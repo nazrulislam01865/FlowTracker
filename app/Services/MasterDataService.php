@@ -135,25 +135,39 @@ class MasterDataService
     public function syncLegacy(): void
     {
         if (!Schema::hasTable('master_values') || !Schema::hasTable('master_records')) return;
+
         $workspaceId = $this->workspaceId();
-        $syncKey = 'flowtrack:master:legacy-sync:'.$workspaceId;
-        if (Cache::get($syncKey)) return;
+        $now = now();
 
-        foreach (MasterValue::query()->get() as $legacy) {
-            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true) ?: Str::singular($legacy->group_key);
-            MasterRecord::query()->firstOrCreate(
-                ['workspace_id' => $workspaceId, 'type' => $type, 'code' => $legacy->code],
-                [
-                    'name' => $legacy->name,
-                    'description' => $legacy->description,
-                    'metadata' => $legacy->meta,
-                    'status' => $legacy->is_active ? 'active' : 'inactive',
-                    'sort_order' => (int) $legacy->id,
-                ]
-            );
-        }
+        $rows = MasterValue::query()->get()->map(function (MasterValue $legacy) use ($workspaceId, $now): array {
+            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true);
+            $type = $type === false ? Str::singular($legacy->group_key) : $type;
 
-        Cache::put($syncKey, true, now()->addMinutes(5));
+            return [
+                'workspace_id' => $workspaceId,
+                'parent_id' => null,
+                'type' => $type,
+                'code' => $legacy->code,
+                'name' => $legacy->name,
+                'description' => $legacy->description,
+                'metadata' => $legacy->meta === null
+                    ? null
+                    : json_encode($legacy->meta, JSON_THROW_ON_ERROR),
+                'status' => $legacy->is_active ? 'active' : 'inactive',
+                'sort_order' => (int) $legacy->id,
+                'created_at' => $legacy->created_at ?? $now,
+                'updated_at' => $now,
+                'deleted_at' => null,
+            ];
+        })->all();
+
+        if ($rows === []) return;
+
+        DB::table('master_records')->upsert(
+            $rows,
+            ['workspace_id', 'type', 'code'],
+            ['name', 'description', 'metadata', 'status', 'sort_order', 'deleted_at', 'updated_at']
+        );
     }
 
     private function mirrorLegacy(MasterRecord $record): void
