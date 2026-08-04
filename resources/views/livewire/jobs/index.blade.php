@@ -10,7 +10,6 @@
             :priorities="$priorities"
             :available-documents="$availableDocuments"
             :activity-tab="$taskActivityTab"
-            :activity-page="$taskActivityPage"
             :task-document-uploads="$taskDocumentUploads"
             :show-task-document-picker="$showTaskDocumentPicker"
         />
@@ -28,12 +27,10 @@
             :health-options="$healthOptions"
             :job-task-search="$jobTaskSearch"
             :activity-tab="$jobActivityTab"
-            :activity-page="$jobActivityPage"
             :job-document-uploads="$jobDocumentUploads"
             :show-document-picker="$showDocumentPicker"
         />
     @else
-        <span class="ft-jobs-list-poll" wire:poll.20s.visible aria-hidden="true"></span>
         <x-jobs.table
             :jobs="$jobs"
             :job-summary="$jobSummary"
@@ -47,7 +44,6 @@
             :health-filter="$health"
             :quick-filter="$quickFilter"
             :show-more-filters="$showMoreFilters"
-            :selected-job-ids="$selectedJobIds"
         />
     @endif
 </div>

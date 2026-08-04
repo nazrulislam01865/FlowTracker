@@ -47,7 +47,6 @@
                     </div>
                     <div class="ft-workflow-editor-actions">
                         <a href="{{ route('workflow.edit', $selected->id) }}" wire:navigate class="ft-admin-outline">Edit Details</a>
-                        <button type="button" class="ft-admin-danger" wire:click="deleteWorkflow({{ $selected->id }})" wire:confirm="Delete this Workflow? Workflows already used by Jobs cannot be deleted and must be deactivated instead.">Delete Workflow</button>
                         <button type="button" class="ft-admin-primary" wire:click="openPhase">＋ Add Phase</button>
                     </div>
                 </div>

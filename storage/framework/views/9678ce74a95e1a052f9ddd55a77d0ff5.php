@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job','compact'=>false,'activityTab'=>'all','activityPage'=>1]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job','compact'=>false,'activityTab'=>'all']));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job','compact'=>false,'activityTab'=>'all','activityPage'=>1]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job','compact'=>false,'activityTab'=>'all']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -35,11 +35,6 @@ unset($__defined_vars, $__key, $__value); ?>
     } elseif ($activityTab === 'history') {
         $activities = $activities->reject(fn($activity) => $activity->event === 'job.comment')->values();
     }
-    $activityPerPage = 30;
-    $activityTotal = $activities->count();
-    $activityPages = max(1, (int) ceil($activityTotal / $activityPerPage));
-    $activityCurrentPage = min(max(1, (int) $activityPage), $activityPages);
-    $activities = $activities->forPage($activityCurrentPage, $activityPerPage)->values();
 ?>
 <section class="ft-detail-card ft-activity-card ft-friendly-activity <?php echo e($compact ? 'compact' : ''); ?>">
     <div class="ft-activity-head">
@@ -127,15 +122,5 @@ unset($__defined_vars, $__key, $__value); ?>
             <div class="empty-state">No <?php echo e($activityTab==='comments' ? 'comments' : ($activityTab==='history' ? 'changes' : 'activity')); ?> yet.</div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($activityTotal > $activityPerPage): ?>
-        <div class="ft-activity-pagination">
-            <span>Showing <?php echo e((($activityCurrentPage - 1) * $activityPerPage) + 1); ?>–<?php echo e(min($activityCurrentPage * $activityPerPage, $activityTotal)); ?> of <?php echo e($activityTotal); ?></span>
-            <div>
-                <button type="button" wire:click="setJobActivityPage(<?php echo e($activityCurrentPage - 1); ?>)" <?php if($activityCurrentPage <= 1): echo 'disabled'; endif; ?>>Previous</button>
-                <span>Page <?php echo e($activityCurrentPage); ?> of <?php echo e($activityPages); ?></span>
-                <button type="button" wire:click="setJobActivityPage(<?php echo e($activityCurrentPage + 1); ?>)" <?php if($activityCurrentPage >= $activityPages): echo 'disabled'; endif; ?>>Next</button>
-            </div>
-        </div>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </section>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/jobs/detail-activity.blade.php ENDPATH**/ ?>

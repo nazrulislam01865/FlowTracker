@@ -15,10 +15,9 @@
     $tasksReady = $requiredTasks->filter(fn($task) => !$task->completed_at && $task->status !== 'Completed')->isEmpty();
     $documentsReady = $missingCurrent->isEmpty();
     $canEditJob = app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job);
-    $canChangeJobStatus = app(\App\Services\AccessControlService::class)->canChangeJobStatus(auth()->user(), $job);
 @endphp
 <div class="ft-workflow-detail-section ft-exact-workflow">
-    <div class="ft-section-title-row"><div><h2>Workflow</h2><p>{{ $job->workflow->name }} · Version 1</p></div></div>
+    <div class="ft-section-title-row"><div><h2>Workflow</h2><p>{{ $job->workflow->name }} · Version 1</p></div><a class="ft-link-blue" href="{{ route('workflow.setup') }}" wire:navigate>View workflow setup ↗</a></div>
 
     @if($blockers->isNotEmpty())
         <div class="ft-warning-banner">
@@ -83,11 +82,7 @@
                     <span>▣</span>
                     <div><b>Next phase: {{ $next?->name ?? 'Completed' }}</b><p>{{ $blockers->isEmpty() ? 'All Task Pack requirements are ready.' : 'Complete the remaining Task Pack requirements.' }}</p></div>
                     @if($blockingTask)<button class="ft-outline-btn" type="button" wire:click="openTask({{ $blockingTask->id }})">Open blocking task</button>@elseif(!$documentsReady)<button class="ft-outline-btn" type="button" wire:click="setDetailTab('documents')">Open documents</button>@else<button class="ft-outline-btn" type="button" wire:click="setDetailTab('overview')">Review</button>@endif
-                    @if($canChangeJobStatus)
-                        <button class="{{ $blockers->isEmpty() ? 'ft-new-job-btn' : 'ft-disabled-btn' }}" wire:click="completePhase" @disabled($blockers->isNotEmpty())>Move to {{ $next?->name ?? 'Completed' }}</button>
-                    @else
-                        <span class="ft-permission-note">Only the assigned Job owner can move this Job to another phase.</span>
-                    @endif
+                    <button class="{{ $blockers->isEmpty() ? 'ft-new-job-btn' : 'ft-disabled-btn' }}" wire:click="completePhase" @disabled($blockers->isNotEmpty())>Move to {{ $next?->name ?? 'Completed' }}</button>
                     <button class="ft-outline-btn ft-square-action" type="button">•••</button>
                 </div>
                 @error('phaseCompletion')<div class="ft-warning-banner slim"><span>!</span><p>{{ $message }}</p></div>@enderror

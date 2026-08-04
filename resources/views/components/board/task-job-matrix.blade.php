@@ -39,18 +39,15 @@
                 @foreach($laneStatuses as $laneStatus)
                     @php($laneTasks = $jobTasks->where('status', $laneStatus))
                     <div
-                        class="ft-task-job-status-cell {{ $laneTasks->isEmpty() ? 'is-empty' : 'has-tasks' }}"
-                        data-status="{{ $laneStatus }}"
+                        class="ft-task-job-status-cell"
                         @if($draggable)
                             x-on:dragover.prevent
                             x-on:drop.prevent="if(draggedTask){ $wire.moveTask(draggedTask, {{ \Illuminate\Support\Js::from($laneStatus) }}); draggedTask=null }"
                         @endif
                     >
-                        <div class="ft-mobile-lane-label"><span>{{ $laneStatus }}</span><b>{{ $laneTasks->count() }}</b></div>
                         @forelse($laneTasks as $taskRow)
-                            @php($canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditTask(auth()->user(), $taskRow))
-                            @if($canDragTask)
-                                <x-board.task-card :task="$taskRow" draggable="true" x-on:dragstart="draggedTask={{ $taskRow->id }}" x-on:dragend="draggedTask=null" wire:key="{{ $keyPrefix }}-{{ str($laneStatus)->slug() }}-task-{{ $taskRow->id }}" />
+                            @if($draggable)
+                                <x-board.task-card :task="$taskRow" draggable="true" x-on:dragstart="draggedTask={{ $taskRow->id }}" wire:key="{{ $keyPrefix }}-{{ str($laneStatus)->slug() }}-task-{{ $taskRow->id }}" />
                             @else
                                 <x-board.task-card :task="$taskRow" wire:key="{{ $keyPrefix }}-{{ str($laneStatus)->slug() }}-task-{{ $taskRow->id }}" />
                             @endif

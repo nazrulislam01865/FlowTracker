@@ -75,7 +75,7 @@
                         <div class="ft-admin-field">
                             <label>Default assignee</label>
                             <select wire:model="tasks.{{ $index }}.default_assignee_id">
-                                <option value="">Unassigned</option>
+                                <option value="">Job coordinator</option>
                                 @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
                             </select>
                         </div>

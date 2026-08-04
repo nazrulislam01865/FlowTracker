@@ -22,17 +22,7 @@
             </div>
             @if($search || $job || $client || $phase || $category || $status)<div class="ft-doc-active-filter"><span>Filtered files</span><button wire:click="clearFilters">×</button></div>@endif
 
-            <div class="ft-doc-expand-row">
-                <div></div>
-                <div class="ft-group-toggle-actions" aria-label="Document group controls">
-                    <button type="button" class="ft-double-chevron-btn" wire:click="expandAll" title="Expand all" aria-label="Expand all">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg>
-                    </button>
-                    <button type="button" class="ft-double-chevron-btn" wire:click="collapseAll" title="Collapse all" aria-label="Collapse all">
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg>
-                    </button>
-                </div>
-            </div>
+            <div class="ft-doc-expand-row"><div></div><div><button class="ghost" wire:click="expandAll">⌄ Expand all</button><button class="ghost" wire:click="collapseAll">⌃ Collapse all</button></div></div>
 
             <div class="card ft-doc-table-card">
                 @forelse($grouped as $jobId=>$docs)
@@ -49,13 +39,13 @@
                             @foreach($docs as $doc)
                                 @php($docStatus=$doc->is_final?'Approved':($doc->task?->needs_attention?'Needs attention':'Current'))
                                 <tr class="{{ $selected?->id===$doc->id?'selected':'' }}" wire:click="selectDocument({{ $doc->id }})">
-                                    <td data-label="Document"><div class="ft-doc-file"><span class="ft-file-badge {{ strtolower(pathinfo($doc->name,PATHINFO_EXTENSION)) }}">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b></div></td>
-                                    <td data-label="Linked to"><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>
-                                    <td data-label="Type">{{ $doc->category ?: 'Other' }}</td><td data-label="Version">v{{ $doc->version }}</td>
-                                    <td data-label="Owner"><div class="person"><x-ui.avatar :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
-                                    <td data-label="Status"><span class="ft-doc-status {{ $docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue') }}">{{ $docStatus }}</span></td>
-                                    <td data-label="Updated">{{ $doc->updated_at?->format('M j') }}</td>
-                                    <td data-label="Actions"><div class="ft-doc-row-actions"><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener" wire:click.stop>Open</a>@if(auth()->user()->canModule('documents','delete'))<button wire:click.stop="deleteDocument({{ $doc->id }})" wire:confirm="Delete this document?">⋮</button>@else<span>⋮</span>@endif</div></td>
+                                    <td><div class="ft-doc-file"><span class="ft-file-badge {{ strtolower(pathinfo($doc->name,PATHINFO_EXTENSION)) }}">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b></div></td>
+                                    <td><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>
+                                    <td>{{ $doc->category ?: 'Other' }}</td><td>v{{ $doc->version }}</td>
+                                    <td><div class="person"><x-ui.avatar :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
+                                    <td><span class="ft-doc-status {{ $docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue') }}">{{ $docStatus }}</span></td>
+                                    <td>{{ $doc->updated_at?->format('M j') }}</td>
+                                    <td><div class="ft-doc-row-actions"><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener" wire:click.stop>Open</a>@if(auth()->user()->canModule('documents','delete'))<button wire:click.stop="deleteDocument({{ $doc->id }})" wire:confirm="Delete this document?">⋮</button>@else<span>⋮</span>@endif</div></td>
                                 </tr>
                             @endforeach
                             </tbody></table></div>

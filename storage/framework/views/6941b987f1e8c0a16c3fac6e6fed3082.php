@@ -3,7 +3,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.index', ['lazy' => true]);
+[$__name, $__params] = $__split('dashboard.index', []);
 
 $__keyOuter = $__key ?? null;
 

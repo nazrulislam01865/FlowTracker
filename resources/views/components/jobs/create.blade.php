@@ -49,7 +49,7 @@
         <section class="ft-create-section">
             <div class="ft-create-section-title"><span>3</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
-                <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Required delivery date *</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                <label class="ft-create-field"><b>Required delivery date *</b><input type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field"><b>Priority</b><select wire:model="priority">@foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></label>
                 <label class="ft-create-field"><b>Job owner *</b><select wire:model="ownerId">@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select><small>Accountable for overall delivery.</small>@error('ownerId')<small class="validation-error">{{ $message }}</small>@enderror</label>
             </div>
