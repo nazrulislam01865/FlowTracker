@@ -165,9 +165,12 @@ class TaskPackService
     {
         $this->assertManage();
         return DB::transaction(function () use ($pack, $data, $id) {
+            $existingItem = $id ? TaskPackItem::query()->findOrFail($id) : null;
+            $previousDefaultAssigneeId = $existingItem?->default_assignee_id ? (int) $existingItem->default_assignee_id : null;
+
             $sort = array_key_exists('sort_order', $data)
                 ? max(0, (int) $data['sort_order'])
-                : ($id ? (int) TaskPackItem::findOrFail($id)->sort_order : ((int) $pack->items()->max('sort_order') + 1));
+                : ($id ? (int) $existingItem->sort_order : ((int) $pack->items()->max('sort_order') + 1));
             $item = TaskPackItem::query()->updateOrCreate(['id' => $id], [
                 'task_pack_id' => $pack->id,
                 'title' => trim($data['title']),
@@ -190,8 +193,75 @@ class TaskPackService
                 'document_requirement_source' => $item->document_category_id ? 'task_pack' : null,
             ]);
 
+            // The Task Pack is also the source of truth for the initial task
+            // assignee. Keep generated tasks in sync when the configured
+            // assignee changes, while preserving a deliberate manual
+            // reassignment made on an individual Job task.
+            $this->syncGeneratedTaskAssignees($item->fresh(), $previousDefaultAssigneeId);
+
             return $item;
         });
+    }
+
+    private function syncGeneratedTaskAssignees(TaskPackItem $item, ?int $previousDefaultAssigneeId = null): void
+    {
+        if (!Schema::hasTable('tasks') || !Schema::hasColumn('tasks', 'assignee_id')) return;
+
+        $item->loadMissing('defaultDepartment');
+        $desiredAssigneeId = $item->default_assignee_id ? (int) $item->default_assignee_id : null;
+
+        // A Task Pack may use a default department instead of a named user.
+        // Resolve that exactly as Job generation does so existing and newly
+        // generated tasks behave consistently.
+        if (!$desiredAssigneeId && $item->defaultDepartment && Schema::hasTable('departments')) {
+            $legacyDepartmentId = DB::table('departments')
+                ->where('code', $item->defaultDepartment->code)
+                ->value('id');
+            if ($legacyDepartmentId) {
+                $desiredAssigneeId = DB::table('users')
+                    ->where('is_active', true)
+                    ->where('department_id', $legacyDepartmentId)
+                    ->orderBy('id')
+                    ->value('id');
+                $desiredAssigneeId = $desiredAssigneeId ? (int) $desiredAssigneeId : null;
+            }
+        }
+
+        Task::query()
+            ->where('task_pack_task_id', $item->id)
+            ->orderBy('id')
+            ->get()
+            ->each(function (Task $task) use ($desiredAssigneeId, $previousDefaultAssigneeId): void {
+                $storedSetupId = Schema::hasColumn('tasks', 'setup_assignee_id') && $task->setup_assignee_id
+                    ? (int) $task->setup_assignee_id
+                    : null;
+
+                $followsTaskPack = !$task->assignee_id
+                    || ($storedSetupId && (int) $task->assignee_id === $storedSetupId)
+                    || ($previousDefaultAssigneeId && (int) $task->assignee_id === $previousDefaultAssigneeId);
+
+                if (!$followsTaskPack) return;
+
+                $changes = ['assignee_id' => $desiredAssigneeId];
+                if (Schema::hasColumn('tasks', 'setup_assignee_id')) {
+                    $changes['setup_assignee_id'] = $desiredAssigneeId;
+                }
+                $task->update($changes);
+
+                if ($desiredAssigneeId && Schema::hasTable('flow_job_members')) {
+                    DB::table('flow_job_members')->updateOrInsert(
+                        ['flow_job_id' => $task->flow_job_id, 'user_id' => $desiredAssigneeId],
+                        [
+                            'access_level' => 'member',
+                            'can_manage_tasks' => false,
+                            'can_upload_documents' => true,
+                            'can_view_financials' => false,
+                            'updated_at' => now(),
+                            'created_at' => now(),
+                        ]
+                    );
+                }
+            });
     }
 
     public function deleteItem(int $id): void

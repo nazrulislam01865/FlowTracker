@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
+<div class="ft-board-page ft-operations-board" wire:poll.20s.visible x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
     <div class="ft-board-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>Operations Board</h1><p>Track work across all active Jobs</p></div>
@@ -36,9 +36,10 @@
                     <button class="ft-quick-chip red <?php echo e($quick==='blocked'?'active':''); ?>" wire:click="setQuick('blocked')">Blocked <b><?php echo e($jobCounts['blocked']); ?></b></button>
                     <button class="ft-quick-chip <?php echo e($quick==='waiting'?'active':''); ?>" wire:click="setQuick('waiting')">Waiting external <b><?php echo e($jobCounts['waiting']); ?></b></button>
                     <button class="ft-quick-chip amber <?php echo e($quick==='unassigned'?'active':''); ?>" wire:click="setQuick('unassigned')">Unassigned <b><?php echo e($jobCounts['unassigned']); ?></b></button>
-                    <button type="button" class="ft-filter-collapse" wire:click="<?php echo e(count($expandedJobs) ? 'collapseAll' : 'expandAll'); ?>" title="<?php echo e(count($expandedJobs) ? 'Collapse all job cards' : 'Expand all job cards'); ?>">
-                        <svg class="<?php echo e(count($expandedJobs) ? '' : 'rotated'); ?>" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                    </button>
+                    <span class="ft-board-group-controls" aria-label="Job group controls">
+                        <button type="button" class="ft-filter-collapse" wire:click="expandAll" title="Expand all job cards" aria-label="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all job cards" aria-label="Collapse all job cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                    </span>
                 <?php else: ?>
                     <button class="ft-quick-chip <?php echo e($quick==='mine'?'active':''); ?>" wire:click="setQuick('mine')">My task <b><?php echo e($taskCounts['mine']); ?></b></button>
                     <button class="ft-quick-chip red <?php echo e($quick==='overdue'?'active':''); ?>" wire:click="setQuick('overdue')">Overdue <b><?php echo e($taskCounts['overdue']); ?></b></button>
@@ -46,9 +47,10 @@
                     <button class="ft-quick-chip red <?php echo e($quick==='blocked'?'active':''); ?>" wire:click="setQuick('blocked')">Blocked <b><?php echo e($taskCounts['blocked']); ?></b></button>
                     <button class="ft-quick-chip <?php echo e($quick==='waiting'?'active':''); ?>" wire:click="setQuick('waiting')">Waiting external <b><?php echo e($taskCounts['waiting']); ?></b></button>
                     <button class="ft-quick-chip amber <?php echo e($quick==='unassigned'?'active':''); ?>" wire:click="setQuick('unassigned')">Unassigned <b><?php echo e($taskCounts['unassigned']); ?></b></button>
-                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=!allGroupsOpen; $dispatch(allGroupsOpen ? 'board-expand-all' : 'board-collapse-all')" :title="allGroupsOpen ? 'Collapse all jobs' : 'Expand all jobs'">
-                        <svg :class="{'rotated':!allGroupsOpen}" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                    </button>
+                    <span class="ft-board-group-controls" aria-label="Task job group controls">
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                    </span>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
         </section>
@@ -90,18 +92,24 @@
                     <?php ($phaseJobs = $jobs->where('workflow_phase_id', $phase->id)); ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hideEmptyPhases && $phaseJobs->isEmpty()): ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?><?php continue; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <section class="ft-board-column ft-job-column ft-board-column-nohead" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-phase-'.e($phase->id).''; ?>wire:key="job-phase-<?php echo e($phase->id); ?>">
+                        <button type="button" class="ft-mobile-phase-head" x-on:click="phaseClosed[<?php echo e($phase->id); ?>]=!phaseClosed[<?php echo e($phase->id); ?>]">
+                            <span><?php echo e($phase->short_name); ?></span><b><?php echo e($phaseJobs->count()); ?></b>
+                            <svg :class="{'rotated':phaseClosed[<?php echo e($phase->id); ?>]}" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
                         <div class="ft-board-column-list" x-show="!phaseClosed[<?php echo e($phase->id); ?>]" x-on:dragover.prevent x-on:drop.prevent="if(draggedJob){$wire.moveJob(draggedJob,<?php echo e($phase->id); ?>);draggedJob=null}">
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $phaseJobs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $jobRow): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                <?php if (isset($component)) { $__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d = $component; } ?>
+                                <?php ($canMoveJob = app(\App\Services\AccessControlService::class)->canChangeJobStatus(auth()->user(), $jobRow)); ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canMoveJob): ?>
+                                    <?php if (isset($component)) { $__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalcbcc5eff7de3b88c3d9ef252a4a9284d = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.job-card','data' => ['job' => $jobRow,'expanded' => in_array($jobRow->id,$expandedJobs,true),'draggable' => 'true','xOn:dragstart' => 'draggedJob='.e($jobRow->id).'','wire:key' => 'job-card-'.e($jobRow->id).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.job-card','data' => ['job' => $jobRow,'expanded' => in_array($jobRow->id,$expandedJobs,true),'draggable' => 'true','xOn:dragstart' => 'draggedJob='.e($jobRow->id).'','xOn:dragend' => 'draggedJob=null','wire:key' => 'job-card-'.e($jobRow->id).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('board.job-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobRow),'expanded' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(in_array($jobRow->id,$expandedJobs,true)),'draggable' => 'true','x-on:dragstart' => 'draggedJob='.e($jobRow->id).'','wire:key' => 'job-card-'.e($jobRow->id).'']); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobRow),'expanded' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(in_array($jobRow->id,$expandedJobs,true)),'draggable' => 'true','x-on:dragstart' => 'draggedJob='.e($jobRow->id).'','x-on:dragend' => 'draggedJob=null','wire:key' => 'job-card-'.e($jobRow->id).'']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -114,6 +122,30 @@
 <?php $component = $__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d; ?>
 <?php unset($__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d); ?>
 <?php endif; ?>
+                                <?php else: ?>
+                                    <?php if (isset($component)) { $__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalcbcc5eff7de3b88c3d9ef252a4a9284d = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.job-card','data' => ['job' => $jobRow,'expanded' => in_array($jobRow->id,$expandedJobs,true),'draggable' => 'false','wire:key' => 'job-card-'.e($jobRow->id).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('board.job-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobRow),'expanded' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(in_array($jobRow->id,$expandedJobs,true)),'draggable' => 'false','wire:key' => 'job-card-'.e($jobRow->id).'']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalcbcc5eff7de3b88c3d9ef252a4a9284d)): ?>
+<?php $attributes = $__attributesOriginalcbcc5eff7de3b88c3d9ef252a4a9284d; ?>
+<?php unset($__attributesOriginalcbcc5eff7de3b88c3d9ef252a4a9284d); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d)): ?>
+<?php $component = $__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d; ?>
+<?php unset($__componentOriginalcbcc5eff7de3b88c3d9ef252a4a9284d); ?>
+<?php endif; ?>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                 <div class="ft-board-empty-column">No Jobs</div>
                             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>

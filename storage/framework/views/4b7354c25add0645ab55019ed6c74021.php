@@ -83,14 +83,14 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $jobs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $job): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <?php ($next = \App\Support\BoardPresenter::nextTask($job)); ?>
                     <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-row-'.e($job->id).''; ?>wire:key="job-row-<?php echo e($job->id); ?>">
-                        <td><input type="checkbox" wire:model.live="selectedJobIds" value="<?php echo e($job->id); ?>" aria-label="Select <?php echo e($job->job_number); ?>"></td>
-                        <td><button class="ft-table-job-link" wire:click="openJob(<?php echo e($job->id); ?>)"><?php echo e($job->job_number); ?></button><div class="ft-table-sub"><?php echo e($job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT)); ?></div></td>
-                        <td><b><?php echo e($job->client?->name); ?></b><div class="ft-table-sub"><?php echo e(\Illuminate\Support\Str::limit($job->title, 36)); ?></div></td>
-                        <td><b><?php echo e($job->product ?: 'Product'); ?></b><div class="ft-table-sub"><?php echo e(max(1,$job->items->count())); ?> product · <?php echo e(number_format($job->quantity)); ?> pcs</div></td>
-                        <td><span class="ft-soft-pill blue"><?php echo e($job->phase?->short_name ?? '—'); ?></span></td>
-                        <td><b><?php echo e($next?->title ?? ($job->next_action ?: 'Review client requirement')); ?></b><div class="ft-table-due <?php echo e($next?->due_date?->isPast() ? 'overdue' : ''); ?>"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($next?->due_date): ?><?php echo e($next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j')); ?><?php else: ?> — <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div></td>
-                        <td><span class="ft-soft-pill <?php echo e(\App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health)); ?>"><?php echo e($job->needs_attention ? 'Needs Attention' : $job->health); ?></span></td>
-                        <td>
+                        <td data-label="Select"><input type="checkbox" wire:model.live="selectedJobIds" value="<?php echo e($job->id); ?>" aria-label="Select <?php echo e($job->job_number); ?>"></td>
+                        <td data-label="Job / Order"><button class="ft-table-job-link" wire:click="openJob(<?php echo e($job->id); ?>)"><?php echo e($job->job_number); ?></button><div class="ft-table-sub"><?php echo e($job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT)); ?></div></td>
+                        <td data-label="Client / Brief"><b><?php echo e($job->client?->name); ?></b><div class="ft-table-sub"><?php echo e(\Illuminate\Support\Str::limit($job->title, 36)); ?></div></td>
+                        <td data-label="Product / Qty"><b><?php echo e($job->product ?: 'Product'); ?></b><div class="ft-table-sub"><?php echo e(max(1,$job->items->count())); ?> product · <?php echo e(number_format($job->quantity)); ?> pcs</div></td>
+                        <td data-label="Phase"><span class="ft-soft-pill blue"><?php echo e($job->phase?->short_name ?? '—'); ?></span></td>
+                        <td data-label="Next Action"><b><?php echo e($next?->title ?? ($job->next_action ?: 'Review client requirement')); ?></b><div class="ft-table-due <?php echo e($next?->due_date?->isPast() ? 'overdue' : ''); ?>"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($next?->due_date): ?><?php echo e($next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j')); ?><?php else: ?> — <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div></td>
+                        <td data-label="Health"><span class="ft-soft-pill <?php echo e(\App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health)); ?>"><?php echo e($job->needs_attention ? 'Needs Attention' : $job->health); ?></span></td>
+                        <td data-label="Owner">
                             <div class="ft-owner-chip ft-inline-owner-editor" x-data="{ editing:false }">
                                 <?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
@@ -127,7 +127,7 @@ unset($__defined_vars, $__key, $__value); ?>
                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
                         </td>
-                        <td>
+                        <td data-label="Delivery">
                             <div class="ft-date-chip ft-inline-date-editor <?php echo e($job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : ''); ?>" x-data="{ editing:false }">
                                 <span x-show="!editing" class="ft-inline-date-text"><?php echo e($job->delivery_date?->format('M j') ?? 'Set date'); ?></span>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job)): ?>
@@ -139,9 +139,9 @@ unset($__defined_vars, $__key, $__value); ?>
                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
                         </td>
-                        <td><div class="ft-table-progress"><span style="width:<?php echo e($job->progress); ?>%"></span></div><small><?php echo e($job->progress); ?>%</small></td>
-                        <td><span class="ft-soft-pill <?php echo e($job->commercial_value > 0 ? 'blue' : 'amber'); ?>"><?php echo e($job->commercial_value > 0 ? 'Draft $'.number_format($job->commercial_value,0) : 'Quotation pending'); ?></span></td>
-                        <td><button class="ft-table-kebab" wire:click="openJob(<?php echo e($job->id); ?>)">•••</button></td>
+                        <td data-label="Progress"><div class="ft-table-progress"><span style="width:<?php echo e($job->progress); ?>%"></span></div><small><?php echo e($job->progress); ?>%</small></td>
+                        <td data-label="Invoice"><span class="ft-soft-pill <?php echo e($job->commercial_value > 0 ? 'blue' : 'amber'); ?>"><?php echo e($job->commercial_value > 0 ? 'Draft $'.number_format($job->commercial_value,0) : 'Quotation pending'); ?></span></td>
+                        <td data-label="Actions"><button class="ft-table-kebab" wire:click="openJob(<?php echo e($job->id); ?>)">•••</button></td>
                     </tr>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?><tr><td colspan="12"><div class="empty-state">No Jobs match the selected filters.</div></td></tr><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </tbody>

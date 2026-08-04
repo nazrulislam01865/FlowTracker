@@ -52,14 +52,14 @@
                 @forelse($jobs as $job)
                     @php($next = \App\Support\BoardPresenter::nextTask($job))
                     <tr wire:key="job-row-{{ $job->id }}">
-                        <td><input type="checkbox" wire:model.live="selectedJobIds" value="{{ $job->id }}" aria-label="Select {{ $job->job_number }}"></td>
-                        <td><button class="ft-table-job-link" wire:click="openJob({{ $job->id }})">{{ $job->job_number }}</button><div class="ft-table-sub">{{ $job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</div></td>
-                        <td><b>{{ $job->client?->name }}</b><div class="ft-table-sub">{{ \Illuminate\Support\Str::limit($job->title, 36) }}</div></td>
-                        <td><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,$job->items->count()) }} product · {{ number_format($job->quantity) }} pcs</div></td>
-                        <td><span class="ft-soft-pill blue">{{ $job->phase?->short_name ?? '—' }}</span></td>
-                        <td><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ $next?->due_date?->isPast() ? 'overdue' : '' }}">@if($next?->due_date){{ $next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
-                        <td><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
-                        <td>
+                        <td data-label="Select"><input type="checkbox" wire:model.live="selectedJobIds" value="{{ $job->id }}" aria-label="Select {{ $job->job_number }}"></td>
+                        <td data-label="Job / Order"><button class="ft-table-job-link" wire:click="openJob({{ $job->id }})">{{ $job->job_number }}</button><div class="ft-table-sub">{{ $job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</div></td>
+                        <td data-label="Client / Brief"><b>{{ $job->client?->name }}</b><div class="ft-table-sub">{{ \Illuminate\Support\Str::limit($job->title, 36) }}</div></td>
+                        <td data-label="Product / Qty"><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,$job->items->count()) }} product · {{ number_format($job->quantity) }} pcs</div></td>
+                        <td data-label="Phase"><span class="ft-soft-pill blue">{{ $job->phase?->short_name ?? '—' }}</span></td>
+                        <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ $next?->due_date?->isPast() ? 'overdue' : '' }}">@if($next?->due_date){{ $next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
+                        <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
+                        <td data-label="Owner">
                             <div class="ft-owner-chip ft-inline-owner-editor" x-data="{ editing:false }">
                                 <x-ui.avatar :name="$job->owner?->name ?? 'Unassigned'" :size="28"/>
                                 <span x-show="!editing" class="ft-inline-owner-name">{{ $job->owner?->name ?? 'Unassigned' }}</span>
@@ -75,7 +75,7 @@
                                 @endif
                             </div>
                         </td>
-                        <td>
+                        <td data-label="Delivery">
                             <div class="ft-date-chip ft-inline-date-editor {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
                                 <span x-show="!editing" class="ft-inline-date-text">{{ $job->delivery_date?->format('M j') ?? 'Set date' }}</span>
                                 @if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job))
@@ -87,9 +87,9 @@
                                 @endif
                             </div>
                         </td>
-                        <td><div class="ft-table-progress"><span style="width:{{ $job->progress }}%"></span></div><small>{{ $job->progress }}%</small></td>
-                        <td><span class="ft-soft-pill {{ $job->commercial_value > 0 ? 'blue' : 'amber' }}">{{ $job->commercial_value > 0 ? 'Draft $'.number_format($job->commercial_value,0) : 'Quotation pending' }}</span></td>
-                        <td><button class="ft-table-kebab" wire:click="openJob({{ $job->id }})">•••</button></td>
+                        <td data-label="Progress"><div class="ft-table-progress"><span style="width:{{ $job->progress }}%"></span></div><small>{{ $job->progress }}%</small></td>
+                        <td data-label="Invoice"><span class="ft-soft-pill {{ $job->commercial_value > 0 ? 'blue' : 'amber' }}">{{ $job->commercial_value > 0 ? 'Draft $'.number_format($job->commercial_value,0) : 'Quotation pending' }}</span></td>
+                        <td data-label="Actions"><button class="ft-table-kebab" wire:click="openJob({{ $job->id }})">•••</button></td>
                     </tr>
                 @empty<tr><td colspan="12"><div class="empty-state">No Jobs match the selected filters.</div></td></tr>@endforelse
                 </tbody>

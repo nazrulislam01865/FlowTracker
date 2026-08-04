@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
+<div class="ft-board-page ft-operations-board" wire:poll.20s.visible x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
     <div class="ft-board-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>Operations Board</h1><p>Track work across all active Jobs</p></div>
@@ -36,9 +36,10 @@
                     <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $jobCounts['blocked'] }}</b></button>
                     <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $jobCounts['waiting'] }}</b></button>
                     <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $jobCounts['unassigned'] }}</b></button>
-                    <button type="button" class="ft-filter-collapse" wire:click="{{ count($expandedJobs) ? 'collapseAll' : 'expandAll' }}" title="{{ count($expandedJobs) ? 'Collapse all job cards' : 'Expand all job cards' }}">
-                        <svg class="{{ count($expandedJobs) ? '' : 'rotated' }}" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                    </button>
+                    <span class="ft-board-group-controls" aria-label="Job group controls">
+                        <button type="button" class="ft-filter-collapse" wire:click="expandAll" title="Expand all job cards" aria-label="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all job cards" aria-label="Collapse all job cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                    </span>
                 @else
                     <button class="ft-quick-chip {{ $quick==='mine'?'active':'' }}" wire:click="setQuick('mine')">My task <b>{{ $taskCounts['mine'] }}</b></button>
                     <button class="ft-quick-chip red {{ $quick==='overdue'?'active':'' }}" wire:click="setQuick('overdue')">Overdue <b>{{ $taskCounts['overdue'] }}</b></button>
@@ -46,9 +47,10 @@
                     <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $taskCounts['blocked'] }}</b></button>
                     <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $taskCounts['waiting'] }}</b></button>
                     <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $taskCounts['unassigned'] }}</b></button>
-                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=!allGroupsOpen; $dispatch(allGroupsOpen ? 'board-expand-all' : 'board-collapse-all')" :title="allGroupsOpen ? 'Collapse all jobs' : 'Expand all jobs'">
-                        <svg :class="{'rotated':!allGroupsOpen}" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                    </button>
+                    <span class="ft-board-group-controls" aria-label="Task job group controls">
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                    </span>
                 @endif
             </div>
         </section>
@@ -90,9 +92,18 @@
                     @php($phaseJobs = $jobs->where('workflow_phase_id', $phase->id))
                     @if($hideEmptyPhases && $phaseJobs->isEmpty()) @continue @endif
                     <section class="ft-board-column ft-job-column ft-board-column-nohead" wire:key="job-phase-{{ $phase->id }}">
+                        <button type="button" class="ft-mobile-phase-head" x-on:click="phaseClosed[{{ $phase->id }}]=!phaseClosed[{{ $phase->id }}]">
+                            <span>{{ $phase->short_name }}</span><b>{{ $phaseJobs->count() }}</b>
+                            <svg :class="{'rotated':phaseClosed[{{ $phase->id }}]}" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
+                        </button>
                         <div class="ft-board-column-list" x-show="!phaseClosed[{{ $phase->id }}]" x-on:dragover.prevent x-on:drop.prevent="if(draggedJob){$wire.moveJob(draggedJob,{{ $phase->id }});draggedJob=null}">
                             @forelse($phaseJobs as $jobRow)
-                                <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="true" x-on:dragstart="draggedJob={{ $jobRow->id }}" wire:key="job-card-{{ $jobRow->id }}" />
+                                @php($canMoveJob = app(\App\Services\AccessControlService::class)->canChangeJobStatus(auth()->user(), $jobRow))
+                                @if($canMoveJob)
+                                    <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="true" x-on:dragstart="draggedJob={{ $jobRow->id }}" x-on:dragend="draggedJob=null" wire:key="job-card-{{ $jobRow->id }}" />
+                                @else
+                                    <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="false" wire:key="job-card-{{ $jobRow->id }}" />
+                                @endif
                             @empty
                                 <div class="ft-board-empty-column">No Jobs</div>
                             @endforelse

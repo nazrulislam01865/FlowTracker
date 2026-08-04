@@ -10,7 +10,9 @@ use App\Models\RoleModuleAccess;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class AdminService
@@ -52,6 +54,69 @@ class AdminService
         $this->syncMembership($user);
         $this->audit($user, 'access.user_created', 'User created and assigned to role '.$user->role?->name, $actor);
         return $user;
+    }
+
+
+    public function updateUser(User $user, array $data, User $actor): User
+    {
+        $this->assertAdministrator($actor);
+        $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
+
+        $changes = [
+            'name' => trim($data['name']),
+            'email' => trim($data['email']),
+            'role_id' => $role->id,
+            'department_id' => $data['department_id'] ?: null,
+            'is_active' => (bool) ($data['is_active'] ?? true),
+        ];
+        if (!empty($data['password'])) $changes['password'] = Hash::make($data['password']);
+
+        // Do not allow an administrator account to accidentally remove the last protected
+        // Super Admin identity. Password/name/email edits are still allowed.
+        if ($user->isSuperAdmin()) {
+            $changes['role_id'] = $user->role_id;
+            $changes['is_active'] = true;
+        }
+
+        $passwordChanged = array_key_exists('password', $changes);
+        $user->update($changes);
+        $this->syncMembership($user);
+
+        if ($passwordChanged && Schema::hasTable('sessions')) {
+            DB::table('sessions')->where('user_id', $user->id)->delete();
+        }
+
+        $this->audit($user, 'access.user_updated', 'Updated user '.$user->name.($passwordChanged ? ' and changed password' : ''), $actor);
+        return $user->refresh();
+    }
+
+    public function deleteUser(User $user, User $actor): void
+    {
+        $this->assertAdministrator($actor);
+        abort_if($user->id === $actor->id, 422, 'You cannot delete your own signed-in account.');
+        abort_if($user->isSuperAdmin(), 422, 'Super Admin cannot be deleted.');
+
+        DB::transaction(function () use ($user, $actor) {
+            $name = $user->name;
+            $userId = $user->id;
+
+            // These compatibility columns intentionally have no foreign key in the supplied
+            // SQL-aligned structure, so clear them before deleting the User record.
+            if (Schema::hasTable('task_pack_items') && Schema::hasColumn('task_pack_items', 'default_assignee_id')) {
+                DB::table('task_pack_items')->where('default_assignee_id', $userId)->update(['default_assignee_id' => null]);
+            }
+            if (Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'setup_assignee_id')) {
+                DB::table('tasks')->where('setup_assignee_id', $userId)->update(['setup_assignee_id' => null]);
+            }
+            if (Schema::hasTable('sessions')) {
+                DB::table('sessions')->where('user_id', $userId)->delete();
+            }
+
+            // Write the audit entry before deletion; activities.user_id uses nullOnDelete so
+            // the record survives while its actor reference is safely cleared if necessary.
+            $this->audit($user, 'access.user_deleted', 'Deleted user '.$name, $actor);
+            $user->delete();
+        });
     }
 
     public function saveRole(array $data, ?int $id, User $actor): Role

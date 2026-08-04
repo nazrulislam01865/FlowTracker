@@ -199,6 +199,22 @@ class AccessControlService
         return $this->jobWithinScope($job, $user, $this->scope($user, 'jobs'));
     }
 
+    /**
+     * Job workflow/status transitions are intentionally stricter than normal
+     * inline Job editing. For non-administrators, the role must allow Job
+     * editing and the user must be the Job's assigned owner. Older Jobs that
+     * do not have an owner fall back to the coordinator so they remain usable.
+     */
+    public function canChangeJobStatus(User $user, object $job): bool
+    {
+        if ($this->isAdministrator($user)) return true;
+        if (!$this->can($user, 'jobs', 'edit')) return false;
+        if (!$this->jobWithinScope($job, $user, $this->scope($user, 'jobs'))) return false;
+
+        $assignedUserId = (int) (($job->owner_id ?? null) ?: ($job->coordinator_id ?? 0));
+        return $assignedUserId > 0 && $assignedUserId === (int) $user->id;
+    }
+
     public function canAssignTask(User $user, object $task): bool
     {
         if ($this->isAdministrator($user)) return true;

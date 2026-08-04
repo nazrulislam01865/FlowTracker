@@ -33,6 +33,7 @@
             :show-document-picker="$showDocumentPicker"
         />
     @else
+        <span class="ft-jobs-list-poll" wire:poll.20s.visible aria-hidden="true"></span>
         <x-jobs.table
             :jobs="$jobs"
             :job-summary="$jobSummary"

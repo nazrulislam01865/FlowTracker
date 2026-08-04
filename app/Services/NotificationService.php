@@ -7,6 +7,7 @@ use App\Models\FlowNotification;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class NotificationService
 {
@@ -68,6 +69,7 @@ class NotificationService
             'message' => $message,
         ]);
 
+        Cache::forget('flowtrack:dashboard:metrics:user:'.$recipient->id);
         $unreadCount = $this->unreadCount($recipient);
 
         app(PusherChannelService::class)->triggerUser($recipient->id, 'flowtrack.notification', [
@@ -95,15 +97,14 @@ class NotificationService
         ?User $actor = null,
         array $extraUserIds = [],
     ): void {
-        $job->loadMissing(['members','tasks']);
-        $ids = collect([$job->owner_id, $job->coordinator_id])
-            ->merge($job->members->pluck('user_id'))
-            ->merge($job->tasks->pluck('assignee_id'))
-            ->merge($extraUserIds)
-            ->merge($actor ? [$actor->id] : [])
+        // Job-level notifications are deliberately restricted to the Job's
+        // assigned user plus Admin/Super Admin. Task assignees, generic Job
+        // members, coordinators on Jobs with an owner, and the acting user do
+        // not receive Job noise merely because they can view the record.
+        $assignedUserId = (int) (($job->owner_id ?? null) ?: ($job->coordinator_id ?? 0));
+        $ids = collect($assignedUserId > 0 ? [$assignedUserId] : [])
+            ->merge($this->administratorIds())
             ->filter()->unique()->values();
-
-        if ($type === 'risk') $ids = $ids->merge($this->administratorIds())->unique()->values();
 
         User::query()->whereIn('id', $ids)->where('is_active', true)->get()
             ->each(fn (User $recipient) => $this->notifyUser($recipient, $title, $message, $type, $job, null, $actor));

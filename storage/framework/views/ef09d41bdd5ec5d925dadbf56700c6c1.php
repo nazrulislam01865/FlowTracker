@@ -22,7 +22,17 @@
             </div>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($search || $job || $client || $phase || $category || $status): ?><div class="ft-doc-active-filter"><span>Filtered files</span><button wire:click="clearFilters">×</button></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-            <div class="ft-doc-expand-row"><div></div><div><button class="ghost" wire:click="expandAll">⌄ Expand all</button><button class="ghost" wire:click="collapseAll">⌃ Collapse all</button></div></div>
+            <div class="ft-doc-expand-row">
+                <div></div>
+                <div class="ft-group-toggle-actions" aria-label="Document group controls">
+                    <button type="button" class="ft-double-chevron-btn" wire:click="expandAll" title="Expand all" aria-label="Expand all">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg>
+                    </button>
+                    <button type="button" class="ft-double-chevron-btn" wire:click="collapseAll" title="Collapse all" aria-label="Collapse all">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg>
+                    </button>
+                </div>
+            </div>
 
             <div class="card ft-doc-table-card">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $grouped; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $jobId=>$docs): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
@@ -39,10 +49,10 @@
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $docs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $doc): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                 <?php ($docStatus=$doc->is_final?'Approved':($doc->task?->needs_attention?'Needs attention':'Current')); ?>
                                 <tr class="<?php echo e($selected?->id===$doc->id?'selected':''); ?>" wire:click="selectDocument(<?php echo e($doc->id); ?>)">
-                                    <td><div class="ft-doc-file"><span class="ft-file-badge <?php echo e(strtolower(pathinfo($doc->name,PATHINFO_EXTENSION))); ?>"><?php echo e(strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE')); ?></span><b><?php echo e($doc->name); ?></b></div></td>
-                                    <td><b><?php echo e($doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job'); ?></b><span><?php echo e($doc->task?->title ?? $doc->job?->title ?? 'General'); ?></span></td>
-                                    <td><?php echo e($doc->category ?: 'Other'); ?></td><td>v<?php echo e($doc->version); ?></td>
-                                    <td><div class="person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+                                    <td data-label="Document"><div class="ft-doc-file"><span class="ft-file-badge <?php echo e(strtolower(pathinfo($doc->name,PATHINFO_EXTENSION))); ?>"><?php echo e(strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE')); ?></span><b><?php echo e($doc->name); ?></b></div></td>
+                                    <td data-label="Linked to"><b><?php echo e($doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job'); ?></b><span><?php echo e($doc->task?->title ?? $doc->job?->title ?? 'General'); ?></span></td>
+                                    <td data-label="Type"><?php echo e($doc->category ?: 'Other'); ?></td><td data-label="Version">v<?php echo e($doc->version); ?></td>
+                                    <td data-label="Owner"><div class="person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['name' => $doc->uploader?->name ?? 'System']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.avatar'); ?>
@@ -64,9 +74,9 @@
 <?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?><span><?php echo e($doc->uploader?->name ?? 'System'); ?></span></div></td>
-                                    <td><span class="ft-doc-status <?php echo e($docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue')); ?>"><?php echo e($docStatus); ?></span></td>
-                                    <td><?php echo e($doc->updated_at?->format('M j')); ?></td>
-                                    <td><div class="ft-doc-row-actions"><a href="<?php echo e(route('documents.open',$doc)); ?>" target="_blank" rel="noopener" wire:click.stop>Open</a><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('documents','delete')): ?><button wire:click.stop="deleteDocument(<?php echo e($doc->id); ?>)" wire:confirm="Delete this document?">⋮</button><?php else: ?><span>⋮</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div></td>
+                                    <td data-label="Status"><span class="ft-doc-status <?php echo e($docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue')); ?>"><?php echo e($docStatus); ?></span></td>
+                                    <td data-label="Updated"><?php echo e($doc->updated_at?->format('M j')); ?></td>
+                                    <td data-label="Actions"><div class="ft-doc-row-actions"><a href="<?php echo e(route('documents.open',$doc)); ?>" target="_blank" rel="noopener" wire:click.stop>Open</a><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('documents','delete')): ?><button wire:click.stop="deleteDocument(<?php echo e($doc->id); ?>)" wire:confirm="Delete this document?">⋮</button><?php else: ?><span>⋮</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div></td>
                                 </tr>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </tbody></table></div>

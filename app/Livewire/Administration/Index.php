@@ -15,11 +15,14 @@ class Index extends Component
     public ?int $selectedRoleId = null;
 
     public bool $showUserModal = false;
+    public ?int $editingUserId = null;
     public string $name = '';
     public string $email = '';
     public string $password = '';
+    public string $passwordConfirmation = '';
     public ?int $roleId = null;
     public ?int $departmentId = null;
+    public bool $userActive = true;
 
     public bool $showRoleModal = false;
     public ?int $editingRoleId = null;
@@ -46,30 +49,79 @@ class Index extends Component
         $this->tab = 'matrix';
     }
 
-    public function openUser(): void
+    public function openUser(?int $id = null): void
     {
-        $this->showUserModal = true;
         $this->resetValidation();
+        $this->editingUserId = $id;
+        $this->password = '';
+        $this->passwordConfirmation = '';
+
+        if ($id) {
+            $user = User::findOrFail($id);
+            $this->name = $user->name;
+            $this->email = $user->email;
+            $this->roleId = $user->role_id;
+            $this->departmentId = $user->department_id;
+            $this->userActive = (bool) $user->is_active;
+        } else {
+            $this->reset(['name','email','roleId','departmentId']);
+            $this->userActive = true;
+        }
+
+        $this->showUserModal = true;
     }
 
-    public function closeUser(): void { $this->showUserModal = false; }
-
-    public function createUser(): void
+    public function closeUser(): void
     {
-        $data = $this->validate([
+        $this->showUserModal = false;
+        $this->editingUserId = null;
+        $this->resetValidation();
+        $this->reset(['name','email','password','passwordConfirmation','roleId','departmentId']);
+        $this->userActive = true;
+    }
+
+    public function saveUser(): void
+    {
+        $editing = $this->editingUserId !== null;
+        $rules = [
             'name' => ['required','string','max:255'],
-            'email' => ['required','email','unique:users,email'],
-            'password' => ['required','string','min:10'],
+            'email' => ['required','email', $editing ? 'unique:users,email,'.$this->editingUserId : 'unique:users,email'],
             'roleId' => ['required','exists:roles,id'],
             'departmentId' => ['nullable','exists:departments,id'],
+            'userActive' => ['boolean'],
+            'password' => $editing ? ['nullable','string','min:10'] : ['required','string','min:10'],
+            'passwordConfirmation' => $editing ? ['required_with:password','same:password'] : ['required','same:password'],
+        ];
+        $data = $this->validate($rules, [
+            'passwordConfirmation.same' => 'The password confirmation does not match.',
         ]);
-        app(AdminService::class)->createUser([
-            'name' => $data['name'], 'email' => $data['email'], 'password' => $data['password'],
-            'role_id' => $data['roleId'], 'department_id' => $data['departmentId'],
-        ]);
-        $this->showUserModal = false;
-        $this->reset(['name','email','password','roleId','departmentId']);
+
+        $payload = [
+            'name' => $data['name'],
+            'email' => $data['email'],
+            'role_id' => $data['roleId'],
+            'department_id' => $data['departmentId'],
+            'is_active' => $data['userActive'],
+        ];
+        if (filled($data['password'] ?? null)) $payload['password'] = $data['password'];
+
+        if ($editing) {
+            app(AdminService::class)->updateUser(User::findOrFail($this->editingUserId), $payload, auth()->user());
+        } else {
+            app(AdminService::class)->createUser($payload);
+        }
+
+        session()->flash('success', $editing ? 'User updated.' : 'User created.');
+        $this->closeUser();
     }
+
+    public function deleteUser(int $userId): void
+    {
+        app(AdminService::class)->deleteUser(User::findOrFail($userId), auth()->user());
+        session()->flash('success', 'User deleted.');
+    }
+
+    public function createUser(): void { $this->saveUser(); }
 
     public function openRole(?int $id = null): void
     {

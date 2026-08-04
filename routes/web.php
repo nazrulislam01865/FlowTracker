@@ -24,6 +24,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
 });
 
+Route::get('/session/status', function () {
+    return response()->json(['ok' => true, 'user_id' => auth()->id()]);
+})->middleware('auth')->name('session.status');
+
 Route::middleware('auth')->group(function () {
     Route::post('/pusher/auth', function (\Illuminate\Http\Request $request) {
         abort_unless(auth()->user()->canModule('notifications', 'view'), 403);

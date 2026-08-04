@@ -8,6 +8,7 @@ use App\Models\User;
 use App\Services\BoardService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use Livewire\Attributes\On;
 use Livewire\Component;
 
 class Index extends Component
@@ -53,6 +54,12 @@ class Index extends Component
         abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($taskId);
         app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+    }
+
+    #[On('flowtrack-notification')]
+    public function refreshRealtime(): void
+    {
+        // Re-render this screen when Pusher reports a visible Job/Task change.
     }
 
     public function render()

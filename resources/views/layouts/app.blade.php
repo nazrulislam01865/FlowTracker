@@ -4,6 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="flowtrack-session-timeout" content="1800">
+    @auth
+        <meta name="flowtrack-session-status-url" content="{{ route('session.status') }}">
+        <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
+    @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ config('app.name','FlowTrack') }}</title>
     @if(auth()->check() && auth()->user()->canModule('notifications','view'))
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">

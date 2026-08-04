@@ -109,8 +109,8 @@
                                 $rowInitials = collect(preg_split('/\s+/', trim($clientRow->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
                             ?>
                             <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'client-row-'.e($clientRow->id).''; ?>wire:key="client-row-<?php echo e($clientRow->id); ?>" class="<?php echo e((int)$selectedClientId === (int)$clientRow->id ? 'selected' : ''); ?>" wire:click="openClient(<?php echo e($clientRow->id); ?>)">
-                                <td><div class="ft-client-identity"><span class="ft-client-logo"><?php echo e($rowInitials ?: 'CL'); ?></span><span><b><?php echo e($clientRow->name); ?></b><small><?php echo e($clientRow->country ?: '—'); ?></small></span></div></td>
-                                <td><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clientRow->accountManager): ?><div class="ft-client-person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+                                <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo"><?php echo e($rowInitials ?: 'CL'); ?></span><span><b><?php echo e($clientRow->name); ?></b><small><?php echo e($clientRow->country ?: '—'); ?></small></span></div></td>
+                                <td data-label="Account manager"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clientRow->accountManager): ?><div class="ft-client-person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['name' => $clientRow->accountManager->name,'size' => 26]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.avatar'); ?>
@@ -132,8 +132,8 @@
 <?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?><span><?php echo e($clientRow->accountManager->name); ?></span></div><?php else: ?><span class="muted">Unassigned</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></td>
-                                <td><b><?php echo e($clientRow->active_jobs_count); ?> / <?php echo e($clientRow->total_jobs_count); ?></b> active<div class="ft-mini-progress"><span style="width:<?php echo e($clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0); ?>%"></span></div></td>
-                                <td>
+                                <td data-label="Jobs"><b><?php echo e($clientRow->active_jobs_count); ?> / <?php echo e($clientRow->total_jobs_count); ?></b> active<div class="ft-mini-progress"><span style="width:<?php echo e($clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0); ?>%"></span></div></td>
+                                <td data-label="Tasks">
                                     <b><?php echo e($clientRow->open_tasks_count); ?></b> open
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((int) $clientRow->overdue_tasks_count > 0): ?>
                                         <small class="ft-text-red"><?php echo e($clientRow->overdue_tasks_count); ?> overdue</small>
@@ -143,11 +143,11 @@
                                         <small class="ft-text-green">0 overdue</small>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </td>
-                                <td><span class="ft-client-health <?php echo e($healthClass); ?>"><?php echo e($rowHealth); ?></span></td>
-                                <td><?php echo e($clientRow->next_delivery_at ? \Carbon\Carbon::parse($clientRow->next_delivery_at)->format('M j') : '—'); ?></td>
-                                <td><b>$<?php echo e(number_format($clientRow->outstanding_balance,0)); ?></b></td>
-                                <td><?php echo e($clientRow->updated_at?->diffForHumans(short:true)); ?></td>
-                                <td class="ft-client-action-cell">
+                                <td data-label="Health"><span class="ft-client-health <?php echo e($healthClass); ?>"><?php echo e($rowHealth); ?></span></td>
+                                <td data-label="Next delivery"><?php echo e($clientRow->next_delivery_at ? \Carbon\Carbon::parse($clientRow->next_delivery_at)->format('M j') : '—'); ?></td>
+                                <td data-label="Outstanding"><b>$<?php echo e(number_format($clientRow->outstanding_balance,0)); ?></b></td>
+                                <td data-label="Updated"><?php echo e($clientRow->updated_at?->diffForHumans(short:true)); ?></td>
+                                <td data-label="Actions" class="ft-client-action-cell">
                                     <button type="button" class="ft-client-more" wire:click.stop="toggleClientMenu(<?php echo e($clientRow->id); ?>)" aria-label="Client actions">⋮</button>
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($actionMenuClientId === (int)$clientRow->id): ?>
                                         <div class="ft-client-action-menu" x-on:click.stop>

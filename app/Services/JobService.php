@@ -242,7 +242,7 @@ class JobService
 
     public function deactivate(FlowJob $job, User $actor): FlowJob
     {
-        $this->assertEditable($job, $actor);
+        $this->assertStatusEditable($job, $actor);
         $old = $job->status;
         $job->update(['status' => 'Inactive']);
         $job->activities()->create([
@@ -256,7 +256,7 @@ class JobService
 
     public function cancel(FlowJob $job, User $actor): FlowJob
     {
-        $this->assertEditable($job, $actor);
+        $this->assertStatusEditable($job, $actor);
         DB::transaction(function () use ($job, $actor) {
             $job->tasks()->whereNull('completed_at')->update(['status' => 'Cancelled']);
             $job->update(['status' => 'Cancelled']);
@@ -449,7 +449,7 @@ class JobService
 
     public function completePhase(FlowJob $job, User $actor, bool $automatic = false): FlowJob
     {
-        if (!$automatic) $this->assertEditable($job, $actor);
+        if (!$automatic) $this->assertStatusEditable($job, $actor);
         return DB::transaction(function () use ($job, $actor) {
             $this->syncWorkflowTasks($job, $actor);
             $job = $this->findVisible($actor, $job->id);
@@ -510,7 +510,7 @@ class JobService
 
     public function moveToPhase(FlowJob $job, int $phaseId, User $actor): FlowJob
     {
-        $this->assertEditable($job, $actor);
+        $this->assertStatusEditable($job, $actor);
         $job->load('phase', 'workflow.phases');
         $target = $job->workflow->phases->firstWhere('id', $phaseId);
         abort_unless($target, 422, 'Invalid workflow phase.');
@@ -571,7 +571,7 @@ class JobService
             ], [
                 'task_number' => 'TSK-'.str_pad((string) ((int) Task::withTrashed()->max('id') + 301), 5, '0', STR_PAD_LEFT),
                 'assignee_id' => $assigneeId,
-                'setup_assignee_id' => $template->default_assignee_id,
+                'setup_assignee_id' => $assigneeId,
                 'document_category_id' => $template->document_category_id,
                 'document_requirement_source' => $template->document_category_id ? 'task_pack' : null,
                 'title' => $template->title,
@@ -596,21 +596,20 @@ class JobService
             // when the Task Pack now has an explicit default assignee. A manual
             // reassignment is preserved because its assignee differs from the
             // stored setup_assignee_id.
-            $templateAssigneeId = $template->default_assignee_id ? (int) $template->default_assignee_id : null;
+            // Store the resolved Task Pack assignee (explicit user first,
+            // otherwise the Task Pack's default department resolution) so the
+            // same initial owner is shown everywhere in the system.
+            $templateAssigneeId = $assigneeId ? (int) $assigneeId : null;
             $previousSetupAssigneeId = $task->setup_assignee_id ? (int) $task->setup_assignee_id : null;
-            if ($templateAssigneeId) {
-                $followsSetup = !$task->assignee_id
-                    || ($previousSetupAssigneeId && (int) $task->assignee_id === $previousSetupAssigneeId)
-                    || (!$previousSetupAssigneeId && (int) $task->assignee_id === (int) ($job->coordinator_id ?: 0));
+            $followsSetup = !$task->assignee_id
+                || ($previousSetupAssigneeId && (int) $task->assignee_id === $previousSetupAssigneeId)
+                || (!$previousSetupAssigneeId && (int) $task->assignee_id === (int) ($job->coordinator_id ?: 0));
 
-                if ($followsSetup && (int) ($task->assignee_id ?: 0) !== $templateAssigneeId) {
-                    $changes['assignee_id'] = $templateAssigneeId;
-                }
-                if ($previousSetupAssigneeId !== $templateAssigneeId) {
-                    $changes['setup_assignee_id'] = $templateAssigneeId;
-                }
-            } elseif (!$task->assignee_id && $assigneeId) {
-                $changes['assignee_id'] = $assigneeId;
+            if ($followsSetup && (int) ($task->assignee_id ?: 0) !== (int) ($templateAssigneeId ?: 0)) {
+                $changes['assignee_id'] = $templateAssigneeId;
+            }
+            if ($previousSetupAssigneeId !== $templateAssigneeId) {
+                $changes['setup_assignee_id'] = $templateAssigneeId;
             }
             if ((int) ($task->document_category_id ?: 0) !== (int) ($template->document_category_id ?: 0)) {
                 $changes['document_category_id'] = $template->document_category_id ?: null;
@@ -689,6 +688,15 @@ class JobService
     private function assertEditable(FlowJob $job, User $actor): void
     {
         abort_unless(app(AccessControlService::class)->canEditJob($actor, $job), 403);
+    }
+
+    private function assertStatusEditable(FlowJob $job, User $actor): void
+    {
+        abort_unless(
+            app(AccessControlService::class)->canChangeJobStatus($actor, $job),
+            403,
+            'Only the assigned Job owner or an Admin/Super Admin can change the Job status.'
+        );
     }
 
     private function ensureMembers(FlowJob $job): void

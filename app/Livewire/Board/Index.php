@@ -6,6 +6,7 @@ use App\Services\BoardService;
 use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use Livewire\Attributes\On;
 use Livewire\Component;
 use Throwable;
 
@@ -138,6 +139,12 @@ class Index extends Component
             'due' => $this->due,
             'quick' => $this->quick,
         ];
+    }
+
+    #[On('flowtrack-notification')]
+    public function refreshRealtime(): void
+    {
+        // Re-render this screen when Pusher reports a visible Job/Task change.
     }
 
     public function render()

@@ -69,6 +69,7 @@
 <?php unset($__componentOriginal91e787de8877d89678d42f881ad44e86); ?>
 <?php endif; ?>
     <?php else: ?>
+        <span class="ft-jobs-list-poll" wire:poll.20s.visible aria-hidden="true"></span>
         <?php if (isset($component)) { $__componentOriginal25a57b57fd3380b6c9462e30c241e3d7 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal25a57b57fd3380b6c9462e30c241e3d7 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.table','data' => ['jobs' => $jobs,'jobSummary' => $jobSummary,'clients' => $clients,'phases' => $phases,'users' => $users,'priorities' => $priorities,'healthOptions' => $healthOptions,'jobStatuses' => $jobStatuses,'phaseFilter' => $phase,'healthFilter' => $health,'quickFilter' => $quickFilter,'showMoreFilters' => $showMoreFilters,'selectedJobIds' => $selectedJobIds]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MasterRecord;
 use App\Models\MasterValue;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -67,7 +68,13 @@ class MasterDataService
     public function active(string $type)
     {
         $this->syncLegacy();
-        return MasterRecord::query()->forWorkspace($this->workspaceId())->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get();
+        $workspaceId = $this->workspaceId();
+        $rows = Cache::remember($this->activeCacheKey($workspaceId, $type), now()->addMinutes(5), fn () =>
+            MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get()
+                ->map(fn (MasterRecord $record) => $record->getAttributes())->all()
+        );
+
+        return collect($rows)->map(fn (array $attributes) => (new MasterRecord())->newFromBuilder($attributes));
     }
 
     public function save(string $type, array $data, ?int $id = null): MasterRecord
@@ -92,6 +99,7 @@ class MasterDataService
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
             ]);
             $this->mirrorLegacy($record);
+            $this->forgetActiveCache($record->type);
             return $record;
         });
     }
@@ -102,6 +110,7 @@ class MasterDataService
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         $record->update(['status' => $record->status === 'active' ? 'inactive' : 'active']);
         $this->mirrorLegacy($record);
+        $this->forgetActiveCache($record->type);
         return $record;
     }
 
@@ -118,13 +127,18 @@ class MasterDataService
         }
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         if (Schema::hasTable('master_values')) MasterValue::where('group_key', $legacyGroup)->where('code', $record->code)->delete();
+        $type = $record->type;
         $record->delete();
+        $this->forgetActiveCache($type);
     }
 
     public function syncLegacy(): void
     {
         if (!Schema::hasTable('master_values') || !Schema::hasTable('master_records')) return;
         $workspaceId = $this->workspaceId();
+        $syncKey = 'flowtrack:master:legacy-sync:'.$workspaceId;
+        if (Cache::get($syncKey)) return;
+
         foreach (MasterValue::query()->get() as $legacy) {
             $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true) ?: Str::singular($legacy->group_key);
             MasterRecord::query()->firstOrCreate(
@@ -138,6 +152,8 @@ class MasterDataService
                 ]
             );
         }
+
+        Cache::put($syncKey, true, now()->addMinutes(5));
     }
 
     private function mirrorLegacy(MasterRecord $record): void
@@ -155,6 +171,16 @@ class MasterDataService
             ]
         );
     }
+    private function activeCacheKey(int $workspaceId, string $type): string
+    {
+        return "flowtrack:master:active:{$workspaceId}:{$type}";
+    }
+
+    private function forgetActiveCache(string $type): void
+    {
+        Cache::forget($this->activeCacheKey($this->workspaceId(), $type));
+    }
+
     private function assertManage(): void
     {
         $user = auth()->user();

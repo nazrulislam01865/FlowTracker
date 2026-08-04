@@ -16,6 +16,7 @@ use App\Services\TaskService;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\Attributes\On;
 use Livewire\Attributes\Url;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -408,6 +409,19 @@ class Index extends Component
         app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
     }
 
+    public function updatedJobDocumentUploads(): void
+    {
+        // Livewire first transfers selected files into temporary storage. As
+        // soon as that transfer finishes, persist them to the configured
+        // FlowTrack document disk and link them to the selected Task Pack
+        // requirement. This avoids the confusing state where a browser upload
+        // appears to finish but the file is only temporary and disappears on
+        // the next render.
+        if (!$this->jobDocumentUploads || !$this->jobDocumentTaskId) return;
+
+        $this->uploadJobDocuments();
+    }
+
     public function uploadJobDocuments(): void
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
@@ -432,7 +446,17 @@ class Index extends Component
         }
 
         $this->jobDocumentUploads = [];
-        session()->flash('success', 'Document uploaded and linked to the selected Task Pack task.');
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*', 'jobDocumentTaskId']);
+
+        // Re-read the Job immediately so the linked file and requirement count
+        // are visible in the same Livewire response. Then move the selector to
+        // the next missing Task Pack document, if there is one.
+        $fresh = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+        $missing = \App\Support\JobDetailPresenter::requiredDocuments($fresh)
+            ->first(fn ($requirement) => !$requirement->complete);
+        $this->jobDocumentTaskId = $missing?->task?->id ?: $task->id;
+
+        session()->flash('success', 'Document uploaded and linked to '.$task->title.'.');
     }
 
     public function attachExistingDocument(): void
@@ -752,6 +776,12 @@ class Index extends Component
                 (int) ($task->setupTemplate?->sort_order ?? 999),
             ])->first();
         $this->jobDocumentTaskId = $task?->id;
+    }
+
+    #[On('flowtrack-notification')]
+    public function refreshRealtime(): void
+    {
+        // Re-render open Job/Task details when another permitted user updates them.
     }
 
     public function render()
