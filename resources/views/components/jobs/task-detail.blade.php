@@ -6,6 +6,7 @@
     'priorities'=>collect(),
     'availableDocuments'=>collect(),
     'activityTab'=>'all',
+    'activityPage'=>1,
     'taskDocumentUploads'=>[],
     'showTaskDocumentPicker'=>false,
 ])
@@ -35,47 +36,71 @@
     $timeline = $commentEvents->concat($activityEvents)->sortByDesc('created_at')->values();
     if($activityTab==='comments') $timeline = $timeline->where('kind','comment')->values();
     if($activityTab==='history') $timeline = $timeline->where('kind','activity')->values();
+    $activityPerPage = 30;
+    $timelineTotal = $timeline->count();
+    $timelinePages = max(1, (int) ceil($timelineTotal / $activityPerPage));
+    $timelineCurrentPage = min(max(1, (int) $activityPage), $timelinePages);
+    $timeline = $timeline->forPage($timelineCurrentPage, $activityPerPage)->values();
 @endphp
 <div class="ft-task-detail-page ft-exact-task-detail">
     @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
     <div class="ft-detail-toolbar task-toolbar ft-exact-task-header">
-        <div>
-            <div class="ft-detail-breadcrumb"><a href="{{ route('my-work') }}" wire:navigate>My Work</a><span>/</span><span>{{ $task->task_number }}</span></div>
-            <div class="ft-detail-number">{{ $task->task_number }}</div>
-            <h1>{{ $task->title }}</h1>
+        <div class="ft-task-heading-copy">
+            <div class="ft-detail-breadcrumb ft-id-breadcrumb">
+                <a href="{{ route('my-work') }}" wire:navigate>My Work</a><span>/</span>
+                <a class="ft-copyable-id-link" href="{{ route('jobs.index', ['open'=>$task->flow_job_id, 'task'=>$task->id]) }}" wire:navigate>{{ $task->task_number }}</a>
+                <button type="button" class="ft-copy-id-btn" title="Copy Task ID" aria-label="Copy {{ $task->task_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($task->task_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+            </div>
+            @if($job)
+                <div class="ft-detail-number ft-detail-linked-number">
+                    <a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+                    <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy {{ $job->job_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->job_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                </div>
+            @endif
+            <h1 class="ft-editable-task-title" x-data="{editing:false}">
+                <span x-show="!editing">{{ $task->title }}</span>
+                @if($canEditTask)
+                    <button x-show="!editing" type="button" class="ft-pencil" aria-label="Edit task title" title="Edit task name" x-on:click.stop="editing=true; $nextTick(() => $refs.taskTitle.focus())">✎</button>
+                    <input x-ref="taskTitle" x-show="editing" type="text" value="{{ $task->title }}" maxlength="255"
+                        x-on:keydown.escape="editing=false"
+                        x-on:keydown.enter="$event.target.blur()"
+                        x-on:blur="editing=false"
+                        wire:change="updateSelectedTaskField('title', $event.target.value)">
+                @endif
+            </h1>
         </div>
-        <div class="ft-detail-actions"><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" wire:loading.attr="disabled" wire:target="markTaskComplete" @disabled($task->status==='Completed' || !$canEditTask)><span wire:loading.remove wire:target="markTaskComplete">{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</span><span wire:loading wire:target="markTaskComplete">Saving…</span></button><button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button">×</button></div>
+        <div class="ft-detail-actions"><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" wire:loading.attr="disabled" wire:target="markTaskComplete" @disabled($task->status==='Completed' || !$canEditTask)><span wire:loading.remove wire:target="markTaskComplete">{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</span><span wire:loading wire:target="markTaskComplete">Saving…</span></button><button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
 
     <div class="ft-task-detail-layout">
         <main>
-            <section class="ft-task-property-grid">
-                <div class="ft-task-property" x-data="{editing:false}">
+            <section class="ft-task-property-grid ft-friendly-task-properties">
+                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Assignee</small>
-                    <div x-show="!editing"><x-ui.avatar :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/><b class="ft-property-value">{{ $task->assignee?->name ?? 'Unassigned' }}</b>@if($canAssignTask)<button type="button" title="Edit assignee" x-on:click="editing=true;$nextTick(()=>$refs.assignee.focus())">✎</button>@endif</div>
-                    @if($canAssignTask)<select x-ref="assignee" x-show="editing" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" x-on:blur="editing=false" wire:change="updateSelectedTaskField('assignee_id',$event.target.value)"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$task->assignee_id===(int)$user->id)>{{ $user->name }}</option>@endforeach</select>@endif
+                    <div class="ft-task-property-display"><x-ui.avatar :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/><b class="ft-property-value">{{ $task->assignee?->name ?? 'Unassigned' }}</b>@if($canAssignTask)<button type="button" title="Edit assignee" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.assignee?.focus())">✎</button>@endif</div>
+                    @if($canAssignTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="assignee" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('assignee_id',$event.target.value)"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$task->assignee_id===(int)$user->id)>{{ $user->name }}</option>@endforeach</select></div>@endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}">
+                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Status</small>
-                    <div x-show="!editing"><span class="status-dot blue"></span><b class="ft-property-value">{{ $task->status }}</b>@if($canEditTask)<button type="button" title="Edit status" x-on:click="editing=true;$nextTick(()=>$refs.status.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<select x-ref="status" x-show="editing" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" x-on:blur="editing=false" wire:change="updateSelectedTaskField('status',$event.target.value)">@foreach($taskStatuses as $status)<option value="{{ $status }}" @selected($task->status===$status)>{{ $status }}</option>@endforeach</select>@endif
+                    <div class="ft-task-property-display"><span class="status-dot blue"></span><b class="ft-property-value">{{ $task->status }}</b>@if($canEditTask)<button type="button" title="Edit status" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.status?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="status" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('status',$event.target.value)">@foreach($taskStatuses as $status)<option value="{{ $status }}" @selected($task->status===$status)>{{ $status }}</option>@endforeach</select></div>@endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}">
+                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Priority</small>
-                    <div x-show="!editing"><span class="status-dot amber"></span><b class="ft-property-value">{{ $task->priority }}</b>@if($canEditTask)<button type="button" title="Edit priority" x-on:click="editing=true;$nextTick(()=>$refs.priority.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<select x-ref="priority" x-show="editing" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" x-on:blur="editing=false" wire:change="updateSelectedTaskField('priority',$event.target.value)">@foreach($priorities as $priority)<option value="{{ $priority->name }}" @selected($task->priority===$priority->name)>{{ $priority->name }}</option>@endforeach</select>@endif
+                    <div class="ft-task-property-display"><span class="status-dot amber"></span><b class="ft-property-value">{{ $task->priority }}</b>@if($canEditTask)<button type="button" title="Edit priority" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.priority?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="priority" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('priority',$event.target.value)">@foreach($priorities as $priority)<option value="{{ $priority->name }}" @selected($task->priority===$priority->name)>{{ $priority->name }}</option>@endforeach</select></div>@endif
                 </div>
-                <div class="ft-task-property"><small>Phase</small><div><b class="ft-property-value">{{ $task->phase?->name ?? '—' }}</b></div></div>
-                <div class="ft-task-property" x-data="{editing:false}">
+                <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><b class="ft-property-value">{{ $task->phase?->name ?? '—' }}</b></div></div>
+                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Start date</small>
-                    <div x-show="!editing"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $effectiveStartDate?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit start date" x-on:click="editing=true;$nextTick(()=>$refs.start.showPicker ? $refs.start.showPicker() : $refs.start.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<input x-ref="start" x-show="editing" class="ft-task-property-input" type="date" value="{{ $effectiveStartDate?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" x-on:blur="editing=false" wire:change="updateSelectedTaskField('start_date',$event.target.value)">@endif
+                    <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $effectiveStartDate?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit start date" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.start?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><input x-ref="start" class="ft-task-property-input" type="date" value="{{ $effectiveStartDate?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('start_date',$event.target.value)"></div>@endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}">
+                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Due date</small>
-                    <div x-show="!editing" class="{{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $task->due_date?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit due date" x-on:click="editing=true;$nextTick(()=>$refs.due.showPicker ? $refs.due.showPicker() : $refs.due.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<input x-ref="due" x-show="editing" class="ft-task-property-input" type="date" value="{{ $task->due_date?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" x-on:blur="editing=false" wire:change="updateSelectedTaskField('due_date',$event.target.value)">@endif
+                    <div class="ft-task-property-display {{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $task->due_date?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit due date" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.due?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><input x-ref="due" class="ft-task-property-input" type="date" value="{{ $task->due_date?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('due_date',$event.target.value)"></div>@endif
                 </div>
             </section>
 
@@ -160,6 +185,16 @@
                         <div class="empty-state">No {{ $activityTab==='comments' ? 'comments' : ($activityTab==='history' ? 'changes' : 'activity') }} yet.</div>
                     @endforelse
                 </div>
+                @if($timelineTotal > $activityPerPage)
+                    <div class="ft-activity-pagination">
+                        <span>Showing {{ (($timelineCurrentPage - 1) * $activityPerPage) + 1 }}–{{ min($timelineCurrentPage * $activityPerPage, $timelineTotal) }} of {{ $timelineTotal }}</span>
+                        <div>
+                            <button type="button" wire:click="setTaskActivityPage({{ $timelineCurrentPage - 1 }})" @disabled($timelineCurrentPage <= 1)>Previous</button>
+                            <span>Page {{ $timelineCurrentPage }} of {{ $timelinePages }}</span>
+                            <button type="button" wire:click="setTaskActivityPage({{ $timelineCurrentPage + 1 }})" @disabled($timelineCurrentPage >= $timelinePages)>Next</button>
+                        </div>
+                    </div>
+                @endif
             </section>
         </main>
         <aside>

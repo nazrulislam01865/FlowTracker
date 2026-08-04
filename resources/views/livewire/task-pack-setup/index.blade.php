@@ -26,7 +26,10 @@
                         <h2>{{ $pack->name }}</h2>
                         <p>{{ $pack->code }} · {{ $pack->items->count() }} predefined task{{ $pack->items->count() === 1 ? '' : 's' }} · {{ $pack->is_active ? 'Active' : 'Inactive' }}</p>
                     </div>
-                    <a class="ft-admin-outline-small" href="{{ route('task-pack.edit', $pack->id) }}" wire:navigate>Edit</a>
+                    <div class="ft-taskpack-card-actions">
+                        <a class="ft-admin-outline-small" href="{{ route('task-pack.edit', $pack->id) }}" wire:navigate>Edit</a>
+                        <button type="button" class="ft-admin-danger-small" wire:click="deletePack({{ $pack->id }})" wire:confirm="Delete this Task Pack? This is only allowed when it is not mapped to a Workflow and has not generated Tasks.">Delete</button>
+                    </div>
                 </div>
                 <p class="ft-taskpack-description">{{ $pack->description ?: 'No description' }}</p>
 
@@ -36,7 +39,7 @@
                             <div>
                                 <b>{{ $loop->iteration }}. {{ $item->title }}</b>
                                 <small>
-                                    {{ $item->defaultAssignee?->name ?? 'Job coordinator' }} · Due set from Task details · {{ $item->priority?->name ?? 'Use Job priority' }}
+                                    {{ $item->defaultAssignee?->name ?? 'Unassigned' }} · Due set from Task details · {{ $item->priority?->name ?? 'Use Job priority' }}
                                     @if($item->documentCategory) · Required file: {{ $item->documentCategory->name }} @endif
                                 </small>
                             </div>

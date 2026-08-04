@@ -38,23 +38,31 @@
                 <p>Select the Task Pack document requirement first. The uploaded or chosen file is linked to that exact task automatically.</p>
 
                 @if($required->isNotEmpty())
-                    <label>Document type</label>
-                    <select wire:model.live="jobDocumentTaskId" class="ft-document-purpose-select">
-                        <option value="">Select document type</option>
-                        @foreach($required as $item)
-                            <option value="{{ $item->task->id }}">{{ $item->name }} · {{ $item->phase->name }} · {{ $item->task->title }}</option>
-                        @endforeach
-                    </select>
-                    <small class="ft-document-match-note">The matching phase, Task Pack requirement and task are resolved automatically.</small>
+                    <div class="ft-document-purpose-field">
+                        <label for="jobDocumentRequirement-{{ $job->id }}">Document type</label>
+                        <select id="jobDocumentRequirement-{{ $job->id }}" wire:model.live="jobDocumentTaskId" class="ft-document-purpose-select">
+                            <option value="">Select a Task Pack document requirement</option>
+                            @foreach($required as $item)
+                                <option value="{{ $item->task->id }}">{{ $item->name }} · {{ $item->phase->name }} · {{ $item->task->title }}</option>
+                            @endforeach
+                        </select>
+                        <small class="ft-document-match-note">Choose the required document first. FlowTrack links the uploaded or selected file to the matching phase and task automatically.</small>
+                    </div>
 
-                    @if($canUploadDocument)
-                        <label class="ft-upload-zone ft-livewire-upload-zone" for="jobDocumentUpload-{{ $job->id }}">
-                            <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
-                            <span class="ft-paperclip">⌕</span>
-                            <div>Drop files here or <strong>browse</strong><small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
-                        </label>
-                    @endif
-                    @if($canLinkDocument)<div class="ft-document-link-action"><button class="ft-outline-btn" type="button" wire:click="toggleDocumentPicker">Choose from Documents</button></div>@endif
+                    <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone">
+                        @if($canUploadDocument)
+                            <label class="ft-task-upload-drop ft-livewire-upload-zone" for="jobDocumentUpload-{{ $job->id }}">
+                                <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                                <span class="ft-paperclip">⌕</span>
+                                <div>Drop files here or <strong>browse</strong><small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                            </label>
+                        @else
+                            <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Document upload<small>You have read-only access to Job documents.</small></div></div>
+                        @endif
+                        @if($canLinkDocument)
+                            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleDocumentPicker">Choose from Documents</button>
+                        @endif
+                    </div>
                     @unless($canManageDocuments)<p class="muted small">You have read-only access to Job documents.</p>@endunless
 
                     <div class="ft-upload-progress-wrap" x-cloak x-show="uploading" x-transition.opacity>

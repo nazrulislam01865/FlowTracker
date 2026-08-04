@@ -24,6 +24,10 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
 });
 
+Route::get('/session/status', function () {
+    return response()->json(['ok' => true, 'user_id' => auth()->id()]);
+})->middleware('auth')->name('session.status');
+
 Route::middleware('auth')->group(function () {
     Route::post('/pusher/auth', function (\Illuminate\Http\Request $request) {
         abort_unless(auth()->user()->canModule('notifications', 'view'), 403);
@@ -57,6 +61,10 @@ Route::middleware('auth')->group(function () {
     })->name('documents.download');
     Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
     Route::get('/notifications', NotificationsController::class)->middleware('permission:notifications.view')->name('notifications');
+    Route::get('/notifications/unread-count', function () {
+        abort_unless(auth()->user()->canModule('notifications', 'view'), 403);
+        return response()->json(['count' => app(\App\Services\NotificationService::class)->unreadCount(auth()->user())]);
+    })->name('notifications.unread-count');
     Route::get('/profile', ProfileController::class)->name('profile');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 

@@ -14,6 +14,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'healthOptions'=>collect(),
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
+    'activityPage'=>1,
     'jobDocumentUploads'=>[],
     'showDocumentPicker'=>false,
 ]));
@@ -44,6 +45,7 @@ foreach (array_filter(([
     'healthOptions'=>collect(),
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
+    'activityPage'=>1,
     'jobDocumentUploads'=>[],
     'showDocumentPicker'=>false,
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
@@ -64,7 +66,11 @@ unset($__defined_vars, $__key, $__value); ?>
 <div class="ft-job-detail-page ft-exact-job-detail">
     <div class="ft-detail-toolbar ft-exact-job-header">
         <div class="ft-job-heading-copy">
-            <div class="ft-detail-breadcrumb">Jobs / <?php echo e($job->job_number); ?></div>
+            <div class="ft-detail-breadcrumb ft-id-breadcrumb">
+                <span>Jobs</span><span>/</span>
+                <a class="ft-copyable-id-link" href="<?php echo e(route('jobs.index', ['open'=>$job->id])); ?>" wire:navigate><?php echo e($job->job_number); ?></a>
+                <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy <?php echo e($job->job_number); ?>" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(<?php echo \Illuminate\Support\Js::from($job->job_number)->toHtml() ?>); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+            </div>
             <h1 class="ft-editable-job-title" x-data="{ editing:false }">
                 <span x-show="!editing"><?php echo e($job->title); ?></span>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job)): ?>
@@ -81,7 +87,10 @@ unset($__defined_vars, $__key, $__value); ?>
                 <span class="ft-soft-pill <?php echo e(\App\Support\JobDetailPresenter::healthClass($job->health)); ?>"><?php echo e($job->health); ?></span>
                 <span class="ft-soft-pill red"><?php echo e($job->priority); ?></span>
                 <span class="ft-soft-pill purple"><?php echo e($job->phase?->name ?? $job->status); ?></span>
-                <span class="ft-job-number-inline"><?php echo e($job->job_number); ?> <span aria-hidden="true">▧</span></span>
+                <span class="ft-job-number-inline ft-copyable-id-wrap">
+                    <a href="<?php echo e(route('jobs.index', ['open'=>$job->id])); ?>" wire:navigate><?php echo e($job->job_number); ?></a>
+                    <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy <?php echo e($job->job_number); ?>" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(<?php echo \Illuminate\Support\Js::from($job->job_number)->toHtml() ?>); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                </span>
             </div>
         </div>
         <div class="ft-detail-actions ft-exact-job-team" aria-label="Job team">
@@ -124,14 +133,14 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($detailTab==='overview'): ?>
         <?php if (isset($component)) { $__componentOriginaldad3229fa826ba1f935ba3112a62f4a3 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginaldad3229fa826ba1f935ba3112a62f4a3 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.detail-overview','data' => ['job' => $job,'expandedPhaseIds' => $expandedPhaseIds,'taskStatuses' => $taskStatuses,'users' => $users,'priorities' => $priorities,'products' => $products,'categories' => $categories,'jobTaskSearch' => $jobTaskSearch,'activityTab' => $activityTab]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.detail-overview','data' => ['job' => $job,'expandedPhaseIds' => $expandedPhaseIds,'taskStatuses' => $taskStatuses,'users' => $users,'priorities' => $priorities,'products' => $products,'categories' => $categories,'jobTaskSearch' => $jobTaskSearch,'activityTab' => $activityTab,'activityPage' => $activityPage]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.detail-overview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'expanded-phase-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($expandedPhaseIds),'task-statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskStatuses),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($users),'priorities' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($priorities),'products' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($products),'categories' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categories),'job-task-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobTaskSearch),'activity-tab' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityTab)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'expanded-phase-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($expandedPhaseIds),'task-statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskStatuses),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($users),'priorities' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($priorities),'products' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($products),'categories' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categories),'job-task-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobTaskSearch),'activity-tab' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityTab),'activity-page' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityPage)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

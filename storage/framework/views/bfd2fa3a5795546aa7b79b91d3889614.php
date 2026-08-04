@@ -67,24 +67,27 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $laneStatuses; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $laneStatus): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <?php ($laneTasks = $jobTasks->where('status', $laneStatus)); ?>
                     <div
-                        class="ft-task-job-status-cell"
+                        class="ft-task-job-status-cell <?php echo e($laneTasks->isEmpty() ? 'is-empty' : 'has-tasks'); ?>"
+                        data-status="<?php echo e($laneStatus); ?>"
                         <?php if($draggable): ?>
                             x-on:dragover.prevent
                             x-on:drop.prevent="if(draggedTask){ $wire.moveTask(draggedTask, <?php echo e(\Illuminate\Support\Js::from($laneStatus)); ?>); draggedTask=null }"
                         <?php endif; ?>
                     >
+                        <div class="ft-mobile-lane-label"><span><?php echo e($laneStatus); ?></span><b><?php echo e($laneTasks->count()); ?></b></div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_2 = true; $__currentLoopData = $laneTasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $taskRow): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_2 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($draggable): ?>
+                            <?php ($canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditTask(auth()->user(), $taskRow)); ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDragTask): ?>
                                 <?php if (isset($component)) { $__componentOriginal637533543995aac582a7a49daaf2271d = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal637533543995aac582a7a49daaf2271d = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.task-card','data' => ['task' => $taskRow,'draggable' => 'true','xOn:dragstart' => 'draggedTask='.e($taskRow->id).'','wire:key' => ''.e($keyPrefix).'-'.e(str($laneStatus)->slug()).'-task-'.e($taskRow->id).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.task-card','data' => ['task' => $taskRow,'draggable' => 'true','xOn:dragstart' => 'draggedTask='.e($taskRow->id).'','xOn:dragend' => 'draggedTask=null','wire:key' => ''.e($keyPrefix).'-'.e(str($laneStatus)->slug()).'-task-'.e($taskRow->id).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('board.task-card'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskRow),'draggable' => 'true','x-on:dragstart' => 'draggedTask='.e($taskRow->id).'','wire:key' => ''.e($keyPrefix).'-'.e(str($laneStatus)->slug()).'-task-'.e($taskRow->id).'']); ?>
+<?php $component->withAttributes(['task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskRow),'draggable' => 'true','x-on:dragstart' => 'draggedTask='.e($taskRow->id).'','x-on:dragend' => 'draggedTask=null','wire:key' => ''.e($keyPrefix).'-'.e(str($laneStatus)->slug()).'-task-'.e($taskRow->id).'']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

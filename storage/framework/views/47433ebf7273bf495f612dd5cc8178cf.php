@@ -3,14 +3,14 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('task-pack-setup.form', ['task-pack-id' => $taskPackId]);
+[$__name, $__params] = $__split('clients.index', []);
 
 $__keyOuter = $__key ?? null;
 
 $__key = null;
 $__componentSlots = [];
 
-$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-2439029053-0', $__key);
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-4074563733-0', $__key);
 
 $__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
 
@@ -27,4 +27,4 @@ unset($__split);
 ?>
 <?php $__env->stopSection(); ?>
 
-<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/pages/task-pack-form.blade.php ENDPATH**/ ?>
+<?php echo $__env->make('layouts.app', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/pages/clients.blade.php ENDPATH**/ ?>

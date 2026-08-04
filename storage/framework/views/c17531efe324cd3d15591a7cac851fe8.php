@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true }">
+<div class="ft-board-page ft-my-work-page" wire:poll.20s.visible x-data="{ allGroupsOpen:true, draggedTask:null }">
     <div class="ft-board-sticky-header ft-mywork-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>My Work</h1><p>All visible jobs and tasks across the workspace</p></div>
@@ -24,9 +24,10 @@
                 <button class="ft-quick-chip red <?php echo e($quick==='blocked'?'active':''); ?>" wire:click="setQuick('blocked')">Blocked <b><?php echo e($counts['blocked']); ?></b></button>
                 <button class="ft-quick-chip <?php echo e($quick==='waiting'?'active':''); ?>" wire:click="setQuick('waiting')">Waiting external <b><?php echo e($counts['waiting']); ?></b></button>
                 <button class="ft-quick-chip <?php echo e($quick==='completed'?'active':''); ?>" wire:click="setQuick('completed')">Completed <b><?php echo e($counts['completed']); ?></b></button>
-                <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=!allGroupsOpen; $dispatch(allGroupsOpen ? 'board-expand-all' : 'board-collapse-all')" :title="allGroupsOpen ? 'Collapse all jobs' : 'Expand all jobs'">
-                    <svg :class="{'rotated':!allGroupsOpen}" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                </button>
+                <span class="ft-board-group-controls" aria-label="Job group controls">
+                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                </span>
             </div>
         </section>
     </div>
@@ -44,14 +45,14 @@
     <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
         <?php if (isset($component)) { $__componentOriginal67670d28261a498be033858bd5d8e998 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal67670d28261a498be033858bd5d8e998 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.task-job-matrix','data' => ['tasks' => $tasks,'statuses' => $displayStatuses,'keyPrefix' => 'mywork']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.board.task-job-matrix','data' => ['tasks' => $tasks,'statuses' => $displayStatuses,'draggable' => true,'keyPrefix' => 'mywork']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('board.task-job-matrix'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['tasks' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($tasks),'statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($displayStatuses),'key-prefix' => 'mywork']); ?>
+<?php $component->withAttributes(['tasks' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($tasks),'statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($displayStatuses),'draggable' => true,'key-prefix' => 'mywork']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

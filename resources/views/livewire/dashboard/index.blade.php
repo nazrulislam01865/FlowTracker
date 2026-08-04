@@ -1,4 +1,4 @@
-<div>
+<div wire:poll.15s.visible>
 <x-ui.page-head title="Management Dashboard" :subtitle="now()->format('l, F j').' · Exceptions, workload and delivery health'">
     <x-slot:actions>@if(auth()->user()->canModule('reports','export'))<a class="ghost" href="{{ route('reports') }}" wire:navigate>Export summary</a>@endif @if(auth()->user()->canModule('jobs','create'))<a class="primary" href="{{ route('jobs.index',['create'=>1]) }}" wire:navigate>＋ New Job</a>@endif</x-slot:actions>
 </x-ui.page-head>

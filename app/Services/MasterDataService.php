@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MasterRecord;
 use App\Models\MasterValue;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -39,9 +40,10 @@ class MasterDataService
 
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
 
-    public function list(string $type, string $search = '')
+    public function query(string $type, string $search = '')
     {
         $this->syncLegacy();
+
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
@@ -50,13 +52,29 @@ class MasterDataService
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%")))
-            ->orderBy('sort_order')->orderBy('name')->get();
+            ->orderBy('sort_order')->orderBy('name');
+    }
+
+    public function list(string $type, string $search = '')
+    {
+        return $this->query($type, $search)->get();
+    }
+
+    public function paginate(string $type, string $search = '', int $perPage = 30)
+    {
+        return $this->query($type, $search)->paginate($perPage, ['*'], 'masterPage');
     }
 
     public function active(string $type)
     {
         $this->syncLegacy();
-        return MasterRecord::query()->forWorkspace($this->workspaceId())->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get();
+        $workspaceId = $this->workspaceId();
+        $rows = Cache::remember($this->activeCacheKey($workspaceId, $type), now()->addMinutes(5), fn () =>
+            MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get()
+                ->map(fn (MasterRecord $record) => $record->getAttributes())->all()
+        );
+
+        return collect($rows)->map(fn (array $attributes) => (new MasterRecord())->newFromBuilder($attributes));
     }
 
     public function save(string $type, array $data, ?int $id = null): MasterRecord
@@ -81,6 +99,7 @@ class MasterDataService
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
             ]);
             $this->mirrorLegacy($record);
+            $this->forgetActiveCache($record->type);
             return $record;
         });
     }
@@ -91,6 +110,7 @@ class MasterDataService
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         $record->update(['status' => $record->status === 'active' ? 'inactive' : 'active']);
         $this->mirrorLegacy($record);
+        $this->forgetActiveCache($record->type);
         return $record;
     }
 
@@ -107,46 +127,33 @@ class MasterDataService
         }
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         if (Schema::hasTable('master_values')) MasterValue::where('group_key', $legacyGroup)->where('code', $record->code)->delete();
+        $type = $record->type;
         $record->delete();
+        $this->forgetActiveCache($type);
     }
 
     public function syncLegacy(): void
     {
         if (!Schema::hasTable('master_values') || !Schema::hasTable('master_records')) return;
-
         $workspaceId = $this->workspaceId();
-        $now = now();
-        $rows = MasterValue::query()->get()->map(function (MasterValue $legacy) use ($workspaceId, $now): array {
-            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true);
-            $type = $type === false ? Str::singular($legacy->group_key) : $type;
+        $syncKey = 'flowtrack:master:legacy-sync:'.$workspaceId;
+        if (Cache::get($syncKey)) return;
 
-            return [
-                'workspace_id' => $workspaceId,
-                'parent_id' => null,
-                'type' => $type,
-                'code' => $legacy->code,
-                'name' => $legacy->name,
-                'description' => $legacy->description,
-                'metadata' => $legacy->meta === null
-                    ? null
-                    : json_encode($legacy->meta, JSON_THROW_ON_ERROR),
-                'status' => $legacy->is_active ? 'active' : 'inactive',
-                'sort_order' => (int) $legacy->id,
-                'created_at' => $legacy->created_at ?? $now,
-                'updated_at' => $now,
-                'deleted_at' => null,
-            ];
-        })->all();
+        foreach (MasterValue::query()->get() as $legacy) {
+            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true) ?: Str::singular($legacy->group_key);
+            MasterRecord::query()->firstOrCreate(
+                ['workspace_id' => $workspaceId, 'type' => $type, 'code' => $legacy->code],
+                [
+                    'name' => $legacy->name,
+                    'description' => $legacy->description,
+                    'metadata' => $legacy->meta,
+                    'status' => $legacy->is_active ? 'active' : 'inactive',
+                    'sort_order' => (int) $legacy->id,
+                ]
+            );
+        }
 
-        if ($rows === []) return;
-
-        // A single atomic upsert prevents duplicate-key failures from concurrent
-        // Livewire requests and also restores matching soft-deleted records.
-        DB::table('master_records')->upsert(
-            $rows,
-            ['workspace_id', 'type', 'code'],
-            ['name', 'description', 'metadata', 'status', 'sort_order', 'deleted_at', 'updated_at']
-        );
+        Cache::put($syncKey, true, now()->addMinutes(5));
     }
 
     private function mirrorLegacy(MasterRecord $record): void
@@ -164,6 +171,16 @@ class MasterDataService
             ]
         );
     }
+    private function activeCacheKey(int $workspaceId, string $type): string
+    {
+        return "flowtrack:master:active:{$workspaceId}:{$type}";
+    }
+
+    private function forgetActiveCache(string $type): void
+    {
+        Cache::forget($this->activeCacheKey($this->workspaceId(), $type));
+    }
+
     private function assertManage(): void
     {
         $user = auth()->user();

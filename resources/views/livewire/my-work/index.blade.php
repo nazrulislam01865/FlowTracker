@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true }">
+<div class="ft-board-page ft-my-work-page" wire:poll.20s.visible x-data="{ allGroupsOpen:true, draggedTask:null }">
     <div class="ft-board-sticky-header ft-mywork-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>My Work</h1><p>All visible jobs and tasks across the workspace</p></div>
@@ -24,9 +24,10 @@
                 <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $counts['blocked'] }}</b></button>
                 <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $counts['waiting'] }}</b></button>
                 <button class="ft-quick-chip {{ $quick==='completed'?'active':'' }}" wire:click="setQuick('completed')">Completed <b>{{ $counts['completed'] }}</b></button>
-                <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=!allGroupsOpen; $dispatch(allGroupsOpen ? 'board-expand-all' : 'board-collapse-all')" :title="allGroupsOpen ? 'Collapse all jobs' : 'Expand all jobs'">
-                    <svg :class="{'rotated':!allGroupsOpen}" viewBox="0 0 24 24"><path d="m6 15 6-6 6 6"/></svg>
-                </button>
+                <span class="ft-board-group-controls" aria-label="Job group controls">
+                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                </span>
             </div>
         </section>
     </div>
@@ -42,6 +43,6 @@
         </div>
     </div>
     <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
-        <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" key-prefix="mywork" />
+        <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" :draggable="true" key-prefix="mywork" />
     </div>
 </div>

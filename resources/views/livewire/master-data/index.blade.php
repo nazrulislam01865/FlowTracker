@@ -33,13 +33,13 @@
                     <tbody>
                     @forelse($rows as $r)
                         <tr>
-                            <td>{{ $r->sort_order }}</td>
-                            <td><b>{{ $r->code }}</b></td>
-                            <td>{{ $r->name }}</td>
-                            <td>{{ $r->parent?->name ?? '—' }}</td>
-                            <td>{{ $r->description ?: '—' }}</td>
-                            <td><x-ui.badge :label="$r->status==='active'?'Active':'Inactive'"/></td>
-                            <td><div class="row-actions"><button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button><button class="mini-btn" wire:click="toggle({{ $r->id }})">{{ $r->status==='active'?'Deactivate':'Activate' }}</button><button class="mini-btn" wire:click="deleteRecord({{ $r->id }})" wire:confirm="Delete this master record?">Delete</button></div></td>
+                            <td data-label="Order">{{ $r->sort_order }}</td>
+                            <td data-label="Code"><b>{{ $r->code }}</b></td>
+                            <td data-label="Name">{{ $r->name }}</td>
+                            <td data-label="Parent">{{ $r->parent?->name ?? '—' }}</td>
+                            <td data-label="Description / Use">{{ $r->description ?: '—' }}</td>
+                            <td data-label="Status"><x-ui.badge :label="$r->status==='active'?'Active':'Inactive'"/></td>
+                            <td data-label="Actions"><div class="row-actions"><button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button><button class="mini-btn" wire:click="toggle({{ $r->id }})">{{ $r->status==='active'?'Deactivate':'Activate' }}</button><button class="mini-btn" wire:click="deleteRecord({{ $r->id }})" wire:confirm="Delete this master record?">Delete</button></div></td>
                         </tr>
                     @empty
                         <tr><td colspan="7"><div class="empty-state">No records found.</div></td></tr>
@@ -47,6 +47,16 @@
                     </tbody>
                 </table>
             </div>
+            @if($rows->total() > 30)
+                <div class="ft-list-pagination ft-master-pagination">
+                    <span>Showing <b>{{ $rows->firstItem() ?? 0 }}–{{ $rows->lastItem() ?? 0 }}</b> of {{ $rows->total() }} records</span>
+                    <div class="ft-page-actions">
+                        <button type="button" wire:click="previousPage('masterPage')" @disabled($rows->onFirstPage())>Previous</button>
+                        <span>Page {{ $rows->currentPage() }} of {{ $rows->lastPage() }}</span>
+                        <button type="button" wire:click="nextPage('masterPage')" @disabled(!$rows->hasMorePages())>Next</button>
+                    </div>
+                </div>
+            @endif
         </div>
     </div>
 
@@ -62,7 +72,6 @@
                     <div class="field"><label>Status</label><select wire:model="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
                     <div class="field"><label>Sort order</label><input type="number" min="0" wire:model="sortOrder"></div>
                     <div class="field full"><label>Description</label><textarea wire:model="description" rows="3"></textarea></div>
-                    <div class="field full"><label>Metadata (JSON)</label><textarea wire:model="metadataJson" rows="4" placeholder='{"color":"#F97366"}'></textarea>@error('metadataJson')<div class="validation-error">{{ $message }}</div>@enderror</div>
                 </div>
             </div>
             <div class="modal-foot"><button class="ghost" wire:click="close">Cancel</button><button class="primary" wire:click="save">Save Record</button></div>

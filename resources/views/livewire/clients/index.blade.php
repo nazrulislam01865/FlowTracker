@@ -1,6 +1,8 @@
 <div>
 @if($showCreate)
     <x-clients.create :users="$users" :client-code="$clientCode" />
+@elseif($showDetail && $detail)
+    <x-clients.detail :detail="$detail" :users="$users" :editing="$showEdit" />
 @else
 @php
     $selected = $detail['client'] ?? null;
@@ -65,10 +67,10 @@
                                 $rowInitials = collect(preg_split('/\s+/', trim($clientRow->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
                             @endphp
                             <tr wire:key="client-row-{{ $clientRow->id }}" class="{{ (int)$selectedClientId === (int)$clientRow->id ? 'selected' : '' }}" wire:click="openClient({{ $clientRow->id }})">
-                                <td><div class="ft-client-identity"><span class="ft-client-logo">{{ $rowInitials ?: 'CL' }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
-                                <td>@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
-                                <td><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
-                                <td>
+                                <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ $rowInitials ?: 'CL' }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
+                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
+                                <td data-label="Jobs"><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
+                                <td data-label="Tasks">
                                     <b>{{ $clientRow->open_tasks_count }}</b> open
                                     @if ((int) $clientRow->overdue_tasks_count > 0)
                                         <small class="ft-text-red">{{ $clientRow->overdue_tasks_count }} overdue</small>
@@ -78,11 +80,24 @@
                                         <small class="ft-text-green">0 overdue</small>
                                     @endif
                                 </td>
-                                <td><span class="ft-client-health {{ $healthClass }}">{{ $rowHealth }}</span></td>
-                                <td>{{ $clientRow->next_delivery_at ? \Carbon\Carbon::parse($clientRow->next_delivery_at)->format('M j') : '—' }}</td>
-                                <td><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
-                                <td>{{ $clientRow->updated_at?->diffForHumans(short:true) }}</td>
-                                <td><button type="button" class="ft-client-more" wire:click.stop="openClient({{ $clientRow->id }})">⋮</button></td>
+                                <td data-label="Health"><span class="ft-client-health {{ $healthClass }}">{{ $rowHealth }}</span></td>
+                                <td data-label="Next delivery">{{ $clientRow->next_delivery_at ? \Carbon\Carbon::parse($clientRow->next_delivery_at)->format('M j') : '—' }}</td>
+                                <td data-label="Outstanding"><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
+                                <td data-label="Updated">{{ $clientRow->updated_at?->diffForHumans(short:true) }}</td>
+                                <td data-label="Actions" class="ft-client-action-cell">
+                                    <button type="button" class="ft-client-more" wire:click.stop="toggleClientMenu({{ $clientRow->id }})" aria-label="Client actions">⋮</button>
+                                    @if($actionMenuClientId === (int)$clientRow->id)
+                                        <div class="ft-client-action-menu" x-on:click.stop>
+                                            <button type="button" wire:click="viewClient({{ $clientRow->id }})">View client</button>
+                                            @php
+                                                $access = app(\App\Services\AccessControlService::class);
+                                                $rowCanEdit = $access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(),'clients') || ($access->canEditOwn(auth()->user(),'clients') && (int)$clientRow->account_manager_id === (int)auth()->id());
+                                            @endphp
+                                            @if($rowCanEdit)<button type="button" wire:click="editClient({{ $clientRow->id }})">Edit client</button>@endif
+                                            @if(auth()->user()->canModule('clients','delete'))<button type="button" class="danger" wire:click="deleteClient({{ $clientRow->id }})" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button>@endif
+                                        </div>
+                                    @endif
+                                </td>
                             </tr>
                         @empty
                             <tr><td colspan="9" class="ft-client-empty">No clients match the selected filters.</td></tr>
@@ -106,8 +121,7 @@
             <div class="ft-client-detail-head">
                 <span class="ft-client-detail-logo">{{ $selectedInitials ?: 'CL' }}</span>
                 <div><h2>{{ $selected->name }}</h2><p>{{ $selected->country ?: '—' }} <span class="ft-client-health {{ $detailHealthClass }}">{{ $selectedHealth }}</span></p></div>
-                <a class="ft-open-client" href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>Open client</a>
-                <button type="button" class="ft-client-more">⋮</button>
+                <button class="ft-open-client" type="button" wire:click="viewClient({{ $selected->id }})">Open client</button>
             </div>
             <div class="ft-client-detail-contact">
                 <div><small>Account manager</small>@if($selected->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$selected->accountManager->name" :size="28" /><b>{{ $selected->accountManager->name }}</b></div>@else<b>Unassigned</b>@endif</div>

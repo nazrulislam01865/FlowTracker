@@ -4,7 +4,15 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <meta name="flowtrack-session-timeout" content="1800">
+    @auth
+        <meta name="flowtrack-session-status-url" content="{{ route('session.status') }}">
+        <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
+    @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ config('app.name','FlowTrack') }}</title>
+    @if(auth()->check() && auth()->user()->canModule('notifications','view'))
+        <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
+    @endif
     @if(config('services.pusher.key') && auth()->check() && auth()->user()->canModule('notifications','view'))
         <meta name="flowtrack-pusher-key" content="{{ config('services.pusher.key') }}">
         <meta name="flowtrack-pusher-cluster" content="{{ config('services.pusher.cluster','mt1') }}">
@@ -22,7 +30,7 @@
     <main class="main">
         @include('layouts.partials.topbar')
         <div class="content">
-            @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
+            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>
     </main>

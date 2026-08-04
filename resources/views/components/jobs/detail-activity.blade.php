@@ -1,4 +1,4 @@
-@props(['job','compact'=>false,'activityTab'=>'all'])
+@props(['job','compact'=>false,'activityTab'=>'all','activityPage'=>1])
 @php
     $canComment = app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job);
     $activities = $job->activities->sortByDesc('created_at')->values();
@@ -7,6 +7,11 @@
     } elseif ($activityTab === 'history') {
         $activities = $activities->reject(fn($activity) => $activity->event === 'job.comment')->values();
     }
+    $activityPerPage = 30;
+    $activityTotal = $activities->count();
+    $activityPages = max(1, (int) ceil($activityTotal / $activityPerPage));
+    $activityCurrentPage = min(max(1, (int) $activityPage), $activityPages);
+    $activities = $activities->forPage($activityCurrentPage, $activityPerPage)->values();
 @endphp
 <section class="ft-detail-card ft-activity-card ft-friendly-activity {{ $compact ? 'compact' : '' }}">
     <div class="ft-activity-head">
@@ -52,4 +57,14 @@
             <div class="empty-state">No {{ $activityTab==='comments' ? 'comments' : ($activityTab==='history' ? 'changes' : 'activity') }} yet.</div>
         @endforelse
     </div>
+    @if($activityTotal > $activityPerPage)
+        <div class="ft-activity-pagination">
+            <span>Showing {{ (($activityCurrentPage - 1) * $activityPerPage) + 1 }}–{{ min($activityCurrentPage * $activityPerPage, $activityTotal) }} of {{ $activityTotal }}</span>
+            <div>
+                <button type="button" wire:click="setJobActivityPage({{ $activityCurrentPage - 1 }})" @disabled($activityCurrentPage <= 1)>Previous</button>
+                <span>Page {{ $activityCurrentPage }} of {{ $activityPages }}</span>
+                <button type="button" wire:click="setJobActivityPage({{ $activityCurrentPage + 1 }})" @disabled($activityCurrentPage >= $activityPages)>Next</button>
+            </div>
+        </div>
+    @endif
 </section>
