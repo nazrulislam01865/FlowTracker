@@ -1,0 +1,338 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\FlowJobMember;
+use App\Models\FlowTaskChecklistItem;
+use App\Models\FlowTaskComment;
+use App\Models\Task;
+use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Arr;
+use Illuminate\Validation\ValidationException;
+
+class TaskService
+{
+    public function visibleQuery(User $user): Builder
+    {
+        return app(AccessControlService::class)->applyTaskScope(Task::query(), $user);
+    }
+
+    public function list(User $user, array $filters = [])
+    {
+        return $this->visibleQuery($user)
+            ->with(['job.client', 'assignee', 'phase'])
+            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($x) => $x->where('title', 'like', "%{$s}%")->orWhereHas('job', fn ($j) => $j->where('job_number', 'like', "%{$s}%"))))
+            ->when($filters['status'] ?? null, fn ($q, $s) => $q->where('status', $s))
+            ->when($filters['assignee'] ?? null, fn ($q, $a) => $q->where('assignee_id', $a))
+            ->whereNull('completed_at')
+            ->orderByRaw('due_date is null, due_date asc')
+            ->limit(60)
+            ->get();
+    }
+
+    public function metrics(User $user): array
+    {
+        $q = $this->visibleQuery($user)->whereNull('completed_at');
+
+        return [
+            'today' => (clone $q)->whereDate('due_date', today())->count(),
+            'overdue' => (clone $q)->whereDate('due_date', '<', today())->count(),
+            'attention' => (clone $q)->where('needs_attention', true)->count(),
+            'approval' => (clone $q)->whereIn('status', ['Waiting for Client', 'Waiting for Internal Approval'])->count(),
+            'upcoming' => (clone $q)->whereDate('due_date', '>', today())->count(),
+            'completed_week' => $this->visibleQuery($user)->whereBetween('completed_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+        ];
+    }
+
+    public function moveStatus(Task $task, string $status, User $actor): Task
+    {
+        return $this->update($task, [
+            'status' => $status,
+            'assignee_id' => $task->assignee_id,
+            'progress' => $status === 'Completed' ? 100 : ($status === 'Not Started' ? 0 : max($task->progress, 35)),
+            'needs_attention' => $task->needs_attention,
+            'attention_reason' => $task->attention_reason,
+        ], $actor);
+    }
+
+    public function updateDueDate(Task $task, ?string $dueDate, User $actor): Task
+    {
+        $this->assertEditable($task, $actor);
+        $old = $task->due_date?->format('Y-m-d');
+        $new = $dueDate ?: null;
+        $task->update(['due_date' => $new]);
+        $this->record($task, $actor, 'task.due_date_updated', $this->changeDescription('Due date', $old, $new));
+
+        return $task->refresh();
+    }
+
+    public function updateDetailField(Task $task, string $field, mixed $value, User $actor): Task
+    {
+        $allowed = ['title', 'assignee_id', 'status', 'priority', 'start_date', 'due_date', 'description'];
+        abort_unless(in_array($field, $allowed, true), 422, 'This task field cannot be edited.');
+
+        if ($field === 'assignee_id') {
+            abort_unless(app(AccessControlService::class)->canAssignTask($actor, $task), 403);
+        } else {
+            $this->assertEditable($task, $actor);
+        }
+
+        if ($field === 'due_date') {
+            return $this->updateDueDate($task, filled($value) ? (string) $value : null, $actor);
+        }
+
+        $old = $task->{$field};
+        if ($old instanceof \DateTimeInterface) $old = $old->format('Y-m-d');
+
+        $new = $value;
+        if ($field === 'assignee_id') {
+            $new = filled($value) ? (int) $value : null;
+            if ($new) User::where('is_active', true)->findOrFail($new);
+        } elseif ($field === 'start_date') {
+            $new = filled($value) ? (string) $value : null;
+        } elseif ($field === 'description') {
+            $new = trim((string) $value) ?: null;
+        } elseif ($field === 'title') {
+            $new = trim((string) $value);
+            abort_if($new === '', 422, 'Task name is required.');
+        } else {
+            $new = trim((string) $value);
+            abort_if($new === '', 422, ucfirst(str_replace('_', ' ', $field)).' is required.');
+        }
+
+        $updates = [$field => $new];
+        if ($field === 'status' && $new === 'Completed') $this->ensureCompletionRequirements($task);
+        if ($field === 'status') {
+            $updates['progress'] = $new === 'Completed' ? 100 : ($new === 'Not Started' ? 0 : max(1, min(99, (int) $task->progress)));
+            $updates['completed_at'] = $new === 'Completed' ? ($task->completed_at ?: now()) : null;
+        }
+        $task->update($updates);
+
+        if ($field === 'assignee_id' && $new) {
+            FlowJobMember::firstOrCreate(
+                ['flow_job_id' => $task->flow_job_id, 'user_id' => $new],
+                ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+            );
+        }
+
+        $labels = [
+            'title' => 'Task name', 'assignee_id' => 'Assignee', 'status' => 'Status', 'priority' => 'Priority',
+            'start_date' => 'Start date', 'description' => 'Description',
+        ];
+        $oldDisplay = $field === 'assignee_id' ? (User::find($old)?->name ?? 'Unassigned') : $old;
+        $newDisplay = $field === 'assignee_id' ? (User::find($new)?->name ?? 'Unassigned') : $new;
+        $this->record($task, $actor, 'task.field_updated', $this->changeDescription($labels[$field] ?? $field, $oldDisplay, $newDisplay), [
+            'field' => $field, 'old' => $oldDisplay, 'new' => $newDisplay,
+        ]);
+
+        $this->refreshJobState($task, $actor);
+        return $task->refresh();
+    }
+
+    public function update(Task $task, array $data, User $actor): Task
+    {
+        $assignmentChanged = array_key_exists('assignee_id', $data) && (int) ($data['assignee_id'] ?: 0) !== (int) ($task->assignee_id ?: 0);
+        if ($assignmentChanged) abort_unless(app(AccessControlService::class)->canAssignTask($actor, $task), 403);
+        $this->assertEditable($task, $actor);
+        $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
+        $assigneeId = array_key_exists('assignee_id', $data) ? ($data['assignee_id'] ?: null) : $task->assignee_id;
+        $reason = trim((string) ($data['attention_reason'] ?? $task->attention_reason ?? ''));
+        $status = (string) ($data['status'] ?? $task->status);
+
+        if ($status === 'Completed') $this->ensureCompletionRequirements($task);
+
+        $task->update([
+            'status' => $status,
+            'assignee_id' => $assigneeId,
+            'progress' => $status === 'Completed' ? 100 : ($status === 'Not Started' ? 0 : (int) ($data['progress'] ?? $task->progress)),
+            'needs_attention' => (bool) ($data['needs_attention'] ?? $task->needs_attention),
+            'attention_reason' => $reason !== '' ? $reason : null,
+            'completed_at' => $status === 'Completed' ? ($task->completed_at ?: now()) : null,
+        ]);
+
+        if ($assigneeId) {
+            FlowJobMember::firstOrCreate(
+                ['flow_job_id' => $task->flow_job_id, 'user_id' => $assigneeId],
+                ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+            );
+        }
+
+        $after = $task->fresh()->only(['status','assignee_id','progress','needs_attention','attention_reason']);
+        $changes = [];
+        foreach ($after as $key => $value) {
+            if (($before[$key] ?? null) != $value) $changes[$key] = ['old' => $before[$key] ?? null, 'new' => $value];
+        }
+
+        if ($changes) {
+            $parts = [];
+            foreach ($changes as $key => $change) {
+                $label = ucfirst(str_replace('_', ' ', $key));
+                if ($key === 'assignee_id') {
+                    $change['old'] = User::find($change['old'])?->name ?? 'Unassigned';
+                    $change['new'] = User::find($change['new'])?->name ?? 'Unassigned';
+                }
+                if ($key === 'needs_attention') {
+                    $label = 'Management attention';
+                    $change['old'] = $change['old'] ? 'Flagged' : 'Not flagged';
+                    $change['new'] = $change['new'] ? 'Flagged' : 'Not flagged';
+                }
+                $parts[] = $this->changeDescription($label, $change['old'], $change['new']);
+            }
+            $this->record($task, $actor, 'task.updated', implode(' · ', $parts), ['changes' => $changes]);
+        }
+
+        $this->syncJobAttention($task);
+        $this->refreshJobState($task, $actor);
+
+        return $task->refresh();
+    }
+
+    public function addChecklistItem(Task $task, string $label, User $actor): FlowTaskChecklistItem
+    {
+        $this->assertEditable($task, $actor);
+        $label = trim($label);
+        abort_if($label === '', 422, 'Checklist item is required.');
+        $item = $task->checklistItems()->create([
+            'label' => $label,
+            'is_completed' => false,
+            'sort_order' => ((int) $task->checklistItems()->max('sort_order')) + 1,
+        ]);
+        $this->record($task, $actor, 'task.checklist_added', 'Checklist item added: '.$label);
+        $this->syncChecklistProgress($task);
+        return $item;
+    }
+
+    public function toggleChecklistItem(Task $task, FlowTaskChecklistItem $item, bool $completed, User $actor): FlowTaskChecklistItem
+    {
+        $this->assertEditable($task, $actor);
+        abort_unless((int) $item->flow_task_id === (int) $task->id, 422);
+        $item->update(['is_completed' => $completed]);
+        $this->record($task, $actor, 'task.checklist_updated', ($completed ? 'Completed checklist item: ' : 'Reopened checklist item: ').$item->label);
+        $this->syncChecklistProgress($task);
+        return $item->refresh();
+    }
+
+    public function deleteChecklistItem(Task $task, FlowTaskChecklistItem $item, User $actor): void
+    {
+        $this->assertEditable($task, $actor);
+        abort_unless((int) $item->flow_task_id === (int) $task->id, 422);
+        $label = $item->label;
+        $item->delete();
+        $this->record($task, $actor, 'task.checklist_deleted', 'Checklist item deleted: '.$label);
+        $this->syncChecklistProgress($task);
+    }
+
+    public function addComment(Task $task, string $body, User $actor): FlowTaskComment
+    {
+        abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
+        $body = trim($body);
+        abort_if($body === '', 422, 'Comment cannot be empty.');
+        $comment = $task->comments()->create(['user_id' => $actor->id, 'body' => $body]);
+        $this->record($task, $actor, 'task.comment', 'Comment: '.$body, ['comment_id' => $comment->id, 'body' => $body]);
+        return $comment;
+    }
+
+    public function syncJobAttention(Task $task): void
+    {
+        $job = $task->job()->first();
+        if (!$job) return;
+        $hasFlaggedTask = $job->tasks()->where('needs_attention', true)->exists();
+        if ($hasFlaggedTask && !$job->needs_attention) {
+            $job->update(['needs_attention' => true]);
+        } elseif (!$hasFlaggedTask && $job->needs_attention) {
+            $job->update(['needs_attention' => false]);
+        }
+    }
+
+
+
+    private function assertEditable(Task $task, User $actor): void
+    {
+        abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
+    }
+
+    private function ensureCompletionRequirements(Task $task): void
+    {
+        $task->loadMissing(['documents','documentCategory','setupTemplate.documentCategory']);
+        $hasRequiredDocument = (bool) ($task->setupTemplate?->document_category_id ?: $task->document_category_id);
+        if ($hasRequiredDocument) {
+            $name = $task->setupTemplate?->documentCategory?->name ?: $task->documentCategory?->name ?: 'required document';
+            $hasMatchingDocument = $task->documents->contains(fn ($document) =>
+                strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
+            );
+            if (!$hasMatchingDocument) {
+                throw ValidationException::withMessages([
+                    'taskCompletion' => 'Upload or link '.$name.' before completing this task.',
+                ]);
+            }
+        }
+    }
+
+    private function syncChecklistProgress(Task $task): void
+    {
+        $total = $task->checklistItems()->count();
+        if ($total <= 0 || $task->status === 'Completed') return;
+        $done = $task->checklistItems()->where('is_completed', true)->count();
+        $progress = (int) round(($done / $total) * 100);
+        $task->update(['progress' => min(99, $progress)]);
+    }
+
+    private function refreshJobState(Task $task, User $actor): void
+    {
+        $task = $task->refresh();
+        $job = $task->job()->first();
+        if (!$job) return;
+        app(JobService::class)->recalculateProgress($job);
+        if ((int) $task->workflow_phase_id === (int) $job->workflow_phase_id) {
+            app(JobService::class)->maybeAutoAdvance($job, $actor);
+        }
+    }
+
+    private function record(Task $task, User $actor, string $event, string $description, array $meta = []): void
+    {
+        $task->activities()->create([
+            'user_id' => $actor->id,
+            'event' => $event,
+            'description' => $description,
+            'meta' => $meta ?: null,
+        ]);
+
+        $job = $task->job()->first();
+        if ($job) {
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.task_activity',
+                'description' => $task->title.': '.$description,
+                'meta' => array_merge(['task_id' => $task->id, 'task_number' => $task->task_number, 'task_event' => $event], $meta),
+            ]);
+        }
+
+        $fresh = $task->refresh();
+        $isAssignment = ($meta['field'] ?? null) === 'assignee_id' || isset($meta['changes']['assignee_id']);
+        $type = ($fresh->needs_attention || str_contains($event, 'attention')) ? 'risk' : ($isAssignment ? 'assignment' : ($event === 'task.comment' ? 'comment' : 'update'));
+        app(NotificationService::class)->notifyTaskParticipants(
+            $fresh,
+            $isAssignment ? 'Task assigned: '.$fresh->title : $this->notificationTitle($fresh, $event),
+            $description,
+            $type,
+            $actor,
+        );
+    }
+
+    private function notificationTitle(Task $task, string $event): string
+    {
+        return match ($event) {
+            'task.comment' => 'New comment on '.$task->title,
+            'task.checklist_added', 'task.checklist_updated', 'task.checklist_deleted' => 'Checklist updated: '.$task->title,
+            'task.document_uploaded', 'task.document_linked', 'task.document_deleted' => 'Task document updated: '.$task->title,
+            default => 'Task updated: '.$task->title,
+        };
+    }
+
+    private function changeDescription(string $label, mixed $old, mixed $new): string
+    {
+        $format = static fn ($value) => $value === null || $value === '' ? '—' : (is_bool($value) ? ($value ? 'Yes' : 'No') : (string) $value);
+        return $label.' changed from '.$format($old).' to '.$format($new);
+    }
+}

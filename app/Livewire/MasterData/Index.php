@@ -1,0 +1,140 @@
+<?php
+
+namespace App\Livewire\MasterData;
+
+use App\Models\MasterRecord;
+use App\Services\MasterDataService;
+use Illuminate\Validation\ValidationException;
+use Livewire\Component;
+use Livewire\WithPagination;
+
+class Index extends Component
+{
+    use WithPagination;
+
+    public string $group = 'product_category';
+    public string $search = '';
+    public bool $showModal = false;
+    public ?int $editId = null;
+    public string $code = '';
+    public string $name = '';
+    public string $description = '';
+    public ?int $parentId = null;
+    public string $status = 'active';
+    public int $sortOrder = 0;
+    public string $metadataJson = '';
+
+    public function selectGroup(string $group): void
+    {
+        abort_unless(array_key_exists($group, MasterDataService::LABELS), 404);
+        $this->group = $group;
+        $this->search = '';
+        $this->resetPage('masterPage');
+        $this->resetValidation();
+    }
+
+    public function open(?int $id = null): void
+    {
+        $this->showModal = true;
+        $this->editId = $id;
+        $this->resetValidation();
+        if ($id) {
+            $r = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
+            $this->code = $r->code;
+            $this->name = $r->name;
+            $this->description = (string) $r->description;
+            $this->parentId = $r->parent_id;
+            $this->status = $r->status;
+            $this->sortOrder = (int) $r->sort_order;
+            $this->metadataJson = $r->metadata ? json_encode($r->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
+        } else {
+            $this->reset(['code','name','description','parentId','metadataJson']);
+            $this->status = 'active';
+            $this->sortOrder = (int) MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->where('type', $this->group)->max('sort_order') + 1;
+        }
+    }
+
+    public function close(): void { $this->showModal = false; $this->resetValidation(); }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage('masterPage');
+    }
+
+    public function save(): void
+    {
+        $data = $this->validate([
+            'code' => ['required','string','max:40'],
+            'name' => ['required','string','max:255'],
+            'description' => ['nullable','string','max:5000'],
+            'parentId' => ['nullable','integer','exists:master_records,id'],
+            'status' => ['required','in:active,inactive'],
+            'sortOrder' => ['required','integer','min:0','max:1000000'],
+            'metadataJson' => ['nullable','string'],
+        ]);
+
+        $metadata = null;
+        if (filled($data['metadataJson'])) {
+            $metadata = json_decode($data['metadataJson'], true);
+            if (json_last_error() !== JSON_ERROR_NONE || !is_array($metadata)) {
+                throw ValidationException::withMessages(['metadataJson' => 'Metadata must be valid JSON.']);
+            }
+        }
+
+        app(MasterDataService::class)->save($this->group, [
+            'code' => $data['code'],
+            'name' => $data['name'],
+            'description' => $data['description'],
+            'parent_id' => $data['parentId'],
+            'status' => $data['status'],
+            'sort_order' => $data['sortOrder'],
+            'metadata' => $metadata,
+        ], $this->editId);
+
+        $this->showModal = false;
+        session()->flash('success', 'Master data saved.');
+        app(\App\Services\NotificationService::class)->notifyUser(
+            auth()->user(),
+            'Master data updated',
+            ($this->name ?: $this->code).' was saved in '.(MasterDataService::LABELS[$this->group] ?? 'Master Data').'.',
+            'update',
+            null,
+            null,
+            auth()->user(),
+        );
+    }
+
+    public function toggle(int $id): void
+    {
+        $record = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
+        app(MasterDataService::class)->toggle($id);
+        session()->flash('success', 'Master data status updated.');
+        app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Master data status updated', $record->name.' status was changed.', 'update', null, null, auth()->user());
+    }
+
+    public function deleteRecord(int $id): void
+    {
+        try {
+            app(MasterDataService::class)->delete($id);
+            $this->resetPage('masterPage');
+            session()->flash('success', 'Master data record deleted.');
+            app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Master data deleted', 'A master data record was deleted.', 'update', null, null, auth()->user());
+        } catch (ValidationException $e) {
+            $this->addError('record', collect($e->errors())->flatten()->first());
+        }
+    }
+
+    public function render()
+    {
+        $service = app(MasterDataService::class);
+        $rows = $service->paginate($this->group, $this->search, 30);
+        $workspaceId = $service->workspaceId();
+        return view('livewire.master-data.index', [
+            'labels' => MasterDataService::LABELS,
+            'rows' => $rows,
+            'parents' => MasterRecord::where('workspace_id', $workspaceId)->where('type', $this->group)->when($this->editId, fn ($q) => $q->whereKeyNot($this->editId))->orderBy('name')->get(),
+            'total' => MasterRecord::where('workspace_id', $workspaceId)->count(),
+            'active' => MasterRecord::where('workspace_id', $workspaceId)->where('status', 'active')->count(),
+        ]);
+    }
+}
