@@ -9,3 +9,6 @@
 - Existing client, Job, task, document, and activity history remains in the database and is available through the archived client record.
 
 No database migration is required.
+
+The Board activity eager-load also qualifies every `activities` column used by
+the `latestOfMany` relationship, preventing MySQL's ambiguous-column 500.
