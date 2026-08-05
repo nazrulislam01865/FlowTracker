@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in — FlowTrack</title>
-    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css']); ?>
+    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/login.css']); ?>
 </head>
 <body>
 <div class="login screen">

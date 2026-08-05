@@ -1,0 +1,252 @@
+:root {
+    --bg: #f4f7fb;
+    --text: #172235;
+    --muted: #66758b;
+    --line: #e1e7ef;
+    --blue: #2563eb;
+    --blue2: #eaf1ff;
+    --red: #c2413a;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html {
+    scroll-behavior: smooth;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    font-size: 14px;
+}
+
+button,
+input {
+    color: inherit;
+    font: inherit;
+}
+
+button {
+    cursor: pointer;
+}
+
+.screen {
+    min-height: 100vh;
+}
+
+.small {
+    font-size: 12px;
+}
+
+.login {
+    display: grid;
+    min-height: 100vh;
+    grid-template-columns: 1.1fr .9fr;
+    background: #fff;
+}
+
+.login-visual {
+    position: relative;
+    display: flex;
+    overflow: hidden;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 64px;
+    background: linear-gradient(145deg, #091525, #15375c);
+    color: #fff;
+}
+
+.login-visual::before,
+.login-visual::after {
+    position: absolute;
+    content: "";
+    border: 1px solid rgba(255, 255, 255, .14);
+    border-radius: 50%;
+}
+
+.login-visual::before {
+    top: -180px;
+    right: -160px;
+    width: 480px;
+    height: 480px;
+}
+
+.login-visual::after {
+    bottom: -190px;
+    left: -190px;
+    width: 360px;
+    height: 360px;
+}
+
+.brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-weight: 700;
+    letter-spacing: .1px;
+}
+
+.brand-mark {
+    display: grid;
+    width: 38px;
+    height: 38px;
+    place-items: center;
+    border-radius: 11px;
+    background: #fff;
+    color: var(--blue);
+    font-weight: 800;
+}
+
+.login-visual h1 {
+    max-width: 680px;
+    margin: 24px 0 14px;
+    font-size: 42px;
+    line-height: 1.12;
+}
+
+.login-visual p {
+    max-width: 630px;
+    color: #d6e4f4;
+    font-size: 17px;
+    line-height: 1.7;
+}
+
+.flow-preview {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    margin-top: 32px;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+}
+
+.flow-preview div {
+    padding: 14px;
+    border: 1px solid rgba(255, 255, 255, .18);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, .07);
+    font-size: 12px;
+}
+
+.login-form-wrap {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.login-form {
+    width: min(420px, 100%);
+}
+
+.login-form h2 {
+    margin: 0 0 8px;
+    font-size: 30px;
+}
+
+.login-form p {
+    margin: 0 0 28px;
+    color: var(--muted);
+    line-height: 1.6;
+}
+
+.field {
+    display: flex;
+    flex-direction: column;
+    margin-bottom: 16px;
+    gap: 7px;
+}
+
+.field label {
+    font-size: 13px;
+    font-weight: 600;
+}
+
+.field input {
+    width: 100%;
+    padding: 12px 13px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    outline: none;
+    background: #fff;
+}
+
+.field input:focus {
+    border-color: #8fb1ff;
+    box-shadow: 0 0 0 3px rgba(37, 99, 235, .1);
+}
+
+.primary {
+    padding: 10px 14px;
+    border: 0;
+    border-radius: 9px;
+    background: var(--blue);
+    color: #fff;
+    font-weight: 650;
+}
+
+.primary:hover {
+    background: #1d4ed8;
+}
+
+.login-form .primary {
+    width: 100%;
+    padding: 13px;
+}
+
+.check-row {
+    display: flex;
+    align-items: center;
+    padding: 8px 0;
+    border-bottom: 1px solid var(--line);
+    gap: 9px;
+}
+
+.demo-note {
+    margin-top: 16px;
+    padding: 13px;
+    border-radius: 10px;
+    background: #f7f9fc;
+    color: var(--muted);
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.validation-error {
+    margin-top: 5px;
+    color: var(--red);
+    font-size: 11px;
+}
+
+.ft-login-session-message {
+    margin-bottom: 14px;
+    padding: 10px 12px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fff1f2;
+    color: #b42318;
+}
+
+@media (max-width: 900px) {
+    .login {
+        grid-template-columns: 1fr;
+    }
+
+    .login-visual {
+        display: none;
+    }
+}
+
+@media (max-width: 620px) {
+    .login-form-wrap {
+        padding: 24px;
+    }
+
+    .flow-preview {
+        grid-template-columns: 1fr 1fr;
+    }
+}

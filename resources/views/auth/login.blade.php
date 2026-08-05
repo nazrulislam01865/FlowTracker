@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>Sign in — FlowTrack</title>
-    @vite(['resources/css/app.css'])
+    @vite(['resources/css/login.css'])
 </head>
 <body>
 <div class="login screen">
