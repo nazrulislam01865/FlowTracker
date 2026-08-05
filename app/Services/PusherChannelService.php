@@ -10,11 +10,9 @@ class PusherChannelService
 {
     public function enabled(): bool
     {
-        return (bool) config('services.pusher.enabled', false)
-            && filled(config('services.pusher.app_id'))
-            && filled(config('services.pusher.key'))
-            && filled(config('services.pusher.secret'))
-            && !Cache::has($this->circuitKey());
+        // Temporarily disabled. Keep the integration code in place so it can be
+        // re-enabled later without affecting database-backed notifications.
+        return false;
     }
 
     public function userChannel(int $userId): string

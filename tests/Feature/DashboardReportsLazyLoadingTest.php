@@ -131,6 +131,19 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertStringNotContainsString('Receivable', $reports);
         $this->assertStringNotContainsString('4.2d', $reports);
         $this->assertStringNotContainsString('91%', $reports);
+        $sharedPlaceholder = file_get_contents(resource_path('views/livewire/shared/page-placeholder.blade.php'));
+        $dashboardComponent = file_get_contents(app_path('Livewire/Dashboard/Index.php'));
+        $reportsComponent = file_get_contents(app_path('Livewire/Reports/Index.php'));
+
         $this->assertStringContainsString("route('logout')", $sidebar);
+        $this->assertStringNotContainsString('ft-workspace-loader', $sharedPlaceholder);
+        $this->assertStringContainsString("@island(name: 'dashboard-metrics', defer: true", $dashboard);
+        $this->assertStringContainsString("@island(name: 'dashboard-attention', lazy: true", $dashboard);
+        $this->assertStringContainsString("@island(name: 'report-kpis', defer: true", $reports);
+        $this->assertStringContainsString("@island(name: 'report-phases', lazy: true", $reports);
+        $this->assertStringContainsString('#[Computed]', $dashboardComponent);
+        $this->assertStringContainsString('#[Computed]', $reportsComponent);
+        $this->assertStringNotContainsString('->data(auth()->user())', $dashboardComponent);
+        $this->assertStringNotContainsString('->data(auth()->user())', $reportsComponent);
     }
 }

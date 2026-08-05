@@ -10,7 +10,9 @@
 - Report and Dashboard scalar metrics use short cache windows and realtime invalidation.
 - Added a POST logout action to the sidebar.
 - Enabled Livewire lazy loading on every authenticated page.
-- Added one shared responsive skeleton placeholder for all page components.
+- Added one shared responsive inline skeleton placeholder for all page components.
+- Removed the fixed side loader card.
+- Split Dashboard and Reports into deferred/viewport-lazy Livewire islands so their sections no longer query in one monolithic request.
 
 ## After replacing the project
 

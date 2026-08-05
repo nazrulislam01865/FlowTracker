@@ -16,49 +16,65 @@ class ReportService
         Cache::forget('flowtrack:reports:kpis:v2:user:'.$userId);
     }
 
+    /**
+     * Backwards-compatible aggregate used by tests and non-Livewire callers.
+     * The Reports Livewire component now requests these sections independently.
+     */
     public function data(User $user): array
     {
-        $access = app(AccessControlService::class);
-        abort_unless($access->can($user, 'reports', 'view'), 403);
+        return [
+            'phase' => $this->phase($user),
+            'workload' => $this->workload($user),
+            'kpis' => $this->kpis($user),
+        ];
+    }
 
-        $jobService = app(JobService::class);
-        $taskService = app(TaskService::class);
-        $jobs = $jobService->visibleQuery($user);
-        $activeJobs = $jobService->activeQuery($user);
-        $tasks = $taskService->visibleQuery($user)->whereHas('job');
+    public function phase(User $user)
+    {
+        $this->authorize($user);
 
-        $phase = (clone $activeJobs)
+        return app(JobService::class)->activeQuery($user)
             ->reorder()
             ->selectRaw('workflow_phase_id, count(*) total')
             ->groupBy('workflow_phase_id')
             ->with('phase:id,name,short_name,sequence')
             ->get();
+    }
 
-        if ($access->isAdministrator($user) || $access->scope($user, 'tasks') === 'all_records') {
-            $workload = User::query()
-                ->where('is_active', true)
-                ->select(['users.id', 'users.name'])
-                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q
-                    ->whereNull('completed_at')
-                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
-                ->orderByDesc('open_tasks_count')
-                ->limit(8)
-                ->get();
-        } else {
-            $workload = User::query()
-                ->whereKey($user->id)
-                ->select(['users.id', 'users.name'])
-                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q
-                    ->whereNull('completed_at')
-                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
-                ->get();
+    public function workload(User $user)
+    {
+        $this->authorize($user);
+        $access = app(AccessControlService::class);
+        $query = User::query()
+            ->where('is_active', true)
+            ->select(['users.id', 'users.name']);
+
+        if (!$access->isAdministrator($user) && $access->scope($user, 'tasks') !== 'all_records') {
+            $query->whereKey($user->id);
         }
 
-        $kpis = Cache::remember('flowtrack:reports:kpis:v2:user:'.$user->id, now()->addSeconds(15), function () use ($jobs, $activeJobs, $tasks) {
+        return $query
+            ->withCount(['assignedTasks as open_tasks_count' => fn ($tasks) => $tasks
+                ->whereNull('completed_at')
+                ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
+            ->orderByDesc('open_tasks_count')
+            ->limit(8)
+            ->get();
+    }
+
+    public function kpis(User $user): array
+    {
+        $this->authorize($user);
+
+        return Cache::remember('flowtrack:reports:kpis:v2:user:'.$user->id, now()->addSeconds(15), function () use ($user) {
+            $jobs = app(JobService::class)->visibleQuery($user);
+            $activeJobs = app(JobService::class)->activeQuery($user);
+            $tasks = app(TaskService::class)->visibleQuery($user)->whereHas('job');
+
             $jobMetrics = (clone $jobs)
                 ->reorder()
-                ->selectRaw("sum(case when flow_jobs.completed_at is not null then 1 else 0 end) as completed_jobs")
-                ->selectRaw("sum(case when flow_jobs.completed_at is not null and flow_jobs.delivery_date is not null and date(flow_jobs.completed_at) <= flow_jobs.delivery_date then 1 else 0 end) as on_time_jobs")
+                ->selectRaw('sum(case when flow_jobs.completed_at is not null then 1 else 0 end) as completed_jobs')
+                ->selectRaw('sum(case when flow_jobs.completed_at is not null and flow_jobs.delivery_date is not null and date(flow_jobs.completed_at) <= flow_jobs.delivery_date then 1 else 0 end) as on_time_jobs')
                 ->first();
 
             $taskMetrics = (clone $tasks)
@@ -83,8 +99,11 @@ class ReportService
                 'shipment_on_time' => $this->phaseOnTimePercentage($jobs, 'ship'),
             ];
         });
+    }
 
-        return compact('phase', 'workload', 'kpis');
+    private function authorize(User $user): void
+    {
+        abort_unless(app(AccessControlService::class)->can($user, 'reports', 'view'), 403);
     }
 
     private function averagePhaseCycleDays(Builder $visibleJobs, string $phaseNeedle): float

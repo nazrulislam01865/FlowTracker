@@ -2,7 +2,7 @@
 
 ## New first-load lazy behavior
 
-The Dashboard Livewire component is now mounted with `lazy`, so the authenticated application shell (sidebar/topbar) and a YouTube-style skeleton are returned first. The heavier Dashboard queries run in the isolated Livewire AJAX request after the first paint. The placeholder contains metric skeleton cards, chart/list/table skeletons, and a responsive “Preparing your workspace” status card.
+The Dashboard Livewire component is now mounted with `lazy`, so the authenticated application shell (sidebar/topbar) and a YouTube-style skeleton are returned first. The Dashboard shell loads after the first paint, then Livewire islands request metrics and visible sections independently; below-the-fold sections wait until they enter the viewport. The placeholder contains inline metric, chart, list, and table skeletons. The previous fixed “Preparing your workspace” side card has been removed.
 
 Files:
 - `resources/views/pages/dashboard.blade.php`
