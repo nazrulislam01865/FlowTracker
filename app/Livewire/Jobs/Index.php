@@ -54,6 +54,9 @@ class Index extends Component
     public array $expandedPhaseIds = [];
     public string $jobTaskSearch = '';
     public bool $showCreate = false;
+    public bool $createCatalogReady = false;
+    public bool $createAssignmentReady = false;
+    public bool $createWorkflowReady = false;
 
     public string $jobTitle = '';
     public string $priority = 'Medium';
@@ -202,6 +205,37 @@ class Index extends Component
         $this->showCreate = false;
         $this->resetCreateForm();
     }
+
+    public function loadCreateSection(string $section): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+
+        if ($section === 'catalog') {
+            $this->createCatalogReady = true;
+            return;
+        }
+
+        if ($section === 'assignment') {
+            $this->createCatalogReady = true;
+            $this->ownerId ??= auth()->id();
+            $this->coordinatorId ??= auth()->id();
+            $this->createAssignmentReady = true;
+            return;
+        }
+
+        if ($section === 'workflow') {
+            $this->createCatalogReady = true;
+            $this->createAssignmentReady = true;
+            $this->ownerId ??= auth()->id();
+            $this->coordinatorId ??= auth()->id();
+            $this->workflowId ??= Workflow::where('is_active', true)->orderBy('id')->value('id');
+            $this->setDefaultStartPhase();
+            $this->createWorkflowReady = true;
+            return;
+        }
+
+        abort(422, 'Unknown Create Job section.');
+    }
     public function addProductRow(): void { $this->jobItems[] = ['category' => '', 'product' => '', 'quantity' => 1]; }
     public function removeProductRow(int $index): void { if (count($this->jobItems) <= 1) return; unset($this->jobItems[$index]); $this->jobItems = array_values($this->jobItems); }
 
@@ -267,6 +301,12 @@ class Index extends Component
     private function persistJob(bool $draft): void
     {
         abort_unless(auth()->user()->canAccess('jobs.create'), 403);
+
+        if (!$this->createCatalogReady || !$this->createAssignmentReady || !$this->createWorkflowReady) {
+            $this->addError('createLoading', 'Please wait for the remaining Create Job fields to finish loading.');
+            return;
+        }
+
         $data = $this->validate([
             'jobTitle' => ['required','string','max:255'],
             'priority' => ['required','string','max:30'],
@@ -785,7 +825,6 @@ class Index extends Component
     {
         $this->resetCreateForm();
         $this->deliveryDate = now()->addMonth()->format('Y-m-d');
-        $this->workflowId = Workflow::where('is_active', true)->value('id');
 
         $clientQuery = app(ClientService::class)
             ->visibleQuery(auth()->user())
@@ -794,10 +833,7 @@ class Index extends Component
         $this->clientId = $requestedClientId && (clone $clientQuery)->whereKey($requestedClientId)->exists()
             ? $requestedClientId
             : $clientQuery->value('id');
-        $this->ownerId = auth()->id();
-        $this->coordinatorId = auth()->id();
         $this->jobItems = [['category' => '', 'product' => '', 'quantity' => 1000]];
-        $this->setDefaultStartPhase();
     }
 
     private function resetCreateForm(): void
@@ -815,6 +851,9 @@ class Index extends Component
             'description',
             'jobItems',
             'jobAttachments',
+            'createCatalogReady',
+            'createAssignmentReady',
+            'createWorkflowReady',
         ]);
     }
 
@@ -874,6 +913,10 @@ class Index extends Component
     private function createPageData(User $user): array
     {
         $master = app(MasterDataService::class);
+        $productOptionsNeeded = $this->createCatalogReady
+            && collect($this->jobItems)->contains(
+                fn ($item) => filled($item['category'] ?? null)
+            );
 
         return [
             'selectedJob' => null,
@@ -883,15 +926,17 @@ class Index extends Component
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name', 'contact_name']),
-            'workflows' => Workflow::query()
-                ->with('phases.taskPack.templates')
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(),
-            'users' => $this->userOptions($user),
-            'categories' => $master->active('product_category'),
-            'products' => $master->active('product'),
-            'priorities' => $master->active('priority'),
+            'workflows' => $this->createWorkflowReady
+                ? Workflow::query()
+                    ->with('phases.taskPack.templates')
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get()
+                : collect(),
+            'users' => $this->createAssignmentReady ? $this->userOptions($user) : collect(),
+            'categories' => $this->createCatalogReady ? $master->active('product_category') : collect(),
+            'products' => $productOptionsNeeded ? $master->active('product') : collect(),
+            'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
         ];
     }
 

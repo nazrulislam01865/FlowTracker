@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Storage;
 
 class DocumentService
@@ -13,7 +14,14 @@ class DocumentService
     public function query(User $user, array $filters = [])
     {
         $query = app(AccessControlService::class)->applyDocumentScope(Document::query(), $user)
-            ->with(['job.client','job.phase','job.tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user),'task.phase','task.assignee','uploader']);
+            ->with([
+                'job' => fn ($job) => $job
+                    ->with(['client', 'phase'])
+                    ->withCount(['tasks' => fn ($tasks) => app(AccessControlService::class)->applyTaskScope($tasks, $user)]),
+                'task.phase',
+                'task.assignee',
+                'uploader',
+            ]);
 
         return $query
             ->when($filters['search'] ?? null, fn ($q, $search) => $q->where(fn ($x) => $x
@@ -45,6 +53,36 @@ class DocumentService
     public function paginate(User $user, array $filters = [], int $perPage = 25)
     {
         return $this->query($user, $filters)->latest()->paginate($perPage);
+    }
+
+    public function metrics(User $user): array
+    {
+        return Cache::remember(
+            $this->metricsCacheKey($user->id),
+            now()->addSeconds(30),
+            function () use ($user) {
+                $row = $this->query($user)
+                    ->reorder()
+                    ->withoutEagerLoads()
+                    ->selectRaw('count(*) as all_count')
+                    ->selectRaw('sum(case when documents.is_final = 0 and exists (select 1 from tasks where tasks.id = documents.task_id and tasks.needs_attention = 1 and tasks.deleted_at is null) then 1 else 0 end) as attention_count')
+                    ->selectRaw("sum(case when documents.is_final = 0 and exists (select 1 from tasks where tasks.id = documents.task_id and tasks.status in ('In Review','Waiting for Internal Approval') and tasks.deleted_at is null) then 1 else 0 end) as approval_count")
+                    ->selectRaw('sum(case when documents.updated_at >= ? then 1 else 0 end) as recent_count', [now()->subDays(7)])
+                    ->first();
+
+                return [
+                    'all' => (int) ($row?->all_count ?? 0),
+                    'attention' => (int) ($row?->attention_count ?? 0),
+                    'approval' => (int) ($row?->approval_count ?? 0),
+                    'recent' => (int) ($row?->recent_count ?? 0),
+                ];
+            },
+        );
+    }
+
+    public function forgetMetrics(User|int $user): void
+    {
+        Cache::forget($this->metricsCacheKey($user instanceof User ? $user->id : $user));
     }
 
     public function store(UploadedFile $file, array $data, User $user): Document
@@ -93,6 +131,7 @@ class DocumentService
 
         $this->recordDocumentActivity($document, $user, 'uploaded');
         $this->notifyDocumentChange($document, $user, 'uploaded');
+        $this->forgetMetrics($user);
         return $document;
     }
 
@@ -116,6 +155,7 @@ class DocumentService
         ]);
         $this->recordDocumentActivity($document, $user, 'linked');
         $this->notifyDocumentChange($document, $user, 'linked');
+        $this->forgetMetrics($user);
         return $document;
     }
 
@@ -130,6 +170,7 @@ class DocumentService
             $this->notifyDocumentChange($document, $actor, 'removed');
         }
         $document->delete();
+        if ($actor) $this->forgetMetrics($actor);
         if ($path && !Document::where('path', $path)->exists()) Storage::disk((string) config('flowtrack.document_disk', 'public'))->delete($path);
     }
 
@@ -185,5 +226,10 @@ class DocumentService
     private function nextNumber(): string
     {
         return 'DOC-'.str_pad((string) ((int) Document::max('id') + 1), 6, '0', STR_PAD_LEFT);
+    }
+
+    private function metricsCacheKey(int $userId): string
+    {
+        return 'flowtrack:documents:metrics:v1:user:'.$userId;
     }
 }

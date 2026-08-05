@@ -22,16 +22,19 @@ class Index extends Component
     public string $assignee = '';
     public string $due = '';
     public string $quick = '';
+    public bool $tasksReady = false;
     public int $cardLimit = 60;
 
     public function setQuick(string $filter): void
     {
+        $this->tasksReady = true;
         $this->quick = $this->quick === $filter ? '' : $filter;
         $this->cardLimit = 60;
     }
 
     public function clearFilters(): void
     {
+        $this->tasksReady = true;
         $this->search = '';
         $this->job = '';
         $this->client = '';
@@ -46,13 +49,20 @@ class Index extends Component
     public function updated(string $property): void
     {
         if (in_array($property, ['search', 'job', 'client', 'status', 'priority', 'assignee', 'due'], true)) {
+            $this->tasksReady = true;
             $this->cardLimit = 60;
         }
     }
 
     public function loadMore(): void
     {
+        $this->tasksReady = true;
         $this->cardLimit = min(300, $this->cardLimit + 60);
+    }
+
+    public function loadMyWorkTasks(): void
+    {
+        $this->tasksReady = true;
     }
 
     public function moveTask(int $taskId, string $status): void
@@ -104,7 +114,9 @@ class Index extends Component
             $master->active('task_status')->pluck('name')
         ));
 
-        $taskRows = $service->tasks(auth()->user(), $filters, $this->cardLimit + 1);
+        $taskRows = $this->tasksReady
+            ? $service->tasks(auth()->user(), $filters, $this->cardLimit + 1)
+            : collect();
 
         return view('livewire.my-work.index', [
             'tasks' => $taskRows->take($this->cardLimit)->values(),

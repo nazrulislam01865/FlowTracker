@@ -1,7 +1,10 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments']));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
+    'clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments',
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,
+]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +19,10 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter(([
+    'clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments',
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,
+]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -33,6 +39,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $allowedPhases = $selectedWorkflow?->phases?->where('allow_job_start', true) ?? collect();
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
+    $createReady = $catalogReady && $assignmentReady && $workflowReady;
 ?>
 <div <?php echo e($attributes->class('ft-create-job-page')); ?>>
     <div class="ft-create-shell">
@@ -64,7 +71,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             </div>
         </section>
 
-        <section class="ft-create-section">
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogReady): ?>
+        <section class="ft-create-section" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'create-catalog-ready'; ?>wire:key="create-catalog-ready">
             <div class="ft-create-section-title"><span>2</span><h2>Products & quantities</h2></div>
             <div class="ft-product-rows">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $jobItems; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
@@ -108,8 +116,33 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             </div>
             <div class="ft-product-row-footer"><button type="button" wire:click="addProductRow">＋ Add product</button><span><?php echo e(count($jobItems)); ?> <?php echo e(\Illuminate\Support\Str::plural('product',count($jobItems))); ?> · <?php echo e(number_format($totalUnits)); ?> total units</span></div>
         </section>
+        <?php else: ?>
+            <?php if (isset($component)) { $__componentOriginal732a8e3f5371418be0dfaaa000db0561 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal732a8e3f5371418be0dfaaa000db0561 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create-section-placeholder','data' => ['number' => '2','title' => 'Products & quantities','section' => 'catalog','rows' => 3]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.create-section-placeholder'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['number' => '2','title' => 'Products & quantities','section' => 'catalog','rows' => 3]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
-        <section class="ft-create-section">
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $attributes = $__attributesOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $component = $__componentOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__componentOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($assignmentReady): ?>
+        <section class="ft-create-section" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'create-assignment-ready'; ?>wire:key="create-assignment-ready">
             <div class="ft-create-section-title"><span>3</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Required delivery date *</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['deliveryDate'];
@@ -131,8 +164,33 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
             </div>
         </section>
+        <?php else: ?>
+            <?php if (isset($component)) { $__componentOriginal732a8e3f5371418be0dfaaa000db0561 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal732a8e3f5371418be0dfaaa000db0561 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create-section-placeholder','data' => ['number' => '3','title' => 'Schedule & owner','section' => 'assignment','rows' => 3]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.create-section-placeholder'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['number' => '3','title' => 'Schedule & owner','section' => 'assignment','rows' => 3]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
-        <section class="ft-create-section">
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $attributes = $__attributesOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $component = $__componentOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__componentOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowReady): ?>
+        <section class="ft-create-section" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'create-workflow-ready'; ?>wire:key="create-workflow-ready">
             <div class="ft-create-section-title"><span>4</span><h2>Workflow</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field"><b>Workflow</b><select wire:model.live="workflowId"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $workflows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $workflow): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($workflow->id); ?>"><?php echo e($workflow->name); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></label>
@@ -148,6 +206,30 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>
             </div>
         </section>
+        <?php else: ?>
+            <?php if (isset($component)) { $__componentOriginal732a8e3f5371418be0dfaaa000db0561 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal732a8e3f5371418be0dfaaa000db0561 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create-section-placeholder','data' => ['number' => '4','title' => 'Workflow','section' => 'workflow','rows' => 2]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.create-section-placeholder'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['number' => '4','title' => 'Workflow','section' => 'workflow','rows' => 2]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $attributes = $__attributesOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__attributesOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal732a8e3f5371418be0dfaaa000db0561)): ?>
+<?php $component = $__componentOriginal732a8e3f5371418be0dfaaa000db0561; ?>
+<?php unset($__componentOriginal732a8e3f5371418be0dfaaa000db0561); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <section class="ft-create-section">
             <div class="ft-create-section-title"><span>5</span><h2>Attachments</h2></div>
@@ -176,9 +258,17 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
         <div class="ft-create-actions">
             <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
-            <button type="button" class="ft-create-draft" wire:click="saveDraft">Save draft</button>
-            <button type="button" class="ft-create-primary" wire:click="createJob">Create job</button>
+            <button type="button" class="ft-create-draft" wire:click="saveDraft" <?php if(!$createReady): echo 'disabled'; endif; ?>>Save draft</button>
+            <button type="button" class="ft-create-primary" wire:click="createJob" <?php if(!$createReady): echo 'disabled'; endif; ?>>Create job</button>
         </div>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['createLoading'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
 </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/jobs/create.blade.php ENDPATH**/ ?>

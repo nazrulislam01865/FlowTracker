@@ -1,4 +1,4 @@
-<div>
+<div wire:init="loadSecondaryReports">
     <?php if (isset($component)) { $__componentOriginal8f6938ac62d0a39f318af1c1674a1814 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8f6938ac62d0a39f318af1c1674a1814 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.page-head','data' => ['title' => 'Reports','subtitle' => 'Operational performance, delivery, workload and task completion']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -28,7 +28,6 @@
 <?php unset($__componentOriginal8f6938ac62d0a39f318af1c1674a1814); ?>
 <?php endif; ?>
 
-<?php ($kpis = $this->kpis); ?>
         <div class="metrics ft-auto-metrics">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = [
                 ['Active Jobs',$kpis['active_jobs'],'Current portfolio'],
@@ -49,10 +48,10 @@
 
     <div class="report-grid">
         <div class="ft-island-shell">
-<?php ($phase = $this->phase); ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($secondaryReady): ?>
                 <div class="card section-card">
                     <div class="section-head"><h3>Active Jobs by Phase</h3><span class="small muted">Current portfolio</span></div>
-                    <div class="bars">
+                    <div class="bars ft-report-scroll-bars">
                         <?php ($max = max(1, $phase->max('total') ?? 1)); ?>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $phase->sortBy(fn($row) => $row->phase?->sequence ?? PHP_INT_MAX); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <div class="bar-row"><span><?php echo e($row->phase?->short_name ?? 'Unassigned'); ?></span><div class="bar"><span style="width:<?php echo e($row->total/$max*100); ?>%"></span></div><b><?php echo e($row->total); ?></b></div>
@@ -61,13 +60,16 @@
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
+            <?php else: ?>
+                <?php echo $__env->make('livewire.dashboard.secondary-placeholder', ['title' => 'Active Jobs by Phase', 'rows' => 6], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
 
         <div class="ft-island-shell">
-<?php ($workload = $this->workload); ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($secondaryReady): ?>
                 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><span class="small muted">Open tasks</span></div>
-                    <div class="bars">
+                    <div class="bars ft-report-scroll-bars">
                         <?php ($workloadMax = max(1, $workload->max('open_tasks_count') ?? 1)); ?>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $workload; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $person): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <div class="bar-row"><span><?php echo e($person->name); ?></span><div class="bar"><span style="width:<?php echo e($person->open_tasks_count/$workloadMax*100); ?>%"></span></div><b><?php echo e($person->open_tasks_count); ?></b></div>
@@ -76,6 +78,9 @@
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                 </div>
+            <?php else: ?>
+                <?php echo $__env->make('livewire.dashboard.secondary-placeholder', ['title' => 'Team Workload', 'rows' => 6], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
 
         <div class="ft-island-shell ft-report-performance">

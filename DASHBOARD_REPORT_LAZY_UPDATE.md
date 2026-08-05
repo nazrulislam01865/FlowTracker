@@ -15,6 +15,7 @@
 - One grouped Livewire request loads Jobs by Phase, Team Workload, Upcoming Deliveries and Recent Activity.
 - Added fixed-size Dashboard skeleton cards to preserve the final grid while secondary data loads.
 - Added a short per-user cache for every Dashboard dataset with complete invalidation.
+- Reports KPIs and Delivery Performance render first; phase and workload charts load in one grouped secondary request.
 
 ## After replacing the project
 

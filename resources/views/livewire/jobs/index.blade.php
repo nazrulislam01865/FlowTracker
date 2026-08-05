@@ -1,6 +1,21 @@
 <div>
     @if($showCreate)
-        <x-jobs.create :clients="$clients" :workflows="$workflows" :users="$users" :categories="$categories" :products="$products" :priorities="$priorities" :client-id="$clientId" :workflow-id="$workflowId" :job-items="$jobItems" :job-attachments="$jobAttachments" wire:key="job-create" />
+        <x-jobs.create
+            :clients="$clients"
+            :workflows="$workflows"
+            :users="$users"
+            :categories="$categories"
+            :products="$products"
+            :priorities="$priorities"
+            :client-id="$clientId"
+            :workflow-id="$workflowId"
+            :job-items="$jobItems"
+            :job-attachments="$jobAttachments"
+            :catalog-ready="$createCatalogReady"
+            :assignment-ready="$createAssignmentReady"
+            :workflow-ready="$createWorkflowReady"
+            wire:key="job-create"
+        />
     @elseif($selectedTask)
         <x-jobs.task-detail
             :task="$selectedTask"

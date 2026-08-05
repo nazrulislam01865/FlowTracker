@@ -29,6 +29,7 @@ class Index extends Component
     public string $quick = '';
     public string $sort = 'delivery';
     public bool $hideEmptyPhases = false;
+    public bool $cardsReady = false;
     public int $cardLimit = 60;
     public array $expandedJobs = [];
 
@@ -40,6 +41,9 @@ class Index extends Component
     public function setMode(string $mode): void
     {
         $this->mode = in_array($mode, ['tasks', 'jobs'], true) ? $mode : 'jobs';
+        // A mode switch is already a Livewire request, so render the requested
+        // board directly instead of adding a second follow-up request.
+        $this->cardsReady = true;
         $this->quick = '';
         $this->cardLimit = 60;
         $this->message = null;
@@ -47,12 +51,14 @@ class Index extends Component
 
     public function setQuick(string $filter): void
     {
+        $this->cardsReady = true;
         $this->quick = $this->quick === $filter ? '' : $filter;
         $this->cardLimit = 60;
     }
 
     public function clearFilters(): void
     {
+        $this->cardsReady = true;
         $this->search = '';
         $this->job = '';
         $this->client = '';
@@ -66,13 +72,20 @@ class Index extends Component
     public function updated(string $property): void
     {
         if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort'], true)) {
+            $this->cardsReady = true;
             $this->cardLimit = 60;
         }
     }
 
     public function loadMore(): void
     {
+        $this->cardsReady = true;
         $this->cardLimit = min(300, $this->cardLimit + 60);
+    }
+
+    public function loadBoardCards(): void
+    {
+        $this->cardsReady = true;
     }
 
     public function toggleJobCard(int $jobId): void
@@ -91,6 +104,7 @@ class Index extends Component
 
     public function expandAll(): void
     {
+        $this->cardsReady = true;
         $this->expandedJobs = app(BoardService::class)->jobs(auth()->user(), $this->jobFilters(), $this->cardLimit)->pluck('id')->all();
     }
 
@@ -187,10 +201,17 @@ class Index extends Component
             'hasMoreCards' => false,
         ];
 
+        $data['taskJobs'] = app(JobService::class)->activeQuery(auth()->user())
+            ->orderBy('job_number')
+            ->limit(250)
+            ->get(['id', 'job_number', 'title']);
+
         if ($this->mode === 'jobs') {
             $filters = $this->jobFilters();
             $visibleJobQuery = app(JobService::class)->visibleQuery(auth()->user());
-            $jobRows = $service->jobs(auth()->user(), $filters, $this->cardLimit + 1);
+            $jobRows = $this->cardsReady
+                ? $service->jobs(auth()->user(), $filters, $this->cardLimit + 1)
+                : collect();
             $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
             $data['jobs'] = $jobRows->take($this->cardLimit)->values();
             $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
@@ -205,14 +226,12 @@ class Index extends Component
                 ->values();
         } else {
             $filters = $this->taskFilters();
-            $taskRows = $service->tasks(auth()->user(), $filters, $this->cardLimit + 1);
+            $taskRows = $this->cardsReady
+                ? $service->tasks(auth()->user(), $filters, $this->cardLimit + 1)
+                : collect();
             $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
             $data['tasks'] = $taskRows->take($this->cardLimit)->values();
             $data['taskCounts'] = $service->taskCounts(auth()->user(), $filters);
-            $data['taskJobs'] = app(JobService::class)->activeQuery(auth()->user())
-                ->orderBy('job_number')
-                ->limit(250)
-                ->get(['id', 'job_number', 'title']);
             $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
                 app(MasterDataService::class)->active('task_status')->pluck('name')
             ));

@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
+<div wire:init="loadBoardCards" class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
     <div class="ft-board-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>Operations Board</h1><p>Track work across all active Jobs</p></div>
@@ -56,7 +56,9 @@
         </section>
 
         <div class="ft-board-summary-row ft-reference-summary">
-            @if($mode === 'jobs')
+            @if(!$cardsReady)
+                <span>Loading {{ $mode === 'jobs' ? 'Job' : 'Task' }} Board cards…</span>
+            @elseif($mode === 'jobs')
                 <span>Showing <b>{{ $jobs->count() }}</b> Jobs across <b>{{ $jobs->pluck('workflow_id')->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('workflow', $jobs->pluck('workflow_id')->unique()->count()) }}</span>
             @else
                 <span>Showing <b>{{ $tasks->count() }}</b> of <b>{{ $taskCounts['open'] + $taskCounts['completed'] }}</b> tasks across <b>{{ $tasks->pluck('flow_job_id')->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('job', $tasks->pluck('flow_job_id')->unique()->count()) }}</span>
@@ -71,6 +73,9 @@
             <p>Job cards show current phase progress, next action and expandable phase tasks.</p>
         </section>
 
+        @if(!$cardsReady)
+            @include('livewire.shared.board-cards-placeholder', ['columns' => max(3, $phases->count())])
+        @else
         <div class="ft-lane-sticky-header">
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="jobHeaderScroll" x-on:scroll="$refs.jobBodyScroll && ($refs.jobBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-job-board-header-grid">
@@ -112,7 +117,11 @@
                 @endforeach
             </div>
         </div>
+        @endif
     @else
+        @if(!$cardsReady)
+            @include('livewire.shared.board-cards-placeholder', ['columns' => max(3, $taskStatuses->count())])
+        @else
         <div class="ft-lane-sticky-header">
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="taskHeaderScroll" x-on:scroll="$refs.taskBodyScroll && ($refs.taskBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $taskStatuses->count()) }};">
@@ -125,9 +134,10 @@
         <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="taskBodyScroll" x-on:scroll="$refs.taskHeaderScroll && ($refs.taskHeaderScroll.scrollLeft = $event.target.scrollLeft)">
             <x-board.task-job-matrix :tasks="$tasks" :statuses="$taskStatuses" :draggable="true" key-prefix="board" />
         </div>
+        @endif
     @endif
 
-    @if($hasMoreCards)
+    @if($cardsReady && $hasMoreCards)
         <div class="ft-board-load-more">
             <button type="button" class="ft-outline-btn" wire:click="loadMore">Load 60 more</button>
         </div>

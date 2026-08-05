@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
+<div wire:init="loadBoardCards" class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
     <div class="ft-board-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>Operations Board</h1><p>Track work across all active Jobs</p></div>
@@ -56,7 +56,9 @@
         </section>
 
         <div class="ft-board-summary-row ft-reference-summary">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($mode === 'jobs'): ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$cardsReady): ?>
+                <span>Loading <?php echo e($mode === 'jobs' ? 'Job' : 'Task'); ?> Board cards…</span>
+            <?php elseif($mode === 'jobs'): ?>
                 <span>Showing <b><?php echo e($jobs->count()); ?></b> Jobs across <b><?php echo e($jobs->pluck('workflow_id')->unique()->count()); ?></b> <?php echo e(\Illuminate\Support\Str::plural('workflow', $jobs->pluck('workflow_id')->unique()->count())); ?></span>
             <?php else: ?>
                 <span>Showing <b><?php echo e($tasks->count()); ?></b> of <b><?php echo e($taskCounts['open'] + $taskCounts['completed']); ?></b> tasks across <b><?php echo e($tasks->pluck('flow_job_id')->unique()->count()); ?></b> <?php echo e(\Illuminate\Support\Str::plural('job', $tasks->pluck('flow_job_id')->unique()->count())); ?></span>
@@ -71,6 +73,9 @@
             <p>Job cards show current phase progress, next action and expandable phase tasks.</p>
         </section>
 
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$cardsReady): ?>
+            <?php echo $__env->make('livewire.shared.board-cards-placeholder', ['columns' => max(3, $phases->count())], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        <?php else: ?>
         <div class="ft-lane-sticky-header">
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="jobHeaderScroll" x-on:scroll="$refs.jobBodyScroll && ($refs.jobBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-job-board-header-grid">
@@ -154,7 +159,11 @@
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
             </div>
         </div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php else: ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$cardsReady): ?>
+            <?php echo $__env->make('livewire.shared.board-cards-placeholder', ['columns' => max(3, $taskStatuses->count())], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+        <?php else: ?>
         <div class="ft-lane-sticky-header">
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="taskHeaderScroll" x-on:scroll="$refs.taskBodyScroll && ($refs.taskBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-task-board-status-header" style="--ft-lane-count: <?php echo e(max(1, $taskStatuses->count())); ?>;">
@@ -188,9 +197,10 @@
 <?php unset($__componentOriginal67670d28261a498be033858bd5d8e998); ?>
 <?php endif; ?>
         </div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hasMoreCards): ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($cardsReady && $hasMoreCards): ?>
         <div class="ft-board-load-more">
             <button type="button" class="ft-outline-btn" wire:click="loadMore">Load 60 more</button>
         </div>

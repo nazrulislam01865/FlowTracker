@@ -162,7 +162,10 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertStringContainsString('initialData($user)', $dashboardComponent);
         $this->assertStringContainsString('secondaryData($user)', $dashboardComponent);
         $this->assertStringNotContainsString('#[Computed]', $dashboardComponent);
-        $this->assertStringContainsString('#[Computed]', $reportsComponent);
+        $this->assertStringNotContainsString('#[Computed]', $reportsComponent);
+        $this->assertStringContainsString('public bool $secondaryReady = false;', $reportsComponent);
+        $this->assertStringContainsString('function loadSecondaryReports()', $reportsComponent);
+        $this->assertStringContainsString('wire:init="loadSecondaryReports"', $reports);
         $this->assertStringNotContainsString('->data(auth()->user())', $dashboardComponent);
         $this->assertStringNotContainsString('->data(auth()->user())', $reportsComponent);
         $this->assertStringContainsString("'metrics'", $dashboardService);

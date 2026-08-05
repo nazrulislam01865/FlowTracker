@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true, draggedTask:null }">
+<div wire:init="loadMyWorkTasks" class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true, draggedTask:null }">
     <div class="ft-board-sticky-header ft-mywork-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>My Work</h1><p>All visible jobs and tasks across the workspace</p></div>
@@ -37,15 +37,19 @@
         <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="myWorkHeaderScroll" x-on:scroll="$refs.myWorkBodyScroll && ($refs.myWorkBodyScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $displayStatuses->count()) }};">
                 @foreach($displayStatuses as $workStatus)
-                    <div class="ft-task-status-head"><span>{{ strtoupper($workStatus) }}</span><b>{{ $tasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $workStatus))->count() }}</b></div>
+                    <div class="ft-task-status-head"><span>{{ strtoupper($workStatus) }}</span><b>{{ $tasksReady ? $tasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $workStatus))->count() : '…' }}</b></div>
                 @endforeach
             </div>
         </div>
     </div>
     <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
-        <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" :draggable="true" key-prefix="mywork" />
+        @if($tasksReady)
+            <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" :draggable="true" key-prefix="mywork" />
+        @else
+            @include('livewire.shared.board-cards-placeholder', ['columns' => max(3, $displayStatuses->count())])
+        @endif
     </div>
-    @if($hasMoreCards)
+    @if($tasksReady && $hasMoreCards)
         <div class="ft-board-load-more">
             <button type="button" class="ft-outline-btn" wire:click="loadMore">Load 60 more</button>
         </div>

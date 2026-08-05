@@ -1,10 +1,14 @@
-@props(['clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments'])
+@props([
+    'clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments',
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,
+])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
     $selectedWorkflow = $workflows->firstWhere('id', (int)$workflowId);
     $allowedPhases = $selectedWorkflow?->phases?->where('allow_job_start', true) ?? collect();
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
+    $createReady = $catalogReady && $assignmentReady && $workflowReady;
 @endphp
 <div {{ $attributes->class('ft-create-job-page') }}>
     <div class="ft-create-shell">
@@ -22,7 +26,8 @@
             </div>
         </section>
 
-        <section class="ft-create-section">
+        @if($catalogReady)
+        <section class="ft-create-section" wire:key="create-catalog-ready">
             <div class="ft-create-section-title"><span>2</span><h2>Products & quantities</h2></div>
             <div class="ft-product-rows">
                 @foreach($jobItems as $index => $item)
@@ -45,8 +50,12 @@
             </div>
             <div class="ft-product-row-footer"><button type="button" wire:click="addProductRow">＋ Add product</button><span>{{ count($jobItems) }} {{ \Illuminate\Support\Str::plural('product',count($jobItems)) }} · {{ number_format($totalUnits) }} total units</span></div>
         </section>
+        @else
+            <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
+        @endif
 
-        <section class="ft-create-section">
+        @if($assignmentReady)
+        <section class="ft-create-section" wire:key="create-assignment-ready">
             <div class="ft-create-section-title"><span>3</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Required delivery date *</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
@@ -54,8 +63,12 @@
                 <label class="ft-create-field"><b>Job owner *</b><select wire:model="ownerId">@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select><small>Accountable for overall delivery.</small>@error('ownerId')<small class="validation-error">{{ $message }}</small>@enderror</label>
             </div>
         </section>
+        @else
+            <x-jobs.create-section-placeholder number="3" title="Schedule & owner" section="assignment" :rows="3" />
+        @endif
 
-        <section class="ft-create-section">
+        @if($workflowReady)
+        <section class="ft-create-section" wire:key="create-workflow-ready">
             <div class="ft-create-section-title"><span>4</span><h2>Workflow</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field"><b>Workflow</b><select wire:model.live="workflowId">@foreach($workflows as $workflow)<option value="{{ $workflow->id }}">{{ $workflow->name }}</option>@endforeach</select></label>
@@ -64,6 +77,9 @@
                 <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>
             </div>
         </section>
+        @else
+            <x-jobs.create-section-placeholder number="4" title="Workflow" section="workflow" :rows="2" />
+        @endif
 
         <section class="ft-create-section">
             <div class="ft-create-section-title"><span>5</span><h2>Attachments</h2></div>
@@ -85,8 +101,9 @@
 
         <div class="ft-create-actions">
             <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
-            <button type="button" class="ft-create-draft" wire:click="saveDraft">Save draft</button>
-            <button type="button" class="ft-create-primary" wire:click="createJob">Create job</button>
+            <button type="button" class="ft-create-draft" wire:click="saveDraft" @disabled(!$createReady)>Save draft</button>
+            <button type="button" class="ft-create-primary" wire:click="createJob" @disabled(!$createReady)>Create job</button>
         </div>
+        @error('createLoading')<div class="validation-error">{{ $message }}</div>@enderror
     </div>
 </div>
