@@ -20,7 +20,13 @@
         <meta name="flowtrack-pusher-auth" content="<?php echo e(route('pusher.auth')); ?>">
         <script src="https://js.pusher.com/8.4.0/pusher.min.js" defer></script>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php echo app('Illuminate\Foundation\Vite')(['resources/css/app.css','resources/js/app.js']); ?>
+    <?php echo app('Illuminate\Foundation\Vite')([
+        'resources/css/generated/flowtrack-01.css',
+        'resources/css/generated/flowtrack-02.css',
+        'resources/css/generated/flowtrack-03.css',
+        'resources/css/generated/flowtrack-04.css',
+        'resources/js/app.js',
+    ]); ?>
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

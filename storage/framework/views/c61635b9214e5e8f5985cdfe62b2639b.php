@@ -63,7 +63,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $team = \App\Support\JobDetailPresenter::team($job);
     $tabs = ['overview'=>'Overview','workflow'=>'Workflow','documents'=>'Documents'];
 ?>
-<div class="ft-job-detail-page ft-exact-job-detail">
+<div <?php echo e($attributes->class('ft-job-detail-page ft-exact-job-detail')); ?>>
     <div class="ft-detail-toolbar ft-exact-job-header">
         <div class="ft-job-heading-copy">
             <div class="ft-detail-breadcrumb ft-id-breadcrumb">

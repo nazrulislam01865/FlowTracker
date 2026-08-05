@@ -1,4 +1,4 @@
-# Dashboard, Reports, Logout and Lazy Loading Update
+# Dashboard, Reports, Logout and Progressive Rendering Update
 
 ## Implemented
 
@@ -9,10 +9,12 @@
 - Reports now calculate active Jobs, on-time Jobs, Task completion, overdue Tasks, average Artwork phase duration and on-time Shipment phases from database records.
 - Report and Dashboard scalar metrics use short cache windows and realtime invalidation.
 - Added a POST logout action to the sidebar.
-- Enabled Livewire lazy loading on every authenticated page.
-- Added one shared responsive inline skeleton placeholder for all page components.
+- Primary authenticated page components render immediately so useful content is present in the first response.
 - Removed the fixed side loader card.
-- Split Dashboard and Reports into deferred/viewport-lazy Livewire islands so their sections no longer query in one monolithic request.
+- Dashboard metrics and Needs Attention render first.
+- One grouped Livewire request loads Jobs by Phase, Team Workload, Upcoming Deliveries and Recent Activity.
+- Added fixed-size Dashboard skeleton cards to preserve the final grid while secondary data loads.
+- Added a short per-user cache for every Dashboard dataset with complete invalidation.
 
 ## After replacing the project
 

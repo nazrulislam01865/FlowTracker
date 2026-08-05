@@ -42,7 +42,7 @@
     $timelineCurrentPage = min(max(1, (int) $activityPage), $timelinePages);
     $timeline = $timeline->forPage($timelineCurrentPage, $activityPerPage)->values();
 @endphp
-<div class="ft-task-detail-page ft-exact-task-detail">
+<div {{ $attributes->class('ft-task-detail-page ft-exact-task-detail') }}>
     @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
     <div class="ft-detail-toolbar task-toolbar ft-exact-task-header">
         <div class="ft-task-heading-copy">

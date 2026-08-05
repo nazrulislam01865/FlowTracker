@@ -6,7 +6,7 @@
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
 @endphp
-<div class="ft-create-job-page">
+<div {{ $attributes->class('ft-create-job-page') }}>
     <div class="ft-create-shell">
         <div class="ft-create-breadcrumb">Jobs / Create job</div>
         <div class="ft-create-title"><h1>Create new job</h1><p>Set the job scope, products, ownership and workflow.</p></div>

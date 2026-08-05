@@ -3,6 +3,7 @@
     "private": true,
     "type": "module",
     "scripts": {
+        "css:split": "node scripts/split-flowtrack-css.mjs",
         "build": "vite build",
         "dev": "vite"
     },

@@ -10,4 +10,5 @@ return [
     'log_all_requests' => env('PERFORMANCE_LOG_ALL_REQUESTS', false),
     'server_timing' => env('PERFORMANCE_SERVER_TIMING', false),
     'include_query_sql' => env('PERFORMANCE_INCLUDE_QUERY_SQL', false),
+    'dashboard_cache_seconds' => (int) env('DASHBOARD_CACHE_SECONDS', 30),
 ];

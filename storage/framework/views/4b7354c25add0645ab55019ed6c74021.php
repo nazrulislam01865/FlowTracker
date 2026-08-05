@@ -35,7 +35,7 @@ foreach ($attributes->all() as $__key => $__value) {
 }
 
 unset($__defined_vars, $__key, $__value); ?>
-<div class="ft-list-page ft-jobs-list-page ft-exact-jobs-list">
+<div <?php echo e($attributes->class('ft-list-page ft-jobs-list-page ft-exact-jobs-list')); ?>>
     <div class="ft-list-head">
         <div><h1>Jobs</h1><p>Manage active jobs from request to collection</p></div>
         <div class="ft-list-actions"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('jobs','export')): ?><button class="ft-outline-btn" type="button">Export</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?><button class="ft-outline-btn" type="button">Columns</button><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('jobs','create')): ?><button class="ft-new-job-btn" wire:click="openCreate">＋ New Job</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div>

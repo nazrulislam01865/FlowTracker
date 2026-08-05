@@ -3,7 +3,7 @@
     'phaseFilter'=>'','healthFilter'=>'','quickFilter'=>'all','showMoreFilters'=>false,'selectedJobIds'=>[],
     'allFilteredJobsSelected'=>false,
 ])
-<div class="ft-list-page ft-jobs-list-page ft-exact-jobs-list">
+<div {{ $attributes->class('ft-list-page ft-jobs-list-page ft-exact-jobs-list') }}>
     <div class="ft-list-head">
         <div><h1>Jobs</h1><p>Manage active jobs from request to collection</p></div>
         <div class="ft-list-actions">@if(auth()->user()->canModule('jobs','export'))<button class="ft-outline-btn" type="button">Export</button>@endif<button class="ft-outline-btn" type="button">Columns</button>@if(auth()->user()->canModule('jobs','create'))<button class="ft-new-job-btn" wire:click="openCreate">＋ New Job</button>@endif</div>

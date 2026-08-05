@@ -81,7 +81,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $timelineCurrentPage = min(max(1, (int) $activityPage), $timelinePages);
     $timeline = $timeline->forPage($timelineCurrentPage, $activityPerPage)->values();
 ?>
-<div class="ft-task-detail-page ft-exact-task-detail">
+<div <?php echo e($attributes->class('ft-task-detail-page ft-exact-task-detail')); ?>>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <div class="ft-detail-toolbar task-toolbar ft-exact-task-header">
         <div class="ft-task-heading-copy">

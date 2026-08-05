@@ -1,6 +1,6 @@
 <div>
     @if($showCreate)
-        <x-jobs.create :clients="$clients" :workflows="$workflows" :users="$users" :categories="$categories" :products="$products" :priorities="$priorities" :client-id="$clientId" :workflow-id="$workflowId" :job-items="$jobItems" :job-attachments="$jobAttachments" />
+        <x-jobs.create :clients="$clients" :workflows="$workflows" :users="$users" :categories="$categories" :products="$products" :priorities="$priorities" :client-id="$clientId" :workflow-id="$workflowId" :job-items="$jobItems" :job-attachments="$jobAttachments" wire:key="job-create" />
     @elseif($selectedTask)
         <x-jobs.task-detail
             :task="$selectedTask"
@@ -13,6 +13,7 @@
             :activity-page="$taskActivityPage"
             :task-document-uploads="$taskDocumentUploads"
             :show-task-document-picker="$showTaskDocumentPicker"
+            wire:key="task-detail-{{ $selectedTask->id }}"
         />
     @elseif($selectedJob)
         <x-jobs.detail
@@ -31,9 +32,9 @@
             :activity-page="$jobActivityPage"
             :job-document-uploads="$jobDocumentUploads"
             :show-document-picker="$showDocumentPicker"
+            wire:key="job-detail-{{ $selectedJob->id }}"
         />
     @else
-        <span class="ft-jobs-list-poll" aria-hidden="true"></span>
         <x-jobs.table
             :jobs="$jobs"
             :job-summary="$jobSummary"
@@ -49,6 +50,7 @@
             :show-more-filters="$showMoreFilters"
             :selected-job-ids="$selectedJobIds"
             :all-filtered-jobs-selected="$allFilteredJobsSelected"
+            wire:key="jobs-table"
         />
     @endif
 </div>

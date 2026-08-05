@@ -48,6 +48,43 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertCount('selectedJobIds', 11);
     }
 
+    public function test_jobs_list_does_not_initialize_or_render_the_create_form(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+
+        Livewire::actingAs($user)
+            ->test(\App\Livewire\Jobs\Index::class)
+            ->assertSet('showCreate', false)
+            ->assertSet('workflowId', null)
+            ->assertSet('workflowPhaseId', null)
+            ->assertSet('clientId', null)
+            ->assertSet('jobItems', [])
+            ->assertSee('Manage active jobs from request to collection')
+            ->assertDontSee('Create new job');
+    }
+
+    public function test_open_create_switches_from_the_list_to_create_only_data(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [, $workflow, $phase] = $this->jobDependencies();
+
+        Livewire::actingAs($user)
+            ->test(\App\Livewire\Jobs\Index::class)
+            ->call('openCreate')
+            ->assertSet('showCreate', true)
+            ->assertSet('workflowId', $workflow->id)
+            ->assertSet('workflowPhaseId', $phase->id)
+            ->assertCount('jobItems', 1)
+            ->assertSee('Create new job')
+            ->assertDontSee('Manage active jobs from request to collection')
+            ->call('closeCreate')
+            ->assertSet('showCreate', false)
+            ->assertSet('workflowId', null)
+            ->assertSet('jobItems', [])
+            ->assertSee('Manage active jobs from request to collection')
+            ->assertDontSee('Create new job');
+    }
+
     public function test_active_job_query_does_not_count_hidden_or_deleted_jobs(): void
     {
         $user = User::factory()->create(['is_super_admin' => true]);

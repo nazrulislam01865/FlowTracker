@@ -2223,3 +2223,7 @@ body:has(.ft-client-preview-backdrop){
 
 /* Progressive Livewire island layout. */
 .ft-island-shell{min-width:0;height:100%}.ft-island-shell>div{height:100%}.ft-island-shell .section-card{height:100%}
+
+/* Dashboard staged rendering: reserve final card space while one grouped
+   secondary Livewire request loads the below-the-fold datasets. */
+.ft-dashboard-skeleton{min-height:220px;overflow:hidden}.ft-dashboard-skeleton-label{color:var(--muted);font-size:11px}.ft-dashboard-skeleton-lines{display:flex;flex-direction:column;gap:12px;padding-top:2px}.ft-dashboard-skeleton-lines span{display:block;width:var(--ft-skeleton-width,100%);height:30px;border-radius:8px;background:linear-gradient(90deg,#edf2f7 20%,#f8fafc 50%,#edf2f7 80%);background-size:220% 100%;animation:ft-dashboard-skeleton-pulse 1.4s ease-in-out infinite}@keyframes ft-dashboard-skeleton-pulse{0%{background-position:100% 0}100%{background-position:-100% 0}}@media(prefers-reduced-motion:reduce){.ft-dashboard-skeleton-lines span{animation:none}}
