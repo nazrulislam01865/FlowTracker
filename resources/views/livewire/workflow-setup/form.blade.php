@@ -43,7 +43,7 @@
         </div>
         <div class="ft-admin-form-footer">
             <button type="button" class="ft-admin-cancel" wire:click="cancel">Cancel</button>
-            <button type="submit" class="ft-admin-primary" wire:loading.attr="disabled">{{ $workflowId ? 'Save Workflow' : 'Create Workflow' }}</button>
+            <button type="submit" class="ft-admin-primary">{{ $workflowId ? 'Save Workflow' : 'Create Workflow' }}</button>
         </div>
     </form>
 </div>

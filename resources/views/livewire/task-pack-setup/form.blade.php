@@ -116,7 +116,7 @@
 
         <div class="ft-admin-form-footer">
             <button type="button" class="ft-admin-cancel" wire:click="cancel">Cancel</button>
-            <button type="submit" class="ft-admin-primary" wire:loading.attr="disabled">{{ $taskPackId ? 'Save Task Pack' : 'Create Task Pack' }}</button>
+            <button type="submit" class="ft-admin-primary">{{ $taskPackId ? 'Save Task Pack' : 'Create Task Pack' }}</button>
         </div>
     </form>
 </div>

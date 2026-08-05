@@ -68,14 +68,13 @@
         <section class="ft-create-section">
             <div class="ft-create-section-title"><span>5</span><h2>Attachments</h2></div>
             @if(auth()->user()->canModule('documents','create'))
-                <div class="ft-create-upload-wrap" x-data="{ uploading:false, progress:0 }" x-on:livewire-upload-start="uploading=true; progress=0" x-on:livewire-upload-progress="progress=$event.detail.progress" x-on:livewire-upload-error="uploading=false; progress=0" x-on:livewire-upload-finish="progress=100; setTimeout(() => { uploading=false; progress=0 }, 700)">
+                <div class="ft-create-upload-wrap">
                 <div class="ft-create-upload">
                     <span class="ft-create-paperclip">⌕</span>
                     <div><b>Drop files here or <label for="job-create-files">browse</label></b><small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                     @if(auth()->user()->canModule('documents','view'))<a href="{{ route('documents.index') }}" wire:navigate>Open Documents</a>@endif
                     <input id="job-create-files" type="file" wire:model="jobAttachments" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                 </div>
-                <div class="ft-upload-progress-wrap" x-cloak x-show="uploading" x-transition.opacity><div class="ft-upload-progress-copy"><span>Uploading attachment…</span><b x-text="progress + '%'">0%</b></div><div class="ft-upload-progress-track"><span x-bind:style="`width:${progress}%`"></span></div></div>
                 </div>
             @else
                 <div class="ft-create-note">Your role does not allow document uploads during Job creation.</div>
@@ -86,8 +85,8 @@
 
         <div class="ft-create-actions">
             <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
-            <button type="button" class="ft-create-draft" wire:click="saveDraft" wire:loading.attr="disabled">Save draft</button>
-            <button type="button" class="ft-create-primary" wire:click="createJob" wire:loading.attr="disabled">Create job</button>
+            <button type="button" class="ft-create-draft" wire:click="saveDraft">Save draft</button>
+            <button type="button" class="ft-create-primary" wire:click="createJob">Create job</button>
         </div>
     </div>
 </div>

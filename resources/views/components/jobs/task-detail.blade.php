@@ -69,7 +69,7 @@
                 @endif
             </h1>
         </div>
-        <div class="ft-detail-actions"><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" wire:loading.attr="disabled" wire:target="markTaskComplete" @disabled($task->status==='Completed' || !$canEditTask)><span wire:loading.remove wire:target="markTaskComplete">{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</span><span wire:loading wire:target="markTaskComplete">Saving…</span></button><button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
+        <div class="ft-detail-actions"><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed' || !$canEditTask)>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button><button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
 
@@ -124,7 +124,7 @@
                 @unless($canCheck)<p class="ft-checklist-permission-note">Only the assigned person can check or uncheck checklist items.</p>@endunless
             </section>
 
-            <section class="ft-detail-card ft-attachment-card" x-data="{ uploading:false, progress:0 }" x-on:livewire-upload-start="uploading=true; progress=0" x-on:livewire-upload-progress="progress=$event.detail.progress" x-on:livewire-upload-error="uploading=false; progress=0" x-on:livewire-upload-finish="progress=100; setTimeout(() => { uploading=false; progress=0 }, 700)">
+            <section class="ft-detail-card ft-attachment-card">
                 <h2>Attachments <span>{{ $task->documents->count() }}</span></h2>
                 <div class="ft-upload-zone compact ft-task-upload-zone">
                     @if($canUploadDocument)
@@ -138,12 +138,8 @@
                     @endif
                     @if($canLinkDocument)<button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleTaskDocumentPicker">Choose from Documents</button>@endif
                 </div>
-                <div class="ft-upload-progress-wrap" x-cloak x-show="uploading" x-transition.opacity>
-                    <div class="ft-upload-progress-copy"><span>Uploading attachment…</span><b x-text="progress + '%'">0%</b></div>
-                    <div class="ft-upload-progress-track"><span x-bind:style="`width:${progress}%`"></span></div>
-                </div>
                 @if(count($taskDocumentUploads ?? []))
-                    <div class="ft-upload-ready-row"><span>{{ count($taskDocumentUploads ?? []) }} file{{ count($taskDocumentUploads ?? [])===1?'':'s' }} ready</span><button class="ft-new-job-btn" type="button" wire:click="uploadSelectedTaskDocuments" wire:loading.attr="disabled" wire:target="uploadSelectedTaskDocuments">Upload &amp; link</button><span wire:loading wire:target="uploadSelectedTaskDocuments">Uploading…</span></div>
+                    <div class="ft-upload-ready-row"><span>{{ count($taskDocumentUploads ?? []) }} file{{ count($taskDocumentUploads ?? [])===1?'':'s' }} ready</span><button class="ft-new-job-btn" type="button" wire:click="uploadSelectedTaskDocuments">Upload &amp; link</button></div>
                 @endif
                 @error('taskDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
                 @error('taskDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
@@ -165,7 +161,7 @@
                     <div class="ft-activity-tabs"><button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setTaskActivityTab('all')">All</button><button type="button" class="{{ $activityTab==='comments'?'active':'' }}" wire:click="setTaskActivityTab('comments')">Comments</button><button type="button" class="{{ $activityTab==='history'?'active':'' }}" wire:click="setTaskActivityTab('history')">History</button></div>
                 </div>
                 @if($canEditTask)
-                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :name="auth()->user()->name" :size="32"/><input wire:model="taskComment" wire:keydown.enter="addTaskComment" placeholder="Write a comment about this task..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment" wire:loading.attr="disabled" wire:target="addTaskComment">Comment</button></div>
+                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :name="auth()->user()->name" :size="32"/><input wire:model="taskComment" wire:keydown.enter="addTaskComment" placeholder="Write a comment about this task..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
                 @endif
                 <div class="ft-activity-feed">
                     @forelse($timeline as $entry)

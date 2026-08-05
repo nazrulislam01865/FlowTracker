@@ -68,10 +68,7 @@
     </div>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hasMoreCards): ?>
         <div class="ft-board-load-more">
-            <button type="button" class="ft-outline-btn" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore">
-                <span wire:loading.remove wire:target="loadMore">Load 60 more</span>
-                <span wire:loading wire:target="loadMore">Loading…</span>
-            </button>
+            <button type="button" class="ft-outline-btn" wire:click="loadMore">Load 60 more</button>
         </div>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>

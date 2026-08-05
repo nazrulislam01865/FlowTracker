@@ -33,7 +33,7 @@
                 <button type="button">Recently updated <b>{{ $job->documents->filter(fn($doc)=>$doc->updated_at?->gte(now()->subDays(7)))->count() }}</b></button>
             </div>
 
-            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel" x-data="{ uploading:false, progress:0 }" x-on:livewire-upload-start="uploading=true; progress=0" x-on:livewire-upload-progress="progress=$event.detail.progress" x-on:livewire-upload-error="uploading=false; progress=0" x-on:livewire-upload-finish="progress=100; setTimeout(() => { uploading=false; progress=0 }, 700)">
+            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel">
                 <b>Add documents</b>
                 <p>Select the Task Pack document requirement first. The uploaded or chosen file is linked to that exact task automatically.</p>
 
@@ -65,16 +65,10 @@
                     </div>
                     @unless($canManageDocuments)<p class="muted small">You have read-only access to Job documents.</p>@endunless
 
-                    <div class="ft-upload-progress-wrap" x-cloak x-show="uploading" x-transition.opacity>
-                        <div class="ft-upload-progress-copy"><span>Uploading document…</span><b x-text="progress + '%'">0%</b></div>
-                        <div class="ft-upload-progress-track"><span x-bind:style="`width:${progress}%`"></span></div>
-                    </div>
-
                     @if($canUploadDocument && count($jobDocumentUploads ?? []))
                         <div class="ft-upload-ready-row">
                             <span>{{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready</span>
-                            <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments" wire:loading.attr="disabled" wire:target="uploadJobDocuments">Upload &amp; link</button>
-                            <span wire:loading wire:target="uploadJobDocuments">Uploading…</span>
+                            <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
                         </div>
                     @endif
 

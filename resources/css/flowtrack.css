@@ -1426,13 +1426,6 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-activity-card.compact.ft-friendly-activity .ft-friendly-composer{padding:8px 13px!important}
 .ft-activity-card.compact.ft-friendly-activity .ft-activity-feed{padding:3px 13px 8px}
 
-.ft-upload-progress-wrap{margin-top:9px;padding:9px 11px;border:1px solid #d9e5f3;border-radius:8px;background:#f8fbff}
-.ft-upload-progress-copy{display:flex;align-items:center;justify-content:space-between;gap:10px;color:#4e6581;font-size:9px;margin-bottom:6px}
-.ft-upload-progress-copy b{color:#145fe6;font-size:9px}
-.ft-upload-progress-track{height:7px;background:#e4ebf4;border-radius:999px;overflow:hidden}
-.ft-upload-progress-track>span{display:block;height:100%;background:#2563eb;border-radius:999px;transition:width .18s ease}
-.ft-create-upload-wrap .ft-upload-progress-wrap{margin-top:7px}
-.ft-doc-upload-modal .ft-upload-progress-wrap{width:100%;margin-top:8px}
 
 @media(max-width:800px){
   .ft-friendly-activity .ft-activity-head{align-items:flex-start;flex-direction:column}

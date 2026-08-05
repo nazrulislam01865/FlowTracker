@@ -20,7 +20,7 @@
                 <label class="ft-client-field"><b>Outstanding balance</b><input type="number" step="0.01" min="0" wire:model="outstandingBalance">@error('outstandingBalance')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-client-field"><b>Notes</b><textarea rows="4" wire:model="notes" placeholder="Commercial notes, preferences or account instructions..."></textarea></label>
             </div>
-            <div class="ft-client-form-actions"><button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button><button type="button" class="ft-create-primary" wire:click="createClient" wire:loading.attr="disabled">Create Client</button></div>
+            <div class="ft-client-form-actions"><button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button><button type="button" class="ft-create-primary" wire:click="createClient">Create Client</button></div>
         </section>
     </div>
 </div>

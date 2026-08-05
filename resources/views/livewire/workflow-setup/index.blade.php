@@ -166,7 +166,7 @@
             </div>
             <div class="ft-phase-modal-footer">
                 <button type="button" class="ft-admin-cancel" wire:click="closePhase">Cancel</button>
-                <button type="button" class="ft-admin-primary" wire:click="savePhase" wire:loading.attr="disabled">Save Phase</button>
+                <button type="button" class="ft-admin-primary" wire:click="savePhase">Save Phase</button>
             </div>
         </div>
     @endif

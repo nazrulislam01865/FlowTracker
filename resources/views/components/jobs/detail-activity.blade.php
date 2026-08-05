@@ -29,7 +29,7 @@
         <div class="ft-comment-composer ft-friendly-composer">
             <x-ui.avatar :name="auth()->user()->name" :size="32"/>
             <input wire:model="jobComment" wire:keydown.enter="addJobComment" placeholder="Write a comment about this Job...">
-            <button class="ft-new-job-btn" type="button" wire:click="addJobComment" wire:loading.attr="disabled" wire:target="addJobComment">Comment</button>
+            <button class="ft-new-job-btn" type="button" wire:click="addJobComment">Comment</button>
         </div>
     @endif
     <div class="ft-activity-feed">

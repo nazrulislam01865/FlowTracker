@@ -48,7 +48,7 @@
                     <label><span>Preferred language</span><select wire:model="preferredLanguage"><option>English</option><option>Chinese</option><option>Spanish</option><option>French</option><option>German</option><option>Arabic</option><option>Bengali</option></select></label>
                     <label><span>Outstanding balance</span><input type="number" min="0" step="0.01" wire:model="outstandingBalance"></label>
                     <label class="span-2"><span>Notes</span><textarea wire:model="notes"></textarea></label>
-                    <div class="ft-client-edit-form-actions"><button type="button" class="ft-outline-btn" wire:click="cancelEditClient">Cancel</button><button type="button" class="ft-new-job-btn" wire:click="updateClient" wire:loading.attr="disabled">Save Client</button></div>
+                    <div class="ft-client-edit-form-actions"><button type="button" class="ft-outline-btn" wire:click="cancelEditClient">Cancel</button><button type="button" class="ft-new-job-btn" wire:click="updateClient">Save Client</button></div>
                 </div>
             @else
                 <div class="ft-client-contact-box">
