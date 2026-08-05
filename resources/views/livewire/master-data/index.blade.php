@@ -1,4 +1,4 @@
-<div>
+<div wire:init="loadMasterRecords">
     <x-ui.page-head title="Master Data" subtitle="Maintain the values used across jobs, Task Packs, workflows, documents, production and shipment">
         <x-slot:actions><button class="primary" wire:click="open">＋ Add Record</button></x-slot:actions>
     </x-ui.page-head>
@@ -17,7 +17,7 @@
         <div class="card master-categories">
             @foreach($labels as $key=>$label)
                 <button class="{{ $key===$group?'active':'' }}" wire:click="selectGroup('{{ $key }}')">
-                    <b>{{ $label }}</b><small>{{ \App\Models\MasterRecord::where('workspace_id',app(\App\Services\MasterDataService::class)->workspaceId())->where('type',$key)->count() }} records</small>
+                    <b>{{ $label }}</b><small>{{ $groupCounts[$key] ?? 0 }} records</small>
                 </button>
             @endforeach
         </div>
@@ -27,7 +27,10 @@
                 <div><h3 style="margin:0 0 4px">{{ $labels[$group] }}</h3><div class="small muted">All values are read from the database and become available immediately after saving.</div></div>
                 <input wire:model.live.debounce.300ms="search" style="max-width:280px;border:1px solid var(--line);border-radius:8px;padding:9px" placeholder="Search records…">
             </div>
-            <div class="table-wrap">
+            @if(!$recordsReady)
+                @include('livewire.shared.table-rows-placeholder', ['columns' => $group === 'product' ? 7 : 6, 'rows' => 8])
+            @else
+            <div class="table-wrap" wire:key="master-records-{{ $group }}">
                 <table class="master-table">
                     <thead><tr><th>Order</th><th>Code</th><th>Name</th>@if($group === 'product')<th>Product Category</th>@endif<th>Description / Use</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody>
@@ -56,6 +59,7 @@
                         <button type="button" wire:click="nextPage('masterPage')" @disabled(!$rows->hasMorePages())>Next</button>
                     </div>
                 </div>
+            @endif
             @endif
         </div>
     </div>

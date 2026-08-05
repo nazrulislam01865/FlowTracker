@@ -4,7 +4,6 @@ namespace App\Livewire\WorkflowSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
-use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
@@ -141,8 +140,13 @@ class Index extends Component
             'selectedPhaseCount'=>$selectedPhases->count(),
             'allowedStartingStages'=>$selectedPhases->where('is_active',true)->where('allow_job_start',true)->count(),
             'automaticTransitions'=>$selectedPhases->where('is_active',true)->where('auto_advance_on_ready',true)->count(),
-            'taskPacks'=>TaskPack::where('workspace_id',$workspaceId)->where('is_active',true)->orderBy('name')->get(),
-            'documentCategories'=>MasterRecord::where('workspace_id',$workspaceId)->where('type','document_category')->where('status','active')->orderBy('sort_order')->orderBy('name')->get(),
+            // These shared datasets are only used by the phase editor.
+            'taskPacks' => $this->showPhaseModal
+                ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : collect(),
+            'documentCategories' => $this->showPhaseModal
+                ? app(MasterDataService::class)->active('document_category')
+                : collect(),
         ]);
     }
 }

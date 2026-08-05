@@ -19,7 +19,22 @@ class TaskPackService
 
     public function all()
     {
-        return TaskPack::query()->where('workspace_id', $this->workspaceId())->with(['items.defaultAssignee','items.defaultDepartment','items.priority','items.documentCategory'])->orderBy('name')->get();
+        return TaskPack::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->select(['id', 'workspace_id', 'code', 'name', 'description', 'is_active'])
+            ->with([
+                'items' => fn ($query) => $query->select([
+                    'id', 'task_pack_id', 'title', 'default_assignee_id',
+                    'default_department_id', 'priority_id', 'document_category_id',
+                    'is_required', 'sort_order',
+                ]),
+                'items.defaultAssignee:id,name',
+                'items.defaultDepartment:id,name',
+                'items.priority:id,name',
+                'items.documentCategory:id,name',
+            ])
+            ->orderBy('name')
+            ->get();
     }
 
 

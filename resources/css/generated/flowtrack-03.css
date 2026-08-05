@@ -1,4 +1,12 @@
 
+.ft-filter-collapse svg.rotated{transform:rotate(180deg)}
+
+.ft-reference-summary{background:#fff;border:1px solid #d8e1ec;border-radius:9px;min-height:39px!important;padding:0 14px;margin:4px 0 8px!important;font-size:11.5px!important;color:#536780}
+.ft-reference-summary b{color:#12243d}
+.ft-workflow-reference-card{background:#fff;border:1px solid #d8e1ec;border-radius:12px;padding:13px 14px;margin:0 0 14px}
+.ft-workflow-reference-card>label{display:block;font-size:12px;font-weight:800;color:#14243d;margin-bottom:9px}
+.ft-workflow-reference-card select{width:100%;height:45px;border:1px solid #d8e1ec;background:#fff;border-radius:9px;padding:0 14px;color:#20334c;font-size:12px}
+.ft-workflow-reference-card p{margin:10px 0 0;color:#5e728d;font-size:11px}
 
 .ft-board-lanes-scroll{padding-top:0}
 .ft-board-page .ft-job-board-grid{grid-auto-columns:315px;gap:11px}
@@ -823,4 +831,4 @@
 
 /* Keep the reference forms unchanged structurally, but restore readable sizes. */
 .ft-create-job-page{font-size:13px}.ft-create-shell{max-width:1180px}.ft-create-breadcrumb{font-size:12px}.ft-create-title h1{font-size:26px}.ft-create-title p{font-size:13px;margin:6px 0 16px}.ft-create-section{padding:16px 18px;margin-bottom:12px}.ft-create-section-title{margin-bottom:14px}.ft-create-section-title>span{width:26px;height:26px;font-size:12px}.ft-create-section-title h2{font-size:17px}.ft-create-fields{gap:13px}.ft-create-field>b,.ft-product-row label>b{font-size:12px}.ft-create-field input,.ft-create-field select,.ft-create-field textarea,.ft-product-row input,.ft-product-row select{min-height:44px;font-size:13px;border-radius:8px}.ft-create-field textarea{min-height:88px;padding-top:11px}.ft-create-field>small{font-size:10px}.ft-locked-input{height:44px;font-size:13px}.ft-product-row{padding:12px 14px}.ft-product-delete{height:44px}.ft-product-row-footer button{height:34px;font-size:11px}.ft-product-row-footer span{font-size:11px}.ft-workflow-summary{height:35px;font-size:10.5px}.ft-create-note{font-size:10.5px}.ft-create-upload{min-height:68px}.ft-create-upload b{font-size:12px}.ft-create-upload small{font-size:10px}.ft-create-upload>a{height:38px;font-size:10.5px}.ft-create-upload-list span{font-size:10.5px}.ft-create-actions button,.ft-client-form-actions button{height:42px;font-size:11.5px}
-.ft-create-client-page{font-size:13px}.ft-client-create-top h1{font-size:26px}.ft-client-create-top p{font-size:13px}.ft-back-clients{height:40px;font-size:12px}.ft-client-form-head{padding:18px 20px 16px}.ft-client-form-head h2{font-size:23px}.ft-client-form-head p{font-size:13px}.ft-client-form-body{padding:18px 20px 20px;gap:17px}.ft-client-field>b{font-size:12px}.ft-client-field input,.ft-client-field select,.ft-client-field textarea{min-height:42px;font-size:13px}.ft-client-field textarea{min-height:82px}.ft-client-field>small{font-size:10.5px}.ft-client-code-box{height:42px;font-size:14px}.ft-client-form-actions{padding:14px 20px}
+.ft-create-client-page{font-size:13px}.ft-client-create-top h1{font-size:26px}.ft-client-create-top p{font-size:13px}.ft-back-clients{height:40px;font-size:12px}.ft-client-form-head{padding:18px 20px 16px}

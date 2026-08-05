@@ -1,14 +1,14 @@
-<div wire:init="loadDocuments" class="ft-documents-page">
+<div class="ft-documents-page">
     <div class="ft-doc-page-head"><div><h1>Documents</h1><p>Find, upload and manage files across every Job, phase and task.</p></div><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('documents','create')): ?><button class="primary" wire:click="openUpload">⇧ Upload document</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <div class="ft-doc-layout">
         <div class="ft-doc-main">
             <div class="ft-doc-metrics">
-                <button class="card" wire:click="setStatus('')"><span>All files</span><b><?php echo e($metrics['all']); ?></b><i>▤</i></button>
-                <button class="card danger" wire:click="setStatus('needs_action')"><span>Needs attention</span><b><?php echo e($metrics['attention']); ?></b><i>△</i></button>
-                <button class="card purple" wire:click="setStatus('awaiting_approval')"><span>Awaiting approval</span><b><?php echo e($metrics['approval']); ?></b><i>◷</i></button>
-                <button class="card" wire:click="setStatus('recent')"><span>Recently updated</span><b><?php echo e($metrics['recent']); ?></b><i>◴</i></button>
+                <button class="card" wire:click="$set('status','')"><span>All files</span><b><?php echo e($metrics['all']); ?></b><i>▤</i></button>
+                <button class="card danger" wire:click="$set('status','needs_action')"><span>Needs attention</span><b><?php echo e($metrics['attention']); ?></b><i>△</i></button>
+                <button class="card purple" wire:click="$set('status','awaiting_approval')"><span>Awaiting approval</span><b><?php echo e($metrics['approval']); ?></b><i>◷</i></button>
+                <button class="card" wire:click="$set('status','recent')"><span>Recently updated</span><b><?php echo e($metrics['recent']); ?></b><i>◴</i></button>
             </div>
 
             <div class="ft-doc-filterbar">
@@ -35,9 +35,6 @@
             </div>
 
             <div class="card ft-doc-table-card">
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$documentsReady): ?>
-                    <?php echo $__env->make('livewire.documents.rows-placeholder', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-                <?php else: ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $grouped; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $jobId=>$docs): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <?php ($first=$docs->first()); ?>
                     <?php ($expanded=$jobId==0 || in_array((int)$jobId,$expandedJobs,true)); ?>
@@ -45,7 +42,7 @@
                         <button class="ft-doc-job-head" <?php if($jobId): ?> wire:click="toggleJob(<?php echo e($jobId); ?>)" <?php endif; ?>>
                             <span class="ft-doc-chevron"><?php echo e($expanded?'⌄':'›'); ?></span>
                             <b><?php echo e($first->job?->job_number ?? 'General documents'); ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($first->job): ?> · <?php echo e($first->job->title); ?> <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></b>
-                            <span class="ft-doc-job-meta"><?php echo e($first->job?->client?->name ?? 'No client'); ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($first->job): ?> <em>|</em> Phase: <?php echo e($first->job?->phase?->sequence ?? '—'); ?> <em>·</em> Tasks: <?php echo e($first->job?->tasks_count ?? 0); ?> <em>·</em> Documents: <?php echo e($docs->count()); ?> <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
+                            <span class="ft-doc-job-meta"><?php echo e($first->job?->client?->name ?? 'No client'); ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($first->job): ?> <em>|</em> Phase: <?php echo e($first->job?->phase?->sequence ?? '—'); ?> <em>·</em> Tasks: <?php echo e($first->job?->tasks?->count() ?? 0); ?> <em>·</em> Documents: <?php echo e($docs->count()); ?> <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
                         </button>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($expanded): ?>
                             <div class="ft-doc-table-scroll"><table class="ft-doc-table"><thead><tr><th>Document</th><th>Linked to</th><th>Type</th><th>Version</th><th>Owner</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
@@ -88,14 +85,11 @@
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?><div class="empty">No documents found.</div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($documents->hasPages() || $documents->total()): ?><div class="ft-doc-pagination"><span>Showing <?php echo e($documents->firstItem() ?? 0); ?>–<?php echo e($documents->lastItem() ?? 0); ?> of <?php echo e($documents->total()); ?> documents</span><div><select wire:model.live="perPage"><option value="10">10 per page</option><option value="25">25 per page</option><option value="50">50 per page</option></select><button wire:click="previousPage" <?php if($documents->onFirstPage()): echo 'disabled'; endif; ?>>Previous</button><span>Page <?php echo e($documents->currentPage()); ?> of <?php echo e($documents->lastPage()); ?></span><button wire:click="nextPage" <?php if(!$documents->hasMorePages()): echo 'disabled'; endif; ?>>Next</button></div></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
         </div>
 
         <aside class="card ft-doc-detail-panel">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$documentsReady): ?>
-                <?php echo $__env->make('livewire.documents.detail-placeholder', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-            <?php elseif($selected): ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selected): ?>
                 <div class="ft-doc-detail-title"><span class="ft-file-large"><?php echo e(strtoupper(pathinfo($selected->name,PATHINFO_EXTENSION) ?: 'FILE')); ?></span><div><h3><?php echo e($selected->name); ?></h3><div><span class="ft-doc-status blue"><?php echo e($selected->is_final?'Approved':'Current'); ?></span> <span class="tag">v<?php echo e($selected->version); ?></span> · <?php echo e(number_format($selected->size/1024)); ?> KB</div></div></div>
                 <div class="ft-doc-side-list">
                     <div><span>Job</span><a href="<?php echo e($selected->job ? route('jobs.index',['open'=>$selected->flow_job_id]) : '#'); ?>" wire:navigate><?php echo e($selected->job?->job_number ?? '—'); ?></a></div>

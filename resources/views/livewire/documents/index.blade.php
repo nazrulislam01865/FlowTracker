@@ -1,14 +1,14 @@
-<div wire:init="loadDocuments" class="ft-documents-page">
+<div class="ft-documents-page">
     <div class="ft-doc-page-head"><div><h1>Documents</h1><p>Find, upload and manage files across every Job, phase and task.</p></div>@if(auth()->user()->canModule('documents','create'))<button class="primary" wire:click="openUpload">⇧ Upload document</button>@endif</div>
     @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
 
     <div class="ft-doc-layout">
         <div class="ft-doc-main">
             <div class="ft-doc-metrics">
-                <button class="card" wire:click="setStatus('')"><span>All files</span><b>{{ $metrics['all'] }}</b><i>▤</i></button>
-                <button class="card danger" wire:click="setStatus('needs_action')"><span>Needs attention</span><b>{{ $metrics['attention'] }}</b><i>△</i></button>
-                <button class="card purple" wire:click="setStatus('awaiting_approval')"><span>Awaiting approval</span><b>{{ $metrics['approval'] }}</b><i>◷</i></button>
-                <button class="card" wire:click="setStatus('recent')"><span>Recently updated</span><b>{{ $metrics['recent'] }}</b><i>◴</i></button>
+                <button class="card" wire:click="$set('status','')"><span>All files</span><b>{{ $metrics['all'] }}</b><i>▤</i></button>
+                <button class="card danger" wire:click="$set('status','needs_action')"><span>Needs attention</span><b>{{ $metrics['attention'] }}</b><i>△</i></button>
+                <button class="card purple" wire:click="$set('status','awaiting_approval')"><span>Awaiting approval</span><b>{{ $metrics['approval'] }}</b><i>◷</i></button>
+                <button class="card" wire:click="$set('status','recent')"><span>Recently updated</span><b>{{ $metrics['recent'] }}</b><i>◴</i></button>
             </div>
 
             <div class="ft-doc-filterbar">
@@ -35,9 +35,6 @@
             </div>
 
             <div class="card ft-doc-table-card">
-                @if(!$documentsReady)
-                    @include('livewire.documents.rows-placeholder')
-                @else
                 @forelse($grouped as $jobId=>$docs)
                     @php($first=$docs->first())
                     @php($expanded=$jobId==0 || in_array((int)$jobId,$expandedJobs,true))
@@ -45,7 +42,7 @@
                         <button class="ft-doc-job-head" @if($jobId) wire:click="toggleJob({{ $jobId }})" @endif>
                             <span class="ft-doc-chevron">{{ $expanded?'⌄':'›' }}</span>
                             <b>{{ $first->job?->job_number ?? 'General documents' }} @if($first->job) · {{ $first->job->title }} @endif</b>
-                            <span class="ft-doc-job-meta">{{ $first->job?->client?->name ?? 'No client' }} @if($first->job) <em>|</em> Phase: {{ $first->job?->phase?->sequence ?? '—' }} <em>·</em> Tasks: {{ $first->job?->tasks_count ?? 0 }} <em>·</em> Documents: {{ $docs->count() }} @endif</span>
+                            <span class="ft-doc-job-meta">{{ $first->job?->client?->name ?? 'No client' }} @if($first->job) <em>|</em> Phase: {{ $first->job?->phase?->sequence ?? '—' }} <em>·</em> Tasks: {{ $first->job?->tasks?->count() ?? 0 }} <em>·</em> Documents: {{ $docs->count() }} @endif</span>
                         </button>
                         @if($expanded)
                             <div class="ft-doc-table-scroll"><table class="ft-doc-table"><thead><tr><th>Document</th><th>Linked to</th><th>Type</th><th>Version</th><th>Owner</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
@@ -67,14 +64,11 @@
                 @empty<div class="empty">No documents found.</div>@endforelse
 
                 @if($documents->hasPages() || $documents->total())<div class="ft-doc-pagination"><span>Showing {{ $documents->firstItem() ?? 0 }}–{{ $documents->lastItem() ?? 0 }} of {{ $documents->total() }} documents</span><div><select wire:model.live="perPage"><option value="10">10 per page</option><option value="25">25 per page</option><option value="50">50 per page</option></select><button wire:click="previousPage" @disabled($documents->onFirstPage())>Previous</button><span>Page {{ $documents->currentPage() }} of {{ $documents->lastPage() }}</span><button wire:click="nextPage" @disabled(!$documents->hasMorePages())>Next</button></div></div>@endif
-                @endif
             </div>
         </div>
 
         <aside class="card ft-doc-detail-panel">
-            @if(!$documentsReady)
-                @include('livewire.documents.detail-placeholder')
-            @elseif($selected)
+            @if($selected)
                 <div class="ft-doc-detail-title"><span class="ft-file-large">{{ strtoupper(pathinfo($selected->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><h3>{{ $selected->name }}</h3><div><span class="ft-doc-status blue">{{ $selected->is_final?'Approved':'Current' }}</span> <span class="tag">v{{ $selected->version }}</span> · {{ number_format($selected->size/1024) }} KB</div></div></div>
                 <div class="ft-doc-side-list">
                     <div><span>Job</span><a href="{{ $selected->job ? route('jobs.index',['open'=>$selected->flow_job_id]) : '#' }}" wire:navigate>{{ $selected->job?->job_number ?? '—' }}</a></div>

@@ -1,4 +1,4 @@
-<div class="ft-admin-reference ft-taskpack-reference">
+<div wire:init="loadTaskPacks" class="ft-admin-reference ft-taskpack-reference">
     <div class="ft-admin-page-head">
         <div>
             <h1>Task Pack Setup</h1>
@@ -12,12 +12,15 @@
     @error('item')<div class="flash error">{{ $message }}</div>@enderror
 
     <div class="ft-admin-stats">
-        <div><span>Total Task Packs</span><b>{{ $totalPacks }}</b></div>
-        <div><span>Active Task Packs</span><b>{{ $activePacks }}</b></div>
-        <div><span>Configured Tasks</span><b>{{ $configuredTasks }}</b></div>
-        <div><span>Mapped Phases</span><b>{{ $mappedPhases }}</b></div>
+        <div><span>Total Task Packs</span><b>{{ $packsReady ? $totalPacks : '…' }}</b></div>
+        <div><span>Active Task Packs</span><b>{{ $packsReady ? $activePacks : '…' }}</b></div>
+        <div><span>Configured Tasks</span><b>{{ $packsReady ? $configuredTasks : '…' }}</b></div>
+        <div><span>Mapped Phases</span><b>{{ $packsReady ? $mappedPhases : '…' }}</b></div>
     </div>
 
+    @if(!$packsReady)
+        @include('livewire.shared.card-list-placeholder', ['cards' => 4])
+    @else
     <div class="ft-taskpack-grid">
         @forelse($packs as $pack)
             <section class="ft-taskpack-card">
@@ -54,4 +57,5 @@
             <div class="ft-admin-empty-wide">No Task Packs configured. Use “Add Task Pack” to create the first one.</div>
         @endforelse
     </div>
+    @endif
 </div>

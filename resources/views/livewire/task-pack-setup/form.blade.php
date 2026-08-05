@@ -1,4 +1,4 @@
-<div class="ft-admin-reference ft-taskpack-form-page">
+<div wire:init="loadTaskPackOptions" class="ft-admin-reference ft-taskpack-form-page">
     <div class="ft-admin-form-top">
         <div>
             <div class="ft-admin-breadcrumb">{{ $taskPackId ? 'Edit Task Pack' : 'Add Task Pack' }}</div>
@@ -72,7 +72,8 @@
                             <textarea wire:model="tasks.{{ $index }}.description" rows="2"></textarea>
                         </div>
 
-                        <div class="ft-admin-field">
+                        @if($optionsReady)
+                        <div class="ft-admin-field" wire:key="task-pack-options-{{ $index }}">
                             <label>Default assignee</label>
                             <select wire:model="tasks.{{ $index }}.default_assignee_id">
                                 <option value="">Unassigned</option>
@@ -105,6 +106,13 @@
                             <small>The file must be attached to the Job before this task can be completed.</small>
                         </div>
 
+                        @else
+                            <div class="ft-taskpack-options-placeholder" wire:key="task-pack-options-loading-{{ $index }}" role="status" aria-live="polite" aria-busy="true">
+                                @for($field = 0; $field < 4; $field++)
+                                    <div><span></span><span></span></div>
+                                @endfor
+                            </div>
+                        @endif
                         <label class="ft-required-task-check">
                             <input type="checkbox" wire:model="tasks.{{ $index }}.is_required">
                             <span>Required task</span>
@@ -116,7 +124,8 @@
 
         <div class="ft-admin-form-footer">
             <button type="button" class="ft-admin-cancel" wire:click="cancel">Cancel</button>
-            <button type="submit" class="ft-admin-primary">{{ $taskPackId ? 'Save Task Pack' : 'Create Task Pack' }}</button>
+            <button type="submit" class="ft-admin-primary" @disabled(!$optionsReady)>{{ $taskPackId ? 'Save Task Pack' : 'Create Task Pack' }}</button>
         </div>
+        @error('options')<div class="validation-error">{{ $message }}</div>@enderror
     </form>
 </div>

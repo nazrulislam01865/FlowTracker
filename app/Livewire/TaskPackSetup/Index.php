@@ -4,12 +4,9 @@ namespace App\Livewire\TaskPackSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
-use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\TaskPackItem;
-use App\Models\User;
 use App\Models\WorkflowPhase;
-use App\Services\MasterDataService;
 use App\Services\TaskPackService;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -20,6 +17,7 @@ class Index extends Component
     public ?int $selectedPackId = null;
     public bool $showPackModal = false;
     public bool $showItemModal = false;
+    public bool $packsReady = false;
     public ?int $editPackId = null;
     public ?int $editItemId = null;
 
@@ -39,7 +37,12 @@ class Index extends Component
 
     public function mount(): void
     {
-        $this->selectedPackId = app(TaskPackService::class)->all()->first()?->id;
+        // The list is loaded after the page shell renders.
+    }
+
+    public function loadTaskPacks(): void
+    {
+        $this->packsReady = true;
     }
 
     public function selectPack(int $id): void { $this->selectedPackId = $id; $this->resetValidation(); }
@@ -69,12 +72,14 @@ class Index extends Component
 
     public function togglePack(int $id): void
     {
+        $this->packsReady = true;
         try { $pack = TaskPack::findOrFail($id); app(TaskPackService::class)->togglePack($id); session()->flash('success','Task Pack status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack status updated', $pack->name.' status was changed.', 'update', null, null, auth()->user()); }
         catch (ValidationException $e) { $this->addError('pack', collect($e->errors())->flatten()->first()); }
     }
 
     public function deletePack(int $id): void
     {
+        $this->packsReady = true;
         try {
             app(TaskPackService::class)->deletePack($id);
             $this->selectedPackId = app(TaskPackService::class)->all()->first()?->id;
@@ -115,6 +120,7 @@ class Index extends Component
 
     public function deleteItem(int $id): void
     {
+        $this->packsReady = true;
         try { app(TaskPackService::class)->deleteItem($id); session()->flash('success','Task Pack item deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack task deleted', 'A Task Pack task was deleted.', 'update', null, null, auth()->user()); }
         catch (ValidationException $e) { $this->addError('item', collect($e->errors())->flatten()->first()); }
     }
@@ -123,10 +129,10 @@ class Index extends Component
 
     public function render()
     {
-        $service=app(TaskPackService::class); $packs=$service->all();
+        $service=app(TaskPackService::class);
+        $packs=$this->packsReady ? $service->all() : collect();
         if (!$this->selectedPackId && $packs->isNotEmpty()) $this->selectedPackId=$packs->first()->id;
         $selected=$packs->firstWhere('id',$this->selectedPackId);
-        $master=app(MasterDataService::class); $workspaceId=$master->workspaceId();
         $packIds = $packs->pluck('id');
         return view('livewire.task-pack-setup.index',[
             'packs'=>$packs,'selected'=>$selected,
@@ -134,10 +140,6 @@ class Index extends Component
             'activePacks'=>$packs->where('is_active',true)->count(),
             'configuredTasks'=>$packs->sum(fn($pack) => $pack->items->count()),
             'mappedPhases'=>$packIds->isEmpty() ? 0 : WorkflowPhase::whereIn('task_pack_id',$packIds)->count(),
-            'users'=>User::where('is_active',true)->orderBy('name')->get(),
-            'departments'=>MasterRecord::where('workspace_id',$workspaceId)->where('type','department')->where('status','active')->orderBy('sort_order')->orderBy('name')->get(),
-            'priorities'=>MasterRecord::where('workspace_id',$workspaceId)->where('type','priority')->where('status','active')->orderBy('sort_order')->orderBy('name')->get(),
-            'documentCategories'=>MasterRecord::where('workspace_id',$workspaceId)->where('type','document_category')->where('status','active')->orderBy('sort_order')->orderBy('name')->get(),
         ]);
     }
 }

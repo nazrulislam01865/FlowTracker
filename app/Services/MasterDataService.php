@@ -65,6 +65,7 @@ class MasterDataService
 
     public function active(string $type)
     {
+        abort_unless(array_key_exists($type, self::LABELS), 404);
         $workspaceId = $this->workspaceId();
         $rows = Cache::remember($this->activeCacheKey($workspaceId, $type), now()->addMinutes(5), fn () =>
             MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get()

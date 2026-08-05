@@ -4,11 +4,11 @@ namespace App\Livewire\TaskPackSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
-use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Services\MasterDataService;
 use App\Services\TaskPackService;
+use Illuminate\Validation\Rule;
 use Livewire\Component;
 
 class Form extends Component
@@ -20,6 +20,7 @@ class Form extends Component
     public string $packDescription = '';
     public string $packStatus = 'active';
     public array $tasks = [];
+    public bool $optionsReady = false;
 
     public function mount(?int $taskPackId = null): void
     {
@@ -60,6 +61,11 @@ class Form extends Component
         $this->tasks[] = $this->blankTask();
     }
 
+    public function loadTaskPackOptions(): void
+    {
+        $this->optionsReady = true;
+    }
+
     public function removeTask(int $index): void
     {
         if (!array_key_exists($index, $this->tasks)) return;
@@ -79,6 +85,16 @@ class Form extends Component
 
     public function save(): void
     {
+        if (!$this->optionsReady) {
+            $this->addError('options', 'Please wait for Task Pack options to finish loading.');
+            return;
+        }
+
+        $workspaceId = app(TaskPackService::class)->workspaceId();
+        $masterRule = fn (string $type) => Rule::exists('master_records', 'id')->where(
+            fn ($query) => $query->where('workspace_id', $workspaceId)->where('type', $type)->whereNull('deleted_at')
+        );
+
         $data = $this->validate([
             'packName' => ['required','string','max:255'],
             'packDescription' => ['nullable','string','max:5000'],
@@ -88,9 +104,9 @@ class Form extends Component
             'tasks.*.title' => ['required','string','max:255'],
             'tasks.*.description' => ['nullable','string','max:5000'],
             'tasks.*.default_assignee_id' => ['nullable','integer','exists:users,id'],
-            'tasks.*.default_department_id' => ['nullable','integer','exists:master_records,id'],
-            'tasks.*.priority_id' => ['nullable','integer','exists:master_records,id'],
-            'tasks.*.document_category_id' => ['nullable','integer','exists:master_records,id'],
+            'tasks.*.default_department_id' => ['nullable','integer', $masterRule('department')],
+            'tasks.*.priority_id' => ['nullable','integer', $masterRule('priority')],
+            'tasks.*.document_category_id' => ['nullable','integer', $masterRule('document_category')],
             'tasks.*.due_offset_days' => ['nullable','integer','min:0','max:3650'],
             'tasks.*.is_required' => ['boolean'],
         ]);
@@ -138,13 +154,13 @@ class Form extends Component
     public function render()
     {
         $master = app(MasterDataService::class);
-        $workspaceId = $master->workspaceId();
-
         return view('livewire.task-pack-setup.form', [
-            'users' => User::query()->where('is_active', true)->orderBy('name')->get(),
-            'departments' => MasterRecord::query()->where('workspace_id', $workspaceId)->where('type', 'department')->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get(),
-            'priorities' => MasterRecord::query()->where('workspace_id', $workspaceId)->where('type', 'priority')->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get(),
-            'documentCategories' => MasterRecord::query()->where('workspace_id', $workspaceId)->where('type', 'document_category')->where('status', 'active')->orderBy('sort_order')->orderBy('name')->get(),
+            'users' => $this->optionsReady
+                ? User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                : collect(),
+            'departments' => $this->optionsReady ? $master->active('department') : collect(),
+            'priorities' => $this->optionsReady ? $master->active('priority') : collect(),
+            'documentCategories' => $this->optionsReady ? $master->active('document_category') : collect(),
         ]);
     }
 }

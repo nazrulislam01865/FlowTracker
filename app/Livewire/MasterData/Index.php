@@ -18,6 +18,7 @@ class Index extends Component
 
     public string $group = 'product_category';
     public string $search = '';
+    public bool $recordsReady = false;
     public bool $showModal = false;
     public ?int $editId = null;
     public string $code = '';
@@ -32,6 +33,7 @@ class Index extends Component
     {
         abort_unless(array_key_exists($group, MasterDataService::LABELS), 404);
         $this->group = $group;
+        $this->recordsReady = true;
         $this->search = '';
         $this->parentId = null;
         $this->resetPage('masterPage');
@@ -40,6 +42,7 @@ class Index extends Component
 
     public function open(?int $id = null): void
     {
+        $this->recordsReady = true;
         $this->showModal = true;
         $this->editId = $id;
         $this->resetValidation();
@@ -64,7 +67,13 @@ class Index extends Component
 
     public function updatedSearch(): void
     {
+        $this->recordsReady = true;
         $this->resetPage('masterPage');
+    }
+
+    public function loadMasterRecords(): void
+    {
+        $this->recordsReady = true;
     }
 
     public function save(): void
@@ -118,6 +127,7 @@ class Index extends Component
 
     public function toggle(int $id): void
     {
+        $this->recordsReady = true;
         $record = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
         app(MasterDataService::class)->toggle($id);
         session()->flash('success', 'Master data status updated.');
@@ -126,6 +136,7 @@ class Index extends Component
 
     public function deleteRecord(int $id): void
     {
+        $this->recordsReady = true;
         try {
             app(MasterDataService::class)->delete($id);
             $this->resetPage('masterPage');
@@ -139,16 +150,28 @@ class Index extends Component
     public function render()
     {
         $service = app(MasterDataService::class);
-        $rows = $service->paginate($this->group, $this->search, 30);
         $workspaceId = $service->workspaceId();
+        $summaries = MasterRecord::query()
+            ->where('workspace_id', $workspaceId)
+            ->selectRaw('type, count(*) as total_count')
+            ->selectRaw("sum(case when status = 'active' then 1 else 0 end) as active_count")
+            ->groupBy('type')
+            ->get()
+            ->keyBy('type');
+
         return view('livewire.master-data.index', [
             'labels' => MasterDataService::LABELS,
-            'rows' => $rows,
-            'parents' => $this->group === 'product'
-                ? MasterRecord::where('workspace_id', $workspaceId)->where('type', 'product_category')->orderBy('sort_order')->orderBy('name')->get()
+            'rows' => $this->recordsReady
+                ? $service->paginate($this->group, $this->search, 30)
+                : null,
+            'parents' => $this->showModal && $this->group === 'product'
+                ? $service->active('product_category')
                 : collect(),
-            'total' => MasterRecord::where('workspace_id', $workspaceId)->count(),
-            'active' => MasterRecord::where('workspace_id', $workspaceId)->where('status', 'active')->count(),
+            'groupCounts' => collect(MasterDataService::LABELS)->mapWithKeys(
+                fn ($label, $type) => [$type => (int) ($summaries->get($type)?->total_count ?? 0)]
+            ),
+            'total' => (int) $summaries->sum('total_count'),
+            'active' => (int) $summaries->sum('active_count'),
         ]);
     }
 }

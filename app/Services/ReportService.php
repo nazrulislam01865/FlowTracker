@@ -22,19 +22,10 @@ class ReportService
      */
     public function data(User $user): array
     {
-        return $this->initialData($user) + $this->secondaryData($user);
-    }
-
-    public function initialData(User $user): array
-    {
-        return ['kpis' => $this->kpis($user)];
-    }
-
-    public function secondaryData(User $user): array
-    {
         return [
             'phase' => $this->phase($user),
             'workload' => $this->workload($user),
+            'kpis' => $this->kpis($user),
         ];
     }
 

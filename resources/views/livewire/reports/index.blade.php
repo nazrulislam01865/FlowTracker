@@ -1,4 +1,4 @@
-<div wire:init="loadSecondaryReports">
+<div>
     <x-ui.page-head title="Reports" subtitle="Operational performance, delivery, workload and task completion">
         <x-slot:actions>
             @if(auth()->user()->canModule('reports','export'))
@@ -8,6 +8,7 @@
         </x-slot:actions>
     </x-ui.page-head>
 
+@php($kpis = $this->kpis)
         <div class="metrics ft-auto-metrics">
             @foreach([
                 ['Active Jobs',$kpis['active_jobs'],'Current portfolio'],
@@ -28,10 +29,10 @@
 
     <div class="report-grid">
         <div class="ft-island-shell">
-            @if($secondaryReady)
+@php($phase = $this->phase)
                 <div class="card section-card">
                     <div class="section-head"><h3>Active Jobs by Phase</h3><span class="small muted">Current portfolio</span></div>
-                    <div class="bars ft-report-scroll-bars">
+                    <div class="bars">
                         @php($max = max(1, $phase->max('total') ?? 1))
                         @forelse($phase->sortBy(fn($row) => $row->phase?->sequence ?? PHP_INT_MAX) as $row)
                             <div class="bar-row"><span>{{ $row->phase?->short_name ?? 'Unassigned' }}</span><div class="bar"><span style="width:{{ $row->total/$max*100 }}%"></span></div><b>{{ $row->total }}</b></div>
@@ -40,16 +41,13 @@
                         @endforelse
                     </div>
                 </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Active Jobs by Phase', 'rows' => 6])
-            @endif
         </div>
 
         <div class="ft-island-shell">
-            @if($secondaryReady)
+@php($workload = $this->workload)
                 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><span class="small muted">Open tasks</span></div>
-                    <div class="bars ft-report-scroll-bars">
+                    <div class="bars">
                         @php($workloadMax = max(1, $workload->max('open_tasks_count') ?? 1))
                         @forelse($workload as $person)
                             <div class="bar-row"><span>{{ $person->name }}</span><div class="bar"><span style="width:{{ $person->open_tasks_count/$workloadMax*100 }}%"></span></div><b>{{ $person->open_tasks_count }}</b></div>
@@ -58,9 +56,6 @@
                         @endforelse
                     </div>
                 </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Team Workload', 'rows' => 6])
-            @endif
         </div>
 
         <div class="ft-island-shell ft-report-performance">

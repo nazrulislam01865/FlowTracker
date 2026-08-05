@@ -1,4 +1,5 @@
 
+@media(max-width:800px){.ft-list-head,.ft-detail-toolbar{flex-direction:column}.ft-detail-actions{width:100%;justify-content:flex-start}.ft-detail-tabs{gap:16px;overflow:auto}.ft-overview-metrics{grid-template-columns:1fr}.ft-phase-task-line{grid-template-columns:35px minmax(180px,1fr);gap:6px}.ft-phase-task-line span:nth-of-type(n+2),.ft-phase-task-line .ft-soft-pill{font-size:11px}.ft-task-property-grid{grid-template-columns:1fr}.ft-task-property{border-right:0;border-bottom:1px solid #dce5f0}.ft-job-table-card{margin-left:-10px;margin-right:-10px;border-radius:10px}.ft-list-view-tabs{overflow:auto;flex-wrap:nowrap}.ft-workflow-stepper-card,.ft-detail-card{padding:12px}.ft-next-phase-box{grid-template-columns:32px 1fr}.ft-next-phase-box button{width:100%}.ft-readiness-table>div{grid-template-columns:24px 26px 1fr}.ft-readiness-table strong,.ft-readiness-table em,.ft-readiness-table button{grid-column:3}.ft-upload-panel select{width:100%}.ft-upload-zone{grid-template-columns:30px 1fr}.ft-upload-zone button{grid-column:1/-1}.ft-activity-line{grid-template-columns:28px 1fr}.ft-activity-line small,.ft-activity-line button{grid-column:2}}
 
 /* --------------------------------------------------------------------------
    Screenshot-locked redesign: Jobs list, Job detail, Task detail
@@ -459,11 +460,3 @@
 .ft-board-page .ft-quick-chip b{height:20px;min-width:21px;border-radius:10px;font-size:10px}
 .ft-filter-collapse{margin-left:auto;flex:0 0 38px;width:38px;height:38px;border:1px solid #d8e1ec;background:#fff;border-radius:9px;display:grid;place-items:center;color:#53667f}
 .ft-filter-collapse svg{width:17px;height:17px;fill:none;stroke:currentColor;stroke-width:2;transition:transform .16s}
-.ft-filter-collapse svg.rotated{transform:rotate(180deg)}
-
-.ft-reference-summary{background:#fff;border:1px solid #d8e1ec;border-radius:9px;min-height:39px!important;padding:0 14px;margin:4px 0 8px!important;font-size:11.5px!important;color:#536780}
-.ft-reference-summary b{color:#12243d}
-.ft-workflow-reference-card{background:#fff;border:1px solid #d8e1ec;border-radius:12px;padding:13px 14px;margin:0 0 14px}
-.ft-workflow-reference-card>label{display:block;font-size:12px;font-weight:800;color:#14243d;margin-bottom:9px}
-.ft-workflow-reference-card select{width:100%;height:45px;border:1px solid #d8e1ec;background:#fff;border-radius:9px;padding:0 14px;color:#20334c;font-size:12px}
-.ft-workflow-reference-card p{margin:10px 0 0;color:#5e728d;font-size:11px}
