@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\AccessControlService;
 use App\Services\ShellDataService;
+use App\Services\SetupContext;
 use App\Support\Performance\RequestPerformanceMonitor;
 use Illuminate\Cache\Events\CacheFailedOver;
 use Illuminate\Cache\Events\CacheHit;
@@ -27,6 +28,7 @@ class AppServiceProvider extends ServiceProvider
         $this->app->singleton(AccessControlService::class);
         $this->app->scoped(RequestPerformanceMonitor::class);
         $this->app->scoped(ShellDataService::class);
+        $this->app->scoped(SetupContext::class);
     }
 
     public function boot(): void

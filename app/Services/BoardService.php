@@ -56,6 +56,7 @@ class BoardService
                         'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date',
                         'tasks.completed_at', 'tasks.updated_at',
                     ])
+                    ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
                     ->with(['assignee:id,name', 'phase:id,name,sequence'])
                     ->orderByRaw('completed_at is null desc')
                     ->orderByRaw('due_date is null, due_date asc'),
@@ -388,8 +389,8 @@ class BoardService
             ->when($filters['status'] ?? null, fn ($q, $value) => $q->where('status', $value))
             ->when($filters['due'] ?? null, function ($q, $value) {
                 match ($value) {
-                    'overdue' => $q->whereDate('delivery_date', '<', today()),
-                    'today' => $q->whereDate('delivery_date', today()),
+                    'overdue' => $q->where('delivery_date', '<', today()->toDateString()),
+                    'today' => $q->where('delivery_date', today()->toDateString()),
                     'week' => $q->whereBetween('delivery_date', [today(), today()->copy()->addDays(7)]),
                     'month' => $q->whereBetween('delivery_date', [today(), today()->copy()->addDays(30)]),
                     'none' => $q->whereNull('delivery_date'),
@@ -406,7 +407,7 @@ class BoardService
                 ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id))
                 ->orWhereHas('tasks', fn ($t) => $t->where('assignee_id', $user->id))
             ),
-            'overdue' => $query->whereDate('delivery_date', '<', today()),
+            'overdue' => $query->where('delivery_date', '<', today()->toDateString()),
             'week' => $query->whereBetween('delivery_date', [today(), today()->copy()->addDays(7)]),
             'blocked' => $query->where(fn ($q) => $q->where('health', 'Blocked')->orWhere('status', 'Blocked')->orWhereHas('tasks', fn ($t) => $t->where('status', 'Blocked')->whereNull('completed_at'))),
             'waiting' => $query->where(fn ($q) => $q->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->orWhereHas('tasks', fn ($t) => $t->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->whereNull('completed_at'))),
@@ -454,8 +455,8 @@ class BoardService
             ->when($filters['priority'] ?? null, fn ($q, $value) => $q->where('priority', $value))
             ->when($filters['due'] ?? null, function ($q, $value) {
                 match ($value) {
-                    'overdue' => $q->whereDate('due_date', '<', today()),
-                    'today' => $q->whereDate('due_date', today()),
+                    'overdue' => $q->where('due_date', '<', today()->toDateString()),
+                    'today' => $q->where('due_date', today()->toDateString()),
                     'week' => $q->whereBetween('due_date', [today(), today()->copy()->addDays(7)]),
                     'month' => $q->whereBetween('due_date', [today(), today()->copy()->addDays(30)]),
                     'none' => $q->whereNull('due_date'),
@@ -466,7 +467,7 @@ class BoardService
         match ($filters['quick'] ?? '') {
             'open' => $query->whereNull('completed_at'),
             'mine' => $query->where('assignee_id', $user->id),
-            'overdue' => $query->whereNull('completed_at')->whereDate('due_date', '<', today()),
+            'overdue' => $query->whereNull('completed_at')->where('due_date', '<', today()->toDateString()),
             'week' => $query->whereNull('completed_at')->whereBetween('due_date', [today(), today()->copy()->addDays(7)]),
             'blocked' => $query->whereNull('completed_at')->where('status', 'Blocked'),
             'waiting' => $query->whereNull('completed_at')->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval']),

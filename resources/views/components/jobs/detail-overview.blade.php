@@ -5,8 +5,8 @@
     $currentTasks = \App\Support\JobDetailPresenter::phaseTasks($job);
     $done = \App\Support\JobDetailPresenter::completedCount($currentTasks);
     $accessControl = app(\App\Services\AccessControlService::class);
-    $canEditJob = $accessControl->canEditJob(auth()->user(), $job);
-    $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
+    $canEditJob = $accessControl->canEditVisibleJob(auth()->user(), $job);
+    $canAssignJob = $accessControl->canAssignVisibleJob(auth()->user());
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
 @endphp
@@ -206,7 +206,7 @@
                         <div class="ft-phase-task-columns"><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Action</span></div>
                         @forelse($phaseTasks as $task)
                             @php($taskAccess = app(\App\Services\AccessControlService::class))
-                            @php($canEditTask = $taskAccess->canEditTask(auth()->user(), $task))
+                            @php($canEditTask = $taskAccess->canEditVisibleTask(auth()->user(), $task))
                             @php($canAssignTask = $taskAccess->canAssignTask(auth()->user(), $task))
                             <div class="ft-phase-task-line ft-editable-task-line" wire:key="job-task-{{ $task->id }}">
                                 <span>{{ $phase->sequence }}.{{ $loop->iteration }}</span>

@@ -117,7 +117,7 @@ class DashboardService
         return app(JobService::class)->activeQuery($user)
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.title', 'flow_jobs.delivery_date'])
             ->with('client:id,name')
-            ->whereDate('delivery_date', '>=', today())
+            ->where('delivery_date', '>=', today()->toDateString())
             ->orderBy('delivery_date')
             ->limit(6)
             ->get();

@@ -3,7 +3,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('clients.index', ['lazy' => true]);
+[$__name, $__params] = $__split('clients.index', []);
 
 $__keyOuter = $__key ?? null;
 

@@ -64,7 +64,7 @@
                             <div class="ft-owner-chip ft-inline-owner-editor" x-data="{ editing:false }">
                                 <x-ui.avatar :name="$job->owner?->name ?? 'Unassigned'" :size="28"/>
                                 <span x-show="!editing" class="ft-inline-owner-name">{{ $job->owner?->name ?? 'Unassigned' }}</span>
-                                @if(app(\App\Services\AccessControlService::class)->canAssignJob(auth()->user(), $job))
+                                @if(app(\App\Services\AccessControlService::class)->canAssignVisibleJob(auth()->user()))
                                     <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>
                                     <select x-ref="ownerSelect" x-show="editing" aria-label="Edit Job owner"
                                         x-on:keydown.escape="editing=false"
@@ -79,7 +79,7 @@
                         <td data-label="Delivery">
                             <div class="ft-date-chip ft-inline-date-editor {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
                                 <span x-show="!editing" class="ft-inline-date-text">{{ $job->delivery_date?->format('M j') ?? 'Set date' }}</span>
-                                @if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job))
+                                @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
                                     <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit delivery date" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.deliveryDate.showPicker ? $refs.deliveryDate.showPicker() : $refs.deliveryDate.focus())">✎</button>
                                     <input x-ref="deliveryDate" x-show="editing" type="date" value="{{ $job->delivery_date?->format('Y-m-d') }}" aria-label="Edit delivery date"
                                         x-on:keydown.escape="editing=false"

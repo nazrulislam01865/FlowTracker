@@ -18,7 +18,7 @@
     $previousTask = $job?->tasks?->where('workflow_phase_id',$task->workflow_phase_id)->where('id','<',$task->id)->sortByDesc('id')->first();
     $taskDocumentName = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name;
     $accessControl = app(\App\Services\AccessControlService::class);
-    $canEditTask = $accessControl->canEditTask(auth()->user(), $task);
+    $canEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
     $canAssignTask = $accessControl->canAssignTask(auth()->user(), $task);
     $canCheck = $canEditTask;
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');

@@ -133,7 +133,6 @@ class Index extends Component
         $all=app(WorkflowService::class)->all();
         if(!$this->selectedWorkflowId && $all->isNotEmpty()) $this->selectedWorkflowId=$all->first()?->id;
         $selected=$all->firstWhere('id',$this->selectedWorkflowId);
-        app(TaskPackService::class)->syncLegacy(); app(MasterDataService::class)->syncLegacy();
         $workspaceId=app(MasterDataService::class)->workspaceId();
         $selectedPhases = $selected?->phases ?? collect();
         return view('livewire.workflow-setup.index',[

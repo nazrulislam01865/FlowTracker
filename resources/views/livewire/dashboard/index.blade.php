@@ -10,7 +10,6 @@
         </x-slot:actions>
     </x-ui.page-head>
 
-    @island(name: 'dashboard-metrics', defer: true, always: true)
 @php($metrics = $this->metrics)
         <div class="metrics ft-auto-metrics">
             @foreach([
@@ -28,11 +27,9 @@
                 </div>
             @endforeach
         </div>
-    @endisland
 
     <div class="grid-2">
         <div class="ft-island-shell">
-            @island(name: 'dashboard-attention', lazy: true, always: true)
 <div class="card section-card">
                     <div class="section-head"><h3>Needs Attention</h3><a class="link-btn" href="{{ route('jobs.index') }}" wire:navigate>View all Jobs</a></div>
                     <div class="attention-list">
@@ -51,11 +48,9 @@
                         @endforelse
                     </div>
                 </div>
-            @endisland
         </div>
 
         <div class="ft-island-shell">
-            @island(name: 'dashboard-phases', lazy: true, always: true)
 <div class="card section-card">
                     <div class="section-head"><h3>Jobs by Phase</h3><a class="link-btn" href="{{ route('board') }}" wire:navigate>Open board</a></div>
                     <div class="phase-list">
@@ -66,13 +61,11 @@
                         @endforelse
                     </div>
                 </div>
-            @endisland
         </div>
     </div>
 
     <div class="grid-3">
         <div class="ft-island-shell">
-            @island(name: 'dashboard-workload', lazy: true, always: true)
 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><a class="link-btn" href="{{ route('reports') }}" wire:navigate>Details</a></div>
                     @forelse($this->workload as $person)
@@ -81,11 +74,9 @@
                         <div class="empty-state">No active team workload.</div>
                     @endforelse
                 </div>
-            @endisland
         </div>
 
         <div class="ft-island-shell">
-            @island(name: 'dashboard-deliveries', lazy: true, always: true)
 <div class="card section-card">
                     <div class="section-head"><h3>Upcoming Deliveries</h3><a class="link-btn" href="{{ route('jobs.index') }}" wire:navigate>View Jobs</a></div>
                     <table class="mini-table">
@@ -99,11 +90,9 @@
                         </tbody>
                     </table>
                 </div>
-            @endisland
         </div>
 
         <div class="ft-island-shell">
-            @island(name: 'dashboard-activity', lazy: true, always: true)
 <div class="card section-card">
                     <div class="section-head"><h3>Recent Activity</h3><a class="link-btn" href="{{ route('notifications') }}" wire:navigate>All activity</a></div>
                     @forelse($this->activity as $notification)
@@ -112,7 +101,6 @@
                         <div class="empty-state">No recent activity.</div>
                     @endforelse
                 </div>
-            @endisland
         </div>
     </div>
 </div>

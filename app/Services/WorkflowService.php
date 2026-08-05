@@ -18,7 +18,6 @@ class WorkflowService
 
     public function all()
     {
-        $this->syncLegacy();
         return WorkflowTemplate::query()
             ->where('workspace_id', $this->workspaceId())
             ->with(['phases.taskPack','phases.documentCategory'])

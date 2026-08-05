@@ -1,4 +1,4 @@
 @extends('layouts.app')
 @section('content')
-<livewire:workflow-setup.index lazy />
+<livewire:workflow-setup.index />
 @endsection

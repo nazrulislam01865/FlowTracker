@@ -76,7 +76,7 @@ unset($__defined_vars, $__key, $__value); ?>
                     >
                         <div class="ft-mobile-lane-label"><span><?php echo e($laneStatus); ?></span><b><?php echo e($laneTasks->count()); ?></b></div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_2 = true; $__currentLoopData = $laneTasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $taskRow): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_2 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                            <?php ($canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditTask(auth()->user(), $taskRow)); ?>
+                            <?php ($canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditVisibleTask(auth()->user(), $taskRow)); ?>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDragTask): ?>
                                 <?php if (isset($component)) { $__componentOriginal637533543995aac582a7a49daaf2271d = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal637533543995aac582a7a49daaf2271d = $attributes; } ?>

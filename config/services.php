@@ -41,7 +41,7 @@ return [
         'app_id' => env('PUSHER_APP_ID'),
         'key' => env('PUSHER_APP_KEY'),
         'secret' => env('PUSHER_APP_SECRET'),
-        'cluster' => env('PUSHER_APP_CLUSTER', 'mt1'),
+        'cluster' => env('PUSHER_APP_CLUSTER', 'ap1'),
         'scheme' => env('PUSHER_SCHEME', 'https'),
         'host' => env('PUSHER_HOST'),
         'port' => env('PUSHER_PORT'),

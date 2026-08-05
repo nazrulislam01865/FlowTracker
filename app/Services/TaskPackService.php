@@ -19,7 +19,6 @@ class TaskPackService
 
     public function all()
     {
-        $this->syncLegacy();
         return TaskPack::query()->where('workspace_id', $this->workspaceId())->with(['items.defaultAssignee','items.defaultDepartment','items.priority','items.documentCategory'])->orderBy('name')->get();
     }
 

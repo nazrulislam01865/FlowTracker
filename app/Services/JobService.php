@@ -66,7 +66,7 @@ class JobService
             ->when($filters['priority'] ?? null, fn ($q, $v) => $q->where('priority', $v))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
             ->when(($filters['delivery'] ?? null) === 'week', fn ($q) => $q->whereBetween('delivery_date', [today(), today()->addDays(7)]))
-            ->when(($filters['delivery'] ?? null) === 'overdue', fn ($q) => $q->whereDate('delivery_date', '<', today())->whereNull('completed_at'))
+            ->when(($filters['delivery'] ?? null) === 'overdue', fn ($q) => $q->where('delivery_date', '<', today()->toDateString())->whereNull('completed_at'))
             ->when(($filters['delivery'] ?? null) === 'none', fn ($q) => $q->whereNull('delivery_date'))
             ->when(($filters['invoice'] ?? null) === 'pending', fn ($q) => $q->where('commercial_value', '<=', 0))
             ->when(($filters['invoice'] ?? null) === 'draft', fn ($q) => $q->where('commercial_value', '>', 0))
@@ -98,11 +98,13 @@ class JobService
                 'phase:id,name,short_name,sequence',
                 'owner:id,name',
                 'coordinator:id,name',
+                'members:id,flow_job_id,user_id',
                 'tasks' => fn ($query) => app(AccessControlService::class)
                     ->applyTaskScope($query, $user)
                     ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.completed_at'])
                     ->whereNull('completed_at')
                     ->where('status', '!=', 'Completed')
+                    ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
                     ->with(['assignee:id,name', 'phase:id,name,sequence'])
                     ->orderByRaw('due_date is null, due_date asc'),
             ])

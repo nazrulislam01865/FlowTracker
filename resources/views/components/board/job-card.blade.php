@@ -124,7 +124,7 @@
             <div><span>Delivery</span>
                 <span class="ft-inline-date ft-job-inline-date {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
                     <span class="ft-inline-date-display" x-show="!editing"><b>{{ $job->delivery_date?->format('M j') ?? 'Set due date' }}</b></span>
-                    @if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job))
+                    @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
                         <button x-show="!editing" type="button" class="ft-inline-edit-button compact" aria-label="Edit delivery date" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.jobDate.showPicker ? $refs.jobDate.showPicker() : $refs.jobDate.focus())">✎</button>
                         <input x-ref="jobDate" x-show="editing" x-on:blur="editing=false" x-on:keydown.escape="editing=false" type="date" value="{{ $job->delivery_date?->format('Y-m-d') }}" wire:change="updateJobDueDate({{ $job->id }}, $event.target.value)" aria-label="Job delivery date">
                     @endif

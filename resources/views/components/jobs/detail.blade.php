@@ -29,7 +29,7 @@
             </div>
             <h1 class="ft-editable-job-title" x-data="{ editing:false }">
                 <span x-show="!editing">{{ $job->title }}</span>
-                @if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job))
+                @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
                     <button x-show="!editing" type="button" class="ft-pencil" aria-label="Edit job title" title="Edit job name" x-on:click.stop="editing=true; $nextTick(() => $refs.jobTitle.focus())">✎</button>
                     <input x-ref="jobTitle" x-show="editing" type="text" value="{{ $job->title }}" maxlength="255"
                         x-on:keydown.escape="editing=false"

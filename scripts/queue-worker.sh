@@ -2,7 +2,7 @@
 set -euo pipefail
 
 cd "$(dirname "$0")/.."
-exec php artisan queue:work redis \
+exec php artisan queue:work \
     --queue=realtime,notifications,default \
     --sleep=1 \
     --tries=3 \

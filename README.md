@@ -39,3 +39,11 @@ For production deployment, begin with `.env.production.example` and run:
 ./scripts/deploy.sh
 ./scripts/queue-worker.sh
 ```
+
+After upgrading from a legacy FlowTrack schema, run the compatibility sync once:
+
+```bash
+php artisan flowtrack:sync-legacy
+```
+
+Legacy synchronization no longer runs during normal page requests. China-specific deployment notes and diagnostics are in [`CHINA_PERFORMANCE_UPDATE.md`](CHINA_PERFORMANCE_UPDATE.md).

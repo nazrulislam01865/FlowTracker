@@ -126,7 +126,7 @@ class Index extends Component
         $service=app(TaskPackService::class); $packs=$service->all();
         if (!$this->selectedPackId && $packs->isNotEmpty()) $this->selectedPackId=$packs->first()->id;
         $selected=$packs->firstWhere('id',$this->selectedPackId);
-        $master=app(MasterDataService::class); $master->syncLegacy(); $workspaceId=$master->workspaceId();
+        $master=app(MasterDataService::class); $workspaceId=$master->workspaceId();
         $packIds = $packs->pluck('id');
         return view('livewire.task-pack-setup.index',[
             'packs'=>$packs,'selected'=>$selected,

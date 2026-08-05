@@ -24,9 +24,6 @@ class Form extends Component
     public function mount(?int $taskPackId = null): void
     {
         $this->taskPackId = $taskPackId;
-        app(TaskPackService::class)->syncLegacy();
-        app(MasterDataService::class)->syncLegacy();
-
         if ($taskPackId) {
             $pack = TaskPack::query()
                 ->where('workspace_id', app(TaskPackService::class)->workspaceId())

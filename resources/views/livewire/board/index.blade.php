@@ -98,7 +98,7 @@
                         </button>
                         <div class="ft-board-column-list" x-show="!phaseClosed[{{ $phase->id }}]" x-on:dragover.prevent x-on:drop.prevent="if(draggedJob){$wire.moveJob(draggedJob,{{ $phase->id }});draggedJob=null}">
                             @forelse($phaseJobs as $jobRow)
-                                @php($canMoveJob = app(\App\Services\AccessControlService::class)->canChangeJobStatus(auth()->user(), $jobRow))
+                                @php($canMoveJob = app(\App\Services\AccessControlService::class)->canChangeVisibleJobStatus(auth()->user(), $jobRow))
                                 @if($canMoveJob)
                                     <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="true" x-on:dragstart="draggedJob={{ $jobRow->id }}" x-on:dragend="draggedJob=null" wire:key="job-card-{{ $jobRow->id }}" />
                                 @else

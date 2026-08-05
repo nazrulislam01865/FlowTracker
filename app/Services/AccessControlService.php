@@ -181,6 +181,25 @@ class AccessControlService
             || $this->isJobMember($job, $user);
     }
 
+    /**
+     * Authorization for a Job that was already loaded through visibleQuery().
+     * This avoids repeating an EXISTS scope query for every rendered row/card.
+     */
+    public function canEditVisibleJob(User $user, object $job): bool
+    {
+        if ($this->isAdministrator($user)) return true;
+        if (!$this->can($user, 'jobs', 'edit')) return false;
+        if ($this->canEditAll($user, 'jobs')) return true;
+
+        $isMember = method_exists($job, 'relationLoaded') && $job->relationLoaded('members')
+            ? $job->members->contains(fn ($member) => (int) $member->user_id === (int) $user->id)
+            : $this->isJobMember($job, $user);
+
+        return (int) ($job->owner_id ?? 0) === (int) $user->id
+            || (int) ($job->coordinator_id ?? 0) === (int) $user->id
+            || $isMember;
+    }
+
     public function canEditTask(User $user, object $task): bool
     {
         if ($this->isAdministrator($user)) return true;
@@ -192,11 +211,27 @@ class AccessControlService
         return (int) ($task->assignee_id ?? 0) === (int) $user->id;
     }
 
+    /** Authorization for a Task already loaded through visibleQuery(). */
+    public function canEditVisibleTask(User $user, object $task): bool
+    {
+        if ($this->isAdministrator($user)) return true;
+        if (!$this->can($user, 'tasks', 'edit')) return false;
+        if ($this->canEditAll($user, 'tasks')) return true;
+
+        return (int) ($task->assignee_id ?? 0) === (int) $user->id;
+    }
+
     public function canAssignJob(User $user, object $job): bool
     {
         if ($this->isAdministrator($user)) return true;
         if (!$this->can($user, 'jobs', 'assign')) return false;
         return $this->jobWithinScope($job, $user, $this->scope($user, 'jobs'));
+    }
+
+    /** Assignment authorization for a Job already loaded through visibleQuery(). */
+    public function canAssignVisibleJob(User $user): bool
+    {
+        return $this->isAdministrator($user) || $this->can($user, 'jobs', 'assign');
     }
 
     /**
@@ -210,6 +245,16 @@ class AccessControlService
         if ($this->isAdministrator($user)) return true;
         if (!$this->can($user, 'jobs', 'edit')) return false;
         if (!$this->jobWithinScope($job, $user, $this->scope($user, 'jobs'))) return false;
+
+        $assignedUserId = (int) (($job->owner_id ?? null) ?: ($job->coordinator_id ?? 0));
+        return $assignedUserId > 0 && $assignedUserId === (int) $user->id;
+    }
+
+    /** Status authorization for a Job already loaded through visibleQuery(). */
+    public function canChangeVisibleJobStatus(User $user, object $job): bool
+    {
+        if ($this->isAdministrator($user)) return true;
+        if (!$this->can($user, 'jobs', 'edit')) return false;
 
         $assignedUserId = (int) (($job->owner_id ?? null) ?: ($job->coordinator_id ?? 0));
         return $assignedUserId > 0 && $assignedUserId === (int) $user->id;

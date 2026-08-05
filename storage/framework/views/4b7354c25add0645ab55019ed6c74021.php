@@ -117,7 +117,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?>
                                 <span x-show="!editing" class="ft-inline-owner-name"><?php echo e($job->owner?->name ?? 'Unassigned'); ?></span>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canAssignJob(auth()->user(), $job)): ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canAssignVisibleJob(auth()->user())): ?>
                                     <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>
                                     <select x-ref="ownerSelect" x-show="editing" aria-label="Edit Job owner"
                                         x-on:keydown.escape="editing=false"
@@ -132,7 +132,7 @@ unset($__defined_vars, $__key, $__value); ?>
                         <td data-label="Delivery">
                             <div class="ft-date-chip ft-inline-date-editor <?php echo e($job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : ''); ?>" x-data="{ editing:false }">
                                 <span x-show="!editing" class="ft-inline-date-text"><?php echo e($job->delivery_date?->format('M j') ?? 'Set date'); ?></span>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job)): ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job)): ?>
                                     <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit delivery date" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.deliveryDate.showPicker ? $refs.deliveryDate.showPicker() : $refs.deliveryDate.focus())">✎</button>
                                     <input x-ref="deliveryDate" x-show="editing" type="date" value="<?php echo e($job->delivery_date?->format('Y-m-d')); ?>" aria-label="Edit delivery date"
                                         x-on:keydown.escape="editing=false"

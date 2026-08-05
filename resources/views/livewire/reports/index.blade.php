@@ -8,7 +8,6 @@
         </x-slot:actions>
     </x-ui.page-head>
 
-    @island(name: 'report-kpis', defer: true, always: true)
 @php($kpis = $this->kpis)
         <div class="metrics ft-auto-metrics">
             @foreach([
@@ -27,11 +26,9 @@
                 </div>
             @endforeach
         </div>
-    @endisland
 
     <div class="report-grid">
         <div class="ft-island-shell">
-            @island(name: 'report-phases', lazy: true, always: true)
 @php($phase = $this->phase)
                 <div class="card section-card">
                     <div class="section-head"><h3>Active Jobs by Phase</h3><span class="small muted">Current portfolio</span></div>
@@ -44,11 +41,9 @@
                         @endforelse
                     </div>
                 </div>
-            @endisland
         </div>
 
         <div class="ft-island-shell">
-            @island(name: 'report-workload', lazy: true, always: true)
 @php($workload = $this->workload)
                 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><span class="small muted">Open tasks</span></div>
@@ -61,12 +56,9 @@
                         @endforelse
                     </div>
                 </div>
-            @endisland
         </div>
 
         <div class="ft-island-shell ft-report-performance">
-            @island(name: 'report-performance', lazy: true, always: true)
-@php($kpis = $this->kpis)
                 <div class="card section-card">
                     <div class="section-head"><h3>Delivery Performance</h3><span class="small muted">Calculated from current Job, task and phase-history records</span></div>
                     <div class="kpi-list ft-report-kpis">
@@ -78,7 +70,6 @@
                         <div class="kpi"><b>{{ $kpis['overdue_tasks'] }}</b><span>Overdue open tasks</span></div>
                     </div>
                 </div>
-            @endisland
         </div>
     </div>
 </div>

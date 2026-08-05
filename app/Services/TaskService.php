@@ -37,11 +37,11 @@ class TaskService
         $q = $this->visibleQuery($user)->whereNull('completed_at');
 
         return [
-            'today' => (clone $q)->whereDate('due_date', today())->count(),
-            'overdue' => (clone $q)->whereDate('due_date', '<', today())->count(),
+            'today' => (clone $q)->where('due_date', today()->toDateString())->count(),
+            'overdue' => (clone $q)->where('due_date', '<', today()->toDateString())->count(),
             'attention' => (clone $q)->where('needs_attention', true)->count(),
             'approval' => (clone $q)->whereIn('status', ['Waiting for Client', 'Waiting for Internal Approval'])->count(),
-            'upcoming' => (clone $q)->whereDate('due_date', '>', today())->count(),
+            'upcoming' => (clone $q)->where('due_date', '>', today()->toDateString())->count(),
             'completed_week' => $this->visibleQuery($user)->whereBetween('completed_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
         ];
     }

@@ -38,7 +38,7 @@ class PusherChannelService
         $appId = (string) config('services.pusher.app_id');
         $key = (string) config('services.pusher.key');
         $secret = (string) config('services.pusher.secret');
-        $cluster = (string) config('services.pusher.cluster', 'mt1');
+        $cluster = (string) config('services.pusher.cluster', 'ap1');
         $scheme = (string) config('services.pusher.scheme', 'https');
         $host = (string) (config('services.pusher.host') ?: 'api-'.$cluster.'.pusher.com');
         $port = (int) (config('services.pusher.port') ?: ($scheme === 'https' ? 443 : 80));

@@ -22,7 +22,6 @@ class Form extends Component
     public function mount(?int $workflowId = null, ?int $sourceWorkflowId = null): void
     {
         $service = app(WorkflowService::class);
-        $service->syncLegacy();
         $this->workflowId = $workflowId;
         $this->sourceWorkflowId = $sourceWorkflowId;
 

@@ -14,8 +14,8 @@
     $progress = $currentTasks->count() ? round($done/max(1,$currentTasks->count())*100) : 0;
     $tasksReady = $requiredTasks->filter(fn($task) => !$task->completed_at && $task->status !== 'Completed')->isEmpty();
     $documentsReady = $missingCurrent->isEmpty();
-    $canEditJob = app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job);
-    $canChangeJobStatus = app(\App\Services\AccessControlService::class)->canChangeJobStatus(auth()->user(), $job);
+    $canEditJob = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
+    $canChangeJobStatus = app(\App\Services\AccessControlService::class)->canChangeVisibleJobStatus(auth()->user(), $job);
 @endphp
 <div class="ft-workflow-detail-section ft-exact-workflow">
     <div class="ft-section-title-row"><div><h2>Workflow</h2><p>{{ $job->workflow->name }} · Version 1</p></div></div>

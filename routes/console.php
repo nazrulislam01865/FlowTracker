@@ -9,6 +9,20 @@ Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
 })->purpose('Display an inspiring quote');
 
+Artisan::command('flowtrack:sync-legacy', function (): int {
+    $this->info('Synchronizing legacy Master Data...');
+    app(\App\Services\MasterDataService::class)->syncLegacy();
+
+    $this->info('Synchronizing legacy Task Packs...');
+    app(\App\Services\TaskPackService::class)->syncLegacy();
+
+    $this->info('Synchronizing legacy Workflows...');
+    app(\App\Services\WorkflowService::class)->syncLegacy();
+
+    $this->info('Legacy synchronization completed.');
+    return 0;
+})->purpose('Run legacy compatibility synchronization explicitly outside web requests');
+
 Artisan::command('flowtrack:performance:explain {--user=1 : User ID used for assignee/member query plans}', function (): int {
     $userId = max(1, (int) $this->option('user'));
     $driver = DB::connection()->getDriverName();
@@ -34,6 +48,11 @@ Artisan::command('flowtrack:performance:explain {--user=1 : User ID used for ass
             'tasks',
             "select id from tasks where flow_job_id = ? and deleted_at is null and completed_at is null and status <> ? order by due_date asc",
             [1, 'Completed'],
+        ],
+        'Current phase Tasks for a Job card' => [
+            'tasks',
+            "select id from tasks where flow_job_id = ? and workflow_phase_id = ? and deleted_at is null order by completed_at, due_date asc",
+            [1, 1],
         ],
         'Unread notifications' => [
             'flow_notifications',
@@ -64,6 +83,11 @@ Artisan::command('flowtrack:performance:explain {--user=1 : User ID used for ass
             'workflow_phases',
             "select id from workflow_phases where workflow_id = ? and is_active = ? order by sequence",
             [1, 1],
+        ],
+        'Active clients by country' => [
+            'clients',
+            "select id from clients where is_active = ? and country = ? order by name limit 30",
+            [1, 'China'],
         ],
     ];
 

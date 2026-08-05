@@ -42,8 +42,6 @@ class MasterDataService
 
     public function query(string $type, string $search = '')
     {
-        $this->syncLegacy();
-
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
@@ -67,7 +65,6 @@ class MasterDataService
 
     public function active(string $type)
     {
-        $this->syncLegacy();
         $workspaceId = $this->workspaceId();
         $rows = Cache::remember($this->activeCacheKey($workspaceId, $type), now()->addMinutes(5), fn () =>
             MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->active()->orderBy('sort_order')->orderBy('name')->get()

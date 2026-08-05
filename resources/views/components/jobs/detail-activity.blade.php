@@ -1,6 +1,6 @@
 @props(['job','compact'=>false,'activityTab'=>'all','activityPage'=>1])
 @php
-    $canComment = app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job);
+    $canComment = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
     $activities = $job->activities->sortByDesc('created_at')->values();
     if ($activityTab === 'comments') {
         $activities = $activities->where('event','job.comment')->values();
