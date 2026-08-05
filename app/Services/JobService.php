@@ -34,6 +34,7 @@ class JobService
     public function activeQuery(User $user): Builder
     {
         return $this->visibleQuery($user)
+            ->whereHas('client', fn ($client) => $client->where('is_active', true))
             ->whereNull('completed_at')
             ->whereNotIn('status', self::INACTIVE_STATUSES);
     }
@@ -43,6 +44,7 @@ class JobService
         $quick = (string) ($filters['quick'] ?? 'all');
 
         return $this->visibleQuery($user)
+            ->whereHas('client', fn ($client) => $client->where('is_active', true))
             ->when($quick !== 'completed', fn ($q) => $q->whereNull('completed_at'))
             ->when($quick !== 'completed' && empty($filters['status']), fn ($q) => $q->whereNotIn('status', self::INACTIVE_STATUSES))
             ->when($quick === 'completed', fn ($q) => $q->whereNotNull('completed_at'))

@@ -60,7 +60,9 @@ class DashboardService
         return $this->remember($user, 'metrics', function () use ($user) {
             $jobs = app(JobService::class)->activeQuery($user)->reorder();
             $tasks = app(TaskService::class)->visibleQuery($user)
-                ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))
+                ->whereHas('job', fn ($job) => $job
+                    ->whereHas('client', fn ($client) => $client->where('is_active', true))
+                    ->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))
                 ->reorder();
 
             $jobMetrics = $jobs
@@ -136,7 +138,9 @@ class DashboardService
                 ->select(['users.id', 'users.name'])
                 ->withCount(['assignedTasks as open_tasks_count' => fn ($tasks) => $tasks
                     ->whereNull('completed_at')
-                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
+                    ->whereHas('job', fn ($job) => $job
+                        ->whereHas('client', fn ($client) => $client->where('is_active', true))
+                        ->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
                 ->orderByDesc('open_tasks_count')
                 ->limit(5)
                 ->get()
@@ -195,7 +199,7 @@ class DashboardService
 
     private function cacheKey(string $section, int $userId): string
     {
-        return 'flowtrack:dashboard:'.self::CACHE_VERSION.':'.$section.':user:'.$userId;
+        return 'flowtrack:dashboard:'.self::CACHE_VERSION.':clients-'.app(ClientService::class)->lifecycleVersion().':'.$section.':user:'.$userId;
     }
 
     private function legacyCacheKey(string $section, int $userId): string

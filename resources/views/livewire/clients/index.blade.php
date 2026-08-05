@@ -13,16 +13,24 @@
 <div class="ft-clients-reference">
     <div class="ft-clients-page-head">
         <div>
-            <h1>Clients</h1>
-            <p>Monitor client Jobs, task delivery, account health and outstanding balances.</p>
+            <h1>{{ $showArchived ? 'Archived Clients' : 'Clients' }}</h1>
+            <p>{{ $showArchived ? 'Review inactive clients and restore them when needed.' : 'Monitor client Jobs, task delivery, account health and outstanding balances.' }}</p>
         </div>
         @if(auth()->user()->canModule('clients','create'))
             <button class="ft-clients-new" type="button" wire:click="openCreate">＋ New Client</button>
         @endif
     </div>
 
+    @if(session('success'))<div class="flash success">{{ session('success') }}</div>@endif
+
+    <div class="ft-client-list-modes" role="tablist" aria-label="Client status">
+        <button type="button" wire:click="showActiveClients" class="{{ !$showArchived ? 'active' : '' }}">Active Clients <span>{{ $summary['clients'] }}</span></button>
+        <button type="button" wire:click="showArchivedClients" class="{{ $showArchived ? 'active' : '' }}">Archived Clients <span>{{ $summary['archived'] }}</span></button>
+    </div>
+
     <div class="ft-clients-layout ft-clients-layout-full">
         <section class="ft-clients-main">
+            @if(!$showArchived)
             <div class="ft-clients-metrics">
                 <button type="button" wire:click="setQuick('all')" class="ft-client-metric {{ $quick==='all'?'is-active':'' }}">
                     <span class="ft-client-metric-icon ft-client-metric-blue">♙</span><span><small>Total clients</small><b>{{ number_format($summary['clients']) }}</b></span>
@@ -37,25 +45,54 @@
                     <span class="ft-client-metric-icon ft-client-metric-purple">$</span><span><small>Outstanding</small><b>${{ number_format($summary['outstanding'],0) }}</b></span>
                 </button>
             </div>
+            @endif
 
-            <div class="ft-client-filter-card">
+            <div class="ft-client-filter-card {{ $showArchived ? 'is-archived' : '' }}">
                 <div class="ft-client-filter-search"><span>⌕</span><input wire:model.live.debounce.300ms="search" placeholder="Search client, Job ID, country or manager"></div>
                 <select wire:model.live="manager"><option value="">Account manager</option>@foreach($managers as $managerOption)<option value="{{ $managerOption->id }}">{{ $managerOption->name }}</option>@endforeach</select>
                 <select wire:model.live="country"><option value="">Country</option>@foreach($countries as $countryOption)<option value="{{ $countryOption }}">{{ $countryOption }}</option>@endforeach</select>
-                <select wire:model.live="jobHealth"><option value="">Job health</option>@foreach($healthOptions as $healthOption)<option value="{{ $healthOption }}">{{ $healthOption }}</option>@endforeach</select>
+                @if(!$showArchived)<select wire:model.live="jobHealth"><option value="">Job health</option>@foreach($healthOptions as $healthOption)<option value="{{ $healthOption }}">{{ $healthOption }}</option>@endforeach</select>@endif
                 <select wire:model.live="outstanding"><option value="">Outstanding</option><option value="positive">Has balance</option><option value="high">$10,000+</option><option value="zero">No balance</option></select>
                 <button type="button" wire:click="clearFilters">Clear</button>
             </div>
 
+            @if(!$showArchived)
             <div class="ft-client-quick-row">
                 <button type="button" wire:click="setQuick('all')" class="{{ $quick==='all'?'active':'' }}">All clients <span>{{ $summary['clients'] }}</span></button>
                 <button type="button" wire:click="setQuick('active_jobs')" class="{{ $quick==='active_jobs'?'active':'' }}">Active Jobs <span>{{ $summary['clients_active'] }}</span></button>
                 <button type="button" wire:click="setQuick('attention')" class="{{ $quick==='attention'?'active':'' }}">Needs attention <span>{{ $summary['clients_attention'] }}</span></button>
                 <button type="button" wire:click="setQuick('outstanding')" class="{{ $quick==='outstanding'?'active':'' }}">Outstanding balance <span>{{ $summary['clients_outstanding'] }}</span></button>
             </div>
+            @endif
 
             <div class="ft-client-list-card">
                 <div class="ft-client-table-scroll">
+                    @if($showArchived)
+                    <table class="ft-client-table ft-archived-client-table">
+                        <thead><tr><th>Archived client</th><th>Account manager</th><th>Job history</th><th>Outstanding</th><th>Archived</th><th>Actions</th></tr></thead>
+                        <tbody>
+                        @forelse($clients as $clientRow)
+                            <tr wire:key="archived-client-row-{{ $clientRow->id }}">
+                                <td data-label="Archived client">
+                                    <div class="ft-client-identity"><span class="ft-client-logo is-archived">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }} · {{ $clientRow->country ?: 'No country' }}</small></span></div>
+                                </td>
+                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
+                                <td data-label="Job history"><b>{{ $clientRow->total_jobs_count }}</b> {{ \Illuminate\Support\Str::plural('Job', $clientRow->total_jobs_count) }} preserved</td>
+                                <td data-label="Outstanding"><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
+                                <td data-label="Archived"><span class="ft-archived-status">Archived</span><small>{{ $clientRow->updated_at?->diffForHumans(short:true) }}</small></td>
+                                <td data-label="Actions">
+                                    <div class="ft-archived-actions">
+                                        <button type="button" class="ft-archive-view" wire:click="viewClient({{ $clientRow->id }})">View history</button>
+                                        @if(auth()->user()->canModule('clients','delete'))<button type="button" class="ft-archive-restore" wire:click="restoreClient({{ $clientRow->id }})" wire:confirm="Restore this client to the active client list?">Restore</button>@endif
+                                    </div>
+                                </td>
+                            </tr>
+                        @empty
+                            <tr><td colspan="6" class="ft-client-empty">No archived clients match the selected filters.</td></tr>
+                        @endforelse
+                        </tbody>
+                    </table>
+                    @else
                     <table class="ft-client-table">
                         <thead><tr><th>Client</th><th>Account manager</th><th>Jobs</th><th>Tasks</th><th>Health</th><th>Next delivery</th><th>Outstanding</th><th>Updated</th><th>Actions</th></tr></thead>
                         <tbody>
@@ -63,7 +100,6 @@
                             @php
                                 $rowHealth = $clientRow->attention_jobs_count > 0 ? 'Needs Attention' : ($clientRow->overdue_tasks_count > 0 ? 'At Risk' : 'On Track');
                                 $healthClass = $rowHealth === 'On Track' ? 'green' : ($rowHealth === 'At Risk' ? 'amber' : 'red');
-                                $rowInitials = collect(preg_split('/\s+/', trim($clientRow->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
                             @endphp
                             <tr
                                 wire:key="client-row-{{ $clientRow->id }}"
@@ -74,7 +110,7 @@
                                 tabindex="0"
                                 aria-label="Preview client {{ $clientRow->name }}"
                             >
-                                <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ $rowInitials ?: 'CL' }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
+                                <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
                                 <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Jobs"><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
                                 <td data-label="Tasks">
@@ -100,20 +136,27 @@
                                                 $access = app(\App\Services\AccessControlService::class);
                                                 $rowCanEdit = $access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(),'clients') || ($access->canEditOwn(auth()->user(),'clients') && (int)$clientRow->account_manager_id === (int)auth()->id());
                                             @endphp
-                                            @if($rowCanEdit)<button type="button" wire:click.stop="editClient({{ $clientRow->id }})">Edit client</button>@endif
-                                            @if(auth()->user()->canModule('clients','delete'))<button type="button" class="danger" wire:click.stop="deleteClient({{ $clientRow->id }})" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button>@endif
+                                            @if(!$showArchived && $rowCanEdit)<button type="button" wire:click.stop="editClient({{ $clientRow->id }})">Edit client</button>@endif
+                                            @if(auth()->user()->canModule('clients','delete'))
+                                                @if($showArchived)
+                                                    <button type="button" wire:click.stop="restoreClient({{ $clientRow->id }})" wire:confirm="Restore this client to the active client list?">Restore client</button>
+                                                @else
+                                                    <button type="button" class="danger" wire:click.stop="deleteClient({{ $clientRow->id }})" wire:confirm="Archive this client? Existing history will be preserved and the client can be restored later.">Archive client</button>
+                                                @endif
+                                            @endif
                                         </div>
                                     @endif
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="9" class="ft-client-empty">No clients match the selected filters.</td></tr>
+                            <tr><td colspan="9" class="ft-client-empty">{{ $showArchived ? 'No archived clients match the selected filters.' : 'No clients match the selected filters.' }}</td></tr>
                         @endforelse
                         </tbody>
                     </table>
+                    @endif
                 </div>
                 <div class="ft-client-pagination">
-                    <span>Showing {{ $clients->firstItem() ?? 0 }}–{{ $clients->lastItem() ?? 0 }} of {{ $clients->total() }} clients</span>
+                    <span>Showing {{ $clients->firstItem() ?? 0 }}–{{ $clients->lastItem() ?? 0 }} of {{ $clients->total() }} {{ $showArchived ? 'archived ' : '' }}clients</span>
                     <div><label>Rows per page:</label><select wire:model.live="perPage"><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option></select><button type="button" wire:click="previousPage" @disabled($clients->onFirstPage())>Previous</button><span>Page {{ $clients->currentPage() }} of {{ max(1,$clients->lastPage()) }}</span><button type="button" wire:click="nextPage" @disabled(!$clients->hasMorePages())>Next →</button></div>
                 </div>
             </div>

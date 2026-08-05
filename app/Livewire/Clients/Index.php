@@ -22,6 +22,7 @@ class Index extends Component
     public string $jobHealth = '';
     public string $outstanding = '';
     public string $quick = 'all';
+    public bool $showArchived = false;
     public int $perPage = 10;
     public ?int $selectedClientId = null;
     public bool $showClientPreview = false;
@@ -58,6 +59,22 @@ class Index extends Component
     {
         abort_unless(in_array($quick, ['all','active_jobs','attention','outstanding'], true), 422);
         $this->quick = $quick;
+        $this->resetPage();
+    }
+
+    public function showActiveClients(): void
+    {
+        $this->showArchived = false;
+        $this->quick = 'all';
+        $this->actionMenuClientId = null;
+        $this->resetPage();
+    }
+
+    public function showArchivedClients(): void
+    {
+        $this->showArchived = true;
+        $this->quick = 'all';
+        $this->actionMenuClientId = null;
         $this->resetPage();
     }
 
@@ -229,25 +246,33 @@ class Index extends Component
 
     public function deleteClient(int $id): void
     {
-        $client = app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
         abort_unless(auth()->user()->canModule('clients','delete'), 403);
-
-        // Jobs use a restrictive FK to clients, so archive clients with history and
-        // hard-delete only clients that have never been used.
-        if ($client->jobs()->exists()) {
-            $client->update(['is_active' => false]);
-            session()->flash('success', 'Client archived. Existing Job history was preserved.');
+        $client = app(ClientService::class)->archive(auth()->user(), $id);
+        session()->flash('success', 'Client archived. It is available from Archived Clients and can be restored.');
+        try {
             app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client archived', $client->name.' was archived.', 'update', null, null, auth()->user());
-        } else {
-            $client->delete();
-            session()->flash('success', 'Client deleted successfully.');
-            app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client deleted', $client->name.' was deleted.', 'update', null, null, auth()->user());
+        } catch (\Throwable $exception) {
+            report($exception);
         }
 
         if ($this->selectedClientId === $id) $this->selectedClientId = null;
         $this->showClientPreview = false;
         $this->showDetail = false;
         $this->showEdit = false;
+        $this->actionMenuClientId = null;
+        $this->resetPage();
+    }
+
+    public function restoreClient(int $id): void
+    {
+        abort_unless(auth()->user()->canModule('clients','delete'), 403);
+        $client = app(ClientService::class)->restore(auth()->user(), $id);
+        session()->flash('success', $client->name.' was restored to Active Clients.');
+        try {
+            app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client restored', $client->name.' was restored.', 'update', null, null, auth()->user());
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
         $this->actionMenuClientId = null;
         $this->resetPage();
     }
@@ -269,6 +294,7 @@ class Index extends Component
             'health' => $this->jobHealth,
             'outstanding' => $this->outstanding,
             'quick' => $this->quick,
+            'archived' => $this->showArchived,
         ], $this->perPage);
 
         $detail = $this->selectedClientId ? $service->detail(auth()->user(), $this->selectedClientId) : null;
@@ -281,11 +307,13 @@ class Index extends Component
             'clients' => $clients,
             'summary' => $service->summary(auth()->user()),
             'detail' => $detail,
-            'countries' => $service->visibleQuery(auth()->user())->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
+            'countries' => $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
             'managers' => User::where('is_active', true)
-                ->whereIn('id', $service->visibleQuery(auth()->user())->whereNotNull('account_manager_id')->distinct()->pluck('account_manager_id'))
+                ->whereIn('id', $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('account_manager_id')->distinct()->pluck('account_manager_id'))
                 ->orderBy('name')->get(['id','name']),
-            'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), auth()->user())->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),
+            'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), auth()->user())
+                ->whereHas('client', fn ($client) => $client->where('is_active', !$this->showArchived))
+                ->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),
             'users' => $users,
         ]);
     }

@@ -7,6 +7,7 @@ use App\Models\FlowJob;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 
 class ClientService
 {
@@ -20,8 +21,10 @@ class ClientService
         $access = app(AccessControlService::class);
         $quick = (string) ($filters['quick'] ?? 'all');
 
+        $archived = (bool) ($filters['archived'] ?? false);
+
         return $this->visibleQuery($user)
-            ->where('clients.is_active', true)
+            ->where('clients.is_active', !$archived)
             ->with('accountManager')
             ->withMin([
                 'jobs as next_delivery_at' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->whereNotNull('flow_jobs.delivery_date'), $user),
@@ -86,7 +89,43 @@ class ClientService
             'clients_active' => (clone $clients)->whereHas('jobs', fn ($j) => app(AccessControlService::class)->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES), $user))->count(),
             'clients_attention' => (clone $clients)->whereHas('jobs', fn ($j) => app(AccessControlService::class)->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user))->count(),
             'clients_outstanding' => (int) ($clientMetrics?->outstanding_client_count ?? 0),
+            'archived' => $this->visibleQuery($user)->where('clients.is_active', false)->count(),
         ];
+    }
+
+    public function archive(User $user, int $clientId): Client
+    {
+        $client = $this->visibleQuery($user)->findOrFail($clientId);
+        if ($client->is_active) {
+            $client->update(['is_active' => false]);
+            $this->touchLifecycleVersion();
+        }
+
+        return $client->refresh();
+    }
+
+    public function restore(User $user, int $clientId): Client
+    {
+        $client = $this->visibleQuery($user)->findOrFail($clientId);
+        if (!$client->is_active) {
+            $client->update(['is_active' => true]);
+            $this->touchLifecycleVersion();
+        }
+
+        return $client->refresh();
+    }
+
+    public function lifecycleVersion(): int
+    {
+        return max(1, (int) Cache::get('flowtrack:clients:lifecycle-version', 1));
+    }
+
+    private function touchLifecycleVersion(): void
+    {
+        if (!Cache::has('flowtrack:clients:lifecycle-version')) {
+            Cache::forever('flowtrack:clients:lifecycle-version', 1);
+        }
+        Cache::increment('flowtrack:clients:lifecycle-version');
     }
 
     public function detail(User $user, int $clientId): array

@@ -13,7 +13,7 @@ class ReportService
     public function forget(User|int $user): void
     {
         $userId = $user instanceof User ? $user->id : $user;
-        Cache::forget('flowtrack:reports:kpis:v2:user:'.$userId);
+        Cache::forget($this->kpiCacheKey($userId));
     }
 
     /**
@@ -56,7 +56,9 @@ class ReportService
         return $query
             ->withCount(['assignedTasks as open_tasks_count' => fn ($tasks) => $tasks
                 ->whereNull('completed_at')
-                ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
+                ->whereHas('job', fn ($job) => $job
+                    ->whereHas('client', fn ($client) => $client->where('is_active', true))
+                    ->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
             ->orderByDesc('open_tasks_count')
             ->limit(8)
             ->get();
@@ -66,10 +68,12 @@ class ReportService
     {
         $this->authorize($user);
 
-        return Cache::remember('flowtrack:reports:kpis:v2:user:'.$user->id, now()->addSeconds(15), function () use ($user) {
-            $jobs = app(JobService::class)->visibleQuery($user);
+        return Cache::remember($this->kpiCacheKey($user->id), now()->addSeconds(15), function () use ($user) {
+            $jobs = app(JobService::class)->visibleQuery($user)
+                ->whereHas('client', fn ($client) => $client->where('is_active', true));
             $activeJobs = app(JobService::class)->activeQuery($user);
-            $tasks = app(TaskService::class)->visibleQuery($user)->whereHas('job');
+            $tasks = app(TaskService::class)->visibleQuery($user)
+                ->whereHas('job', fn ($job) => $job->whereHas('client', fn ($client) => $client->where('is_active', true)));
 
             $jobMetrics = (clone $jobs)
                 ->reorder()
@@ -99,6 +103,11 @@ class ReportService
                 'shipment_on_time' => $this->phaseOnTimePercentage($jobs, 'ship'),
             ];
         });
+    }
+
+    private function kpiCacheKey(int $userId): string
+    {
+        return 'flowtrack:reports:kpis:v2:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
     }
 
     private function authorize(User $user): void

@@ -354,7 +354,7 @@ class BoardService
 
     private function lookupCacheKey(int $userId): string
     {
-        return 'flowtrack:board:lookups:v2:user:'.$userId;
+        return 'flowtrack:board:lookups:v2:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
     }
 
     private function workflowCacheKey(): string
@@ -369,7 +369,8 @@ class BoardService
 
     private function jobQuery(User $user, array $filters): Builder
     {
-        $query = $this->jobs->visibleQuery($user);
+        $query = $this->jobs->visibleQuery($user)
+            ->whereHas('client', fn ($client) => $client->where('is_active', true));
 
         $query
             ->when(empty($filters['status']), fn ($q) => $q->whereNotIn('status', JobService::INACTIVE_STATUSES))
@@ -431,6 +432,7 @@ class BoardService
     {
         $query = $this->tasks->visibleQuery($user)
             ->whereHas('job', fn ($job) => $job
+                ->whereHas('client', fn ($client) => $client->where('is_active', true))
                 ->whereNull('completed_at')
                 ->whereNotIn('status', JobService::INACTIVE_STATUSES));
 

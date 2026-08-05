@@ -23,6 +23,7 @@ class ShellDataService
                         ->visibleQuery($user)
                         ->whereNull('completed_at')
                         ->whereHas('job', fn ($job) => $job
+                            ->whereHas('client', fn ($client) => $client->where('is_active', true))
                             ->whereNull('completed_at')
                             ->whereNotIn('status', JobService::INACTIVE_STATUSES))
                         ->count()
@@ -38,6 +39,6 @@ class ShellDataService
 
     private function key(int $userId): string
     {
-        return 'flowtrack:shell:user:'.$userId;
+        return 'flowtrack:shell:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
     }
 }
