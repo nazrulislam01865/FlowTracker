@@ -65,7 +65,7 @@ unset($__defined_vars, $__key, $__value); ?>
 
             <div class="ft-task-job-row-grid" x-show="open">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $laneStatuses; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $laneStatus): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                    <?php ($laneTasks = $jobTasks->where('status', $laneStatus)); ?>
+                    <?php ($laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus))); ?>
                     <div
                         class="ft-task-job-status-cell <?php echo e($laneTasks->isEmpty() ? 'is-empty' : 'has-tasks'); ?>"
                         data-status="<?php echo e($laneStatus); ?>"

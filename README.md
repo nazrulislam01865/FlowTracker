@@ -10,8 +10,8 @@ Updated areas:
 - Job Details documents section with upload area, grouped document table, required document sidebar, and document health panel.
 
 Database schema note:
-- No new migrations were added in this update.
-- Existing tables and migration order remain unchanged.
+- A performance-only migration adds indexes for high-frequency Job, Task, notification, activity, document, Master Data, and workflow queries.
+- It does not change application records or remove existing columns.
 
 Run after replacing files:
 
@@ -27,4 +27,15 @@ If you already ran `npm install`, only run:
 ```bash
 php artisan optimize:clear
 npm run build
+```
+
+## Production performance deployment
+
+The cloud performance implementation, Redis/Pusher configuration, queue worker setup, monitoring, and query-plan verification steps are documented in [`PERFORMANCE_IMPLEMENTATION.md`](PERFORMANCE_IMPLEMENTATION.md).
+
+For production deployment, begin with `.env.production.example` and run:
+
+```bash
+./scripts/deploy.sh
+./scripts/queue-worker.sh
 ```

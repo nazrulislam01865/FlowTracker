@@ -48,7 +48,6 @@
 <?php else: ?>
 <?php
     $selected = $detail['client'] ?? null;
-    $selectedJobs = $detail['jobs'] ?? collect();
     $activeJobs = $detail['active'] ?? collect();
     $attentionTasks = $detail['tasks'] ?? collect();
     $selectedHealth = $detail['health'] ?? 'On Track';
@@ -64,7 +63,7 @@
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
 
-    <div class="ft-clients-layout">
+    <div class="ft-clients-layout ft-clients-layout-full">
         <section class="ft-clients-main">
             <div class="ft-clients-metrics">
                 <button type="button" wire:click="setQuick('all')" class="ft-client-metric <?php echo e($quick==='all'?'is-active':''); ?>">
@@ -108,7 +107,15 @@
                                 $healthClass = $rowHealth === 'On Track' ? 'green' : ($rowHealth === 'At Risk' ? 'amber' : 'red');
                                 $rowInitials = collect(preg_split('/\s+/', trim($clientRow->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
                             ?>
-                            <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'client-row-'.e($clientRow->id).''; ?>wire:key="client-row-<?php echo e($clientRow->id); ?>" class="<?php echo e((int)$selectedClientId === (int)$clientRow->id ? 'selected' : ''); ?>" wire:click="openClient(<?php echo e($clientRow->id); ?>)">
+                            <tr
+                                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'client-row-'.e($clientRow->id).''; ?>wire:key="client-row-<?php echo e($clientRow->id); ?>"
+                                class="<?php echo e($showClientPreview && (int)$selectedClientId === (int)$clientRow->id ? 'selected' : ''); ?>"
+                                wire:click="openClient(<?php echo e($clientRow->id); ?>)"
+                                wire:keydown.enter="openClient(<?php echo e($clientRow->id); ?>)"
+                                wire:keydown.space.prevent="openClient(<?php echo e($clientRow->id); ?>)"
+                                tabindex="0"
+                                aria-label="Preview client <?php echo e($clientRow->name); ?>"
+                            >
                                 <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo"><?php echo e($rowInitials ?: 'CL'); ?></span><span><b><?php echo e($clientRow->name); ?></b><small><?php echo e($clientRow->country ?: '—'); ?></small></span></div></td>
                                 <td data-label="Account manager"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clientRow->accountManager): ?><div class="ft-client-person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
@@ -151,13 +158,13 @@
                                     <button type="button" class="ft-client-more" wire:click.stop="toggleClientMenu(<?php echo e($clientRow->id); ?>)" aria-label="Client actions">⋮</button>
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($actionMenuClientId === (int)$clientRow->id): ?>
                                         <div class="ft-client-action-menu" x-on:click.stop>
-                                            <button type="button" wire:click="viewClient(<?php echo e($clientRow->id); ?>)">View client</button>
+                                            <button type="button" wire:click.stop="viewClient(<?php echo e($clientRow->id); ?>)">View client</button>
                                             <?php
                                                 $access = app(\App\Services\AccessControlService::class);
                                                 $rowCanEdit = $access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(),'clients') || ($access->canEditOwn(auth()->user(),'clients') && (int)$clientRow->account_manager_id === (int)auth()->id());
                                             ?>
-                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($rowCanEdit): ?><button type="button" wire:click="editClient(<?php echo e($clientRow->id); ?>)">Edit client</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('clients','delete')): ?><button type="button" class="danger" wire:click="deleteClient(<?php echo e($clientRow->id); ?>)" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($rowCanEdit): ?><button type="button" wire:click.stop="editClient(<?php echo e($clientRow->id); ?>)">Edit client</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('clients','delete')): ?><button type="button" class="danger" wire:click.stop="deleteClient(<?php echo e($clientRow->id); ?>)" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                         </div>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </td>
@@ -175,15 +182,33 @@
             </div>
         </section>
 
-        <aside class="ft-client-detail-card">
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selected): ?>
+    </div>
+
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showClientPreview && $selected): ?>
+        <div
+            class="ft-client-preview-backdrop"
+            <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'client-preview-'.e($selected->id).''; ?>wire:key="client-preview-<?php echo e($selected->id); ?>"
+            wire:click.self="closeClientPreview"
+            x-data
+            x-on:keydown.escape.window="$wire.closeClientPreview()"
+            x-init="$nextTick(() => $refs.dialog.focus())"
+        >
+        <aside
+            class="ft-client-detail-card ft-client-preview-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-preview-title-<?php echo e($selected->id); ?>"
+            tabindex="-1"
+            x-ref="dialog"
+        >
             <?php
                 $detailHealthClass = $selectedHealth === 'On Track' ? 'green' : ($selectedHealth === 'At Risk' ? 'amber' : 'red');
                 $selectedInitials = collect(preg_split('/\s+/', trim($selected->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
             ?>
+            <button class="ft-client-preview-close" type="button" wire:click="closeClientPreview" aria-label="Close client preview">×</button>
             <div class="ft-client-detail-head">
                 <span class="ft-client-detail-logo"><?php echo e($selectedInitials ?: 'CL'); ?></span>
-                <div><h2><?php echo e($selected->name); ?></h2><p><?php echo e($selected->country ?: '—'); ?> <span class="ft-client-health <?php echo e($detailHealthClass); ?>"><?php echo e($selectedHealth); ?></span></p></div>
+                <div><h2 id="client-preview-title-<?php echo e($selected->id); ?>"><?php echo e($selected->name); ?></h2><p><?php echo e($selected->country ?: '—'); ?> <span class="ft-client-health <?php echo e($detailHealthClass); ?>"><?php echo e($selectedHealth); ?></span></p></div>
                 <button class="ft-open-client" type="button" wire:click="viewClient(<?php echo e($selected->id); ?>)">Open client</button>
             </div>
             <div class="ft-client-detail-contact">
@@ -254,11 +279,9 @@
                 </tbody></table>
             </div>
             <a class="ft-view-client-work" href="<?php echo e(route('jobs.index',['search'=>$selected->name])); ?>" wire:navigate>View all client work&nbsp; →</a>
-        <?php else: ?>
-            <div class="ft-client-empty-detail">Select a client to see its Jobs and Tasks.</div>
-        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </aside>
-    </div>
+        </div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>
 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>

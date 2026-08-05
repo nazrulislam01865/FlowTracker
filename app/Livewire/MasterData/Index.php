@@ -2,14 +2,18 @@
 
 namespace App\Livewire\MasterData;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     use WithPagination;
 
     public string $group = 'product_category';
@@ -29,6 +33,7 @@ class Index extends Component
         abort_unless(array_key_exists($group, MasterDataService::LABELS), 404);
         $this->group = $group;
         $this->search = '';
+        $this->parentId = null;
         $this->resetPage('masterPage');
         $this->resetValidation();
     }
@@ -40,10 +45,11 @@ class Index extends Component
         $this->resetValidation();
         if ($id) {
             $r = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
+            abort_unless($r->type === $this->group, 404);
             $this->code = $r->code;
             $this->name = $r->name;
             $this->description = (string) $r->description;
-            $this->parentId = $r->parent_id;
+            $this->parentId = $this->group === 'product' ? $r->parent_id : null;
             $this->status = $r->status;
             $this->sortOrder = (int) $r->sort_order;
             $this->metadataJson = $r->metadata ? json_encode($r->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
@@ -63,11 +69,17 @@ class Index extends Component
 
     public function save(): void
     {
+        $workspaceId = app(MasterDataService::class)->workspaceId();
         $data = $this->validate([
             'code' => ['required','string','max:40'],
             'name' => ['required','string','max:255'],
             'description' => ['nullable','string','max:5000'],
-            'parentId' => ['nullable','integer','exists:master_records,id'],
+            'parentId' => $this->group === 'product'
+                ? ['nullable','integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q
+                    ->where('workspace_id', $workspaceId)
+                    ->where('type', 'product_category')
+                    ->whereNull('deleted_at'))]
+                : ['nullable'],
             'status' => ['required','in:active,inactive'],
             'sortOrder' => ['required','integer','min:0','max:1000000'],
             'metadataJson' => ['nullable','string'],
@@ -85,7 +97,7 @@ class Index extends Component
             'code' => $data['code'],
             'name' => $data['name'],
             'description' => $data['description'],
-            'parent_id' => $data['parentId'],
+            'parent_id' => $this->group === 'product' ? $data['parentId'] : null,
             'status' => $data['status'],
             'sort_order' => $data['sortOrder'],
             'metadata' => $metadata,
@@ -132,7 +144,9 @@ class Index extends Component
         return view('livewire.master-data.index', [
             'labels' => MasterDataService::LABELS,
             'rows' => $rows,
-            'parents' => MasterRecord::where('workspace_id', $workspaceId)->where('type', $this->group)->when($this->editId, fn ($q) => $q->whereKeyNot($this->editId))->orderBy('name')->get(),
+            'parents' => $this->group === 'product'
+                ? MasterRecord::where('workspace_id', $workspaceId)->where('type', 'product_category')->orderBy('sort_order')->orderBy('name')->get()
+                : collect(),
             'total' => MasterRecord::where('workspace_id', $workspaceId)->count(),
             'active' => MasterRecord::where('workspace_id', $workspaceId)->where('status', 'active')->count(),
         ]);

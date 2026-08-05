@@ -37,7 +37,7 @@
 
             <div class="ft-task-job-row-grid" x-show="open">
                 @foreach($laneStatuses as $laneStatus)
-                    @php($laneTasks = $jobTasks->where('status', $laneStatus))
+                    @php($laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus)))
                     <div
                         class="ft-task-job-status-cell {{ $laneTasks->isEmpty() ? 'is-empty' : 'has-tasks' }}"
                         data-status="{{ $laneStatus }}"

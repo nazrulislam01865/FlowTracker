@@ -3,7 +3,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('reports.index', []);
+[$__name, $__params] = $__split('reports.index', ['lazy' => true]);
 
 $__keyOuter = $__key ?? null;
 

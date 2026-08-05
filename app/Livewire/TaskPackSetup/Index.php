@@ -2,6 +2,8 @@
 
 namespace App\Livewire\TaskPackSetup;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\TaskPackItem;
@@ -14,6 +16,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public ?int $selectedPackId = null;
     public bool $showPackModal = false;
     public bool $showItemModal = false;

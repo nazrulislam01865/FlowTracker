@@ -1,4 +1,4 @@
-<div wire:poll.5s>
+<div>
 <x-ui.page-head title="Notifications" subtitle="Assignments, changes and attention alerts delivered according to your role and record access">
     <x-slot:actions><button class="ghost" wire:click="markAllRead">Mark all read</button></x-slot:actions>
 </x-ui.page-head>

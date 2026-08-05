@@ -3,69 +3,121 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\FlowJobPhaseHistory;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
+use App\Support\BoardLaneResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 class BoardService
 {
+    public const CARD_LIMIT = 60;
+
     public function __construct(
         private readonly JobService $jobs,
         private readonly TaskService $tasks,
     ) {}
 
-    public function jobs(User $user, array $filters = []): Collection
+    public function jobs(User $user, array $filters = [], int $limit = self::CARD_LIMIT): Collection
     {
         return $this->jobQuery($user, $filters)
+            ->select([
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_id',
+                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
+                'flow_jobs.title', 'flow_jobs.quantity', 'flow_jobs.commercial_value', 'flow_jobs.currency',
+                'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
+                'flow_jobs.delivery_date', 'flow_jobs.next_action', 'flow_jobs.needs_attention',
+                'flow_jobs.completed_at', 'flow_jobs.created_at', 'flow_jobs.updated_at',
+            ])
+            ->addSelect([
+                'phase_entered_at' => FlowJobPhaseHistory::query()
+                    ->select('entered_at')
+                    ->whereColumn('flow_job_id', 'flow_jobs.id')
+                    ->whereColumn('workflow_phase_id', 'flow_jobs.workflow_phase_id')
+                    ->latest('entered_at')
+                    ->limit(1),
+            ])
             ->with([
-                'client', 'workflow', 'phase', 'owner', 'coordinator',
-                'items', 'members.user',
-                'phaseHistories' => fn ($query) => $query->latest('entered_at'),
-                'tasks' => fn ($query) => app(AccessControlService::class)->applyTaskScope($query, $user)->with(['assignee', 'phase'])->orderByRaw('completed_at is null desc')->orderByRaw('due_date is null, due_date asc'),
-                'activities' => fn ($query) => $query->with('user')->latest()->limit(1),
+                'client:id,name',
+                'phase:id,workflow_id,name,short_name,sequence',
+                'owner:id,name',
+                'coordinator:id,name',
+                'items:id,flow_job_id,quantity',
+                'members:id,flow_job_id,user_id',
+                'members.user:id,name',
+                'tasks' => fn ($query) => app(AccessControlService::class)
+                    ->applyTaskScope($query, $user)
+                    ->select([
+                        'tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id',
+                        'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.due_date',
+                        'tasks.completed_at', 'tasks.updated_at',
+                    ])
+                    ->with(['assignee:id,name', 'phase:id,name,sequence'])
+                    ->orderByRaw('completed_at is null desc')
+                    ->orderByRaw('due_date is null, due_date asc'),
+                'latestActivity:id,subject_type,subject_id,user_id,created_at',
+                'latestActivity.user:id,name',
             ])
             ->whereNull('completed_at')
-            ->limit(250)
+            ->limit(max(1, $limit))
             ->get();
     }
 
-    public function tasks(User $user, array $filters = []): Collection
+    public function tasks(User $user, array $filters = [], int $limit = self::CARD_LIMIT): Collection
     {
         return $this->taskQuery($user, $filters)
+            ->select([
+                'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
+                'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.progress',
+                'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason',
+                'tasks.completed_at', 'tasks.created_at', 'tasks.updated_at',
+            ])
             ->with([
-                'job.client', 'job.coordinator', 'phase', 'assignee',
-                'checklistItems', 'comments.user', 'documents',
+                'job:id,job_number,title,client_id,coordinator_id,status,completed_at',
+                'job.client:id,name',
+                'phase:id,name,short_name,sequence',
+                'assignee:id,name',
+            ])
+            ->withCount([
+                'checklistItems',
+                'checklistItems as completed_checklist_items_count' => fn ($query) => $query->where('is_completed', true),
+                'comments',
+                'documents',
             ])
             ->orderByRaw('due_date is null, due_date asc')
-            ->limit(250)
+            ->limit(max(1, $limit))
             ->get();
     }
 
     public function jobCounts(User $user, array $baseFilters = []): array
     {
         $base = $this->jobQuery($user, array_diff_key($baseFilters, ['quick' => true]));
+        $today = today()->format('Y-m-d');
+        $weekEnd = today()->copy()->addDays(7)->format('Y-m-d');
+
+        $row = (clone $base)
+            ->reorder()
+            ->selectRaw("sum(case when flow_jobs.completed_at is null then 1 else 0 end) as all_count")
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.owner_id = ? or flow_jobs.coordinator_id = ? or exists (select 1 from flow_job_members where flow_job_members.flow_job_id = flow_jobs.id and flow_job_members.user_id = ?) or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.assignee_id = ? and tasks.deleted_at is null)) then 1 else 0 end) as mine_count", [$user->id, $user->id, $user->id, $user->id])
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.delivery_date < ? then 1 else 0 end) as overdue_count", [$today])
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.delivery_date between ? and ? then 1 else 0 end) as week_count", [$today, $weekEnd])
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.health = 'Blocked' or flow_jobs.status = 'Blocked' or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status = 'Blocked' and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as blocked_count")
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as waiting_count")
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.owner_id is null or flow_jobs.coordinator_id is null or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.assignee_id is null and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as unassigned_count")
+            ->first();
 
         return [
-            'all' => (clone $base)->whereNull('completed_at')->count(),
-            'mine' => (clone $base)->whereNull('completed_at')->where(fn ($q) => $q
-                ->where('owner_id', $user->id)
-                ->orWhere('coordinator_id', $user->id)
-                ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id))
-                ->orWhereHas('tasks', fn ($t) => $t->where('assignee_id', $user->id))
-            )->count(),
-            'overdue' => (clone $base)->whereNull('completed_at')->whereDate('delivery_date', '<', today())->count(),
-            'week' => (clone $base)->whereNull('completed_at')->whereBetween('delivery_date', [today(), today()->copy()->addDays(7)])->count(),
-            'blocked' => (clone $base)->whereNull('completed_at')->where(fn ($q) => $q->where('health', 'Blocked')->orWhere('status', 'Blocked')->orWhereHas('tasks', fn ($t) => $t->where('status', 'Blocked')->whereNull('completed_at')))->count(),
-            'waiting' => (clone $base)->whereNull('completed_at')->where(fn ($q) => $q
-                ->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])
-                ->orWhereHas('tasks', fn ($t) => $t->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->whereNull('completed_at'))
-            )->count(),
-            'unassigned' => (clone $base)->whereNull('completed_at')->where(fn ($q) => $q
-                ->whereNull('owner_id')->orWhereNull('coordinator_id')->orWhereHas('tasks', fn ($t) => $t->whereNull('assignee_id')->whereNull('completed_at'))
-            )->count(),
+            'all' => (int) ($row?->all_count ?? 0),
+            'mine' => (int) ($row?->mine_count ?? 0),
+            'overdue' => (int) ($row?->overdue_count ?? 0),
+            'week' => (int) ($row?->week_count ?? 0),
+            'blocked' => (int) ($row?->blocked_count ?? 0),
+            'waiting' => (int) ($row?->waiting_count ?? 0),
+            'unassigned' => (int) ($row?->unassigned_count ?? 0),
         ];
     }
 
@@ -73,15 +125,27 @@ class BoardService
     {
         $base = $this->taskQuery($user, array_diff_key($baseFilters, ['quick' => true, 'open_only' => true]));
 
+        $row = (clone $base)
+            ->reorder()
+            ->selectRaw("sum(case when completed_at is null then 1 else 0 end) as open_count")
+            ->selectRaw("sum(case when completed_at is null and assignee_id = ? then 1 else 0 end) as mine_count", [$user->id])
+            ->selectRaw("sum(case when completed_at is null and due_date < ? then 1 else 0 end) as overdue_count", [today()->format('Y-m-d')])
+            ->selectRaw("sum(case when completed_at is null and due_date between ? and ? then 1 else 0 end) as week_count", [today()->format('Y-m-d'), today()->copy()->addDays(7)->format('Y-m-d')])
+            ->selectRaw("sum(case when completed_at is null and status = 'Blocked' then 1 else 0 end) as blocked_count")
+            ->selectRaw("sum(case when completed_at is null and status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') then 1 else 0 end) as waiting_count")
+            ->selectRaw("sum(case when completed_at is null and assignee_id is null then 1 else 0 end) as unassigned_count")
+            ->selectRaw("sum(case when completed_at is not null or status = 'Completed' then 1 else 0 end) as completed_count")
+            ->first();
+
         return [
-            'open' => (clone $base)->whereNull('completed_at')->count(),
-            'mine' => (clone $base)->whereNull('completed_at')->where('assignee_id', $user->id)->count(),
-            'overdue' => (clone $base)->whereNull('completed_at')->whereDate('due_date', '<', today())->count(),
-            'week' => (clone $base)->whereNull('completed_at')->whereBetween('due_date', [today(), today()->copy()->addDays(7)])->count(),
-            'blocked' => (clone $base)->whereNull('completed_at')->where('status', 'Blocked')->count(),
-            'waiting' => (clone $base)->whereNull('completed_at')->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->count(),
-            'unassigned' => (clone $base)->whereNull('completed_at')->whereNull('assignee_id')->count(),
-            'completed' => (clone $base)->where(fn ($q) => $q->whereNotNull('completed_at')->orWhere('status', 'Completed'))->count(),
+            'open' => (int) ($row?->open_count ?? 0),
+            'mine' => (int) ($row?->mine_count ?? 0),
+            'overdue' => (int) ($row?->overdue_count ?? 0),
+            'week' => (int) ($row?->week_count ?? 0),
+            'blocked' => (int) ($row?->blocked_count ?? 0),
+            'waiting' => (int) ($row?->waiting_count ?? 0),
+            'unassigned' => (int) ($row?->unassigned_count ?? 0),
+            'completed' => (int) ($row?->completed_count ?? 0),
         ];
     }
 
@@ -90,22 +154,216 @@ class BoardService
         if (!$workflowId) {
             $workflowId = Workflow::where('is_active', true)->orderBy('id')->value('id');
         }
+        if (!$workflowId) return collect();
 
-        return WorkflowPhase::where('workflow_id', $workflowId)->where('is_active', true)->orderBy('sequence')->get();
+        $key = $this->phaseCacheKey($workflowId);
+        $expiresAt = now()->addMinutes(5);
+        $resolver = fn () => WorkflowPhase::query()
+            ->where('workflow_id', $workflowId)
+            ->where('is_active', true)
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get(['id', 'workflow_id', 'name', 'short_name', 'sequence'])
+            ->map(fn (WorkflowPhase $phase) => [
+                'id' => (int) $phase->id,
+                'workflow_id' => (int) $phase->workflow_id,
+                'name' => (string) $phase->name,
+                'short_name' => (string) ($phase->short_name ?: $phase->name),
+                'sequence' => (int) $phase->sequence,
+            ])
+            ->all();
+        $rows = $this->rememberScalarRows(
+            $key,
+            $expiresAt,
+            $resolver,
+            ['id', 'workflow_id', 'name', 'short_name', 'sequence'],
+        );
+
+        return $this->rowObjects($rows, ['id', 'workflow_id', 'name', 'short_name', 'sequence']);
     }
 
-    public function lookups(User $user): array
+    public function lookups(User $user, bool $includeWorkflows = true): array
+    {
+        // Cache only scalar arrays. Laravel 13 defaults to rejecting class
+        // unserialization from cache, so storing Eloquent collections here can
+        // turn a later lookup into strings/incomplete values and break Blade.
+        $lookupKey = $this->lookupCacheKey($user->id);
+        $lookupExpiresAt = now()->addMinutes(3);
+        $lookupResolver = fn () => $this->buildLookupPayload($user);
+        $cached = Cache::remember($lookupKey, $lookupExpiresAt, $lookupResolver);
+
+        if (!$this->lookupPayloadIsValid($cached)) {
+            Cache::forget($lookupKey);
+            $cached = $lookupResolver();
+            Cache::put($lookupKey, $cached, $lookupExpiresAt);
+        }
+
+        $workflows = [];
+        if ($includeWorkflows) {
+            $workflowKey = $this->workflowCacheKey();
+            $workflowExpiresAt = now()->addMinutes(5);
+            $workflowResolver = fn () => Workflow::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Workflow $workflow) => [
+                    'id' => (int) $workflow->id,
+                    'name' => (string) $workflow->name,
+                ])
+                ->all();
+            $workflows = $this->rememberScalarRows(
+                $workflowKey,
+                $workflowExpiresAt,
+                $workflowResolver,
+                ['id', 'name'],
+            );
+        }
+
+        return [
+            'clients' => $this->rowObjects($cached['clients'] ?? [], ['id', 'name']),
+            'users' => $this->rowObjects($cached['users'] ?? [], ['id', 'name']),
+            'workflows' => $this->rowObjects($workflows, ['id', 'name']),
+        ];
+    }
+
+
+    private function buildLookupPayload(User $user): array
     {
         $access = app(AccessControlService::class);
-        $clients = $access->applyClientScope(Client::where('is_active', true), $user)->orderBy('name')->get(['id','name']);
+        $clients = $access->applyClientScope(Client::where('is_active', true), $user)
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Client $client) => [
+                'id' => (int) $client->id,
+                'name' => (string) $client->name,
+            ])
+            ->all();
+
         $users = $access->scope($user, 'tasks') === 'all_records'
-            ? User::where('is_active', true)->orderBy('name')->get(['id','name'])
-            : collect([$user])->map(fn ($u) => (object) ['id' => $u->id, 'name' => $u->name]);
-        return [
-            'clients' => $clients,
-            'users' => $users,
-            'workflows' => Workflow::where('is_active', true)->orderBy('name')->get(['id', 'name']),
-        ];
+            ? User::where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (User $row) => [
+                    'id' => (int) $row->id,
+                    'name' => (string) $row->name,
+                ])
+                ->all()
+            : [[
+                'id' => (int) $user->id,
+                'name' => (string) $user->name,
+            ]];
+
+        return ['clients' => $clients, 'users' => $users];
+    }
+
+    private function lookupPayloadIsValid(mixed $payload): bool
+    {
+        return is_array($payload)
+            && $this->scalarRowsAreValid($payload['clients'] ?? null, ['id', 'name'])
+            && $this->scalarRowsAreValid($payload['users'] ?? null, ['id', 'name']);
+    }
+
+    private function rememberScalarRows(
+        string $key,
+        mixed $expiresAt,
+        callable $resolver,
+        array $requiredFields,
+    ): array {
+        $rows = Cache::remember($key, $expiresAt, $resolver);
+
+        if (!$this->scalarRowsAreValid($rows, $requiredFields)) {
+            Cache::forget($key);
+            $rows = $resolver();
+            Cache::put($key, $rows, $expiresAt);
+        }
+
+        return is_array($rows) ? $rows : [];
+    }
+
+    private function scalarRowsAreValid(mixed $rows, array $requiredFields): bool
+    {
+        if (!is_array($rows)) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if (!is_array($row)) {
+                return false;
+            }
+
+            foreach ($requiredFields as $field) {
+                if (!array_key_exists($field, $row)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
+    }
+
+    private function rowObjects(mixed $rows, array $fields): Collection
+    {
+        if ($rows instanceof Collection) {
+            $rows = $rows->all();
+        }
+
+        if (!is_iterable($rows)) {
+            return collect();
+        }
+
+        return collect($rows)
+            ->map(function (mixed $row) use ($fields): ?object {
+                if ($row instanceof \Illuminate\Database\Eloquent\Model) {
+                    $row = $row->getAttributes();
+                } elseif (is_object($row)) {
+                    $row = get_object_vars($row);
+                }
+
+                if (!is_array($row)) {
+                    return null;
+                }
+
+                $attributes = [];
+                foreach ($fields as $field) {
+                    $attributes[$field] = $row[$field] ?? null;
+                }
+
+                if (!isset($attributes['id']) || !is_numeric($attributes['id'])) {
+                    return null;
+                }
+
+                $attributes['id'] = (int) $attributes['id'];
+                if (array_key_exists('workflow_id', $attributes) && is_numeric($attributes['workflow_id'])) {
+                    $attributes['workflow_id'] = (int) $attributes['workflow_id'];
+                }
+                if (array_key_exists('sequence', $attributes)) {
+                    $attributes['sequence'] = (int) ($attributes['sequence'] ?? 0);
+                }
+                foreach (['name', 'short_name'] as $field) {
+                    if (array_key_exists($field, $attributes)) {
+                        $attributes[$field] = (string) ($attributes[$field] ?? '');
+                    }
+                }
+
+                return (object) $attributes;
+            })
+            ->filter()
+            ->values();
+    }
+
+    private function lookupCacheKey(int $userId): string
+    {
+        return 'flowtrack:board:lookups:v2:user:'.$userId;
+    }
+
+    private function workflowCacheKey(): string
+    {
+        return 'flowtrack:board:workflows:v2';
+    }
+
+    private function phaseCacheKey(int $workflowId): string
+    {
+        return 'flowtrack:board:phases:v2:'.$workflowId;
     }
 
     private function jobQuery(User $user, array $filters): Builder
@@ -113,7 +371,7 @@ class BoardService
         $query = $this->jobs->visibleQuery($user);
 
         $query
-            ->when(empty($filters['status']), fn ($q) => $q->whereNotIn('status', ['Inactive','Cancelled']))
+            ->when(empty($filters['status']), fn ($q) => $q->whereNotIn('status', JobService::INACTIVE_STATUSES))
             ->when($filters['workflow'] ?? null, fn ($q, $value) => $q->where('workflow_id', $value))
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->whereKey($value))
             ->when($filters['search'] ?? null, function ($q, $search) {
@@ -138,7 +396,6 @@ class BoardService
                     default => null,
                 };
             })
-            // Legacy filters retained for compatibility with existing URLs/state.
             ->when($filters['owner'] ?? null, fn ($q, $value) => $q->where(fn ($inner) => $inner->where('owner_id', $value)->orWhere('coordinator_id', $value)))
             ->when($filters['health'] ?? null, fn ($q, $value) => $q->where('health', $value));
 
@@ -172,11 +429,11 @@ class BoardService
     private function taskQuery(User $user, array $filters): Builder
     {
         $query = $this->tasks->visibleQuery($user)
-            ->whereHas('job', fn ($job) => $job->whereNotIn('status', ['Inactive','Cancelled']));
+            ->whereHas('job', fn ($job) => $job
+                ->whereNull('completed_at')
+                ->whereNotIn('status', JobService::INACTIVE_STATUSES));
 
-        if (($filters['open_only'] ?? false) === true) {
-            $query->whereNull('completed_at');
-        }
+        if (($filters['open_only'] ?? false) === true) $query->whereNull('completed_at');
 
         $query
             ->when($filters['search'] ?? null, function ($q, $search) {
@@ -193,7 +450,7 @@ class BoardService
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->where('flow_job_id', $value))
             ->when($filters['client'] ?? null, fn ($q, $value) => $q->whereHas('job', fn ($job) => $job->where('client_id', $value)))
             ->when($filters['assignee'] ?? null, fn ($q, $value) => $q->where('assignee_id', $value))
-            ->when($filters['status'] ?? null, fn ($q, $value) => $q->where('status', $value))
+            ->when($filters['status'] ?? null, fn ($q, $value) => $q->whereIn('status', BoardLaneResolver::databaseStatusValues((string) $value)))
             ->when($filters['priority'] ?? null, fn ($q, $value) => $q->where('priority', $value))
             ->when($filters['due'] ?? null, function ($q, $value) {
                 match ($value) {

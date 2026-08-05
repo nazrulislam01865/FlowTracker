@@ -1,1 +1,7 @@
 @import './flowtrack.css';
+
+.ft-board-load-more {
+    display: flex;
+    justify-content: center;
+    padding: 18px 0 4px;
+}

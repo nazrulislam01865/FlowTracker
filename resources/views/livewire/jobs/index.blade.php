@@ -33,7 +33,7 @@
             :show-document-picker="$showDocumentPicker"
         />
     @else
-        <span class="ft-jobs-list-poll" wire:poll.20s.visible aria-hidden="true"></span>
+        <span class="ft-jobs-list-poll" aria-hidden="true"></span>
         <x-jobs.table
             :jobs="$jobs"
             :job-summary="$jobSummary"
@@ -48,6 +48,7 @@
             :quick-filter="$quickFilter"
             :show-more-filters="$showMoreFilters"
             :selected-job-ids="$selectedJobIds"
+            :all-filtered-jobs-selected="$allFilteredJobsSelected"
         />
     @endif
 </div>

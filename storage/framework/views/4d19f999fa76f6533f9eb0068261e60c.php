@@ -3,7 +3,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('notifications.index', []);
+[$__name, $__params] = $__split('notifications.index', ['lazy' => true]);
 
 $__keyOuter = $__key ?? null;
 

@@ -6,7 +6,6 @@
 @else
 @php
     $selected = $detail['client'] ?? null;
-    $selectedJobs = $detail['jobs'] ?? collect();
     $activeJobs = $detail['active'] ?? collect();
     $attentionTasks = $detail['tasks'] ?? collect();
     $selectedHealth = $detail['health'] ?? 'On Track';
@@ -22,7 +21,7 @@
         @endif
     </div>
 
-    <div class="ft-clients-layout">
+    <div class="ft-clients-layout ft-clients-layout-full">
         <section class="ft-clients-main">
             <div class="ft-clients-metrics">
                 <button type="button" wire:click="setQuick('all')" class="ft-client-metric {{ $quick==='all'?'is-active':'' }}">
@@ -66,7 +65,15 @@
                                 $healthClass = $rowHealth === 'On Track' ? 'green' : ($rowHealth === 'At Risk' ? 'amber' : 'red');
                                 $rowInitials = collect(preg_split('/\s+/', trim($clientRow->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
                             @endphp
-                            <tr wire:key="client-row-{{ $clientRow->id }}" class="{{ (int)$selectedClientId === (int)$clientRow->id ? 'selected' : '' }}" wire:click="openClient({{ $clientRow->id }})">
+                            <tr
+                                wire:key="client-row-{{ $clientRow->id }}"
+                                class="{{ $showClientPreview && (int)$selectedClientId === (int)$clientRow->id ? 'selected' : '' }}"
+                                wire:click="openClient({{ $clientRow->id }})"
+                                wire:keydown.enter="openClient({{ $clientRow->id }})"
+                                wire:keydown.space.prevent="openClient({{ $clientRow->id }})"
+                                tabindex="0"
+                                aria-label="Preview client {{ $clientRow->name }}"
+                            >
                                 <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ $rowInitials ?: 'CL' }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
                                 <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Jobs"><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
@@ -88,13 +95,13 @@
                                     <button type="button" class="ft-client-more" wire:click.stop="toggleClientMenu({{ $clientRow->id }})" aria-label="Client actions">⋮</button>
                                     @if($actionMenuClientId === (int)$clientRow->id)
                                         <div class="ft-client-action-menu" x-on:click.stop>
-                                            <button type="button" wire:click="viewClient({{ $clientRow->id }})">View client</button>
+                                            <button type="button" wire:click.stop="viewClient({{ $clientRow->id }})">View client</button>
                                             @php
                                                 $access = app(\App\Services\AccessControlService::class);
                                                 $rowCanEdit = $access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(),'clients') || ($access->canEditOwn(auth()->user(),'clients') && (int)$clientRow->account_manager_id === (int)auth()->id());
                                             @endphp
-                                            @if($rowCanEdit)<button type="button" wire:click="editClient({{ $clientRow->id }})">Edit client</button>@endif
-                                            @if(auth()->user()->canModule('clients','delete'))<button type="button" class="danger" wire:click="deleteClient({{ $clientRow->id }})" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button>@endif
+                                            @if($rowCanEdit)<button type="button" wire:click.stop="editClient({{ $clientRow->id }})">Edit client</button>@endif
+                                            @if(auth()->user()->canModule('clients','delete'))<button type="button" class="danger" wire:click.stop="deleteClient({{ $clientRow->id }})" wire:confirm="Delete this client? Clients with Job history will be archived.">Delete client</button>@endif
                                         </div>
                                     @endif
                                 </td>
@@ -112,15 +119,33 @@
             </div>
         </section>
 
-        <aside class="ft-client-detail-card">
-        @if($selected)
+    </div>
+
+    @if($showClientPreview && $selected)
+        <div
+            class="ft-client-preview-backdrop"
+            wire:key="client-preview-{{ $selected->id }}"
+            wire:click.self="closeClientPreview"
+            x-data
+            x-on:keydown.escape.window="$wire.closeClientPreview()"
+            x-init="$nextTick(() => $refs.dialog.focus())"
+        >
+        <aside
+            class="ft-client-detail-card ft-client-preview-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="client-preview-title-{{ $selected->id }}"
+            tabindex="-1"
+            x-ref="dialog"
+        >
             @php
                 $detailHealthClass = $selectedHealth === 'On Track' ? 'green' : ($selectedHealth === 'At Risk' ? 'amber' : 'red');
                 $selectedInitials = collect(preg_split('/\s+/', trim($selected->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
             @endphp
+            <button class="ft-client-preview-close" type="button" wire:click="closeClientPreview" aria-label="Close client preview">×</button>
             <div class="ft-client-detail-head">
                 <span class="ft-client-detail-logo">{{ $selectedInitials ?: 'CL' }}</span>
-                <div><h2>{{ $selected->name }}</h2><p>{{ $selected->country ?: '—' }} <span class="ft-client-health {{ $detailHealthClass }}">{{ $selectedHealth }}</span></p></div>
+                <div><h2 id="client-preview-title-{{ $selected->id }}">{{ $selected->name }}</h2><p>{{ $selected->country ?: '—' }} <span class="ft-client-health {{ $detailHealthClass }}">{{ $selectedHealth }}</span></p></div>
                 <button class="ft-open-client" type="button" wire:click="viewClient({{ $selected->id }})">Open client</button>
             </div>
             <div class="ft-client-detail-contact">
@@ -149,11 +174,9 @@
                 </tbody></table>
             </div>
             <a class="ft-view-client-work" href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>View all client work&nbsp; →</a>
-        @else
-            <div class="ft-client-empty-detail">Select a client to see its Jobs and Tasks.</div>
-        @endif
         </aside>
-    </div>
+        </div>
+    @endif
 </div>
 @endif
 </div>

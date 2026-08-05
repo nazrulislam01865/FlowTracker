@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-operations-board" wire:poll.20s.visible x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
+<div class="ft-board-page ft-operations-board" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
     <div class="ft-board-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>Operations Board</h1><p>Track work across all active Jobs</p></div>
@@ -117,13 +117,22 @@
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="taskHeaderScroll" x-on:scroll="$refs.taskBodyScroll && ($refs.taskBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $taskStatuses->count()) }};">
                     @foreach($taskStatuses as $taskStatus)
-                        <div class="ft-task-status-head"><span>{{ strtoupper($taskStatus) }}</span><b>{{ $tasks->where('status',$taskStatus)->count() }}</b></div>
+                        <div class="ft-task-status-head"><span>{{ strtoupper($taskStatus) }}</span><b>{{ $tasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $taskStatus))->count() }}</b></div>
                     @endforeach
                 </div>
             </div>
         </div>
         <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="taskBodyScroll" x-on:scroll="$refs.taskHeaderScroll && ($refs.taskHeaderScroll.scrollLeft = $event.target.scrollLeft)">
             <x-board.task-job-matrix :tasks="$tasks" :statuses="$taskStatuses" :draggable="true" key-prefix="board" />
+        </div>
+    @endif
+
+    @if($hasMoreCards)
+        <div class="ft-board-load-more">
+            <button type="button" class="ft-outline-btn" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore">
+                <span wire:loading.remove wire:target="loadMore">Load 60 more</span>
+                <span wire:loading wire:target="loadMore">Loading…</span>
+            </button>
         </div>
     @endif
 </div>

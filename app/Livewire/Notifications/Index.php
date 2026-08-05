@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Notifications;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\FlowNotification;
 use App\Services\NotificationService;
 use Livewire\Attributes\On;
@@ -10,6 +12,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     use WithPagination;
 
     public function markAllRead(): void
@@ -21,6 +24,7 @@ class Index extends Component
     public function markRead(int $id): void
     {
         FlowNotification::where('user_id', auth()->id())->whereKey($id)->update(['read_at' => now()]);
+        app(\App\Services\ShellDataService::class)->forget((int) auth()->id());
         $this->dispatch('flowtrack-unread-count', count: app(NotificationService::class)->unreadCount(auth()->user()));
     }
 

@@ -1,4 +1,4 @@
 @extends('layouts.app')
 @section('content')
-<livewire:task-pack-setup.index />
+<livewire:task-pack-setup.index lazy />
 @endsection

@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="<?php echo e(csrf_token()); ?>">
-    <meta name="flowtrack-session-timeout" content="1800">
+    <meta name="flowtrack-session-timeout" content="<?php echo e((int) config('session.lifetime', 30) * 60); ?>">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-session-status-url" content="<?php echo e(route('session.status')); ?>">
         <meta name="flowtrack-logout-url" content="<?php echo e(route('logout')); ?>">
@@ -13,7 +13,7 @@
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && auth()->user()->canModule('notifications','view')): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(config('services.pusher.key') && auth()->check() && auth()->user()->canModule('notifications','view')): ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && auth()->user()->canModule('notifications','view') && app(\App\Services\PusherChannelService::class)->enabled()): ?>
         <meta name="flowtrack-pusher-key" content="<?php echo e(config('services.pusher.key')); ?>">
         <meta name="flowtrack-pusher-cluster" content="<?php echo e(config('services.pusher.cluster','mt1')); ?>">
         <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.<?php echo e(auth()->id()); ?>">

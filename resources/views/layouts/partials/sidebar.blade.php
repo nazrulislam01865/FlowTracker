@@ -1,7 +1,7 @@
 @php
     $user = auth()->user();
-    $unread = \App\Models\FlowNotification::where('user_id',$user->id)->whereNull('read_at')->count();
-    $myWork = app(\App\Services\TaskService::class)->visibleQuery($user)->whereNull('completed_at')->count();
+    $unread = (int) ($shellData['unread_notifications'] ?? 0);
+    $myWork = (int) ($shellData['open_my_work'] ?? 0);
 @endphp
 <aside id="sidebar" class="sidebar">
     <div class="brand"><div class="brand-mark">FT</div><span>FlowTrack</span></div>
@@ -21,5 +21,14 @@
     @endif
     @if($user->canAccess('master.manage'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
     @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
-    <div class="sidebar-footer"><div class="user-mini"><x-ui.avatar :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div></div>
+    <div class="sidebar-footer">
+        <div class="user-mini"><x-ui.avatar :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div>
+        <form method="POST" action="{{ route('logout') }}" class="ft-sidebar-logout-form">
+            @csrf
+            <button type="submit" class="ft-sidebar-logout" aria-label="Log out of FlowTrack">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+                <span>Log out</span>
+            </button>
+        </form>
+    </div>
 </aside>

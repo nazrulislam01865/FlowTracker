@@ -29,20 +29,20 @@
             </div>
             <div class="table-wrap">
                 <table class="master-table">
-                    <thead><tr><th>Order</th><th>Code</th><th>Name</th><th>Parent</th><th>Description / Use</th><th>Status</th><th>Actions</th></tr></thead>
+                    <thead><tr><th>Order</th><th>Code</th><th>Name</th>@if($group === 'product')<th>Product Category</th>@endif<th>Description / Use</th><th>Status</th><th>Actions</th></tr></thead>
                     <tbody>
                     @forelse($rows as $r)
                         <tr>
                             <td data-label="Order">{{ $r->sort_order }}</td>
                             <td data-label="Code"><b>{{ $r->code }}</b></td>
                             <td data-label="Name">{{ $r->name }}</td>
-                            <td data-label="Parent">{{ $r->parent?->name ?? '—' }}</td>
+                            @if($group === 'product')<td data-label="Product Category">{{ $r->parent?->name ?? '—' }}</td>@endif
                             <td data-label="Description / Use">{{ $r->description ?: '—' }}</td>
                             <td data-label="Status"><x-ui.badge :label="$r->status==='active'?'Active':'Inactive'"/></td>
                             <td data-label="Actions"><div class="row-actions"><button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button><button class="mini-btn" wire:click="toggle({{ $r->id }})">{{ $r->status==='active'?'Deactivate':'Activate' }}</button><button class="mini-btn" wire:click="deleteRecord({{ $r->id }})" wire:confirm="Delete this master record?">Delete</button></div></td>
                         </tr>
                     @empty
-                        <tr><td colspan="7"><div class="empty-state">No records found.</div></td></tr>
+                        <tr><td colspan="{{ $group === 'product' ? 7 : 6 }}"><div class="empty-state">No records found.</div></td></tr>
                     @endforelse
                     </tbody>
                 </table>
@@ -68,7 +68,9 @@
                 <div class="form-grid">
                     <div class="field"><label>Code *</label><input wire:model="code" maxlength="40">@error('code')<div class="validation-error">{{ $message }}</div>@enderror</div>
                     <div class="field"><label>Name *</label><input wire:model="name">@error('name')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Parent record</label><select wire:model="parentId"><option value="">No parent</option>@foreach($parents as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select></div>
+                    @if($group === 'product')
+                        <div class="field"><label>Product category</label><select wire:model="parentId"><option value="">No category</option>@foreach($parents as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select>@error('parentId')<div class="validation-error">{{ $message }}</div>@enderror</div>
+                    @endif
                     <div class="field"><label>Status</label><select wire:model="status"><option value="active">Active</option><option value="inactive">Inactive</option></select></div>
                     <div class="field"><label>Sort order</label><input type="number" min="0" wire:model="sortOrder"></div>
                     <div class="field full"><label>Description</label><textarea wire:model="description" rows="3"></textarea></div>

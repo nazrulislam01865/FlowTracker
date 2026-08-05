@@ -1,6 +1,7 @@
 @props([
     'jobs','jobSummary','clients','phases','users','priorities','healthOptions','jobStatuses',
     'phaseFilter'=>'','healthFilter'=>'','quickFilter'=>'all','showMoreFilters'=>false,'selectedJobIds'=>[],
+    'allFilteredJobsSelected'=>false,
 ])
 <div class="ft-list-page ft-jobs-list-page ft-exact-jobs-list">
     <div class="ft-list-head">
@@ -32,7 +33,7 @@
 
         @if(count($selectedJobIds))
             <div class="ft-job-bulk-bar">
-                <div><b>{{ count($selectedJobIds) }}</b> Job{{ count($selectedJobIds) === 1 ? '' : 's' }} selected</div>
+                <div><b>{{ count($selectedJobIds) }}</b> Job{{ count($selectedJobIds) === 1 ? '' : 's' }} selected@if($allFilteredJobsSelected) · all filtered Jobs@endif</div>
                 <div class="ft-job-bulk-actions">
                     @if(auth()->user()->canModule('jobs','edit'))
                         <button type="button" class="ft-outline-btn" wire:click="bulkUpdateJobs('deactivate')">Deactivate</button>
@@ -47,7 +48,7 @@
 
         <div class="ft-job-table-wrap">
             <table class="ft-job-table">
-                <thead><tr><th><span class="ft-checkbox-head">Select</span></th><th>Job / Order</th><th>Client / Brief</th><th>Product / Qty</th><th>Phase</th><th>Next Action</th><th>Health</th><th>Owner</th><th>Delivery ↓</th><th>Progress</th><th>Invoice</th><th>•••</th></tr></thead>
+                <thead><tr><th><label class="ft-checkbox-head"><input type="checkbox" wire:click="toggleSelectAllJobs" @checked($allFilteredJobsSelected) @disabled($jobs->total() === 0) aria-label="Select all {{ $jobs->total() }} filtered Jobs"><span>Select all</span></label></th><th>Job / Order</th><th>Client / Brief</th><th>Product / Qty</th><th>Phase</th><th>Next Action</th><th>Health</th><th>Owner</th><th>Delivery ↓</th><th>Progress</th><th>Invoice</th><th>•••</th></tr></thead>
                 <tbody>
                 @forelse($jobs as $job)
                     @php($next = \App\Support\BoardPresenter::nextTask($job))
@@ -55,7 +56,7 @@
                         <td data-label="Select"><input type="checkbox" wire:model.live="selectedJobIds" value="{{ $job->id }}" aria-label="Select {{ $job->job_number }}"></td>
                         <td data-label="Job / Order"><button class="ft-table-job-link" wire:click="openJob({{ $job->id }})">{{ $job->job_number }}</button><div class="ft-table-sub">{{ $job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</div></td>
                         <td data-label="Client / Brief"><b>{{ $job->client?->name }}</b><div class="ft-table-sub">{{ \Illuminate\Support\Str::limit($job->title, 36) }}</div></td>
-                        <td data-label="Product / Qty"><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,$job->items->count()) }} product · {{ number_format($job->quantity) }} pcs</div></td>
+                        <td data-label="Product / Qty"><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,(int) $job->items_count) }} product · {{ number_format($job->quantity) }} pcs</div></td>
                         <td data-label="Phase"><span class="ft-soft-pill blue">{{ $job->phase?->short_name ?? '—' }}</span></td>
                         <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ $next?->due_date?->isPast() ? 'overdue' : '' }}">@if($next?->due_date){{ $next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
                         <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>

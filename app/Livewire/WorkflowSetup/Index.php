@@ -2,6 +2,8 @@
 
 namespace App\Livewire\WorkflowSetup;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\WorkflowPhase;
@@ -14,6 +16,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public ?int $selectedWorkflowId = null;
     public bool $showWorkflowModal = false;
     public ?int $editWorkflowId = null;

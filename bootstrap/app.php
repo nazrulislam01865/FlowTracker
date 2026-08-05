@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\EnsureSingleLoginSession;
+use App\Http\Middleware\MonitorPerformance;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,7 +17,7 @@ return Application::configure(basePath: dirname(__DIR__))
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias(['super.admin' => EnsureSuperAdmin::class, 'permission' => EnsurePermission::class]);
-        $middleware->web(append: [EnsureSingleLoginSession::class]);
+        $middleware->web(append: [MonitorPerformance::class, EnsureSingleLoginSession::class]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

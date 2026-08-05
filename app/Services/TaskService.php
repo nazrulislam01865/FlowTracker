@@ -7,6 +7,7 @@ use App\Models\FlowTaskChecklistItem;
 use App\Models\FlowTaskComment;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\BoardLaneResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
 use Illuminate\Validation\ValidationException;
@@ -50,7 +51,7 @@ class TaskService
         return $this->update($task, [
             'status' => $status,
             'assignee_id' => $task->assignee_id,
-            'progress' => $status === 'Completed' ? 100 : ($status === 'Not Started' ? 0 : max($task->progress, 35)),
+            'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : max($task->progress, 35)),
             'needs_attention' => $task->needs_attention,
             'attention_reason' => $task->attention_reason,
         ], $actor);
@@ -102,10 +103,10 @@ class TaskService
         }
 
         $updates = [$field => $new];
-        if ($field === 'status' && $new === 'Completed') $this->ensureCompletionRequirements($task);
+        if ($field === 'status' && BoardLaneResolver::isCompleted($new)) $this->ensureCompletionRequirements($task);
         if ($field === 'status') {
-            $updates['progress'] = $new === 'Completed' ? 100 : ($new === 'Not Started' ? 0 : max(1, min(99, (int) $task->progress)));
-            $updates['completed_at'] = $new === 'Completed' ? ($task->completed_at ?: now()) : null;
+            $updates['progress'] = BoardLaneResolver::isCompleted($new) ? 100 : (BoardLaneResolver::isNotStarted($new) ? 0 : max(1, min(99, (int) $task->progress)));
+            $updates['completed_at'] = BoardLaneResolver::isCompleted($new) ? ($task->completed_at ?: now()) : null;
         }
         $task->update($updates);
 
@@ -140,15 +141,15 @@ class TaskService
         $reason = trim((string) ($data['attention_reason'] ?? $task->attention_reason ?? ''));
         $status = (string) ($data['status'] ?? $task->status);
 
-        if ($status === 'Completed') $this->ensureCompletionRequirements($task);
+        if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
 
         $task->update([
             'status' => $status,
             'assignee_id' => $assigneeId,
-            'progress' => $status === 'Completed' ? 100 : ($status === 'Not Started' ? 0 : (int) ($data['progress'] ?? $task->progress)),
+            'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : (int) ($data['progress'] ?? $task->progress)),
             'needs_attention' => (bool) ($data['needs_attention'] ?? $task->needs_attention),
             'attention_reason' => $reason !== '' ? $reason : null,
-            'completed_at' => $status === 'Completed' ? ($task->completed_at ?: now()) : null,
+            'completed_at' => BoardLaneResolver::isCompleted($status) ? ($task->completed_at ?: now()) : null,
         ]);
 
         if ($assigneeId) {

@@ -2,12 +2,13 @@
 
 namespace App\Services;
 
+use App\Jobs\DeliverRealtimeNotification;
+use App\Jobs\FanOutFlowNotification;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Collection;
-use Illuminate\Support\Facades\Cache;
 
 class NotificationService
 {
@@ -35,6 +36,7 @@ class NotificationService
     public function markAllRead(User $user): void
     {
         FlowNotification::where('user_id', $user->id)->whereNull('read_at')->update(['read_at' => now()]);
+        app(ShellDataService::class)->forget($user->id);
     }
 
     public function notifyUser(
@@ -69,22 +71,24 @@ class NotificationService
             'message' => $message,
         ]);
 
-        Cache::forget('flowtrack:dashboard:metrics:user:'.$recipient->id);
-        $unreadCount = $this->unreadCount($recipient);
-
-        app(PusherChannelService::class)->triggerUser($recipient->id, 'flowtrack.notification', [
-            'id' => $notification->id,
-            'type' => $notification->type,
-            'title' => $notification->title,
-            'message' => $notification->message,
-            'job_id' => $job?->id,
-            'job_number' => $job?->job_number,
-            'task_id' => $task?->id,
-            'task_number' => $task?->task_number,
-            'url' => $this->urlFor($notification),
-            'created_at' => $notification->created_at?->toIso8601String(),
-            'unread_count' => $unreadCount,
-        ]);
+        app(DashboardService::class)->forget($recipient->id);
+        app(ReportService::class)->forget($recipient->id);
+        app(ShellDataService::class)->forget($recipient->id);
+        if (app(PusherChannelService::class)->enabled()) {
+            DeliverRealtimeNotification::dispatch($recipient->id, 'flowtrack.notification', [
+                'id' => $notification->id,
+                'type' => $notification->type,
+                'title' => $notification->title,
+                'message' => $notification->message,
+                'job_id' => $job?->id,
+                'job_number' => $job?->job_number,
+                'task_id' => $task?->id,
+                'task_number' => $task?->task_number,
+                'url' => $this->urlFor($notification),
+                'created_at' => $notification->created_at?->toIso8601String(),
+                'unread_count' => $this->unreadCount($recipient),
+            ])->afterCommit();
+        }
 
         return $notification;
     }
@@ -98,16 +102,24 @@ class NotificationService
         array $extraUserIds = [],
     ): void {
         // Job-level notifications are deliberately restricted to the Job's
-        // assigned user plus Admin/Super Admin. Task assignees, generic Job
-        // members, coordinators on Jobs with an owner, and the acting user do
-        // not receive Job noise merely because they can view the record.
+        // assigned user plus Admin/Super Admin. Explicit extra recipients are
+        // included for assignment changes, while generic viewers do not receive
+        // Job noise merely because they can view the record.
         $assignedUserId = (int) (($job->owner_id ?? null) ?: ($job->coordinator_id ?? 0));
         $ids = collect($assignedUserId > 0 ? [$assignedUserId] : [])
+            ->merge($extraUserIds)
             ->merge($this->administratorIds())
             ->filter()->unique()->values();
 
-        User::query()->whereIn('id', $ids)->where('is_active', true)->get()
-            ->each(fn (User $recipient) => $this->notifyUser($recipient, $title, $message, $type, $job, null, $actor));
+        FanOutFlowNotification::dispatch(
+            $ids->all(),
+            $title,
+            $message,
+            $type,
+            $job->id,
+            null,
+            $actor?->id,
+        )->afterCommit();
     }
 
     public function notifyTaskParticipants(
@@ -128,8 +140,15 @@ class NotificationService
 
         if ($type === 'risk') $ids = $ids->merge($this->administratorIds())->unique()->values();
 
-        User::query()->whereIn('id', $ids)->where('is_active', true)->get()
-            ->each(fn (User $recipient) => $this->notifyUser($recipient, $title, $message, $type, $job, $task, $actor));
+        FanOutFlowNotification::dispatch(
+            $ids->all(),
+            $title,
+            $message,
+            $type,
+            $job?->id,
+            $task->id,
+            $actor?->id,
+        )->afterCommit();
     }
 
     public function notifyTaskAssigned(Task $task, ?User $actor = null): void
@@ -138,15 +157,15 @@ class NotificationService
         $task->loadMissing(['job','phase','assignee']);
         if (!$task->assignee) return;
 
-        $this->notifyUser(
-            $task->assignee,
+        FanOutFlowNotification::dispatch(
+            [$task->assignee->id],
             'Task assigned: '.$task->title,
             ($task->job?->job_number ? $task->job->job_number.' · ' : '').($task->phase?->name ?: 'Task').' · '.($task->due_date?->format('M j, Y') ?: 'No due date'),
             'assignment',
-            $task->job,
-            $task,
-            $actor,
-        );
+            $task->job?->id,
+            $task->id,
+            $actor?->id,
+        )->afterCommit();
     }
 
     public function notifyJobAssigned(FlowJob $job, ?User $actor = null, array $extraUserIds = []): void

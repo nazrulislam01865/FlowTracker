@@ -1,7 +1,7 @@
 <?php
     $user = auth()->user();
-    $unread = \App\Models\FlowNotification::where('user_id',$user->id)->whereNull('read_at')->count();
-    $myWork = app(\App\Services\TaskService::class)->visibleQuery($user)->whereNull('completed_at')->count();
+    $unread = (int) ($shellData['unread_notifications'] ?? 0);
+    $myWork = (int) ($shellData['open_my_work'] ?? 0);
 ?>
 <aside id="sidebar" class="sidebar">
     <div class="brand"><div class="brand-mark">FT</div><span>FlowTrack</span></div>
@@ -273,7 +273,8 @@
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
 <?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <div class="sidebar-footer"><div class="user-mini"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+    <div class="sidebar-footer">
+        <div class="user-mini"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['name' => $user->name,'dark' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.avatar'); ?>
@@ -294,6 +295,14 @@
 <?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
 <?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
-<?php endif; ?><div><div style="color:#fff;font-size:12px;font-weight:650"><?php echo e($user->name); ?></div><div style="font-size:10px;color:#8397ae"><?php echo e($user->role?->name ?? 'User'); ?></div></div></div></div>
+<?php endif; ?><div><div style="color:#fff;font-size:12px;font-weight:650"><?php echo e($user->name); ?></div><div style="font-size:10px;color:#8397ae"><?php echo e($user->role?->name ?? 'User'); ?></div></div></div>
+        <form method="POST" action="<?php echo e(route('logout')); ?>" class="ft-sidebar-logout-form">
+            <?php echo csrf_field(); ?>
+            <button type="submit" class="ft-sidebar-logout" aria-label="Log out of FlowTrack">
+                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 17l5-5-5-5M15 12H3M14 3h5a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-5"/></svg>
+                <span>Log out</span>
+            </button>
+        </form>
+    </div>
 </aside>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/layouts/partials/sidebar.blade.php ENDPATH**/ ?>

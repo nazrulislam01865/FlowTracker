@@ -18,24 +18,33 @@ use App\Models\WorkflowPhase;
 use App\Support\JobDetailPresenter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 
 class JobService
 {
+    public const INACTIVE_STATUSES = ['Inactive', 'Cancelled'];
+
     public function visibleQuery(User $user): Builder
     {
         return app(AccessControlService::class)->applyJobScope(FlowJob::query(), $user, 'jobs');
     }
 
-    public function paginate(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
+    public function activeQuery(User $user): Builder
+    {
+        return $this->visibleQuery($user)
+            ->whereNull('completed_at')
+            ->whereNotIn('status', self::INACTIVE_STATUSES);
+    }
+
+    public function filteredQuery(User $user, array $filters): Builder
     {
         $quick = (string) ($filters['quick'] ?? 'all');
 
         return $this->visibleQuery($user)
-            ->with(['client','phase','owner','coordinator','items','tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user)->with(['assignee','phase','checklistItems']),'documents'])
             ->when($quick !== 'completed', fn ($q) => $q->whereNull('completed_at'))
-            ->when($quick !== 'completed' && empty($filters['status']), fn ($q) => $q->whereNotIn('status', ['Inactive','Cancelled']))
+            ->when($quick !== 'completed' && empty($filters['status']), fn ($q) => $q->whereNotIn('status', self::INACTIVE_STATUSES))
             ->when($quick === 'completed', fn ($q) => $q->whereNotNull('completed_at'))
             ->when($quick === 'attention', fn ($q) => $q->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])))
             ->when($quick === 'due_week', fn ($q) => $q->whereBetween('delivery_date', [today(), today()->addDays(7)]))
@@ -61,22 +70,69 @@ class JobService
             ->when(($filters['delivery'] ?? null) === 'none', fn ($q) => $q->whereNull('delivery_date'))
             ->when(($filters['invoice'] ?? null) === 'pending', fn ($q) => $q->where('commercial_value', '<=', 0))
             ->when(($filters['invoice'] ?? null) === 'draft', fn ($q) => $q->where('commercial_value', '>', 0))
-            ->latest('id')
+            ->latest('id');
+    }
+
+    public function filteredIds(User $user, array $filters): Collection
+    {
+        return $this->filteredQuery($user, $filters)
+            ->reorder('id')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+    }
+
+    public function paginate(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
+    {
+        return $this->filteredQuery($user, $filters)
+            ->select([
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number', 'flow_jobs.client_id',
+                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
+                'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity', 'flow_jobs.next_action',
+                'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
+                'flow_jobs.delivery_date', 'flow_jobs.commercial_value', 'flow_jobs.currency',
+                'flow_jobs.needs_attention', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
+            ])
+            ->with([
+                'client:id,name',
+                'phase:id,name,short_name,sequence',
+                'owner:id,name',
+                'coordinator:id,name',
+                'tasks' => fn ($query) => app(AccessControlService::class)
+                    ->applyTaskScope($query, $user)
+                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.completed_at'])
+                    ->whereNull('completed_at')
+                    ->where('status', '!=', 'Completed')
+                    ->with(['assignee:id,name', 'phase:id,name,sequence'])
+                    ->orderByRaw('due_date is null, due_date asc'),
+            ])
+            ->withCount('items')
             ->paginate($perPage);
     }
 
     public function summaryCounts(User $user): array
     {
-        $base = $this->visibleQuery($user);
-        $active = (clone $base)->whereNull('completed_at')->whereNotIn('status', ['Inactive','Cancelled']);
+        $today = today()->format('Y-m-d');
+        $weekEnd = today()->copy()->addDays(7)->format('Y-m-d');
+        $inactive = self::INACTIVE_STATUSES;
+
+        $row = $this->visibleQuery($user)
+            ->reorder()
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) then 1 else 0 end) as active_count", $inactive)
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.needs_attention = 1 or flow_jobs.health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_count", $inactive)
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and flow_jobs.delivery_date between ? and ? then 1 else 0 end) as week_count", [...$inactive, $today, $weekEnd])
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status like 'Waiting%' and tasks.completed_at is null and tasks.deleted_at is null) then 1 else 0 end) as waiting_count", $inactive)
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.commercial_value <= 0 or exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and workflow_phases.short_name = 'Invoice')) then 1 else 0 end) as invoice_count", $inactive)
+            ->selectRaw("sum(case when flow_jobs.completed_at is not null then 1 else 0 end) as completed_count")
+            ->first();
 
         return [
-            'all' => (clone $active)->count(),
-            'attention' => (clone $active)->where(fn ($q) => $q->where('needs_attention', true)->orWhereIn('health', ['Needs Attention', 'At Risk', 'Delayed', 'Blocked']))->count(),
-            'week' => (clone $active)->whereBetween('delivery_date', [today(), today()->addDays(7)])->count(),
-            'waiting' => (clone $active)->whereHas('tasks', fn ($q) => $q->where('status', 'like', 'Waiting%')->whereNull('completed_at'))->count(),
-            'invoice' => (clone $active)->where(fn ($q) => $q->where('commercial_value', '<=', 0)->orWhereHas('phase', fn ($p) => $p->where('short_name', 'Invoice')))->count(),
-            'completed' => (clone $base)->whereNotNull('completed_at')->count(),
+            'all' => (int) ($row?->active_count ?? 0),
+            'attention' => (int) ($row?->attention_count ?? 0),
+            'week' => (int) ($row?->week_count ?? 0),
+            'waiting' => (int) ($row?->waiting_count ?? 0),
+            'invoice' => (int) ($row?->invoice_count ?? 0),
+            'completed' => (int) ($row?->completed_count ?? 0),
         ];
     }
 
@@ -285,6 +341,8 @@ class JobService
             'description' => 'Job deleted',
         ]);
         $job->delete();
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
     }
 
     public function updateTextField(FlowJob $job, string $field, ?string $value, User $actor): FlowJob

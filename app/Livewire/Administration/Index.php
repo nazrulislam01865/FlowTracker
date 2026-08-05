@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Administration;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
@@ -11,6 +13,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public string $tab = 'dashboard';
     public ?int $selectedRoleId = null;
 

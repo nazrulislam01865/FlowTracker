@@ -2,17 +2,19 @@
 
 namespace App\Services;
 
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Http;
-use Illuminate\Support\Facades\Log;
-use Throwable;
+use RuntimeException;
 
 class PusherChannelService
 {
     public function enabled(): bool
     {
-        return filled(config('services.pusher.app_id'))
+        return (bool) config('services.pusher.enabled', false)
+            && filled(config('services.pusher.app_id'))
             && filled(config('services.pusher.key'))
-            && filled(config('services.pusher.secret'));
+            && filled(config('services.pusher.secret'))
+            && !Cache::has($this->circuitKey());
     }
 
     public function userChannel(int $userId): string
@@ -22,7 +24,7 @@ class PusherChannelService
 
     public function authenticate(string $socketId, string $channelName, int $userId): array
     {
-        abort_unless($this->enabled(), 503, 'Realtime notifications are not configured.');
+        abort_unless($this->enabled(), 404);
         abort_unless($channelName === $this->userChannel($userId), 403);
         abort_unless(preg_match('/^\d+\.\d+$/', $socketId) === 1, 422, 'Invalid socket ID.');
 
@@ -50,7 +52,7 @@ class PusherChannelService
             'data' => json_encode($payload, JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE),
         ], JSON_UNESCAPED_SLASHES | JSON_UNESCAPED_UNICODE);
 
-        if ($body === false) return;
+        if ($body === false) throw new RuntimeException('Unable to encode Pusher payload.');
 
         $params = [
             'auth_key' => $key,
@@ -64,27 +66,24 @@ class PusherChannelService
         $query = http_build_query($params, '', '&', PHP_QUERY_RFC3986);
         $url = $scheme.'://'.$host.(in_array($port, [80, 443], true) ? '' : ':'.$port).$path.'?'.$query;
 
-        try {
-            $response = Http::connectTimeout(0.5)
-                ->timeout(1.2)
-                ->withBody($body, 'application/json')
-                ->post($url);
+        $response = Http::connectTimeout((float) config('services.pusher.connect_timeout', 1))
+            ->timeout((float) config('services.pusher.timeout', 3))
+            ->withBody($body, 'application/json')
+            ->post($url);
 
-            if ($response->failed()) {
-                Log::warning('FlowTrack Pusher notification rejected', [
-                    'user_id' => $userId,
-                    'event' => $event,
-                    'status' => $response->status(),
-                ]);
-            }
-        } catch (Throwable $e) {
-            // A Pusher outage must never block a Job/Task update. The database
-            // notification remains available and the realtime delivery is best effort.
-            Log::warning('FlowTrack Pusher notification failed', [
-                'user_id' => $userId,
-                'event' => $event,
-                'message' => $e->getMessage(),
-            ]);
+        if ($response->failed()) {
+            $seconds = in_array($response->status(), [401, 403], true)
+                ? max(3600, (int) config('services.pusher.circuit_seconds', 300))
+                : max(60, (int) config('services.pusher.circuit_seconds', 300));
+            Cache::put($this->circuitKey(), true, now()->addSeconds($seconds));
+            throw new RuntimeException('Pusher rejected the event with HTTP '.$response->status().'. Realtime delivery is temporarily disabled.');
         }
+
+        Cache::forget($this->circuitKey());
+    }
+
+    private function circuitKey(): string
+    {
+        return 'flowtrack:pusher:circuit-open';
     }
 }

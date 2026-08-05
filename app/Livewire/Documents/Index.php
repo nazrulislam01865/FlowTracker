@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Documents;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\Document;
 use App\Models\MasterRecord;
 use App\Models\Task;
@@ -17,6 +19,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     use WithFileUploads, WithPagination;
 
     public string $search = '';

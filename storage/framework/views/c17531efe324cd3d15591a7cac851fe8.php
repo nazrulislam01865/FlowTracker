@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-my-work-page" wire:poll.20s.visible x-data="{ allGroupsOpen:true, draggedTask:null }">
+<div class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true, draggedTask:null }">
     <div class="ft-board-sticky-header ft-mywork-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>My Work</h1><p>All visible jobs and tasks across the workspace</p></div>
@@ -32,12 +32,12 @@
         </section>
     </div>
 
-    <?php ($displayStatuses = $taskStatuses->filter(fn($value) => $quick === 'completed' ? $value === 'Completed' : $value !== 'Completed')->values()); ?>
+    <?php ($displayStatuses = $taskStatuses->filter(fn($value) => $quick === 'completed' ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values()); ?>
     <div class="ft-lane-sticky-header">
         <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="myWorkHeaderScroll" x-on:scroll="$refs.myWorkBodyScroll && ($refs.myWorkBodyScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-task-board-status-header" style="--ft-lane-count: <?php echo e(max(1, $displayStatuses->count())); ?>;">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $displayStatuses; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $workStatus): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                    <div class="ft-task-status-head"><span><?php echo e(strtoupper($workStatus)); ?></span><b><?php echo e($tasks->where('status',$workStatus)->count()); ?></b></div>
+                    <div class="ft-task-status-head"><span><?php echo e(strtoupper($workStatus)); ?></span><b><?php echo e($tasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $workStatus))->count()); ?></b></div>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
             </div>
         </div>
@@ -66,5 +66,13 @@
 <?php unset($__componentOriginal67670d28261a498be033858bd5d8e998); ?>
 <?php endif; ?>
     </div>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hasMoreCards): ?>
+        <div class="ft-board-load-more">
+            <button type="button" class="ft-outline-btn" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore">
+                <span wire:loading.remove wire:target="loadMore">Load 60 more</span>
+                <span wire:loading wire:target="loadMore">Loading…</span>
+            </button>
+        </div>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/my-work/index.blade.php ENDPATH**/ ?>

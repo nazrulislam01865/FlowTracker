@@ -20,9 +20,13 @@ final class BoardPresenter
 
     public static function phaseDays(FlowJob $job): int
     {
-        $history = $job->phaseHistories
-            ->first(fn ($row) => (int) $row->workflow_phase_id === (int) $job->workflow_phase_id && $row->entered_at);
-        $entered = $history?->entered_at ?? $job->updated_at ?? $job->created_at;
+        $entered = $job->getAttribute('phase_entered_at');
+        if (is_string($entered) && $entered !== '') $entered = \Illuminate\Support\Carbon::parse($entered);
+        if (!$entered && $job->relationLoaded('phaseHistories')) {
+            $entered = $job->phaseHistories
+                ->first(fn ($row) => (int) $row->workflow_phase_id === (int) $job->workflow_phase_id && $row->entered_at)?->entered_at;
+        }
+        $entered ??= $job->updated_at ?? $job->created_at;
 
         return max(1, (int) $entered?->copy()->startOfDay()->diffInDays(now()->startOfDay()));
     }
@@ -91,7 +95,8 @@ final class BoardPresenter
 
     public static function updatedBy(FlowJob $job): string
     {
-        return $job->activities->first()?->user?->name
+        return ($job->relationLoaded('latestActivity') ? $job->latestActivity?->user?->name : null)
+            ?? ($job->relationLoaded('activities') ? $job->activities->first()?->user?->name : null)
             ?? $job->coordinator?->name
             ?? $job->owner?->name
             ?? 'FlowTrack';

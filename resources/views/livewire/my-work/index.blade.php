@@ -1,4 +1,4 @@
-<div class="ft-board-page ft-my-work-page" wire:poll.20s.visible x-data="{ allGroupsOpen:true, draggedTask:null }">
+<div class="ft-board-page ft-my-work-page" x-data="{ allGroupsOpen:true, draggedTask:null }">
     <div class="ft-board-sticky-header ft-mywork-sticky-header">
         <div class="ft-board-page-head">
             <div><h1>My Work</h1><p>All visible jobs and tasks across the workspace</p></div>
@@ -32,12 +32,12 @@
         </section>
     </div>
 
-    @php($displayStatuses = $taskStatuses->filter(fn($value) => $quick === 'completed' ? $value === 'Completed' : $value !== 'Completed')->values())
+    @php($displayStatuses = $taskStatuses->filter(fn($value) => $quick === 'completed' ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values())
     <div class="ft-lane-sticky-header">
         <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="myWorkHeaderScroll" x-on:scroll="$refs.myWorkBodyScroll && ($refs.myWorkBodyScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $displayStatuses->count()) }};">
                 @foreach($displayStatuses as $workStatus)
-                    <div class="ft-task-status-head"><span>{{ strtoupper($workStatus) }}</span><b>{{ $tasks->where('status',$workStatus)->count() }}</b></div>
+                    <div class="ft-task-status-head"><span>{{ strtoupper($workStatus) }}</span><b>{{ $tasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $workStatus))->count() }}</b></div>
                 @endforeach
             </div>
         </div>
@@ -45,4 +45,12 @@
     <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
         <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" :draggable="true" key-prefix="mywork" />
     </div>
+    @if($hasMoreCards)
+        <div class="ft-board-load-more">
+            <button type="button" class="ft-outline-btn" wire:click="loadMore" wire:loading.attr="disabled" wire:target="loadMore">
+                <span wire:loading.remove wire:target="loadMore">Load 60 more</span>
+                <span wire:loading wire:target="loadMore">Loading…</span>
+            </button>
+        </div>
+    @endif
 </div>

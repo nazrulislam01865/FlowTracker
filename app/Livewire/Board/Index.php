@@ -2,16 +2,20 @@
 
 namespace App\Livewire\Board;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Services\BoardService;
 use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use App\Support\BoardLaneResolver;
 use Livewire\Attributes\On;
 use Livewire\Component;
 use Throwable;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public string $mode = 'jobs';
     public ?string $message = null;
 
@@ -25,6 +29,7 @@ class Index extends Component
     public string $quick = '';
     public string $sort = 'delivery';
     public bool $hideEmptyPhases = false;
+    public int $cardLimit = 60;
     public array $expandedJobs = [];
 
     public function mount(): void
@@ -36,12 +41,14 @@ class Index extends Component
     {
         $this->mode = in_array($mode, ['tasks', 'jobs'], true) ? $mode : 'jobs';
         $this->quick = '';
+        $this->cardLimit = 60;
         $this->message = null;
     }
 
     public function setQuick(string $filter): void
     {
         $this->quick = $this->quick === $filter ? '' : $filter;
+        $this->cardLimit = 60;
     }
 
     public function clearFilters(): void
@@ -53,6 +60,19 @@ class Index extends Component
         $this->status = '';
         $this->due = '';
         $this->quick = '';
+        $this->cardLimit = 60;
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort'], true)) {
+            $this->cardLimit = 60;
+        }
+    }
+
+    public function loadMore(): void
+    {
+        $this->cardLimit = min(300, $this->cardLimit + 60);
     }
 
     public function toggleJobCard(int $jobId): void
@@ -71,7 +91,7 @@ class Index extends Component
 
     public function expandAll(): void
     {
-        $this->expandedJobs = app(BoardService::class)->jobs(auth()->user(), $this->jobFilters())->pluck('id')->all();
+        $this->expandedJobs = app(BoardService::class)->jobs(auth()->user(), $this->jobFilters(), $this->cardLimit)->pluck('id')->all();
     }
 
     public function collapseAll(): void
@@ -150,31 +170,55 @@ class Index extends Component
     public function render()
     {
         $service = app(BoardService::class);
-        $master = app(MasterDataService::class);
-        $lookups = $service->lookups(auth()->user());
-        $jobFilters = $this->jobFilters();
-        $taskFilters = $this->taskFilters();
-        $jobs = $service->jobs(auth()->user(), $jobFilters);
-        $tasks = $service->tasks(auth()->user(), $taskFilters);
-        $visibleJobQuery = app(JobService::class)->visibleQuery(auth()->user());
-        $taskJobs = (clone $visibleJobQuery)->whereNull('completed_at')->whereNotIn('status', ['Inactive','Cancelled'])->orderBy('job_number')->limit(250)->get(['id', 'job_number', 'title']);
-        $jobStatuses = (clone $visibleJobQuery)->whereNotNull('status')->distinct()->orderBy('status')->pluck('status')->filter()->values();
-        $configuredTaskStatuses = $master->active('task_status')->pluck('name')->filter()->values();
-        $actualTaskStatuses = app(TaskService::class)->visibleQuery(auth()->user())->whereNotNull('status')->distinct()->orderBy('status')->pluck('status')->filter()->values();
-        $taskStatuses = $configuredTaskStatuses->concat($actualTaskStatuses)->unique()->values();
+        $lookups = $service->lookups(auth()->user(), $this->mode === 'jobs');
 
-        return view('livewire.board.index', [
-            'jobs' => $jobs,
-            'tasks' => $tasks,
-            'phases' => $service->phases($this->workflow ? (int) $this->workflow : null),
-            'jobCounts' => $service->jobCounts(auth()->user(), $jobFilters),
-            'taskCounts' => $service->taskCounts(auth()->user(), $taskFilters),
+        $data = [
+            'jobs' => collect(),
+            'tasks' => collect(),
+            'phases' => collect(),
+            'jobCounts' => ['all'=>0,'mine'=>0,'overdue'=>0,'week'=>0,'blocked'=>0,'waiting'=>0,'unassigned'=>0],
+            'taskCounts' => ['open'=>0,'mine'=>0,'overdue'=>0,'week'=>0,'blocked'=>0,'waiting'=>0,'unassigned'=>0,'completed'=>0],
             'clients' => $lookups['clients'],
             'users' => $lookups['users'],
-            'workflows' => $lookups['workflows'],
-            'taskJobs' => $taskJobs,
-            'jobStatuses' => $jobStatuses,
-            'taskStatuses' => $taskStatuses,
-        ]);
+            'workflows' => collect(),
+            'taskJobs' => collect(),
+            'jobStatuses' => collect(),
+            'taskStatuses' => collect(),
+            'hasMoreCards' => false,
+        ];
+
+        if ($this->mode === 'jobs') {
+            $filters = $this->jobFilters();
+            $visibleJobQuery = app(JobService::class)->visibleQuery(auth()->user());
+            $jobRows = $service->jobs(auth()->user(), $filters, $this->cardLimit + 1);
+            $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
+            $data['jobs'] = $jobRows->take($this->cardLimit)->values();
+            $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
+            $data['jobCounts'] = $service->jobCounts(auth()->user(), $filters);
+            $data['workflows'] = $lookups['workflows'];
+            $data['jobStatuses'] = (clone $visibleJobQuery)
+                ->whereNotNull('status')
+                ->distinct()
+                ->orderBy('status')
+                ->pluck('status')
+                ->filter()
+                ->values();
+        } else {
+            $filters = $this->taskFilters();
+            $taskRows = $service->tasks(auth()->user(), $filters, $this->cardLimit + 1);
+            $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
+            $data['tasks'] = $taskRows->take($this->cardLimit)->values();
+            $data['taskCounts'] = $service->taskCounts(auth()->user(), $filters);
+            $data['taskJobs'] = app(JobService::class)->activeQuery(auth()->user())
+                ->orderBy('job_number')
+                ->limit(250)
+                ->get(['id', 'job_number', 'title']);
+            $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
+                app(MasterDataService::class)->active('task_status')->pluck('name')
+            ));
+        }
+
+        return view('livewire.board.index', $data);
     }
+
 }

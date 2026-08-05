@@ -2,6 +2,8 @@
 
 namespace App\Livewire\TaskPackSetup;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\User;
@@ -11,6 +13,7 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use UsesPagePlaceholder;
     public ?int $taskPackId = null;
     public string $packCode = '';
     public string $packName = '';

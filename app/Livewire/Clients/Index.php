@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Clients;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\User;
@@ -11,6 +13,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     use WithPagination;
 
     public string $search = '';
@@ -21,6 +24,7 @@ class Index extends Component
     public string $quick = 'all';
     public int $perPage = 10;
     public ?int $selectedClientId = null;
+    public bool $showClientPreview = false;
     public bool $showCreate = false;
     public bool $showDetail = false;
     public bool $showEdit = false;
@@ -106,6 +110,7 @@ class Index extends Component
 
         $this->showCreate = false;
         $this->selectedClientId = $client->id;
+        $this->showClientPreview = true;
         session()->flash('success', 'Client created successfully.');
         app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client created', $client->name.' was created.', 'update', null, null, auth()->user());
     }
@@ -114,8 +119,18 @@ class Index extends Component
     {
         app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
         $this->selectedClientId = $id;
+        $this->showClientPreview = true;
+        $this->showDetail = false;
+        $this->showEdit = false;
+        $this->actionMenuClientId = null;
     }
 
+    public function closeClientPreview(): void
+    {
+        $this->showClientPreview = false;
+        $this->selectedClientId = null;
+        $this->actionMenuClientId = null;
+    }
 
     public function toggleClientMenu(int $id): void
     {
@@ -127,6 +142,7 @@ class Index extends Component
     {
         app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
         $this->selectedClientId = $id;
+        $this->showClientPreview = false;
         $this->showDetail = true;
         $this->showEdit = false;
         $this->actionMenuClientId = null;
@@ -136,6 +152,8 @@ class Index extends Component
     {
         $this->showDetail = false;
         $this->showEdit = false;
+        $this->showClientPreview = false;
+        $this->selectedClientId = null;
         $this->actionMenuClientId = null;
         $this->resetValidation();
     }
@@ -153,6 +171,7 @@ class Index extends Component
         $client = app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
         abort_unless($this->canEditClient($client), 403);
         $this->selectedClientId = $id;
+        $this->showClientPreview = false;
         $this->showDetail = true;
         $this->showEdit = true;
         $this->actionMenuClientId = null;
@@ -226,6 +245,7 @@ class Index extends Component
         }
 
         if ($this->selectedClientId === $id) $this->selectedClientId = null;
+        $this->showClientPreview = false;
         $this->showDetail = false;
         $this->showEdit = false;
         $this->actionMenuClientId = null;
@@ -251,7 +271,6 @@ class Index extends Component
             'quick' => $this->quick,
         ], $this->perPage);
 
-        if (!$this->selectedClientId && $clients->count()) $this->selectedClientId = (int) $clients->first()->id;
         $detail = $this->selectedClientId ? $service->detail(auth()->user(), $this->selectedClientId) : null;
 
         $users = (auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'))

@@ -2,53 +2,134 @@
 
 namespace App\Services;
 
+use App\Models\FlowJobPhaseHistory;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ReportService
 {
+    public function forget(User|int $user): void
+    {
+        $userId = $user instanceof User ? $user->id : $user;
+        Cache::forget('flowtrack:reports:kpis:v2:user:'.$userId);
+    }
+
     public function data(User $user): array
     {
         $access = app(AccessControlService::class);
         abort_unless($access->can($user, 'reports', 'view'), 403);
 
-        $jobs = app(JobService::class)->visibleQuery($user);
-        $tasks = app(TaskService::class)->visibleQuery($user);
-        $clients = app(ClientService::class)->visibleQuery($user);
+        $jobService = app(JobService::class);
+        $taskService = app(TaskService::class);
+        $jobs = $jobService->visibleQuery($user);
+        $activeJobs = $jobService->activeQuery($user);
+        $tasks = $taskService->visibleQuery($user)->whereHas('job');
 
-        $phase = (clone $jobs)
+        $phase = (clone $activeJobs)
+            ->reorder()
             ->selectRaw('workflow_phase_id, count(*) total')
             ->groupBy('workflow_phase_id')
-            ->with('phase')
+            ->with('phase:id,name,short_name,sequence')
             ->get();
 
         if ($access->isAdministrator($user) || $access->scope($user, 'tasks') === 'all_records') {
             $workload = User::query()
                 ->where('is_active', true)
-                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
+                ->select(['users.id', 'users.name'])
+                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q
+                    ->whereNull('completed_at')
+                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
                 ->orderByDesc('open_tasks_count')
                 ->limit(8)
                 ->get();
         } else {
             $workload = User::query()
                 ->whereKey($user->id)
-                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
+                ->select(['users.id', 'users.name'])
+                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q
+                    ->whereNull('completed_at')
+                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
                 ->get();
         }
 
-        $completed = (clone $jobs)->whereNotNull('completed_at')->count();
-        $onTime = (clone $jobs)->whereNotNull('completed_at')->whereColumn('completed_at', '<=', 'delivery_date')->count();
-        $taskTotal = (clone $tasks)->count();
-        $taskDone = (clone $tasks)->whereNotNull('completed_at')->count();
+        $kpis = Cache::remember('flowtrack:reports:kpis:v2:user:'.$user->id, now()->addSeconds(15), function () use ($jobs, $activeJobs, $tasks) {
+            $jobMetrics = (clone $jobs)
+                ->reorder()
+                ->selectRaw("sum(case when flow_jobs.completed_at is not null then 1 else 0 end) as completed_jobs")
+                ->selectRaw("sum(case when flow_jobs.completed_at is not null and flow_jobs.delivery_date is not null and date(flow_jobs.completed_at) <= flow_jobs.delivery_date then 1 else 0 end) as on_time_jobs")
+                ->first();
 
-        return [
-            'phase' => $phase,
-            'workload' => $workload,
-            'kpis' => [
-                'active_jobs' => (clone $jobs)->whereNull('completed_at')->count(),
-                'task_completion' => $taskTotal ? round($taskDone / $taskTotal * 100) : 0,
-                'on_time' => $completed ? round($onTime / $completed * 100) : 0,
-                'receivables' => (clone $clients)->sum('outstanding_balance'),
-            ],
-        ];
+            $taskMetrics = (clone $tasks)
+                ->reorder()
+                ->selectRaw('count(*) as task_total')
+                ->selectRaw('sum(case when tasks.completed_at is not null then 1 else 0 end) as task_done')
+                ->selectRaw("sum(case when tasks.completed_at is null and tasks.due_date < ? and exists (select 1 from flow_jobs where flow_jobs.id = tasks.flow_job_id and flow_jobs.deleted_at is null and flow_jobs.completed_at is null and flow_jobs.status not in ('Inactive','Cancelled')) then 1 else 0 end) as overdue_tasks", [today()->format('Y-m-d')])
+                ->first();
+
+            $completedJobs = (int) ($jobMetrics?->completed_jobs ?? 0);
+            $taskTotal = (int) ($taskMetrics?->task_total ?? 0);
+            $taskDone = (int) ($taskMetrics?->task_done ?? 0);
+
+            return [
+                'active_jobs' => (clone $activeJobs)->count(),
+                'completed_jobs' => $completedJobs,
+                'overdue_tasks' => (int) ($taskMetrics?->overdue_tasks ?? 0),
+                'task_done' => $taskDone,
+                'task_completion' => $taskTotal > 0 ? (int) round($taskDone / $taskTotal * 100) : 0,
+                'on_time' => $completedJobs > 0 ? (int) round(((int) ($jobMetrics?->on_time_jobs ?? 0)) / $completedJobs * 100) : 0,
+                'avg_artwork_cycle' => $this->averagePhaseCycleDays($jobs, 'artwork'),
+                'shipment_on_time' => $this->phaseOnTimePercentage($jobs, 'ship'),
+            ];
+        });
+
+        return compact('phase', 'workload', 'kpis');
+    }
+
+    private function averagePhaseCycleDays(Builder $visibleJobs, string $phaseNeedle): float
+    {
+        $query = $this->phaseHistoryQuery($visibleJobs, $phaseNeedle)
+            ->whereNotNull('entered_at')
+            ->whereNotNull('completed_at');
+
+        $driver = DB::connection()->getDriverName();
+        $expression = $driver === 'sqlite'
+            ? 'avg(julianday(completed_at) - julianday(entered_at)) as average_days'
+            : 'avg(timestampdiff(minute, entered_at, completed_at)) / 1440 as average_days';
+
+        $average = $query->selectRaw($expression)->value('average_days');
+
+        return round(max(0, (float) ($average ?? 0)), 1);
+    }
+
+    private function phaseOnTimePercentage(Builder $visibleJobs, string $phaseNeedle): int
+    {
+        $row = $this->phaseHistoryQuery($visibleJobs, $phaseNeedle)
+            ->whereNotNull('target_date')
+            ->whereNotNull('completed_at')
+            ->selectRaw('count(*) as completed_total')
+            ->selectRaw('sum(case when date(completed_at) <= target_date then 1 else 0 end) as completed_on_time')
+            ->first();
+
+        $total = (int) ($row?->completed_total ?? 0);
+
+        return $total > 0
+            ? (int) round(((int) ($row?->completed_on_time ?? 0)) / $total * 100)
+            : 0;
+    }
+
+    private function phaseHistoryQuery(Builder $visibleJobs, string $phaseNeedle): Builder
+    {
+        $needle = '%'.mb_strtolower($phaseNeedle).'%';
+
+        return FlowJobPhaseHistory::query()
+            ->whereIn('flow_job_id', (clone $visibleJobs)->reorder()->select('flow_jobs.id'))
+            ->whereHas('phase', function ($query) use ($needle) {
+                $query->where(function ($phase) use ($needle) {
+                    $phase->whereRaw('lower(name) like ?', [$needle])
+                        ->orWhereRaw('lower(short_name) like ?', [$needle]);
+                });
+            });
     }
 }

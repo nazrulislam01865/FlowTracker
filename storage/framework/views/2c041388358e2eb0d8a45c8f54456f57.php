@@ -3,7 +3,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('jobs.index', []);
+[$__name, $__params] = $__split('jobs.index', ['lazy' => true]);
 
 $__keyOuter = $__key ?? null;
 

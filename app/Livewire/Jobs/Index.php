@@ -2,6 +2,8 @@
 
 namespace App\Livewire\Jobs;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\Client;
 use App\Models\Document;
 use App\Models\FlowJob;
@@ -13,6 +15,7 @@ use App\Models\WorkflowPhase;
 use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use App\Support\BoardLaneResolver;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -24,6 +27,7 @@ use Throwable;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     use WithPagination, WithFileUploads;
 
     public string $search = '';
@@ -111,33 +115,46 @@ class Index extends Component
     }
 
     public function updatedWorkflowId(): void { $this->setDefaultStartPhase(); }
-    public function updatedSearch(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedPhase(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedHealth(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedClient(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedOwner(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedDelivery(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedInvoice(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedPriorityFilter(): void { $this->selectedJobIds = []; $this->resetPage(); }
-    public function updatedJobStatusFilter(): void { $this->selectedJobIds = []; $this->resetPage(); }
+    public function updatedSearch(): void { $this->resetJobSelection(); }
+    public function updatedPhase(): void { $this->resetJobSelection(); }
+    public function updatedHealth(): void { $this->resetJobSelection(); }
+    public function updatedClient(): void { $this->resetJobSelection(); }
+    public function updatedOwner(): void { $this->resetJobSelection(); }
+    public function updatedDelivery(): void { $this->resetJobSelection(); }
+    public function updatedInvoice(): void { $this->resetJobSelection(); }
+    public function updatedPriorityFilter(): void { $this->resetJobSelection(); }
+    public function updatedJobStatusFilter(): void { $this->resetJobSelection(); }
 
     public function clearFilters(): void
     {
         $this->reset(['search','phase','health','client','owner','delivery','invoice','priorityFilter','jobStatusFilter']);
         $this->quickFilter = 'all';
-        $this->selectedJobIds = [];
-        $this->resetPage();
+        $this->resetJobSelection();
     }
 
     public function setQuickFilter(string $filter): void
     {
         abort_unless(in_array($filter, ['all','attention','due_week','waiting','invoice','completed'], true), 422);
         $this->quickFilter = $filter;
-        $this->selectedJobIds = [];
-        $this->resetPage();
+        $this->resetJobSelection();
     }
 
     public function toggleMoreFilters(): void { $this->showMoreFilters = !$this->showMoreFilters; }
+
+    public function toggleSelectAllJobs(): void
+    {
+        $ids = app(JobService::class)->filteredIds(auth()->user(), $this->jobFilters());
+
+        if ($ids->isNotEmpty() && count($this->selectedJobIds) === $ids->count()) {
+            $selected = collect($this->selectedJobIds)->map(fn ($id) => (int) $id)->sort()->values();
+            if ($selected->all() === $ids->sort()->values()->all()) {
+                $this->selectedJobIds = [];
+                return;
+            }
+        }
+
+        $this->selectedJobIds = $ids->all();
+    }
 
     public function bulkUpdateJobs(string $action): void
     {
@@ -163,8 +180,7 @@ class Index extends Component
             };
         }
 
-        $this->selectedJobIds = [];
-        $this->resetPage();
+        $this->resetJobSelection();
         session()->flash('success', match ($action) {
             'deactivate' => 'Selected Jobs deactivated.',
             'cancel' => 'Selected Jobs cancelled.',
@@ -209,10 +225,7 @@ class Index extends Component
         abort_unless(in_array($tab, ['overview','workflow','documents'], true), 422);
         $this->detailTab = $tab;
         if ($tab === 'documents' && $this->selectedJobId) {
-            $service = app(JobService::class);
-            $job = $service->findVisible(auth()->user(), $this->selectedJobId);
-            $service->syncWorkflowTasks($job);
-            $this->setDefaultDocumentTask($service->findVisible(auth()->user(), $this->selectedJobId));
+            $this->setDefaultDocumentTask();
         }
     }
 
@@ -752,13 +765,13 @@ class Index extends Component
 
     private function prepareSelectedJob(int $id): void
     {
-        $service = app(JobService::class);
-        $job = $service->findVisible(auth()->user(), $id);
-        $service->syncWorkflowTasks($job);
-        $service->recalculateProgress($job->refresh());
-        $fresh = $service->findVisible(auth()->user(), $id);
-        if (!$this->expandedPhaseIds && $fresh->phase) $this->expandedPhaseIds = [(int) $fresh->phase->id];
-        $this->setDefaultDocumentTask($fresh);
+        $job = app(JobService::class)->visibleQuery(auth()->user())
+            ->select(['id', 'workflow_phase_id'])
+            ->findOrFail($id);
+
+        if (!$this->expandedPhaseIds && $job->workflow_phase_id) {
+            $this->expandedPhaseIds = [(int) $job->workflow_phase_id];
+        }
     }
 
     private function setDefaultDocumentTask(?FlowJob $job = null): void
@@ -788,47 +801,124 @@ class Index extends Component
     {
         $service = app(JobService::class);
         $master = app(MasterDataService::class);
-        $selected = $this->selectedJobId ? $service->findVisible(auth()->user(), $this->selectedJobId) : null;
-        $task = $this->selectedTaskId ? app(TaskService::class)->visibleQuery(auth()->user())->with([
-            'job.client','job.workflow.phases','job.phase','job.owner','job.coordinator','job.documents','job.tasks',
-            'assignee','phase','documentCategory','setupTemplate.documentCategory','checklistItems','comments.user','documents','activities.user',
-        ])->findOrFail($this->selectedTaskId) : null;
+        $user = auth()->user();
 
-        $taskStatuses = collect(['Not Started'])
-            ->merge($master->active('task_status')->pluck('name'))
-            ->merge(Task::query()->distinct()->pluck('status'))
-            ->filter()->unique()->values();
-        $healthOptions = FlowJob::query()->distinct()->pluck('health')->filter()->merge(['On Track','At Risk','Delayed','Blocked','Completed'])->unique()->values();
-        $jobStatuses = FlowJob::query()->distinct()->pluck('status')->filter()->unique()->values();
         $priorities = $master->active('priority');
+        $canAssign = $user->canModule('tasks', 'assign') || $user->canModule('jobs', 'assign');
+        $users = $canAssign
+            ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
+            : collect([(object) ['id' => $user->id, 'name' => $user->name]]);
+
+        if ($this->showCreate) {
+            return view('livewire.jobs.index', [
+                'selectedJob' => null,
+                'selectedTask' => null,
+                'clients' => app(\App\Services\ClientService::class)->visibleQuery($user)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+                'workflows' => Workflow::with('phases.taskPack.items')->where('is_active', true)->get(),
+                'users' => $users,
+                'categories' => $master->active('product_category'),
+                'products' => $master->active('product'),
+                'priorities' => $priorities,
+            ]);
+        }
+
+        if ($this->selectedTaskId) {
+            $taskStatuses = collect(BoardLaneResolver::taskStatuses(
+                $master->active('task_status')->pluck('name')
+            ));
+            $task = app(TaskService::class)->visibleQuery($user)->with([
+                'job.client:id,name',
+                'job.tasks' => fn ($query) => app(AccessControlService::class)
+                    ->applyTaskScope($query, $user)
+                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.title'])
+                    ->orderBy('tasks.id'),
+                'assignee', 'phase', 'documentCategory', 'setupTemplate.documentCategory',
+                'checklistItems', 'comments.user', 'documents', 'activities.user',
+            ])->findOrFail($this->selectedTaskId);
+
+            $availableDocuments = $this->showTaskDocumentPicker
+                ? app(\App\Services\DocumentService::class)
+                    ->query($user, ['client' => $task->job?->client_id])
+                    ->with(['job:id,job_number', 'task:id,title'])
+                    ->latest('id')
+                    ->limit(60)
+                    ->get()
+                : collect();
+
+            return view('livewire.jobs.index', [
+                'selectedJob' => null,
+                'selectedTask' => $task,
+                'users' => $users,
+                'taskStatuses' => $taskStatuses,
+                'priorities' => $priorities,
+                'availableDocuments' => $availableDocuments,
+            ]);
+        }
+
+        if ($this->selectedJobId) {
+            $taskStatuses = collect(BoardLaneResolver::taskStatuses(
+                $master->active('task_status')->pluck('name')
+            ));
+            $selected = $service->findVisible($user, $this->selectedJobId);
+            $availableDocuments = $this->detailTab === 'documents'
+                ? app(\App\Services\DocumentService::class)
+                    ->query($user, ['client' => $selected->client_id])
+                    ->with(['job:id,job_number', 'task:id,title'])
+                    ->latest('id')
+                    ->limit(60)
+                    ->get()
+                : collect();
+
+            return view('livewire.jobs.index', [
+                'selectedJob' => $selected,
+                'selectedTask' => null,
+                'taskStatuses' => $taskStatuses,
+                'users' => $users,
+                'priorities' => $priorities,
+                'products' => $this->detailTab === 'overview' ? $master->active('product') : collect(),
+                'categories' => $this->detailTab === 'overview' ? $master->active('product_category') : collect(),
+                'availableDocuments' => $availableDocuments,
+                'healthOptions' => collect(['On Track', 'At Risk', 'Delayed', 'Blocked', 'Completed']),
+            ]);
+        }
+
+        $filters = $this->jobFilters();
+        $jobs = $service->paginate($user, $filters, $this->perPage);
 
         return view('livewire.jobs.index', [
-            'jobs' => $service->paginate(auth()->user(), [
-                'search' => $this->search,
-                'phase' => $this->phase,
-                'health' => $this->health,
-                'client' => $this->client,
-                'owner' => $this->owner,
-                'delivery' => $this->delivery,
-                'invoice' => $this->invoice,
-                'priority' => $this->priorityFilter,
-                'status' => $this->jobStatusFilter,
-                'quick' => $this->quickFilter,
-            ], $this->perPage),
-            'jobSummary' => $service->summaryCounts(auth()->user()),
-            'clients' => app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->where('is_active', true)->orderBy('name')->get(),
-            'phases' => WorkflowPhase::where('is_active', true)->orderBy('sequence')->get(),
-            'workflows' => Workflow::with('phases.taskPack.items')->where('is_active', true)->get(),
-            'users' => (auth()->user()->canModule('tasks','assign') || auth()->user()->canModule('jobs','assign')) ? User::where('is_active', true)->orderBy('name')->get() : collect([auth()->user()]),
-            'categories' => $master->active('product_category'),
-            'products' => $master->active('product'),
-            'availableDocuments' => $selected ? app(\App\Services\DocumentService::class)->query(auth()->user(), ['client'=>$selected->client_id])->with(['job','task'])->latest('id')->limit(60)->get() : collect(),
+            'selectedJob' => null,
+            'selectedTask' => null,
+            'jobs' => $jobs,
+            'jobSummary' => $service->summaryCounts($user),
+            'clients' => app(\App\Services\ClientService::class)->visibleQuery($user)->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'phases' => WorkflowPhase::where('is_active', true)->orderBy('sequence')->get(['id', 'name', 'short_name', 'sequence']),
+            'users' => $users,
             'priorities' => $priorities,
-            'taskStatuses' => $taskStatuses,
-            'healthOptions' => $healthOptions,
-            'jobStatuses' => $jobStatuses,
-            'selectedJob' => $selected,
-            'selectedTask' => $task,
+            'healthOptions' => collect(['On Track', 'At Risk', 'Delayed', 'Blocked', 'Completed']),
+            'jobStatuses' => $service->visibleQuery($user)->whereNotNull('status')->distinct()->orderBy('status')->pluck('status')->filter()->values(),
+            'allFilteredJobsSelected' => $jobs->total() > 0 && count($this->selectedJobIds) === $jobs->total(),
         ]);
+    }
+
+    private function jobFilters(): array
+    {
+        return [
+            'search' => $this->search,
+            'phase' => $this->phase,
+            'health' => $this->health,
+            'client' => $this->client,
+            'owner' => $this->owner,
+            'delivery' => $this->delivery,
+            'invoice' => $this->invoice,
+            'priority' => $this->priorityFilter,
+            'status' => $this->jobStatusFilter,
+            'quick' => $this->quickFilter,
+        ];
+    }
+
+    private function resetJobSelection(): void
+    {
+        $this->selectedJobIds = [];
+        $this->resetPage();
     }
 }

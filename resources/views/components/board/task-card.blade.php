@@ -2,8 +2,10 @@
 @php
     $overdueDays = \App\Support\BoardPresenter::overdueDays($task);
     $waiting = \App\Support\BoardPresenter::waitingLabel($task);
-    $checkTotal = $task->checklistItems->count();
-    $checkDone = $task->checklistItems->where('is_completed', true)->count();
+    $checkTotal = (int) ($task->checklist_items_count ?? ($task->relationLoaded('checklistItems') ? $task->checklistItems->count() : 0));
+    $checkDone = (int) ($task->completed_checklist_items_count ?? ($task->relationLoaded('checklistItems') ? $task->checklistItems->where('is_completed', true)->count() : 0));
+    $documentCount = (int) ($task->documents_count ?? ($task->relationLoaded('documents') ? $task->documents->count() : 0));
+    $commentCount = (int) ($task->comments_count ?? ($task->relationLoaded('comments') ? $task->comments->count() : 0));
 @endphp
 <article {{ $attributes->class(['ft-task-board-card']) }}>
     <div class="ft-task-board-top">
@@ -43,8 +45,8 @@
 
     <div class="ft-task-meta-footer">
         <span><svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="m7 12 3 3 7-7"/></svg>{{ $checkDone }}/{{ $checkTotal }}</span>
-        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.5 11.5-8.2 8.2a6 6 0 1 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9.1 9.1a2 2 0 0 1-2.8-2.8l8.4-8.4"/></svg>{{ $task->documents->count() }}</span>
-        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-7a6 6 0 0 1-1-3.3V8a5 5 0 0 1 5-5h10a4 4 0 0 1 4 4z"/></svg>{{ $task->comments->count() }}</span>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m20.5 11.5-8.2 8.2a6 6 0 1 1-8.5-8.5l9-9a4 4 0 0 1 5.7 5.7l-9.1 9.1a2 2 0 0 1-2.8-2.8l8.4-8.4"/></svg>{{ $documentCount }}</span>
+        <span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15a4 4 0 0 1-4 4H8l-5 3v-7a6 6 0 0 1-1-3.3V8a5 5 0 0 1 5-5h10a4 4 0 0 1 4 4z"/></svg>{{ $commentCount }}</span>
         <span class="ft-task-updated">Updated {{ \App\Support\BoardPresenter::lastUpdatedText($task) }} ago</span>
     </div>
 </article>

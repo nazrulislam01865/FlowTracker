@@ -1,8 +1,11 @@
 <?php
 namespace App\Livewire\Profile;
+
+use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Services\ProfileService;use Livewire\Component;
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public string $name='';public string $email='';public string $locale='en';public string $currentPassword='';public string $newPassword='';public string $newPasswordConfirmation='';
     public function mount():void{$u=auth()->user();$this->name=$u->name;$this->email=$u->email;$this->locale=$u->locale;}
     public function saveProfile():void{$d=$this->validate(['name'=>['required','string','max:255'],'email'=>['required','email','unique:users,email,'.auth()->id()],'locale'=>['required','in:en,zh']]);app(ProfileService::class)->update(auth()->user(),$d);session()->flash('success','Profile updated.');}

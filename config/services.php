@@ -37,6 +37,7 @@ return [
 
 
     'pusher' => [
+        'enabled' => env('PUSHER_ENABLED', false),
         'app_id' => env('PUSHER_APP_ID'),
         'key' => env('PUSHER_APP_KEY'),
         'secret' => env('PUSHER_APP_SECRET'),
@@ -44,6 +45,10 @@ return [
         'scheme' => env('PUSHER_SCHEME', 'https'),
         'host' => env('PUSHER_HOST'),
         'port' => env('PUSHER_PORT'),
+        'queue' => env('PUSHER_QUEUE', 'realtime'),
+        'connect_timeout' => (float) env('PUSHER_CONNECT_TIMEOUT', 1),
+        'timeout' => (float) env('PUSHER_TIMEOUT', 3),
+        'circuit_seconds' => (int) env('PUSHER_CIRCUIT_SECONDS', 300),
     ],
 
 ];

@@ -2,39 +2,50 @@
 
 namespace App\Services;
 
-use App\Models\Client;
 use App\Models\FlowNotification;
 use App\Models\User;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
+    public function forget(User|int $user): void
+    {
+        $userId = $user instanceof User ? $user->id : $user;
+        Cache::forget('flowtrack:dashboard:metrics:user:'.$userId);
+    }
+
     public function data(User $user): array
     {
         $access = app(AccessControlService::class);
-        $jobQuery = app(JobService::class)->visibleQuery($user);
-        $taskQuery = app(TaskService::class)->visibleQuery($user);
+        $jobService = app(JobService::class);
+        $taskService = app(TaskService::class);
+        $jobQuery = $jobService->activeQuery($user);
 
-        // Only scalar dashboard metrics are cached. Eloquent collections remain
-        // live so the cache never serializes model objects and attention/activity
-        // rows still react immediately to Pusher/Livewire refreshes.
-        $metrics = Cache::remember('flowtrack:dashboard:metrics:user:'.$user->id, now()->addSeconds(20), function () use ($user) {
-            $access = app(AccessControlService::class);
-            $jobs = app(JobService::class)->visibleQuery($user);
-            $tasks = app(TaskService::class)->visibleQuery($user);
+        // Cache only scalar aggregates. Lists remain live and never serialize models.
+        $metrics = Cache::remember('flowtrack:dashboard:metrics:user:'.$user->id, now()->addSeconds(20), function () use ($user, $jobService, $taskService) {
+            $jobs = $jobService->activeQuery($user)->reorder();
+            $tasks = $taskService->visibleQuery($user)
+                ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))
+                ->reorder();
 
-            $activeJobs = (clone $jobs)->whereNull('completed_at')->count();
-            $riskJobs = (clone $jobs)->where(function ($q) {
-                $q->where('needs_attention', true)
-                    ->orWhereIn('health', ['At Risk','Delayed','Blocked','Needs Attention'])
-                    ->orWhereHas('tasks', fn ($t) => $t->where('needs_attention', true));
-            })->count();
-            $overdueTasks = (clone $tasks)->whereNull('completed_at')->whereDate('due_date', '<', today())->count();
-            $pendingApprovals = (clone $tasks)->whereIn('status', ['Waiting for Client','Waiting for Internal Approval'])->count();
-            $shipping = (clone $jobs)->whereHas('phase', fn ($q) => $q->where('short_name', 'Shipment'))->count();
-            $outstanding = $access->applyClientScope(Client::query(), $user)->sum('outstanding_balance');
+            $jobMetrics = $jobs
+                ->selectRaw('count(*) as active_jobs')
+                ->selectRaw("sum(case when flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.needs_attention = 1 and tasks.completed_at is null and tasks.deleted_at is null) then 1 else 0 end) as risk_jobs")
+                ->selectRaw("sum(case when exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and (lower(workflow_phases.name) like '%ship%' or lower(workflow_phases.short_name) like '%ship%')) then 1 else 0 end) as shipping_jobs")
+                ->first();
 
-            return compact('activeJobs','riskJobs','overdueTasks','pendingApprovals','shipping','outstanding');
+            $taskMetrics = $tasks
+                ->selectRaw("sum(case when tasks.completed_at is null and tasks.due_date < ? then 1 else 0 end) as overdue_tasks", [today()->format('Y-m-d')])
+                ->selectRaw("sum(case when tasks.completed_at is null and tasks.status in ('Waiting for Client','Waiting for Internal Approval') then 1 else 0 end) as pending_approvals")
+                ->first();
+
+            return [
+                'activeJobs' => (int) ($jobMetrics?->active_jobs ?? 0),
+                'riskJobs' => (int) ($jobMetrics?->risk_jobs ?? 0),
+                'overdueTasks' => (int) ($taskMetrics?->overdue_tasks ?? 0),
+                'pendingApprovals' => (int) ($taskMetrics?->pending_approvals ?? 0),
+                'shipping' => (int) ($jobMetrics?->shipping_jobs ?? 0),
+            ];
         });
 
         $workload = User::query()->where('is_active', true);
@@ -44,14 +55,53 @@ class DashboardService
 
         return [
             'metrics' => $metrics,
-            'attentionJobs' => (clone $jobQuery)->with(['client','phase','tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q->where('needs_attention', true), $user)->latest()])
+            'attentionJobs' => (clone $jobQuery)
+                ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.next_action', 'flow_jobs.health'])
+                ->with([
+                    'client:id,name',
+                    'phase:id,short_name',
+                    'tasks' => fn ($q) => app(AccessControlService::class)
+                        ->applyTaskScope($q, $user)
+                        ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.title', 'tasks.needs_attention', 'tasks.created_at'])
+                        ->where('needs_attention', true)
+                        ->whereNull('completed_at')
+                        ->latest(),
+                ])
                 ->where(function ($q) {
-                    $q->where('needs_attention', true)->orWhereHas('tasks', fn ($t) => $t->where('needs_attention', true));
-                })->latest()->limit(6)->get(),
-            'phaseCounts' => (clone $jobQuery)->selectRaw('workflow_phase_id, count(*) total')->groupBy('workflow_phase_id')->with('phase')->get(),
-            'workload' => $workload->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])->orderByDesc('open_tasks_count')->limit(5)->get(),
-            'deliveries' => (clone $jobQuery)->with('client')->whereNull('completed_at')->whereNotNull('delivery_date')->orderBy('delivery_date')->limit(6)->get(),
-            'activity' => FlowNotification::with('job')->where('user_id', $user->id)->latest()->limit(5)->get(),
+                    $q->where('needs_attention', true)
+                        ->orWhereIn('health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])
+                        ->orWhereHas('tasks', fn ($t) => $t->where('needs_attention', true)->whereNull('completed_at'));
+                })
+                ->latest('flow_jobs.id')
+                ->limit(6)
+                ->get(),
+            'phaseCounts' => (clone $jobQuery)
+                ->reorder()
+                ->selectRaw('workflow_phase_id, count(*) total')
+                ->groupBy('workflow_phase_id')
+                ->with('phase:id,name,short_name,sequence')
+                ->get(),
+            'workload' => $workload
+                ->select(['users.id', 'users.name'])
+                ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q
+                    ->whereNull('completed_at')
+                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES))])
+                ->orderByDesc('open_tasks_count')
+                ->limit(5)
+                ->get(),
+            'deliveries' => (clone $jobQuery)
+                ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.title', 'flow_jobs.delivery_date'])
+                ->with('client:id,name')
+                ->whereDate('delivery_date', '>=', today())
+                ->orderBy('delivery_date')
+                ->limit(6)
+                ->get(),
+            'activity' => FlowNotification::query()
+                ->select(['id', 'user_id', 'flow_job_id', 'title', 'message', 'created_at'])
+                ->where('user_id', $user->id)
+                ->latest()
+                ->limit(5)
+                ->get(),
         ];
     }
 }

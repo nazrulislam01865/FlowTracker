@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <meta name="flowtrack-session-timeout" content="1800">
+    <meta name="flowtrack-session-timeout" content="{{ (int) config('session.lifetime', 30) * 60 }}">
     @auth
         <meta name="flowtrack-session-status-url" content="{{ route('session.status') }}">
         <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
@@ -13,7 +13,7 @@
     @if(auth()->check() && auth()->user()->canModule('notifications','view'))
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endif
-    @if(config('services.pusher.key') && auth()->check() && auth()->user()->canModule('notifications','view'))
+    @if(auth()->check() && auth()->user()->canModule('notifications','view') && app(\App\Services\PusherChannelService::class)->enabled())
         <meta name="flowtrack-pusher-key" content="{{ config('services.pusher.key') }}">
         <meta name="flowtrack-pusher-cluster" content="{{ config('services.pusher.cluster','mt1') }}">
         <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.{{ auth()->id() }}">

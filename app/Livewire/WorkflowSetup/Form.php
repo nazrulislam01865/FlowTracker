@@ -2,12 +2,15 @@
 
 namespace App\Livewire\WorkflowSetup;
 
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Models\WorkflowTemplate;
 use App\Services\WorkflowService;
 use Livewire\Component;
 
 class Form extends Component
 {
+    use UsesPagePlaceholder;
     public ?int $workflowId = null;
     public ?int $sourceWorkflowId = null;
     public string $workflowName = '';

@@ -47,7 +47,7 @@ class MasterDataService
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
-            ->with('parent')
+            ->when($type === 'product', fn ($q) => $q->with('parent'))
             ->when($search, fn ($q) => $q->where(fn ($x) => $x
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
@@ -86,10 +86,27 @@ class MasterDataService
         $duplicate = MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->where('code', $code)->when($id, fn ($q) => $q->whereKeyNot($id))->exists();
         if ($duplicate) throw ValidationException::withMessages(['code' => 'This code already exists in the selected master data type.']);
 
-        return DB::transaction(function () use ($type, $data, $id, $workspaceId, $code) {
-            $record = MasterRecord::query()->updateOrCreate(['id' => $id], [
+        $parentId = null;
+        if ($type === 'product' && filled($data['parent_id'] ?? null)) {
+            $parentId = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->whereKey((int) $data['parent_id'])
+                ->value('id');
+
+            if (!$parentId) {
+                throw ValidationException::withMessages(['parentId' => 'Select a valid Product Category.']);
+            }
+        }
+
+        return DB::transaction(function () use ($type, $data, $id, $workspaceId, $code, $parentId) {
+            $record = $id
+                ? MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id)
+                : new MasterRecord();
+
+            $record->fill([
                 'workspace_id' => $workspaceId,
-                'parent_id' => $data['parent_id'] ?? null,
+                'parent_id' => $parentId,
                 'type' => $type,
                 'code' => $code,
                 'name' => trim($data['name']),
@@ -97,7 +114,7 @@ class MasterDataService
                 'metadata' => $data['metadata'] ?? null,
                 'status' => ($data['status'] ?? 'active') === 'active' ? 'active' : 'inactive',
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
-            ]);
+            ])->save();
             $this->mirrorLegacy($record);
             $this->forgetActiveCache($record->type);
             return $record;
@@ -135,51 +152,75 @@ class MasterDataService
     public function syncLegacy(): void
     {
         if (!Schema::hasTable('master_values') || !Schema::hasTable('master_records')) return;
-
         $workspaceId = $this->workspaceId();
-        $now = now();
+        $syncKey = 'flowtrack:master:legacy-sync:'.$workspaceId;
+        if (Cache::get($syncKey)) return;
 
-        $rows = MasterValue::query()->get()->map(function (MasterValue $legacy) use ($workspaceId, $now): array {
-            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true);
-            $type = $type === false ? Str::singular($legacy->group_key) : $type;
+        foreach (MasterValue::query()->get() as $legacy) {
+            $type = array_search($legacy->group_key, self::LEGACY_GROUPS, true) ?: Str::singular($legacy->group_key);
+            MasterRecord::query()->firstOrCreate(
+                ['workspace_id' => $workspaceId, 'type' => $type, 'code' => $legacy->code],
+                [
+                    'name' => $legacy->name,
+                    'description' => $legacy->description,
+                    'metadata' => $legacy->meta,
+                    'status' => $legacy->is_active ? 'active' : 'inactive',
+                    'sort_order' => (int) $legacy->id,
+                ]
+            );
+        }
 
-            return [
-                'workspace_id' => $workspaceId,
-                'parent_id' => null,
-                'type' => $type,
-                'code' => $legacy->code,
-                'name' => $legacy->name,
-                'description' => $legacy->description,
-                'metadata' => $legacy->meta === null
-                    ? null
-                    : json_encode($legacy->meta, JSON_THROW_ON_ERROR),
-                'status' => $legacy->is_active ? 'active' : 'inactive',
-                'sort_order' => (int) $legacy->id,
-                'created_at' => $legacy->created_at ?? $now,
-                'updated_at' => $now,
-                'deleted_at' => null,
-            ];
-        })->all();
+        // Product is the only hierarchical master-data type. Preserve legacy
+        // Product -> Product Category links without introducing parents for
+        // departments, statuses, priorities, or any other master data.
+        MasterRecord::query()->forWorkspace($workspaceId)->where('type', '!=', 'product')->whereNotNull('parent_id')->update(['parent_id' => null]);
+        foreach (MasterValue::query()->where('group_key', self::LEGACY_GROUPS['product'])->whereNotNull('parent_id')->get() as $legacyProduct) {
+            $legacyCategory = MasterValue::query()->whereKey($legacyProduct->parent_id)->first();
+            if (!$legacyCategory || $legacyCategory->group_key !== self::LEGACY_GROUPS['product_category']) continue;
 
-        if ($rows === []) return;
+            $categoryId = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->where('code', $legacyCategory->code)
+                ->value('id');
 
-        DB::table('master_records')->upsert(
-            $rows,
-            ['workspace_id', 'type', 'code'],
-            ['name', 'description', 'metadata', 'status', 'sort_order', 'deleted_at', 'updated_at']
-        );
+            if ($categoryId) {
+                MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->where('code', $legacyProduct->code)
+                    ->whereNull('parent_id')
+                    ->update(['parent_id' => $categoryId]);
+            }
+        }
+
+        Cache::put($syncKey, true, now()->addMinutes(5));
     }
 
     private function mirrorLegacy(MasterRecord $record): void
     {
         if (!Schema::hasTable('master_values')) return;
         $group = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
+        $legacyParentId = null;
+        if ($record->type === 'product' && $record->parent_id) {
+            $parent = MasterRecord::query()
+                ->forWorkspace($record->workspace_id)
+                ->ofType('product_category')
+                ->find($record->parent_id);
+            if ($parent) {
+                $legacyParentId = MasterValue::query()
+                    ->where('group_key', self::LEGACY_GROUPS['product_category'])
+                    ->where('code', $parent->code)
+                    ->value('id');
+            }
+        }
+
         MasterValue::query()->updateOrCreate(
             ['group_key' => $group, 'code' => $record->code],
             [
                 'name' => $record->name,
                 'description' => $record->description,
-                'parent_id' => null,
+                'parent_id' => $legacyParentId,
                 'is_active' => $record->status === 'active',
                 'meta' => $record->metadata,
             ]

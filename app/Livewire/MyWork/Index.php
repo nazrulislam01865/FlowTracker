@@ -2,17 +2,18 @@
 
 namespace App\Livewire\MyWork;
 
-use App\Models\Client;
-use App\Models\FlowJob;
-use App\Models\User;
+use App\Livewire\Concerns\UsesPagePlaceholder;
+
 use App\Services\BoardService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use App\Support\BoardLaneResolver;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use UsesPagePlaceholder;
     public string $search = '';
     public string $job = '';
     public string $client = '';
@@ -21,10 +22,12 @@ class Index extends Component
     public string $assignee = '';
     public string $due = '';
     public string $quick = '';
+    public int $cardLimit = 60;
 
     public function setQuick(string $filter): void
     {
         $this->quick = $this->quick === $filter ? '' : $filter;
+        $this->cardLimit = 60;
     }
 
     public function clearFilters(): void
@@ -37,6 +40,19 @@ class Index extends Component
         $this->assignee = '';
         $this->due = '';
         $this->quick = '';
+        $this->cardLimit = 60;
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['search', 'job', 'client', 'status', 'priority', 'assignee', 'due'], true)) {
+            $this->cardLimit = 60;
+        }
+    }
+
+    public function loadMore(): void
+    {
+        $this->cardLimit = min(300, $this->cardLimit + 60);
     }
 
     public function moveTask(int $taskId, string $status): void
@@ -78,20 +94,24 @@ class Index extends Component
             'open_only' => $this->quick !== 'completed' && strcasecmp($this->status, 'Completed') !== 0,
         ];
 
-        $visibleJobs = app(\App\Services\JobService::class)->visibleQuery(auth()->user())
-            ->whereNull('completed_at')->whereNotIn('status', ['Inactive','Cancelled'])->orderBy('job_number')->get(['id', 'job_number', 'title', 'client_id']);
+        $lookups = $service->lookups(auth()->user(), false);
+        $visibleJobs = app(\App\Services\JobService::class)->activeQuery(auth()->user())
+            ->orderBy('job_number')
+            ->limit(250)
+            ->get(['id', 'job_number', 'title', 'client_id']);
 
-        $configuredStatuses = $master->active('task_status')->pluck('name')->filter()->values();
-        $actualStatuses = app(TaskService::class)->visibleQuery(auth()->user())->whereNotNull('status')->distinct()->orderBy('status')->pluck('status')->filter()->values();
-        $statuses = $configuredStatuses->concat($actualStatuses)->unique()->values();
+        $statuses = collect(BoardLaneResolver::taskStatuses(
+            $master->active('task_status')->pluck('name')
+        ));
+
+        $taskRows = $service->tasks(auth()->user(), $filters, $this->cardLimit + 1);
 
         return view('livewire.my-work.index', [
-            'tasks' => $service->tasks(auth()->user(), $filters),
+            'tasks' => $taskRows->take($this->cardLimit)->values(),
+            'hasMoreCards' => $taskRows->count() > $this->cardLimit,
             'counts' => $service->taskCounts(auth()->user(), $filters),
-            'users' => auth()->user()->accessScope('tasks') === 'all_records'
-                ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
-                : collect([auth()->user()]),
-            'clients' => app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->where('is_active', true)->orderBy('name')->get(['id', 'name']),
+            'users' => $lookups['users'],
+            'clients' => $lookups['clients'],
             'taskJobs' => $visibleJobs,
             'taskStatuses' => $statuses,
             'priorities' => $master->active('priority'),
