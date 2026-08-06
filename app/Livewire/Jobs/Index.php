@@ -477,15 +477,9 @@ class Index extends Component
 
     public function updatedJobDocumentUploads(): void
     {
-        // Livewire first transfers selected files into temporary storage. As
-        // soon as that transfer finishes, persist them to the configured
-        // FlowTrack document disk and link them to the selected Task Pack
-        // requirement. This avoids the confusing state where a browser upload
-        // appears to finish but the file is only temporary and disappears on
-        // the next render.
-        if (!$this->jobDocumentUploads || !$this->jobDocumentTaskId) return;
-
-        $this->uploadJobDocuments();
+        // Files remain in Livewire temporary storage until the user confirms
+        // the selected Task Pack requirement with “Upload & link”.
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
     }
 
     public function uploadJobDocuments(): void
@@ -692,18 +686,30 @@ class Index extends Component
         if ($body === '') return;
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         abort_unless(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job), 403);
+        $actor = auth()->user();
+        $mentionIds = app(\App\Services\MentionService::class)->userIdsFromText($body);
         $job->activities()->create([
-            'user_id' => auth()->id(),
+            'user_id' => $actor->id,
             'event' => 'job.comment',
             'description' => $body,
-            'meta' => ['body' => $body],
+            'meta' => ['body' => $body, 'mention_user_ids' => $mentionIds],
         ]);
         app(\App\Services\NotificationService::class)->notifyJobParticipants(
             $job,
             'New comment on '.$job->job_number,
             $body,
             'comment',
-            auth()->user(),
+            $actor,
+            [],
+            $mentionIds,
+        );
+        app(\App\Services\NotificationService::class)->notifyMentionedUsers(
+            $mentionIds,
+            $actor->name.' mentioned you in '.$job->job_number,
+            $body,
+            $job,
+            null,
+            $actor,
         );
         $this->jobComment = '';
         $this->jobActivityPage = 1;
@@ -937,6 +943,7 @@ class Index extends Component
             'categories' => $this->createCatalogReady ? $master->active('product_category') : collect(),
             'products' => $productOptionsNeeded ? $master->active('product') : collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
+            'mentionUsers' => app(\App\Services\MentionService::class)->optionsForCreate($user),
         ];
     }
 
@@ -969,6 +976,7 @@ class Index extends Component
             'taskStatuses' => $this->taskStatusOptions($master),
             'priorities' => $master->active('priority'),
             'availableDocuments' => $availableDocuments,
+            'mentionUsers' => app(\App\Services\MentionService::class)->optionsForTask($task, $user),
         ];
     }
 
@@ -995,6 +1003,7 @@ class Index extends Component
             'categories' => $this->detailTab === 'overview' ? $master->active('product_category') : collect(),
             'availableDocuments' => $availableDocuments,
             'healthOptions' => $this->healthOptions(),
+            'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),
         ];
     }
 

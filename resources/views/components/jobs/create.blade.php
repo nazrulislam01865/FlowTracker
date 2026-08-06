@@ -1,6 +1,6 @@
 @props([
     'clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments',
-    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'mentionUsers'=>collect(),
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
@@ -22,7 +22,7 @@
                 <label class="ft-create-field"><b>Client *</b><select wire:model.live="clientId">@foreach($clients as $client)<option value="{{ $client->id }}">{{ $client->name }}</option>@endforeach</select>@error('clientId')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
                 <label class="ft-create-field"><b>Job title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <label class="ft-create-field"><b>Request description</b><textarea wire:model="description" rows="4" placeholder="Specifications, target price, printing or customization requirements..."></textarea></label>
+                <label class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea></label>
             </div>
         </section>
 
@@ -85,9 +85,9 @@
             <div class="ft-create-section-title"><span>5</span><h2>Attachments</h2></div>
             @if(auth()->user()->canModule('documents','create'))
                 <div class="ft-create-upload-wrap">
-                <div class="ft-create-upload">
+                <div class="ft-create-upload ft-livewire-upload-zone" data-file-dropzone>
                     <span class="ft-create-paperclip">⌕</span>
-                    <div><b>Drop files here or <label for="job-create-files">browse</label></b><small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                    <div><b>Drop files here or <label for="job-create-files">browse</label></b><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                     @if(auth()->user()->canModule('documents','view'))<a href="{{ route('documents.index') }}" wire:navigate>Open Documents</a>@endif
                     <input id="job-create-files" type="file" wire:model="jobAttachments" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                 </div>

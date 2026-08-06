@@ -10,10 +10,10 @@
         <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
     @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ config('app.name','FlowTrack') }}</title>
-    @if(auth()->check() && auth()->user()->canModule('notifications','view'))
+    @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
-    @endif
-    @if(auth()->check() && auth()->user()->canModule('notifications','view') && app(\App\Services\PusherChannelService::class)->enabled())
+    @endauth
+    @if(auth()->check() && app(\App\Services\PusherChannelService::class)->enabled())
         <meta name="flowtrack-pusher-key" content="{{ config('services.pusher.key') }}">
         <meta name="flowtrack-pusher-cluster" content="{{ config('services.pusher.cluster','mt1') }}">
         <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.{{ auth()->id() }}">

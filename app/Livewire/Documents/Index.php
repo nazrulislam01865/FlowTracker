@@ -33,7 +33,7 @@ class Index extends Component
     public ?int $selectedDocumentId = null;
 
     public bool $showUpload = false;
-    public array $files = [];
+    public array $documentUploads = [];
     public ?int $uploadJobId = null;
     public ?int $uploadTaskId = null;
     public string $uploadCategory = '';
@@ -86,18 +86,18 @@ class Index extends Component
     public function closeUpload(): void
     {
         $this->showUpload = false;
-        $this->files = [];
+        $this->documentUploads = [];
         $this->uploadTaskId = null;
     }
 
     public function updatedUploadJobId(): void { $this->uploadTaskId = null; }
 
-    public function upload(): void
+    public function storeDocuments(): void
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
         $this->validate([
-            'files' => ['required','array','min:1'],
-            'files.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'documentUploads' => ['required','array','min:1'],
+            'documentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
             'uploadJobId' => ['required','integer'],
             'uploadTaskId' => ['nullable','integer'],
             'uploadCategory' => ['required','string','max:100'],
@@ -106,7 +106,7 @@ class Index extends Component
         $job = app(JobService::class)->findVisible(auth()->user(), (int)$this->uploadJobId);
         $task = $this->uploadTaskId ? app(\App\Services\TaskService::class)->visibleQuery(auth()->user())->where('flow_job_id',$job->id)->findOrFail($this->uploadTaskId) : null;
 
-        foreach ($this->files as $file) {
+        foreach ($this->documentUploads as $file) {
             $doc = app(DocumentService::class)->store($file, [
                 'flow_job_id' => $job->id,
                 'client_id' => $job->client_id,

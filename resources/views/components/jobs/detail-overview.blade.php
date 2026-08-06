@@ -1,4 +1,4 @@
-@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1])
+@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
     $nextTask = \App\Support\JobDetailPresenter::nextTask($job);
@@ -22,13 +22,13 @@
             <h2>Job overview</h2>
             <div class="ft-editable-copy ft-editable-description" x-data="{ editing:false }">
                 <div class="ft-edit-display-row" x-show="!editing">
-                    <span>{{ $job->description ?: 'No job description recorded.' }}</span>
+                    <span>@if($job->description)<x-ui.mention-text :text="$job->description" />@else No job description recorded. @endif</span>
                     @if($canEditJob)
                         <button type="button" class="ft-inline-edit-button" aria-label="Edit job description" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
                     @endif
                 </div>
                 @if($canEditJob)
-                    <textarea x-ref="descriptionEditor" x-show="editing" rows="3"
+                    <textarea x-ref="descriptionEditor" x-show="editing" rows="3" class="ft-mention-input" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}"
                         x-on:keydown.escape="editing=false"
                         x-on:blur="editing=false"
                         wire:change="updateJobTextField({{ $job->id }}, 'description', $event.target.value)">{{ $job->description }}</textarea>
@@ -247,5 +247,5 @@
         @foreach($job->documents as $doc)<div class="ft-job-file-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><b>{{ $doc->name }}</b><small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ $doc->created_at?->format('M j, Y, H:i') }}</small></div><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if($canDeleteDocument)<button type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">Delete</button>@endif</div>@endforeach
     </section>
 
-    <x-jobs.detail-activity :job="$job" compact="true" :activity-tab="$activityTab" :activity-page="$activityPage" />
+    <x-jobs.detail-activity :job="$job" :mention-users="$mentionUsers" compact="true" :activity-tab="$activityTab" :activity-page="$activityPage" />
 </div>

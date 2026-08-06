@@ -86,6 +86,96 @@
     </div>
 
     @if($showUpload)
-        <div class="overlay livewire-overlay" wire:click.self="closeUpload"></div><div class="modal livewire-modal ft-doc-upload-modal"><div class="modal-head"><div><h2>Upload document</h2><div class="small muted">Link the file to a visible Job and optionally to one of your assigned tasks.</div></div><button class="close-btn" wire:click="closeUpload">×</button></div><div class="modal-body"><div class="form-grid"><div class="field"><label>Job *</label><select wire:model.live="uploadJobId"><option value="">Select Job</option>@foreach($jobs as $j)<option value="{{ $j->id }}">{{ $j->job_number }} · {{ $j->title }}</option>@endforeach</select></div><div class="field"><label>Task</label><select wire:model="uploadTaskId"><option value="">Job-level document</option>@foreach($uploadTasks as $task)<option value="{{ $task->id }}">{{ $task->phase?->short_name }} · {{ $task->title }}</option>@endforeach</select></div><div class="field full"><label>Document type *</label><select wire:model="uploadCategory">@foreach($categories as $cat)<option>{{ $cat->name }}</option>@endforeach</select></div><div class="field full"><label class="upload-zone"><input type="file" wire:model="files" multiple><b>Drop files here or browse</b><div class="small muted">PDF, DOCX, XLSX, JPG, PNG, ZIP, TXT or CSV · Max 20 MB each</div></label></div></div>@error('files.*')<div class="validation-error">{{ $message }}</div>@enderror</div><div class="modal-foot"><button class="ghost" wire:click="closeUpload">Cancel</button><button class="primary" wire:click="upload">Upload document</button></div></div>
+        <div class="overlay livewire-overlay" wire:click.self="closeUpload"></div>
+        <div class="modal livewire-modal ft-doc-upload-modal" wire:key="document-upload-modal">
+            <div class="modal-head">
+                <div>
+                    <h2>Upload document</h2>
+                    <div class="small muted">Link the file to a visible Job and optionally to one of your assigned tasks.</div>
+                </div>
+                <button type="button" class="close-btn" wire:click="closeUpload">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Job *</label>
+                        <select wire:model.live="uploadJobId">
+                            <option value="">Select Job</option>
+                            @foreach($jobs as $j)
+                                <option value="{{ $j->id }}">{{ $j->job_number }} · {{ $j->title }}</option>
+                            @endforeach
+                        </select>
+                        @error('uploadJobId')<div class="validation-error">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Task</label>
+                        <select wire:model="uploadTaskId">
+                            <option value="">Job-level document</option>
+                            @foreach($uploadTasks as $task)
+                                <option value="{{ $task->id }}">{{ $task->phase?->short_name }} · {{ $task->title }}</option>
+                            @endforeach
+                        </select>
+                    </div>
+
+                    <div class="field full">
+                        <label>Document type *</label>
+                        <select wire:model="uploadCategory">
+                            @foreach($categories as $cat)<option>{{ $cat->name }}</option>@endforeach
+                        </select>
+                        @error('uploadCategory')<div class="validation-error">{{ $message }}</div>@enderror
+                    </div>
+
+                    <div class="field full">
+                        <label
+                            class="upload-zone ft-livewire-upload-zone"
+                            data-file-dropzone
+                            for="document-page-upload-input"
+                        >
+                            <input
+                                id="document-page-upload-input"
+                                type="file"
+                                wire:model="documentUploads"
+                                multiple
+                                accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv"
+                            >
+                            <b>Drop files here or browse</b>
+                            <div class="small muted" data-drop-status>PDF, DOCX, XLSX, JPG, PNG, ZIP, TXT or CSV · Max 20 MB each</div>
+                        </label>
+
+                        <div class="ft-file-upload-progress" wire:loading wire:target="documentUploads">
+                            Preparing selected files…
+                        </div>
+
+                        @if(count($documentUploads))
+                            <div class="ft-upload-ready-list">
+                                @foreach($documentUploads as $file)
+                                    <span>{{ $file->getClientOriginalName() }}</span>
+                                @endforeach
+                            </div>
+                        @endif
+                    </div>
+                </div>
+
+                @error('documentUploads')<div class="validation-error">{{ $message }}</div>@enderror
+                @error('documentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
+            </div>
+
+            <div class="modal-foot">
+                <button type="button" class="ghost" wire:click="closeUpload">Cancel</button>
+                <button
+                    type="button"
+                    class="primary"
+                    wire:click="storeDocuments"
+                    wire:loading.attr="disabled"
+                    wire:target="documentUploads,storeDocuments"
+                    @disabled(count($documentUploads) === 0)
+                >
+                    <span wire:loading.remove wire:target="storeDocuments">Upload document</span>
+                    <span wire:loading wire:target="storeDocuments">Uploading…</span>
+                </button>
+            </div>
+        </div>
     @endif
 </div>

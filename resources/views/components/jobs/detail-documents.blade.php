@@ -51,10 +51,10 @@
 
                     <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone">
                         @if($canUploadDocument)
-                            <label class="ft-task-upload-drop ft-livewire-upload-zone" for="jobDocumentUpload-{{ $job->id }}">
+                            <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
                                 <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                                 <span class="ft-paperclip">⌕</span>
-                                <div>Drop files here or <strong>browse</strong><small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                                <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                             </label>
                         @else
                             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Document upload<small>You have read-only access to Job documents.</small></div></div>

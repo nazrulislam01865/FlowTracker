@@ -30,7 +30,6 @@ Route::get('/session/status', function () {
 
 Route::middleware('auth')->group(function () {
     Route::post('/pusher/auth', function (\Illuminate\Http\Request $request) {
-        abort_unless(auth()->user()->canModule('notifications', 'view'), 403);
         $data = $request->validate([
             'socket_id' => ['required','string','max:80'],
             'channel_name' => ['required','string','max:160'],
@@ -60,10 +59,26 @@ Route::middleware('auth')->group(function () {
         return Storage::disk((string) config('flowtrack.document_disk', 'public'))->download($document->path, $document->name);
     })->name('documents.download');
     Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
-    Route::get('/notifications', NotificationsController::class)->middleware('permission:notifications.view')->name('notifications');
+    Route::get('/notifications', NotificationsController::class)->name('notifications');
     Route::get('/notifications/unread-count', function () {
-        abort_unless(auth()->user()->canModule('notifications', 'view'), 403);
-        return response()->json(['count' => app(\App\Services\NotificationService::class)->unreadCount(auth()->user())]);
+        $user = auth()->user();
+        $service = app(\App\Services\NotificationService::class);
+        $latest = \App\Models\FlowNotification::query()
+            ->where('user_id', $user->id)
+            ->latest('id')
+            ->first();
+
+        return response()->json([
+            'count' => $service->unreadCount($user),
+            'latest' => $latest ? [
+                'id' => $latest->id,
+                'type' => $latest->type,
+                'title' => $latest->title,
+                'message' => $latest->message,
+                'url' => $service->urlFor($latest),
+                'created_at' => $latest->created_at?->toIso8601String(),
+            ] : null,
+        ]);
     })->name('notifications.unread-count');
     Route::get('/profile', ProfileController::class)->name('profile');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');

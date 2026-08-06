@@ -12,12 +12,10 @@ class ShellDataService
     {
         return Cache::remember($this->key($user->id), now()->addSeconds(60), function () use ($user) {
             return [
-                'unread_notifications' => $user->canModule('notifications', 'view')
-                    ? FlowNotification::query()
-                        ->where('user_id', $user->id)
-                        ->whereNull('read_at')
-                        ->count()
-                    : 0,
+                'unread_notifications' => FlowNotification::query()
+                    ->where('user_id', $user->id)
+                    ->whereNull('read_at')
+                    ->count(),
                 'open_my_work' => $user->canModule('tasks', 'view')
                     ? app(TaskService::class)
                         ->visibleQuery($user)

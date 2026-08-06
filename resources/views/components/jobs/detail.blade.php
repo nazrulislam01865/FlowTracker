@@ -4,6 +4,7 @@
     'expandedPhaseIds'=>[],
     'taskStatuses'=>collect(),
     'users'=>collect(),
+    'mentionUsers'=>collect(),
     'priorities'=>collect(),
     'products'=>collect(),
     'categories'=>collect(),
@@ -71,6 +72,7 @@
             :expanded-phase-ids="$expandedPhaseIds"
             :task-statuses="$taskStatuses"
             :users="$users"
+            :mention-users="$mentionUsers"
             :priorities="$priorities"
             :products="$products"
             :categories="$categories"

@@ -1,6 +1,7 @@
 @props([
     'task',
     'users',
+    'mentionUsers'=>collect(),
     'taskProgress',
     'taskStatuses'=>collect(),
     'priorities'=>collect(),
@@ -107,8 +108,8 @@
             <section class="ft-detail-card ft-description-card" x-data="{editing:false}">
                 @if($canEditTask)<button x-show="!editing" class="ft-card-edit" type="button" title="Edit description" x-on:click="editing=true;$nextTick(()=>$refs.description.focus())">✎</button>@endif
                 <h2>Description</h2>
-                <p x-show="!editing">{{ $effectiveDescription ?: 'No description has been provided for this task.' }}</p>
-                @if($canEditTask)<div x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" rows="4">{{ $task->description ?: $task->setupTemplate?->description }}</textarea><div><button type="button" class="ft-outline-btn" x-on:click="editing=false">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="$wire.updateSelectedTaskField('description',$refs.description.value); editing=false">Save</button></div></div>@endif
+                <p x-show="!editing">@if($effectiveDescription)<x-ui.mention-text :text="$effectiveDescription" />@else No description has been provided for this task. @endif</p>
+                @if($canEditTask)<div x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}">{{ $task->description ?: $task->setupTemplate?->description }}</textarea><div><button type="button" class="ft-outline-btn" x-on:click="editing=false">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="$wire.updateSelectedTaskField('description',$refs.description.value); editing=false">Save</button></div></div>@endif
             </section>
 
             <section class="ft-detail-card ft-checklist-card" x-data="{adding:false}">
@@ -128,10 +129,10 @@
                 <h2>Attachments <span>{{ $task->documents->count() }}</span></h2>
                 <div class="ft-upload-zone compact ft-task-upload-zone">
                     @if($canUploadDocument)
-                        <label class="ft-task-upload-drop ft-livewire-upload-zone" for="taskDocumentUpload-{{ $task->id }}">
+                        <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="taskDocumentUpload-{{ $task->id }}">
                             <input id="taskDocumentUpload-{{ $task->id }}" type="file" wire:model="taskDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                             <span class="ft-paperclip">⌕</span>
-                            <div>Drop files here or <strong>browse</strong><small>{{ $taskDocumentName ? 'Required document: '.$taskDocumentName.' · ' : '' }}PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                            <div>Drop files here or <strong>browse</strong><small data-drop-status>{{ $taskDocumentName ? 'Required document: '.$taskDocumentName.' · ' : '' }}PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                         </label>
                     @else
                         <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to task attachments.</small></div></div>
@@ -161,7 +162,7 @@
                     <div class="ft-activity-tabs"><button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setTaskActivityTab('all')">All</button><button type="button" class="{{ $activityTab==='comments'?'active':'' }}" wire:click="setTaskActivityTab('comments')">Comments</button><button type="button" class="{{ $activityTab==='history'?'active':'' }}" wire:click="setTaskActivityTab('history')">History</button></div>
                 </div>
                 @if($canEditTask)
-                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :name="auth()->user()->name" :size="32"/><input wire:model="taskComment" wire:keydown.enter="addTaskComment" placeholder="Write a comment about this task..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
+                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
                 @endif
                 <div class="ft-activity-feed">
                     @forelse($timeline as $entry)
@@ -173,7 +174,7 @@
                             <div class="ft-activity-entry-avatar"><x-ui.avatar :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
                                 <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><time title="{{ $entry->created_at?->format('M j, Y g:i A') }}">{{ $entry->created_at?->diffForHumans() }}</time></div>
-                                <p>{{ $entry->body }}</p>
+                                <p><x-ui.mention-text :text="$entry->body" /></p>
                                 <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $entry->created_at?->format('M j, Y · g:i A') }}</span></div>
                             </div>
                         </article>

@@ -60,9 +60,6 @@ class BoardService
                     ->with(['assignee:id,name', 'phase:id,name,sequence'])
                     ->orderByRaw('completed_at is null desc')
                     ->orderByRaw('due_date is null, due_date asc'),
-                // latestOfMany joins activities to an aggregate of the same
-                // table. Qualify every selected column for MySQL, otherwise
-                // subject_type/subject_id are ambiguous in the eager load.
                 'latestActivity' => fn ($query) => $query->select([
                     'activities.id',
                     'activities.subject_type',

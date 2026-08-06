@@ -14,7 +14,7 @@
     @if($user->canAccess('documents.view'))<x-ui.nav-link route="documents.index" label="Documents" icon="documents" />@endif
     @if($user->canAccess('reports.view'))<x-ui.nav-link route="reports" label="Reports" icon="reports" />@endif
     <div class="sidebar-section">Administration</div>
-    @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
+    <x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />
     @if($user->canAccess('workflow.manage'))
         <x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />
         <x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />

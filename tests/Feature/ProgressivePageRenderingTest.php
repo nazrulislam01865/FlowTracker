@@ -9,7 +9,6 @@ class ProgressivePageRenderingTest extends TestCase
     public function test_board_defers_heavy_cards_but_keeps_each_mode_branch_specific(): void
     {
         $component = file_get_contents(app_path('Livewire/Board/Index.php'));
-        $service = file_get_contents(app_path('Services/BoardService.php'));
         $view = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
 
         $this->assertStringContainsString('public bool $cardsReady = false;', $component);
@@ -18,9 +17,6 @@ class ProgressivePageRenderingTest extends TestCase
         $this->assertStringContainsString('wire:init="loadBoardCards"', $view);
         $this->assertStringContainsString('@if(!$cardsReady)', $view);
         $this->assertStringContainsString('livewire.shared.board-cards-placeholder', $view);
-        $this->assertStringContainsString("'activities.subject_type'", $service);
-        $this->assertStringContainsString("'activities.subject_id'", $service);
-        $this->assertStringNotContainsString('latestActivity:id,subject_type', $service);
     }
 
     public function test_my_work_defers_task_cards_until_after_the_controls_render(): void

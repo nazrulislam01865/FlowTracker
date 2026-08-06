@@ -37,7 +37,7 @@
                     <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $jobCounts['waiting'] }}</b></button>
                     <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $jobCounts['unassigned'] }}</b></button>
                     <span class="ft-board-group-controls" aria-label="Job group controls">
-                        <button type="button" class="ft-filter-collapse" wire:click="expandAll" title="Expand all job cards" aria-label="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" wire:click="expandVisibleJobs('{{ $jobs->pluck('id')->implode(',') }}')" title="Expand all job cards" aria-label="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
                         <button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all job cards" aria-label="Collapse all job cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
                     </span>
                 @else
@@ -48,8 +48,8 @@
                     <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $taskCounts['waiting'] }}</b></button>
                     <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $taskCounts['unassigned'] }}</b></button>
                     <span class="ft-board-group-controls" aria-label="Task job group controls">
-                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
-                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" wire:click="expandAllTaskGroups" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" wire:click="collapseAllTaskGroups" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
                     </span>
                 @endif
             </div>
@@ -132,7 +132,7 @@
             </div>
         </div>
         <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="taskBodyScroll" x-on:scroll="$refs.taskHeaderScroll && ($refs.taskHeaderScroll.scrollLeft = $event.target.scrollLeft)">
-            <x-board.task-job-matrix :tasks="$tasks" :statuses="$taskStatuses" :draggable="true" key-prefix="board" />
+            <x-board.task-job-matrix :tasks="$tasks" :statuses="$taskStatuses" :draggable="true" :all-groups-expanded="$taskGroupsExpanded" :group-state-key="$taskGroupsExpanded ? 'open' : 'closed'" key-prefix="board" />
         </div>
         @endif
     @endif

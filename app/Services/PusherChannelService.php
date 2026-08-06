@@ -10,9 +10,10 @@ class PusherChannelService
 {
     public function enabled(): bool
     {
-        // Temporarily disabled. Keep the integration code in place so it can be
-        // re-enabled later without affecting database-backed notifications.
-        return false;
+        return (bool) config('services.pusher.enabled', true)
+            && filled(config('services.pusher.app_id'))
+            && filled(config('services.pusher.key'))
+            && filled(config('services.pusher.secret'));
     }
 
     public function userChannel(int $userId): string
@@ -33,7 +34,7 @@ class PusherChannelService
 
     public function triggerUser(int $userId, string $event, array $payload): void
     {
-        if (!$this->enabled()) return;
+        if (!$this->enabled() || Cache::get($this->circuitKey())) return;
 
         $appId = (string) config('services.pusher.app_id');
         $key = (string) config('services.pusher.key');
@@ -70,9 +71,7 @@ class PusherChannelService
             ->post($url);
 
         if ($response->failed()) {
-            $seconds = in_array($response->status(), [401, 403], true)
-                ? max(3600, (int) config('services.pusher.circuit_seconds', 300))
-                : max(60, (int) config('services.pusher.circuit_seconds', 300));
+            $seconds = max(60, (int) config('services.pusher.circuit_seconds', 300));
             Cache::put($this->circuitKey(), true, now()->addSeconds($seconds));
             throw new RuntimeException('Pusher rejected the event with HTTP '.$response->status().'. Realtime delivery is temporarily disabled.');
         }
@@ -82,6 +81,13 @@ class PusherChannelService
 
     private function circuitKey(): string
     {
-        return 'flowtrack:pusher:circuit-open';
+        $fingerprint = implode('|', [
+            (string) config('services.pusher.app_id'),
+            (string) config('services.pusher.key'),
+            (string) config('services.pusher.cluster'),
+            (string) config('services.pusher.host'),
+        ]);
+
+        return 'flowtrack:pusher:circuit-open:'.sha1($fingerprint);
     }
 }

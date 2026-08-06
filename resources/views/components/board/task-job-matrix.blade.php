@@ -1,4 +1,4 @@
-@props(['tasks', 'statuses', 'draggable' => false, 'keyPrefix' => 'task-matrix'])
+@props(['tasks', 'statuses', 'draggable' => false, 'keyPrefix' => 'task-matrix', 'allGroupsExpanded' => true, 'groupStateKey' => 'default'])
 @php
     $matrixTasks = collect($tasks);
     $laneStatuses = collect($statuses)->values();
@@ -13,10 +13,8 @@
         @endphp
         <section
             class="ft-task-job-matrix-group"
-            x-data="{ open: true }"
-            x-on:board-expand-all.window="open = true"
-            x-on:board-collapse-all.window="open = false"
-            wire:key="{{ $keyPrefix }}-job-{{ $resolvedJobId }}"
+            x-data="{ open: {{ $allGroupsExpanded ? 'true' : 'false' }} }"
+            wire:key="{{ $keyPrefix }}-job-{{ $resolvedJobId }}-{{ $groupStateKey }}"
         >
             <div class="ft-task-job-row-head">
                 <button type="button" class="ft-task-job-row-toggle" x-on:click="open = !open" :title="open ? 'Collapse job tasks' : 'Expand job tasks'" :aria-expanded="open.toString()">

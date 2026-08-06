@@ -234,11 +234,25 @@ class JobService
                 'description' => $draft ? 'Job saved as draft' : 'Job created at '.$phase->name,
             ]);
 
-            if (!$draft) {
+            $mentionIds = app(MentionService::class)->userIdsFromText((string) $job->description);
+            if (!$draft || $mentionIds) {
                 $jobId = $job->id;
-                DB::afterCommit(function () use ($jobId, $actor) {
+                DB::afterCommit(function () use ($jobId, $actor, $draft, $mentionIds) {
                     $fresh = FlowJob::with(['client','phase','members','tasks'])->find($jobId);
-                    if ($fresh) app(NotificationService::class)->notifyJobAssigned($fresh, $actor);
+                    if (!$fresh) return;
+
+                    if (!$draft) app(NotificationService::class)->notifyJobAssigned($fresh, $actor, [], $mentionIds);
+
+                    if ($mentionIds) {
+                        app(NotificationService::class)->notifyMentionedUsers(
+                            $mentionIds,
+                            $actor->name.' mentioned you in '.$fresh->job_number,
+                            (string) $fresh->description,
+                            $fresh,
+                            null,
+                            $actor,
+                        );
+                    }
                 });
             }
 
@@ -360,15 +374,42 @@ class JobService
             abort_if(mb_strlen($value) > 255, 422, 'Job title is too long.');
         }
 
-        $job->update([$field => $field === 'description' && $value === '' ? null : $value]);
+        $storedValue = $field === 'description' && $value === '' ? null : $value;
+        $mentionIds = $field === 'description'
+            ? app(MentionService::class)->userIdsFromText($storedValue)
+            : [];
+
+        $job->update([$field => $storedValue]);
         $job->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.'.$field.'_updated',
             'description' => $field === 'title' ? 'Job title updated' : 'Job description updated',
+            'meta' => $mentionIds ? ['mention_user_ids' => $mentionIds] : null,
         ]);
 
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job details updated', $job->job_number.' · '.($field === 'title' ? 'Job name changed' : 'Description updated'), 'update', $actor);
-        return $job->refresh();
+        $fresh = $job->refresh();
+        app(NotificationService::class)->notifyJobParticipants(
+            $fresh,
+            'Job details updated',
+            $fresh->job_number.' · '.($field === 'title' ? 'Job name changed' : 'Description updated'),
+            'update',
+            $actor,
+            [],
+            $mentionIds,
+        );
+
+        if ($mentionIds) {
+            app(NotificationService::class)->notifyMentionedUsers(
+                $mentionIds,
+                $actor->name.' mentioned you in '.$fresh->job_number,
+                (string) $fresh->description,
+                $fresh,
+                null,
+                $actor,
+            );
+        }
+
+        return $fresh;
     }
 
     public function updateItem(FlowJob $job, FlowJobItem $item, string $field, mixed $value, User $actor): FlowJobItem

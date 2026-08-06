@@ -7,6 +7,7 @@
             :categories="$categories"
             :products="$products"
             :priorities="$priorities"
+            :mention-users="$mentionUsers"
             :client-id="$clientId"
             :workflow-id="$workflowId"
             :job-items="$jobItems"
@@ -20,6 +21,7 @@
         <x-jobs.task-detail
             :task="$selectedTask"
             :users="$users"
+            :mention-users="$mentionUsers"
             :task-progress="$taskProgress"
             :task-statuses="$taskStatuses"
             :priorities="$priorities"
@@ -37,6 +39,7 @@
             :expanded-phase-ids="$expandedPhaseIds"
             :task-statuses="$taskStatuses"
             :users="$users"
+            :mention-users="$mentionUsers"
             :priorities="$priorities"
             :products="$products"
             :categories="$categories"

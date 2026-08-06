@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AccessControlService;
+use App\Services\MentionService;
 use App\Services\ShellDataService;
 use App\Services\SetupContext;
 use App\Support\Performance\RequestPerformanceMonitor;
@@ -26,6 +27,7 @@ class AppServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->app->singleton(AccessControlService::class);
+        $this->app->scoped(MentionService::class);
         $this->app->scoped(RequestPerformanceMonitor::class);
         $this->app->scoped(ShellDataService::class);
         $this->app->scoped(SetupContext::class);

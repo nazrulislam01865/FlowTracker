@@ -1,4 +1,4 @@
-@props(['job','compact'=>false,'activityTab'=>'all','activityPage'=>1])
+@props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1])
 @php
     $canComment = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
     $activities = $job->activities->sortByDesc('created_at')->values();
@@ -28,7 +28,7 @@
     @if($canComment)
         <div class="ft-comment-composer ft-friendly-composer">
             <x-ui.avatar :name="auth()->user()->name" :size="32"/>
-            <input wire:model="jobComment" wire:keydown.enter="addJobComment" placeholder="Write a comment about this Job...">
+            <input class="ft-mention-input" wire:model="jobComment" wire:keydown.enter="addJobComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone...">
             <button class="ft-new-job-btn" type="button" wire:click="addJobComment">Comment</button>
         </div>
     @endif
@@ -49,7 +49,7 @@
                         <div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $isComment ? 'comment' : 'history' }}">{{ $isComment ? 'Comment' : 'Change' }}</span></div>
                         <time title="{{ $activity->created_at?->format('M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                     </div>
-                    <p>{{ $activity->description }}</p>
+                    <p><x-ui.mention-text :text="$activity->description" /></p>
                     <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $activity->created_at?->format('M j, Y · g:i A') }}</span></div>
                 </div>
             </article>

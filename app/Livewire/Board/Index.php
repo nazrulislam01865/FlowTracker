@@ -3,6 +3,7 @@
 namespace App\Livewire\Board;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Models\User;
 
 use App\Services\BoardService;
 use App\Services\JobService;
@@ -32,6 +33,7 @@ class Index extends Component
     public bool $cardsReady = false;
     public int $cardLimit = 60;
     public array $expandedJobs = [];
+    public bool $taskGroupsExpanded = true;
 
     public function mount(): void
     {
@@ -105,12 +107,38 @@ class Index extends Component
     public function expandAll(): void
     {
         $this->cardsReady = true;
-        $this->expandedJobs = app(BoardService::class)->jobs(auth()->user(), $this->jobFilters(), $this->cardLimit)->pluck('id')->all();
+        $this->expandedJobs = app(BoardService::class)
+            ->jobs(auth()->user(), $this->jobFilters(), $this->cardLimit)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    public function expandVisibleJobs(string $jobIds): void
+    {
+        $this->cardsReady = true;
+        $this->expandedJobs = collect(explode(',', $jobIds))
+            ->map(fn ($id) => (int) trim($id))
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 
     public function collapseAll(): void
     {
         $this->expandedJobs = [];
+    }
+
+    public function expandAllTaskGroups(): void
+    {
+        $this->taskGroupsExpanded = true;
+    }
+
+    public function collapseAllTaskGroups(): void
+    {
+        $this->taskGroupsExpanded = false;
     }
 
     public function moveTask(int $taskId, string $status): void
@@ -183,10 +211,20 @@ class Index extends Component
 
     public function render()
     {
+        $user = auth()->user();
         $service = app(BoardService::class);
-        $lookups = $service->lookups(auth()->user(), $this->mode === 'jobs');
+        $lookups = $service->lookups($user, $this->mode === 'jobs');
 
-        $data = [
+        $data = $this->mode === 'jobs'
+            ? $this->jobBoardData($user, $service, $lookups)
+            : $this->taskBoardData($user, $service, $lookups);
+
+        return view('livewire.board.index', $data);
+    }
+
+    private function boardBaseData(User $user, array $lookups): array
+    {
+        return [
             'jobs' => collect(),
             'tasks' => collect(),
             'phases' => collect(),
@@ -195,49 +233,57 @@ class Index extends Component
             'clients' => $lookups['clients'],
             'users' => $lookups['users'],
             'workflows' => collect(),
-            'taskJobs' => collect(),
+            'taskJobs' => app(JobService::class)->activeQuery($user)
+                ->orderBy('job_number')
+                ->limit(250)
+                ->get(['id', 'job_number', 'title']),
             'jobStatuses' => collect(),
             'taskStatuses' => collect(),
             'hasMoreCards' => false,
         ];
+    }
 
-        $data['taskJobs'] = app(JobService::class)->activeQuery(auth()->user())
-            ->orderBy('job_number')
-            ->limit(250)
-            ->get(['id', 'job_number', 'title']);
+    private function jobBoardData(User $user, BoardService $service, array $lookups): array
+    {
+        $data = $this->boardBaseData($user, $lookups);
+        $filters = $this->jobFilters();
+        $jobRows = $this->cardsReady
+            ? $service->jobs($user, $filters, $this->cardLimit + 1)
+            : collect();
 
-        if ($this->mode === 'jobs') {
-            $filters = $this->jobFilters();
-            $visibleJobQuery = app(JobService::class)->visibleQuery(auth()->user());
-            $jobRows = $this->cardsReady
-                ? $service->jobs(auth()->user(), $filters, $this->cardLimit + 1)
-                : collect();
-            $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
-            $data['jobs'] = $jobRows->take($this->cardLimit)->values();
-            $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
-            $data['jobCounts'] = $service->jobCounts(auth()->user(), $filters);
-            $data['workflows'] = $lookups['workflows'];
-            $data['jobStatuses'] = (clone $visibleJobQuery)
-                ->whereNotNull('status')
-                ->distinct()
-                ->orderBy('status')
-                ->pluck('status')
-                ->filter()
-                ->values();
-        } else {
-            $filters = $this->taskFilters();
-            $taskRows = $this->cardsReady
-                ? $service->tasks(auth()->user(), $filters, $this->cardLimit + 1)
-                : collect();
-            $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
-            $data['tasks'] = $taskRows->take($this->cardLimit)->values();
-            $data['taskCounts'] = $service->taskCounts(auth()->user(), $filters);
-            $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
-                app(MasterDataService::class)->active('task_status')->pluck('name')
-            ));
-        }
+        $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
+        $data['jobs'] = $jobRows->take($this->cardLimit)->values();
+        $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
+        $data['jobCounts'] = $service->jobCounts($user, $filters);
+        $data['workflows'] = $lookups['workflows'];
+        $data['jobStatuses'] = app(JobService::class)
+            ->visibleQuery($user)
+            ->whereNotNull('status')
+            ->distinct()
+            ->orderBy('status')
+            ->pluck('status')
+            ->filter()
+            ->values();
 
-        return view('livewire.board.index', $data);
+        return $data;
+    }
+
+    private function taskBoardData(User $user, BoardService $service, array $lookups): array
+    {
+        $data = $this->boardBaseData($user, $lookups);
+        $filters = $this->taskFilters();
+        $taskRows = $this->cardsReady
+            ? $service->tasks($user, $filters, $this->cardLimit + 1)
+            : collect();
+
+        $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
+        $data['tasks'] = $taskRows->take($this->cardLimit)->values();
+        $data['taskCounts'] = $service->taskCounts($user, $filters);
+        $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
+            app(MasterDataService::class)->active('task_status')->pluck('name')
+        ));
+
+        return $data;
     }
 
 }

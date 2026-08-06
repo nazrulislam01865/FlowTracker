@@ -123,8 +123,16 @@ class TaskService
         ];
         $oldDisplay = $field === 'assignee_id' ? (User::find($old)?->name ?? 'Unassigned') : $old;
         $newDisplay = $field === 'assignee_id' ? (User::find($new)?->name ?? 'Unassigned') : $new;
+        $mentionIds = $field === 'description'
+            ? app(MentionService::class)->userIdsFromText((string) $new)
+            : [];
+
         $this->record($task, $actor, 'task.field_updated', $this->changeDescription($labels[$field] ?? $field, $oldDisplay, $newDisplay), [
-            'field' => $field, 'old' => $oldDisplay, 'new' => $newDisplay,
+            'field' => $field,
+            'old' => $oldDisplay,
+            'new' => $newDisplay,
+            'mention_user_ids' => $mentionIds,
+            'mention_text' => $field === 'description' ? (string) $new : null,
         ]);
 
         $this->refreshJobState($task, $actor);
@@ -229,8 +237,14 @@ class TaskService
         abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
         $body = trim($body);
         abort_if($body === '', 422, 'Comment cannot be empty.');
+        $mentionIds = app(MentionService::class)->userIdsFromText($body);
         $comment = $task->comments()->create(['user_id' => $actor->id, 'body' => $body]);
-        $this->record($task, $actor, 'task.comment', 'Comment: '.$body, ['comment_id' => $comment->id, 'body' => $body]);
+        $this->record($task, $actor, 'task.comment', 'Comment: '.$body, [
+            'comment_id' => $comment->id,
+            'body' => $body,
+            'mention_user_ids' => $mentionIds,
+            'mention_text' => $body,
+        ]);
         return $comment;
     }
 
@@ -312,13 +326,34 @@ class TaskService
         $fresh = $task->refresh();
         $isAssignment = ($meta['field'] ?? null) === 'assignee_id' || isset($meta['changes']['assignee_id']);
         $type = ($fresh->needs_attention || str_contains($event, 'attention')) ? 'risk' : ($isAssignment ? 'assignment' : ($event === 'task.comment' ? 'comment' : 'update'));
+        $mentionIds = collect($meta['mention_user_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
         app(NotificationService::class)->notifyTaskParticipants(
             $fresh,
             $isAssignment ? 'Task assigned: '.$fresh->title : $this->notificationTitle($fresh, $event),
             $description,
             $type,
             $actor,
+            [],
+            $mentionIds,
         );
+
+        if ($mentionIds) {
+            $mentionText = trim((string) ($meta['mention_text'] ?? $description));
+            app(NotificationService::class)->notifyMentionedUsers(
+                $mentionIds,
+                $actor->name.' mentioned you in '.$fresh->title,
+                $mentionText,
+                $fresh->job()->first(),
+                $fresh,
+                $actor,
+            );
+        }
     }
 
     private function notificationTitle(Task $task, string $event): string
