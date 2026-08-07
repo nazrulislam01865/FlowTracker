@@ -108,7 +108,7 @@ class ReportService
                 ->reorder()
                 ->selectRaw('count(*) as task_total')
                 ->selectRaw('sum(case when tasks.completed_at is not null then 1 else 0 end) as task_done')
-                ->selectRaw("sum(case when tasks.completed_at is null and tasks.due_date < ? and exists (select 1 from flow_jobs where flow_jobs.id = tasks.flow_job_id and flow_jobs.deleted_at is null and flow_jobs.completed_at is null and flow_jobs.status not in ('Inactive','Cancelled')) then 1 else 0 end) as overdue_tasks", [today()->format('Y-m-d')])
+                ->selectRaw("sum(case when tasks.completed_at is null and tasks.due_date < ? and exists (select 1 from flow_jobs where flow_jobs.id = tasks.flow_job_id and flow_jobs.deleted_at is null and flow_jobs.completed_at is null and flow_jobs.status not in ('Inactive','Cancelled')) then 1 else 0 end) as overdue_tasks", [app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d')])
                 ->first();
 
             $completedJobs = (int) ($jobMetrics?->completed_jobs ?? 0);

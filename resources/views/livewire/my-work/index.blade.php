@@ -11,8 +11,8 @@
                 <x-ui.remote-filter label="Job" property="job" type="jobs" context="my-work" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
                 <x-ui.remote-filter label="Client" property="client" type="clients" context="my-work" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
                 <x-ui.remote-filter label="Assignee" property="assignee" type="users" context="my-work" :value="$assignee" placeholder="Anyone" :initial-options="$assigneeFilterOptions" />
-                <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="$taskStatuses->map(fn($value) => ['id' => $value, 'label' => $value])" />
-                <x-ui.select-filter label="Priority" property="priority" :value="$priority" placeholder="All priorities" :options="$priorities->map(fn($row) => ['id' => $row->name, 'label' => $row->name])" />
+                <x-ui.remote-filter label="Status" property="status" type="task-statuses" context="my-work" :value="$status" placeholder="All statuses" :initial-options="$statusFilterOptions" />
+                <x-ui.remote-filter label="Priority" property="priority" type="priorities" context="my-work" :value="$priority" placeholder="All priorities" :initial-options="$priorityFilterOptions" />
                 <x-ui.select-filter label="Due" property="due" :value="$due" placeholder="Any date" :options="collect([['id'=>'overdue','label'=>'Overdue'],['id'=>'today','label'=>'Due today'],['id'=>'week','label'=>'Due this week'],['id'=>'month','label'=>'Next 30 days'],['id'=>'none','label'=>'No due date']])" />
             </div>
             @php

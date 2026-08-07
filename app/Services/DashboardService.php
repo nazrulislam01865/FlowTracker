@@ -73,7 +73,7 @@ class DashboardService
                 ->first();
 
             $taskMetrics = $tasks
-                ->selectRaw('sum(case when tasks.completed_at is null and tasks.due_date < ? then 1 else 0 end) as overdue_tasks', [today()->format('Y-m-d')])
+                ->selectRaw('sum(case when tasks.completed_at is null and tasks.due_date < ? then 1 else 0 end) as overdue_tasks', [app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d')])
                 ->selectRaw("sum(case when tasks.completed_at is null and tasks.status in ('Waiting for Client','Waiting for Internal Approval') then 1 else 0 end) as pending_approvals")
                 ->first();
 
@@ -179,7 +179,7 @@ class DashboardService
             app(JobService::class)->activeQuery($user)
                 ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.title', 'flow_jobs.delivery_date'])
                 ->with('client:id,name')
-                ->where('delivery_date', '>=', today()->toDateString())
+                ->where('delivery_date', '>=', app(WorkspaceSettingsService::class)->localToday()->toDateString())
                 ->orderBy('delivery_date')
                 ->limit(6)
                 ->get()

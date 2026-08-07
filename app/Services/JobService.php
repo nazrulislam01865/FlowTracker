@@ -49,7 +49,7 @@ class JobService
             ->when($quick !== 'completed' && empty($filters['status']), fn ($q) => $q->whereNotIn('status', self::INACTIVE_STATUSES))
             ->when($quick === 'completed', fn ($q) => $q->whereNotNull('completed_at'))
             ->when($quick === 'attention', fn ($q) => $q->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])))
-            ->when($quick === 'due_week', fn ($q) => $q->whereBetween('delivery_date', [today(), today()->addDays(7)]))
+            ->when($quick === 'due_week', fn ($q) => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->addDays(7)]))
             ->when($quick === 'waiting', fn ($q) => $q->whereHas('tasks', fn ($t) => $t->where('status', 'like', 'Waiting%')->whereNull('completed_at')))
             ->when($quick === 'invoice', fn ($q) => $q->where(fn ($x) => $x->where('commercial_value', '<=', 0)->orWhereHas('phase', fn ($p) => $p->where('short_name', 'Invoice'))))
             ->when($filters['search'] ?? null, function ($q, $search) {
@@ -72,8 +72,8 @@ class JobService
             ->when($filters['owner'] ?? null, fn ($q, $v) => $q->where('owner_id', $v))
             ->when($filters['priority'] ?? null, fn ($q, $v) => $q->where('priority', $v))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
-            ->when(($filters['delivery'] ?? null) === 'week', fn ($q) => $q->whereBetween('delivery_date', [today(), today()->addDays(7)]))
-            ->when(($filters['delivery'] ?? null) === 'overdue', fn ($q) => $q->where('delivery_date', '<', today()->toDateString())->whereNull('completed_at'))
+            ->when(($filters['delivery'] ?? null) === 'week', fn ($q) => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->addDays(7)]))
+            ->when(($filters['delivery'] ?? null) === 'overdue', fn ($q) => $q->where('delivery_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString())->whereNull('completed_at'))
             ->when(($filters['delivery'] ?? null) === 'none', fn ($q) => $q->whereNull('delivery_date'))
             ->when(($filters['invoice'] ?? null) === 'pending', fn ($q) => $q->where('commercial_value', '<=', 0))
             ->when(($filters['invoice'] ?? null) === 'draft', fn ($q) => $q->where('commercial_value', '>', 0))
@@ -128,8 +128,8 @@ class JobService
 
     public function summaryCounts(User $user): array
     {
-        $today = today()->format('Y-m-d');
-        $weekEnd = today()->copy()->addDays(7)->format('Y-m-d');
+        $today = app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d');
+        $weekEnd = app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)->format('Y-m-d');
         $inactive = self::INACTIVE_STATUSES;
 
         $row = $this->visibleQuery($user)
@@ -190,7 +190,7 @@ class JobService
             $next = (int) FlowJob::withTrashed()->max('id') + 126;
             $draft = (bool) ($data['draft'] ?? false);
             $job = FlowJob::create([
-                'job_number' => 'JOB-'.now()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
+                'job_number' => 'JOB-'.app(WorkspaceSettingsService::class)->localNow()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
                 'client_id' => $data['client_id'],
                 'workflow_id' => $workflow->id,
                 'source_workflow_id' => $workflow->id,
@@ -750,7 +750,7 @@ class JobService
             $priority = $template->priority?->name ?: $job->priority;
             $dueDate = null;
             if ($isCurrent) {
-                $dueDate = today()->addDays(max(0, (int) $template->due_offset_days));
+                $dueDate = app(WorkspaceSettingsService::class)->localToday()->addDays(max(0, (int) $template->due_offset_days));
                 if ($job->delivery_date && $dueDate->gt($job->delivery_date)) $dueDate = $job->delivery_date->copy();
             }
 
@@ -770,7 +770,7 @@ class JobService
                 'status' => $defaultStatus,
                 'priority' => $priority,
                 'progress' => $isPast ? 100 : 0,
-                'start_date' => $isPast || $isCurrent ? today() : null,
+                'start_date' => $isPast || $isCurrent ? app(WorkspaceSettingsService::class)->localToday() : null,
                 'due_date' => $dueDate,
                 'completed_at' => $isPast ? now() : null,
             ]);
@@ -807,7 +807,7 @@ class JobService
                 $changes['document_requirement_source'] = $template->document_category_id ? 'task_pack' : null;
             }
             if (!$task->description && $template->description) $changes['description'] = $template->description;
-            if ($isCurrent && !$task->start_date) $changes['start_date'] = today();
+            if ($isCurrent && !$task->start_date) $changes['start_date'] = app(WorkspaceSettingsService::class)->localToday();
             if ($changes) $task->update($changes);
 
             FlowTaskComment::firstOrCreate(['flow_task_id' => $task->id, 'body' => 'Task created from the configured phase Task Pack.'], ['user_id' => $job->coordinator_id]);

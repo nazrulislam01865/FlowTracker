@@ -37,12 +37,12 @@ class TaskService
         $q = $this->visibleQuery($user)->whereNull('completed_at');
 
         return [
-            'today' => (clone $q)->where('due_date', today()->toDateString())->count(),
-            'overdue' => (clone $q)->where('due_date', '<', today()->toDateString())->count(),
+            'today' => (clone $q)->where('due_date', app(WorkspaceSettingsService::class)->localToday()->toDateString())->count(),
+            'overdue' => (clone $q)->where('due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString())->count(),
             'attention' => (clone $q)->where('needs_attention', true)->count(),
             'approval' => (clone $q)->whereIn('status', ['Waiting for Client', 'Waiting for Internal Approval'])->count(),
-            'upcoming' => (clone $q)->where('due_date', '>', today()->toDateString())->count(),
-            'completed_week' => $this->visibleQuery($user)->whereBetween('completed_at', [now()->startOfWeek(), now()->endOfWeek()])->count(),
+            'upcoming' => (clone $q)->where('due_date', '>', app(WorkspaceSettingsService::class)->localToday()->toDateString())->count(),
+            'completed_week' => $this->visibleQuery($user)->whereBetween('completed_at', app(WorkspaceSettingsService::class)->localWeekUtcBounds())->count(),
         ];
     }
 
@@ -246,6 +246,36 @@ class TaskService
             'mention_text' => $body,
         ]);
         return $comment;
+    }
+
+    public function setAttentionFlag(Task $task, ?string $flag, User $actor): Task
+    {
+        $this->assertEditable($task, $actor);
+
+        $flag = trim((string) $flag);
+        $newFlag = $flag !== '' ? $flag : null;
+        $oldFlag = $task->needs_attention
+            ? (trim((string) $task->attention_reason) ?: 'Management attention')
+            : null;
+
+        if ($oldFlag === $newFlag) return $task->refresh();
+
+        $task->update([
+            'needs_attention' => $newFlag !== null,
+            'attention_reason' => $newFlag,
+        ]);
+
+        $this->record(
+            $task,
+            $actor,
+            'task.attention_updated',
+            $this->changeDescription('Task flag', $oldFlag ?: 'Not flagged', $newFlag ?: 'Not flagged'),
+            ['old_flag' => $oldFlag, 'new_flag' => $newFlag],
+        );
+
+        $this->syncJobAttention($task);
+
+        return $task->refresh();
     }
 
     public function syncJobAttention(Task $task): void

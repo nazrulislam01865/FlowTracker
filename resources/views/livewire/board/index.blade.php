@@ -18,10 +18,10 @@
                 <x-ui.remote-filter label="Job" property="job" type="jobs" context="board" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
                 <x-ui.remote-filter label="Client" property="client" type="clients" context="board" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
                 <x-ui.remote-filter label="Assignee" property="assignee" type="users" context="board" :value="$assignee" placeholder="Anyone" :initial-options="$assigneeFilterOptions" />
-                <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="($mode === 'jobs' ? $jobStatuses : $taskStatuses)->map(fn($value) => ['id' => $value, 'label' => $value])" />
+                <x-ui.remote-filter label="Status" property="status" :type="$mode === 'jobs' ? 'job-statuses' : 'task-statuses'" context="board" :value="$status" placeholder="All statuses" :initial-options="$statusFilterOptions" wire:key="board-status-filter-{{ $mode }}" />
                 <x-ui.select-filter label="Due" property="due" :value="$due" placeholder="Any date" :options="collect([['id'=>'overdue','label'=>'Overdue'],['id'=>'today','label'=>'Due today'],['id'=>'week','label'=>'Due this week'],['id'=>'month','label'=>'Next 30 days'],['id'=>'none','label'=>'No due date']])" />
                 @if($mode === 'jobs')
-                    <x-ui.select-filter label="Workflow" property="workflow" :value="$workflow" placeholder="Select workflow" :clearable="false" :options="$workflows->map(fn($flow) => ['id' => (string)$flow->id, 'label' => $flow->name])" />
+                    <x-ui.remote-filter label="Workflow" property="workflow" type="workflows" context="board" :value="$workflow" placeholder="Select workflow" :clearable="false" :initial-options="$workflowFilterOptions" />
                     <x-ui.select-filter label="Sort" property="sort" :value="$sort" placeholder="Delivery date" :clearable="false" :options="collect([['id'=>'delivery','label'=>'Delivery date'],['id'=>'updated','label'=>'Recently updated'],['id'=>'priority','label'=>'Priority']])" />
                 @endif
             </div>

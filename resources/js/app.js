@@ -1,3 +1,39 @@
+
+const flowtrackTimezoneState = { syncing: false };
+
+const syncBrowserTimezone = async () => {
+    if (flowtrackTimezoneState.syncing || !window.Intl?.DateTimeFormat) return false;
+
+    const url = document.querySelector('meta[name="flowtrack-timezone-sync-url"]')?.content;
+    const current = document.querySelector('meta[name="flowtrack-display-timezone"]')?.content;
+    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    if (!url || !csrf || !timezone || timezone === current) return false;
+
+    flowtrackTimezoneState.syncing = true;
+    try {
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: {
+                'Accept': 'application/json',
+                'Content-Type': 'application/json',
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ timezone }),
+        });
+        if (!response.ok) return false;
+
+        window.location.reload();
+        return true;
+    } catch (_) {
+        return false;
+    } finally {
+        flowtrackTimezoneState.syncing = false;
+    }
+};
+
 const bootShell = () => {
     const sidebar = document.getElementById('sidebar');
     const shade = document.getElementById('sidebarShade');
@@ -589,6 +625,7 @@ const bootFileDropzones = () => {
 };
 
 const boot = () => {
+    syncBrowserTimezone();
     bootShell();
     bootRealtimeNotifications();
     bootLivewireNotificationEvents();
@@ -606,6 +643,7 @@ document.addEventListener('livewire:init', () => {
     bootLivewireMentionHooks();
 });
 document.addEventListener('livewire:navigated', () => {
+    syncBrowserTimezone();
     bootShell();
     bootRealtimeNotifications();
     bootLivewireNotificationEvents();

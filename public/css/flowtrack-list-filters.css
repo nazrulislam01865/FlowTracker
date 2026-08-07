@@ -1,6 +1,6 @@
 /* FlowTrack shared list/search/filter experience.
    UI follows the supplied job-list prototype: compact filter toolbar,
-   420px searchable popovers for large datasets, consistent menu styling,
+   compact searchable popovers for large datasets, consistent menu styling,
    active-filter chips, and retained results while Livewire refreshes. */
 
 .ft-list-filter-shell {
@@ -136,12 +136,12 @@
 
 /* Shared dropdown panel.
    It follows the supplied prototype: absolutely anchored to the filter
-   control, width capped at 420px, and removed from normal document flow. */
+   control, compact width aligned with the assignee picker, and removed from normal document flow. */
 .ft-remote-filter-menu {
   position: absolute;
   z-index: 1200;
   box-sizing: border-box;
-  width: min(420px, calc(100vw - 24px));
+  width: min(320px, calc(100vw - 24px));
   max-width: calc(100vw - 24px);
   padding: 8px;
   color: var(--text, #172231);
@@ -467,4 +467,157 @@
   .ft-list-active-row .ft-list-filter-actions .ft-board-group-controls {
     grid-column: auto !important;
   }
+}
+
+/* 2026-08-08: list filters use the same light, searchable dropdown language as
+   the Job Details phase-task assignee control. Keep page typography simple and
+   avoid heavy selected/option text. */
+.ft-list-filter-shell .ft-jl-control > label {
+  margin-bottom: 6px;
+  font-size: 13px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+.ft-list-filter-shell .ft-remote-filter-button {
+  min-height: 42px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 400;
+}
+.ft-list-filter-shell .ft-filter-chevron {
+  font-size: 13px;
+  font-weight: 400;
+}
+.ft-list-filter-shell .ft-remote-filter-menu {
+  width: min(320px, calc(100vw - 24px)) !important;
+  min-width: min(260px, calc(100vw - 24px)) !important;
+  max-width: calc(100vw - 24px) !important;
+  padding: 8px !important;
+  border-radius: 12px;
+  box-shadow: 0 14px 32px rgba(28, 45, 66, .14);
+}
+.ft-list-filter-shell .ft-remote-filter-search {
+  min-height: 42px;
+  margin: 0 0 8px;
+  padding: 9px 12px;
+  border-radius: 10px;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 400;
+}
+.ft-list-filter-shell .ft-remote-filter-list {
+  gap: 2px;
+  max-height: 245px;
+}
+.ft-list-filter-shell .ft-remote-filter-option {
+  min-height: 40px;
+  padding: 9px 11px;
+  border-radius: 9px;
+  font-size: 14px;
+  line-height: 1.35;
+  font-weight: 400;
+}
+.ft-list-filter-shell .ft-remote-filter-option[aria-selected="true"] {
+  font-weight: 400;
+}
+.ft-list-filter-shell .ft-remote-filter-option > small {
+  font-size: 12px;
+  line-height: 1.3;
+  font-weight: 400;
+  text-align: right;
+}
+.ft-list-filter-shell .ft-remote-filter-message {
+  padding: 8px 10px 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  font-weight: 400;
+}
+@media (max-width: 520px) {
+  .ft-list-filter-shell .ft-remote-filter-menu {
+    width: 100% !important;
+    min-width: 100% !important;
+    max-width: 100% !important;
+  }
+}
+
+/* 2026-08-08 compact dynamic filter pass.
+   List filters intentionally mirror the lightweight Job Details assignee picker:
+   shorter controls, smaller regular-weight type, compact searchable menus. */
+.ft-list-filter-shell .ft-list-filter-grid{
+  grid-template-columns:repeat(auto-fill,minmax(155px,1fr));
+  gap:8px;
+}
+.ft-list-filter-shell .ft-jl-control>label{
+  margin:0 0 4px 2px;
+  font-size:12px;
+  line-height:1.25;
+  font-weight:500;
+}
+.ft-list-filter-shell .ft-jl-search,
+.ft-list-filter-shell .ft-remote-filter-button{
+  min-height:36px;
+  height:36px;
+  padding:6px 10px;
+  border-radius:9px;
+  font-size:13px;
+  line-height:1.25;
+  font-weight:400;
+}
+.ft-list-filter-shell .ft-jl-search{
+  padding-left:32px;
+  padding-right:32px;
+}
+.ft-list-filter-shell .ft-jl-search-icon{left:10px}
+.ft-list-filter-shell .ft-jl-clear-search{right:5px;width:25px;height:25px}
+.ft-list-filter-shell .ft-filter-chevron{
+  font-size:11px;
+  font-weight:400;
+}
+.ft-list-filter-shell .ft-remote-filter-menu{
+  min-width:min(230px,calc(100vw - 24px))!important;
+  padding:7px!important;
+  border-radius:11px;
+  box-shadow:0 12px 28px rgba(28,45,66,.13);
+}
+.ft-list-filter-shell .ft-remote-filter-search{
+  min-height:36px;
+  height:36px;
+  margin:0 0 6px;
+  padding:7px 10px;
+  border-radius:9px;
+  font-size:13px;
+  line-height:1.25;
+  font-weight:400;
+}
+.ft-list-filter-shell .ft-remote-filter-list{
+  gap:1px;
+  max-height:210px;
+}
+.ft-list-filter-shell .ft-remote-filter-option{
+  min-height:34px;
+  padding:6px 9px;
+  border-radius:8px;
+  font-size:13px;
+  line-height:1.25;
+  font-weight:400;
+}
+.ft-list-filter-shell .ft-remote-filter-option[aria-selected="true"]{font-weight:400}
+.ft-list-filter-shell .ft-remote-filter-option>small{
+  font-size:11px;
+  line-height:1.2;
+  font-weight:400;
+  max-width:44%;
+}
+.ft-list-filter-shell .ft-remote-filter-message{
+  padding:7px 9px 3px;
+  font-size:11px;
+  line-height:1.35;
+  font-weight:400;
+}
+.ft-list-filter-shell .ft-filter-skeleton{
+  height:30px;
+  margin:3px;
 }

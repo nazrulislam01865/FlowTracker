@@ -47,10 +47,10 @@
                 <div class="ft-activity-entry-content">
                     <div class="ft-activity-entry-head">
                         <div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $isComment ? 'comment' : 'history' }}">{{ $isComment ? 'Comment' : 'Change' }}</span></div>
-                        <time title="{{ $activity->created_at?->format('M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
+                        <time title="{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                     </div>
                     <p><x-ui.mention-text :text="$activity->description" /></p>
-                    <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $activity->created_at?->format('M j, Y · g:i A') }}</span></div>
+                    <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y · g:i A') }}</span></div>
                 </div>
             </article>
         @empty

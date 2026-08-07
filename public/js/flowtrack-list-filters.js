@@ -20,8 +20,8 @@
         // control that opened it. It may be wider than the trigger, but it
         // never participates in page layout or horizontal board scrolling.
         const availableWidth = Math.max(0, viewportWidth - (edge * 2));
-        const requestedWidth = Number(component.menuWidth || 420);
-        const preferredWidth = Number.isFinite(requestedWidth) ? Math.max(rect.width, requestedWidth) : 420;
+        const requestedWidth = Number(component.menuWidth || 320);
+        const preferredWidth = Number.isFinite(requestedWidth) ? Math.max(rect.width, requestedWidth) : 320;
         const width = Math.min(preferredWidth, availableWidth);
         const alignRight = rect.left + width > viewportWidth - edge;
 
@@ -63,7 +63,7 @@
         return {
             ...positioningMethods,
             searchable: true,
-            menuWidth: Number(config.menuWidth || 420),
+            menuWidth: Number(config.menuWidth || 320),
             open: false,
             query: '',
             loading: false,
@@ -82,7 +82,9 @@
             openMenu() {
                 if (config.disabled) return;
                 this.openPositionedMenu();
-                if (!this.recentLoaded) this.searchOptions();
+                // Show the render-provided recent options immediately, then refresh
+                // them in the background so each open reflects current source data.
+                this.searchOptions(true);
                 this.$nextTick(() => {
                     this.reposition();
                     this.$refs.search?.focus();
@@ -103,7 +105,7 @@
                 const next = index < 0 ? 0 : Math.max(0, Math.min(buttons.length - 1, index + direction));
                 buttons[next]?.focus();
             },
-            async searchOptions() {
+            async searchOptions(force = false) {
                 const q = this.query.trim();
                 if (q.length > 0 && q.length < 2) {
                     this.controller?.abort();
@@ -115,7 +117,7 @@
                 }
 
                 const key = q.toLowerCase();
-                if (this.cache.has(key)) {
+                if (!force && this.cache.has(key)) {
                     this.items = this.cache.get(key);
                     this.message = q
                         ? `${this.items.length} result${this.items.length === 1 ? '' : 's'}`
@@ -197,16 +199,25 @@
         };
     };
 
-    // Small fixed lists use the exact same panel/option visuals as searchable
-    // filters, just without the search input. This removes native OS dropdown
-    // differences while preserving the prototype's simple-list behavior.
+    // Fixed list filters now use the same searchable, lightweight interaction
+    // as the Job Details assignee picker. Search stays client-side because the
+    // option sets are already small and fully loaded.
     window.FlowTrackLocalFilter = (config) => ({
         ...positioningMethods,
-        searchable: false,
+        searchable: true,
+        menuWidth: Number(config.menuWidth || 320),
         open: false,
+        query: '',
         items: Array.isArray(config.items) ? config.items : [],
         selectedValue: String(config.value || ''),
         selectedLabel: config.selectedLabel || config.placeholder,
+        get filteredItems() {
+            const q = normaliseOptionValue(this.query);
+            if (!q) return this.items;
+            return this.items.filter((item) =>
+                normaliseOptionValue(item.label).includes(q) || normaliseOptionValue(item.meta).includes(q)
+            );
+        },
         toggle() {
             if (config.disabled) return;
             if (this.open) {
@@ -217,15 +228,18 @@
             this.openPositionedMenu();
             this.$nextTick(() => {
                 this.reposition();
-                const selected = this.$refs.menu?.querySelector('[aria-selected="true"]');
-                (selected || this.$refs.menu?.querySelector('.ft-remote-filter-option'))?.focus();
+                this.$refs.search?.focus();
             });
         },
         close() {
             this.open = false;
+            this.query = '';
+        },
+        focusFirst() {
+            this.$refs.menu?.querySelector('.ft-remote-filter-list .ft-remote-filter-option')?.focus();
         },
         moveOption(direction) {
-            const buttons = [...(this.$refs.menu?.querySelectorAll('.ft-remote-filter-option') || [])];
+            const buttons = [...(this.$refs.menu?.querySelectorAll('.ft-remote-filter-list .ft-remote-filter-option') || [])];
             if (!buttons.length) return;
             const index = buttons.indexOf(document.activeElement);
             const next = index < 0 ? 0 : Math.max(0, Math.min(buttons.length - 1, index + direction));
@@ -235,6 +249,7 @@
             this.selectedValue = String(value || '');
             this.selectedLabel = label || config.placeholder;
             this.open = false;
+            this.query = '';
         },
         sync(value, label) {
             const next = String(value || '');

@@ -7,6 +7,7 @@
     'selectedLabel' => null,
     'disabled' => false,
     'clearable' => true,
+    'menuWidth' => 300,
 ])
 @php
     $items = collect($options)->map(function ($item) {
@@ -54,6 +55,7 @@
         selectedLabel: @js($resolvedLabel),
         items: @js($items->all()),
         disabled: @js((bool)$disabled),
+        menuWidth: @js((int)$menuWidth),
     })"
     x-effect="sync(@js((string)$value), @js($resolvedLabel))"
     x-on:keydown.escape.window="close()"
@@ -68,13 +70,19 @@
         x-on:click.outside="close()"
         x-on:keydown.arrow-down.prevent="moveOption(1)"
         x-on:keydown.arrow-up.prevent="moveOption(-1)">
+        <input x-ref="search" class="ft-remote-filter-search" type="text" role="searchbox" inputmode="search"
+            x-model="query" x-on:keydown.arrow-down.prevent="focusFirst()"
+            placeholder="Search {{ strtolower($label) }}…" autocomplete="off">
         @if($clearable)
             <button type="button" class="ft-remote-filter-option ft-remote-filter-clear" :aria-selected="selectedValue === ''" x-on:click="choose('', @js($placeholder)); $wire.set(@js($property), '')">
                 <span>{{ $placeholder }}</span><small x-show="selectedValue === ''">Selected</small>
             </button>
         @endif
         <div class="ft-remote-filter-list" role="listbox">
-            <template x-for="item in items" :key="item.id">
+            <template x-if="filteredItems.length === 0">
+                <div class="ft-remote-filter-message">No matching options</div>
+            </template>
+            <template x-for="item in filteredItems" :key="item.id">
                 <button type="button" class="ft-remote-filter-option" :aria-selected="String(item.id) === String(selectedValue)" x-on:click="choose(String(item.id), item.label); $wire.set(@js($property), String(item.id))">
                     <span x-text="item.label"></span><small x-text="item.meta || (String(item.id) === String(selectedValue) ? 'Selected' : '')"></small>
                 </button>

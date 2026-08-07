@@ -1,16 +1,16 @@
 <div class="ft-access-admin">
     <div class="ft-access-head">
         <div>
-            <h1>{{ $tab === 'branding' ? 'System Branding' : 'Access Roles & Permissions' }}</h1>
-            <p>{{ $tab === 'branding' ? 'Manage the logo and browser favicon used across FlowTrack.' : 'Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.' }}</p>
+            <h1>{{ $tab === 'branding' ? 'System Branding' : ($tab === 'settings' ? 'System Settings' : 'Access Roles & Permissions') }}</h1>
+            <p>{{ $tab === 'branding' ? 'Manage the logo and browser favicon used across FlowTrack.' : ($tab === 'settings' ? 'Configure workspace-wide display settings used throughout FlowTrack.' : 'Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.') }}</p>
         </div>
-        @if($tab !== 'branding')
+        @if(!in_array($tab, ['branding','settings'], true))
             <div class="ft-access-actions"><button class="ghost" wire:click="setTab('audit')">Audit Log</button><button class="primary" wire:click="openRole">＋ New Role</button></div>
         @endif
     </div>
 
     <div class="ft-access-tabs">
-        @foreach(['dashboard'=>'Access Dashboard','roles'=>'Roles & Policies','matrix'=>'Permission Matrix','users'=>'Users & Assignments','audit'=>'Audit Log','security'=>'Security Settings','branding'=>'Branding'] as $key=>$label)
+        @foreach(['dashboard'=>'Access Dashboard','roles'=>'Roles & Policies','matrix'=>'Permission Matrix','users'=>'Users & Assignments','audit'=>'Audit Log','security'=>'Security Settings','settings'=>'Settings','branding'=>'Branding'] as $key=>$label)
             <button class="{{ $tab===$key?'active':'' }}" wire:click="setTab('{{ $key }}')">{{ $label }}</button>
         @endforeach
     </div>
@@ -137,7 +137,7 @@
         </tbody></table></div>
     @elseif($tab==='audit')
         <section class="card ft-access-panel"><div class="section-head"><div><h3>Access audit log</h3><div class="small muted">Role, permission, scope, security and assignment changes.</div></div></div>
-            <div class="ft-access-audit">@forelse($auditLog as $event)<div class="ft-audit-row"><div class="ft-audit-dot">{{ strtoupper(substr($event->user?->name ?? 'S',0,1)) }}</div><div><b>{{ $event->description }}</b><span>{{ $event->user?->name ?? 'System' }} · {{ $event->created_at?->format('M j, Y g:i A') }}</span></div><code>{{ $event->event }}</code></div>@empty<div class="empty">No access changes recorded yet.</div>@endforelse</div>
+            <div class="ft-access-audit">@forelse($auditLog as $event)<div class="ft-audit-row"><div class="ft-audit-dot">{{ strtoupper(substr($event->user?->name ?? 'S',0,1)) }}</div><div><b>{{ $event->description }}</b><span>{{ $event->user?->name ?? 'System' }} · {{ \App\Support\UserLocalTime::format($event->created_at, 'M j, Y g:i A') }}</span></div><code>{{ $event->event }}</code></div>@empty<div class="empty">No access changes recorded yet.</div>@endforelse</div>
         </section>
     @elseif($tab==='security')
         <div class="ft-access-grid-2">
@@ -146,6 +146,16 @@
             </section>
             <section class="card ft-access-panel"><div class="section-head"><div><h3>Access policy</h3></div></div><div class="ft-control-note"><b>Administrator/Super Admin</b><span>Unrestricted application access. These roles can configure all permissions.</span></div><div class="ft-control-note"><b>All other roles</b><span>Must pass both the action permission and record-scope check on every page and update.</span></div><div class="ft-control-note"><b>Assignments</b><span>Task assignees see their assigned tasks; associated Job visibility follows from those assignments.</span></div></section>
         </div>
+    @elseif($tab==='settings')
+        <section class="card ft-access-panel ft-workspace-settings-card">
+            <div class="section-head">
+                <div><h3>Local time</h3><div class="small muted">FlowTrack automatically uses each signed-in user's current device/browser time zone.</div></div>
+            </div>
+            <div class="ft-workspace-setting-row ft-auto-timezone-row">
+                <div><b>Automatic local time</b><span>No manual selection is required. If the user's device time zone changes, FlowTrack updates it for that session automatically. Database timestamps remain unchanged.</span></div>
+                <div class="ft-access-info"><b>{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}</b><span>{{ app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('M j, Y · g:i A') }}</span></div>
+            </div>
+        </section>
     @endif
 
     @if($tab === 'branding')

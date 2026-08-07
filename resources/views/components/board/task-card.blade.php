@@ -28,14 +28,14 @@
     @if($waiting)
         <div class="ft-waiting-panel">
             <span class="ft-waiting-icon"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="m10.5 13.5 3-3"/><path d="m7.5 15.5-1 1a4 4 0 0 1-5.7-5.7l3-3a4 4 0 0 1 5.7 0"/><path d="m16.5 8.5 1-1a4 4 0 0 1 5.7 5.7l-3 3a4 4 0 0 1-5.7 0"/></svg></span>
-            <div><b>Waiting on: <span>{{ $waiting }}</span></b><small>Since {{ $task->updated_at?->format('M j') ?? '—' }}</small></div>
+            <div><b>Waiting on: <span>{{ $waiting }}</span></b><small>Since {{ \App\Support\UserLocalTime::format($task->updated_at, 'M j') }}</small></div>
         </div>
     @endif
 
     <div class="ft-task-assignee-row">
         <div class="ft-task-assignee"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="38" /><b>{{ $task->assignee?->name ?? 'Unassigned' }}</b></div>
         <span
-            class="ft-inline-date ft-inline-edit-shell {{ $task->due_date?->isPast() && !$task->completed_at ? 'overdue' : '' }}"
+            class="ft-inline-date ft-inline-edit-shell {{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date)) && !$task->completed_at ? 'overdue' : '' }}"
             x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j') ?? 'Set due date') })"
             :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         >

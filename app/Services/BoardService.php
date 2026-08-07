@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
+use App\Models\WorkflowTemplate;
 use App\Support\BoardLaneResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -104,8 +105,8 @@ class BoardService
     public function jobCounts(User $user, array $baseFilters = []): array
     {
         $base = $this->jobQuery($user, array_diff_key($baseFilters, ['quick' => true]));
-        $today = today()->format('Y-m-d');
-        $weekEnd = today()->copy()->addDays(7)->format('Y-m-d');
+        $today = app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d');
+        $weekEnd = app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)->format('Y-m-d');
 
         $row = (clone $base)
             ->reorder()
@@ -137,8 +138,8 @@ class BoardService
             ->reorder()
             ->selectRaw("sum(case when completed_at is null then 1 else 0 end) as open_count")
             ->selectRaw("sum(case when completed_at is null and assignee_id = ? then 1 else 0 end) as mine_count", [$user->id])
-            ->selectRaw("sum(case when completed_at is null and due_date < ? then 1 else 0 end) as overdue_count", [today()->format('Y-m-d')])
-            ->selectRaw("sum(case when completed_at is null and due_date between ? and ? then 1 else 0 end) as week_count", [today()->format('Y-m-d'), today()->copy()->addDays(7)->format('Y-m-d')])
+            ->selectRaw("sum(case when completed_at is null and due_date < ? then 1 else 0 end) as overdue_count", [app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d')])
+            ->selectRaw("sum(case when completed_at is null and due_date between ? and ? then 1 else 0 end) as week_count", [app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d'), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)->format('Y-m-d')])
             ->selectRaw("sum(case when completed_at is null and status = 'Blocked' then 1 else 0 end) as blocked_count")
             ->selectRaw("sum(case when completed_at is null and status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') then 1 else 0 end) as waiting_count")
             ->selectRaw("sum(case when completed_at is null and assignee_id is null then 1 else 0 end) as unassigned_count")
@@ -160,7 +161,12 @@ class BoardService
     public function phases(?int $workflowId = null): Collection
     {
         if (!$workflowId) {
-            $workflowId = Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id');
+            $workflowId = WorkflowTemplate::query()
+                ->where('workspace_id', app(SetupContext::class)->workspaceId())
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('id')
+                ->value('id');
         }
         if (!$workflowId) return collect();
 
@@ -168,7 +174,10 @@ class BoardService
         $expiresAt = now()->addMinutes(5);
         $resolver = function () use ($workflowId) {
             $sourceRows = WorkflowPhase::query()
-                ->where('workflow_id', $workflowId)
+                ->where(function ($query) use ($workflowId) {
+                    $query->where('workflow_template_id', $workflowId)
+                        ->orWhere('workflow_id', $workflowId);
+                })
                 ->where('is_active', true)
                 ->orderBy('sequence')
                 ->orderBy('id')
@@ -222,29 +231,25 @@ class BoardService
 
     public function workflowOptions(): Collection
     {
+        $workspaceId = app(SetupContext::class)->workspaceId();
         $workflowKey = $this->workflowCacheKey();
         $workflowExpiresAt = now()->addMinutes(5);
-        $workflowResolver = function () {
-            $setup = Workflow::query()
-                ->where('is_snapshot', false)
+        $workflowResolver = function () use ($workspaceId) {
+            // Workflow Setup is the only source of truth for this filter. Do not
+            // merge deleted legacy Workflows or private Job snapshots back into
+            // the Board dropdown.
+            return WorkflowTemplate::query()
+                ->where('workspace_id', $workspaceId)
                 ->where('is_active', true)
+                ->orderByDesc('is_default')
                 ->orderBy('name')
                 ->get(['id', 'name'])
-                ->map(fn (Workflow $workflow) => [
+                ->map(fn (WorkflowTemplate $workflow) => [
                     'id' => (int) $workflow->id,
                     'name' => (string) $workflow->name,
-                ]);
-
-            $jobSnapshots = FlowJob::query()
-                ->whereNotNull('source_workflow_id')
-                ->with('workflow:id,name')
-                ->get(['id', 'workflow_id', 'source_workflow_id'])
-                ->map(fn (FlowJob $job) => [
-                    'id' => (int) $job->source_workflow_id,
-                    'name' => (string) ($job->workflow?->name ?: 'Archived Workflow'),
-                ]);
-
-            return $setup->concat($jobSnapshots)->unique('id')->sortBy('name')->values()->all();
+                ])
+                ->values()
+                ->all();
         };
 
         $rows = $this->rememberScalarRows(
@@ -412,14 +417,24 @@ class BoardService
         return 'flowtrack:board:lookups:v2:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
     }
 
+    public static function workflowOptionsCacheKey(int $workspaceId): string
+    {
+        return 'flowtrack:board:workflows:v3:workspace:'.$workspaceId;
+    }
+
+    public static function workflowPhaseCacheKey(int $workflowId): string
+    {
+        return 'flowtrack:board:phases:v3:'.$workflowId;
+    }
+
     private function workflowCacheKey(): string
     {
-        return 'flowtrack:board:workflows:v2';
+        return self::workflowOptionsCacheKey(app(SetupContext::class)->workspaceId());
     }
 
     private function phaseCacheKey(int $workflowId): string
     {
-        return 'flowtrack:board:phases:v2:'.$workflowId;
+        return self::workflowPhaseCacheKey($workflowId);
     }
 
     private function jobQuery(User $user, array $filters): Builder
@@ -450,10 +465,10 @@ class BoardService
             ->when($filters['status'] ?? null, fn ($q, $value) => $q->where('status', $value))
             ->when($filters['due'] ?? null, function ($q, $value) {
                 match ($value) {
-                    'overdue' => $q->where('delivery_date', '<', today()->toDateString()),
-                    'today' => $q->where('delivery_date', today()->toDateString()),
-                    'week' => $q->whereBetween('delivery_date', [today(), today()->copy()->addDays(7)]),
-                    'month' => $q->whereBetween('delivery_date', [today(), today()->copy()->addDays(30)]),
+                    'overdue' => $q->where('delivery_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+                    'today' => $q->where('delivery_date', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+                    'week' => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)]),
+                    'month' => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(30)]),
                     'none' => $q->whereNull('delivery_date'),
                     default => null,
                 };
@@ -468,8 +483,8 @@ class BoardService
                 ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id))
                 ->orWhereHas('tasks', fn ($t) => $t->where('assignee_id', $user->id))
             ),
-            'overdue' => $query->where('delivery_date', '<', today()->toDateString()),
-            'week' => $query->whereBetween('delivery_date', [today(), today()->copy()->addDays(7)]),
+            'overdue' => $query->where('delivery_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+            'week' => $query->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)]),
             'blocked' => $query->where(fn ($q) => $q->where('health', 'Blocked')->orWhere('status', 'Blocked')->orWhereHas('tasks', fn ($t) => $t->where('status', 'Blocked')->whereNull('completed_at'))),
             'waiting' => $query->where(fn ($q) => $q->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->orWhereHas('tasks', fn ($t) => $t->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->whereNull('completed_at'))),
             'unassigned' => $query->where(fn ($q) => $q->whereNull('owner_id')->orWhereNull('coordinator_id')->orWhereHas('tasks', fn ($t) => $t->whereNull('assignee_id')->whereNull('completed_at'))),
@@ -517,10 +532,10 @@ class BoardService
             ->when($filters['priority'] ?? null, fn ($q, $value) => $q->where('priority', $value))
             ->when($filters['due'] ?? null, function ($q, $value) {
                 match ($value) {
-                    'overdue' => $q->where('due_date', '<', today()->toDateString()),
-                    'today' => $q->where('due_date', today()->toDateString()),
-                    'week' => $q->whereBetween('due_date', [today(), today()->copy()->addDays(7)]),
-                    'month' => $q->whereBetween('due_date', [today(), today()->copy()->addDays(30)]),
+                    'overdue' => $q->where('due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+                    'today' => $q->where('due_date', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+                    'week' => $q->whereBetween('due_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)]),
+                    'month' => $q->whereBetween('due_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(30)]),
                     'none' => $q->whereNull('due_date'),
                     default => null,
                 };
@@ -529,8 +544,8 @@ class BoardService
         match ($filters['quick'] ?? '') {
             'open' => $query->whereNull('completed_at'),
             'mine' => $query->where('assignee_id', $user->id),
-            'overdue' => $query->whereNull('completed_at')->where('due_date', '<', today()->toDateString()),
-            'week' => $query->whereNull('completed_at')->whereBetween('due_date', [today(), today()->copy()->addDays(7)]),
+            'overdue' => $query->whereNull('completed_at')->where('due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
+            'week' => $query->whereNull('completed_at')->whereBetween('due_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)]),
             'blocked' => $query->whereNull('completed_at')->where('status', 'Blocked'),
             'waiting' => $query->whereNull('completed_at')->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval']),
             'unassigned' => $query->whereNull('completed_at')->whereNull('assignee_id'),

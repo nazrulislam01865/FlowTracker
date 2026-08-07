@@ -39,8 +39,13 @@ class Index extends Component
 
     public function mount(): void
     {
-        $this->workflow = (string) (\App\Models\Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id')
-            ?: \App\Models\FlowJob::query()->whereNotNull('source_workflow_id')->value('source_workflow_id'));
+        $workspaceId = app(\App\Services\SetupContext::class)->workspaceId();
+        $this->workflow = (string) (\App\Models\WorkflowTemplate::query()
+            ->where('workspace_id', $workspaceId)
+            ->where('is_active', true)
+            ->orderByDesc('is_default')
+            ->orderBy('id')
+            ->value('id') ?: '');
     }
 
     public function setMode(string $mode): void
@@ -229,15 +234,20 @@ class Index extends Component
 
     private function boardBaseData(User $user): array
     {
+        $options = app(\App\Services\FilterOptionService::class);
+        $statusType = $this->mode === 'jobs' ? 'job-statuses' : 'task-statuses';
+
         return [
             'jobs' => collect(),
             'tasks' => collect(),
             'phases' => collect(),
-            'jobFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 6),
-            'clientFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 6),
-            'assigneeFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 6),
-            'workflows' => collect(),
-            'jobStatuses' => collect(),
+            'jobFilterOptions' => $options->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 5),
+            'clientFilterOptions' => $options->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 5),
+            'assigneeFilterOptions' => $options->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 5),
+            'statusFilterOptions' => $options->options($user, $statusType, 'board', '', $this->status, 5),
+            'workflowFilterOptions' => $this->mode === 'jobs'
+                ? $options->options($user, 'workflows', 'board', '', $this->workflow !== '' ? (int) $this->workflow : null, 5)
+                : collect(),
             'taskStatuses' => collect(),
             'hasMoreCards' => false,
         ];
@@ -254,16 +264,6 @@ class Index extends Component
         $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
         $data['jobs'] = $jobRows->take($this->cardLimit)->values();
         $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
-        $data['workflows'] = $service->workflowOptions();
-        $data['jobStatuses'] = app(JobService::class)
-            ->visibleQuery($user)
-            ->whereNotNull('status')
-            ->distinct()
-            ->orderBy('status')
-            ->pluck('status')
-            ->filter()
-            ->values();
-
         return $data;
     }
 

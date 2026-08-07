@@ -6,7 +6,8 @@ use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\User;
-use App\Models\Workflow;
+use App\Models\WorkflowPhase;
+use App\Models\WorkflowTemplate;
 use Illuminate\Support\Collection;
 
 class FilterOptionService
@@ -29,7 +30,14 @@ class FilterOptionService
             'users' => $this->users($user, $context, $search, $limit),
             'product-categories' => $this->productCategories($user, $context, $search, $limit),
             'products' => $this->products($user, $context, $search, $limit, (string) ($constraints['category'] ?? '')),
-            'workflows' => $this->workflows($user, $search, $limit),
+            'workflows' => $this->workflows($user, $context, $search, $limit),
+            'priorities' => $this->masterOptions('priority', $search, $limit),
+            'task-statuses' => $this->masterOptions('task_status', $search, $limit),
+            'document-categories' => $this->masterOptions('document_category', $search, $limit),
+            'countries' => $this->countries($user, $context, $search, $limit),
+            'job-statuses' => $this->jobStatuses($user, $search, $limit),
+            'job-healths' => $this->jobHealths($user, $search, $limit),
+            'phases' => $this->phases($search, $limit),
             default => collect(),
         };
 
@@ -40,7 +48,14 @@ class FilterOptionService
                 'users' => $this->userById($user, $context, $selectedId),
                 'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
                 'products' => $this->productByName($user, $context, (string) $selectedId, (string) ($constraints['category'] ?? '')),
-                'workflows' => $this->workflowById($user, $selectedId),
+                'workflows' => $this->workflowById($user, $context, $selectedId),
+                'priorities' => $this->masterByName('priority', (string) $selectedId),
+                'task-statuses' => $this->masterByName('task_status', (string) $selectedId),
+                'document-categories' => $this->masterByName('document_category', (string) $selectedId),
+                'countries' => $this->countryByName($user, $context, (string) $selectedId),
+                'job-statuses' => $this->jobStatusByName($user, (string) $selectedId),
+                'job-healths' => $this->jobHealthByName($user, (string) $selectedId),
+                'phases' => $this->phaseById($selectedId),
                 default => null,
             };
             if ($selected) $items->prepend($selected);
@@ -288,43 +303,205 @@ class FilterOptionService
         abort_unless($canCreate || $canEditFromJobDetail, 403);
     }
 
-    private function workflows(User $user, string $search, int $limit): Collection
+    private function workflows(User $user, string $context, string $search, int $limit): Collection
     {
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeWorkflowOptions($user, $context);
+        $workspaceId = app(SetupContext::class)->workspaceId();
 
-        return Workflow::query()
-            ->select(['id', 'name'])
-            ->where('is_snapshot', false)
+        return WorkflowTemplate::query()
+            ->where('workspace_id', $workspaceId)
             ->where('is_active', true)
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
+            ->orderByDesc('is_default')
             ->orderBy('name')
             ->limit($limit)
-            ->get()
-            ->map(fn (Workflow $workflow) => [
+            ->get(['id', 'name'])
+            ->map(fn (WorkflowTemplate $workflow) => [
                 'id' => (int) $workflow->id,
                 'label' => (string) $workflow->name,
                 'meta' => $workflow->phases_count.' '.str('phase')->plural($workflow->phases_count),
             ]);
     }
 
-    private function workflowById(User $user, int|string $id): ?array
+    private function workflowById(User $user, string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeWorkflowOptions($user, $context);
 
-        $row = Workflow::query()
-            ->select(['id', 'name'])
-            ->where('is_snapshot', false)
+        $row = WorkflowTemplate::query()
+            ->where('workspace_id', app(SetupContext::class)->workspaceId())
             ->where('is_active', true)
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
-            ->find((int) $id);
+            ->find((int) $id, ['id', 'name']);
 
         return $row ? [
             'id' => (int) $row->id,
             'label' => (string) $row->name,
             'meta' => $row->phases_count.' '.str('phase')->plural($row->phases_count),
         ] : null;
+    }
+
+
+    private function masterOptions(string $type, string $search, int $limit): Collection
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType($type)
+            ->active()
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->where('name', 'like', $search.'%')
+                ->orWhere('code', 'like', $search.'%')))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'code'])
+            ->map(fn (MasterRecord $record) => [
+                'id' => (string) $record->name,
+                'label' => (string) $record->name,
+                'meta' => '',
+            ]);
+    }
+
+    private function masterByName(string $type, string $name): ?array
+    {
+        if ($name === '') return null;
+
+        $record = MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType($type)
+            ->active()
+            ->where('name', $name)
+            ->first(['id', 'name', 'code']);
+
+        return $record ? [
+            'id' => (string) $record->name,
+            'label' => (string) $record->name,
+            'meta' => '',
+        ] : null;
+    }
+
+    private function countries(User $user, string $context, string $search, int $limit): Collection
+    {
+        $active = $context !== 'clients-archived';
+
+        return app(ClientService::class)->visibleQuery($user)
+            ->where('is_active', $active)
+            ->whereNotNull('country')
+            ->where('country', '!=', '')
+            ->when(strlen($search) >= 2, fn ($q) => $q->where('country', 'like', $search.'%'))
+            ->distinct()
+            ->orderBy('country')
+            ->limit($limit)
+            ->pluck('country')
+            ->map(fn ($country) => ['id' => (string) $country, 'label' => (string) $country, 'meta' => '']);
+    }
+
+    private function countryByName(User $user, string $context, string $country): ?array
+    {
+        if ($country === '') return null;
+        $active = $context !== 'clients-archived';
+        $exists = app(ClientService::class)->visibleQuery($user)
+            ->where('is_active', $active)
+            ->where('country', $country)
+            ->exists();
+
+        return $exists ? ['id' => $country, 'label' => $country, 'meta' => ''] : null;
+    }
+
+    private function jobStatuses(User $user, string $search, int $limit): Collection
+    {
+        return app(JobService::class)->visibleQuery($user)
+            ->whereNotNull('status')
+            ->where('status', '!=', '')
+            ->when(strlen($search) >= 2, fn ($q) => $q->where('status', 'like', $search.'%'))
+            ->distinct()
+            ->orderBy('status')
+            ->limit($limit)
+            ->pluck('status')
+            ->map(fn ($status) => ['id' => (string) $status, 'label' => (string) $status, 'meta' => '']);
+    }
+
+    private function jobStatusByName(User $user, string $status): ?array
+    {
+        if ($status === '') return null;
+        $exists = app(JobService::class)->visibleQuery($user)->where('status', $status)->exists();
+        return $exists ? ['id' => $status, 'label' => $status, 'meta' => ''] : null;
+    }
+
+    private function jobHealths(User $user, string $search, int $limit): Collection
+    {
+        return app(JobService::class)->visibleQuery($user)
+            ->whereNotNull('health')
+            ->where('health', '!=', '')
+            ->when(strlen($search) >= 2, fn ($q) => $q->where('health', 'like', $search.'%'))
+            ->distinct()
+            ->orderBy('health')
+            ->limit($limit)
+            ->pluck('health')
+            ->map(fn ($health) => ['id' => (string) $health, 'label' => (string) $health, 'meta' => '']);
+    }
+
+    private function jobHealthByName(User $user, string $health): ?array
+    {
+        if ($health === '') return null;
+        $exists = app(JobService::class)->visibleQuery($user)->where('health', $health)->exists();
+        return $exists ? ['id' => $health, 'label' => $health, 'meta' => ''] : null;
+    }
+
+    private function phases(string $search, int $limit): Collection
+    {
+        $workspaceId = app(SetupContext::class)->workspaceId();
+
+        return WorkflowPhase::query()
+            ->whereNotNull('workflow_template_id')
+            ->where('is_active', true)
+            ->whereHas('workflowTemplate', fn ($workflow) => $workflow
+                ->where('workspace_id', $workspaceId)
+                ->where('is_active', true))
+            ->with('workflowTemplate:id,name')
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->where('name', 'like', $search.'%')
+                ->orWhere('short_name', 'like', $search.'%')))
+            ->orderBy('sequence')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'workflow_template_id', 'name', 'short_name', 'sequence'])
+            ->map(fn (WorkflowPhase $phase) => [
+                'id' => (int) $phase->id,
+                'label' => (string) $phase->name,
+                'meta' => (string) ($phase->workflowTemplate?->name ?: ''),
+            ]);
+    }
+
+    private function phaseById(int|string $id): ?array
+    {
+        if (!is_numeric($id)) return null;
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $phase = WorkflowPhase::query()
+            ->whereNotNull('workflow_template_id')
+            ->where('is_active', true)
+            ->whereHas('workflowTemplate', fn ($workflow) => $workflow
+                ->where('workspace_id', $workspaceId)
+                ->where('is_active', true))
+            ->with('workflowTemplate:id,name')
+            ->find((int) $id, ['id', 'workflow_template_id', 'name']);
+
+        return $phase ? [
+            'id' => (int) $phase->id,
+            'label' => (string) $phase->name,
+            'meta' => (string) ($phase->workflowTemplate?->name ?: ''),
+        ] : null;
+    }
+
+    private function authorizeWorkflowOptions(User $user, string $context): void
+    {
+        if ($context === 'board') {
+            abort_unless($user->canAccess('tasks.view'), 403);
+            return;
+        }
+
+        abort_unless($user->canAccess('jobs.create'), 403);
     }
 
     private function visibleUsers(User $user, string $context)
@@ -343,6 +520,12 @@ class FilterOptionService
                 : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
+        $access = app(AccessControlService::class);
+        $module = $context === 'clients' ? 'clients' : ($context === 'jobs' ? 'jobs' : 'tasks');
+        if ($access->scope($user, $module) === 'all_records') {
+            return User::query()->where('is_active', true);
+        }
+
         $ids = match ($context) {
             'clients' => app(ClientService::class)->visibleQuery($user)
                 ->whereNotNull('account_manager_id')
@@ -359,6 +542,6 @@ class FilterOptionService
                 ->pluck('assignee_id'),
         };
 
-        return User::query()->where('is_active', true)->whereIn('id', $ids);
+        return User::query()->where('is_active', true)->whereIn('id', $ids->push($user->id)->unique());
     }
 }

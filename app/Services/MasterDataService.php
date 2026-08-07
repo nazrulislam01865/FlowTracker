@@ -23,6 +23,7 @@ class MasterDataService
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
         'task_status' => 'Task Statuses',
+        'task_flag' => 'Task Flags',
     ];
 
     private const LEGACY_GROUPS = [

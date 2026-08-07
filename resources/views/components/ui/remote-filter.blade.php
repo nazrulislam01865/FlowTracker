@@ -11,6 +11,7 @@
     'disabled' => false,
     'clearable' => true,
     'action' => null,
+    'menuWidth' => 300,
 ])
 @php
     $items = collect($initialOptions)->map(fn ($item) => is_array($item) ? $item : (array) $item)->values();
@@ -28,6 +29,7 @@
     initialItems: @js($items->all()),
     params: @js($params),
     disabled: @js((bool)$disabled),
+    menuWidth: @js((int)$menuWidth),
 })" x-effect="sync(@js((string)$value), @js($resolvedLabel))" x-on:keydown.escape.window="close()" x-on:resize.window="open && reposition()" x-on:scroll.window="open && reposition()">
     <label>{{ $label }}</label>
     <button x-ref="trigger" type="button" class="ft-remote-filter-button" x-on:click="toggle()" :aria-expanded="open.toString()" @disabled($disabled)>

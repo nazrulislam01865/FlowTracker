@@ -7,7 +7,6 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Models\Document;
 use App\Models\MasterRecord;
 use App\Models\Task;
-use App\Models\WorkflowPhase;
 use App\Services\AccessControlService;
 use App\Services\ClientService;
 use App\Services\DocumentService;
@@ -163,13 +162,7 @@ class Index extends Component
             'recent' => (clone $base)->where('updated_at','>=',now()->subDays(7))->count(),
         ];
 
-        $categories = app(MasterDataService::class)->active('document_category');
-        $phases = WorkflowPhase::query()
-            ->whereNotNull('workflow_template_id')
-            ->where('is_active', true)
-            ->orderBy('sequence')
-            ->orderBy('name')
-            ->get(['id','name','short_name','sequence']);
+        $categories = $this->showUpload ? app(MasterDataService::class)->active('document_category') : collect();
 
         $selected = $this->selectedDocumentId
             ? $access->applyDocumentScope(Document::query()->with(['job.client','task.phase','task.assignee','uploader']),$user)->find($this->selectedDocumentId)
@@ -188,10 +181,11 @@ class Index extends Component
             'documents' => $documents,
             'grouped' => $grouped,
             'metrics' => $metrics,
-            'jobFilterOptions' => $optionService->options($user, 'jobs', 'documents', '', $this->job !== '' ? (int)$this->job : null, 6),
-            'clientFilterOptions' => $optionService->options($user, 'clients', 'documents', '', $this->client !== '' ? (int)$this->client : null, 6),
+            'jobFilterOptions' => $optionService->options($user, 'jobs', 'documents', '', $this->job !== '' ? (int)$this->job : null, 5),
+            'clientFilterOptions' => $optionService->options($user, 'clients', 'documents', '', $this->client !== '' ? (int)$this->client : null, 5),
+            'phaseFilterOptions' => $optionService->options($user, 'phases', 'documents', '', $this->phase !== '' ? (int)$this->phase : null, 5),
+            'categoryFilterOptions' => $optionService->options($user, 'document-categories', 'documents', '', $this->category, 5),
             'jobs' => $jobs,
-            'phases' => $phases,
             'categories' => $categories,
             'uploadTasks' => $uploadTasks,
             'selected' => $selected,

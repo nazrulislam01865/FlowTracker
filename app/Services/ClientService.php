@@ -34,7 +34,7 @@ class ClientService
                 'jobs as active_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES), $user),
                 'jobs as attention_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user),
                 'tasks as open_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at'), $user),
-                'tasks as overdue_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where('tasks.due_date', '<', today()->toDateString()), $user),
+                'tasks as overdue_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where('tasks.due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()), $user),
                 'tasks as blocked_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where(fn ($x) => $x->where('tasks.status', 'Blocked')->orWhere('tasks.needs_attention', true)), $user),
             ])
             ->when($filters['search'] ?? null, function ($q, $search) {
@@ -143,7 +143,7 @@ class ClientService
             ->where(function ($q) {
                 $q->where('needs_attention', true)
                     ->orWhere('status', 'Blocked')
-                    ->orWhereDate('due_date', '<', today());
+                    ->orWhereDate('due_date', '<', app(WorkspaceSettingsService::class)->localToday());
             })
             ->orderByRaw('due_date is null, due_date asc')
             ->limit(5)
@@ -152,7 +152,7 @@ class ClientService
         $active = $jobs->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES);
         $overdue = app(TaskService::class)->visibleQuery($user)
             ->whereHas('job', fn ($q) => $q->where('client_id', $client->id))
-            ->whereNull('completed_at')->where('due_date', '<', today()->toDateString())->count();
+            ->whereNull('completed_at')->where('due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString())->count();
         $openTasks = app(TaskService::class)->visibleQuery($user)
             ->whereHas('job', fn ($q) => $q->where('client_id', $client->id))
             ->whereNull('completed_at')->count();

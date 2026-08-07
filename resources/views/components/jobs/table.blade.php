@@ -1,5 +1,5 @@
 @props([
-    'jobs','clientFilterOptions','ownerFilterOptions','phases','users','priorities','healthOptions','jobStatuses',
+    'jobs','clientFilterOptions','ownerFilterOptions','phaseFilterOptions','users','priorityFilterOptions','healthFilterOptions','jobStatusFilterOptions',
     'searchFilter'=>'','phaseFilter'=>'','healthFilter'=>'','clientFilter'=>'','ownerFilter'=>'','deliveryFilter'=>'','invoiceFilter'=>'','priorityFilterValue'=>'','jobStatusFilterValue'=>'','sortValue'=>'updated_desc','showMoreFilters'=>false,'selectedJobIds'=>[],
     'allFilteredJobsSelected'=>false,
 ])
@@ -13,19 +13,19 @@
         <div class="ft-list-filter-shell" aria-label="Job search and filters">
             <div class="ft-list-filter-grid">
                 <x-ui.list-search property="search" :value="$searchFilter" placeholder="Job number, order, title, client or product…" />
-                <x-ui.select-filter label="Phase" property="phase" :value="$phaseFilter" placeholder="All phases" :options="$phases->map(fn($p) => ['id'=>(string)$p->id,'label'=>$p->name])" />
-                <x-ui.select-filter label="Health" property="health" :value="$healthFilter" placeholder="All health" :options="$healthOptions->map(fn($h) => ['id'=>$h,'label'=>$h])" />
+                <x-ui.remote-filter label="Phase" property="phase" type="phases" context="jobs" :value="$phaseFilter" placeholder="All phases" :initial-options="$phaseFilterOptions" />
+                <x-ui.remote-filter label="Health" property="health" type="job-healths" context="jobs" :value="$healthFilter" placeholder="All health" :initial-options="$healthFilterOptions" />
                 <x-ui.remote-filter label="Owner" property="owner" type="users" context="jobs" :value="$ownerFilter" placeholder="Anyone" :initial-options="$ownerFilterOptions" />
                 <x-ui.remote-filter label="Client" property="client" type="clients" context="jobs" :value="$clientFilter" placeholder="All clients" :initial-options="$clientFilterOptions" />
                 <x-ui.select-filter label="Delivery" property="delivery" :value="$deliveryFilter" placeholder="Any date" :options="collect([['id'=>'week','label'=>'Due this week'],['id'=>'overdue','label'=>'Overdue'],['id'=>'none','label'=>'No delivery date']])" />
                 <x-ui.select-filter label="Invoice" property="invoice" :value="$invoiceFilter" placeholder="Any invoice" :options="collect([['id'=>'pending','label'=>'Quotation pending'],['id'=>'draft','label'=>'Draft / value recorded']])" />
-                <x-ui.select-filter label="Priority" property="priorityFilter" :value="$priorityFilterValue" placeholder="All priorities" :options="$priorities->map(fn($p) => ['id'=>$p->name,'label'=>$p->name])" />
-                <x-ui.select-filter label="Job status" property="jobStatusFilter" :value="$jobStatusFilterValue" placeholder="All statuses" :options="$jobStatuses->map(fn($status) => ['id'=>$status,'label'=>$status])" />
+                <x-ui.remote-filter label="Priority" property="priorityFilter" type="priorities" context="jobs" :value="$priorityFilterValue" placeholder="All priorities" :initial-options="$priorityFilterOptions" />
+                <x-ui.remote-filter label="Job status" property="jobStatusFilter" type="job-statuses" context="jobs" :value="$jobStatusFilterValue" placeholder="All statuses" :initial-options="$jobStatusFilterOptions" />
             </div>
             @php
                 $activeChips = collect();
                 if($searchFilter) $activeChips->push(['key'=>'search','label'=>'Search: '.$searchFilter]);
-                if($phaseFilter) $activeChips->push(['key'=>'phase','label'=>'Phase: '.($phases->firstWhere('id',(int)$phaseFilter)?->name ?? $phaseFilter)]);
+                if($phaseFilter) $activeChips->push(['key'=>'phase','label'=>'Phase: '.(collect($phaseFilterOptions)->firstWhere('id',(int)$phaseFilter)['label'] ?? $phaseFilter)]);
                 if($healthFilter) $activeChips->push(['key'=>'health','label'=>'Health: '.$healthFilter]);
                 if($ownerFilter) $activeChips->push(['key'=>'owner','label'=>'Owner: '.(collect($ownerFilterOptions)->firstWhere('id',(int)$ownerFilter)['label'] ?? 'Selected')]);
                 if($clientFilter) $activeChips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$clientFilter)['label'] ?? 'Selected')]);
@@ -71,7 +71,7 @@
                         <td data-label="Client / Brief"><b>{{ $job->client?->name }}</b><div class="ft-table-sub">{{ \Illuminate\Support\Str::limit($job->title, 36) }}</div></td>
                         <td data-label="Product / Qty"><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,(int) $job->items_count) }} product · {{ number_format($job->quantity) }} pcs</div></td>
                         <td data-label="Phase"><span class="ft-soft-pill blue">{{ $job->phase?->short_name ?? '—' }}</span></td>
-                        <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ $next?->due_date?->isPast() ? 'overdue' : '' }}">@if($next?->due_date){{ $next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
+                        <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ ($next?->due_date && \App\Support\UserLocalTime::isDatePast($next->due_date)) ? 'overdue' : '' }}">@if($next?->due_date){{ \App\Support\UserLocalTime::isDatePast($next->due_date) ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
                         <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
                         <td data-label="Owner">
                             <div
@@ -99,7 +99,7 @@
                         </td>
                         <td data-label="Delivery">
                             <div
-                                class="ft-date-chip ft-inline-date-editor ft-inline-edit-shell {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}"
+                                class="ft-date-chip ft-inline-date-editor ft-inline-edit-shell {{ ($job->delivery_date && \App\Support\UserLocalTime::isDatePast($job->delivery_date)) && !$job->completed_at ? 'overdue' : '' }}"
                                 x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set date') })"
                                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                             >

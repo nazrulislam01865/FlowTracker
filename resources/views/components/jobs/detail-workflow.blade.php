@@ -17,7 +17,7 @@
     $canChangeJobStatus = app(\App\Services\AccessControlService::class)->canChangeVisibleJobStatus(auth()->user(), $job);
 @endphp
 <div class="ft-workflow-detail-section ft-exact-workflow">
-    <div class="ft-section-title-row"><div><h2>Workflow</h2><p>{{ $job->workflow->name }} · Version 1 · {{ $job->created_at?->format('M j, Y') ?? '—' }}</p></div></div>
+    <div class="ft-section-title-row"><div><h2>Workflow</h2><p>{{ $job->workflow->name }} · Version 1 · {{ \App\Support\UserLocalTime::format($job->created_at, 'M j, Y') }}</p></div></div>
 
     @if($blockers->isNotEmpty())
         <div class="ft-warning-banner">
@@ -88,7 +88,7 @@
                 <h2>Phase history</h2><p>Each phase is calculated only from its selected Task Pack tasks and Task Pack document requirements.</p>
                 <table class="ft-history-table"><thead><tr><th>Phase</th><th>Status</th><th>Entered</th><th>Completed</th><th>Time in phase</th><th>Outcome</th></tr></thead><tbody>
                     @foreach($rows as $row)
-                        <tr><td><b>{{ $row->phase->sequence }}</b> &nbsp; {{ $row->phase->short_name }}</td><td><span class="ft-soft-pill {{ $row->status==='Completed'?'green':($row->status==='Current'?'blue':'gray') }}">{{ $row->status }}</span></td><td>{{ $row->entered?->format('M j Y') ?? '—' }}</td><td>{{ $row->completed?->format('M j Y') ?? '—' }}</td><td>{{ $row->time ? $row->time.' day'.($row->time>1?'s':'') : '—' }}</td><td class="{{ $row->outcome==='Passed'?'green-text':($row->outcome==='Blocked'?'warn-text':'') }}">{{ $row->outcome }}</td></tr>
+                        <tr><td><b>{{ $row->phase->sequence }}</b> &nbsp; {{ $row->phase->short_name }}</td><td><span class="ft-soft-pill {{ $row->status==='Completed'?'green':($row->status==='Current'?'blue':'gray') }}">{{ $row->status }}</span></td><td>{{ \App\Support\UserLocalTime::format($row->entered, 'M j Y') }}</td><td>{{ \App\Support\UserLocalTime::format($row->completed, 'M j Y') }}</td><td>{{ $row->time ? $row->time.' day'.($row->time>1?'s':'') : '—' }}</td><td class="{{ $row->outcome==='Passed'?'green-text':($row->outcome==='Blocked'?'warn-text':'') }}">{{ $row->outcome }}</td></tr>
                     @endforeach
                 </tbody></table>
             </section>

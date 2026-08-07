@@ -120,10 +120,14 @@
 .ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-option{font-size:11px}
 .ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-message{font-size:10px}
 .ft-inline-product-draft-row .ft-inline-cell-input{border-color:#a9c4f7;background:#fff}
-.ft-inline-product-quantity-wrap{display:flex;align-items:center;gap:7px;min-width:0}
-.ft-inline-product-quantity-wrap>.ft-inline-field-editor{flex:1 1 auto;min-width:0}
+.ft-inline-product-quantity-wrap{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0;width:100%}
+.ft-inline-product-quantity-wrap>.ft-inline-field-editor{flex:0 1 110px;min-width:0;margin-left:auto}
 .ft-inline-product-delete{flex:0 0 26px;width:26px;height:26px;border:1px solid transparent;border-radius:6px;background:transparent;color:#7c8ca3;font:inherit;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
 .ft-inline-product-delete:hover,.ft-inline-product-delete:focus-visible{border-color:#f2b8b8;background:#fff6f6;color:#b42318;outline:0}
 .ft-inline-product-delete:disabled{opacity:.45;cursor:not-allowed}
+.ft-inline-product-table th:last-child,.ft-inline-product-table td:last-child{text-align:right}
+.ft-inline-product-table .ft-inline-cell-input.quantity{text-align:right}
+.ft-readonly-product-value{margin-left:auto;text-align:right;justify-content:flex-end}
+
 .ft-add-product-inline:disabled{opacity:.55;cursor:wait}
 

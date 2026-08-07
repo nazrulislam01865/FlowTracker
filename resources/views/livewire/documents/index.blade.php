@@ -16,8 +16,8 @@
                     <x-ui.list-search property="search" :value="$search" placeholder="File name, document number, Job or task…" />
                     <x-ui.remote-filter label="Job" property="job" type="jobs" context="documents" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
                     <x-ui.remote-filter label="Client" property="client" type="clients" context="documents" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
-                    <x-ui.select-filter label="Phase" property="phase" :value="$phase" placeholder="All phases" :options="$phases->map(fn($p) => ['id'=>(string)$p->id,'label'=>$p->name])" />
-                    <x-ui.select-filter label="Document type" property="category" :value="$category" placeholder="All types" :options="$categories->map(fn($cat) => ['id'=>$cat->name,'label'=>$cat->name])" />
+                    <x-ui.remote-filter label="Phase" property="phase" type="phases" context="documents" :value="$phase" placeholder="All phases" :initial-options="$phaseFilterOptions" />
+                    <x-ui.remote-filter label="Document type" property="category" type="document-categories" context="documents" :value="$category" placeholder="All types" :initial-options="$categoryFilterOptions" />
                     <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="collect([['id'=>'current','label'=>'Current'],['id'=>'approved','label'=>'Approved'],['id'=>'needs_action','label'=>'Needs attention'],['id'=>'awaiting_approval','label'=>'Awaiting approval'],['id'=>'recent','label'=>'Recently updated']])" />
                 </div>
                 @php
@@ -25,7 +25,7 @@
                     if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
                     if($job) $chips->push(['key'=>'job','label'=>'Job: '.(collect($jobFilterOptions)->firstWhere('id',(int)$job)['label'] ?? 'Selected')]);
                     if($client) $chips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$client)['label'] ?? 'Selected')]);
-                    if($phase) $chips->push(['key'=>'phase','label'=>'Phase: '.($phases->firstWhere('id',(int)$phase)?->name ?? 'Selected')]);
+                    if($phase) $chips->push(['key'=>'phase','label'=>'Phase: '.(collect($phaseFilterOptions)->firstWhere('id',(int)$phase)['label'] ?? 'Selected')]);
                     if($category) $chips->push(['key'=>'category','label'=>'Type: '.$category]);
                     if($status) $chips->push(['key'=>'status','label'=>'Status: '.(['current'=>'Current','approved'=>'Approved','needs_action'=>'Needs attention','awaiting_approval'=>'Awaiting approval','recent'=>'Recently updated'][$status] ?? $status)]);
                 @endphp
@@ -72,7 +72,7 @@
                                     <td data-label="Type">{{ $doc->category ?: 'Other' }}</td><td data-label="Version">v{{ $doc->version }}</td>
                                     <td data-label="Owner"><div class="person"><x-ui.avatar :user="$doc->uploader" :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
                                     <td data-label="Status"><span class="ft-doc-status {{ $docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue') }}">{{ $docStatus }}</span></td>
-                                    <td data-label="Updated">{{ $doc->updated_at?->format('M j') }}</td>
+                                    <td data-label="Updated">{{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j') }}</td>
                                     <td data-label="Actions"><div class="ft-doc-row-actions"><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener" wire:click.stop>Open</a>@if(auth()->user()->canModule('documents','delete'))<button wire:click.stop="deleteDocument({{ $doc->id }})" wire:confirm="Delete this document?">⋮</button>@else<span>⋮</span>@endif</div></td>
                                 </tr>
                             @endforeach
@@ -95,10 +95,10 @@
                     <div><span>Task</span><b>{{ $selected->task?->title ?? '—' }}</b></div>
                     <div><span>Type</span><b>{{ $selected->category ?: 'Other' }}</b></div>
                     <div><span>Owner</span><b>{{ $selected->uploader?->name ?? 'System' }}</b></div>
-                    <div><span>Uploaded</span><b>{{ $selected->created_at?->format('M j, Y g:i A') }}</b></div>
+                    <div><span>Uploaded</span><b>{{ \App\Support\UserLocalTime::format($selected->created_at, 'M j, Y g:i A') }}</b></div>
                 </div>
                 <div class="ft-doc-side-actions"><a class="primary" href="{{ route('documents.open',$selected) }}" target="_blank" rel="noopener">Open ↗</a>@if(auth()->user()->canModule('documents','export'))<a class="ghost" href="{{ route('documents.download',$selected) }}">⇩ Download</a>@endif</div>
-                <div class="ft-doc-versions"><h4>Versions</h4>@forelse($versions as $version)<button wire:click="selectDocument({{ $version->id }})"><b>v{{ $version->version }}</b><span>{{ $version->uploader?->name ?? 'System' }} · {{ $version->created_at?->format('M j, Y g:i A') }} · {{ number_format($version->size/1024) }} KB</span>@if($version->id===$selected->id)<em>Current</em>@endif</button>@empty<div class="small muted">No previous versions.</div>@endforelse</div>
+                <div class="ft-doc-versions"><h4>Versions</h4>@forelse($versions as $version)<button wire:click="selectDocument({{ $version->id }})"><b>v{{ $version->version }}</b><span>{{ $version->uploader?->name ?? 'System' }} · {{ \App\Support\UserLocalTime::format($version->created_at, 'M j, Y g:i A') }} · {{ number_format($version->size/1024) }} KB</span>@if($version->id===$selected->id)<em>Current</em>@endif</button>@empty<div class="small muted">No previous versions.</div>@endforelse</div>
             @else<div class="empty">Select a document to view details.</div>@endif
         </aside>
     </div>

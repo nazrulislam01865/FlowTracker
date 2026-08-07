@@ -81,7 +81,7 @@
                             </div>
                         </div>
                         <span class="ft-task-status-mini {{ $phaseTask->status === 'Completed' ? 'done' : (str_contains($phaseTask->status,'Waiting') ? 'waiting' : ($phaseTask->status === 'Blocked' ? 'blocked' : 'ready')) }}">{{ $phaseTask->status }}</span>
-                        <span class="ft-phase-task-due {{ $phaseTask->due_date?->isPast() && !$phaseTask->completed_at ? 'overdue' : '' }}">{{ $phaseTask->due_date?->format('M j') ?? '—' }}</span>
+                        <span class="ft-phase-task-due {{ ($phaseTask->due_date && \App\Support\UserLocalTime::isDatePast($phaseTask->due_date)) && !$phaseTask->completed_at ? 'overdue' : '' }}">{{ $phaseTask->due_date?->format('M j') ?? '—' }}</span>
                     </a>
                 @empty
                     <div class="ft-phase-task-empty">No phase tasks configured.</div>
@@ -95,7 +95,7 @@
             <div class="ft-next-action-meta">
                 <span class="ft-next-assignee"><x-ui.avatar :user="$nextTask->assignee" :name="$nextTask->assignee?->name ?? 'Unassigned'" :size="34" /> {{ $nextTask->assignee?->name ?? 'Unassigned' }}</span>
                 <span class="ft-next-divider"></span>
-                <span class="ft-next-due {{ $nextTask->due_date?->isPast() ? 'overdue' : '' }}">
+                <span class="ft-next-due {{ ($nextTask?->due_date && \App\Support\UserLocalTime::isDatePast($nextTask->due_date)) ? 'overdue' : '' }}">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>
                     Due {{ $nextTask->due_date?->format('M j') ?? '—' }}
                 </span>
@@ -125,7 +125,7 @@
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
             <div><span>Delivery</span>
                 <span
-                    class="ft-inline-date ft-job-inline-date ft-inline-edit-shell {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}"
+                    class="ft-inline-date ft-job-inline-date ft-inline-edit-shell {{ ($job->delivery_date && \App\Support\UserLocalTime::isDatePast($job->delivery_date)) && !$job->completed_at ? 'overdue' : '' }}"
                     x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'Job delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set due date') })"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                 >

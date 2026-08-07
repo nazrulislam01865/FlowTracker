@@ -10,6 +10,7 @@ use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -36,7 +37,7 @@ class WorkflowService
             throw ValidationException::withMessages(['workflowCode' => 'This workflow code already exists.']);
         }
 
-        return DB::transaction(function () use ($data, $id, $workspaceId, $code) {
+        $workflow = DB::transaction(function () use ($data, $id, $workspaceId, $code) {
             if ($id) {
                 $template = WorkflowTemplate::where('workspace_id', $workspaceId)->findOrFail($id);
                 $template->update([
@@ -88,6 +89,10 @@ class WorkflowService
                 'version' => max(1, (int) ($data['version'] ?? 1)),
             ]);
         });
+
+        $this->invalidateBoardWorkflowCache($workspaceId, (int) $workflow->id);
+
+        return $workflow;
     }
 
 
@@ -117,12 +122,14 @@ class WorkflowService
     public function setDefault(int $id): void
     {
         $this->assertManage();
-        DB::transaction(function () use ($id) {
-            WorkflowTemplate::where('workspace_id', $this->workspaceId())->update(['is_default' => false]);
-            $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
+        $workspaceId = $this->workspaceId();
+        DB::transaction(function () use ($id, $workspaceId) {
+            WorkflowTemplate::where('workspace_id', $workspaceId)->update(['is_default' => false]);
+            $workflow = WorkflowTemplate::where('workspace_id', $workspaceId)->findOrFail($id);
             $workflow->update(['is_default' => true, 'is_active' => true]);
             if (Schema::hasTable('workflows')) Workflow::whereKey($id)->update(['is_active' => true]);
         });
+        $this->invalidateBoardWorkflowCache($workspaceId, $id);
     }
 
     public function toggleWorkflow(int $id): void
@@ -134,6 +141,7 @@ class WorkflowService
         }
         $workflow->update(['is_active' => !$workflow->is_active]);
         if (Schema::hasTable('workflows')) Workflow::whereKey($id)->update(['is_active' => $workflow->is_active]);
+        $this->invalidateBoardWorkflowCache($this->workspaceId(), $id);
     }
 
     /**
@@ -185,21 +193,32 @@ class WorkflowService
                     'job_number' => (string) ($jobNumbers->get($task->flow_job_id) ?? ''),
                 ]);
 
-        $hasOtherWorkflows = WorkflowTemplate::query()
-            ->where('workspace_id', $this->workspaceId())
-            ->whereKeyNot($workflow->id)
-            ->exists();
-        $canDelete = !$workflow->is_default || !$hasOtherWorkflows;
+        // A default Workflow can be deleted too. If another reusable Workflow
+        // exists, FlowTrack promotes it automatically during the delete transaction.
+        // This keeps production data (which may contain older/inactive Workflows)
+        // from blocking deletion while still preserving the one-default invariant.
+        $replacementDefault = null;
+        if ($workflow->is_default) {
+            $replacementDefault = WorkflowTemplate::query()
+                ->where('workspace_id', $this->workspaceId())
+                ->whereKeyNot($workflow->id)
+                ->orderByDesc('is_active')
+                ->orderBy('id')
+                ->first(['id', 'name', 'is_active']);
+        }
 
         return [
             'id' => (int) $workflow->id,
             'name' => (string) $workflow->name,
             'is_default' => (bool) $workflow->is_default,
-            'can_delete' => $canDelete,
-            'blocked_reason' => !$canDelete
-                ? 'The default workflow is protected. Set another workflow as default first, then delete this one.'
-                : null,
-            'will_leave_no_default' => (bool) $workflow->is_default && !$hasOtherWorkflows,
+            'can_delete' => true,
+            'blocked_reason' => null,
+            'will_leave_no_default' => (bool) $workflow->is_default && !$replacementDefault,
+            'replacement_default' => $replacementDefault ? [
+                'id' => (int) $replacementDefault->id,
+                'name' => (string) $replacementDefault->name,
+                'was_active' => (bool) $replacementDefault->is_active,
+            ] : null,
             'phase_count' => $phases->count(),
             'phases' => $phases->take(8)->map(fn (WorkflowPhase $phase) => [
                 'id' => (int) $phase->id,
@@ -227,24 +246,53 @@ class WorkflowService
     public function deleteWorkflow(int $id): array
     {
         $this->assertManage();
-        $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
-        if ($workflow->is_default && WorkflowTemplate::query()
-            ->where('workspace_id', $this->workspaceId())
-            ->whereKeyNot($workflow->id)
-            ->exists()) {
-            throw ValidationException::withMessages([
-                'workflow' => 'The default workflow cannot be deleted. Set another workflow as default first.',
-            ]);
-        }
+        $workspaceId = $this->workspaceId();
+        $workflow = WorkflowTemplate::where('workspace_id', $workspaceId)->findOrFail($id);
 
         $phaseIds = $this->workflowPhases($id)->pluck('id')->map(fn ($phaseId) => (int) $phaseId)->all();
         $legacyJobIds = $this->workflowLinkedJobIds($id, $phaseIds);
         $protectedJobs = 0;
 
         try {
-            DB::transaction(function () use ($workflow, $phaseIds, $legacyJobIds, &$protectedJobs) {
+            DB::transaction(function () use ($workflow, $workspaceId, $phaseIds, $legacyJobIds, &$protectedJobs) {
+                // Re-read and lock the reusable Workflow so two concurrent admin
+                // actions cannot leave the workspace with an accidental default gap.
+                $lockedWorkflow = WorkflowTemplate::query()
+                    ->where('workspace_id', $workspaceId)
+                    ->whereKey($workflow->id)
+                    ->lockForUpdate()
+                    ->firstOrFail();
+
+                if ($lockedWorkflow->is_default) {
+                    $replacement = WorkflowTemplate::query()
+                        ->where('workspace_id', $workspaceId)
+                        ->whereKeyNot($lockedWorkflow->id)
+                        ->orderByDesc('is_active')
+                        ->orderBy('id')
+                        ->lockForUpdate()
+                        ->first();
+
+                    if ($replacement) {
+                        // Normalize any older/corrupt cloud data with multiple default
+                        // flags, then promote one deterministic replacement.
+                        WorkflowTemplate::query()
+                            ->where('workspace_id', $workspaceId)
+                            ->whereKeyNot($lockedWorkflow->id)
+                            ->update(['is_default' => false]);
+
+                        $replacement->update(['is_default' => true, 'is_active' => true]);
+
+                        if (Schema::hasTable('workflows')) {
+                            Workflow::query()
+                                ->whereKey($replacement->id)
+                                ->where('is_snapshot', false)
+                                ->update(['is_active' => true]);
+                        }
+                    }
+                }
+
                 if ($legacyJobIds) {
-                    $protectedJobs = app(JobWorkflowSnapshotService::class)->snapshotJobs($legacyJobIds, $workflow->id);
+                    $protectedJobs = app(JobWorkflowSnapshotService::class)->snapshotJobs($legacyJobIds, $lockedWorkflow->id);
                 }
 
                 if ($phaseIds) {
@@ -252,10 +300,10 @@ class WorkflowService
                 }
 
                 if (Schema::hasTable('workflows')) {
-                    Workflow::query()->whereKey($workflow->id)->where('is_snapshot', false)->delete();
+                    Workflow::query()->whereKey($lockedWorkflow->id)->where('is_snapshot', false)->delete();
                 }
 
-                $workflow->delete();
+                $lockedWorkflow->delete();
             });
         } catch (QueryException $exception) {
             if ((string) $exception->getCode() === '23000') {
@@ -265,6 +313,8 @@ class WorkflowService
             }
             throw $exception;
         }
+
+        $this->invalidateBoardWorkflowCache($workspaceId, $id);
 
         return [
             'workflow_name' => (string) $workflow->name,
@@ -314,14 +364,17 @@ class WorkflowService
         if (Schema::hasColumn('workflow_phases', 'entry_rule')) $payload['entry_rule'] = blank($data['entry_condition'] ?? null) ? null : trim($data['entry_condition']);
         if (Schema::hasColumn('workflow_phases', 'exit_rule')) $payload['exit_rule'] = blank($data['exit_condition'] ?? null) ? null : trim($data['exit_condition']);
 
-        return WorkflowPhase::query()->updateOrCreate(['id' => $phase?->id], $payload);
+        $savedPhase = WorkflowPhase::query()->updateOrCreate(['id' => $phase?->id], $payload);
+        $this->invalidateBoardWorkflowCache($this->workspaceId(), (int) $workflow->id);
+
+        return $savedPhase;
     }
 
     public function move(WorkflowPhase $phase, int $direction): void
     {
         $this->assertManage();
-        DB::transaction(function () use ($phase, $direction) {
-            $workflowId = $phase->workflow_template_id ?: $phase->workflow_id;
+        $workflowId = (int) ($phase->workflow_template_id ?: $phase->workflow_id);
+        DB::transaction(function () use ($phase, $direction, $workflowId) {
             $targetSequence = $phase->sequence + $direction;
             if ($targetSequence < 1) return;
             $target = WorkflowPhase::where('workflow_template_id', $workflowId)->where('sequence', $targetSequence)->first();
@@ -331,11 +384,13 @@ class WorkflowService
             $target->update(['sequence' => $original]);
             $phase->update(['sequence' => $targetSequence]);
         });
+        $this->invalidateBoardWorkflowCache($this->workspaceId(), $workflowId);
     }
 
     public function delete(WorkflowPhase $phase): void
     {
         $this->assertManage();
+        $workflowId = (int) ($phase->workflow_template_id ?: $phase->workflow_id);
         $jobIds = FlowJob::withTrashed()
             ->where(function ($query) use ($phase) {
                 $query->where('workflow_phase_id', $phase->id)
@@ -344,8 +399,7 @@ class WorkflowService
             ->pluck('id')
             ->all();
 
-        DB::transaction(function () use ($phase, $jobIds) {
-            $workflowId = $phase->workflow_template_id ?: $phase->workflow_id;
+        DB::transaction(function () use ($phase, $jobIds, $workflowId) {
             if ($jobIds) app(JobWorkflowSnapshotService::class)->snapshotJobs($jobIds, $workflowId);
 
 
@@ -357,6 +411,7 @@ class WorkflowService
                 ->get()
                 ->each(fn ($row) => $row->update(['sequence' => $row->sequence - 1]));
         });
+        $this->invalidateBoardWorkflowCache($this->workspaceId(), $workflowId);
     }
 
     public function syncLegacy(): void
@@ -391,6 +446,7 @@ class WorkflowService
                 if ($changes) $phase->update($changes);
             }
         }
+        $this->invalidateBoardWorkflowCache($workspaceId);
     }
     private function workflowPhases(int $workflowId)
     {
@@ -436,6 +492,14 @@ class WorkflowService
             ->unique()
             ->values()
             ->all();
+    }
+
+    private function invalidateBoardWorkflowCache(int $workspaceId, ?int $workflowId = null): void
+    {
+        Cache::forget(BoardService::workflowOptionsCacheKey($workspaceId));
+        if ($workflowId) {
+            Cache::forget(BoardService::workflowPhaseCacheKey($workflowId));
+        }
     }
 
     private function assertManage(): void

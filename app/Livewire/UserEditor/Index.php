@@ -282,7 +282,7 @@ class Index extends Component
 
         $this->lastActiveLabel = $lastActiveAt ? $lastActiveAt->diffForHumans() : 'No recent session';
         $this->openTasks = $target->assignedTasks()->whereNull('completed_at')->count();
-        $this->createdLabel = $target->created_at?->format('M j, Y') ?? '—';
+        $this->createdLabel = \App\Support\UserLocalTime::format($target->created_at, 'M j, Y');
         $this->userReference = 'USR-'.str_pad((string) $target->id, 4, '0', STR_PAD_LEFT);
         $this->profileImageUrl = $this->profileUrl($target);
     }

@@ -343,8 +343,8 @@ class Index extends Component
             'clients' => $clients,
             'summary' => $service->summary($user),
             'detail' => $this->showClientPreview && $this->selectedClientId ? $service->detail($user, $this->selectedClientId) : null,
-            'countries' => $service->visibleQuery($user)->where('is_active', !$this->showArchived)->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
-            'managerFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->manager !== '' ? (int) $this->manager : null, 6),
+            'countryFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'countries', $this->showArchived ? 'clients-archived' : 'clients', '', $this->country, 5),
+            'managerFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->manager !== '' ? (int) $this->manager : null, 5),
             'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), $user)
                 ->whereHas('client', fn ($client) => $client->where('is_active', !$this->showArchived))
                 ->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),

@@ -122,11 +122,12 @@ class Index extends Component
         return [
             'tasks' => $taskRows->take($this->cardLimit)->values(),
             'hasMoreCards' => $taskRows->count() > $this->cardLimit,
-            'jobFilterOptions' => $optionService->options($user, 'jobs', 'my-work', '', $this->job !== '' ? (int) $this->job : null, 6),
-            'clientFilterOptions' => $optionService->options($user, 'clients', 'my-work', '', $this->client !== '' ? (int) $this->client : null, 6),
-            'assigneeFilterOptions' => $optionService->options($user, 'users', 'my-work', '', $this->assignee !== '' ? (int) $this->assignee : null, 6),
+            'jobFilterOptions' => $optionService->options($user, 'jobs', 'my-work', '', $this->job !== '' ? (int) $this->job : null, 5),
+            'clientFilterOptions' => $optionService->options($user, 'clients', 'my-work', '', $this->client !== '' ? (int) $this->client : null, 5),
+            'assigneeFilterOptions' => $optionService->options($user, 'users', 'my-work', '', $this->assignee !== '' ? (int) $this->assignee : null, 5),
             'taskStatuses' => collect(BoardLaneResolver::taskStatuses($master->active('task_status')->pluck('name'))),
-            'priorities' => $master->active('priority'),
+            'statusFilterOptions' => $optionService->options($user, 'task-statuses', 'my-work', '', $this->status, 5),
+            'priorityFilterOptions' => $optionService->options($user, 'priorities', 'my-work', '', $this->priority, 5),
         ];
     }
 }

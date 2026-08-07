@@ -18,6 +18,7 @@ use App\Services\DocumentService;
 use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
+use App\Services\WorkspaceSettingsService;
 use App\Support\BoardLaneResolver;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -111,7 +112,7 @@ class Index extends Component
         }
 
         if ($this->selectedTaskId) {
-            $this->taskEditMode = false;
+            $this->taskEditMode = true;
             $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
             $this->selectedJobId = $this->selectedJobId ?: $task->flow_job_id;
             $this->loadTaskForm($this->selectedTaskId);
@@ -723,6 +724,14 @@ class Index extends Component
 
     public function openTask(int $id): void
     {
+        // Preserve the original task-detail behavior: opening a task normally
+        // exposes inline editing when the current user has edit permission.
+        $this->openTaskWithMode($id, true);
+    }
+
+    public function viewTask(int $id): void
+    {
+        // Explicit View from the overview action menu remains read-only.
         $this->openTaskWithMode($id, false);
     }
 
@@ -824,18 +833,30 @@ class Index extends Component
             'description' => 'task description',
         ];
 
-        return $this->persistInlineEdit($labels[$field] ?? 'task field', function () use ($field, $value) {
+        $updatedTask = null;
+        $result = $this->persistInlineEdit($labels[$field] ?? 'task field', function () use ($field, $value, &$updatedTask) {
             if ($field === 'assignee_id') abort_unless(auth()->user()->canModule('tasks','assign'), 403);
             else abort_unless(auth()->user()->canAccess('tasks.update'), 403);
             abort_unless($this->selectedTaskId, 422);
             $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
             if ($field === 'assignee_id' && filled($value)) User::where('is_active', true)->findOrFail((int) $value);
             if (in_array($field, ['start_date','due_date'], true) && filled($value)) validator(['date'=>$value], ['date'=>['date']])->validate();
-            $updated = app(TaskService::class)->updateDetailField($task, $field, $value, auth()->user());
+            $updatedTask = app(TaskService::class)->updateDetailField($task, $field, $value, auth()->user());
 
-            if ($field === 'status') $this->taskStatus = (string) $updated->status;
-            if ($field === 'assignee_id') $this->taskAssigneeId = $updated->assignee_id ? (int) $updated->assignee_id : null;
+            if ($field === 'status') $this->taskStatus = (string) $updatedTask->status;
+            if ($field === 'assignee_id') $this->taskAssigneeId = $updatedTask->assignee_id ? (int) $updatedTask->assignee_id : null;
         });
+
+        if ($field === 'status' && ($result['ok'] ?? false) && $updatedTask) {
+            $timezone = app(WorkspaceSettingsService::class)->displayTimezone();
+            $completedLocal = $updatedTask->completed_at?->copy()->timezone($timezone);
+            $this->dispatch('task-completion-updated',
+                completedDate: $completedLocal?->format('M j, Y') ?? '—',
+                completedTime: $completedLocal?->format('g:i A') ?? ''
+            );
+        }
+
+        return $result;
     }
 
     public function addTaskChecklistItem(): void
@@ -960,20 +981,34 @@ class Index extends Component
         $this->showTaskDocumentPicker = !$this->showTaskDocumentPicker;
     }
 
+    public function setTaskFlag(string $flag): void
+    {
+        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
+        abort_unless($this->selectedTaskId, 422);
+
+        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
+        $flag = trim($flag);
+
+        if ($flag !== '') {
+            $allowed = app(MasterDataService::class)->active('task_flag')->pluck('name')->map(fn ($name) => trim((string) $name));
+            $currentLegacyFlag = $task->needs_attention ? trim((string) $task->attention_reason) : '';
+            abort_unless($allowed->contains($flag) || ($currentLegacyFlag !== '' && $currentLegacyFlag === $flag), 422, 'Select a valid Task Flag.');
+        }
+
+        $updated = app(TaskService::class)->setAttentionFlag($task, $flag !== '' ? $flag : null, auth()->user());
+        $this->taskAttention = (bool) $updated->needs_attention;
+        $this->taskAttentionReason = (string) $updated->attention_reason;
+    }
+
     public function toggleTaskAttention(): void
     {
         abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         if (!$this->selectedTaskId) return;
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
-        $value = !(bool) $task->needs_attention;
-        app(TaskService::class)->update($task, [
-            'status' => $task->status,
-            'assignee_id' => $task->assignee_id,
-            'progress' => $task->progress,
-            'needs_attention' => $value,
-            'attention_reason' => $value ? ($task->attention_reason ?: 'Flagged for management attention') : null,
-        ], auth()->user());
-        $this->taskAttention = $value;
+        $flag = $task->needs_attention ? null : (trim((string) $task->attention_reason) ?: 'Management attention');
+        $updated = app(TaskService::class)->setAttentionFlag($task, $flag, auth()->user());
+        $this->taskAttention = (bool) $updated->needs_attention;
+        $this->taskAttentionReason = (string) $updated->attention_reason;
     }
 
     public function saveTask(): void
@@ -1031,7 +1066,7 @@ class Index extends Component
     private function initializeCreateForm(?int $requestedClientId = null): void
     {
         $this->resetCreateForm();
-        $this->deliveryDate = now()->addMonth()->format('Y-m-d');
+        $this->deliveryDate = app(WorkspaceSettingsService::class)->localNow()->addMonth()->format('Y-m-d');
 
         $clientQuery = app(ClientService::class)
             ->visibleQuery(auth()->user())
@@ -1067,11 +1102,16 @@ class Index extends Component
     private function prepareSelectedJob(int $id): void
     {
         $job = app(JobService::class)->visibleQuery(auth()->user())
-            ->select(['id', 'workflow_phase_id'])
+            ->with(['workflow.phases:id,workflow_id'])
+            ->select(['id', 'workflow_id', 'workflow_phase_id'])
             ->findOrFail($id);
 
-        if (!$this->expandedPhaseIds && $job->workflow_phase_id) {
-            $this->expandedPhaseIds = [(int) $job->workflow_phase_id];
+        if (!$this->expandedPhaseIds) {
+            $phaseIds = $job->workflow?->phases?->pluck('id') ?? collect();
+            $this->expandedPhaseIds = $phaseIds
+                ->map(fn ($phaseId) => (int) $phaseId)
+                ->values()
+                ->all();
         }
     }
 
@@ -1197,6 +1237,8 @@ class Index extends Component
             'selectedTask' => $task,
             'taskStatuses' => $this->taskStatusOptions($master),
             'priorities' => $master->active('priority'),
+            'taskFlags' => $master->active('task_flag'),
+            'displayTimezone' => app(WorkspaceSettingsService::class)->displayTimezone(),
             'availableDocuments' => $availableDocuments,
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForTask($task, $user),
         ];
@@ -1234,23 +1276,22 @@ class Index extends Component
     private function jobsTableData(User $user): array
     {
         $service = app(JobService::class);
-        $master = app(MasterDataService::class);
         $filters = $this->jobFilters();
         $jobs = $service->paginate($user, $filters, $this->perPage);
+
+        $options = app(\App\Services\FilterOptionService::class);
 
         return [
             'selectedJob' => null,
             'selectedTask' => null,
             'jobs' => $jobs,
-            'clientFilterOptions' => app(\App\Services\FilterOptionService::class)
-                ->options($user, 'clients', 'jobs', '', $this->client !== '' ? (int) $this->client : null, 6),
-            'ownerFilterOptions' => app(\App\Services\FilterOptionService::class)
-                ->options($user, 'users', 'jobs', '', $this->owner !== '' ? (int) $this->owner : null, 6),
-            'phases' => WorkflowPhase::whereNotNull('workflow_template_id')->where('is_active', true)->orderBy('sequence')->get(['id', 'name', 'short_name', 'sequence']),
+            'clientFilterOptions' => $options->options($user, 'clients', 'jobs', '', $this->client !== '' ? (int) $this->client : null, 5),
+            'ownerFilterOptions' => $options->options($user, 'users', 'jobs', '', $this->owner !== '' ? (int) $this->owner : null, 5),
+            'phaseFilterOptions' => $options->options($user, 'phases', 'jobs', '', $this->phase !== '' ? (int) $this->phase : null, 5),
+            'priorityFilterOptions' => $options->options($user, 'priorities', 'jobs', '', $this->priorityFilter, 5),
+            'jobStatusFilterOptions' => $options->options($user, 'job-statuses', 'jobs', '', $this->jobStatusFilter, 5),
+            'healthFilterOptions' => $options->options($user, 'job-healths', 'jobs', '', $this->health, 5),
             'users' => $this->userOptions($user),
-            'priorities' => $master->active('priority'),
-            'healthOptions' => $this->healthOptions(),
-            'jobStatuses' => $service->visibleQuery($user)->whereNotNull('status')->distinct()->orderBy('status')->pluck('status')->filter()->values(),
             'allFilteredJobsSelected' => $jobs->total() > 0 && count($this->selectedJobIds) === $jobs->total(),
         ];
     }

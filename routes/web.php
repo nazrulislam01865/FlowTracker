@@ -39,6 +39,16 @@ Route::get('/session/status', function () {
 })->middleware('auth')->name('session.status');
 
 Route::middleware('auth')->group(function () {
+    Route::post('/session/timezone', function (\Illuminate\Http\Request $request) {
+        $data = $request->validate([
+            'timezone' => ['required', 'string', 'max:120'],
+        ]);
+
+        abort_unless(in_array($data['timezone'], \DateTimeZone::listIdentifiers(), true), 422, 'Invalid time zone.');
+        $request->session()->put('flowtrack_timezone', $data['timezone']);
+
+        return response()->noContent();
+    })->name('session.timezone');
     Route::post('/pusher/auth', function (\Illuminate\Http\Request $request) {
         $data = $request->validate([
             'socket_id' => ['required','string','max:80'],
@@ -50,7 +60,7 @@ Route::middleware('auth')->group(function () {
     })->name('pusher.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
-    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows')->name('filter-options.index');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|countries|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/jobs', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');

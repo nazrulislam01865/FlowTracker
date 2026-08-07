@@ -48,9 +48,10 @@ class Index extends Component
     public function mount(): void
     {
         $requestedTab = (string) request()->query('tab', '');
-        if (in_array($requestedTab, ['dashboard','roles','matrix','users','audit','security','branding'], true)) {
+        if (in_array($requestedTab, ['dashboard','roles','matrix','users','audit','security','settings','branding'], true)) {
             $this->tab = $requestedTab;
         }
+
 
         if ($this->tab !== 'branding') {
             $this->selectedRoleId = Role::where('slug', 'operations-manager')->value('id') ?: Role::where('slug', '!=', 'super-admin')->value('id') ?: Role::value('id');
@@ -59,7 +60,7 @@ class Index extends Component
 
     public function setTab(string $tab): void
     {
-        $allowed = ['dashboard','roles','matrix','users','audit','security','branding'];
+        $allowed = ['dashboard','roles','matrix','users','audit','security','settings','branding'];
         $this->tab = in_array($tab, $allowed, true) ? $tab : 'dashboard';
     }
 
@@ -279,6 +280,7 @@ class Index extends Component
             'users' => $this->usersPageData($service),
             'audit' => ['auditLog' => $service->auditLog()],
             'security' => ['securitySettings' => $service->securitySettings()],
+            'settings' => [],
             'branding' => ['branding' => app(BrandingService::class)->current()],
             default => $this->dashboardPageData($service),
         });

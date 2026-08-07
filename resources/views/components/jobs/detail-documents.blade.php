@@ -5,10 +5,8 @@
     'showDocumentPicker'=>false,
 ])
 @php
-    $latestDoc = $job->documents->sortByDesc('updated_at')->first();
     $required = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $receivedRequired = $required->where('complete', true)->count();
-    $percent = $required->count() ? round($receivedRequired / $required->count() * 100) : 100;
     $unlinkedDocs = $job->documents->whereNull('task_id')->values();
     $canUploadDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','create');
     $canLinkDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','link');
@@ -20,7 +18,7 @@
     @error('jobDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
     @error('jobDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
 
-    <div class="ft-detail-doc-layout">
+    <div class="ft-detail-doc-full">
         <main>
             <div class="ft-section-title-row ft-doc-title-row">
                 <div><h2>Documents</h2><p>{{ $job->documents->count() }} files · {{ $receivedRequired }} of {{ $required->count() }} required received</p></div>
@@ -135,7 +133,7 @@
                                     <tr>
                                         <td><span class="ft-file-icon {{ str_contains(strtolower($doc->mime_type ?? ''),'pdf') ? 'pdf' : 'sheet' }}">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a><small class="ft-doc-task-caption">{{ $requirement->task->title }}</small></td>
                                         <td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td>
-                                        <td><span class="ft-soft-pill green">Linked</span></td><td>{{ $doc->updated_at?->isToday() ? 'Today '.$doc->updated_at?->format('H:i') : $doc->updated_at?->format('M j, Y') }}</td>
+                                        <td><span class="ft-soft-pill green">Linked</span></td><td>{{ \App\Support\UserLocalTime::isToday($doc->updated_at) ? 'Today '.\App\Support\UserLocalTime::format($doc->updated_at, 'g:i A') : \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td>
                                         <td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','delete'))<button class="ft-doc-delete-button" type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</td>
                                     </tr>
                                 @endforeach
@@ -146,7 +144,7 @@
                             @foreach($phaseAttachments as $doc)
                                 <tr>
                                     <td><span class="ft-file-icon">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a><small class="ft-doc-task-caption">Task attachment · {{ $doc->task?->title }}</small></td>
-                                    <td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ $doc->updated_at?->format('M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td>
+                                    <td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td>
                                 </tr>
                             @endforeach
                         @endforeach
@@ -154,7 +152,7 @@
                         @if($unlinkedDocs->isNotEmpty())
                             <tr class="ft-doc-phase-row"><td colspan="7"><span>⌄</span><b>—</b> Existing Job attachments <small>Not counted as Task Pack requirements</small><em>{{ $unlinkedDocs->count() }}</em></td></tr>
                             @foreach($unlinkedDocs as $doc)
-                                <tr><td><span class="ft-file-icon">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a></td><td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ $doc->updated_at?->format('M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td></tr>
+                                <tr><td><span class="ft-file-icon">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a></td><td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td></tr>
                             @endforeach
                         @endif
                         </tbody>
@@ -163,21 +161,5 @@
             </section>
         </main>
 
-        <aside>
-            <section class="ft-detail-card ft-required-docs-card">
-                <div class="ft-card-row-head"><h3>Required documents</h3><span>{{ $receivedRequired }} of {{ $required->count() }} received</span></div>
-                <div class="ft-doc-progress"><span style="width:{{ $percent }}%"></span></div><b class="ft-percent">{{ $percent }}%</b>
-                @forelse($required as $doc)
-                    <div class="ft-required-doc-row">
-                        <span class="{{ $doc->complete ? 'ok' : 'warn' }}">{{ $doc->complete ? '✓' : '!' }}</span>
-                        <div><b>{{ $doc->name }}</b><p>{{ $doc->phase->name }} · {{ $doc->task->title }}</p>@unless($doc->complete)<small>Required document missing.</small>@endunless</div>
-                        @if(!$doc->complete && $canUploadDocument)<button class="ft-outline-btn ft-doc-upload-btn" type="button" x-on:click="await $wire.set('jobDocumentTaskId', {{ $doc->task->id }}); document.getElementById('jobDocumentUpload-{{ $job->id }}').click()">Upload</button>@endif
-                    </div>
-                @empty
-                    <p class="muted small">No document requirements exist in the selected Task Packs.</p>
-                @endforelse
-            </section>
-            <section class="ft-detail-card ft-doc-health-card"><h3>Document health</h3><div><span>Received</span><b class="green-text">{{ $receivedRequired }}</b></div><div><span>Draft / needs action</span><b class="danger-text">{{ $required->where('complete',false)->count() }}</b></div><div><span>Total Job files</span><b>{{ $job->documents->count() }}</b></div><hr><div><span>Latest update</span><b>{{ $latestDoc?->updated_at?->format('M j, Y') ?? '—' }}</b></div></section>
-        </aside>
     </div>
 </div>

@@ -137,6 +137,17 @@
                     </span>
                 </div>
 
+                @if(!empty($workflowDeleteImpact['replacement_default']))
+                    <div class="flash success" style="margin:0">
+                        This is the current default Workflow. After deletion,
+                        <b>{{ $workflowDeleteImpact['replacement_default']['name'] }}</b> will become the active default automatically.
+                    </div>
+                @elseif($workflowDeleteImpact['will_leave_no_default'] ?? false)
+                    <div class="flash success" style="margin:0">
+                        This is the last Workflow. It can be deleted; the next Workflow you create will become the default automatically.
+                    </div>
+                @endif
+
                 @if(!($workflowDeleteImpact['can_delete'] ?? true))
                     <div class="flash error" style="margin:0">
                         {{ $workflowDeleteImpact['blocked_reason'] ?? 'This Workflow cannot be deleted.' }}

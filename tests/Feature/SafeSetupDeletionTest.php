@@ -191,21 +191,55 @@ class SafeSetupDeletionTest extends TestCase
         $this->assertSame(0, WorkflowTemplate::query()->count());
     }
 
-    public function test_default_workflow_stays_protected_when_another_workflow_exists(): void
+    public function test_default_workflow_can_be_deleted_and_another_workflow_is_promoted_automatically(): void
     {
         $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
-        [, $templateA] = $this->workflowPair('WF-DEFAULT-A', 'Default A', true);
-        $this->workflowPair('WF-DEFAULT-B', 'Other Workflow', false);
+        [$legacyA, $templateA] = $this->workflowPair('WF-DEFAULT-A', 'Default A', true);
+        [$legacyB, $templateB] = $this->workflowPair('WF-DEFAULT-B', 'Other Workflow', false);
 
         $service = app(WorkflowService::class);
         $impact = $service->workflowDeleteImpact($templateA->id);
 
-        $this->assertFalse($impact['can_delete']);
+        $this->assertTrue($impact['can_delete']);
         $this->assertFalse($impact['will_leave_no_default']);
-        $this->assertNotNull($impact['blocked_reason']);
+        $this->assertNull($impact['blocked_reason']);
+        $this->assertSame($templateB->id, $impact['replacement_default']['id']);
 
-        $this->expectException(\Illuminate\Validation\ValidationException::class);
         $service->deleteWorkflow($templateA->id);
+
+        $this->assertDatabaseMissing('workflow_templates', ['id' => $templateA->id]);
+        $this->assertDatabaseMissing('workflows', ['id' => $legacyA->id]);
+        $this->assertDatabaseHas('workflow_templates', [
+            'id' => $templateB->id,
+            'is_default' => 1,
+            'is_active' => 1,
+        ]);
+        $this->assertDatabaseHas('workflows', ['id' => $legacyB->id, 'is_active' => 1]);
+    }
+
+    public function test_deleting_default_promotes_inactive_replacement_and_activates_it(): void
+    {
+        $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
+        [, $templateA] = $this->workflowPair('WF-DEFAULT-C', 'Default C', true);
+        [$legacyB, $templateB] = $this->workflowPair('WF-INACTIVE-D', 'Inactive Replacement', false);
+        $templateB->update(['is_active' => false]);
+        $legacyB->update(['is_active' => false]);
+
+        $service = app(WorkflowService::class);
+        $impact = $service->workflowDeleteImpact($templateA->id);
+
+        $this->assertTrue($impact['can_delete']);
+        $this->assertSame($templateB->id, $impact['replacement_default']['id']);
+        $this->assertFalse($impact['replacement_default']['was_active']);
+
+        $service->deleteWorkflow($templateA->id);
+
+        $this->assertDatabaseHas('workflow_templates', [
+            'id' => $templateB->id,
+            'is_default' => 1,
+            'is_active' => 1,
+        ]);
+        $this->assertDatabaseHas('workflows', ['id' => $legacyB->id, 'is_active' => 1]);
     }
 
     public function test_first_workflow_created_after_empty_setup_becomes_default_automatically(): void

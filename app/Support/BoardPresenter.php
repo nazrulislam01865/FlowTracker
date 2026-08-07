@@ -28,7 +28,10 @@ final class BoardPresenter
         }
         $entered ??= $job->updated_at ?? $job->created_at;
 
-        return max(1, (int) $entered?->copy()->startOfDay()->diffInDays(now()->startOfDay()));
+        $clock = app(\App\Services\WorkspaceSettingsService::class);
+        $enteredLocal = $entered?->copy()->timezone($clock->displayTimezone())->startOfDay();
+
+        return max(1, (int) $enteredLocal?->diffInDays($clock->localToday()));
     }
 
     public static function currentTasks(FlowJob $job): Collection
@@ -51,7 +54,7 @@ final class BoardPresenter
 
     public static function dueSoonCount(FlowJob $job): int
     {
-        return self::openTasks($job)->filter(fn ($task) => $task->due_date && $task->due_date->betweenIncluded(today(), today()->copy()->addDays(3)))->count();
+        return self::openTasks($job)->filter(fn ($task) => $task->due_date && $task->due_date->betweenIncluded(app(\App\Services\WorkspaceSettingsService::class)->localToday(), app(\App\Services\WorkspaceSettingsService::class)->localToday()->addDays(3)))->count();
     }
 
     public static function blockedCount(FlowJob $job): int
@@ -104,11 +107,11 @@ final class BoardPresenter
 
     public static function overdueDays(Task $task): int
     {
-        if (!$task->due_date || !$task->due_date->isPast() || $task->completed_at) {
+        if (!$task->due_date || !\App\Support\UserLocalTime::isDatePast($task->due_date) || $task->completed_at) {
             return 0;
         }
 
-        return max(1, (int) $task->due_date->copy()->startOfDay()->diffInDays(today()));
+        return max(1, (int) $task->due_date->copy()->startOfDay()->diffInDays(app(\App\Services\WorkspaceSettingsService::class)->localToday()));
     }
 
     public static function waitingLabel(Task $task): ?string

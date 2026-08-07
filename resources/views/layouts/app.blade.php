@@ -8,12 +8,14 @@
     @auth
         <meta name="flowtrack-session-status-url" content="{{ route('session.status') }}">
         <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
+        <meta name="flowtrack-timezone-sync-url" content="{{ route('session.timezone') }}">
+        <meta name="flowtrack-display-timezone" content="{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}">
     @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-8">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-9">
     <script src="/js/flowtrack-inline-editing.js?v=20260807-3"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260807-10"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260808-2"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -31,7 +33,7 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260807-9">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-2">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     @livewireStyles
 </head>

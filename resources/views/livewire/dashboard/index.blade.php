@@ -1,5 +1,5 @@
 <div wire:init="loadSecondaryDashboard">
-    <x-ui.page-head title="Management Dashboard" :subtitle="now()->format('l, F j').' · Exceptions, workload and delivery health'" />
+    <x-ui.page-head title="Management Dashboard" :subtitle="app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('l, F j').' · Exceptions, workload and delivery health'" />
 
     <div class="metrics ft-auto-metrics">
         @foreach([
