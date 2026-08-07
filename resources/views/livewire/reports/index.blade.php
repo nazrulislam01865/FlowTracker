@@ -8,7 +8,9 @@
         </x-slot:actions>
     </x-ui.page-head>
 
-@php($kpis = $this->kpis)
+@php
+    $kpis = $this->kpis;
+@endphp
         <div class="metrics ft-auto-metrics">
             @foreach([
                 ['Active Jobs',$kpis['active_jobs'],'Current portfolio'],
@@ -29,11 +31,15 @@
 
     <div class="report-grid">
         <div class="ft-island-shell">
-@php($phase = $this->phase)
+@php
+    $phase = $this->phase;
+@endphp
                 <div class="card section-card">
                     <div class="section-head"><h3>Active Jobs by Phase</h3><span class="small muted">Current portfolio</span></div>
                     <div class="bars">
-                        @php($max = max(1, $phase->max('total') ?? 1))
+                        @php
+                            $max = max(1, $phase->max('total') ?? 1);
+                        @endphp
                         @forelse($phase->sortBy(fn($row) => $row->phase?->sequence ?? PHP_INT_MAX) as $row)
                             <div class="bar-row"><span>{{ $row->phase?->short_name ?? 'Unassigned' }}</span><div class="bar"><span style="width:{{ $row->total/$max*100 }}%"></span></div><b>{{ $row->total }}</b></div>
                         @empty
@@ -44,11 +50,15 @@
         </div>
 
         <div class="ft-island-shell">
-@php($workload = $this->workload)
+@php
+    $workload = $this->workload;
+@endphp
                 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><span class="small muted">Open tasks</span></div>
                     <div class="bars">
-                        @php($workloadMax = max(1, $workload->max('open_tasks_count') ?? 1))
+                        @php
+                            $workloadMax = max(1, $workload->max('open_tasks_count') ?? 1);
+                        @endphp
                         @forelse($workload as $person)
                             <div class="bar-row"><span>{{ $person->name }}</span><div class="bar"><span style="width:{{ $person->open_tasks_count/$workloadMax*100 }}%"></span></div><b>{{ $person->open_tasks_count }}</b></div>
                         @empty

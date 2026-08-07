@@ -120,3 +120,6 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-overview-task-card .ft-phase-group-head strong{font-size:10px}
 .ft-overview-task-card .ft-phase-group-head small{font-size:9px;text-align:right}
 .ft-overview-task-card .ft-phase-group-head em{width:80px!important;background:#e8edf3}
+.ft-overview-task-card .ft-phase-group-head em:before{width:var(--phase-progress,0%);background:#7c2bd9}
+.ft-phase-task-columns{display:grid;grid-template-columns:minmax(245px,1fr) 190px 135px 190px 55px;gap:10px;padding:7px 12px 6px 53px;border-bottom:1px solid #e6ecf3;color:#657890;text-transform:uppercase;font-size:8px;font-weight:700}
+.ft-overview-task-card .ft-phase-task-line{grid-template-columns:42px minmax(200px,1fr) 190px 135px 190px 55px;padding:8px 12px;font-size:10px;min-height:42px}

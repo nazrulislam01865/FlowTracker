@@ -58,12 +58,18 @@
                     <thead><tr><th>Module</th>@foreach($actions as $action)<th>{{ ucwords(str_replace('_',' ',$action)) }}</th>@endforeach<th>Record scope</th></tr></thead>
                     <tbody>
                     @foreach($modules as $code=>$meta)
-                        @php($access=$selectedRole->moduleAccess->firstWhere('module_code',$code))
+                        @php
+                            $access = $selectedRole->moduleAccess->firstWhere('module_code', $code);
+                        @endphp
                         <tr>
                             <td><b>{{ $meta['name'] }}</b><small>{{ $meta['group'] }}</small></td>
                             @foreach($actions as $action)
-                                @php($permissionLocked = in_array($selectedRole->slug,['super-admin','admin','administrator'],true))
-                                @php($permissionEnabled = $permissionLocked || in_array($action,$access?->actions??[],true))
+                                @php
+                                    $permissionLocked = in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
+                                @endphp
+                                @php
+                                    $permissionEnabled = $permissionLocked || in_array($action, $access?->actions ?? [], true);
+                                @endphp
                                 <td
                                     data-label="{{ ucwords(str_replace('_',' ',$action)) }}"
                                     class="ft-inline-edit-shell"
@@ -76,8 +82,12 @@
                                     @unless($permissionLocked)<x-ui.inline-save-state compact />@endunless
                                 </td>
                             @endforeach
-                            @php($scopeLocked = in_array($selectedRole->slug,['super-admin','admin','administrator'],true))
-                            @php($effectiveScope = $scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none'))
+                            @php
+                                $scopeLocked = in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
+                            @endphp
+                            @php
+                                $effectiveScope = $scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none');
+                            @endphp
                             <td
                                 data-label="Record scope"
                                 class="ft-inline-edit-shell"
@@ -102,6 +112,12 @@
         <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><button class="primary" wire:click="openUser">＋ Add User</button></div>
         <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @foreach($users as $u)
+            @php
+                $adminUserStatus = in_array((string) ($u->account_status ?? ''), ['active','inactive','suspended'], true)
+                    ? (string) $u->account_status
+                    : ($u->is_active ? 'active' : 'inactive');
+                $adminUserStatusClass = $adminUserStatus === 'active' ? 'b-green' : ($adminUserStatus === 'suspended' ? 'b-amber' : 'b-gray');
+            @endphp
             <tr
                 wire:key="admin-user-{{ $u->id }}"
                 x-data="{ ...window.FlowTrackInlineEdit({ key: @js('admin-user-'.$u->id.'-role'), label: 'user role', value: @js((string)($u->role_id ?? '')), display: @js($u->role?->name ?? 'No role') }), roleScopes: @js($roles->mapWithKeys(fn($role) => [(string)$role->id => ($role->default_scope ?: 'none')])->all()) }"
@@ -114,8 +130,8 @@
                 </td>
                 <td><span class="tag" x-text="String(roleScopes[value] || 'none').replaceAll('_',' ')">{{ str_replace('_',' ',$u->role?->default_scope ?? 'none') }}</span></td>
                 <td>{{ $u->open_tasks_count }}</td>
-                <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $u->is_active?'b-green':'b-gray' }}">{{ $u->is_active?'Active':'Inactive' }}</span></button></td>
-                <td data-label="Actions"><div class="ft-user-row-actions"><button type="button" class="ghost" wire:click="openUser({{ $u->id }})">Edit</button><button type="button" class="ft-user-delete-btn" wire:click="deleteUser({{ $u->id }})" wire:confirm="Delete {{ addslashes($u->name) }}? Existing Job/Task history will be preserved, but this user account will be removed." @disabled($u->isSuperAdmin() || $u->id === auth()->id())>Delete</button></div></td>
+                <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $adminUserStatusClass }}">{{ ucfirst($adminUserStatus) }}</span></button></td>
+                <td data-label="Actions"><div class="ft-user-row-actions"><a class="ghost ft-user-edit-link" href="{{ route('users.edit', ['user' => $u->id, 'from' => 'administration']) }}" wire:navigate>Edit</a><button type="button" class="ft-user-delete-btn" wire:click="deleteUser({{ $u->id }})" wire:confirm="Delete {{ addslashes($u->name) }}? Existing Job/Task history will be preserved, but this user account will be removed." @disabled($u->isSuperAdmin() || $u->id === auth()->id())>Delete</button></div></td>
             </tr>
         @endforeach
         </tbody></table></div>
@@ -139,23 +155,149 @@
     @if($showUserModal)
         <div class="overlay livewire-overlay" wire:click.self="closeUser"></div>
         <div class="modal livewire-modal ft-user-modal">
-            <div class="modal-head"><h2>{{ $editingUserId ? 'Edit User' : 'Add User' }}</h2><button class="close-btn" wire:click="closeUser">×</button></div>
+            <div class="modal-head">
+                <h2>{{ $editingUserId ? 'Edit User' : 'Add User' }}</h2>
+                <button class="close-btn" wire:click="closeUser">×</button>
+            </div>
+
             <div class="modal-body">
                 <div class="form-grid">
-                    <div class="field"><label>Full name *</label><input wire:model="name">@error('name')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Position / job title</label><input wire:model="position" placeholder="e.g. Production Manager" maxlength="120">@error('position')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Email *</label><input wire:model="email" type="email">@error('email')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Role *</label><select wire:model="roleId" @disabled($editingUserId && optional($users->firstWhere('id',$editingUserId))->isSuperAdmin())><option value="">Select role</option>@foreach($roles->where('is_active',true) as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach</select>@error('roleId')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Department</label><select wire:model="departmentId"><option value="">No department</option>@foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach</select>@error('departmentId')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Password {{ $editingUserId ? '' : '*' }}</label><input wire:model="password" type="password" autocomplete="new-password" placeholder="{{ $editingUserId ? 'Leave blank to keep current password' : 'Enter password' }}">@error('password')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    <div class="field"><label>Confirm password {{ $editingUserId ? '' : '*' }}</label><input wire:model="passwordConfirmation" type="password" autocomplete="new-password" placeholder="Confirm password">@error('passwordConfirmation')<div class="validation-error">{{ $message }}</div>@enderror</div>
-                    @if($editingUserId)<div class="field full"><label>Status</label><select wire:model="userActive" @disabled(optional($users->firstWhere('id',$editingUserId))->isSuperAdmin())><option value="1">Active</option><option value="0">Inactive</option></select></div>@endif
+                    <div class="field">
+                        <label>Full name *</label>
+                        <input wire:model="name">
+                        @error('name')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Position / job title</label>
+                        <input wire:model="position" placeholder="e.g. Production Manager" maxlength="120">
+                        @error('position')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Email *</label>
+                        <input wire:model="email" type="email">
+                        @error('email')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Role *</label>
+                        <select wire:model="roleId" @disabled($editingUserId && optional($users->firstWhere('id', $editingUserId))->isSuperAdmin())>
+                            <option value="">Select role</option>
+                            @foreach($roles->where('is_active', true) as $r)
+                                <option value="{{ $r->id }}">{{ $r->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('roleId')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Department</label>
+                        <select wire:model="departmentId">
+                            <option value="">No department</option>
+                            @foreach($departments as $d)
+                                <option value="{{ $d->id }}">{{ $d->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('departmentId')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Password {{ $editingUserId ? '' : '*' }}</label>
+                        <input wire:model="password" type="password" autocomplete="new-password" placeholder="{{ $editingUserId ? 'Leave blank to keep current password' : 'Enter password' }}">
+                        @error('password')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    <div class="field">
+                        <label>Confirm password {{ $editingUserId ? '' : '*' }}</label>
+                        <input wire:model="passwordConfirmation" type="password" autocomplete="new-password" placeholder="Confirm password">
+                        @error('passwordConfirmation')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
+                    </div>
+
+                    @if($editingUserId)
+                        <div class="field full">
+                            <label>Status</label>
+                            <select wire:model="userActive" @disabled(optional($users->firstWhere('id', $editingUserId))->isSuperAdmin())>
+                                <option value="1">Active</option>
+                                <option value="0">Inactive</option>
+                            </select>
+                        </div>
+                    @endif
                 </div>
-                @if($editingUserId)<div class="ft-access-info">Enter a new password only when you want to change this user's password. Leaving both password fields blank keeps the current password.</div>@endif
+
+                @if($editingUserId)
+                    <div class="ft-access-info">Enter a new password only when you want to change this user's password. Leaving both password fields blank keeps the current password.</div>
+                @endif
             </div>
-            <div class="modal-foot"><button class="ghost" wire:click="closeUser">Cancel</button><button class="primary" wire:click="saveUser">{{ $editingUserId ? 'Save Changes' : 'Create User' }}</button></div>
+
+            <div class="modal-foot">
+                <button class="ghost" wire:click="closeUser">Cancel</button>
+                <button class="primary" wire:click="saveUser">{{ $editingUserId ? 'Save Changes' : 'Create User' }}</button>
+            </div>
         </div>
     @endif
 
-    @if($showRoleModal)<div class="overlay livewire-overlay" wire:click.self="closeRole"></div><div class="modal livewire-modal"><div class="modal-head"><h2>{{ $editingRoleId?'Edit Role':'Create Role' }}</h2><button class="close-btn" wire:click="closeRole">×</button></div><div class="modal-body"><div class="form-grid"><div class="field"><label>Role name *</label><input wire:model="roleName"></div><div class="field"><label>Role code</label><input wire:model="roleCode" placeholder="JOB_MANAGER"></div><div class="field full"><label>Description</label><textarea wire:model="roleDescription" rows="3"></textarea></div><div class="field"><label>Default record scope</label><select wire:model="roleDefaultScope"><option value="none">None</option><option value="own_records">Own records</option><option value="assigned_jobs">Assigned Jobs</option><option value="selected_clients">Selected clients</option><option value="department">Department</option><option value="all_records">All records</option></select></div><div class="field"><label>Status</label><select wire:model="roleActive"><option value="1">Active</option><option value="0">Inactive</option></select></div></div></div><div class="modal-foot"><button class="ghost" wire:click="closeRole">Cancel</button><button class="primary" wire:click="saveRole">Save Role</button></div></div>@endif
+    @if($showRoleModal)
+        <div class="overlay livewire-overlay" wire:click.self="closeRole"></div>
+        <div class="modal livewire-modal">
+            <div class="modal-head">
+                <h2>{{ $editingRoleId ? 'Edit Role' : 'Create Role' }}</h2>
+                <button class="close-btn" wire:click="closeRole">×</button>
+            </div>
+
+            <div class="modal-body">
+                <div class="form-grid">
+                    <div class="field">
+                        <label>Role name *</label>
+                        <input wire:model="roleName">
+                    </div>
+                    <div class="field">
+                        <label>Role code</label>
+                        <input wire:model="roleCode" placeholder="JOB_MANAGER">
+                    </div>
+                    <div class="field full">
+                        <label>Description</label>
+                        <textarea wire:model="roleDescription" rows="3"></textarea>
+                    </div>
+                    <div class="field">
+                        <label>Default record scope</label>
+                        <select wire:model="roleDefaultScope">
+                            <option value="none">None</option>
+                            <option value="own_records">Own records</option>
+                            <option value="assigned_jobs">Assigned Jobs</option>
+                            <option value="selected_clients">Selected clients</option>
+                            <option value="department">Department</option>
+                            <option value="all_records">All records</option>
+                        </select>
+                    </div>
+                    <div class="field">
+                        <label>Status</label>
+                        <select wire:model="roleActive">
+                            <option value="1">Active</option>
+                            <option value="0">Inactive</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-foot">
+                <button class="ghost" wire:click="closeRole">Cancel</button>
+                <button class="primary" wire:click="saveRole">Save Role</button>
+            </div>
+        </div>
+    @endif
 </div>

@@ -32,6 +32,7 @@
         'resources/js/app.js',
     ])
     <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260807-9">
+    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     @livewireStyles
 </head>
 <body>

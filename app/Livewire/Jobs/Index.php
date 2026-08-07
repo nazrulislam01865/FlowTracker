@@ -53,6 +53,7 @@ class Index extends Component
 
     #[Url(as: 'task', history: true)]
     public ?int $selectedTaskId = null;
+    public bool $taskEditMode = false;
     public string $detailTab = 'overview';
     public array $expandedPhaseIds = [];
     public string $jobTaskSearch = '';
@@ -110,6 +111,7 @@ class Index extends Component
         }
 
         if ($this->selectedTaskId) {
+            $this->taskEditMode = false;
             $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
             $this->selectedJobId = $this->selectedJobId ?: $task->flow_job_id;
             $this->loadTaskForm($this->selectedTaskId);
@@ -326,6 +328,7 @@ class Index extends Component
     {
         $this->selectedJobId = $id;
         $this->selectedTaskId = null;
+        $this->taskEditMode = false;
         $this->detailTab = 'overview';
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
@@ -342,6 +345,7 @@ class Index extends Component
     {
         $this->selectedJobId = null;
         $this->selectedTaskId = null;
+        $this->taskEditMode = false;
         $this->expandedPhaseIds = [];
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
@@ -611,8 +615,12 @@ class Index extends Component
     public function updatedJobDocumentUploads(): void
     {
         // Files remain in Livewire temporary storage until the user confirms
-        // the selected Task Pack requirement with “Upload & link”.
+        // “Upload & link”. On Overview there is no separate requirement selector,
+        // so use the same default/missing Task Pack requirement chosen by Documents.
         $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
+        if ($this->selectedJobId && count($this->jobDocumentUploads) > 0 && !$this->jobDocumentTaskId) {
+            $this->setDefaultDocumentTask();
+        }
     }
 
     public function uploadJobDocuments(): void
@@ -715,16 +723,58 @@ class Index extends Component
 
     public function openTask(int $id): void
     {
+        $this->openTaskWithMode($id, false);
+    }
+
+    public function editTask(int $id): void
+    {
+        $this->openTaskWithMode($id, true);
+    }
+
+    private function openTaskWithMode(int $id, bool $editMode): void
+    {
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($id);
+        if ($editMode) {
+            abort_unless(app(AccessControlService::class)->canEditVisibleTask(auth()->user(), $task), 403);
+        }
+
         $this->selectedJobId = (int) $task->flow_job_id;
         $this->selectedTaskId = $task->id;
+        $this->taskEditMode = $editMode;
         $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->showTaskDocumentPicker = false;
         $this->loadTaskForm($id);
     }
 
-    public function closeTask(): void { $this->selectedTaskId = null; $this->taskComment = ''; $this->newChecklistItem = ''; $this->taskActivityTab = 'all'; $this->taskActivityPage = 1; $this->taskDocumentUploads = []; $this->taskExistingDocumentId = null; $this->showTaskDocumentPicker = false; }
+    public function deleteTaskFromJob(int $id): void
+    {
+        abort_unless($this->selectedJobId, 422);
+        $actor = auth()->user();
+        abort_unless(app(AccessControlService::class)->can($actor, 'tasks', 'delete'), 403);
+
+        $task = app(TaskService::class)->visibleQuery($actor)
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($id);
+        $job = app(JobService::class)->findVisible($actor, $this->selectedJobId);
+        $title = (string) $task->title;
+        $taskNumber = (string) ($task->task_number ?? '');
+
+        $task->delete();
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.task_deleted',
+            'description' => 'Task deleted: '.$title,
+            'meta' => ['task_id' => $id, 'task_number' => $taskNumber, 'title' => $title],
+        ]);
+        app(JobService::class)->recalculateProgress($job->refresh());
+
+        if ((int) $this->selectedTaskId === $id) {
+            $this->closeTask();
+        }
+    }
+
+    public function closeTask(): void { $this->selectedTaskId = null; $this->taskEditMode = false; $this->taskComment = ''; $this->newChecklistItem = ''; $this->taskActivityTab = 'all'; $this->taskActivityPage = 1; $this->taskDocumentUploads = []; $this->taskExistingDocumentId = null; $this->showTaskDocumentPicker = false; }
     public function markTaskComplete(): void
     {
         abort_unless($this->selectedTaskId, 422);

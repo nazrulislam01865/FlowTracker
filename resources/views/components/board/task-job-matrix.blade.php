@@ -35,7 +35,9 @@
 
             <div class="ft-task-job-row-grid" x-show="open">
                 @foreach($laneStatuses as $laneStatus)
-                    @php($laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus)))
+                    @php
+                        $laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus));
+                    @endphp
                     <div
                         class="ft-task-job-status-cell {{ $laneTasks->isEmpty() ? 'is-empty' : 'has-tasks' }}"
                         data-status="{{ $laneStatus }}"
@@ -46,7 +48,9 @@
                     >
                         <div class="ft-mobile-lane-label"><span>{{ $laneStatus }}</span><b>{{ $laneTasks->count() }}</b></div>
                         @forelse($laneTasks as $taskRow)
-                            @php($canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditVisibleTask(auth()->user(), $taskRow))
+                            @php
+                                $canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditVisibleTask(auth()->user(), $taskRow);
+                            @endphp
                             @if($canDragTask)
                                 <x-board.task-card :task="$taskRow" draggable="true" x-on:dragstart="draggedTask={{ $taskRow->id }}" x-on:dragend="draggedTask=null" wire:key="{{ $keyPrefix }}-{{ str($laneStatus)->slug() }}-task-{{ $taskRow->id }}" />
                             @else

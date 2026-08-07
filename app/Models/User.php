@@ -17,6 +17,7 @@ class User extends Authenticatable
     protected $fillable = [
         'role_id', 'department_id', 'name', 'email', 'password',
         'is_super_admin', 'is_active', 'locale', 'profile_image_path',
+        'wechat_id', 'phone', 'account_status',
     ];
 
     protected $hidden = ['password', 'remember_token'];

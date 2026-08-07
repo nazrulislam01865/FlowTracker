@@ -24,7 +24,9 @@
                 <div class="section-head"><h3>Needs Attention</h3><a class="link-btn" href="{{ route('jobs.index') }}" wire:navigate>View all Jobs</a></div>
                 <div class="attention-list">
                     @forelse($attentionJobs as $job)
-                        @php($flaggedTask = $job->tasks->first())
+                        @php
+                            $flaggedTask = $job->tasks->first();
+                        @endphp
                         <a class="attention-item" href="{{ $flaggedTask ? route('jobs.index',['open'=>$job->id,'task'=>$flaggedTask->id]) : route('jobs.index',['open'=>$job->id]) }}" wire:navigate>
                             <span class="signal red"></span>
                             <div>

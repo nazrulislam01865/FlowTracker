@@ -16,6 +16,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\TaskPackSetupController;
+use App\Http\Controllers\UserEditController;
 use App\Http\Controllers\WorkflowSetupController;
 use App\Models\Document;
 use App\Services\JobService;
@@ -95,6 +96,7 @@ Route::middleware('auth')->group(function () {
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('profile-images.show');
     Route::get('/profile', ProfileController::class)->name('profile');
+    Route::get('/users/{user}/edit', UserEditController::class)->whereNumber('user')->name('users.edit');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 
     Route::middleware('permission:workflow.manage')->group(function () {

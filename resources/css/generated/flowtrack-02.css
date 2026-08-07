@@ -1,7 +1,4 @@
 
-.ft-overview-task-card .ft-phase-group-head em:before{width:var(--phase-progress,0%);background:#7c2bd9}
-.ft-phase-task-columns{display:grid;grid-template-columns:minmax(245px,1fr) 190px 135px 190px 55px;gap:10px;padding:7px 12px 6px 53px;border-bottom:1px solid #e6ecf3;color:#657890;text-transform:uppercase;font-size:8px;font-weight:700}
-.ft-overview-task-card .ft-phase-task-line{grid-template-columns:42px minmax(200px,1fr) 190px 135px 190px 55px;padding:8px 12px;font-size:10px;min-height:42px}
 .ft-overview-task-card .ft-phase-task-line b{font-size:10px;font-weight:600}
 .ft-overview-task-card .ft-phase-task-line i{font-style:normal;color:#58708e;font-size:9px}
 .ft-task-select-look{border:1px solid #d7e1ec;border-radius:7px;padding:8px 10px;display:flex!important;justify-content:space-between;background:#fff}
@@ -613,3 +610,14 @@
 .ft-inline-planning-row select,.ft-inline-planning-row input{width:100%;min-width:0;height:30px;border:1px solid transparent;border-radius:6px;background:transparent;color:#0b1d36;font:inherit;font-weight:750;outline:0;padding:0 5px}
 .ft-inline-planning-row select:hover,.ft-inline-planning-row select:focus,.ft-inline-planning-row input:hover,.ft-inline-planning-row input:focus{border-color:#a9c4f7;background:#fff;box-shadow:0 0 0 2px rgba(37,99,235,.05)}
 .ft-inline-planning-row select:disabled,.ft-inline-planning-row input:disabled{opacity:1;color:inherit;appearance:none}
+
+.ft-phase-toggle{width:100%;border:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.ft-phase-toggle i{font-style:normal;width:24px;height:24px;border:1px solid #7ca6ff;border-radius:5px;color:#0f63f3;display:grid;place-items:center;background:#fff;justify-self:end}
+.ft-overview-task-card .ft-phase-group.open>.ft-phase-toggle{background:#fbfdff}
+.ft-editable-task-line{cursor:default}
+.ft-inline-task-link{border:0;background:transparent;color:#10233e;font:inherit;font-weight:650;text-align:left;padding:0;cursor:pointer}
+.ft-inline-task-link:hover{color:#0f63f3;text-decoration:underline}
+.ft-inline-task-status{height:31px;min-width:150px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;color:#10233e;font-size:10px;font-weight:700;padding:0 26px 0 9px;outline:0}
+.ft-inline-task-status.done{background:#eaf8ef;color:#087c34}
+.ft-inline-task-status.waiting{background:#fff4df;color:#a96000}
+.ft-inline-task-status.blocked{background:#fff0ef;color:#c2413a}

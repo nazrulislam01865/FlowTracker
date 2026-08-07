@@ -2493,3 +2493,38 @@ body:has(.ft-client-preview-backdrop){
 .ft-inline-product-delete:disabled{opacity:.45;cursor:not-allowed}
 .ft-add-product-inline:disabled{opacity:.55;cursor:wait}
 
+
+
+/* 2026-08-07 Job Overview cleanup: compact phase controls, task actions and read-only saved products. */
+.ft-overview-task-card{overflow:visible}
+.ft-phase-toolbar-icons{gap:7px!important;flex-wrap:nowrap!important}
+.ft-phase-toolbar-icon{
+    width:32px;height:32px;min-width:32px;padding:0;
+    display:inline-grid;place-items:center;border:1px solid #d7e1ee;border-radius:6px;
+    background:#fff;color:#17304e;cursor:pointer;
+}
+.ft-phase-toolbar-icon:hover{border-color:#9bb8eb;background:#f6f9fe;color:#0f63f3}
+.ft-phase-toolbar-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ft-overview-task-card .ft-phase-group-head{grid-template-columns:20px minmax(220px,1fr) auto 80px 28px}
+.ft-inline-task-link{font-size:inherit;font-weight:400;color:inherit;line-height:inherit}
+.ft-task-action-wrap{position:relative;display:flex;justify-content:center;align-items:center;min-width:0}
+.ft-task-action-menu{
+    position:absolute;right:0;top:30px;width:126px;padding:5px;z-index:120;
+    border:1px solid #dce5ef;border-radius:9px;background:#fff;
+    box-shadow:0 14px 32px rgba(15,35,65,.16)
+}
+.ft-task-action-menu button{width:100%;border:0;background:#fff;border-radius:6px;text-align:left;padding:8px 9px;font-size:10px;color:#1a2c45;font-weight:650}
+.ft-task-action-menu button:hover{background:#f3f7fc}
+.ft-task-action-menu button.danger{color:#c7352c}
+.ft-task-action-menu button.danger:hover{background:#fff1ef}
+.ft-readonly-product-value{display:inline-flex;align-items:center;min-height:30px;color:#10233e;font:inherit}
+.ft-job-overview-dropzone{margin-top:8px}
+.ft-job-overview-dropzone .ft-task-upload-drop{min-height:58px}
+
+@media(max-width:760px){
+    .ft-phase-toolbar-icons{display:flex!important;width:auto!important}
+    .ft-overview-task-card .ft-phase-toggle{grid-template-columns:20px minmax(120px,1fr) auto 55px 24px!important}
+}
+@media(max-width:520px){
+    .ft-overview-task-card .ft-phase-toggle{grid-template-columns:20px minmax(100px,1fr) 24px!important}
+}

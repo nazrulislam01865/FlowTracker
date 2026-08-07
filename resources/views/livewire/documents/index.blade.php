@@ -48,8 +48,12 @@
 
             <div class="card ft-doc-table-card ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,phase,category,status">
                 @forelse($grouped as $jobId=>$docs)
-                    @php($first=$docs->first())
-                    @php($expanded=$jobId==0 || in_array((int)$jobId,$expandedJobs,true))
+                    @php
+                        $first=$docs->first();
+                    @endphp
+                    @php
+                        $expanded=$jobId==0 || in_array((int)$jobId,$expandedJobs,true);
+                    @endphp
                     <div class="ft-doc-job-group">
                         <button class="ft-doc-job-head" @if($jobId) wire:click="toggleJob({{ $jobId }})" @endif>
                             <span class="ft-doc-chevron">{{ $expanded?'⌄':'›' }}</span>
@@ -59,7 +63,9 @@
                         @if($expanded)
                             <div class="ft-doc-table-scroll"><table class="ft-doc-table"><thead><tr><th>Document</th><th>Linked to</th><th>Type</th><th>Version</th><th>Owner</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead><tbody>
                             @foreach($docs as $doc)
-                                @php($docStatus=$doc->is_final?'Approved':($doc->task?->needs_attention?'Needs attention':'Current'))
+                                @php
+                                    $docStatus=$doc->is_final?'Approved':($doc->task?->needs_attention?'Needs attention':'Current');
+                                @endphp
                                 <tr class="{{ $selected?->id===$doc->id?'selected':'' }}" wire:click="selectDocument({{ $doc->id }})">
                                     <td data-label="Document"><div class="ft-doc-file"><span class="ft-file-badge {{ strtolower(pathinfo($doc->name,PATHINFO_EXTENSION)) }}">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b></div></td>
                                     <td data-label="Linked to"><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>

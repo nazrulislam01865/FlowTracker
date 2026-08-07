@@ -32,7 +32,8 @@
             :activity-page="$taskActivityPage"
             :task-document-uploads="$taskDocumentUploads"
             :show-task-document-picker="$showTaskDocumentPicker"
-            wire:key="task-detail-{{ $selectedTask->id }}"
+            :edit-mode="$taskEditMode"
+            wire:key="task-detail-{{ $selectedTask->id }}-{{ $taskEditMode ? 'edit' : 'view' }}"
         />
     @elseif($selectedJob)
         <x-jobs.detail

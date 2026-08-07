@@ -48,10 +48,6 @@
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
                 <span class="ft-soft-pill red">{{ $job->priority }}</span>
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>
-                <span class="ft-job-number-inline ft-copyable-id-wrap">
-                    <a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
-                    <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy {{ $job->job_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->job_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
-                </span>
             </div>
         </div>
         <div class="ft-detail-actions ft-exact-job-team" aria-label="Job team">
@@ -83,6 +79,7 @@
             :job-task-search="$jobTaskSearch"
             :activity-tab="$activityTab"
             :activity-page="$activityPage"
+            :job-document-uploads="$jobDocumentUploads"
         />
     @elseif($detailTab==='workflow')
         <x-jobs.detail-workflow :job="$job" :users="$users" :health-options="$healthOptions" />

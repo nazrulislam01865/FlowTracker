@@ -66,7 +66,9 @@
             </div>
             <div class="ft-phase-task-list">
                 @forelse($currentTasks as $phaseTask)
-                    @php($isNext = $nextTask && $nextTask->id === $phaseTask->id)
+                    @php
+                        $isNext = $nextTask && $nextTask->id === $phaseTask->id;
+                    @endphp
                     <a class="ft-phase-task-row" href="{{ route('jobs.index', ['open'=>$job->id, 'task'=>$phaseTask->id]) }}" wire:navigate>
                         <div class="ft-phase-task-main">
                             @if($isNext)<span class="ft-next-badge">NEXT</span>@else<span class="ft-next-spacer"></span>@endif

@@ -117,7 +117,9 @@
                             <tr class="ft-doc-phase-row"><td colspan="7"><span>⌄</span><b>{{ $phase->sequence }}</b> {{ $phase->name }} <small>{{ $phaseDocuments->count() }} documents · {{ $phaseRequirements->count() }} requirement{{ $phaseRequirements->count()===1?'':'s' }}</small><em>{{ $phaseDocuments->count() }}</em></td></tr>
 
                             @forelse($phaseRequirements as $requirement)
-                                @php($docs = $job->documents->where('task_id',$requirement->task->id)->filter(fn($document)=>strcasecmp(trim((string)$document->category),trim((string)$requirement->name))===0)->values())
+                                @php
+                                    $docs = $job->documents->where('task_id',$requirement->task->id)->filter(fn($document)=>strcasecmp(trim((string)$document->category),trim((string)$requirement->name))===0)->values();
+                                @endphp
                                 <tr class="ft-required-inline-row"><td colspan="7">
                                     <div><strong>{{ $requirement->task->title }}</strong><span>{{ $docs->count() ? $docs->count().' received' : 'Required document missing' }}</span></div>
                                     <div class="ft-inline-requirement">

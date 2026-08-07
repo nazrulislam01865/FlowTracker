@@ -69,7 +69,9 @@ class AdminService
         $position = $this->normalizePosition($data['position'] ?? null);
         unset($data['position']);
         $data['role_id'] = $role->id;
-        $user = User::create(array_merge($data, ['password' => Hash::make($data['password']), 'is_active' => true, 'locale' => 'en']));
+        $userDefaults = ['password' => Hash::make($data['password']), 'is_active' => true, 'locale' => 'en'];
+        if (Schema::hasColumn('users', 'account_status')) $userDefaults['account_status'] = 'active';
+        $user = User::create(array_merge($data, $userDefaults));
         $this->syncMembership($user, ['job_title' => $position]);
         $this->audit($user, 'access.user_created', 'User created and assigned to role '.$user->role?->name, $actor);
         return $user;
@@ -82,13 +84,15 @@ class AdminService
         $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
         $position = $this->normalizePosition($data['position'] ?? null);
 
+        $isActive = (bool) ($data['is_active'] ?? true);
         $changes = [
             'name' => trim($data['name']),
             'email' => trim($data['email']),
             'role_id' => $role->id,
             'department_id' => $data['department_id'] ?: null,
-            'is_active' => (bool) ($data['is_active'] ?? true),
+            'is_active' => $isActive,
         ];
+        if (Schema::hasColumn('users', 'account_status')) $changes['account_status'] = $isActive ? 'active' : 'inactive';
         if (!empty($data['password'])) $changes['password'] = Hash::make($data['password']);
 
         // Do not allow an administrator account to accidentally remove the last protected
@@ -96,6 +100,7 @@ class AdminService
         if ($user->isSuperAdmin()) {
             $changes['role_id'] = $user->role_id;
             $changes['is_active'] = true;
+            if (Schema::hasColumn('users', 'account_status')) $changes['account_status'] = 'active';
         }
 
         $passwordChanged = array_key_exists('password', $changes);
@@ -237,7 +242,10 @@ class AdminService
     {
         $this->assertAdministrator($actor);
         abort_if($user->isSuperAdmin(), 422, 'Super Admin cannot be deactivated.');
-        $user->update(['is_active' => !$user->is_active]);
+        $newActive = !$user->is_active;
+        $statusChanges = ['is_active' => $newActive];
+        if (Schema::hasColumn('users', 'account_status')) $statusChanges['account_status'] = $newActive ? 'active' : 'inactive';
+        $user->update($statusChanges);
         $this->syncMembership($user);
         $this->audit($user, 'access.user_status_changed', 'User '.($user->is_active ? 'activated' : 'deactivated'), $actor);
     }
@@ -308,7 +316,7 @@ class AdminService
             array_merge([
                 'role_id' => $user->role_id,
                 'department_id' => $user->department_id,
-                'status' => $user->is_active ? 'active' : 'inactive',
+                'status' => in_array((string) ($user->account_status ?? ''), ['active','inactive','suspended'], true) ? $user->account_status : ($user->is_active ? 'active' : 'inactive'),
                 'joined_at' => $user->created_at ?: now(),
             ], $extra),
         );

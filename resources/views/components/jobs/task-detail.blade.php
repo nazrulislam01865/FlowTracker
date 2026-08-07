@@ -9,6 +9,7 @@
     'activityPage'=>1,
     'taskDocumentUploads'=>[],
     'showTaskDocumentPicker'=>false,
+    'editMode'=>false,
 ])
 @php
     $job = $task->job;
@@ -18,13 +19,14 @@
     $previousTask = $job?->tasks?->where('workflow_phase_id',$task->workflow_phase_id)->where('id','<',$task->id)->sortByDesc('id')->first();
     $taskDocumentName = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name;
     $accessControl = app(\App\Services\AccessControlService::class);
-    $canEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
-    $canAssignTask = $accessControl->canAssignTask(auth()->user(), $task);
+    $mayEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
+    $canEditTask = $editMode && $mayEditTask;
+    $canAssignTask = $editMode && $accessControl->canAssignTask(auth()->user(), $task);
     $canCheck = $canEditTask;
-    $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
-    $canLinkDocument = $accessControl->can(auth()->user(), 'documents', 'link');
+    $canUploadDocument = $editMode && $accessControl->can(auth()->user(), 'documents', 'create');
+    $canLinkDocument = $editMode && $accessControl->can(auth()->user(), 'documents', 'link');
     $canManageDocuments = $canUploadDocument || $canLinkDocument;
-    $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
+    $canDeleteDocument = $editMode && $accessControl->can(auth()->user(), 'documents', 'delete');
     $effectiveDescription = $task->description ?: $task->setupTemplate?->description;
     $effectiveStartDate = $task->start_date ?: $task->created_at;
     $commentEvents = $task->comments->map(fn($comment)=>(object)[
@@ -73,7 +75,7 @@
                 @endif
             </h1>
         </div>
-        <div class="ft-detail-actions"><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed' || !$canEditTask)>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button><button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
+        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
 

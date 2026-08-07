@@ -10,7 +10,9 @@
             <section class="card ft-profile-main-card">
                 <div class="ft-profile-hero ft-profile-edit-hero">
                     <div class="ft-profile-avatar-wrap">
-                        @php($profilePreviewUrl = $profileImage && str_starts_with((string) $profileImage->getMimeType(), 'image/') ? $profileImage->temporaryUrl() : null)
+                        @php
+                            $profilePreviewUrl = $profileImage && str_starts_with((string) $profileImage->getMimeType(), 'image/') ? $profileImage->temporaryUrl() : null;
+                        @endphp
 
                         @if($profilePreviewUrl)
                             <span class="avatar ft-profile-avatar ft-profile-avatar-preview">
@@ -50,7 +52,7 @@
                             @endif
                         </div>
 
-                        <div class="ft-profile-photo-help">JPG, PNG or WebP · Maximum 2 MB · Square images work best.</div>
+                        <div class="ft-profile-photo-help">JPG, PNG or WebP · Maximum 250 KB · Square images work best.</div>
                         @error('profileImage')<div class="validation-error ft-profile-inline-error">{{ $message }}</div>@enderror
                         <div wire:loading wire:target="profileImage" class="ft-profile-photo-help">Preparing preview…</div>
                     </div>

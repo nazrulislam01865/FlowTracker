@@ -46,7 +46,7 @@ class Index extends Component
     public function saveProfileImage()
     {
         $this->validate([
-            'profileImage' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'profileImage' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:250'],
         ]);
 
         app(ProfileService::class)->updateProfileImage(auth()->user(), $this->profileImage);

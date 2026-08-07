@@ -1,4 +1,4 @@
-@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1])
+@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'jobDocumentUploads'=>[]])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
     $completedProductRows = $productRows->filter(fn ($item) => filled($item->product_name ?? null));
@@ -10,6 +10,8 @@
     $canEditJob = $accessControl->canEditVisibleJob(auth()->user(), $job);
     $canAssignJob = $accessControl->canAssignVisibleJob(auth()->user());
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
+    $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
+    $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
 @endphp
 <div class="ft-job-overview-section ft-exact-overview">
@@ -62,7 +64,7 @@
                     @endphp
                     <tr wire:key="job-item-{{ $item->id ?? $loop->index }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false }" @class(['ft-inline-product-draft-row' => $isDraftItem])>
                         <td>
-                            @if($item->id)
+                            @if($item->id && $isDraftItem)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
@@ -94,7 +96,7 @@
                             @endif
                         </td>
                         <td>
-                            @if($item->id)
+                            @if($item->id && $isDraftItem)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="{{ $productPickerKey }}"
@@ -130,22 +132,22 @@
                         <td>
                             @if($item->id)
                                 <div class="ft-inline-product-quantity-wrap">
-                                    <div
-                                        class="ft-inline-field-editor ft-inline-edit-shell"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
-                                        x-init="if (@js($isDraftItem)) editing = true"
-                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    >
-                                        <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ number_format((int)$item->quantity) }}</span>
-                                        @if($canEditJob)
-                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" aria-label="Edit quantity" title="Edit quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.quantityInput.focus())">✎</button>
+                                    @if($isDraftItem)
+                                        <div
+                                            class="ft-inline-field-editor ft-inline-edit-shell"
+                                            x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
+                                            x-init="editing = true"
+                                            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                        >
                                             <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
-                                                x-on:keydown.escape.prevent="if (@js($isDraftItem)) { draftValue = value } else { cancelEdit() }"
+                                                x-on:keydown.escape.prevent="draftValue = value"
                                                 x-on:keydown.enter.prevent="$event.target.blur()"
-                                                x-on:blur="if (editing) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { if (!ok) { quantitySaving = false; return; } if (@js($isDraftItem)) { editing = true } else { await $wire.$refresh() } quantitySaving = false }) } else if (!@js($isDraftItem)) { cancelEdit() } }">
+                                                x-on:blur="if (editing) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then((ok) => { quantitySaving = false; if (ok) editing = true }) } }">
                                             <x-ui.inline-save-state compact />
-                                        @endif
-                                    </div>
+                                        </div>
+                                    @else
+                                        <span class="ft-readonly-product-value">{{ number_format((int)$item->quantity) }}</span>
+                                    @endif
                                     @if($canEditJob)
                                         <button
                                             type="button"
@@ -232,28 +234,6 @@
                     @endif
                 </b>
             </div>
-            <div
-                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-coordinator'), label: 'Job coordinator', value: @js($job->coordinator_id ?? ''), display: @js($job->coordinator?->name ?? 'Unassigned') })"
-                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-            >
-                <span>Coordinator</span>
-                <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-inline-person-live ft-planning-person-value">
-                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/></span>
-                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
-                        <span x-text="display">{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
-                    </span>
-                    @if($canAssignJob)
-                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit coordinator" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.coordinatorSelect.focus())">✎</button>
-                        <select x-ref="coordinatorSelect" x-cloak x-show="editing" x-model="draftValue" class="ft-planning-inline-select" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobCoordinator({{ $job->id }}, draftValue))">
-                            <option value="">Unassigned</option>
-                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
-                        </select>
-                        <x-ui.inline-save-state compact />
-                    @endif
-                </b>
-            </div>
             <div class="ft-side-row"><span>Workflow</span><b>▣ {{ $job->workflow?->name }}</b></div>
             <div class="ft-side-row"><span>Created</span><b>{{ $job->created_at?->format('M j, Y, H:i') }}</b></div>
         </aside>
@@ -270,10 +250,13 @@
     <section class="ft-detail-card ft-phase-table-card ft-overview-task-card">
         <div class="ft-card-row-head ft-task-card-heading">
             <div><h2>All phase tasks</h2><p>{{ $configuredTasks->count() }} tasks across {{ $job->workflow->phases->count() }} phases</p></div>
-            <div class="ft-row-actions">
-                <label class="ft-inline-search"><span>⌕</span><input wire:model.live.debounce.250ms="jobTaskSearch" placeholder="Search tasks"></label>
-                <button class="ft-outline-btn" type="button" wire:click="collapseAllJobPhases">⌃ Collapse all</button>
-                <button class="ft-new-job-btn" type="button" wire:click="expandAllJobPhases">↗ Expand all</button>
+            <div class="ft-row-actions ft-phase-toolbar-icons" aria-label="Phase task display controls">
+                <button class="ft-phase-toolbar-icon" type="button" wire:click="collapseAllJobPhases" title="Collapse all phases" aria-label="Collapse all phases">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 15 6-6 6 6"/><path d="m6 20 6-6 6 6"/></svg>
+                </button>
+                <button class="ft-phase-toolbar-icon" type="button" wire:click="expandAllJobPhases" title="Expand all phases" aria-label="Expand all phases">
+                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 4 6 6 6-6"/><path d="m6 9 6 6 6-6"/></svg>
+                </button>
             </div>
         </div>
         <div class="ft-phase-load-note"><span>◉ All {{ $configuredTasks->count() }} configured Task Pack tasks are loaded</span><span>{{ count($expandedPhaseIds) }} phase{{ count($expandedPhaseIds)===1?'':'s' }} expanded</span><span>Task status changes save automatically</span></div>
@@ -284,15 +267,10 @@
                     $completed = \App\Support\JobDetailPresenter::completedCount($allPhaseTasks);
                     $phaseProgress = $allPhaseTasks->count() ? round($completed/max(1,$allPhaseTasks->count())*100) : 0;
                     $phaseTasks = $allPhaseTasks;
-                    if(trim($jobTaskSearch)!=='') {
-                        $needle = \Illuminate\Support\Str::lower(trim($jobTaskSearch));
-                        $phaseTasks = $phaseTasks->filter(fn($task) => \Illuminate\Support\Str::contains(\Illuminate\Support\Str::lower($task->title.' '.($task->assignee?->name ?? '')), $needle))->values();
-                    }
                     $expanded = in_array((int)$phase->id, array_map('intval',$expandedPhaseIds), true);
                 @endphp
                 <div class="ft-phase-group {{ $expanded ? 'open' : '' }}" wire:key="job-phase-{{ $phase->id }}">
                     <button type="button" class="ft-phase-group-head ft-phase-toggle" wire:click="toggleJobPhase({{ $phase->id }})" aria-expanded="{{ $expanded?'true':'false' }}">
-                        <span>{{ $expanded ? '⌄' : '›' }}</span>
                         <b class="{{ $phase->id === $job->phase->id ? 'current-number' : '' }}">{{ $phase->sequence }}</b>
                         <strong>{{ $phase->name }}</strong>
                         <small>{{ $completed }} of {{ $allPhaseTasks->count() }} complete</small>
@@ -302,9 +280,12 @@
                     @if($expanded)
                         <div class="ft-phase-task-columns"><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Action</span></div>
                         @forelse($phaseTasks as $task)
-                            @php($taskAccess = app(\App\Services\AccessControlService::class))
-                            @php($canEditTask = $taskAccess->canEditVisibleTask(auth()->user(), $task))
-                            @php($canAssignTask = $taskAccess->canAssignTask(auth()->user(), $task))
+                            @php
+                                $taskAccess = app(\App\Services\AccessControlService::class);
+                                $canEditTask = $taskAccess->canEditVisibleTask(auth()->user(), $task);
+                                $canAssignTask = $taskAccess->canAssignTask(auth()->user(), $task);
+                                $canDeleteTask = $taskAccess->can(auth()->user(), 'tasks', 'delete');
+                            @endphp
                             <div class="ft-phase-task-line ft-editable-task-line" wire:key="job-task-{{ $task->id }}">
                                 <span>{{ $phase->sequence }}.{{ $loop->iteration }}</span>
                                 <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
@@ -362,10 +343,21 @@
                                     </select>
                                     @if($canEditTask)<x-ui.inline-save-state compact />@endif
                                 </span>
-                                <button class="ft-table-kebab" type="button" wire:click="openTask({{ $task->id }})">•••</button>
+                                <div class="ft-task-action-wrap" x-data="{ open: false }" x-on:click.stop>
+                                    <button class="ft-table-kebab" type="button" x-on:click="open = !open" aria-label="Task actions" :aria-expanded="open ? 'true' : 'false'">•••</button>
+                                    <div class="ft-task-action-menu" x-cloak x-show="open" x-on:click.outside="open = false">
+                                        <button type="button" x-on:click="open = false" wire:click.stop="openTask({{ $task->id }})">View</button>
+                                        @if($canEditTask)
+                                            <button type="button" x-on:click="open = false" wire:click.stop="editTask({{ $task->id }})">Edit</button>
+                                        @endif
+                                        @if($canDeleteTask)
+                                            <button type="button" class="danger" x-on:click="open = false" wire:click.stop="deleteTaskFromJob({{ $task->id }})" wire:confirm="Delete this task? The task will be removed from this Job and its phase progress will be recalculated.">Delete</button>
+                                        @endif
+                                    </div>
+                                </div>
                             </div>
                         @empty
-                            <div class="ft-phase-empty-row">No configured tasks match this phase/search.</div>
+                            <div class="ft-phase-empty-row">No configured tasks in this phase.</div>
                         @endforelse
                     @endif
                 </div>
@@ -375,7 +367,30 @@
 
     <section class="ft-detail-card ft-attachment-card ft-job-overview-attachments">
         <h2>Attachments <span>{{ $job->documents->count() }}</span></h2>
-        <div class="ft-upload-zone compact"><span class="ft-paperclip">⌕</span><div>Upload documents against the Task Pack requirement that needs them.<small>Documents are linked to the selected task and stored permanently.</small></div><button class="ft-outline-btn" type="button" wire:click="setDetailTab('documents')">Add / choose document</button></div>
+        @if($requiredDocuments->isNotEmpty())
+            <div class="ft-upload-zone compact ft-task-upload-zone ft-job-overview-dropzone">
+                @if($canUploadDocument)
+                    <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="jobOverviewDocumentUpload-{{ $job->id }}">
+                        <input id="jobOverviewDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                        <span class="ft-paperclip">⌕</span>
+                        <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                    </label>
+                @else
+                    <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Job attachments.</small></div></div>
+                @endif
+                <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="setDetailTab('documents')">Choose from Documents</button>
+            </div>
+            @if($canUploadDocument && count($jobDocumentUploads ?? []))
+                <div class="ft-upload-ready-row">
+                    <span>{{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready</span>
+                    <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
+                </div>
+            @endif
+            @error('jobDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
+            @error('jobDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
+        @else
+            <div class="ft-empty-taskpack-docs">No Task Pack document requirement is configured for this Job. Open Documents to review the document setup.</div>
+        @endif
         @foreach($job->documents as $doc)<div class="ft-job-file-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><b>{{ $doc->name }}</b><small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ $doc->created_at?->format('M j, Y, H:i') }}</small></div><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if($canDeleteDocument)<button type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">Delete</button>@endif</div>@endforeach
     </section>
 

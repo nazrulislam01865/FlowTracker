@@ -7,7 +7,7 @@
     } elseif ($activityTab === 'history') {
         $activities = $activities->reject(fn($activity) => $activity->event === 'job.comment')->values();
     }
-    $activityPerPage = 30;
+    $activityPerPage = 10;
     $activityTotal = $activities->count();
     $activityPages = max(1, (int) ceil($activityTotal / $activityPerPage));
     $activityCurrentPage = min(max(1, (int) $activityPage), $activityPages);

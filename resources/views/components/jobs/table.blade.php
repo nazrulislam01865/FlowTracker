@@ -62,7 +62,9 @@
                 <thead><tr><th><label class="ft-checkbox-head"><input type="checkbox" wire:click="toggleSelectAllJobs" @checked($allFilteredJobsSelected) @disabled($jobs->total() === 0) aria-label="Select all {{ $jobs->total() }} filtered Jobs"><span>Select all</span></label></th><th>Job / Order</th><th>Client / Brief</th><th>Product / Qty</th><th>Phase</th><th>Next Action</th><th>Health</th><th>Owner</th><th>Delivery ↓</th><th>Progress</th><th>Invoice</th><th>•••</th></tr></thead>
                 <tbody>
                 @forelse($jobs as $job)
-                    @php($next = \App\Support\BoardPresenter::nextTask($job))
+                    @php
+                        $next = \App\Support\BoardPresenter::nextTask($job);
+                    @endphp
                     <tr wire:key="job-row-{{ $job->id }}">
                         <td data-label="Select"><input type="checkbox" wire:model.live="selectedJobIds" value="{{ $job->id }}" aria-label="Select {{ $job->job_number }}"></td>
                         <td data-label="Job / Order"><button class="ft-table-job-link" wire:click="openJob({{ $job->id }})">{{ $job->job_number }}</button><div class="ft-table-sub">{{ $job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</div></td>

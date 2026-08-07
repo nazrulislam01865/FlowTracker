@@ -1,15 +1,4 @@
 
-
-.ft-phase-toggle{width:100%;border:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
-.ft-phase-toggle i{font-style:normal;width:24px;height:24px;border:1px solid #7ca6ff;border-radius:5px;color:#0f63f3;display:grid;place-items:center;background:#fff;justify-self:end}
-.ft-overview-task-card .ft-phase-group.open>.ft-phase-toggle{background:#fbfdff}
-.ft-editable-task-line{cursor:default}
-.ft-inline-task-link{border:0;background:transparent;color:#10233e;font:inherit;font-weight:650;text-align:left;padding:0;cursor:pointer}
-.ft-inline-task-link:hover{color:#0f63f3;text-decoration:underline}
-.ft-inline-task-status{height:31px;min-width:150px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;color:#10233e;font-size:10px;font-weight:700;padding:0 26px 0 9px;outline:0}
-.ft-inline-task-status.done{background:#eaf8ef;color:#087c34}
-.ft-inline-task-status.waiting{background:#fff4df;color:#a96000}
-.ft-inline-task-status.blocked{background:#fff0ef;color:#c2413a}
 .ft-inline-task-status.progress{background:#eaf2ff;color:#145fe6}
 .ft-inline-task-status.ready{background:#f8fafc;color:#465b75}
 .ft-inline-task-status:disabled{opacity:.75;cursor:not-allowed}
@@ -781,4 +770,26 @@
     color:#c62828;
     font-weight:750;
     padding:0 14px;
+}
+.ft-checkbox-head{font-size:9px;color:#6b7c92;letter-spacing:.03em;display:inline-flex;align-items:center;gap:6px;white-space:nowrap;cursor:pointer}
+.ft-checkbox-head input:disabled{cursor:not-allowed}
+.ft-job-table input[type="checkbox"]{width:16px;height:16px;accent-color:#2563eb;cursor:pointer}
+@media(max-width:1500px){
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{grid-template-columns:minmax(280px,1.8fr) repeat(4,minmax(120px,1fr));}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-clear-link{min-height:38px}
+}
+@media(max-width:1050px){
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{grid-template-columns:repeat(3,minmax(0,1fr));}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:span 2}
+}
+@media(max-width:720px){
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:9px}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:1/-1}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-clear-link{width:100%;justify-content:center;border:1px solid #d8e2ee;border-radius:8px;background:#fff}
+    .ft-job-bulk-bar{align-items:stretch;flex-direction:column}
+    .ft-job-bulk-actions>*{flex:1}
+}
+@media(max-width:480px){
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{grid-template-columns:1fr}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:auto}
 }

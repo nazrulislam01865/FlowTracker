@@ -38,7 +38,9 @@
         </section>
     </div>
 
-    @php($displayStatuses = $taskStatuses->filter(fn($value) => $status !== '' && \App\Support\BoardLaneResolver::isCompleted($status) ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values())
+    @php
+        $displayStatuses = $taskStatuses->filter(fn($value) => $status !== '' && \App\Support\BoardLaneResolver::isCompleted($status) ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values();
+    @endphp
     <div class="ft-lane-sticky-header">
         <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="myWorkHeaderScroll" x-on:scroll="$refs.myWorkBodyScroll && ($refs.myWorkBodyScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $displayStatuses->count()) }};">

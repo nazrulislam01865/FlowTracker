@@ -3,7 +3,9 @@
     <div class="ft-card-row-head"><div><h2>All phase tasks</h2><p>{{ $job->tasks->count() }} tasks across {{ $job->workflow->phases->count() }} phases</p></div><div class="ft-row-actions"><input placeholder="Search tasks"><button class="ft-outline-btn">Filter</button><button class="ft-new-job-btn">Expand all</button></div></div>
     <div class="ft-phase-task-table">
         @foreach($job->workflow->phases as $phase)
-            @php($phaseTasks = \App\Support\JobDetailPresenter::phaseTasks($job,$phase))
+            @php
+                $phaseTasks = \App\Support\JobDetailPresenter::phaseTasks($job,$phase);
+            @endphp
             <div class="ft-phase-group open">
                 <div class="ft-phase-group-head"><span>⌄</span><b>{{ $phase->sequence }}</b><strong>{{ $phase->name }}</strong><small>{{ \App\Support\JobDetailPresenter::completedCount($phaseTasks) }} of {{ $phaseTasks->count() }} complete</small><em style="width:{{ $phaseTasks->count() ? \App\Support\JobDetailPresenter::completedCount($phaseTasks)/max(1,$phaseTasks->count())*100 : 0 }}%"></em><button type="button">＋</button></div>
                 @forelse($phaseTasks as $task)

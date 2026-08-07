@@ -4,7 +4,9 @@
 </x-ui.page-head>
 <div class="card section-card"><div class="attention-list">
 @forelse($notifications as $n)
-    @php($url = app(\App\Services\NotificationService::class)->urlFor($n))
+    @php
+        $url = app(\App\Services\NotificationService::class)->urlFor($n);
+    @endphp
     <div class="attention-item" style="{{ $n->read_at?'opacity:.62':'' }}">
         <span class="signal {{ $n->type==='risk'?'red':($n->type==='assignment'?'purple':($n->type==='approval'?'amber':'purple')) }}"></span>
         <div><div class="item-title">{{ $n->title }} @if(!$n->read_at)<span class="badge b-blue">New</span>@endif</div><div class="item-meta">{{ $n->message }} · {{ $n->created_at->diffForHumans() }}</div></div>
