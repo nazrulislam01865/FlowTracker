@@ -92,6 +92,9 @@ class Index extends Component
             $this->showWorkflowDeleteModal = true;
         } catch (ValidationException $e) {
             $this->addError('workflow', collect($e->errors())->flatten()->first());
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('workflow', 'FlowTrack could not check this Workflow safely. Please refresh the page and try again.');
         }
     }
 
@@ -104,12 +107,20 @@ class Index extends Component
 
     public function confirmDeleteWorkflow(): void
     {
-        abort_unless($this->deleteWorkflowId, 422);
+        if (!$this->deleteWorkflowId) {
+            $this->closeWorkflowDelete();
+            $this->addError('workflow', 'The Workflow selected for deletion is no longer available. Please try again.');
+            return;
+        }
 
         try {
             $result = app(WorkflowService::class)->deleteWorkflow($this->deleteWorkflowId);
             $this->closeWorkflowDelete();
-            $this->selectedWorkflowId = app(WorkflowService::class)->all()->first()?->id;
+            $this->selectedWorkflowId = WorkflowTemplate::query()
+                ->where('workspace_id', app(WorkflowService::class)->workspaceId())
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->value('id');
 
             $message = $result['workflow_name'].' permanently deleted. Existing Jobs and Tasks were preserved in their own snapshots.';
             if ($result['job_count'] > 0) {
@@ -117,18 +128,30 @@ class Index extends Component
             }
 
             session()->flash('success', $message);
-            app(\App\Services\NotificationService::class)->notifyUser(
-                auth()->user(),
-                'Workflow permanently deleted',
-                $message,
-                'update',
-                null,
-                null,
-                auth()->user(),
-            );
+
+            try {
+                app(\App\Services\NotificationService::class)->notifyUser(
+                    auth()->user(),
+                    'Workflow permanently deleted',
+                    $message,
+                    'update',
+                    null,
+                    null,
+                    auth()->user(),
+                );
+            } catch (\Throwable $notificationError) {
+                report($notificationError);
+            }
         } catch (ValidationException $e) {
             $this->closeWorkflowDelete();
             $this->addError('workflow', collect($e->errors())->flatten()->first());
+        } catch (\Throwable $e) {
+            $this->closeWorkflowDelete();
+            report($e);
+            $this->addError(
+                'workflow',
+                'This Workflow could not be deleted right now. Existing Jobs and Tasks were not intentionally removed. Please refresh and try again.'
+            );
         }
     }
 
@@ -176,24 +199,51 @@ class Index extends Component
 
     public function render()
     {
-        $all=app(WorkflowService::class)->all();
-        if(!$this->selectedWorkflowId && $all->isNotEmpty()) $this->selectedWorkflowId=$all->first()?->id;
-        $selected=$all->firstWhere('id',$this->selectedWorkflowId);
-        $workspaceId=app(MasterDataService::class)->workspaceId();
+        if ($this->showWorkflowDeleteModal) {
+            return view('livewire.workflow-setup.index', $this->emptyPageData());
+        }
+
+        return view('livewire.workflow-setup.index', $this->workflowPageData());
+    }
+
+    private function workflowPageData(): array
+    {
+        $all = app(WorkflowService::class)->all();
+        if (!$this->selectedWorkflowId && $all->isNotEmpty()) {
+            $this->selectedWorkflowId = $all->first()?->id;
+        }
+
+        $selected = $all->firstWhere('id', $this->selectedWorkflowId);
+        $workspaceId = app(MasterDataService::class)->workspaceId();
         $selectedPhases = $selected?->phases ?? collect();
-        return view('livewire.workflow-setup.index',[
-            'workflows'=>$all,'selected'=>$selected,
-            'activeTemplates'=>$all->where('is_active',true)->count(),
-            'selectedPhaseCount'=>$selectedPhases->count(),
-            'allowedStartingStages'=>$selectedPhases->where('is_active',true)->where('allow_job_start',true)->count(),
-            'automaticTransitions'=>$selectedPhases->where('is_active',true)->where('auto_advance_on_ready',true)->count(),
-            // These shared datasets are only used by the phase editor.
+
+        return [
+            'workflows' => $all,
+            'selected' => $selected,
+            'activeTemplates' => $all->where('is_active', true)->count(),
+            'selectedPhaseCount' => $selectedPhases->count(),
+            'allowedStartingStages' => $selectedPhases->where('is_active', true)->where('allow_job_start', true)->count(),
+            'automaticTransitions' => $selectedPhases->where('is_active', true)->where('auto_advance_on_ready', true)->count(),
             'taskPacks' => $this->showPhaseModal
                 ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'documentCategories' => $this->showPhaseModal
                 ? app(MasterDataService::class)->active('document_category')
                 : collect(),
-        ]);
+        ];
+    }
+
+    private function emptyPageData(): array
+    {
+        return [
+            'workflows' => collect(),
+            'selected' => null,
+            'activeTemplates' => 0,
+            'selectedPhaseCount' => 0,
+            'allowedStartingStages' => 0,
+            'automaticTransitions' => 0,
+            'taskPacks' => collect(),
+            'documentCategories' => collect(),
+        ];
     }
 }

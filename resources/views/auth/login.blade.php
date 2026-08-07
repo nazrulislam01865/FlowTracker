@@ -3,16 +3,21 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign in — FlowTrack</title>
+    <title>Sign in — {{ $branding['name'] ?? 'FlowTrack' }}</title>
+    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
     @vite(['resources/css/login.css'])
 </head>
 <body>
 <div class="login screen">
     <section class="login-visual">
         <div>
-            <div class="brand">
-                <div class="brand-mark">FT</div>
-                <span>FlowTrack</span>
+            <div class="brand ft-login-brand ft-login-brand-dark">
+                @if($branding['logo_url'] ?? null)
+                    <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
+                @else
+                    <div class="brand-mark">FT</div>
+                    <span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
+                @endif
             </div>
 
             <h1>One Job. Every phase. Clear ownership.</h1>
@@ -43,9 +48,13 @@
                 </div>
             @endif
 
-            <div class="brand" style="margin-bottom:30px">
-                <div class="brand-mark" style="background:var(--blue);color:#fff">FT</div>
-                <span>FlowTrack</span>
+            <div class="brand ft-login-brand ft-login-brand-form" style="margin-bottom:30px">
+                @if($branding['logo_url'] ?? null)
+                    <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
+                @else
+                    <div class="brand-mark" style="background:var(--blue);color:#fff">FT</div>
+                    <span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
+                @endif
             </div>
 
             <h2>Welcome back</h2>

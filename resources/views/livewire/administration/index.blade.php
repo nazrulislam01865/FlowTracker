@@ -1,11 +1,16 @@
 <div class="ft-access-admin">
     <div class="ft-access-head">
-        <div><h1>Access Roles & Permissions</h1><p>Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.</p></div>
-        <div class="ft-access-actions"><button class="ghost" wire:click="setTab('audit')">Audit Log</button><button class="primary" wire:click="openRole">＋ New Role</button></div>
+        <div>
+            <h1>{{ $tab === 'branding' ? 'System Branding' : 'Access Roles & Permissions' }}</h1>
+            <p>{{ $tab === 'branding' ? 'Manage the logo and browser favicon used across FlowTrack.' : 'Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.' }}</p>
+        </div>
+        @if($tab !== 'branding')
+            <div class="ft-access-actions"><button class="ghost" wire:click="setTab('audit')">Audit Log</button><button class="primary" wire:click="openRole">＋ New Role</button></div>
+        @endif
     </div>
 
     <div class="ft-access-tabs">
-        @foreach(['dashboard'=>'Access Dashboard','roles'=>'Roles & Policies','matrix'=>'Permission Matrix','users'=>'Users & Assignments','audit'=>'Audit Log','security'=>'Security Settings'] as $key=>$label)
+        @foreach(['dashboard'=>'Access Dashboard','roles'=>'Roles & Policies','matrix'=>'Permission Matrix','users'=>'Users & Assignments','audit'=>'Audit Log','security'=>'Security Settings','branding'=>'Branding'] as $key=>$label)
             <button class="{{ $tab===$key?'active':'' }}" wire:click="setTab('{{ $key }}')">{{ $label }}</button>
         @endforeach
     </div>
@@ -95,6 +100,10 @@
             </section>
             <section class="card ft-access-panel"><div class="section-head"><div><h3>Access policy</h3></div></div><div class="ft-control-note"><b>Administrator/Super Admin</b><span>Unrestricted application access. These roles can configure all permissions.</span></div><div class="ft-control-note"><b>All other roles</b><span>Must pass both the action permission and record-scope check on every page and update.</span></div><div class="ft-control-note"><b>Assignments</b><span>Task assignees see their assigned tasks; associated Job visibility follows from those assignments.</span></div></section>
         </div>
+    @endif
+
+    @if($tab === 'branding')
+        @include('livewire.administration.partials.branding')
     @endif
 
     @if($showUserModal)

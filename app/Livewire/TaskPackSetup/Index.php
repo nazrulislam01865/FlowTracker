@@ -91,6 +91,9 @@ class Index extends Component
             $this->showPackDeleteModal = true;
         } catch (ValidationException $e) {
             $this->addError('pack', collect($e->errors())->flatten()->first());
+        } catch (\Throwable $e) {
+            report($e);
+            $this->addError('pack', 'FlowTrack could not check this Task Pack safely. Please refresh the page and try again.');
         }
     }
 
@@ -103,13 +106,22 @@ class Index extends Component
 
     public function confirmDeletePack(): void
     {
-        abort_unless($this->deletePackId, 422);
+        if (!$this->deletePackId) {
+            $this->closePackDelete();
+            $this->addError('pack', 'The Task Pack selected for deletion is no longer available. Please try again.');
+            return;
+        }
+
         $this->packsReady = true;
 
         try {
             $result = app(TaskPackService::class)->deletePack($this->deletePackId);
             $this->closePackDelete();
-            $this->selectedPackId = app(TaskPackService::class)->all()->first()?->id;
+            $this->selectedPackId = TaskPack::query()
+                ->where('workspace_id', app(TaskPackService::class)->workspaceId())
+                ->where('is_snapshot', false)
+                ->orderBy('name')
+                ->value('id');
 
             $message = $result['pack_name'].' permanently deleted. Existing Jobs and Tasks were preserved in their own snapshots.';
             if ($result['job_count'] > 0) {
@@ -120,18 +132,32 @@ class Index extends Component
             }
 
             session()->flash('success', $message);
-            app(\App\Services\NotificationService::class)->notifyUser(
-                auth()->user(),
-                'Task Pack permanently deleted',
-                $message,
-                'update',
-                null,
-                null,
-                auth()->user(),
-            );
+
+            try {
+                app(\App\Services\NotificationService::class)->notifyUser(
+                    auth()->user(),
+                    'Task Pack permanently deleted',
+                    $message,
+                    'update',
+                    null,
+                    null,
+                    auth()->user(),
+                );
+            } catch (\Throwable $notificationError) {
+                // Deletion has already completed. A notification failure must
+                // never make the user think the delete itself failed.
+                report($notificationError);
+            }
         } catch (ValidationException $e) {
             $this->closePackDelete();
             $this->addError('pack', collect($e->errors())->flatten()->first());
+        } catch (\Throwable $e) {
+            $this->closePackDelete();
+            report($e);
+            $this->addError(
+                'pack',
+                'This Task Pack could not be deleted right now. Your Jobs and Tasks were not intentionally removed. Please refresh and try again.'
+            );
         }
     }
 
@@ -176,17 +202,50 @@ class Index extends Component
 
     public function render()
     {
-        $service=app(TaskPackService::class);
-        $packs=$this->packsReady ? $service->all() : collect();
-        if (!$this->selectedPackId && $packs->isNotEmpty()) $this->selectedPackId=$packs->first()->id;
-        $selected=$packs->firstWhere('id',$this->selectedPackId);
+        if (!$this->packsReady) {
+            return view('livewire.task-pack-setup.index', $this->emptyPageData());
+        }
+
+        // The destructive confirmation is its own render branch. While it is
+        // open we do not reload every Task Pack and every item/relationship.
+        if ($this->showPackDeleteModal) {
+            return view('livewire.task-pack-setup.index', $this->emptyPageData());
+        }
+
+        return view('livewire.task-pack-setup.index', $this->taskPackListData());
+    }
+
+    private function taskPackListData(): array
+    {
+        $service = app(TaskPackService::class);
+        $packs = $service->all();
+
+        if (!$this->selectedPackId && $packs->isNotEmpty()) {
+            $this->selectedPackId = $packs->first()->id;
+        }
+
+        $selected = $packs->firstWhere('id', $this->selectedPackId);
         $packIds = $packs->pluck('id');
-        return view('livewire.task-pack-setup.index',[
-            'packs'=>$packs,'selected'=>$selected,
-            'totalPacks'=>$packs->count(),
-            'activePacks'=>$packs->where('is_active',true)->count(),
-            'configuredTasks'=>$packs->sum(fn($pack) => $pack->items->count()),
-            'mappedPhases'=>$packIds->isEmpty() ? 0 : WorkflowPhase::whereIn('task_pack_id',$packIds)->count(),
-        ]);
+
+        return [
+            'packs' => $packs,
+            'selected' => $selected,
+            'totalPacks' => $packs->count(),
+            'activePacks' => $packs->where('is_active', true)->count(),
+            'configuredTasks' => $packs->sum(fn ($pack) => $pack->items->count()),
+            'mappedPhases' => $packIds->isEmpty() ? 0 : WorkflowPhase::whereIn('task_pack_id', $packIds)->count(),
+        ];
+    }
+
+    private function emptyPageData(): array
+    {
+        return [
+            'packs' => collect(),
+            'selected' => null,
+            'totalPacks' => 0,
+            'activePacks' => 0,
+            'configuredTasks' => 0,
+            'mappedPhases' => 0,
+        ];
     }
 }

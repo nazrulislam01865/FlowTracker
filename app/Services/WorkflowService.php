@@ -135,30 +135,46 @@ class WorkflowService
     public function workflowDeleteImpact(int $id): array
     {
         $this->assertManage();
-        $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
+        $workflow = WorkflowTemplate::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->findOrFail($id);
+
         $phases = $this->workflowPhases($id);
         $phaseIds = $phases->pluck('id')->map(fn ($phaseId) => (int) $phaseId)->values()->all();
         $legacyJobIds = $this->workflowLinkedJobIds($id, $phaseIds);
 
-        $jobs = FlowJob::withTrashed()
+        $jobsBase = FlowJob::withTrashed()
             ->where(function ($query) use ($id, $legacyJobIds) {
                 $query->where('source_workflow_id', $id);
                 if ($legacyJobIds) $query->orWhereIn('id', $legacyJobIds);
-            })
+            });
+
+        $jobCount = (clone $jobsBase)->count();
+        $taskCount = $jobCount === 0
+            ? 0
+            : Task::withTrashed()
+                ->whereIn('flow_job_id', (clone $jobsBase)->select('id'))
+                ->count();
+
+        $jobs = (clone $jobsBase)
             ->orderBy('job_number')
+            ->limit(8)
             ->get(['id', 'job_number', 'title', 'workflow_id', 'source_workflow_id', 'deleted_at']);
 
-        $taskQuery = $jobs->isEmpty()
-            ? Task::withTrashed()->whereRaw('1 = 0')
-            : Task::withTrashed()->whereIn('flow_job_id', $jobs->pluck('id'));
-        $taskCount = (clone $taskQuery)->count();
-        $jobMap = $jobs->keyBy('id');
-        $tasks = $taskQuery->orderBy('task_number')->limit(8)->get(['id', 'task_number', 'title', 'flow_job_id'])->map(fn (Task $task) => [
-            'id' => (int) $task->id,
-            'task_number' => (string) $task->task_number,
-            'title' => (string) $task->title,
-            'job_number' => (string) ($jobMap->get($task->flow_job_id)?->job_number ?? ''),
-        ])->all();
+        $jobNumbers = $jobs->pluck('job_number', 'id');
+        $tasks = $jobCount === 0
+            ? collect()
+            : Task::withTrashed()
+                ->whereIn('flow_job_id', (clone $jobsBase)->select('id'))
+                ->orderBy('task_number')
+                ->limit(8)
+                ->get(['id', 'task_number', 'title', 'flow_job_id'])
+                ->map(fn (Task $task) => [
+                    'id' => (int) $task->id,
+                    'task_number' => (string) $task->task_number,
+                    'title' => (string) $task->title,
+                    'job_number' => (string) ($jobNumbers->get($task->flow_job_id) ?? ''),
+                ]);
 
         return [
             'id' => (int) $workflow->id,
@@ -174,8 +190,8 @@ class WorkflowService
                 'name' => (string) $phase->name,
                 'sequence' => (int) $phase->sequence,
             ])->all(),
-            'job_count' => $jobs->count(),
-            'jobs' => $jobs->take(8)->map(fn (FlowJob $job) => [
+            'job_count' => $jobCount,
+            'jobs' => $jobs->map(fn (FlowJob $job) => [
                 'id' => (int) $job->id,
                 'job_number' => (string) $job->job_number,
                 'title' => (string) $job->title,
@@ -183,7 +199,7 @@ class WorkflowService
                 'already_snapshotted' => (int) $job->workflow_id !== (int) $id,
             ])->all(),
             'task_count' => $taskCount,
-            'tasks' => $tasks,
+            'tasks' => $tasks->all(),
             'legacy_job_count' => count($legacyJobIds),
         ];
     }

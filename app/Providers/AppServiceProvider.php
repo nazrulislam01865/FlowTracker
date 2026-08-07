@@ -3,6 +3,7 @@
 namespace App\Providers;
 
 use App\Services\AccessControlService;
+use App\Services\BrandingService;
 use App\Services\MentionService;
 use App\Services\ShellDataService;
 use App\Services\SetupContext;
@@ -28,6 +29,7 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AccessControlService::class);
         $this->app->scoped(MentionService::class);
+        $this->app->scoped(BrandingService::class);
         $this->app->scoped(RequestPerformanceMonitor::class);
         $this->app->scoped(ShellDataService::class);
         $this->app->scoped(SetupContext::class);
@@ -58,6 +60,10 @@ class AppServiceProvider extends ServiceProvider
                 ? $event->exception
                 : new RuntimeException('HTTP connection failed.');
             app(RequestPerformanceMonitor::class)->finishOutgoing($event->request, null, $exception);
+        });
+
+        View::composer(['layouts.app', 'auth.login'], function ($view): void {
+            $view->with('branding', app(BrandingService::class)->current());
         });
 
         View::composer('layouts.app', function ($view): void {

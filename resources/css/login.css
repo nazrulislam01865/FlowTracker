@@ -250,3 +250,25 @@ button {
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* Workspace branding */
+.ft-login-brand img {
+    display: block;
+    width: auto;
+    max-width: 210px;
+    height: auto;
+    max-height: 52px;
+    object-fit: contain;
+    object-position: left center;
+}
+
+.ft-login-brand-dark img {
+    padding: 7px 9px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, .96);
+}
+
+.ft-login-brand-form img {
+    max-width: 190px;
+    max-height: 48px;
+}

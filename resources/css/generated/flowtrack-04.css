@@ -1,29 +1,4 @@
 
-.ft-document-purpose-field .ft-document-purpose-select{display:block!important;float:none!important;width:100%!important;max-width:none!important;height:44px!important;margin:0!important;border:1px solid #cbd9e9!important;border-radius:9px!important;background:#fff;padding:0 12px!important;font-size:11px!important;color:#132844}
-.ft-document-purpose-field .ft-document-match-note{display:block!important;margin:6px 0 0!important;font-size:9.5px!important;color:#667a93;clear:both}
-.ft-job-document-upload-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:12px;align-items:stretch;margin-top:12px}
-.ft-job-document-drop{min-height:64px;border:1px dashed #8fa9c8;border-radius:9px;background:#f9fbff;display:grid;grid-template-columns:34px minmax(0,1fr);gap:11px;align-items:center;padding:10px 14px;cursor:pointer;margin:0!important}
-.ft-job-document-drop>input{display:none!important}.ft-job-document-drop .ft-paperclip{font-size:18px;color:#294f7e}.ft-job-document-drop strong{font-size:11px;color:#132844}.ft-job-document-drop strong span{color:#0f63f3}.ft-job-document-drop small{display:block;margin-top:3px;color:#657a94;font-size:9.5px;font-weight:500}.ft-job-document-drop.readonly{cursor:default}
-.ft-choose-existing-doc{height:auto!important;min-height:64px!important;min-width:190px!important;padding:0 18px!important;align-self:stretch;font-size:11px!important}
-.ft-upload-panel .ft-document-link-action{display:none!important}
-@media(max-width:760px){.ft-job-document-upload-row{grid-template-columns:1fr}.ft-choose-existing-doc{min-width:0!important;width:100%;min-height:44px!important}.ft-editable-task-title input{width:100%;max-width:100%}}
-
-/* Task detail property editor — prototype-style edit-on-pencil */
-.ft-friendly-task-properties{overflow:visible!important;position:relative;z-index:5}
-.ft-friendly-task-properties .ft-task-property{position:relative;overflow:visible!important;min-width:0;transition:border-color .15s,box-shadow .15s,background .15s}
-.ft-friendly-task-properties .ft-task-property.is-editing{z-index:35;border-color:#2563eb!important;box-shadow:inset 0 0 0 1px #2563eb;background:#fbfdff}
-.ft-task-property-display{min-height:34px;display:flex;align-items:center;gap:9px;min-width:0}
-.ft-task-property-display .ft-property-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-task-property-display>button{border:0;background:transparent;color:#275b9c;margin-left:auto;padding:5px;line-height:1;cursor:pointer}
-.ft-task-property-popover{position:absolute;left:-1px;right:-1px;top:calc(100% + 8px);z-index:60;background:#fff;border:1px solid #cbd9e9;border-radius:12px;padding:12px;box-shadow:0 18px 38px rgba(15,35,65,.16)}
-.ft-task-property-popover:before{content:"";position:absolute;left:18px;top:-6px;width:10px;height:10px;background:#fff;border-left:1px solid #cbd9e9;border-top:1px solid #cbd9e9;transform:rotate(45deg)}
-.ft-task-property-popover .ft-task-property-input{display:block!important;width:100%!important;min-width:0;height:46px!important;border:1px solid #d5dfeb!important;border-radius:10px!important;background:#fff!important;padding:0 12px!important;font-size:14px!important;color:#13233d!important;outline:none}
-.ft-task-property-popover .ft-task-property-input:focus{border-color:#7aa5ff!important;box-shadow:0 0 0 3px rgba(37,99,235,.09)!important}
-.ft-description-card{position:relative}
-.ft-description-card .ft-inline-description-editor{margin-top:10px;background:#f8fbff;border:1px solid #dbe6f3;border-radius:10px;padding:10px}
-.ft-description-card .ft-inline-description-editor textarea{width:100%;border:1px solid #d6e1ed;border-radius:9px;padding:10px 12px;font:inherit;resize:vertical;min-height:90px}
-.ft-description-card .ft-inline-description-editor>div{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}
-@media(max-width:900px){.ft-task-property-popover{position:fixed;left:16px;right:16px;top:auto;bottom:18px;z-index:100;padding:14px}.ft-task-property-popover:before{display:none}}
 
 /* Client row actions + dedicated client view */
 .ft-client-action-cell{position:relative;overflow:visible!important}
@@ -906,6 +881,61 @@ body:has(.ft-client-preview-backdrop){
     .ft-profile-signout-button{width:100%}
     .ft-profile-signout-card form{width:100%}
 }
+
+/* --------------------------------------------------------------------------
+   Workspace branding + profile editing usability
+   -------------------------------------------------------------------------- */
+.ft-system-brand{text-decoration:none;min-height:40px;display:flex;align-items:center;overflow:hidden}
+.ft-system-brand:hover{color:#fff}
+.ft-system-logo{display:block;max-width:168px;max-height:38px;width:auto;height:auto;object-fit:contain;object-position:left center}
+
+.ft-branding-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
+.ft-branding-card{padding:22px;min-width:0}
+.ft-branding-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
+.ft-branding-card-head h3{margin:3px 0 5px;font-size:18px;color:#17243a}
+.ft-branding-card-head p{margin:0;color:#687a91;font-size:11px;line-height:1.55;max-width:520px}
+.ft-branding-kicker{display:block;color:#6b7e96;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.09em}
+.ft-branding-access-badge{flex:0 0 auto;border:1px solid #cddcf1;border-radius:999px;background:#f2f7ff;color:#315f9f;padding:5px 8px;font-size:9px;font-weight:750}
+.ft-branding-preview{display:flex;align-items:center;justify-content:center;min-height:150px;margin-bottom:16px;border:1px dashed #cbd8e8;border-radius:12px;background:linear-gradient(145deg,#f8fbff,#f2f6fb);overflow:hidden}
+.ft-branding-logo-preview img{display:block;max-width:78%;max-height:88px;width:auto;height:auto;object-fit:contain}
+.ft-branding-fallback{display:flex;align-items:center;gap:12px;color:#18283f;font-size:18px}
+.ft-branding-fallback span{width:48px;height:48px;border-radius:13px;background:#fff;color:#2563eb;display:grid;place-items:center;font-weight:850;box-shadow:0 4px 14px rgba(31,59,95,.08)}
+.ft-branding-favicon-preview{justify-content:flex-start;gap:14px;padding:20px 24px}
+.ft-branding-favicon-preview img,.ft-branding-favicon-fallback{width:56px;height:56px;flex:0 0 56px;border-radius:12px;object-fit:contain;background:#fff;border:1px solid #dce5f0;padding:7px}
+.ft-branding-favicon-fallback{display:grid;place-items:center;color:#2563eb;font-weight:850;font-size:17px}
+.ft-branding-favicon-preview>div:not(.ft-branding-favicon-fallback){display:flex;flex-direction:column;gap:4px;min-width:0}
+.ft-branding-favicon-preview b{font-size:12px;color:#263750}
+.ft-branding-favicon-preview span{font-size:10px;color:#73849a}
+.ft-branding-upload-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.ft-branding-file-button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 13px;border:1px solid #cbd8eb;border-radius:8px;background:#fff;color:#2457a7;font-size:11px;font-weight:750;cursor:pointer}
+.ft-branding-file-button:hover{background:#f7faff;border-color:#9eb9e5}
+.ft-branding-file-button input{display:none!important}
+.ft-branding-upload-row .primary,.ft-branding-upload-row .danger-btn{min-height:38px;padding:9px 13px;font-size:11px}
+.ft-branding-help{margin-top:13px;padding:10px 12px;border-radius:8px;background:#f7f9fc;color:#6b7d93;font-size:10px;line-height:1.5}
+.ft-branding-note{margin-top:14px}
+.ft-branding-note code{font-size:10px}
+
+.ft-profile-main-column{min-width:0}
+.ft-profile-edit-layout{align-items:start}
+.ft-profile-edit-hero{min-height:188px}
+.ft-profile-edit-section{border-bottom:0}
+.ft-profile-field-help{display:block;margin-top:-2px;color:#7b899b;font-size:10px;line-height:1.4}
+.ft-profile-save-copy{display:flex;min-width:0;flex-direction:column;gap:3px}
+.ft-profile-save-copy strong{color:#2a3b52;font-size:11px}
+.ft-profile-save-copy span{color:#7a899c;font-size:10px;line-height:1.4}
+.ft-profile-company-card{padding-bottom:16px}
+.ft-profile-company-heading{margin-bottom:14px}
+.ft-profile-company-grid-side{grid-template-columns:1fr;gap:8px}
+.ft-profile-company-grid-side .ft-profile-company-item{padding:11px 12px}
+.ft-profile-admin-link,.ft-profile-notification-link{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid #e5ebf2;color:#1265ef;text-decoration:none;font-size:10.5px;font-weight:750}
+.ft-profile-admin-link:hover,.ft-profile-notification-link:hover{text-decoration:underline;text-underline-offset:3px}
+.ft-profile-notification-summary .ft-profile-notification-row{cursor:default}
+.ft-profile-notification-row.is-summary{grid-template-columns:20px minmax(0,1fr)}
+.ft-profile-notification-check.is-on{border-color:var(--blue);background:var(--blue)}
+.ft-profile-notification-check.is-on:after{content:"";width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:translateY(-1px) rotate(-45deg)}
+
+@media(max-width:1100px){.ft-branding-grid{grid-template-columns:1fr}.ft-system-logo{max-width:154px}}
+@media(max-width:700px){.ft-branding-card{padding:17px}.ft-branding-card-head{flex-direction:column;gap:9px}.ft-branding-preview{min-height:125px}.ft-branding-upload-row{align-items:stretch;flex-direction:column}.ft-branding-file-button,.ft-branding-upload-row .primary,.ft-branding-upload-row .danger-btn{width:100%}.ft-profile-save-copy{display:none}}
 
 .ft-board-load-more {
     display: flex;

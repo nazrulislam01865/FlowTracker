@@ -1,21 +1,4 @@
 
-.ft-planning-panel .ft-side-row:last-child{border-bottom:0}
-.ft-planning-panel .ft-side-row button{font-size:10px}
-
-.ft-overview-workflow-line{margin-bottom:10px;padding:12px 11px;gap:0;justify-content:space-between;overflow:visible}
-.ft-overview-workflow-line button{position:relative;flex:1;min-width:64px;gap:3px;font-size:9px;overflow:visible}
-.ft-overview-workflow-line button:before{content:"";position:absolute;left:-50%;right:50%;height:2px;background:#dce5ed;top:12px;z-index:0}
-.ft-overview-workflow-line button:first-child:before{display:none}
-.ft-overview-workflow-line button.done:before,.ft-overview-workflow-line button.current:before{background:#15803d}
-.ft-overview-workflow-line span{width:24px;height:24px;position:relative;z-index:1;font-size:9px}
-.ft-overview-workflow-line .current span{background:#7c2bd9}
-.ft-overview-workflow-line small{font-size:9px;font-weight:700;color:#435976;white-space:nowrap}
-.ft-overview-workflow-line .current small{color:#6d23cc}
-
-.ft-overview-task-card{padding:0;overflow:hidden;margin-bottom:10px}
-.ft-task-card-heading{padding:12px 12px 8px}
-.ft-task-card-heading h2{font-size:14px;margin-bottom:3px}
-.ft-task-card-heading p{font-size:10px;margin:0;color:#667991}
 .ft-row-actions .ft-inline-search{height:32px;border:1px solid #d9e3ef;border-radius:6px;display:flex;align-items:center;padding:0 8px;gap:5px;background:#fff}
 .ft-row-actions .ft-inline-search input{border:0!important;height:28px!important;width:145px;padding:0!important;outline:0;font-size:10px}
 .ft-row-actions .ft-inline-search span{color:#6f8198}
@@ -547,4 +530,71 @@
     display:flex;
     align-items:center;
     gap:9px;
+}
+.ft-task-job-group-main{min-width:0;flex:1}
+.ft-task-job-group-title{
+    display:block;
+    color:#10243f;
+    font-size:11.5px;
+    line-height:1.3;
+    font-weight:800;
+    text-decoration:none;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.ft-task-job-group-title:hover{text-decoration:underline;text-underline-offset:2px}
+.ft-task-job-group-meta{
+    margin-top:3px;
+    color:#6a7c93;
+    font-size:9.5px;
+    display:flex;
+    align-items:center;
+    gap:4px;
+    min-width:0;
+    white-space:nowrap;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.ft-task-job-group-meta a{color:#1767e8;font-weight:750;text-decoration:none}
+.ft-task-job-group-count{
+    flex:0 0 auto;
+    min-width:24px;
+    height:22px;
+    padding:0 6px;
+    border:1px solid #d8e2ee;
+    border-radius:8px;
+    background:#fff;
+    color:#30445f;
+    display:grid;
+    place-items:center;
+    font-size:9.5px;
+    font-weight:800;
+}
+.ft-task-job-group-list{padding:7px;background:#f5f8fb}
+.ft-task-job-group-list .ft-task-board-card:last-child{margin-bottom:0}
+
+/* Desktop quick filters stay in one row where room exists. */
+.ft-board-page .ft-board-quick-row{position:relative;padding-right:48px}
+.ft-board-page .ft-filter-collapse{position:absolute;right:0;top:9px;margin-left:0}
+
+@media(max-width:1100px){
+    .ft-board-page .ft-board-quick-row{flex-wrap:wrap;overflow:visible!important;align-items:stretch}
+    .ft-board-page .ft-quick-label{flex:0 0 auto;align-self:center}
+    .ft-board-page .ft-quick-chip{flex:0 1 auto}
+    .ft-board-page .ft-board-column-list{max-height:calc(100vh - 350px)}
+    .ft-my-work-page .ft-board-column-list{max-height:calc(100vh - 315px)}
+}
+@media(max-width:760px){
+    .ft-board-page .ft-board-quick-row{gap:7px;padding-right:45px}
+    .ft-board-page .ft-quick-label{flex:0 0 100%;padding-top:2px}
+    .ft-board-page .ft-quick-chip{flex:1 1 calc(33.333% - 7px);text-align:center;justify-content:center;min-width:120px}
+    .ft-board-page .ft-filter-collapse{top:5px}
+    .ft-board-page .ft-board-column-list,.ft-my-work-page .ft-board-column-list{min-height:300px!important;max-height:58vh}
+}
+@media(max-width:520px){
+    .ft-board-page .ft-quick-chip{flex:1 1 calc(50% - 7px);min-width:0;padding-left:7px;padding-right:7px}
+    .ft-task-job-group-head{min-height:48px;padding:8px 9px}
+    .ft-task-job-group-title{font-size:11px}
+    .ft-task-job-group-meta{font-size:9px}
 }

@@ -11,6 +11,7 @@
     @error('pack')<div class="flash error">{{ $message }}</div>@enderror
     @error('item')<div class="flash error">{{ $message }}</div>@enderror
 
+    @if(!$showPackDeleteModal)
     <div class="ft-admin-stats">
         <div><span>Total Task Packs</span><b>{{ $packsReady ? $totalPacks : '…' }}</b></div>
         <div><span>Active Task Packs</span><b>{{ $packsReady ? $activePacks : '…' }}</b></div>
@@ -57,6 +58,8 @@
             <div class="ft-admin-empty-wide">No Task Packs configured. Use “Add Task Pack” to create the first one.</div>
         @endforelse
     </div>
+    @endif
+
     @endif
 
     @if($showPackDeleteModal)

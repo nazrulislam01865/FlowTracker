@@ -46,6 +46,7 @@ return [
         'host' => env('PUSHER_HOST'),
         'port' => env('PUSHER_PORT'),
         'queue' => env('PUSHER_QUEUE', 'realtime'),
+        'queue_connection' => env('PUSHER_QUEUE_CONNECTION', 'database'),
         'connect_timeout' => (float) env('PUSHER_CONNECT_TIMEOUT', 1),
         'timeout' => (float) env('PUSHER_TIMEOUT', 3),
         'circuit_seconds' => (int) env('PUSHER_CIRCUIT_SECONDS', 300),

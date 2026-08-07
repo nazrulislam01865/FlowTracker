@@ -5,6 +5,7 @@ namespace App\Livewire\Profile;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Models\User;
 use App\Services\AdminService;
+use App\Services\AccessControlService;
 use App\Services\ProfileService;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -95,6 +96,7 @@ class Index extends Component
             'user' => $user,
             'position' => app(AdminService::class)->positionFor($user),
             'notificationPreferences' => $this->notificationPreferences(),
+            'canManageBranding' => app(AccessControlService::class)->isAdministrator($user),
         ];
     }
 

@@ -9,11 +9,14 @@ use App\Models\Role;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\AdminService;
+use App\Services\BrandingService;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 
 class Index extends Component
 {
     use UsesPagePlaceholder;
+    use WithFileUploads;
     public string $tab = 'dashboard';
     public ?int $selectedRoleId = null;
 
@@ -28,6 +31,9 @@ class Index extends Component
     public ?int $departmentId = null;
     public bool $userActive = true;
 
+    public $logoUpload = null;
+    public $faviconUpload = null;
+
     public bool $showRoleModal = false;
     public ?int $editingRoleId = null;
     public string $roleName = '';
@@ -38,12 +44,19 @@ class Index extends Component
 
     public function mount(): void
     {
-        $this->selectedRoleId = Role::where('slug', 'operations-manager')->value('id') ?: Role::where('slug', '!=', 'super-admin')->value('id') ?: Role::value('id');
+        $requestedTab = (string) request()->query('tab', '');
+        if (in_array($requestedTab, ['dashboard','roles','matrix','users','audit','security','branding'], true)) {
+            $this->tab = $requestedTab;
+        }
+
+        if ($this->tab !== 'branding') {
+            $this->selectedRoleId = Role::where('slug', 'operations-manager')->value('id') ?: Role::where('slug', '!=', 'super-admin')->value('id') ?: Role::value('id');
+        }
     }
 
     public function setTab(string $tab): void
     {
-        $allowed = ['dashboard','roles','matrix','users','audit','security','notification'];
+        $allowed = ['dashboard','roles','matrix','users','audit','security','branding'];
         $this->tab = in_array($tab, $allowed, true) ? $tab : 'dashboard';
     }
 
@@ -195,6 +208,50 @@ class Index extends Component
 
     public function toggleRule(int $id): void { app(AdminService::class)->toggleRule($id); }
 
+    public function saveLogo()
+    {
+        $this->validate([
+            'logoUpload' => ['required', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+        ]);
+
+        app(BrandingService::class)->saveLogo($this->logoUpload, auth()->user());
+        $this->reset('logoUpload');
+        session()->flash('success', 'System logo updated.');
+
+        return $this->redirectRoute('administration', ['tab' => 'branding']);
+    }
+
+    public function saveFavicon()
+    {
+        $this->validate([
+            'faviconUpload' => ['required', 'file', 'mimes:ico,png,jpg,jpeg,webp', 'max:1024'],
+        ]);
+
+        app(BrandingService::class)->saveFavicon($this->faviconUpload, auth()->user());
+        $this->reset('faviconUpload');
+        session()->flash('success', 'Favicon updated.');
+
+        return $this->redirectRoute('administration', ['tab' => 'branding']);
+    }
+
+    public function removeLogo()
+    {
+        app(BrandingService::class)->removeLogo(auth()->user());
+        $this->reset('logoUpload');
+        session()->flash('success', 'System logo removed.');
+
+        return $this->redirectRoute('administration', ['tab' => 'branding']);
+    }
+
+    public function removeFavicon()
+    {
+        app(BrandingService::class)->removeFavicon(auth()->user());
+        $this->reset('faviconUpload');
+        session()->flash('success', 'Favicon removed.');
+
+        return $this->redirectRoute('administration', ['tab' => 'branding']);
+    }
+
     public function render()
     {
         $service = app(AdminService::class);
@@ -205,6 +262,7 @@ class Index extends Component
             'users' => $this->usersPageData($service),
             'audit' => ['auditLog' => $service->auditLog()],
             'security' => ['securitySettings' => $service->securitySettings()],
+            'branding' => ['branding' => app(BrandingService::class)->current()],
             default => $this->dashboardPageData($service),
         });
     }

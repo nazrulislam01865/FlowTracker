@@ -1,4 +1,5 @@
 <div class="ft-admin-reference ft-workflow-reference">
+    @if(!$showWorkflowDeleteModal)
     <div class="ft-admin-page-head">
         <div>
             <h1>Workflow Setup</h1>
@@ -114,6 +115,8 @@
         </section>
     </div>
 
+
+    @endif
 
     @if($showWorkflowDeleteModal)
         <div class="ft-reference-overlay" wire:click.self="closeWorkflowDelete"></div>

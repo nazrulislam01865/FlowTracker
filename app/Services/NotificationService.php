@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Jobs\DeliverRealtimeNotification;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
 use App\Models\Task;
@@ -277,22 +278,37 @@ class NotificationService
         $pusher = app(PusherChannelService::class);
         if (!$pusher->enabled()) return;
 
+        $payload = [
+            'id' => $notification->id,
+            'type' => $notification->type,
+            'title' => $notification->title,
+            'message' => $notification->message,
+            'job_id' => $job?->id,
+            'job_number' => $job?->job_number,
+            'task_id' => $task?->id,
+            'task_number' => $task?->task_number,
+            'url' => $this->urlFor($notification),
+            'created_at' => $notification->created_at?->toIso8601String(),
+            'unread_count' => $this->unreadCount($recipient),
+        ];
+
+        // Never make a Livewire/browser request wait for an external Pusher
+        // HTTP call. Realtime delivery belongs on the queue so a slow or
+        // unreachable Pusher endpoint cannot turn a successful database
+        // action into a 30-second timeout.
         try {
-            $pusher->triggerUser($recipient->id, 'flowtrack.notification', [
-                'id' => $notification->id,
-                'type' => $notification->type,
-                'title' => $notification->title,
-                'message' => $notification->message,
-                'job_id' => $job?->id,
-                'job_number' => $job?->job_number,
-                'task_id' => $task?->id,
-                'task_number' => $task?->task_number,
-                'url' => $this->urlFor($notification),
-                'created_at' => $notification->created_at?->toIso8601String(),
-                'unread_count' => $this->unreadCount($recipient),
-            ]);
+            DeliverRealtimeNotification::dispatch(
+                $recipient->id,
+                'flowtrack.notification',
+                $payload,
+            )
+                ->onConnection((string) config('services.pusher.queue_connection', 'database'))
+                ->afterCommit();
         } catch (\Throwable $exception) {
-            Log::warning('Realtime notification delivery failed.', [
+            // The database notification is already saved. Realtime is an
+            // enhancement only, so queue problems must never fail the user's
+            // original action.
+            Log::warning('Realtime notification could not be queued.', [
                 'notification_id' => $notification->id,
                 'user_id' => $recipient->id,
                 'error' => $exception->getMessage(),

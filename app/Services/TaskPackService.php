@@ -177,55 +177,73 @@ class TaskPackService
     public function packDeleteImpact(int $id): array
     {
         $this->assertManage();
-        $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
+        $pack = TaskPack::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->where('is_snapshot', false)
+            ->findOrFail($id);
 
-        $mappedPhases = WorkflowPhase::query()
-            ->with(['workflowTemplate:id,name', 'workflow:id,name'])
+        $phaseBase = WorkflowPhase::query()
             ->where('task_pack_id', $id)
-            ->whereNotNull('workflow_template_id')
+            ->whereNotNull('workflow_template_id');
+
+        $mappedPhaseCount = (clone $phaseBase)->count();
+        $sourceWorkflowIds = (clone $phaseBase)
+            ->select('workflow_template_id')
+            ->distinct()
+            ->pluck('workflow_template_id')
+            ->filter()
+            ->map(fn ($workflowId) => (int) $workflowId)
+            ->values();
+
+        $mappedPhases = (clone $phaseBase)
+            ->with(['workflowTemplate:id,name'])
             ->orderBy('workflow_template_id')
             ->orderBy('sequence')
-            ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'sequence', 'task_pack_id']);
+            ->limit(8)
+            ->get(['id', 'workflow_template_id', 'name', 'sequence', 'task_pack_id']);
 
-        $sourceWorkflowIds = $mappedPhases
-            ->map(fn (WorkflowPhase $phase) => (int) ($phase->workflow_template_id ?: $phase->workflow_id))
-            ->filter()->unique()->values();
+        $jobsBase = FlowJob::withTrashed()
+            ->where(function ($query) use ($sourceWorkflowIds) {
+                $query->whereIn('source_workflow_id', $sourceWorkflowIds)
+                    ->orWhere(function ($legacy) use ($sourceWorkflowIds) {
+                        $legacy->whereNull('source_workflow_id')->whereIn('workflow_id', $sourceWorkflowIds);
+                    });
+            });
+
+        $jobCount = $sourceWorkflowIds->isEmpty() ? 0 : (clone $jobsBase)->count();
+        $taskCount = $sourceWorkflowIds->isEmpty()
+            ? 0
+            : Task::withTrashed()
+                ->whereIn('flow_job_id', (clone $jobsBase)->select('id'))
+                ->count();
 
         $jobs = $sourceWorkflowIds->isEmpty()
             ? collect()
-            : FlowJob::withTrashed()
-                ->where(function ($query) use ($sourceWorkflowIds) {
-                    $query->whereIn('source_workflow_id', $sourceWorkflowIds)
-                        ->orWhere(function ($legacy) use ($sourceWorkflowIds) {
-                            $legacy->whereNull('source_workflow_id')->whereIn('workflow_id', $sourceWorkflowIds);
-                        });
-                })
+            : (clone $jobsBase)
                 ->orderBy('job_number')
+                ->limit(8)
                 ->get(['id', 'job_number', 'title', 'workflow_id', 'source_workflow_id', 'deleted_at']);
-
-        $taskCount = $jobs->isEmpty()
-            ? 0
-            : Task::withTrashed()->whereIn('flow_job_id', $jobs->pluck('id'))->count();
 
         return [
             'id' => (int) $pack->id,
             'name' => (string) $pack->name,
-            'mapped_phase_count' => $mappedPhases->count(),
-            'mapped_phases' => $mappedPhases->take(8)->map(fn (WorkflowPhase $phase) => [
+            'mapped_phase_count' => $mappedPhaseCount,
+            'mapped_phases' => $mappedPhases->map(fn (WorkflowPhase $phase) => [
                 'id' => (int) $phase->id,
                 'name' => (string) $phase->name,
                 'sequence' => (int) $phase->sequence,
-                'workflow_name' => (string) ($phase->workflowTemplate?->name ?: $phase->workflow?->name ?: 'Workflow'),
+                'workflow_name' => (string) ($phase->workflowTemplate?->name ?: 'Workflow'),
             ])->all(),
             'generated_task_count' => 0,
             'generated_tasks' => [],
-            'job_count' => $jobs->count(),
-            'jobs' => $jobs->take(8)->map(fn (FlowJob $job) => [
+            'job_count' => $jobCount,
+            'jobs' => $jobs->map(fn (FlowJob $job) => [
                 'id' => (int) $job->id,
                 'job_number' => (string) $job->job_number,
                 'title' => (string) $job->title,
                 'trashed' => $job->deleted_at !== null,
-                'already_snapshotted' => $job->source_workflow_id !== null && (int) $job->workflow_id !== (int) $job->source_workflow_id,
+                'already_snapshotted' => $job->source_workflow_id !== null
+                    && (int) $job->workflow_id !== (int) $job->source_workflow_id,
             ])->all(),
             'task_count' => $taskCount,
         ];

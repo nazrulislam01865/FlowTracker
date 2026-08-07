@@ -3,6 +3,7 @@
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\BoardController;
+use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentsController;
@@ -19,6 +20,12 @@ use App\Models\Document;
 use App\Services\JobService;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
+
+
+Route::get('/branding-assets/{type}/{filename}', BrandingAssetController::class)
+    ->where('type', 'logo|favicon')
+    ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|ico)')
+    ->name('branding-assets.show');
 
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');

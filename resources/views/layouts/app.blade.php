@@ -9,7 +9,8 @@
         <meta name="flowtrack-session-status-url" content="{{ route('session.status') }}">
         <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
     @endauth
-    <title>{{ $title ?? 'FlowTrack' }} — {{ config('app.name','FlowTrack') }}</title>
+    <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
+    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -36,7 +37,7 @@
     <main class="main">
         @include('layouts.partials.topbar')
         <div class="content">
-            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data'))<div class="flash">{{ session('success') }}</div>@endif
+            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>
     </main>

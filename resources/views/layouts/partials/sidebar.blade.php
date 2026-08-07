@@ -4,7 +4,13 @@
     $myWork = (int) ($shellData['open_my_work'] ?? 0);
 @endphp
 <aside id="sidebar" class="sidebar">
-    <div class="brand"><div class="brand-mark">FT</div><span>FlowTrack</span></div>
+    <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
+        @if($branding['logo_url'] ?? null)
+            <img class="ft-system-logo" src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
+        @else
+            <div class="brand-mark">FT</div><span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
+        @endif
+    </a>
     <div class="sidebar-section">Workspace</div>
     @if($user->canAccess('dashboard.view'))<x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />@endif
     @if($user->canAccess('tasks.view'))<x-ui.nav-link route="my-work" label="My Work" :badge="$myWork" icon="work" />@endif
