@@ -58,15 +58,19 @@
                     <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy {{ $job->job_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->job_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
                 </div>
             @endif
-            <h1 class="ft-editable-task-title" x-data="{editing:false}">
-                <span x-show="!editing">{{ $task->title }}</span>
+            <h1
+                class="ft-editable-task-title ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-title'), label: 'task title', value: @js($task->title), display: @js($task->title) })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
+                <span x-show="!editing" x-text="display">{{ $task->title }}</span>
                 @if($canEditTask)
-                    <button x-show="!editing" type="button" class="ft-pencil" aria-label="Edit task title" title="Edit task name" x-on:click.stop="editing=true; $nextTick(() => $refs.taskTitle.focus())">✎</button>
-                    <input x-ref="taskTitle" x-show="editing" type="text" value="{{ $task->title }}" maxlength="255"
-                        x-on:keydown.escape="editing=false"
-                        x-on:keydown.enter="$event.target.blur()"
-                        x-on:blur="editing=false"
-                        wire:change="updateSelectedTaskField('title', $event.target.value)">
+                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-pencil" aria-label="Edit task title" title="Edit task name" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskTitle.focus())">✎</button>
+                    <input x-ref="taskTitle" x-cloak x-show="editing" x-model="draftValue" type="text" maxlength="255"
+                        x-on:keydown.escape.prevent="cancelEdit()"
+                        x-on:keydown.enter.prevent="$event.target.blur()"
+                        x-on:blur="if (editing) commit(draftValue.trim(), draftValue.trim(), () => $wire.updateSelectedTaskField('title', draftValue.trim()))">
+                    <x-ui.inline-save-state />
                 @endif
             </h1>
         </div>
@@ -77,39 +81,95 @@
     <div class="ft-task-detail-layout">
         <main>
             <section class="ft-task-property-grid ft-friendly-task-properties">
-                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
+                <div
+                    class="ft-task-property ft-inline-edit-shell"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
+                    :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
                     <small>Assignee</small>
-                    <div class="ft-task-property-display"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/><b class="ft-property-value">{{ $task->assignee?->name ?? 'Unassigned' }}</b>@if($canAssignTask)<button type="button" title="Edit assignee" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.assignee?.focus())">✎</button>@endif</div>
-                    @if($canAssignTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="assignee" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('assignee_id',$event.target.value)"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$task->assignee_id===(int)$user->id)>{{ $user->name }}</option>@endforeach</select></div>@endif
+                    <div class="ft-task-property-display ft-inline-person-live">
+                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/></span>
+                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                        <b class="ft-property-value" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</b>
+                        @if($canAssignTask)<button type="button" :disabled="status === 'saving'" title="Edit assignee" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.assignee?.focus())">✎</button>@endif
+                    </div>
+                    @if($canAssignTask)
+                        <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()">
+                            <select x-ref="assignee" x-model="draftValue" class="ft-task-property-input"
+                                x-on:keydown.escape.prevent="cancelEdit()"
+                                x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateSelectedTaskField('assignee_id', draftValue))">
+                                <option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
+                            </select>
+                        </div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
+                <div
+                    class="ft-task-property ft-inline-edit-shell"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
+                    :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
                     <small>Status</small>
-                    <div class="ft-task-property-display"><span class="status-dot blue"></span><b class="ft-property-value">{{ $task->status }}</b>@if($canEditTask)<button type="button" title="Edit status" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.status?.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="status" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('status',$event.target.value)">@foreach($taskStatuses as $status)<option value="{{ $status }}" @selected($task->status===$status)>{{ $status }}</option>@endforeach</select></div>@endif
+                    <div class="ft-task-property-display"><span class="status-dot blue"></span><b class="ft-property-value" x-text="display">{{ $task->status }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.status?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)
+                        <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()"><select x-ref="status" x-model="draftValue" class="ft-task-property-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('status', draftValue))">@foreach($taskStatuses as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select></div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
+                <div
+                    class="ft-task-property ft-inline-edit-shell"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-priority'), label: 'task priority', value: @js($task->priority), display: @js($task->priority) })"
+                    :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
                     <small>Priority</small>
-                    <div class="ft-task-property-display"><span class="status-dot amber"></span><b class="ft-property-value">{{ $task->priority }}</b>@if($canEditTask)<button type="button" title="Edit priority" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.priority?.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="priority" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('priority',$event.target.value)">@foreach($priorities as $priority)<option value="{{ $priority->name }}" @selected($task->priority===$priority->name)>{{ $priority->name }}</option>@endforeach</select></div>@endif
+                    <div class="ft-task-property-display"><span class="status-dot amber"></span><b class="ft-property-value" x-text="display">{{ $task->priority }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit priority" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.priority?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)
+                        <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()"><select x-ref="priority" x-model="draftValue" class="ft-task-property-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('priority', draftValue))">@foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </div>
                 <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><b class="ft-property-value">{{ $task->phase?->name ?? '—' }}</b></div></div>
-                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
+                <div
+                    class="ft-task-property ft-inline-edit-shell"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-start-date'), label: 'task start date', value: @js($effectiveStartDate?->format('Y-m-d') ?? ''), display: @js($effectiveStartDate?->format('M j, Y') ?? 'Not set') })"
+                    :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
                     <small>Start date</small>
-                    <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $effectiveStartDate?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit start date" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.start?.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><input x-ref="start" class="ft-task-property-input" type="date" value="{{ $effectiveStartDate?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('start_date',$event.target.value)"></div>@endif
+                    <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value" x-text="display">{{ $effectiveStartDate?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit start date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.start?.showPicker ? $refs.start.showPicker() : $refs.start?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)
+                        <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()"><input x-ref="start" x-model="draftValue" class="ft-task-property-input" type="date" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateSelectedTaskField('start_date', draftValue))"></div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </div>
-                <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
+                <div
+                    class="ft-task-property ft-inline-edit-shell"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j, Y') ?? 'Not set') })"
+                    :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
                     <small>Due date</small>
-                    <div class="ft-task-property-display {{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $task->due_date?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" title="Edit due date" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.due?.focus())">✎</button>@endif</div>
-                    @if($canEditTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><input x-ref="due" class="ft-task-property-input" type="date" value="{{ $task->due_date?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('due_date',$event.target.value)"></div>@endif
+                    <div class="ft-task-property-display {{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value" x-text="display">{{ $task->due_date?->format('M j, Y') ?? 'Not set' }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.due?.showPicker ? $refs.due.showPicker() : $refs.due?.focus())">✎</button>@endif</div>
+                    @if($canEditTask)
+                        <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()"><input x-ref="due" x-model="draftValue" class="ft-task-property-input" type="date" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateSelectedTaskField('due_date', draftValue))"></div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </div>
             </section>
 
-            <section class="ft-detail-card ft-description-card" x-data="{editing:false}">
-                @if($canEditTask)<button x-show="!editing" class="ft-card-edit" type="button" title="Edit description" x-on:click="editing=true;$nextTick(()=>$refs.description.focus())">✎</button>@endif
+            <section
+                class="ft-detail-card ft-description-card ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-description'), label: 'task description', value: @js($effectiveDescription ?? ''), display: @js($effectiveDescription ?: 'No description has been provided for this task.') })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
+                @if($canEditTask)<button x-show="!editing" :disabled="status === 'saving'" class="ft-card-edit" type="button" title="Edit description" x-on:click="if (beginEdit()) $nextTick(() => $refs.description.focus())">✎</button>@endif
                 <h2>Description</h2>
-                <p x-show="!editing">@if($effectiveDescription)<x-ui.mention-text :text="$effectiveDescription" />@else No description has been provided for this task. @endif</p>
-                @if($canEditTask)<div x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}">{{ $task->description ?: $task->setupTemplate?->description }}</textarea><div><button type="button" class="ft-outline-btn" x-on:click="editing=false">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="$wire.updateSelectedTaskField('description',$refs.description.value); editing=false">Save</button></div></div>@endif
+                <p x-show="!editing">
+                    <span x-show="String(value) === String(serverValue)">@if($effectiveDescription)<x-ui.mention-text :text="$effectiveDescription" />@else No description has been provided for this task. @endif</span>
+                    <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
+                </p>
+                @if($canEditTask)
+                    <div x-cloak x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" x-model="draftValue" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" x-on:keydown.escape.prevent="cancelEdit()"></textarea><div><button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No description has been provided for this task.', () => $wire.updateSelectedTaskField('description', draftValue))">Save</button></div></div>
+                    <x-ui.inline-save-state />
+                @endif
             </section>
 
             <section class="ft-detail-card ft-checklist-card" x-data="{adding:false}">

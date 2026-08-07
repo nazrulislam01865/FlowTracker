@@ -7,6 +7,7 @@ use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentsController;
+use App\Http\Controllers\FilterOptionController;
 use App\Http\Controllers\JobsController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
@@ -48,6 +49,7 @@ Route::middleware('auth')->group(function () {
     })->name('pusher.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/jobs', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');

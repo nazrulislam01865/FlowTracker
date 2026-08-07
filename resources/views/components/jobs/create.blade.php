@@ -1,10 +1,12 @@
 @props([
-    'clients','workflows','users','categories','products','priorities','clientId','workflowId','jobItems','jobAttachments',
+    'clients','workflows','categories','priorities','clientId','workflowId','ownerId','jobItems','jobAttachments',
+    'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'mentionUsers'=>collect(),
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
     $selectedWorkflow = $workflows->firstWhere('id', (int)$workflowId);
+    $selectedOwnerOption = collect($ownerFilterOptions)->first(fn($item) => (int)($item['id'] ?? 0) === (int)($ownerId ?? 0));
     $allowedPhases = $selectedWorkflow?->phases?->where('allow_job_start', true) ?? collect();
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
@@ -19,7 +21,23 @@
             <div class="ft-create-section-title"><span>1</span><h2>Job basics</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field"><b>Job code</b><div class="ft-locked-input">Generated automatically <span>♙</span></div></label>
-                <label class="ft-create-field"><b>Client *</b><select wire:model.live="clientId">@foreach($clients as $client)<option value="{{ $client->id }}">{{ $client->name }}</option>@endforeach</select>@error('clientId')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                <div class="ft-create-field">
+                    <x-ui.remote-filter
+                        class="ft-create-remote-select"
+                        label="Client *"
+                        property="clientId"
+                        type="clients"
+                        context="create-job"
+                        action="setCreateSelector"
+                        :value="$clientId"
+                        placeholder="Select client"
+                        :selected-label="$selectedClient?->name"
+                        :initial-options="$clientFilterOptions"
+                        :clearable="false"
+                        wire:key="create-client-selector"
+                    />
+                    @error('clientId')<small class="validation-error">{{ $message }}</small>@enderror
+                </div>
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
                 <label class="ft-create-field"><b>Job title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea></label>
@@ -33,16 +51,43 @@
                 @foreach($jobItems as $index => $item)
                     @php
                         $selectedCategory = $item['category'] ?? '';
-                        $filteredProducts = $products->filter(function($product) use ($selectedCategory) {
-                            if(!$selectedCategory) return false;
-                            $haystack = strtolower(($product->description ?? '').' '.$product->name);
-                            return str_contains($haystack, strtolower($selectedCategory));
-                        });
-                        if($selectedCategory && $filteredProducts->isEmpty()) $filteredProducts = $products;
+                        $selectedProduct = $item['product'] ?? '';
                     @endphp
                     <div class="ft-product-row" wire:key="job-product-{{ $index }}">
-                        <label><b>Product category</b><select wire:model.live="jobItems.{{ $index }}.category"><option value="">Select category</option>@foreach($categories as $category)<option value="{{ $category->name }}">{{ $category->name }}</option>@endforeach</select>@error("jobItems.$index.category")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label><b>Product</b><select wire:model="jobItems.{{ $index }}.product" @disabled(empty($selectedCategory))><option value="">{{ $selectedCategory ? 'Select product' : 'Select category first' }}</option>@foreach($filteredProducts as $product)<option value="{{ $product->name }}">{{ $product->name }}</option>@endforeach</select>@error("jobItems.$index.product")<small class="validation-error">{{ $message }}</small>@enderror</label>
+                        <div>
+                            <x-ui.remote-filter
+                                class="ft-create-remote-select"
+                                label="Product category"
+                                property="jobItems.{{ $index }}.category"
+                                type="product-categories"
+                                context="create-job"
+                        action="setCreateSelector"
+                                :value="$selectedCategory"
+                                :selected-label="$selectedCategory ?: null"
+                                placeholder="Select category"
+                                :initial-options="$categoryFilterOptions"
+                                :clearable="false"
+                                wire:key="create-category-selector-{{ $index }}"
+                            />
+                            @error("jobItems.$index.category")<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
+                        <div>
+                            <x-ui.remote-filter
+                                class="ft-create-remote-select"
+                                label="Product"
+                                property="jobItems.{{ $index }}.product"
+                                type="products"
+                                context="create-job"
+                        action="setCreateSelector"
+                                :value="$selectedProduct"
+                                :selected-label="$selectedProduct ?: null"
+                                :placeholder="$selectedCategory ? 'Select product' : 'Select category first'"
+                                :params="['category' => $selectedCategory]"
+                                :disabled="blank($selectedCategory)"
+                                wire:key="create-product-selector-{{ $index }}-{{ md5($selectedCategory) }}"
+                            />
+                            @error("jobItems.$index.product")<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
                         <label class="ft-qty-field"><b>Quantity</b><input type="number" min="1" wire:model.live="jobItems.{{ $index }}.quantity">@error("jobItems.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror</label>
                         <button type="button" class="ft-product-delete" wire:click="removeProductRow({{ $index }})" @disabled(count($jobItems) <= 1) title="Remove product">▱</button>
                     </div>
@@ -60,7 +105,24 @@
             <div class="ft-create-fields">
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Required delivery date *</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field"><b>Priority</b><select wire:model="priority">@foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></label>
-                <label class="ft-create-field"><b>Job owner *</b><select wire:model="ownerId">@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select><small>Accountable for overall delivery.</small>@error('ownerId')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                <div class="ft-create-field">
+                    <x-ui.remote-filter
+                        class="ft-create-remote-select"
+                        label="Job owner *"
+                        property="ownerId"
+                        type="users"
+                        context="create-job"
+                        action="setCreateSelector"
+                        :value="$ownerId"
+                        placeholder="Select owner"
+                        :selected-label="$selectedOwnerOption['label'] ?? null"
+                        :initial-options="$ownerFilterOptions"
+                        :clearable="false"
+                        wire:key="create-owner-selector"
+                    />
+                    <small>Accountable for overall delivery.</small>
+                    @error('ownerId')<small class="validation-error">{{ $message }}</small>@enderror
+                </div>
             </div>
         </section>
         @else
@@ -71,7 +133,22 @@
         <section class="ft-create-section" wire:key="create-workflow-ready">
             <div class="ft-create-section-title"><span>4</span><h2>Workflow</h2></div>
             <div class="ft-create-fields">
-                <label class="ft-create-field"><b>Workflow</b><select wire:model.live="workflowId">@foreach($workflows as $workflow)<option value="{{ $workflow->id }}">{{ $workflow->name }}</option>@endforeach</select></label>
+                <div class="ft-create-field">
+                    <x-ui.remote-filter
+                        class="ft-create-remote-select"
+                        label="Workflow"
+                        property="workflowId"
+                        type="workflows"
+                        context="create-job"
+                        action="setCreateSelector"
+                        :value="$workflowId"
+                        placeholder="Select workflow"
+                        :selected-label="$selectedWorkflow?->name"
+                        :initial-options="$workflowFilterOptions"
+                        :clearable="false"
+                        wire:key="create-workflow-selector"
+                    />
+                </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span>@if(auth()->user()->canAccess('workflow.manage'))<a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>@else<span>Preview workflow ↗</span>@endif</div>
                 <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Administration;
 
+use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\Department;
@@ -10,12 +11,14 @@ use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\AdminService;
 use App\Services\BrandingService;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 
 class Index extends Component
 {
     use UsesPagePlaceholder;
+    use HandlesInlineEdits;
     use WithFileUploads;
     public string $tab = 'dashboard';
     public ?int $selectedRoleId = null;
@@ -186,14 +189,28 @@ class Index extends Component
         app(AdminService::class)->toggleMatrixAction(Role::findOrFail($roleId), $module, $action, auth()->user());
     }
 
-    public function setModuleScope(int $roleId, string $module, string $scope): void
+    #[Renderless]
+    public function setMatrixAction(int $roleId, string $module, string $action, bool $enabled): array
     {
-        app(AdminService::class)->setScope(Role::findOrFail($roleId), $module, $scope, auth()->user());
+        return $this->persistInlineEdit('permission', function () use ($roleId, $module, $action, $enabled) {
+            app(AdminService::class)->setMatrixAction(Role::findOrFail($roleId), $module, $action, $enabled, auth()->user());
+        });
     }
 
-    public function assignRole(int $userId, int $roleId): void
+    #[Renderless]
+    public function setModuleScope(int $roleId, string $module, string $scope): array
     {
-        app(AdminService::class)->assignRole(User::findOrFail($userId), Role::findOrFail($roleId), auth()->user());
+        return $this->persistInlineEdit('record scope', function () use ($roleId, $module, $scope) {
+            app(AdminService::class)->setScope(Role::findOrFail($roleId), $module, $scope, auth()->user());
+        });
+    }
+
+    #[Renderless]
+    public function assignRole(int $userId, int $roleId): array
+    {
+        return $this->persistInlineEdit('user role', function () use ($userId, $roleId) {
+            app(AdminService::class)->assignRole(User::findOrFail($userId), Role::findOrFail($roleId), auth()->user());
+        });
     }
 
     public function toggleUserActive(int $userId): void

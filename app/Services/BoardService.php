@@ -220,6 +220,43 @@ class BoardService
         return $this->rowObjects($rows, ['id', 'workflow_id', 'name', 'short_name', 'sequence']);
     }
 
+    public function workflowOptions(): Collection
+    {
+        $workflowKey = $this->workflowCacheKey();
+        $workflowExpiresAt = now()->addMinutes(5);
+        $workflowResolver = function () {
+            $setup = Workflow::query()
+                ->where('is_snapshot', false)
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name'])
+                ->map(fn (Workflow $workflow) => [
+                    'id' => (int) $workflow->id,
+                    'name' => (string) $workflow->name,
+                ]);
+
+            $jobSnapshots = FlowJob::query()
+                ->whereNotNull('source_workflow_id')
+                ->with('workflow:id,name')
+                ->get(['id', 'workflow_id', 'source_workflow_id'])
+                ->map(fn (FlowJob $job) => [
+                    'id' => (int) $job->source_workflow_id,
+                    'name' => (string) ($job->workflow?->name ?: 'Archived Workflow'),
+                ]);
+
+            return $setup->concat($jobSnapshots)->unique('id')->sortBy('name')->values()->all();
+        };
+
+        $rows = $this->rememberScalarRows(
+            $workflowKey,
+            $workflowExpiresAt,
+            $workflowResolver,
+            ['id', 'name'],
+        );
+
+        return $this->rowObjects($rows, ['id', 'name']);
+    }
+
     public function lookups(User $user, bool $includeWorkflows = true): array
     {
         // Cache only scalar arrays. Laravel 13 defaults to rejecting class
@@ -236,44 +273,12 @@ class BoardService
             Cache::put($lookupKey, $cached, $lookupExpiresAt);
         }
 
-        $workflows = [];
-        if ($includeWorkflows) {
-            $workflowKey = $this->workflowCacheKey();
-            $workflowExpiresAt = now()->addMinutes(5);
-            $workflowResolver = function () {
-                $setup = Workflow::query()
-                    ->where('is_snapshot', false)
-                    ->where('is_active', true)
-                    ->orderBy('name')
-                    ->get(['id', 'name'])
-                    ->map(fn (Workflow $workflow) => [
-                        'id' => (int) $workflow->id,
-                        'name' => (string) $workflow->name,
-                    ]);
-
-                $jobSnapshots = FlowJob::query()
-                    ->whereNotNull('source_workflow_id')
-                    ->with('workflow:id,name')
-                    ->get(['id', 'workflow_id', 'source_workflow_id'])
-                    ->map(fn (FlowJob $job) => [
-                        'id' => (int) $job->source_workflow_id,
-                        'name' => (string) ($job->workflow?->name ?: 'Archived Workflow'),
-                    ]);
-
-                return $setup->concat($jobSnapshots)->unique('id')->sortBy('name')->values()->all();
-            };
-            $workflows = $this->rememberScalarRows(
-                $workflowKey,
-                $workflowExpiresAt,
-                $workflowResolver,
-                ['id', 'name'],
-            );
-        }
+        $workflows = $includeWorkflows ? $this->workflowOptions() : collect();
 
         return [
             'clients' => $this->rowObjects($cached['clients'] ?? [], ['id', 'name']),
             'users' => $this->rowObjects($cached['users'] ?? [], ['id', 'name']),
-            'workflows' => $this->rowObjects($workflows, ['id', 'name']),
+            'workflows' => $workflows,
         ];
     }
 

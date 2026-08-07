@@ -47,13 +47,26 @@
             </div>
             @endif
 
-            <div class="ft-client-filter-card {{ $showArchived ? 'is-archived' : '' }}">
-                <div class="ft-client-filter-search"><span>⌕</span><input wire:model.live.debounce.300ms="search" placeholder="Search client, Job ID, country or manager"></div>
-                <select wire:model.live="manager"><option value="">Account manager</option>@foreach($managers as $managerOption)<option value="{{ $managerOption->id }}">{{ $managerOption->name }}</option>@endforeach</select>
-                <select wire:model.live="country"><option value="">Country</option>@foreach($countries as $countryOption)<option value="{{ $countryOption }}">{{ $countryOption }}</option>@endforeach</select>
-                @if(!$showArchived)<select wire:model.live="jobHealth"><option value="">Job health</option>@foreach($healthOptions as $healthOption)<option value="{{ $healthOption }}">{{ $healthOption }}</option>@endforeach</select>@endif
-                <select wire:model.live="outstanding"><option value="">Outstanding</option><option value="positive">Has balance</option><option value="high">$10,000+</option><option value="zero">No balance</option></select>
-                <button type="button" wire:click="clearFilters">Clear</button>
+            <div class="ft-list-filter-shell {{ $showArchived ? 'is-archived' : '' }}">
+                <div class="ft-list-filter-grid">
+                    <x-ui.list-search property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
+                    <x-ui.remote-filter label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
+                    <x-ui.select-filter label="Country" property="country" :value="$country" placeholder="All countries" :options="$countries->map(fn($countryOption) => ['id'=>$countryOption,'label'=>$countryOption])" />
+                    @if(!$showArchived)<x-ui.select-filter label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />@endif
+                    <x-ui.select-filter label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
+                </div>
+                @php
+                    $chips = collect();
+                    if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                    if($manager) $chips->push(['key'=>'manager','label'=>'Manager: '.(collect($managerFilterOptions)->firstWhere('id',(int)$manager)['label'] ?? 'Selected')]);
+                    if($country) $chips->push(['key'=>'country','label'=>'Country: '.$country]);
+                    if($jobHealth) $chips->push(['key'=>'jobHealth','label'=>'Health: '.$jobHealth]);
+                    if($outstanding) $chips->push(['key'=>'outstanding','label'=>'Outstanding: '.(['positive'=>'Has balance','high'=>'$10,000+','zero'=>'No balance'][$outstanding] ?? $outstanding)]);
+                @endphp
+                <div class="ft-list-active-row">
+                    <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
+                    @if($chips->isNotEmpty() || $quick !== 'all')<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
+                </div>
             </div>
 
             @if(!$showArchived)
@@ -66,7 +79,7 @@
             @endif
 
             <div class="ft-client-list-card">
-                <div class="ft-client-table-scroll">
+                <div class="ft-client-table-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,manager,country,jobHealth,outstanding,quick">
                     @if($showArchived)
                     <table class="ft-client-table ft-archived-client-table">
                         <thead><tr><th>Archived client</th><th>Account manager</th><th>Job history</th><th>Outstanding</th><th>Archived</th><th>Actions</th></tr></thead>

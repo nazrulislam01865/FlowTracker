@@ -1,0 +1,302 @@
+(() => {
+    if (window.FlowTrackInlineEdit) return;
+
+    const state = {
+        pending: new Map(),
+        errors: new Map(),
+        savedTimer: null,
+        host: null,
+        label: null,
+        dot: null,
+        toasts: null,
+    };
+
+    const ensureUi = () => {
+        if (state.host?.isConnected) return;
+
+        const host = document.createElement('div');
+        host.id = 'flowtrackInlineSync';
+        host.className = 'ft-inline-global-sync';
+        host.setAttribute('role', 'status');
+        host.setAttribute('aria-live', 'polite');
+        host.hidden = true;
+        host.innerHTML = '<span class="ft-inline-global-dot" aria-hidden="true"></span><span class="ft-inline-global-label">All changes saved</span>';
+
+        const toasts = document.createElement('div');
+        toasts.id = 'flowtrackInlineToasts';
+        toasts.className = 'ft-inline-toast-region';
+        toasts.setAttribute('aria-live', 'assertive');
+
+        document.body.append(host, toasts);
+        state.host = host;
+        state.label = host.querySelector('.ft-inline-global-label');
+        state.dot = host.querySelector('.ft-inline-global-dot');
+        state.toasts = toasts;
+    };
+
+    const updateGlobal = () => {
+        ensureUi();
+        if (state.savedTimer) {
+            window.clearTimeout(state.savedTimer);
+            state.savedTimer = null;
+        }
+
+        const pending = state.pending.size;
+        const errors = state.errors.size;
+        state.host.hidden = false;
+        state.host.classList.toggle('is-saving', pending > 0);
+        state.host.classList.toggle('is-error', pending === 0 && errors > 0);
+        state.host.classList.toggle('is-saved', pending === 0 && errors === 0);
+
+        if (pending > 0) {
+            state.label.textContent = `Saving ${pending} change${pending === 1 ? '' : 's'}…`;
+            return;
+        }
+
+        if (errors > 0) {
+            state.label.textContent = errors === 1 ? '1 change needs attention' : `${errors} changes need attention`;
+            return;
+        }
+
+        state.label.textContent = 'All changes saved';
+        state.savedTimer = window.setTimeout(() => {
+            if (state.pending.size === 0 && state.errors.size === 0 && state.host) state.host.hidden = true;
+        }, 1800);
+    };
+
+    const removeToast = (key) => {
+        state.toasts?.querySelector(`[data-inline-toast="${CSS.escape(String(key))}"]`)?.remove();
+    };
+
+    const friendlyNetworkMessage = (label) => `Could not confirm ${label}. The previous value is shown for safety. Retry to save the change again.`;
+
+    const errorMessage = (error, label) => {
+        const responseMessage = error?.flowtrackMessage;
+        if (typeof responseMessage === 'string' && responseMessage.trim() !== '') {
+            return responseMessage.trim();
+        }
+        return friendlyNetworkMessage(label);
+    };
+
+    const showFailureToast = ({ key, label, message, retry }) => {
+        ensureUi();
+        removeToast(key);
+
+        const toast = document.createElement('div');
+        toast.className = 'ft-inline-toast';
+        toast.dataset.inlineToast = String(key);
+
+        const copy = document.createElement('div');
+        copy.className = 'ft-inline-toast-copy';
+        const title = document.createElement('strong');
+        title.textContent = `Couldn’t save ${label}.`;
+        const detail = document.createElement('span');
+        detail.textContent = message;
+        copy.append(title, detail);
+
+        const actions = document.createElement('div');
+        actions.className = 'ft-inline-toast-actions';
+        const retryButton = document.createElement('button');
+        retryButton.type = 'button';
+        retryButton.textContent = 'Retry';
+        retryButton.addEventListener('click', () => {
+            toast.remove();
+            retry?.();
+        });
+        const closeButton = document.createElement('button');
+        closeButton.type = 'button';
+        closeButton.className = 'ft-inline-toast-close';
+        closeButton.setAttribute('aria-label', 'Dismiss');
+        closeButton.textContent = '×';
+        closeButton.addEventListener('click', () => toast.remove());
+        actions.append(retryButton, closeButton);
+
+        toast.append(copy, actions);
+        state.toasts.prepend(toast);
+    };
+
+    const resetGlobalState = () => {
+        state.pending.clear();
+        state.errors.clear();
+        if (state.savedTimer) window.clearTimeout(state.savedTimer);
+        state.savedTimer = null;
+        if (state.toasts) state.toasts.innerHTML = '';
+        if (state.host) state.host.hidden = true;
+    };
+
+    document.addEventListener('livewire:navigating', resetGlobalState);
+
+    const bus = {
+        start(key, label) {
+            const token = `${key}:${Date.now()}:${Math.random().toString(36).slice(2)}`;
+            state.pending.set(token, { key, label });
+            state.errors.delete(String(key));
+            removeToast(key);
+            updateGlobal();
+            return token;
+        },
+        success(token, key) {
+            state.pending.delete(token);
+            state.errors.delete(String(key));
+            removeToast(key);
+            updateGlobal();
+        },
+        fail(token, payload) {
+            state.pending.delete(token);
+            state.errors.set(String(payload.key), payload);
+            showFailureToast(payload);
+            updateGlobal();
+        },
+        clearError(key) {
+            state.errors.delete(String(key));
+            removeToast(key);
+            updateGlobal();
+        },
+    };
+
+    const normalize = (value) => value === null || value === undefined ? '' : String(value);
+
+    window.FlowTrackInlineEdit = (config = {}) => {
+        const initialValue = normalize(config.value);
+        const initialDisplay = normalize(config.display ?? config.value);
+
+        return {
+            key: String(config.key || `inline-${Math.random().toString(36).slice(2)}`),
+            label: String(config.label || 'change'),
+            serverValue: initialValue,
+            value: initialValue,
+            display: initialDisplay,
+            savedValue: initialValue,
+            savedDisplay: initialDisplay,
+            draftValue: initialValue,
+            editing: false,
+            status: '',
+            error: '',
+            attemptedValue: null,
+            attemptedDisplay: null,
+            retryAction: null,
+            clearTimer: null,
+            requestSequence: 0,
+
+            beginEdit() {
+                if (this.status === 'saving') return false;
+                this.draftValue = this.value;
+                this.editing = true;
+                return true;
+            },
+
+            cancelEdit() {
+                this.draftValue = this.value;
+                this.editing = false;
+            },
+
+            selectedLabel(event, fallback = '') {
+                const option = event?.target?.selectedOptions?.[0];
+                return (option?.textContent || fallback || event?.target?.value || '').trim();
+            },
+
+            formatDate(value, short = false) {
+                if (!value) return short ? 'Set date' : 'Not set';
+                const [year, month, day] = String(value).split('-').map(Number);
+                if (!year || !month || !day) return String(value);
+                const date = new Date(year, month - 1, day);
+                return date.toLocaleDateString('en-US', short
+                    ? { month: 'short', day: 'numeric' }
+                    : { month: 'short', day: 'numeric', year: 'numeric' });
+            },
+
+            numberLabel(value) {
+                const number = Number.parseInt(String(value || '0'), 10);
+                return Number.isFinite(number) ? Math.max(0, number).toLocaleString() : String(value || '');
+            },
+
+            positiveInteger(value, minimum = 1) {
+                const number = Number.parseInt(String(value || minimum), 10);
+                return String(Number.isFinite(number) ? Math.max(minimum, number) : minimum);
+            },
+
+            initials(value = this.display) {
+                return String(value || '?')
+                    .split(/\s+/)
+                    .filter(Boolean)
+                    .slice(0, 2)
+                    .map((part) => part[0])
+                    .join('')
+                    .toUpperCase() || '?';
+            },
+
+            async commit(nextValue, nextDisplay, requestFactory) {
+                if (typeof requestFactory !== 'function' || this.status === 'saving') return false;
+
+                const normalizedValue = normalize(nextValue);
+                const normalizedDisplay = normalize(nextDisplay ?? nextValue);
+                if (normalizedValue === this.savedValue && normalizedDisplay === this.savedDisplay) {
+                    this.value = this.savedValue;
+                    this.display = this.savedDisplay;
+                    this.draftValue = this.savedValue;
+                    this.editing = false;
+                    return true;
+                }
+
+                const previousValue = this.savedValue;
+                const previousDisplay = this.savedDisplay;
+                const sequence = ++this.requestSequence;
+                const token = bus.start(this.key, this.label);
+
+                this.attemptedValue = normalizedValue;
+                this.attemptedDisplay = normalizedDisplay;
+                this.retryAction = requestFactory;
+                this.value = normalizedValue;
+                this.display = normalizedDisplay;
+                this.draftValue = normalizedValue;
+                this.editing = false;
+                this.status = 'saving';
+                this.error = '';
+
+                if (this.clearTimer) window.clearTimeout(this.clearTimer);
+
+                try {
+                    const response = await requestFactory();
+                    if (sequence !== this.requestSequence) return false;
+
+                    if (response && typeof response === 'object' && response.ok === false) {
+                        const inlineError = new Error(response.message || friendlyNetworkMessage(this.label));
+                        inlineError.flowtrackMessage = response.message;
+                        throw inlineError;
+                    }
+
+                    this.savedValue = normalizedValue;
+                    this.savedDisplay = normalizedDisplay;
+                    this.status = 'saved';
+                    bus.success(token, this.key);
+                    this.clearTimer = window.setTimeout(() => {
+                        if (this.status === 'saved' && sequence === this.requestSequence) this.status = '';
+                    }, 1600);
+                    return true;
+                } catch (error) {
+                    if (sequence !== this.requestSequence) return false;
+
+                    this.value = previousValue;
+                    this.display = previousDisplay;
+                    this.draftValue = previousValue;
+                    this.status = 'error';
+                    this.error = errorMessage(error, this.label);
+
+                    bus.fail(token, {
+                        key: this.key,
+                        label: this.label,
+                        message: this.error,
+                        retry: () => this.retry(),
+                    });
+                    return false;
+                }
+            },
+
+            retry() {
+                if (!this.retryAction || this.attemptedValue === null || this.status === 'saving') return false;
+                bus.clearError(this.key);
+                return this.commit(this.attemptedValue, this.attemptedDisplay, this.retryAction);
+            },
+        };
+    };
+})();

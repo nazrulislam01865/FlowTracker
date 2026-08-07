@@ -180,11 +180,35 @@ class AdminService
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator permissions are always enabled.');
         abort_unless(isset(AccessControlService::MODULES[$module]) && in_array($action, AccessControlService::ACTIONS, true), 422);
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['record_scope' => 'none', 'actions' => []]);
+        $this->setMatrixAction($role, $module, $action, !collect($row->actions ?: [])->contains($action), $actor);
+    }
+
+    public function setMatrixAction(Role $role, string $module, string $action, bool $enabled, User $actor): void
+    {
+        $this->assertAdministrator($actor);
+        $this->assertRoleWorkspace($role);
+        abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator permissions are always enabled.');
+        abort_unless(isset(AccessControlService::MODULES[$module]) && in_array($action, AccessControlService::ACTIONS, true), 422);
+
+        $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['record_scope' => 'none', 'actions' => []]);
         $actions = collect($row->actions ?: []);
-        $actions = $actions->contains($action) ? $actions->reject(fn ($x) => $x === $action) : $actions->push($action);
-        $actions = $actions->unique()->values()->all();
-        $row->update(['actions' => $actions, 'record_scope' => $actions && $row->record_scope === 'none' ? ($role->default_scope ?: 'assigned_jobs') : $row->record_scope]);
-        $this->audit($role, 'access.permission_changed', ($actions && in_array($action, $actions, true) ? 'Granted ' : 'Removed ').$action.' on '.$module.' for '.$role->name, $actor, compact('module','action'));
+        $actions = $enabled
+            ? $actions->push($action)->unique()->values()
+            : $actions->reject(fn ($x) => $x === $action)->values();
+        $storedActions = $actions->all();
+
+        $row->update([
+            'actions' => $storedActions,
+            'record_scope' => $storedActions && $row->record_scope === 'none' ? ($role->default_scope ?: 'assigned_jobs') : $row->record_scope,
+        ]);
+
+        $this->audit(
+            $role,
+            'access.permission_changed',
+            ($enabled ? 'Granted ' : 'Removed ').$action.' on '.$module.' for '.$role->name,
+            $actor,
+            compact('module', 'action', 'enabled'),
+        );
     }
 
     public function setScope(Role $role, string $module, string $scope, User $actor): void

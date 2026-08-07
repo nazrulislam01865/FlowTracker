@@ -192,6 +192,25 @@ class MasterDataService
             }
         }
 
+        // Older demo/legacy Product rows did not always have parent_id set.
+        // Their description begins with the Product Category name, e.g.
+        // "Backpacks & Bags · Custom". Link only when that prefix exactly
+        // matches a real category in this workspace; otherwise leave it alone.
+        foreach (MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->whereNull('parent_id')->get(['id', 'description']) as $product) {
+            $categoryName = trim(explode(' ·', trim((string) $product->description), 2)[0]);
+            if ($categoryName === '') continue;
+
+            $categoryId = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->where('name', $categoryName)
+                ->value('id');
+
+            if ($categoryId) {
+                $product->update(['parent_id' => $categoryId]);
+            }
+        }
+
         Cache::put($syncKey, true, now()->addMinutes(5));
     }
 

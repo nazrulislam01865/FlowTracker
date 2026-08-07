@@ -1,6 +1,6 @@
 @props([
-    'jobs','jobSummary','clients','phases','users','priorities','healthOptions','jobStatuses',
-    'phaseFilter'=>'','healthFilter'=>'','quickFilter'=>'all','showMoreFilters'=>false,'selectedJobIds'=>[],
+    'jobs','clientFilterOptions','ownerFilterOptions','phases','users','priorities','healthOptions','jobStatuses',
+    'searchFilter'=>'','phaseFilter'=>'','healthFilter'=>'','clientFilter'=>'','ownerFilter'=>'','deliveryFilter'=>'','invoiceFilter'=>'','priorityFilterValue'=>'','jobStatusFilterValue'=>'','sortValue'=>'updated_desc','showMoreFilters'=>false,'selectedJobIds'=>[],
     'allFilteredJobsSelected'=>false,
 ])
 <div {{ $attributes->class('ft-list-page ft-jobs-list-page ft-exact-jobs-list') }}>
@@ -9,26 +9,37 @@
         <div class="ft-list-actions">@if(auth()->user()->canModule('jobs','export'))<button class="ft-outline-btn" type="button">Export</button>@endif<button class="ft-outline-btn" type="button">Columns</button>@if(auth()->user()->canModule('jobs','create'))<button class="ft-new-job-btn" wire:click="openCreate">＋ New Job</button>@endif</div>
     </div>
 
-    <div class="ft-list-view-tabs">
-        <button class="ft-list-view-chip red {{ $quickFilter==='attention' ? 'active' : '' }}" wire:click="setQuickFilter('attention')">Needs attention <b>{{ $jobSummary['attention'] ?? 0 }}</b></button>
-        <button class="ft-list-view-chip {{ $quickFilter==='due_week' ? 'active' : '' }}" wire:click="setQuickFilter('due_week')">Due this week <b>{{ $jobSummary['week'] ?? 0 }}</b></button>
-        <button class="ft-list-view-chip {{ $quickFilter==='waiting' ? 'active' : '' }}" wire:click="setQuickFilter('waiting')">Waiting for client <b>{{ $jobSummary['waiting'] ?? 0 }}</b></button>
-        <button class="ft-list-view-chip amber {{ $quickFilter==='invoice' ? 'active' : '' }}" wire:click="setQuickFilter('invoice')">Unpaid invoices <b>{{ $jobSummary['invoice'] ?? 0 }}</b></button>
-        <button class="ft-list-view-chip {{ $quickFilter==='completed' ? 'active' : '' }}" wire:click="setQuickFilter('completed')">Completed <b>{{ $jobSummary['completed'] ?? 0 }}</b></button>
-    </div>
-
-    <section class="ft-job-table-card">
-        <div class="ft-job-filter-grid ft-job-filter-grid-direct">
-            <label class="ft-filter-search ft-job-list-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input wire:model.live.debounce.300ms="search" placeholder="Search Job ID, order, client or product"></label>
-            <select wire:model.live="phase"><option value="">Phase</option>@foreach($phases as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select>
-            <select wire:model.live="health"><option value="">Health</option>@foreach($healthOptions as $h)<option value="{{ $h }}">{{ $h }}</option>@endforeach</select>
-            <select wire:model.live="owner"><option value="">Owner</option>@foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach</select>
-            <select wire:model.live="client"><option value="">Client</option>@foreach($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach</select>
-            <select wire:model.live="delivery"><option value="">Delivery</option><option value="week">Due this week</option><option value="overdue">Overdue</option><option value="none">No delivery date</option></select>
-            <select wire:model.live="invoice"><option value="">Invoice</option><option value="pending">Quotation pending</option><option value="draft">Draft / value recorded</option></select>
-            <select wire:model.live="priorityFilter"><option value="">Priority</option>@foreach($priorities as $p)<option value="{{ $p->name }}">{{ $p->name }}</option>@endforeach</select>
-            <select wire:model.live="jobStatusFilter"><option value="">Job status</option>@foreach($jobStatuses as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select>
-            <button class="ft-clear-link" wire:click="clearFilters" type="button">× Clear filters</button>
+    <section class="ft-job-table-card ft-prototype-list-card">
+        <div class="ft-list-filter-shell" aria-label="Job search and filters">
+            <div class="ft-list-filter-grid">
+                <x-ui.list-search property="search" :value="$searchFilter" placeholder="Job number, order, title, client or product…" />
+                <x-ui.select-filter label="Phase" property="phase" :value="$phaseFilter" placeholder="All phases" :options="$phases->map(fn($p) => ['id'=>(string)$p->id,'label'=>$p->name])" />
+                <x-ui.select-filter label="Health" property="health" :value="$healthFilter" placeholder="All health" :options="$healthOptions->map(fn($h) => ['id'=>$h,'label'=>$h])" />
+                <x-ui.remote-filter label="Owner" property="owner" type="users" context="jobs" :value="$ownerFilter" placeholder="Anyone" :initial-options="$ownerFilterOptions" />
+                <x-ui.remote-filter label="Client" property="client" type="clients" context="jobs" :value="$clientFilter" placeholder="All clients" :initial-options="$clientFilterOptions" />
+                <x-ui.select-filter label="Delivery" property="delivery" :value="$deliveryFilter" placeholder="Any date" :options="collect([['id'=>'week','label'=>'Due this week'],['id'=>'overdue','label'=>'Overdue'],['id'=>'none','label'=>'No delivery date']])" />
+                <x-ui.select-filter label="Invoice" property="invoice" :value="$invoiceFilter" placeholder="Any invoice" :options="collect([['id'=>'pending','label'=>'Quotation pending'],['id'=>'draft','label'=>'Draft / value recorded']])" />
+                <x-ui.select-filter label="Priority" property="priorityFilter" :value="$priorityFilterValue" placeholder="All priorities" :options="$priorities->map(fn($p) => ['id'=>$p->name,'label'=>$p->name])" />
+                <x-ui.select-filter label="Job status" property="jobStatusFilter" :value="$jobStatusFilterValue" placeholder="All statuses" :options="$jobStatuses->map(fn($status) => ['id'=>$status,'label'=>$status])" />
+            </div>
+            @php
+                $activeChips = collect();
+                if($searchFilter) $activeChips->push(['key'=>'search','label'=>'Search: '.$searchFilter]);
+                if($phaseFilter) $activeChips->push(['key'=>'phase','label'=>'Phase: '.($phases->firstWhere('id',(int)$phaseFilter)?->name ?? $phaseFilter)]);
+                if($healthFilter) $activeChips->push(['key'=>'health','label'=>'Health: '.$healthFilter]);
+                if($ownerFilter) $activeChips->push(['key'=>'owner','label'=>'Owner: '.(collect($ownerFilterOptions)->firstWhere('id',(int)$ownerFilter)['label'] ?? 'Selected')]);
+                if($clientFilter) $activeChips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$clientFilter)['label'] ?? 'Selected')]);
+                if($deliveryFilter) $activeChips->push(['key'=>'delivery','label'=>'Delivery: '.(['week'=>'Due this week','overdue'=>'Overdue','none'=>'No delivery date'][$deliveryFilter] ?? $deliveryFilter)]);
+                if($invoiceFilter) $activeChips->push(['key'=>'invoice','label'=>'Invoice: '.(['pending'=>'Quotation pending','draft'=>'Draft / value recorded'][$invoiceFilter] ?? $invoiceFilter)]);
+                if($priorityFilterValue) $activeChips->push(['key'=>'priorityFilter','label'=>'Priority: '.$priorityFilterValue]);
+                if($jobStatusFilterValue) $activeChips->push(['key'=>'jobStatusFilter','label'=>'Status: '.$jobStatusFilterValue]);
+            @endphp
+            <div class="ft-list-active-row">
+                <div class="ft-list-filter-chips" aria-live="polite">
+                    @forelse($activeChips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')" aria-label="Remove {{ $chip['label'] }}">×</button></span>@empty<span>No filters applied</span>@endforelse
+                </div>
+                @if($activeChips->isNotEmpty())<button class="ft-list-clear-all" wire:click="clearFilters" type="button">Clear all filters</button>@endif
+            </div>
         </div>
 
         @if(count($selectedJobIds))
@@ -46,7 +57,7 @@
             </div>
         @endif
 
-        <div class="ft-job-table-wrap">
+        <div class="ft-job-table-wrap ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,phase,health,owner,client,delivery,invoice,priorityFilter,jobStatusFilter,sort">
             <table class="ft-job-table">
                 <thead><tr><th><label class="ft-checkbox-head"><input type="checkbox" wire:click="toggleSelectAllJobs" @checked($allFilteredJobsSelected) @disabled($jobs->total() === 0) aria-label="Select all {{ $jobs->total() }} filtered Jobs"><span>Select all</span></label></th><th>Job / Order</th><th>Client / Brief</th><th>Product / Qty</th><th>Phase</th><th>Next Action</th><th>Health</th><th>Owner</th><th>Delivery ↓</th><th>Progress</th><th>Invoice</th><th>•••</th></tr></thead>
                 <tbody>
@@ -61,30 +72,43 @@
                         <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ $next?->due_date?->isPast() ? 'overdue' : '' }}">@if($next?->due_date){{ $next->due_date->isPast() ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
                         <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
                         <td data-label="Owner">
-                            <div class="ft-owner-chip ft-inline-owner-editor" x-data="{ editing:false }">
-                                <x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="28"/>
-                                <span x-show="!editing" class="ft-inline-owner-name">{{ $job->owner?->name ?? 'Unassigned' }}</span>
+                            <div
+                                class="ft-owner-chip ft-inline-owner-editor ft-inline-edit-shell"
+                                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Job owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
+                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            >
+                                <span class="ft-inline-person-live" x-show="!editing">
+                                    <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="28"/></span>
+                                    <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                                    <span class="ft-inline-owner-name" x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
+                                </span>
                                 @if(app(\App\Services\AccessControlService::class)->canAssignVisibleJob(auth()->user()))
-                                    <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>
-                                    <select x-ref="ownerSelect" x-show="editing" aria-label="Edit Job owner"
-                                        x-on:keydown.escape="editing=false"
-                                        x-on:blur="editing=false"
-                                        wire:change="updateJobOwner({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
+                                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.ownerSelect.focus())">✎</button>
+                                    <select x-ref="ownerSelect" x-cloak x-show="editing" x-model="draftValue" aria-label="Edit Job owner"
+                                        x-on:keydown.escape.prevent="cancelEdit()"
+                                        x-on:blur="if (editing) cancelEdit()"
+                                        x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobOwner({{ $job->id }}, draftValue))">
                                         <option value="">Unassigned</option>
-                                        @foreach($users as $u)<option value="{{ $u->id }}" @selected((int)$job->owner_id===(int)$u->id)>{{ $u->name }}</option>@endforeach
+                                        @foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
                                     </select>
+                                    <x-ui.inline-save-state compact />
                                 @endif
                             </div>
                         </td>
                         <td data-label="Delivery">
-                            <div class="ft-date-chip ft-inline-date-editor {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
-                                <span x-show="!editing" class="ft-inline-date-text">{{ $job->delivery_date?->format('M j') ?? 'Set date' }}</span>
+                            <div
+                                class="ft-date-chip ft-inline-date-editor ft-inline-edit-shell {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}"
+                                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set date') })"
+                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            >
+                                <span x-show="!editing" class="ft-inline-date-text" x-text="display">{{ $job->delivery_date?->format('M j') ?? 'Set date' }}</span>
                                 @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                                    <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit delivery date" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.deliveryDate.showPicker ? $refs.deliveryDate.showPicker() : $refs.deliveryDate.focus())">✎</button>
-                                    <input x-ref="deliveryDate" x-show="editing" type="date" value="{{ $job->delivery_date?->format('Y-m-d') }}" aria-label="Edit delivery date"
-                                        x-on:keydown.escape="editing=false"
-                                        x-on:blur="editing=false"
-                                        wire:change="updateJobDeliveryDate({{ $job->id }}, $event.target.value)">
+                                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit delivery date" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.deliveryDate.showPicker ? $refs.deliveryDate.showPicker() : $refs.deliveryDate.focus())">✎</button>
+                                    <input x-ref="deliveryDate" x-cloak x-show="editing" x-model="draftValue" type="date" aria-label="Edit delivery date"
+                                        x-on:keydown.escape.prevent="cancelEdit()"
+                                        x-on:blur="if (editing) cancelEdit()"
+                                        x-on:change="commit($event.target.value, formatDate($event.target.value, true), () => $wire.updateJobDeliveryDate({{ $job->id }}, draftValue))">
+                                    <x-ui.inline-save-state compact />
                                 @endif
                             </div>
                         </td>

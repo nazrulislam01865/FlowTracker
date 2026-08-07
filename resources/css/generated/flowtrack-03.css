@@ -410,7 +410,7 @@
 .ft-inline-field-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-planning-value{justify-content:flex-end}
 .ft-planning-value>span:not(.ft-planning-person){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-planning-person{display:inline-flex!important;align-items:center;gap:7px;min-width:0}
+.ft-planning-person{display:inline-flex;align-items:center;gap:7px;min-width:0}
 .ft-editable-description{position:relative}
 .ft-editable-description .ft-edit-display-row{justify-content:space-between;align-items:flex-start}
 .ft-editable-description textarea{

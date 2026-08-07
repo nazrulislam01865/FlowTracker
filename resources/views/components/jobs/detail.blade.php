@@ -28,15 +28,19 @@
                 <a class="ft-copyable-id-link" href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
                 <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy {{ $job->job_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->job_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
             </div>
-            <h1 class="ft-editable-job-title" x-data="{ editing:false }">
-                <span x-show="!editing">{{ $job->title }}</span>
+            <h1
+                class="ft-editable-job-title ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-title'), label: 'Job name', value: @js($job->title), display: @js($job->title) })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
+                <span x-show="!editing" x-text="display">{{ $job->title }}</span>
                 @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                    <button x-show="!editing" type="button" class="ft-pencil" aria-label="Edit job title" title="Edit job name" x-on:click.stop="editing=true; $nextTick(() => $refs.jobTitle.focus())">✎</button>
-                    <input x-ref="jobTitle" x-show="editing" type="text" value="{{ $job->title }}" maxlength="255"
-                        x-on:keydown.escape="editing=false"
-                        x-on:keydown.enter="$event.target.blur()"
-                        x-on:blur="editing=false"
-                        wire:change="updateJobTextField({{ $job->id }}, 'title', $event.target.value)">
+                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-pencil" aria-label="Edit job title" title="Edit job name" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.jobTitle.focus())">✎</button>
+                    <input x-ref="jobTitle" x-cloak x-show="editing" x-model="draftValue" type="text" maxlength="255"
+                        x-on:keydown.escape.prevent="cancelEdit()"
+                        x-on:keydown.enter.prevent="$event.target.blur()"
+                        x-on:blur="if (editing) { draftValue.trim() === value ? cancelEdit() : commit(draftValue.trim(), draftValue.trim(), () => $wire.updateJobTextField({{ $job->id }}, 'title', draftValue.trim())) }">
+                    <x-ui.inline-save-state />
                 @endif
             </h1>
             <div class="ft-exact-job-meta">

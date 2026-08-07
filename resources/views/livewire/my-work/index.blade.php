@@ -5,34 +5,40 @@
             <div class="ft-board-head-actions"><a class="ft-new-job-btn" href="{{ route('jobs.index') }}" wire:navigate>Jobs</a></div>
         </div>
 
-        <section class="ft-board-control-card ft-task-controls ft-reference-filter-card">
-            <div class="ft-mywork-filter-grid">
-                <label class="ft-filter-search ft-mywork-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input wire:model.live.debounce.300ms="search" placeholder="Search jobs, tasks, clients or assignees"></label>
-                <select wire:model.live="job"><option value="">Job</option>@foreach($taskJobs as $row)<option value="{{ $row->id }}">{{ $row->job_number }} — {{ $row->title }}</option>@endforeach</select>
-                <select wire:model.live="client"><option value="">Client</option>@foreach($clients as $row)<option value="{{ $row->id }}">{{ $row->name }}</option>@endforeach</select>
-                <select wire:model.live="assignee"><option value="">Assignee</option>@foreach($users as $row)<option value="{{ $row->id }}">{{ $row->name }}</option>@endforeach</select>
-                <select wire:model.live="status"><option value="">Status</option>@foreach($taskStatuses as $value)<option value="{{ $value }}">{{ $value }}</option>@endforeach</select>
-                <select wire:model.live="priority"><option value="">Priority</option>@foreach($priorities as $row)<option value="{{ $row->name }}">{{ $row->name }}</option>@endforeach</select>
-                <select wire:model.live="due"><option value="">Due date</option><option value="overdue">Overdue</option><option value="today">Due today</option><option value="week">Due this week</option><option value="month">Next 30 days</option><option value="none">No due date</option></select>
-                <button type="button" class="ft-clear-wide" wire:click="clearFilters">Clear</button>
+        <section class="ft-board-control-card ft-task-controls ft-reference-filter-card ft-list-filter-shell">
+            <div class="ft-list-filter-grid">
+                <x-ui.list-search property="search" :value="$search" placeholder="Jobs, tasks, clients or assignees…" />
+                <x-ui.remote-filter label="Job" property="job" type="jobs" context="my-work" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
+                <x-ui.remote-filter label="Client" property="client" type="clients" context="my-work" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
+                <x-ui.remote-filter label="Assignee" property="assignee" type="users" context="my-work" :value="$assignee" placeholder="Anyone" :initial-options="$assigneeFilterOptions" />
+                <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="$taskStatuses->map(fn($value) => ['id' => $value, 'label' => $value])" />
+                <x-ui.select-filter label="Priority" property="priority" :value="$priority" placeholder="All priorities" :options="$priorities->map(fn($row) => ['id' => $row->name, 'label' => $row->name])" />
+                <x-ui.select-filter label="Due" property="due" :value="$due" placeholder="Any date" :options="collect([['id'=>'overdue','label'=>'Overdue'],['id'=>'today','label'=>'Due today'],['id'=>'week','label'=>'Due this week'],['id'=>'month','label'=>'Next 30 days'],['id'=>'none','label'=>'No due date']])" />
             </div>
-            <div class="ft-board-quick-row">
-                <span class="ft-quick-label">Quick filters</span>
-                <button class="ft-quick-chip {{ $quick==='open'?'active':'' }}" wire:click="setQuick('open')">Open <b>{{ $counts['open'] }}</b></button>
-                <button class="ft-quick-chip red {{ $quick==='overdue'?'active':'' }}" wire:click="setQuick('overdue')">Overdue <b>{{ $counts['overdue'] }}</b></button>
-                <button class="ft-quick-chip {{ $quick==='week'?'active':'' }}" wire:click="setQuick('week')">Due this week <b>{{ $counts['week'] }}</b></button>
-                <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $counts['blocked'] }}</b></button>
-                <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $counts['waiting'] }}</b></button>
-                <button class="ft-quick-chip {{ $quick==='completed'?'active':'' }}" wire:click="setQuick('completed')">Completed <b>{{ $counts['completed'] }}</b></button>
-                <span class="ft-board-group-controls" aria-label="Job group controls">
-                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
-                    <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
-                </span>
+            @php
+                $chips = collect();
+                if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                if($job) $chips->push(['key'=>'job','label'=>'Job: '.(collect($jobFilterOptions)->firstWhere('id',(int)$job)['label'] ?? 'Selected')]);
+                if($client) $chips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$client)['label'] ?? 'Selected')]);
+                if($assignee) $chips->push(['key'=>'assignee','label'=>'Assignee: '.(collect($assigneeFilterOptions)->firstWhere('id',(int)$assignee)['label'] ?? 'Selected')]);
+                if($status) $chips->push(['key'=>'status','label'=>'Status: '.$status]);
+                if($priority) $chips->push(['key'=>'priority','label'=>'Priority: '.$priority]);
+                if($due) $chips->push(['key'=>'due','label'=>'Due: '.(['overdue'=>'Overdue','today'=>'Due today','week'=>'Due this week','month'=>'Next 30 days','none'=>'No due date'][$due] ?? $due)]);
+            @endphp
+            <div class="ft-list-active-row">
+                <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
+                <div class="ft-list-filter-actions">
+                    @if($chips->isNotEmpty())<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
+                    <span class="ft-board-group-controls" aria-label="Job group controls">
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=true; $dispatch('board-expand-all')" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
+                        <button type="button" class="ft-filter-collapse" x-on:click="allGroupsOpen=false; $dispatch('board-collapse-all')" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
+                    </span>
+                </div>
             </div>
         </section>
     </div>
 
-    @php($displayStatuses = $taskStatuses->filter(fn($value) => $quick === 'completed' ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values())
+    @php($displayStatuses = $taskStatuses->filter(fn($value) => $status !== '' && \App\Support\BoardLaneResolver::isCompleted($status) ? \App\Support\BoardLaneResolver::isCompleted($value) : ! \App\Support\BoardLaneResolver::isCompleted($value))->values())
     <div class="ft-lane-sticky-header">
         <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="myWorkHeaderScroll" x-on:scroll="$refs.myWorkBodyScroll && ($refs.myWorkBodyScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-task-board-status-header" style="--ft-lane-count: {{ max(1, $displayStatuses->count()) }};">
@@ -42,7 +48,7 @@
             </div>
         </div>
     </div>
-    <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
+    <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,assignee,status,priority,due" x-ref="myWorkBodyScroll" x-on:scroll="$refs.myWorkHeaderScroll && ($refs.myWorkHeaderScroll.scrollLeft = $event.target.scrollLeft)">
         @if($tasksReady)
             <x-board.task-job-matrix :tasks="$tasks" :statuses="$displayStatuses" :draggable="true" key-prefix="mywork" />
         @else

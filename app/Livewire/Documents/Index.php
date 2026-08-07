@@ -42,7 +42,6 @@ class Index extends Component
     {
         $this->job = request()->integer('job') ? (string) request()->integer('job') : '';
         $this->uploadJobId = request()->integer('job') ?: null;
-        $this->uploadCategory = app(MasterDataService::class)->active('document_category')->first()?->name ?: 'Other';
     }
 
     public function updated($property): void
@@ -53,6 +52,13 @@ class Index extends Component
     public function clearFilters(): void
     {
         $this->reset(['search','category','client','job','phase','status']);
+        $this->resetPage();
+    }
+
+    public function clearFilter(string $filter): void
+    {
+        abort_unless(in_array($filter, ['search','category','client','job','phase','status'], true), 422);
+        $this->{$filter} = '';
         $this->resetPage();
     }
 
@@ -80,6 +86,7 @@ class Index extends Component
     public function openUpload(): void
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
+        if ($this->uploadCategory === '') $this->uploadCategory = app(MasterDataService::class)->active('document_category')->first()?->name ?: 'Other';
         $this->showUpload = true;
     }
 
@@ -135,14 +142,20 @@ class Index extends Component
 
     public function render()
     {
+        return view('livewire.documents.index', $this->documentsPageData());
+    }
+
+    private function documentsPageData(): array
+    {
+        $user = auth()->user();
         $service = app(DocumentService::class);
         $access = app(AccessControlService::class);
-        $documents = $service->paginate(auth()->user(), $this->filters(), $this->perPage);
+        $documents = $service->paginate($user, $this->filters(), $this->perPage);
         $pageCollection = $documents->getCollection();
         $grouped = $pageCollection->groupBy(fn ($d) => $d->flow_job_id ?: 0);
         if (!$this->expandedJobs && $grouped->keys()->first()) $this->expandedJobs = [(int)$grouped->keys()->first()];
 
-        $base = $service->query(auth()->user());
+        $base = $service->query($user);
         $metrics = [
             'all' => (clone $base)->count(),
             'attention' => (clone $base)->where('is_final',false)->whereHas('task',fn($t)=>$t->where('needs_attention',true))->count(),
@@ -150,18 +163,39 @@ class Index extends Component
             'recent' => (clone $base)->where('updated_at','>=',now()->subDays(7))->count(),
         ];
 
-        $jobs = app(JobService::class)->visibleQuery(auth()->user())->with('client')->orderByDesc('id')->limit(250)->get();
-        $clients = app(ClientService::class)->visibleQuery(auth()->user())->where('is_active',true)->orderBy('name')->get(['id','name']);
-        $phases = WorkflowPhase::whereIn('workflow_id',$jobs->pluck('workflow_id')->filter()->unique())->where('is_active',true)->orderBy('sequence')->get();
         $categories = app(MasterDataService::class)->active('document_category');
-        $uploadTasks = $this->uploadJobId
-            ? app(\App\Services\TaskService::class)->visibleQuery(auth()->user())->where('flow_job_id',$this->uploadJobId)->with('phase')->orderBy('id')->get()
+        $phases = WorkflowPhase::query()
+            ->whereNotNull('workflow_template_id')
+            ->where('is_active', true)
+            ->orderBy('sequence')
+            ->orderBy('name')
+            ->get(['id','name','short_name','sequence']);
+
+        $selected = $this->selectedDocumentId
+            ? $access->applyDocumentScope(Document::query()->with(['job.client','task.phase','task.assignee','uploader']),$user)->find($this->selectedDocumentId)
+            : null;
+        if (!$selected) $selected = $pageCollection->first();
+
+        $optionService = app(\App\Services\FilterOptionService::class);
+        $jobs = $this->showUpload
+            ? app(JobService::class)->visibleQuery($user)->with('client:id,name')->orderByDesc('id')->limit(250)->get(['id','job_number','title','client_id'])
+            : collect();
+        $uploadTasks = $this->showUpload && $this->uploadJobId
+            ? app(\App\Services\TaskService::class)->visibleQuery($user)->where('flow_job_id',$this->uploadJobId)->with('phase')->orderBy('id')->get()
             : collect();
 
-        $selected = $this->selectedDocumentId ? $access->applyDocumentScope(Document::query()->with(['job.client','task.phase','task.assignee','uploader']),auth()->user())->find($this->selectedDocumentId) : null;
-        if (!$selected) $selected = $pageCollection->first();
-        $versions = $selected ? $service->versions($selected, auth()->user()) : collect();
-
-        return view('livewire.documents.index', compact('documents','grouped','metrics','jobs','clients','phases','categories','uploadTasks','selected','versions'));
+        return [
+            'documents' => $documents,
+            'grouped' => $grouped,
+            'metrics' => $metrics,
+            'jobFilterOptions' => $optionService->options($user, 'jobs', 'documents', '', $this->job !== '' ? (int)$this->job : null, 6),
+            'clientFilterOptions' => $optionService->options($user, 'clients', 'documents', '', $this->client !== '' ? (int)$this->client : null, 6),
+            'jobs' => $jobs,
+            'phases' => $phases,
+            'categories' => $categories,
+            'uploadTasks' => $uploadTasks,
+            'selected' => $selected,
+            'versions' => $selected ? $service->versions($selected, $user) : collect(),
+        ];
     }
 }

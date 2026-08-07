@@ -45,7 +45,7 @@ class Index extends Component
     public function mount(): void
     {
         $this->showCreate = request()->boolean('create');
-        $this->clientCode = $this->nextClientCode();
+        if ($this->showCreate) $this->clientCode = $this->nextClientCode();
     }
 
     public function updatedSearch(): void { $this->resetPage(); }
@@ -82,6 +82,13 @@ class Index extends Component
     {
         $this->reset(['search','country','manager','jobHealth','outstanding']);
         $this->quick = 'all';
+        $this->resetPage();
+    }
+
+    public function clearFilter(string $filter): void
+    {
+        abort_unless(in_array($filter, ['search','country','manager','jobHealth','outstanding'], true), 422);
+        $this->{$filter} = '';
         $this->resetPage();
     }
 
@@ -286,8 +293,43 @@ class Index extends Component
 
     public function render()
     {
+        $user = auth()->user();
+
+        if ($this->showCreate) {
+            return view('livewire.clients.index', $this->createPageData($user));
+        }
+
+        if ($this->showDetail && $this->selectedClientId) {
+            return view('livewire.clients.index', $this->detailPageData($user));
+        }
+
+        return view('livewire.clients.index', $this->clientsListData($user));
+    }
+
+    private function createPageData(User $user): array
+    {
+        return [
+            'users' => ($user->canModule('clients','assign') || $user->canModule('clients','edit_all'))
+                ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
+                : collect([$user]),
+            'detail' => null,
+        ];
+    }
+
+    private function detailPageData(User $user): array
+    {
+        return [
+            'detail' => app(ClientService::class)->detail($user, (int) $this->selectedClientId),
+            'users' => $this->showEdit && ($user->canModule('clients','assign') || $user->canModule('clients','edit_all'))
+                ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
+                : collect([$user]),
+        ];
+    }
+
+    private function clientsListData(User $user): array
+    {
         $service = app(ClientService::class);
-        $clients = $service->paginate(auth()->user(), [
+        $clients = $service->paginate($user, [
             'search' => $this->search,
             'country' => $this->country,
             'manager' => $this->manager,
@@ -297,24 +339,16 @@ class Index extends Component
             'archived' => $this->showArchived,
         ], $this->perPage);
 
-        $detail = $this->selectedClientId ? $service->detail(auth()->user(), $this->selectedClientId) : null;
-
-        $users = (auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'))
-            ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
-            : collect([auth()->user()]);
-
-        return view('livewire.clients.index', [
+        return [
             'clients' => $clients,
-            'summary' => $service->summary(auth()->user()),
-            'detail' => $detail,
-            'countries' => $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
-            'managers' => User::where('is_active', true)
-                ->whereIn('id', $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('account_manager_id')->distinct()->pluck('account_manager_id'))
-                ->orderBy('name')->get(['id','name','profile_image_path']),
-            'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), auth()->user())
+            'summary' => $service->summary($user),
+            'detail' => $this->showClientPreview && $this->selectedClientId ? $service->detail($user, $this->selectedClientId) : null,
+            'countries' => $service->visibleQuery($user)->where('is_active', !$this->showArchived)->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
+            'managerFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->manager !== '' ? (int) $this->manager : null, 6),
+            'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), $user)
                 ->whereHas('client', fn ($client) => $client->where('is_active', !$this->showArchived))
                 ->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),
-            'users' => $users,
-        ]);
+            'users' => collect(),
+        ];
     }
 }

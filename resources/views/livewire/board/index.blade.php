@@ -12,66 +12,45 @@
             <button type="button" class="{{ $mode === 'tasks' ? 'active' : '' }}" wire:click="setMode('tasks')">Task Board</button>
         </div>
 
-        <section class="ft-board-control-card ft-reference-filter-card">
-            <div class="ft-board-reference-filter-grid">
-                <label class="ft-filter-search"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-4-4"/></svg><input wire:model.live.debounce.300ms="search" placeholder="Search job ID, task or client"></label>
-                <select wire:model.live="job"><option value="">Job</option>@foreach($taskJobs as $row)<option value="{{ $row->id }}">{{ $row->job_number }} — {{ $row->title }}</option>@endforeach</select>
-                <select wire:model.live="client"><option value="">Client</option>@foreach($clients as $row)<option value="{{ $row->id }}">{{ $row->name }}</option>@endforeach</select>
-                <select wire:model.live="assignee"><option value="">Assignee</option>@foreach($users as $row)<option value="{{ $row->id }}">{{ $row->name }}</option>@endforeach</select>
+        <section class="ft-board-control-card ft-reference-filter-card ft-list-filter-shell">
+            <div class="ft-list-filter-grid">
+                <x-ui.list-search property="search" :value="$search" placeholder="Job ID, task, client or assignee…" />
+                <x-ui.remote-filter label="Job" property="job" type="jobs" context="board" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
+                <x-ui.remote-filter label="Client" property="client" type="clients" context="board" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
+                <x-ui.remote-filter label="Assignee" property="assignee" type="users" context="board" :value="$assignee" placeholder="Anyone" :initial-options="$assigneeFilterOptions" />
+                <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="($mode === 'jobs' ? $jobStatuses : $taskStatuses)->map(fn($value) => ['id' => $value, 'label' => $value])" />
+                <x-ui.select-filter label="Due" property="due" :value="$due" placeholder="Any date" :options="collect([['id'=>'overdue','label'=>'Overdue'],['id'=>'today','label'=>'Due today'],['id'=>'week','label'=>'Due this week'],['id'=>'month','label'=>'Next 30 days'],['id'=>'none','label'=>'No due date']])" />
                 @if($mode === 'jobs')
-                    <select wire:model.live="status"><option value="">Status</option>@foreach($jobStatuses as $value)<option value="{{ $value }}">{{ $value }}</option>@endforeach</select>
-                @else
-                    <select wire:model.live="status"><option value="">Status</option>@foreach($taskStatuses as $value)<option value="{{ $value }}">{{ $value }}</option>@endforeach</select>
+                    <x-ui.select-filter label="Workflow" property="workflow" :value="$workflow" placeholder="Select workflow" :clearable="false" :options="$workflows->map(fn($flow) => ['id' => (string)$flow->id, 'label' => $flow->name])" />
+                    <x-ui.select-filter label="Sort" property="sort" :value="$sort" placeholder="Delivery date" :clearable="false" :options="collect([['id'=>'delivery','label'=>'Delivery date'],['id'=>'updated','label'=>'Recently updated'],['id'=>'priority','label'=>'Priority']])" />
                 @endif
-                <select wire:model.live="due"><option value="">Due date</option><option value="overdue">Overdue</option><option value="today">Due today</option><option value="week">Due this week</option><option value="month">Next 30 days</option><option value="none">No due date</option></select>
-                <button type="button" class="ft-clear-wide" wire:click="clearFilters">Clear</button>
             </div>
-
-            <div class="ft-board-quick-row">
-                <span class="ft-quick-label">Quick filters</span>
-                @if($mode === 'jobs')
-                    <button class="ft-quick-chip {{ $quick==='mine'?'active':'' }}" wire:click="setQuick('mine')">My job <b>{{ $jobCounts['mine'] }}</b></button>
-                    <button class="ft-quick-chip red {{ $quick==='overdue'?'active':'' }}" wire:click="setQuick('overdue')">Overdue <b>{{ $jobCounts['overdue'] }}</b></button>
-                    <button class="ft-quick-chip {{ $quick==='week'?'active':'' }}" wire:click="setQuick('week')">Due this week <b>{{ $jobCounts['week'] }}</b></button>
-                    <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $jobCounts['blocked'] }}</b></button>
-                    <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $jobCounts['waiting'] }}</b></button>
-                    <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $jobCounts['unassigned'] }}</b></button>
-                    <span class="ft-board-group-controls" aria-label="Job group controls">
-                        <button type="button" class="ft-filter-collapse" wire:click="expandVisibleJobs('{{ $jobs->pluck('id')->implode(',') }}')" title="Expand all job cards" aria-label="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
-                        <button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all job cards" aria-label="Collapse all job cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
-                    </span>
-                @else
-                    <button class="ft-quick-chip {{ $quick==='mine'?'active':'' }}" wire:click="setQuick('mine')">My task <b>{{ $taskCounts['mine'] }}</b></button>
-                    <button class="ft-quick-chip red {{ $quick==='overdue'?'active':'' }}" wire:click="setQuick('overdue')">Overdue <b>{{ $taskCounts['overdue'] }}</b></button>
-                    <button class="ft-quick-chip {{ $quick==='week'?'active':'' }}" wire:click="setQuick('week')">Due this week <b>{{ $taskCounts['week'] }}</b></button>
-                    <button class="ft-quick-chip red {{ $quick==='blocked'?'active':'' }}" wire:click="setQuick('blocked')">Blocked <b>{{ $taskCounts['blocked'] }}</b></button>
-                    <button class="ft-quick-chip {{ $quick==='waiting'?'active':'' }}" wire:click="setQuick('waiting')">Waiting external <b>{{ $taskCounts['waiting'] }}</b></button>
-                    <button class="ft-quick-chip amber {{ $quick==='unassigned'?'active':'' }}" wire:click="setQuick('unassigned')">Unassigned <b>{{ $taskCounts['unassigned'] }}</b></button>
-                    <span class="ft-board-group-controls" aria-label="Task job group controls">
-                        <button type="button" class="ft-filter-collapse" wire:click="expandAllTaskGroups" title="Expand all jobs" aria-label="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button>
-                        <button type="button" class="ft-filter-collapse" wire:click="collapseAllTaskGroups" title="Collapse all jobs" aria-label="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button>
-                    </span>
-                @endif
+            @php
+                $chips = collect();
+                if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                if($job) $chips->push(['key'=>'job','label'=>'Job: '.(collect($jobFilterOptions)->firstWhere('id',(int)$job)['label'] ?? 'Selected')]);
+                if($client) $chips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$client)['label'] ?? 'Selected')]);
+                if($assignee) $chips->push(['key'=>'assignee','label'=>'Assignee: '.(collect($assigneeFilterOptions)->firstWhere('id',(int)$assignee)['label'] ?? 'Selected')]);
+                if($status) $chips->push(['key'=>'status','label'=>'Status: '.$status]);
+                if($due) $chips->push(['key'=>'due','label'=>'Due: '.(['overdue'=>'Overdue','today'=>'Due today','week'=>'Due this week','month'=>'Next 30 days','none'=>'No due date'][$due] ?? $due)]);
+            @endphp
+            <div class="ft-list-active-row">
+                <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
+                <div class="ft-list-filter-actions">
+                    @if($chips->isNotEmpty())<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
+                    @if($mode === 'jobs')
+                        <span class="ft-board-group-controls" aria-label="Job group controls"><button type="button" class="ft-filter-collapse" wire:click="expandVisibleJobs('{{ $jobs->pluck('id')->implode(',') }}')" title="Expand all job cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button><button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all job cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button></span>
+                    @else
+                        <span class="ft-board-group-controls" aria-label="Task job group controls"><button type="button" class="ft-filter-collapse" wire:click="expandAllTaskGroups" title="Expand all jobs"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button><button type="button" class="ft-filter-collapse" wire:click="collapseAllTaskGroups" title="Collapse all jobs"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button></span>
+                    @endif
+                </div>
             </div>
         </section>
 
-        <div class="ft-board-summary-row ft-reference-summary">
-            @if(!$cardsReady)
-                <span>Loading {{ $mode === 'jobs' ? 'Job' : 'Task' }} Board cards…</span>
-            @elseif($mode === 'jobs')
-                <span>Showing <b>{{ $jobs->count() }}</b> Jobs across <b>{{ $jobs->map(fn($job) => $job->source_workflow_id ?: $job->workflow_id)->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('workflow', $jobs->map(fn($job) => $job->source_workflow_id ?: $job->workflow_id)->unique()->count()) }}</span>
-            @else
-                <span>Showing <b>{{ $tasks->count() }}</b> of <b>{{ $taskCounts['open'] + $taskCounts['completed'] }}</b> tasks across <b>{{ $tasks->pluck('flow_job_id')->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('job', $tasks->pluck('flow_job_id')->unique()->count()) }}</span>
-            @endif
-        </div>
     </div>
 
     @if($mode === 'jobs')
-        <section class="ft-workflow-reference-card">
-            <label>Workflow</label>
-            <select wire:model.live="workflow">@foreach($workflows as $flow)<option value="{{ $flow->id }}">{{ $flow->name }}</option>@endforeach</select>
-            <p>Job cards show current phase progress, next action and expandable phase tasks.</p>
-        </section>
+
 
         @if(!$cardsReady)
             @include('livewire.shared.board-cards-placeholder', ['columns' => max(3, $phases->count())])
@@ -91,7 +70,7 @@
             </div>
         </div>
 
-        <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="jobBodyScroll" x-on:scroll="$refs.jobHeaderScroll && ($refs.jobHeaderScroll.scrollLeft = $event.target.scrollLeft)">
+        <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,assignee,status,due,workflow,sort" x-ref="jobBodyScroll" x-on:scroll="$refs.jobHeaderScroll && ($refs.jobHeaderScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-job-board-grid ft-job-board-body-grid">
                 @foreach($phases as $phase)
                     @php($phaseJobs = $jobs->filter(fn($job) => (int)($job->source_workflow_phase_id ?: $job->workflow_phase_id) === (int)$phase->id))
@@ -131,7 +110,7 @@
                 </div>
             </div>
         </div>
-        <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="taskBodyScroll" x-on:scroll="$refs.taskHeaderScroll && ($refs.taskHeaderScroll.scrollLeft = $event.target.scrollLeft)">
+        <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,assignee,status,due,workflow,sort" x-ref="taskBodyScroll" x-on:scroll="$refs.taskHeaderScroll && ($refs.taskHeaderScroll.scrollLeft = $event.target.scrollLeft)">
             <x-board.task-job-matrix :tasks="$tasks" :statuses="$taskStatuses" :draggable="true" :all-groups-expanded="$taskGroupsExpanded" :group-state-key="$taskGroupsExpanded ? 'open' : 'closed'" key-prefix="board" />
         </div>
         @endif

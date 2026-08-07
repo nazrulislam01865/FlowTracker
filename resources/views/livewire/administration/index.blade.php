@@ -62,11 +62,35 @@
                         <tr>
                             <td><b>{{ $meta['name'] }}</b><small>{{ $meta['group'] }}</small></td>
                             @foreach($actions as $action)
-                                <td data-label="{{ ucwords(str_replace('_',' ',$action)) }}"><input type="checkbox" class="ft-perm-check" wire:click="toggleMatrixAction({{ $selectedRole->id }},'{{ $code }}','{{ $action }}')" @checked(in_array($selectedRole->slug,['super-admin','admin','administrator'],true) || in_array($action,$access?->actions??[],true)) @disabled(in_array($selectedRole->slug,['super-admin','admin','administrator'],true))></td>
+                                @php($permissionLocked = in_array($selectedRole->slug,['super-admin','admin','administrator'],true))
+                                @php($permissionEnabled = $permissionLocked || in_array($action,$access?->actions??[],true))
+                                <td
+                                    data-label="{{ ucwords(str_replace('_',' ',$action)) }}"
+                                    class="ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-'.$action), label: @js(str_replace('_',' ',$action).' permission'), value: @js($permissionEnabled ? '1' : '0'), display: @js($permissionEnabled ? 'Enabled' : 'Disabled') })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <input type="checkbox" class="ft-perm-check" :checked="value === '1'" :disabled="status === 'saving'"
+                                        x-on:change="commit($event.target.checked ? '1' : '0', $event.target.checked ? 'Enabled' : 'Disabled', () => $wire.setMatrixAction({{ $selectedRole->id }}, '{{ $code }}', '{{ $action }}', draftValue === '1'))"
+                                        @disabled($permissionLocked)>
+                                    @unless($permissionLocked)<x-ui.inline-save-state compact />@endunless
+                                </td>
                             @endforeach
-                            <td data-label="Record scope"><select class="ft-scope-select" wire:change="setModuleScope({{ $selectedRole->id }},'{{ $code }}',$event.target.value)" @disabled(in_array($selectedRole->slug,['super-admin','admin','administrator'],true))>
-                                @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned Jobs','selected_clients'=>'Selected clients','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}" @selected((in_array($selectedRole->slug,['super-admin','admin','administrator'],true)?'all_records':($access?->record_scope??'none'))===$value)>{{ $label }}</option>@endforeach
-                            </select></td>
+                            @php($scopeLocked = in_array($selectedRole->slug,['super-admin','admin','administrator'],true))
+                            @php($effectiveScope = $scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none'))
+                            <td
+                                data-label="Record scope"
+                                class="ft-inline-edit-shell"
+                                x-data="window.FlowTrackInlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-scope'), label: 'record scope', value: @js($effectiveScope), display: @js(str_replace('_',' ',$effectiveScope)) })"
+                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            >
+                                <select class="ft-scope-select" x-model="draftValue" :disabled="status === 'saving'"
+                                    x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.setModuleScope({{ $selectedRole->id }}, '{{ $code }}', draftValue))"
+                                    @disabled($scopeLocked)>
+                                    @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned Jobs','selected_clients'=>'Selected clients','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                                </select>
+                                @unless($scopeLocked)<x-ui.inline-save-state compact />@endunless
+                            </td>
                         </tr>
                     @endforeach
                     </tbody>
@@ -78,11 +102,17 @@
         <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><button class="primary" wire:click="openUser">＋ Add User</button></div>
         <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @foreach($users as $u)
-            <tr>
+            <tr
+                wire:key="admin-user-{{ $u->id }}"
+                x-data="{ ...window.FlowTrackInlineEdit({ key: @js('admin-user-'.$u->id.'-role'), label: 'user role', value: @js((string)($u->role_id ?? '')), display: @js($u->role?->name ?? 'No role') }), roleScopes: @js($roles->mapWithKeys(fn($role) => [(string)$role->id => ($role->default_scope ?: 'none')])->all()) }"
+            >
                 <td><div class="person"><x-ui.avatar :user="$u" :name="$u->name"/><div><b>{{ $u->name }}</b>@if($u->workspaceMemberships->first()?->job_title)<div class="small muted">{{ $u->workspaceMemberships->first()->job_title }}</div>@endif<div class="small muted">{{ $u->email }}</div></div></div></td>
                 <td>{{ $u->department?->name ?? '—' }}</td>
-                <td><select wire:change="assignRole({{ $u->id }},$event.target.value)" @disabled($u->isSuperAdmin())>@foreach($roles->where('is_active',true) as $role)<option value="{{ $role->id }}" @selected($u->role_id===$role->id)>{{ $role->name }}</option>@endforeach</select></td>
-                <td><span class="tag">{{ str_replace('_',' ',$u->role?->default_scope ?? 'none') }}</span></td>
+                <td class="ft-inline-edit-shell" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                    <select x-model="draftValue" :disabled="status === 'saving'" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.assignRole({{ $u->id }}, Number(draftValue)))" @disabled($u->isSuperAdmin())>@foreach($roles->where('is_active',true) as $role)<option value="{{ $role->id }}">{{ $role->name }}</option>@endforeach</select>
+                    @unless($u->isSuperAdmin())<x-ui.inline-save-state compact />@endunless
+                </td>
+                <td><span class="tag" x-text="String(roleScopes[value] || 'none').replaceAll('_',' ')">{{ str_replace('_',' ',$u->role?->default_scope ?? 'none') }}</span></td>
                 <td>{{ $u->open_tasks_count }}</td>
                 <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $u->is_active?'b-green':'b-gray' }}">{{ $u->is_active?'Active':'Inactive' }}</span></button></td>
                 <td data-label="Actions"><div class="ft-user-row-actions"><button type="button" class="ghost" wire:click="openUser({{ $u->id }})">Edit</button><button type="button" class="ft-user-delete-btn" wire:click="deleteUser({{ $u->id }})" wire:confirm="Delete {{ addslashes($u->name) }}? Existing Job/Task history will be preserved, but this user account will be removed." @disabled($u->isSuperAdmin() || $u->id === auth()->id())>Delete</button></div></td>

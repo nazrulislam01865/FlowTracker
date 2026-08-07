@@ -57,13 +57,22 @@ class WorkflowService
                 return $template;
             }
 
+            // If every Workflow was deleted, the next Workflow created becomes
+            // the default automatically. This keeps the setup usable without forcing
+            // the user through a separate "Set Default" step.
+            $shouldBeDefault = !WorkflowTemplate::query()
+                ->where('workspace_id', $workspaceId)
+                ->where('is_default', true)
+                ->exists();
+            $isActive = $shouldBeDefault ? true : (bool) ($data['is_active'] ?? true);
+
             $legacyId = null;
             if (Schema::hasTable('workflows')) {
                 $legacy = Workflow::create([
                     'name' => trim($data['name']),
                     'slug' => Str::slug($data['name']).'-'.strtolower($code).'-'.Str::lower(Str::random(4)),
                     'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
-                    'is_active' => (bool) ($data['is_active'] ?? true),
+                    'is_active' => $isActive,
                 ]);
                 $legacyId = $legacy->id;
             }
@@ -74,8 +83,8 @@ class WorkflowService
                 'code' => $code,
                 'name' => trim($data['name']),
                 'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
-                'is_active' => (bool) ($data['is_active'] ?? true),
-                'is_default' => false,
+                'is_active' => $isActive,
+                'is_default' => $shouldBeDefault,
                 'version' => max(1, (int) ($data['version'] ?? 1)),
             ]);
         });
@@ -176,14 +185,21 @@ class WorkflowService
                     'job_number' => (string) ($jobNumbers->get($task->flow_job_id) ?? ''),
                 ]);
 
+        $hasOtherWorkflows = WorkflowTemplate::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->whereKeyNot($workflow->id)
+            ->exists();
+        $canDelete = !$workflow->is_default || !$hasOtherWorkflows;
+
         return [
             'id' => (int) $workflow->id,
             'name' => (string) $workflow->name,
             'is_default' => (bool) $workflow->is_default,
-            'can_delete' => !$workflow->is_default,
-            'blocked_reason' => $workflow->is_default
+            'can_delete' => $canDelete,
+            'blocked_reason' => !$canDelete
                 ? 'The default workflow is protected. Set another workflow as default first, then delete this one.'
                 : null,
+            'will_leave_no_default' => (bool) $workflow->is_default && !$hasOtherWorkflows,
             'phase_count' => $phases->count(),
             'phases' => $phases->take(8)->map(fn (WorkflowPhase $phase) => [
                 'id' => (int) $phase->id,
@@ -212,7 +228,10 @@ class WorkflowService
     {
         $this->assertManage();
         $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
-        if ($workflow->is_default) {
+        if ($workflow->is_default && WorkflowTemplate::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->whereKeyNot($workflow->id)
+            ->exists()) {
             throw ValidationException::withMessages([
                 'workflow' => 'The default workflow cannot be deleted. Set another workflow as default first.',
             ]);

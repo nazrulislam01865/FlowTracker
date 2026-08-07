@@ -1118,7 +1118,7 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-inline-field-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-planning-value{justify-content:flex-end}
 .ft-planning-value>span:not(.ft-planning-person){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-planning-person{display:inline-flex!important;align-items:center;gap:7px;min-width:0}
+.ft-planning-person{display:inline-flex;align-items:center;gap:7px;min-width:0}
 .ft-editable-description{position:relative}
 .ft-editable-description .ft-edit-display-row{justify-content:space-between;align-items:flex-start}
 .ft-editable-description textarea{
@@ -2412,3 +2412,45 @@ body:has(.ft-client-preview-backdrop){
 
 @media(max-width:1100px){.ft-branding-grid{grid-template-columns:1fr}.ft-system-logo{max-width:154px}}
 @media(max-width:700px){.ft-branding-card{padding:17px}.ft-branding-card-head{flex-direction:column;gap:9px}.ft-branding-preview{min-height:125px}.ft-branding-upload-row{align-items:stretch;flex-direction:column}.ft-branding-file-button,.ft-branding-upload-row .primary,.ft-branding-upload-row .danger-btn{width:100%}.ft-profile-save-copy{display:none}}
+
+/* Job overview description inline editor: use the full available card width. */
+.ft-overview-card .ft-editable-description{display:block;width:100%;min-width:0}
+.ft-overview-card .ft-editable-description .ft-inline-description-editor{width:100%;max-width:none;min-width:0}
+.ft-overview-card .ft-editable-description .ft-inline-description-editor textarea{display:block;width:100%;max-width:none;min-height:110px;box-sizing:border-box}
+
+
+/* Shared list-filter final sizing (2026-08-07). */
+.ft-list-filter-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; align-items: end; }
+.ft-jl-control-search { grid-column: auto !important; }
+.ft-remote-filter-menu { left: 0 !important; right: auto !important; width: 100% !important; min-width: 100% !important; max-width: 100% !important; }
+.ft-remote-filter-option > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ft-list-filter-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.ft-list-filter-actions .ft-board-group-controls { margin-left: 0; }
+@media (max-width: 720px) { .ft-list-filter-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important; } }
+@media (max-width: 480px) { .ft-list-filter-grid { grid-template-columns: 1fr !important; } .ft-remote-filter-menu { width: 100% !important; min-width: 100% !important; max-width: 100% !important; } }
+
+/* Remote-filter overflow hardening: trigger-width menu, vertical scroll only. */
+.ft-remote-filter-menu{
+  left:0!important;
+  right:auto!important;
+  width:100%!important;
+  min-width:0!important;
+  max-width:100%!important;
+  box-sizing:border-box;
+  display:flex;
+  flex-direction:column;
+  max-height:min(230px,40vh);
+  overflow:hidden;
+}
+.ft-remote-filter-search{flex:0 0 auto;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
+.ft-remote-filter-list{flex:1 1 auto;min-width:0;min-height:0;max-width:100%;max-height:none;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
+.ft-remote-filter-option{width:100%;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden}
+.ft-remote-filter-option>span:first-child{flex:1 1 0%;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-remote-filter-option>small{flex:0 1 42%;min-width:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-remote-filter-message{flex:0 0 auto;min-width:0;max-width:100%;overflow-wrap:anywhere}
+
+
+/* Shared list-filter action placement: do not let legacy board rules absolutely position
+   expand/collapse buttons over the page-header action. */
+.ft-list-active-row .ft-list-filter-actions .ft-board-group-controls{position:static!important;display:inline-flex!important;align-items:center!important;gap:7px!important;width:auto!important;margin:0!important;grid-column:auto!important;flex:0 0 auto!important}
+.ft-list-active-row .ft-list-filter-actions .ft-board-group-controls .ft-filter-collapse{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;margin:0!important;transform:none!important}

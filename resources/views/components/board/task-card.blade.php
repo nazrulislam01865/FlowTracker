@@ -34,12 +34,17 @@
 
     <div class="ft-task-assignee-row">
         <div class="ft-task-assignee"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="38" /><b>{{ $task->assignee?->name ?? 'Unassigned' }}</b></div>
-        <span class="ft-inline-date {{ $task->due_date?->isPast() && !$task->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
-            <button type="button" class="ft-inline-date-display" x-show="!editing" x-on:click.stop="editing=true; $nextTick(() => $refs.dateInput.showPicker ? $refs.dateInput.showPicker() : $refs.dateInput.focus())" title="Set due date">
+        <span
+            class="ft-inline-date ft-inline-edit-shell {{ $task->due_date?->isPast() && !$task->completed_at ? 'overdue' : '' }}"
+            x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j') ?? 'Set due date') })"
+            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+        >
+            <button type="button" class="ft-inline-date-display" x-show="!editing" :disabled="status === 'saving'" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.dateInput.showPicker ? $refs.dateInput.showPicker() : $refs.dateInput.focus())" title="Set due date">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>
-                <span>{{ $task->due_date?->format('M j') ?? 'Set due date' }}</span>
+                <span x-text="display">{{ $task->due_date?->format('M j') ?? 'Set due date' }}</span>
             </button>
-            <input x-ref="dateInput" x-show="editing" x-on:blur="editing=false" x-on:keydown.escape="editing=false" type="date" value="{{ $task->due_date?->format('Y-m-d') }}" wire:change="updateTaskDueDate({{ $task->id }}, $event.target.value)" aria-label="Task due date">
+            <input x-ref="dateInput" x-cloak x-show="editing" x-model="draftValue" x-on:blur="if (editing) cancelEdit()" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, formatDate($event.target.value, true), () => $wire.updateTaskDueDate({{ $task->id }}, draftValue))" type="date" aria-label="Task due date">
+            <x-ui.inline-save-state compact />
         </span>
     </div>
 

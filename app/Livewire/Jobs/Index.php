@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Jobs;
 
+use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\Document;
@@ -21,6 +22,7 @@ use App\Support\BoardLaneResolver;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Renderless;
 use Livewire\Attributes\Url;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -29,6 +31,7 @@ use Throwable;
 class Index extends Component
 {
     use UsesPagePlaceholder;
+    use HandlesInlineEdits;
     use WithPagination, WithFileUploads;
 
     public string $search = '';
@@ -40,7 +43,7 @@ class Index extends Component
     public string $invoice = '';
     public string $priorityFilter = '';
     public string $jobStatusFilter = '';
-    public string $quickFilter = 'all';
+    public string $sort = 'updated_desc';
     public bool $showMoreFilters = false;
     public int $perPage = 10;
     public array $selectedJobIds = [];
@@ -119,6 +122,84 @@ class Index extends Component
     {
         if ($this->showCreate) $this->setDefaultStartPhase();
     }
+
+    public function setCreateSelector(string $property, mixed $value): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+
+        $user = auth()->user();
+        $raw = trim((string) $value);
+        $options = app(\App\Services\FilterOptionService::class);
+
+        if (in_array($property, ['clientId', 'ownerId', 'workflowId'], true)) {
+            abort_unless($raw !== '' && ctype_digit($raw), 422, 'Please choose a valid option.');
+            $id = (int) $raw;
+            $type = match ($property) {
+                'clientId' => 'clients',
+                'ownerId' => 'users',
+                'workflowId' => 'workflows',
+            };
+
+            $valid = $options->options($user, $type, 'create-job', '', $id, 20)
+                ->contains(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
+            abort_unless($valid, 422, 'That option is no longer available.');
+
+            $this->{$property} = $id;
+            $this->resetValidation($property);
+
+            if ($property === 'workflowId') {
+                $this->setDefaultStartPhase();
+                $this->resetValidation('workflowPhaseId');
+            }
+
+            return;
+        }
+
+        if (preg_match('/^jobItems\.(\d+)\.(category|product)$/', $property, $matches) !== 1) {
+            abort(422, 'Unsupported Create Job selector.');
+        }
+
+        $index = (int) $matches[1];
+        $field = $matches[2];
+        abort_unless(array_key_exists($index, $this->jobItems), 422, 'That product row is no longer available.');
+        abort_unless($raw !== '', 422, 'Please choose a valid option.');
+
+        $category = $field === 'product' ? trim((string) ($this->jobItems[$index]['category'] ?? '')) : '';
+        $type = $field === 'category' ? 'product-categories' : 'products';
+        $valid = $options->options(
+            $user,
+            $type,
+            'create-job',
+            '',
+            $raw,
+            20,
+            $field === 'product' ? ['category' => $category] : [],
+        )->contains(fn ($item) => (string) ($item['id'] ?? '') === $raw);
+        abort_unless($valid, 422, 'That option is no longer available.');
+
+        $this->jobItems[$index][$field] = $raw;
+        $this->resetValidation("jobItems.$index.$field");
+
+        if ($field === 'category') {
+            // A Product is scoped to its category; changing the category must
+            // invalidate the previous Product before the next render.
+            $this->jobItems[$index]['product'] = '';
+            $this->resetValidation("jobItems.$index.product");
+        }
+    }
+
+    public function updatedJobItems(mixed $value, string $key): void
+    {
+        if (!$this->showCreate || !str_ends_with($key, '.category')) return;
+
+        $index = (int) str($key)->before('.')->toString();
+        if (!array_key_exists($index, $this->jobItems)) return;
+
+        // A product belongs to the selected category. Clear any stale product
+        // immediately so the remote selector cannot submit a value from the
+        // previous category.
+        $this->jobItems[$index]['product'] = '';
+    }
     public function updatedSearch(): void { $this->resetJobSelection(); }
     public function updatedPhase(): void { $this->resetJobSelection(); }
     public function updatedHealth(): void { $this->resetJobSelection(); }
@@ -128,18 +209,20 @@ class Index extends Component
     public function updatedInvoice(): void { $this->resetJobSelection(); }
     public function updatedPriorityFilter(): void { $this->resetJobSelection(); }
     public function updatedJobStatusFilter(): void { $this->resetJobSelection(); }
+    public function updatedSort(): void { $this->resetJobSelection(); }
 
     public function clearFilters(): void
     {
         $this->reset(['search','phase','health','client','owner','delivery','invoice','priorityFilter','jobStatusFilter']);
-        $this->quickFilter = 'all';
+        $this->sort = 'updated_desc';
         $this->resetJobSelection();
     }
 
-    public function setQuickFilter(string $filter): void
+    public function clearFilter(string $filter): void
     {
-        abort_unless(in_array($filter, ['all','attention','due_week','waiting','invoice','completed'], true), 422);
-        $this->quickFilter = $filter;
+        $allowed = ['search','phase','health','client','owner','delivery','invoice','priorityFilter','jobStatusFilter'];
+        abort_unless(in_array($filter, $allowed, true), 422);
+        $this->{$filter} = '';
         $this->resetJobSelection();
     }
 
@@ -362,71 +445,101 @@ class Index extends Component
         session()->flash('success', $draft ? 'Job draft saved.' : 'Job created and all configured Workflow Task Packs were loaded.');
     }
 
-    public function updateJobOwner(int $jobId, mixed $ownerId): void
+    #[Renderless]
+    public function updateJobOwner(int $jobId, mixed $ownerId): array
     {
-        abort_unless(auth()->user()->canModule('jobs','assign'), 403);
-        $ownerId = $ownerId === '' ? null : (int) $ownerId;
-        if ($ownerId) User::where('is_active', true)->findOrFail($ownerId);
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateOwner($job, $ownerId, auth()->user());
+        return $this->persistInlineEdit('Job owner', function () use ($jobId, $ownerId) {
+            abort_unless(auth()->user()->canModule('jobs','assign'), 403);
+            $ownerId = $ownerId === '' ? null : (int) $ownerId;
+            if ($ownerId) User::where('is_active', true)->findOrFail($ownerId);
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateOwner($job, $ownerId, auth()->user());
+        });
     }
 
-    public function updateJobCoordinator(int $jobId, mixed $coordinatorId): void
+    #[Renderless]
+    public function updateJobCoordinator(int $jobId, mixed $coordinatorId): array
     {
-        abort_unless(auth()->user()->canModule('jobs','assign'), 403);
-        $coordinatorId = $coordinatorId === '' ? null : (int) $coordinatorId;
-        if ($coordinatorId) User::where('is_active', true)->findOrFail($coordinatorId);
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateCoordinator($job, $coordinatorId, auth()->user());
+        return $this->persistInlineEdit('Job coordinator', function () use ($jobId, $coordinatorId) {
+            abort_unless(auth()->user()->canModule('jobs','assign'), 403);
+            $coordinatorId = $coordinatorId === '' ? null : (int) $coordinatorId;
+            if ($coordinatorId) User::where('is_active', true)->findOrFail($coordinatorId);
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateCoordinator($job, $coordinatorId, auth()->user());
+        });
     }
 
-    public function updateJobDeliveryDate(int $jobId, mixed $date): void
+    #[Renderless]
+    public function updateJobDeliveryDate(int $jobId, mixed $date): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $date = trim((string) $date);
-        if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateDeliveryDate($job, $date ?: null, auth()->user());
+        return $this->persistInlineEdit('delivery date', function () use ($jobId, $date) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $date = trim((string) $date);
+            if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateDeliveryDate($job, $date ?: null, auth()->user());
+        });
     }
 
-    public function updateJobPriority(int $jobId, mixed $priority): void
+    #[Renderless]
+    public function updateJobPriority(int $jobId, mixed $priority): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $priority = trim((string) $priority);
-        abort_if($priority === '', 422, 'Priority is required.');
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updatePriority($job, $priority, auth()->user());
+        return $this->persistInlineEdit('priority', function () use ($jobId, $priority) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $priority = trim((string) $priority);
+            abort_if($priority === '', 422, 'Priority is required.');
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updatePriority($job, $priority, auth()->user());
+        });
     }
 
-    public function updateJobHealth(int $jobId, mixed $health): void
+    #[Renderless]
+    public function updateJobHealth(int $jobId, mixed $health): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $health = trim((string) $health);
-        abort_if($health === '', 422, 'Health is required.');
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateHealth($job, $health, auth()->user());
+        return $this->persistInlineEdit('Job health', function () use ($jobId, $health) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $health = trim((string) $health);
+            abort_if($health === '', 422, 'Health is required.');
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateHealth($job, $health, auth()->user());
+        });
     }
 
-    public function updateJobTextField(int $jobId, string $field, mixed $value): void
+    #[Renderless]
+    public function updateJobTextField(int $jobId, string $field, mixed $value): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateTextField($job, $field, (string) $value, auth()->user());
+        $label = $field === 'title' ? 'Job name' : 'Job description';
+
+        return $this->persistInlineEdit($label, function () use ($jobId, $field, $value) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateTextField($job, $field, (string) $value, auth()->user());
+        });
     }
 
-    public function updateJobItem(int $itemId, string $field, mixed $value): void
+    #[Renderless]
+    public function updateJobItem(int $itemId, string $field, mixed $value): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        abort_unless($this->selectedJobId, 422);
-        if ($field === 'category_name') {
-            abort_unless(app(MasterDataService::class)->active('product_category')->contains('name', (string) $value), 422, 'Select a valid active product category.');
-        }
-        if ($field === 'product_name') {
-            abort_unless(app(MasterDataService::class)->active('product')->contains('name', (string) $value), 422, 'Select a valid active product.');
-        }
-        $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
-        $item = FlowJobItem::where('flow_job_id', $job->id)->findOrFail($itemId);
-        app(JobService::class)->updateItem($job, $item, $field, $value, auth()->user());
+        $label = match ($field) {
+            'category_name' => 'product category',
+            'product_name' => 'product',
+            'quantity' => 'quantity',
+            default => 'product detail',
+        };
+
+        return $this->persistInlineEdit($label, function () use ($itemId, $field, $value) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            abort_unless($this->selectedJobId, 422);
+            if ($field === 'category_name') {
+                abort_unless(app(MasterDataService::class)->active('product_category')->contains('name', (string) $value), 422, 'Select a valid active product category.');
+            }
+            if ($field === 'product_name') {
+                abort_unless(app(MasterDataService::class)->active('product')->contains('name', (string) $value), 422, 'Select a valid active product.');
+            }
+            $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+            $item = FlowJobItem::where('flow_job_id', $job->id)->findOrFail($itemId);
+            app(JobService::class)->updateItem($job, $item, $field, $value, auth()->user());
+        });
     }
 
     public function addJobItem(int $jobId): void
@@ -449,30 +562,30 @@ class Index extends Component
         app(JobService::class)->removeItem($job, $item, auth()->user());
     }
 
-    public function updateTaskAssigneeFromJob(int $taskId, mixed $assigneeId): void
+    #[Renderless]
+    public function updateTaskAssigneeFromJob(int $taskId, mixed $assigneeId): array
     {
-        abort_unless(auth()->user()->canModule('tasks','assign'), 403);
-        abort_unless($this->selectedJobId, 422);
-        $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
-        $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
-        if ($assigneeId) User::where('is_active', true)->findOrFail($assigneeId);
-        app(TaskService::class)->update($task, [
-            'status' => $task->status,
-            'assignee_id' => $assigneeId ?: $task->assignee_id,
-            'progress' => $task->progress,
-            'needs_attention' => $task->needs_attention,
-            'attention_reason' => $task->attention_reason,
-        ], auth()->user());
+        return $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId) {
+            abort_unless(auth()->user()->canModule('tasks','assign'), 403);
+            abort_unless($this->selectedJobId, 422);
+            $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+            $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
+            if ($assigneeId) User::where('is_active', true)->findOrFail($assigneeId);
+            app(TaskService::class)->updateDetailField($task, 'assignee_id', $assigneeId, auth()->user());
+        });
     }
 
-    public function updateTaskDueDateFromJob(int $taskId, mixed $date): void
+    #[Renderless]
+    public function updateTaskDueDateFromJob(int $taskId, mixed $date): array
     {
-        abort_unless(auth()->user()->canAccess('tasks.update') || auth()->user()->canAccess('jobs.update'), 403);
-        abort_unless($this->selectedJobId, 422);
-        $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
-        $date = trim((string) $date);
-        if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
-        app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+        return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
+            abort_unless(auth()->user()->canAccess('tasks.update') || auth()->user()->canAccess('jobs.update'), 403);
+            abort_unless($this->selectedJobId, 422);
+            $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+            $date = trim((string) $date);
+            if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
+            app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+        });
     }
 
     public function updatedJobDocumentUploads(): void
@@ -553,15 +666,18 @@ class Index extends Component
         $this->showDocumentPicker = !$this->showDocumentPicker;
     }
 
-    public function updateTaskStatusFromJob(int $taskId, mixed $status): void
+    #[Renderless]
+    public function updateTaskStatusFromJob(int $taskId, mixed $status): array
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
-        abort_unless($this->selectedJobId, 422);
-        $status = trim((string) $status);
-        abort_if($status === '', 422, 'Task status is required.');
+        return $this->persistInlineEdit('task status', function () use ($taskId, $status) {
+            abort_unless(auth()->user()->canAccess('tasks.update'), 403);
+            abort_unless($this->selectedJobId, 422);
+            $status = trim((string) $status);
+            abort_if($status === '', 422, 'Task status is required.');
 
-        $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
-        app(TaskService::class)->moveStatus($task, $status, auth()->user());
+            $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+            app(TaskService::class)->moveStatus($task, $status, auth()->user());
+        });
     }
 
     public function completePhase(): void
@@ -625,16 +741,31 @@ class Index extends Component
         $this->taskActivityPage = max(1, $page);
     }
 
-    public function updateSelectedTaskField(string $field, mixed $value): void
+    #[Renderless]
+    public function updateSelectedTaskField(string $field, mixed $value): array
     {
-        if ($field === 'assignee_id') abort_unless(auth()->user()->canModule('tasks','assign'), 403);
-        else abort_unless(auth()->user()->canAccess('tasks.update'), 403);
-        abort_unless($this->selectedTaskId, 422);
-        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
-        if ($field === 'assignee_id' && filled($value)) User::where('is_active', true)->findOrFail((int) $value);
-        if (in_array($field, ['start_date','due_date'], true) && filled($value)) validator(['date'=>$value], ['date'=>['date']])->validate();
-        app(TaskService::class)->updateDetailField($task, $field, $value, auth()->user());
-        $this->loadTaskForm($task->id);
+        $labels = [
+            'title' => 'task name',
+            'assignee_id' => 'task assignee',
+            'status' => 'task status',
+            'priority' => 'task priority',
+            'start_date' => 'task start date',
+            'due_date' => 'task due date',
+            'description' => 'task description',
+        ];
+
+        return $this->persistInlineEdit($labels[$field] ?? 'task field', function () use ($field, $value) {
+            if ($field === 'assignee_id') abort_unless(auth()->user()->canModule('tasks','assign'), 403);
+            else abort_unless(auth()->user()->canAccess('tasks.update'), 403);
+            abort_unless($this->selectedTaskId, 422);
+            $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
+            if ($field === 'assignee_id' && filled($value)) User::where('is_active', true)->findOrFail((int) $value);
+            if (in_array($field, ['start_date','due_date'], true) && filled($value)) validator(['date'=>$value], ['date'=>['date']])->validate();
+            $updated = app(TaskService::class)->updateDetailField($task, $field, $value, auth()->user());
+
+            if ($field === 'status') $this->taskStatus = (string) $updated->status;
+            if ($field === 'assignee_id') $this->taskAssigneeId = $updated->assignee_id ? (int) $updated->assignee_id : null;
+        });
     }
 
     public function addTaskChecklistItem(): void
@@ -919,31 +1050,52 @@ class Index extends Component
     private function createPageData(User $user): array
     {
         $master = app(MasterDataService::class);
-        $productOptionsNeeded = $this->createCatalogReady
-            && collect($this->jobItems)->contains(
-                fn ($item) => filled($item['category'] ?? null)
-            );
+        $options = app(\App\Services\FilterOptionService::class);
+
+        // Create Job is a separate render branch. Keep only the selected
+        // records needed to render dependent fields; large option lists are
+        // loaded by the shared remote selector only when the user opens them.
+        $clients = $this->clientId
+            ? app(ClientService::class)
+                ->visibleQuery($user)
+                ->where('is_active', true)
+                ->whereKey($this->clientId)
+                ->get(['id', 'name', 'contact_name'])
+            : collect();
+
+        $workflows = $this->createWorkflowReady && $this->workflowId
+            ? Workflow::query()
+                ->with('phases.taskPack.templates')
+                ->where('is_snapshot', false)
+                ->where('is_active', true)
+                ->whereKey($this->workflowId)
+                ->get()
+            : collect();
 
         return [
             'selectedJob' => null,
             'selectedTask' => null,
-            'clients' => app(ClientService::class)
-                ->visibleQuery($user)
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name', 'contact_name']),
-            'workflows' => $this->createWorkflowReady
-                ? Workflow::query()
-                    ->with('phases.taskPack.templates')
-                    ->where('is_snapshot', false)
-                    ->where('is_active', true)
-                    ->orderBy('name')
-                    ->get()
-                : collect(),
-            'users' => $this->createAssignmentReady ? $this->userOptions($user) : collect(),
-            'categories' => $this->createCatalogReady ? $master->active('product_category') : collect(),
-            'products' => $productOptionsNeeded ? $master->active('product') : collect(),
+            'clients' => $clients,
+            'workflows' => $workflows,
+            'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
+            'categoryFilterOptions' => $this->createCatalogReady
+                ? $options->options($user, 'product-categories', 'create-job', '', null, 6)
+                : collect(),
+            'clientFilterOptions' => $options->options(
+                $user,
+                'clients',
+                'create-job',
+                '',
+                $this->clientId,
+                6,
+            ),
+            'ownerFilterOptions' => $this->createAssignmentReady
+                ? $options->options($user, 'users', 'create-job', '', $this->ownerId, 6)
+                : collect(),
+            'workflowFilterOptions' => $this->createWorkflowReady
+                ? $options->options($user, 'workflows', 'create-job', '', $this->workflowId, 6)
+                : collect(),
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForCreate($user),
         ];
     }
@@ -1019,12 +1171,10 @@ class Index extends Component
             'selectedJob' => null,
             'selectedTask' => null,
             'jobs' => $jobs,
-            'jobSummary' => $service->summaryCounts($user),
-            'clients' => app(ClientService::class)
-                ->visibleQuery($user)
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            'clientFilterOptions' => app(\App\Services\FilterOptionService::class)
+                ->options($user, 'clients', 'jobs', '', $this->client !== '' ? (int) $this->client : null, 6),
+            'ownerFilterOptions' => app(\App\Services\FilterOptionService::class)
+                ->options($user, 'users', 'jobs', '', $this->owner !== '' ? (int) $this->owner : null, 6),
             'phases' => WorkflowPhase::whereNotNull('workflow_template_id')->where('is_active', true)->orderBy('sequence')->get(['id', 'name', 'short_name', 'sequence']),
             'users' => $this->userOptions($user),
             'priorities' => $master->active('priority'),
@@ -1067,7 +1217,7 @@ class Index extends Component
             'invoice' => $this->invoice,
             'priority' => $this->priorityFilter,
             'status' => $this->jobStatusFilter,
-            'quick' => $this->quickFilter,
+            'sort' => $this->sort,
         ];
     }
 

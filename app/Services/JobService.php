@@ -91,7 +91,14 @@ class JobService
 
     public function paginate(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
     {
-        return $this->filteredQuery($user, $filters)
+        $query = $this->filteredQuery($user, $filters)->reorder();
+        match ($filters['sort'] ?? 'updated_desc') {
+            'due_asc' => $query->orderByRaw('delivery_date is null, delivery_date asc')->orderByDesc('id'),
+            'priority_desc' => $query->orderByRaw("case priority when 'Urgent' then 4 when 'High' then 3 when 'Medium' then 2 when 'Normal' then 2 when 'Low' then 1 else 0 end desc")->orderByDesc('updated_at'),
+            default => $query->orderByDesc('updated_at')->orderByDesc('id'),
+        };
+
+        return $query
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number', 'flow_jobs.client_id',
                 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',

@@ -11,6 +11,9 @@
     @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-3">
+    <script src="/js/flowtrack-inline-editing.js?v=20260807-1"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260807-8"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -28,6 +31,7 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260807-8">
     @livewireStyles
 </head>
 <body>

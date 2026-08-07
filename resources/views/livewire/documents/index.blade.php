@@ -11,17 +11,29 @@
                 <button class="card" wire:click="$set('status','recent')"><span>Recently updated</span><b>{{ $metrics['recent'] }}</b><i>◴</i></button>
             </div>
 
-            <div class="ft-doc-filterbar">
-                <div class="ft-doc-search"><span>⌕</span><input wire:model.live.debounce.300ms="search" placeholder="Search file name, Job ID, client or task"></div>
-                <select wire:model.live="job"><option value="">Job</option>@foreach($jobs as $j)<option value="{{ $j->id }}">{{ $j->job_number }}</option>@endforeach</select>
-                <select wire:model.live="client"><option value="">Client</option>@foreach($clients as $c)<option value="{{ $c->id }}">{{ $c->name }}</option>@endforeach</select>
-                <select wire:model.live="phase"><option value="">Phase</option>@foreach($phases as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select>
-                <select wire:model.live="category"><option value="">Document type</option>@foreach($categories as $cat)<option>{{ $cat->name }}</option>@endforeach</select>
-                <select wire:model.live="status"><option value="">Status</option><option value="current">Current</option><option value="approved">Approved</option><option value="needs_action">Needs attention</option><option value="awaiting_approval">Awaiting approval</option><option value="recent">Recently updated</option></select>
-                <button class="ft-doc-clear" wire:click="clearFilters">Clear</button>
+            <div class="ft-list-filter-shell">
+                <div class="ft-list-filter-grid">
+                    <x-ui.list-search property="search" :value="$search" placeholder="File name, document number, Job or task…" />
+                    <x-ui.remote-filter label="Job" property="job" type="jobs" context="documents" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
+                    <x-ui.remote-filter label="Client" property="client" type="clients" context="documents" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
+                    <x-ui.select-filter label="Phase" property="phase" :value="$phase" placeholder="All phases" :options="$phases->map(fn($p) => ['id'=>(string)$p->id,'label'=>$p->name])" />
+                    <x-ui.select-filter label="Document type" property="category" :value="$category" placeholder="All types" :options="$categories->map(fn($cat) => ['id'=>$cat->name,'label'=>$cat->name])" />
+                    <x-ui.select-filter label="Status" property="status" :value="$status" placeholder="All statuses" :options="collect([['id'=>'current','label'=>'Current'],['id'=>'approved','label'=>'Approved'],['id'=>'needs_action','label'=>'Needs attention'],['id'=>'awaiting_approval','label'=>'Awaiting approval'],['id'=>'recent','label'=>'Recently updated']])" />
+                </div>
+                @php
+                    $chips = collect();
+                    if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                    if($job) $chips->push(['key'=>'job','label'=>'Job: '.(collect($jobFilterOptions)->firstWhere('id',(int)$job)['label'] ?? 'Selected')]);
+                    if($client) $chips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$client)['label'] ?? 'Selected')]);
+                    if($phase) $chips->push(['key'=>'phase','label'=>'Phase: '.($phases->firstWhere('id',(int)$phase)?->name ?? 'Selected')]);
+                    if($category) $chips->push(['key'=>'category','label'=>'Type: '.$category]);
+                    if($status) $chips->push(['key'=>'status','label'=>'Status: '.(['current'=>'Current','approved'=>'Approved','needs_action'=>'Needs attention','awaiting_approval'=>'Awaiting approval','recent'=>'Recently updated'][$status] ?? $status)]);
+                @endphp
+                <div class="ft-list-active-row">
+                    <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
+                    @if($chips->isNotEmpty())<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
+                </div>
             </div>
-            @if($search || $job || $client || $phase || $category || $status)<div class="ft-doc-active-filter"><span>Filtered files</span><button wire:click="clearFilters">×</button></div>@endif
-
             <div class="ft-doc-expand-row">
                 <div></div>
                 <div class="ft-group-toggle-actions" aria-label="Document group controls">
@@ -34,7 +46,7 @@
                 </div>
             </div>
 
-            <div class="card ft-doc-table-card">
+            <div class="card ft-doc-table-card ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,phase,category,status">
                 @forelse($grouped as $jobId=>$docs)
                     @php($first=$docs->first())
                     @php($expanded=$jobId==0 || in_array((int)$jobId,$expandedJobs,true))

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Board;
 
+use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Models\User;
 
@@ -11,12 +12,14 @@ use App\Services\MasterDataService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Throwable;
 
 class Index extends Component
 {
     use UsesPagePlaceholder;
+    use HandlesInlineEdits;
     public string $mode = 'jobs';
     public ?string $message = null;
 
@@ -27,7 +30,6 @@ class Index extends Component
     public string $assignee = '';
     public string $status = '';
     public string $due = '';
-    public string $quick = '';
     public string $sort = 'delivery';
     public bool $hideEmptyPhases = false;
     public bool $cardsReady = false;
@@ -47,16 +49,8 @@ class Index extends Component
         // A mode switch is already a Livewire request, so render the requested
         // board directly instead of adding a second follow-up request.
         $this->cardsReady = true;
-        $this->quick = '';
         $this->cardLimit = 60;
         $this->message = null;
-    }
-
-    public function setQuick(string $filter): void
-    {
-        $this->cardsReady = true;
-        $this->quick = $this->quick === $filter ? '' : $filter;
-        $this->cardLimit = 60;
     }
 
     public function clearFilters(): void
@@ -68,7 +62,14 @@ class Index extends Component
         $this->assignee = '';
         $this->status = '';
         $this->due = '';
-        $this->quick = '';
+        $this->cardLimit = 60;
+    }
+
+    public function clearFilter(string $filter): void
+    {
+        abort_unless(in_array($filter, ['search','job','client','assignee','status','due'], true), 422);
+        $this->{$filter} = '';
+        $this->cardsReady = true;
         $this->cardLimit = 60;
     }
 
@@ -150,18 +151,24 @@ class Index extends Component
         $this->message = 'Board updated successfully.';
     }
 
-    public function updateTaskDueDate(int $taskId, ?string $date): void
+    #[Renderless]
+    public function updateTaskDueDate(int $taskId, ?string $date): array
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
-        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($taskId);
-        app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+        return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
+            abort_unless(auth()->user()->canAccess('tasks.update'), 403);
+            $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($taskId);
+            app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+        });
     }
 
-    public function updateJobDueDate(int $jobId, ?string $date): void
+    #[Renderless]
+    public function updateJobDueDate(int $jobId, ?string $date): array
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        app(JobService::class)->updateDeliveryDate($job, $date ?: null, auth()->user());
+        return $this->persistInlineEdit('Job delivery date', function () use ($jobId, $date) {
+            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateDeliveryDate($job, $date ?: null, auth()->user());
+        });
     }
 
     public function moveJob(int $jobId, int $phaseId): void
@@ -186,7 +193,6 @@ class Index extends Component
             'assignee' => $this->assignee,
             'status' => $this->status,
             'due' => $this->due,
-            'quick' => $this->quick,
             'sort' => $this->sort,
         ];
     }
@@ -200,7 +206,6 @@ class Index extends Component
             'assignee' => $this->assignee,
             'status' => $this->status,
             'due' => $this->due,
-            'quick' => $this->quick,
         ];
     }
 
@@ -214,39 +219,33 @@ class Index extends Component
     {
         $user = auth()->user();
         $service = app(BoardService::class);
-        $lookups = $service->lookups($user, $this->mode === 'jobs');
 
         $data = $this->mode === 'jobs'
-            ? $this->jobBoardData($user, $service, $lookups)
-            : $this->taskBoardData($user, $service, $lookups);
+            ? $this->jobBoardData($user, $service)
+            : $this->taskBoardData($user, $service);
 
         return view('livewire.board.index', $data);
     }
 
-    private function boardBaseData(User $user, array $lookups): array
+    private function boardBaseData(User $user): array
     {
         return [
             'jobs' => collect(),
             'tasks' => collect(),
             'phases' => collect(),
-            'jobCounts' => ['all'=>0,'mine'=>0,'overdue'=>0,'week'=>0,'blocked'=>0,'waiting'=>0,'unassigned'=>0],
-            'taskCounts' => ['open'=>0,'mine'=>0,'overdue'=>0,'week'=>0,'blocked'=>0,'waiting'=>0,'unassigned'=>0,'completed'=>0],
-            'clients' => $lookups['clients'],
-            'users' => $lookups['users'],
+            'jobFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 6),
+            'clientFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 6),
+            'assigneeFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 6),
             'workflows' => collect(),
-            'taskJobs' => app(JobService::class)->activeQuery($user)
-                ->orderBy('job_number')
-                ->limit(250)
-                ->get(['id', 'job_number', 'title']),
             'jobStatuses' => collect(),
             'taskStatuses' => collect(),
             'hasMoreCards' => false,
         ];
     }
 
-    private function jobBoardData(User $user, BoardService $service, array $lookups): array
+    private function jobBoardData(User $user, BoardService $service): array
     {
-        $data = $this->boardBaseData($user, $lookups);
+        $data = $this->boardBaseData($user);
         $filters = $this->jobFilters();
         $jobRows = $this->cardsReady
             ? $service->jobs($user, $filters, $this->cardLimit + 1)
@@ -255,8 +254,7 @@ class Index extends Component
         $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
         $data['jobs'] = $jobRows->take($this->cardLimit)->values();
         $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
-        $data['jobCounts'] = $service->jobCounts($user, $filters);
-        $data['workflows'] = $lookups['workflows'];
+        $data['workflows'] = $service->workflowOptions();
         $data['jobStatuses'] = app(JobService::class)
             ->visibleQuery($user)
             ->whereNotNull('status')
@@ -269,9 +267,9 @@ class Index extends Component
         return $data;
     }
 
-    private function taskBoardData(User $user, BoardService $service, array $lookups): array
+    private function taskBoardData(User $user, BoardService $service): array
     {
-        $data = $this->boardBaseData($user, $lookups);
+        $data = $this->boardBaseData($user);
         $filters = $this->taskFilters();
         $taskRows = $this->cardsReady
             ? $service->tasks($user, $filters, $this->cardLimit + 1)
@@ -279,7 +277,6 @@ class Index extends Component
 
         $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
         $data['tasks'] = $taskRows->take($this->cardLimit)->values();
-        $data['taskCounts'] = $service->taskCounts($user, $filters);
         $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
             app(MasterDataService::class)->active('task_status')->pluck('name')
         ));

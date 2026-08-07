@@ -19,12 +19,13 @@ class DocumentService
             ->when($filters['search'] ?? null, fn ($q, $search) => $q->where(fn ($x) => $x
                 ->where('name', 'like', "%{$search}%")
                 ->orWhere('document_number', 'like', "%{$search}%")
-                ->orWhereHas('job', fn ($j) => $j->where('job_number', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%"))
+                ->orWhereHas('job', fn ($j) => $j->where('job_number', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%")->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%")))
+                ->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%"))
                 ->orWhereHas('task', fn ($t) => $t->where('title', 'like', "%{$search}%"))))
             ->when($filters['category'] ?? null, fn ($q, $value) => $q->where('category', $value))
             ->when($filters['client'] ?? null, fn ($q, $value) => $q->where('client_id', $value))
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->where('flow_job_id', $value))
-            ->when($filters['phase'] ?? null, fn ($q, $value) => $q->whereHas('task', fn ($t) => $t->where('workflow_phase_id', $value)))
+            ->when($filters['phase'] ?? null, fn ($q, $value) => $q->whereHas('task.phase', fn ($phase) => $phase->where(fn ($x) => $x->where('workflow_phases.id', $value)->orWhere('workflow_phases.source_workflow_phase_id', $value))))
             ->when($filters['status'] ?? null, function ($q, $value) {
                 match ($value) {
                     'approved' => $q->where('is_final', true),

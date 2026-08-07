@@ -1,0 +1,73 @@
+/* Shared optimistic inline-edit states. Loaded directly so the feature does not
+   depend on a frontend rebuild during deployment. */
+.ft-inline-edit-shell{position:relative;min-width:0}
+.ft-inline-edit-shell.is-inline-saving{cursor:progress}
+.ft-inline-edit-shell.is-inline-saving .ft-inline-edit-button{opacity:.45;pointer-events:none}
+.ft-inline-edit-shell.is-inline-error{border-color:#efb5b0!important}
+.ft-inline-save-state{display:inline-flex;align-items:center;gap:5px;min-height:18px;margin-left:6px;color:#708096;font-size:9px;font-weight:750;white-space:nowrap;vertical-align:middle}
+.ft-inline-save-state:before{content:none;width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.75}
+.ft-inline-save-state.is-saving:before,.ft-inline-save-state.is-saved:before,.ft-inline-save-state.is-error:before{content:""}
+.ft-inline-save-state.is-saving{color:#a56508}
+.ft-inline-save-state.is-saving:before{animation:ft-inline-pulse .8s ease-in-out infinite alternate}
+.ft-inline-save-state.is-saved{color:#0d7a49}
+.ft-inline-save-state.is-error{color:#c1342c}
+.ft-inline-save-state button{border:0;background:transparent;color:#c1342c;font:inherit;font-weight:800;padding:0;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.ft-inline-save-state.compact{font-size:8px;margin-left:4px}
+.ft-inline-save-state.compact:before{width:5px;height:5px}
+.ft-inline-person-live{display:inline-flex;align-items:center;gap:7px;min-width:0}
+.ft-inline-person-live>.avatar,.ft-inline-person-live>.ft-inline-generated-avatar{flex:0 0 auto}
+.ft-inline-generated-avatar{width:24px;height:24px;border-radius:50%;display:inline-grid;place-items:center;background:#1767e8;color:#fff;font-size:9px;font-weight:800}
+.ft-inline-global-sync{position:fixed;right:24px;top:76px;z-index:180;display:inline-flex;align-items:center;gap:8px;min-height:36px;padding:0 12px;border:1px solid #d7e2ee;border-radius:10px;background:rgba(255,255,255,.96);box-shadow:0 10px 28px rgba(15,35,65,.12);color:#60728a;font-size:11px;font-weight:750;backdrop-filter:blur(10px)}
+.ft-inline-global-sync[hidden]{display:none!important}
+.ft-inline-global-dot{width:8px;height:8px;border-radius:50%;background:#15803d}
+.ft-inline-global-sync.is-saving .ft-inline-global-dot{background:#d18a16;animation:ft-inline-pulse .8s ease-in-out infinite alternate}
+.ft-inline-global-sync.is-error .ft-inline-global-dot{background:#d3342b}
+.ft-inline-global-sync.is-error{border-color:#f0c3bf;color:#a72d27}
+.ft-inline-toast-region{position:fixed;right:24px;top:122px;z-index:181;width:min(390px,calc(100vw - 32px));display:grid;gap:8px;pointer-events:none}
+.ft-inline-toast{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:11px 12px;border:1px solid #e9aaa5;border-radius:10px;background:#fff5f4;box-shadow:0 14px 34px rgba(15,35,65,.16);color:#76231f;pointer-events:auto}
+.ft-inline-toast-copy{display:grid;gap:2px;min-width:0}.ft-inline-toast-copy strong{font-size:11px}.ft-inline-toast-copy span{font-size:10px;line-height:1.35;color:#8b4642}
+.ft-inline-toast-actions{display:flex;align-items:center;gap:4px;flex:0 0 auto}.ft-inline-toast-actions button{border:0;background:transparent;color:#165fd7;font-size:10px;font-weight:800;padding:5px;cursor:pointer}.ft-inline-toast-actions .ft-inline-toast-close{color:#7b5d5a;font-size:17px;line-height:1}
+@keyframes ft-inline-pulse{to{opacity:.3}}
+@media(prefers-reduced-motion:reduce){.ft-inline-save-state.is-saving:before,.ft-inline-global-sync.is-saving .ft-inline-global-dot{animation:none}}
+@media(max-width:760px){.ft-inline-global-sync{right:14px;top:68px}.ft-inline-toast-region{right:14px;top:112px;width:calc(100vw - 28px)}.ft-inline-save-state{font-size:8px}}
+
+/* Job details planning card: person fields use the same one-control-at-a-time
+   inline-edit behavior as Priority and Required delivery. */
+.ft-planning-person-value{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-planning-person-value>span:last-child{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-planning-inline-select{
+    width:min(210px,100%);
+    min-width:0;
+    height:34px;
+    border:1px solid #8fb5fb;
+    border-radius:8px;
+    background:#fff;
+    color:#10233e;
+    padding:0 30px 0 10px;
+    outline:0;
+    font:inherit;
+    font-weight:750;
+    box-shadow:0 0 0 2px rgba(23,103,232,.08);
+}
+.ft-planning-inline-select:focus{border-color:#4f8cf7;box-shadow:0 0 0 3px rgba(23,103,232,.12)}
+
+/* Job overview description: the legacy editable-copy wrapper is flex-based,
+   which allowed the textarea editor to shrink to its content width. Keep this
+   one inline editor full-width while preserving the shared save/retry states. */
+.ft-overview-card .ft-editable-description{
+    display:block;
+    width:100%;
+    min-width:0;
+}
+.ft-overview-card .ft-editable-description .ft-inline-description-editor{
+    width:100%;
+    max-width:none;
+    min-width:0;
+}
+.ft-overview-card .ft-editable-description .ft-inline-description-editor textarea{
+    display:block;
+    width:100%;
+    max-width:none;
+    min-height:110px;
+    box-sizing:border-box;
+}

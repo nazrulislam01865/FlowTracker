@@ -122,11 +122,16 @@
         <div class="ft-job-footer-cell">
             <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/><path d="M8 14h.01M12 14h.01M16 14h.01M8 18h.01M12 18h.01"/></svg>
             <div><span>Delivery</span>
-                <span class="ft-inline-date ft-job-inline-date {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
-                    <span class="ft-inline-date-display" x-show="!editing"><b>{{ $job->delivery_date?->format('M j') ?? 'Set due date' }}</b></span>
+                <span
+                    class="ft-inline-date ft-job-inline-date ft-inline-edit-shell {{ $job->delivery_date?->isPast() && !$job->completed_at ? 'overdue' : '' }}"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'Job delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set due date') })"
+                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                >
+                    <span class="ft-inline-date-display" x-show="!editing"><b x-text="display">{{ $job->delivery_date?->format('M j') ?? 'Set due date' }}</b></span>
                     @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                        <button x-show="!editing" type="button" class="ft-inline-edit-button compact" aria-label="Edit delivery date" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.jobDate.showPicker ? $refs.jobDate.showPicker() : $refs.jobDate.focus())">✎</button>
-                        <input x-ref="jobDate" x-show="editing" x-on:blur="editing=false" x-on:keydown.escape="editing=false" type="date" value="{{ $job->delivery_date?->format('Y-m-d') }}" wire:change="updateJobDueDate({{ $job->id }}, $event.target.value)" aria-label="Job delivery date">
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button compact" aria-label="Edit delivery date" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.jobDate.showPicker ? $refs.jobDate.showPicker() : $refs.jobDate.focus())">✎</button>
+                        <input x-ref="jobDate" x-cloak x-show="editing" x-model="draftValue" x-on:blur="if (editing) cancelEdit()" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, formatDate($event.target.value, true), () => $wire.updateJobDueDate({{ $job->id }}, draftValue))" type="date" aria-label="Job delivery date">
+                        <x-ui.inline-save-state compact />
                     @endif
                 </span>
             </div>

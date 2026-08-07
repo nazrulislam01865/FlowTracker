@@ -325,12 +325,26 @@ class NotificationService
 
     private function runAfterCommit(callable $callback): void
     {
+        // Notifications are a side effect, never part of the user's core save.
+        // A notification/database fan-out problem after a successful commit must
+        // not turn an inline edit into a false failure and make the UI roll back.
+        $safeCallback = static function () use ($callback): void {
+            try {
+                $callback();
+            } catch (\Throwable $exception) {
+                Log::warning('Post-commit notification work failed.', [
+                    'error' => $exception->getMessage(),
+                    'exception' => $exception::class,
+                ]);
+            }
+        };
+
         if (DB::transactionLevel() > 0) {
-            DB::afterCommit($callback);
+            DB::afterCommit($safeCallback);
             return;
         }
 
-        $callback();
+        $safeCallback();
     }
 
     private function administratorIds(): Collection

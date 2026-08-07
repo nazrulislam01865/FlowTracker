@@ -20,18 +20,29 @@
     <div class="ft-overview-top-grid">
         <section class="ft-detail-card ft-overview-card">
             <h2>Job overview</h2>
-            <div class="ft-editable-copy ft-editable-description" x-data="{ editing:false }">
+            <div
+                class="ft-editable-copy ft-editable-description ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-description'), label: 'Job description', value: @js($job->description ?? ''), display: @js($job->description ?: 'No job description recorded.') })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
                 <div class="ft-edit-display-row" x-show="!editing">
-                    <span>@if($job->description)<x-ui.mention-text :text="$job->description" />@else No job description recorded. @endif</span>
+                    <span>
+                        <span x-show="String(value) === String(serverValue)">@if($job->description)<x-ui.mention-text :text="$job->description" />@else No job description recorded. @endif</span>
+                        <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
+                    </span>
                     @if($canEditJob)
-                        <button type="button" class="ft-inline-edit-button" aria-label="Edit job description" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
+                        <button type="button" :disabled="status === 'saving'" class="ft-inline-edit-button" aria-label="Edit job description" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
                     @endif
                 </div>
                 @if($canEditJob)
-                    <textarea x-ref="descriptionEditor" x-show="editing" rows="3" class="ft-mention-input" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}"
-                        x-on:keydown.escape="editing=false"
-                        x-on:blur="editing=false"
-                        wire:change="updateJobTextField({{ $job->id }}, 'description', $event.target.value)">{{ $job->description }}</textarea>
+                    <div x-cloak x-show="editing" class="ft-inline-description-editor">
+                        <textarea x-ref="descriptionEditor" x-model="draftValue" rows="3" class="ft-mention-input" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" x-on:keydown.escape.prevent="cancelEdit()"></textarea>
+                        <div>
+                            <button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button>
+                            <button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No job description recorded.', () => $wire.updateJobTextField({{ $job->id }}, 'description', draftValue))">Save</button>
+                        </div>
+                    </div>
+                    <x-ui.inline-save-state />
                 @endif
             </div>
             <div class="ft-card-section-head"><b>Products &amp; quantities</b><span>{{ $productRows->count() }} product · {{ number_format($productRows->sum('quantity')) }} total units</span></div>
@@ -42,17 +53,21 @@
                     <tr wire:key="job-item-{{ $item->id ?? $loop->index }}">
                         <td>
                             @if($item->id)
-                                <div class="ft-inline-field-editor" x-data="{ editing:false }">
-                                    <span class="ft-inline-field-value" x-show="!editing">{{ $item->category_name ?: 'Uncategorised' }}</span>
+                                <div
+                                    class="ft-inline-field-editor ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($item->category_name ?: 'Uncategorised') })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $item->category_name ?: 'Uncategorised' }}</span>
                                     @if($canEditJob)
-                                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="editing=true; $nextTick(() => $refs.categorySelect.focus())">✎</button>
-                                        <select x-ref="categorySelect" x-show="editing" class="ft-inline-cell-input product"
-                                            x-on:keydown.escape="editing=false"
-                                            x-on:blur="editing=false"
-                                            x-on:change="editing=false"
-                                            wire:change="updateJobItem({{ $item->id }}, 'category_name', $event.target.value)">
-                                            @foreach($categories as $category)<option value="{{ $category->name }}" @selected($item->category_name===$category->name)>{{ $category->name }}</option>@endforeach
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.categorySelect.focus())">✎</button>
+                                        <select x-ref="categorySelect" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input product"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
+                                            x-on:blur="if (editing) cancelEdit()"
+                                            x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobItem({{ $item->id }}, 'category_name', draftValue))">
+                                            @foreach($categories as $category)<option value="{{ $category->name }}">{{ $category->name }}</option>@endforeach
                                         </select>
+                                        <x-ui.inline-save-state compact />
                                     @endif
                                 </div>
                             @else
@@ -61,17 +76,21 @@
                         </td>
                         <td>
                             @if($item->id)
-                                <div class="ft-inline-field-editor" x-data="{ editing:false }">
-                                    <span class="ft-inline-field-value" x-show="!editing">{{ $item->product_name }}</span>
+                                <div
+                                    class="ft-inline-field-editor ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name), display: @js($item->product_name) })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $item->product_name }}</span>
                                     @if($canEditJob)
-                                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.productInput.focus())">✎</button>
-                                        <select x-ref="productInput" x-show="editing" class="ft-inline-cell-input product"
-                                            x-on:keydown.escape="editing=false"
-                                            x-on:blur="editing=false"
-                                            x-on:change="editing=false"
-                                            wire:change="updateJobItem({{ $item->id }}, 'product_name', $event.target.value)">
-                                            @foreach($products as $product)<option value="{{ $product->name }}" @selected($item->product_name===$product->name)>{{ $product->name }}</option>@endforeach
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.productInput.focus())">✎</button>
+                                        <select x-ref="productInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input product"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
+                                            x-on:blur="if (editing) cancelEdit()"
+                                            x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobItem({{ $item->id }}, 'product_name', draftValue))">
+                                            @foreach($products as $product)<option value="{{ $product->name }}">{{ $product->name }}</option>@endforeach
                                         </select>
+                                        <x-ui.inline-save-state compact />
                                     @endif
                                 </div>
                             @else
@@ -80,15 +99,19 @@
                         </td>
                         <td>
                             @if($item->id)
-                                <div class="ft-inline-field-editor" x-data="{ editing:false }">
-                                    <span class="ft-inline-field-value" x-show="!editing">{{ number_format((int)$item->quantity) }}</span>
+                                <div
+                                    class="ft-inline-field-editor ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ number_format((int)$item->quantity) }}</span>
                                     @if($canEditJob)
-                                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit quantity" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.quantityInput.focus())">✎</button>
-                                        <input x-ref="quantityInput" x-show="editing" class="ft-inline-cell-input quantity" type="number" min="1" value="{{ (int)$item->quantity }}"
-                                            x-on:keydown.escape="editing=false"
-                                            x-on:keydown.enter="$event.target.blur()"
-                                            x-on:blur="editing=false"
-                                            wire:change="updateJobItem({{ $item->id }}, 'quantity', $event.target.value)">
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit quantity" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.quantityInput.focus())">✎</button>
+                                        <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
+                                            x-on:keydown.enter.prevent="$event.target.blur()"
+                                            x-on:blur="if (editing) { const next = positiveInteger(draftValue); next === value ? cancelEdit() : commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)) }">
+                                        <x-ui.inline-save-state compact />
                                     @endif
                                 </div>
                             @else
@@ -106,54 +129,82 @@
 
         <aside class="ft-detail-card ft-side-panel ft-planning-panel">
             <h2>Planning &amp; ownership</h2>
-            <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
+            <div
+                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j, Y') ?? 'Not set') })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
                 <span>Required delivery</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing">{{ $job->delivery_date?->format('M j, Y') ?? 'Not set' }}</span>
+                    <span x-show="!editing" x-text="display">{{ $job->delivery_date?->format('M j, Y') ?? 'Not set' }}</span>
                     @if($canEditJob)
-                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit required delivery" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.deliveryInput.showPicker ? $refs.deliveryInput.showPicker() : $refs.deliveryInput.focus())">✎</button>
-                        <input x-ref="deliveryInput" x-show="editing" type="date" value="{{ $job->delivery_date?->format('Y-m-d') }}"
-                            x-on:keydown.escape="editing=false"
-                            x-on:blur="editing=false"
-                            wire:change="updateJobDeliveryDate({{ $job->id }}, $event.target.value)">
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit required delivery" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.deliveryInput.showPicker ? $refs.deliveryInput.showPicker() : $refs.deliveryInput.focus())">✎</button>
+                        <input x-ref="deliveryInput" x-cloak x-show="editing" x-model="draftValue" type="date"
+                            x-on:keydown.escape.prevent="cancelEdit()"
+                            x-on:blur="if (editing) cancelEdit()"
+                            x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateJobDeliveryDate({{ $job->id }}, draftValue))">
+                        <x-ui.inline-save-state compact />
                     @endif
                 </b>
             </div>
-            <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
+            <div
+                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-priority'), label: 'priority', value: @js($job->priority), display: @js($job->priority) })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
                 <span>Priority</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing">{{ $job->priority }}</span>
+                    <span x-show="!editing" x-text="display">{{ $job->priority }}</span>
                     @if($canEditJob)
-                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit priority" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.prioritySelect.focus())">✎</button>
-                        <select x-ref="prioritySelect" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateJobPriority({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
-                            @foreach($priorities as $priority)<option value="{{ $priority->name }}" @selected($job->priority===$priority->name)>{{ $priority->name }}</option>@endforeach
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit priority" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.prioritySelect.focus())">✎</button>
+                        <select x-ref="prioritySelect" x-cloak x-show="editing" x-model="draftValue" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobPriority({{ $job->id }}, draftValue))">
+                            @foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach
                         </select>
+                        <x-ui.inline-save-state compact />
                     @endif
                 </b>
             </div>
-            <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
+            <div
+                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Job owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
                 <span>Job owner</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="24"/>{{ $job->owner?->name ?? 'Unassigned' }}</span>
+                    <span x-show="!editing" class="ft-inline-person-live ft-planning-person-value">
+                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="24"/></span>
+                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                        <span x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
+                    </span>
                     @if($canAssignJob)
-                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>
-                        <select x-ref="ownerSelect" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateJobOwner({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.ownerSelect.focus())">✎</button>
+                        <select x-ref="ownerSelect" x-cloak x-show="editing" x-model="draftValue" class="ft-planning-inline-select" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobOwner({{ $job->id }}, draftValue))">
                             <option value="">Unassigned</option>
-                            @foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$job->owner_id===(int)$user->id)>{{ $user->name }}</option>@endforeach
+                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
                         </select>
+                        <x-ui.inline-save-state compact />
                     @endif
                 </b>
             </div>
-            <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
+            <div
+                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-coordinator'), label: 'Job coordinator', value: @js($job->coordinator_id ?? ''), display: @js($job->coordinator?->name ?? 'Unassigned') })"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+            >
                 <span>Coordinator</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/>{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
+                    <span x-show="!editing" class="ft-inline-person-live ft-planning-person-value">
+                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/></span>
+                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                        <span x-text="display">{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
+                    </span>
                     @if($canAssignJob)
-                        <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit coordinator" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.coordinatorSelect.focus())">✎</button>
-                        <select x-ref="coordinatorSelect" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateJobCoordinator({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit coordinator" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.coordinatorSelect.focus())">✎</button>
+                        <select x-ref="coordinatorSelect" x-cloak x-show="editing" x-model="draftValue" class="ft-planning-inline-select" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobCoordinator({{ $job->id }}, draftValue))">
                             <option value="">Unassigned</option>
-                            @foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$job->coordinator_id===(int)$user->id)>{{ $user->name }}</option>@endforeach
+                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
                         </select>
+                        <x-ui.inline-save-state compact />
                     @endif
                 </b>
             </div>
@@ -211,25 +262,55 @@
                             <div class="ft-phase-task-line ft-editable-task-line" wire:key="job-task-{{ $task->id }}">
                                 <span>{{ $phase->sequence }}.{{ $loop->iteration }}</span>
                                 <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
-                                <span class="ft-task-inline-editor" x-data="{ editing:false }">
-                                    <span x-show="!editing" class="ft-task-inline-display"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/>{{ $task->assignee?->name ?? 'Unassigned' }}</span>
+                                <span
+                                    class="ft-task-inline-editor ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span x-show="!editing" class="ft-task-inline-display ft-inline-person-live">
+                                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/></span>
+                                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                                        <span x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
+                                    </span>
                                     @if($canAssignTask)
-                                        <button x-show="!editing" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="editing=true; $nextTick(() => $refs.taskAssignee.focus())">✎</button>
-                                        <select x-ref="taskAssignee" x-show="editing" class="ft-task-inline-input" x-on:keydown.escape="editing=false" x-on:blur="editing=false" x-on:change="editing=false" wire:change="updateTaskAssigneeFromJob({{ $task->id }}, $event.target.value)">
-                                            @foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$task->assignee_id===(int)$user->id)>{{ $user->name }}</option>@endforeach
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskAssignee.focus())">✎</button>
+                                        <select x-ref="taskAssignee" x-cloak x-show="editing" x-model="draftValue" class="ft-task-inline-input"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
+                                            x-on:blur="if (editing) cancelEdit()"
+                                            x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue))">
+                                            <option value="">Unassigned</option>
+                                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
                                         </select>
+                                        <x-ui.inline-save-state compact />
                                     @endif
                                 </span>
-                                <span class="ft-task-inline-editor" x-data="{ editing:false }">
-                                    <span x-show="!editing" class="ft-task-inline-display {{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
+                                <span
+                                    class="ft-task-inline-editor ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j, Y') ?? 'Set due date') })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span x-show="!editing" x-text="display" class="ft-task-inline-display {{ $task->due_date?->isPast() && !$task->completed_at ? 'danger-text' : '' }}">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
                                     @if($canEditTask)
-                                        <button x-show="!editing" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="editing=true; $nextTick(() => $refs.taskDue.showPicker ? $refs.taskDue.showPicker() : $refs.taskDue.focus())">✎</button>
-                                        <input x-ref="taskDue" x-show="editing" class="ft-task-inline-input" type="date" value="{{ $task->due_date?->format('Y-m-d') }}" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateTaskDueDateFromJob({{ $task->id }}, $event.target.value)">
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskDue.showPicker ? $refs.taskDue.showPicker() : $refs.taskDue.focus())">✎</button>
+                                        <input x-ref="taskDue" x-cloak x-show="editing" x-model="draftValue" class="ft-task-inline-input" type="date"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
+                                            x-on:blur="if (editing) cancelEdit()"
+                                            x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob({{ $task->id }}, draftValue))">
+                                        <x-ui.inline-save-state compact />
                                     @endif
                                 </span>
-                                <select class="ft-inline-task-status {{ \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" wire:change="updateTaskStatusFromJob({{ $task->id }}, $event.target.value)" @disabled(!$canEditTask)>
-                                    @foreach($taskStatuses as $status)<option value="{{ $status }}" @selected($task->status===$status)>{{ $status }}</option>@endforeach
-                                </select>
+                                <span
+                                    class="ft-task-inline-status-shell ft-inline-edit-shell"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <select class="ft-inline-task-status {{ \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" x-model="draftValue"
+                                        x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue))"
+                                        :disabled="status === 'saving'" @disabled(!$canEditTask)>
+                                        @foreach($taskStatuses as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
+                                    </select>
+                                    @if($canEditTask)<x-ui.inline-save-state compact />@endif
+                                </span>
                                 <button class="ft-table-kebab" type="button" wire:click="openTask({{ $task->id }})">•••</button>
                             </div>
                         @empty

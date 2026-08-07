@@ -170,6 +170,66 @@ class SafeSetupDeletionTest extends TestCase
         $this->assertSame($preservedJob->workflow_phase_id, $preservedTask->workflow_phase_id);
     }
 
+
+    public function test_last_default_workflow_can_be_deleted_and_leave_setup_empty(): void
+    {
+        $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
+        [$legacy, $template] = $this->workflowPair('WF-LAST', 'Last Workflow', true);
+        $this->phase($legacy, $template, 1, 'Only Phase', null, true);
+
+        $service = app(WorkflowService::class);
+        $impact = $service->workflowDeleteImpact($template->id);
+
+        $this->assertTrue($impact['can_delete']);
+        $this->assertTrue($impact['will_leave_no_default']);
+        $this->assertNull($impact['blocked_reason']);
+
+        $service->deleteWorkflow($template->id);
+
+        $this->assertDatabaseMissing('workflow_templates', ['id' => $template->id]);
+        $this->assertDatabaseMissing('workflows', ['id' => $legacy->id]);
+        $this->assertSame(0, WorkflowTemplate::query()->count());
+    }
+
+    public function test_default_workflow_stays_protected_when_another_workflow_exists(): void
+    {
+        $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
+        [, $templateA] = $this->workflowPair('WF-DEFAULT-A', 'Default A', true);
+        $this->workflowPair('WF-DEFAULT-B', 'Other Workflow', false);
+
+        $service = app(WorkflowService::class);
+        $impact = $service->workflowDeleteImpact($templateA->id);
+
+        $this->assertFalse($impact['can_delete']);
+        $this->assertFalse($impact['will_leave_no_default']);
+        $this->assertNotNull($impact['blocked_reason']);
+
+        $this->expectException(\Illuminate\Validation\ValidationException::class);
+        $service->deleteWorkflow($templateA->id);
+    }
+
+    public function test_first_workflow_created_after_empty_setup_becomes_default_automatically(): void
+    {
+        $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
+        [$legacy, $template] = $this->workflowPair('WF-OLD-LAST', 'Old Last Workflow', true);
+
+        $service = app(WorkflowService::class);
+        $service->deleteWorkflow($template->id);
+
+        $created = $service->saveWorkflow([
+            'code' => 'WF-NEW-FIRST',
+            'name' => 'New First Workflow',
+            'description' => null,
+            'is_active' => false,
+            'version' => 1,
+        ]);
+
+        $this->assertTrue((bool) $created->is_default);
+        $this->assertTrue((bool) $created->is_active);
+        $this->assertDatabaseHas('workflows', ['id' => $created->id, 'is_active' => 1]);
+        $this->assertDatabaseMissing('workflows', ['id' => $legacy->id]);
+    }
+
     public function test_task_pack_delete_keeps_existing_job_tasks_using_copied_pack_data(): void
     {
         $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
