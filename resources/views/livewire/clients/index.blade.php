@@ -76,7 +76,7 @@
                                 <td data-label="Archived client">
                                     <div class="ft-client-identity"><span class="ft-client-logo is-archived">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }} · {{ $clientRow->country ?: 'No country' }}</small></span></div>
                                 </td>
-                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
+                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Job history"><b>{{ $clientRow->total_jobs_count }}</b> {{ \Illuminate\Support\Str::plural('Job', $clientRow->total_jobs_count) }} preserved</td>
                                 <td data-label="Outstanding"><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
                                 <td data-label="Archived"><span class="ft-archived-status">Archived</span><small>{{ $clientRow->updated_at?->diffForHumans(short:true) }}</small></td>
@@ -111,7 +111,7 @@
                                 aria-label="Preview client {{ $clientRow->name }}"
                             >
                                 <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
-                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
+                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Jobs"><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
                                 <td data-label="Tasks">
                                     <b>{{ $clientRow->open_tasks_count }}</b> open
@@ -192,7 +192,7 @@
                 <button class="ft-open-client" type="button" wire:click="viewClient({{ $selected->id }})">Open client</button>
             </div>
             <div class="ft-client-detail-contact">
-                <div><small>Account manager</small>@if($selected->accountManager)<div class="ft-client-person"><x-ui.avatar :name="$selected->accountManager->name" :size="28" /><b>{{ $selected->accountManager->name }}</b></div>@else<b>Unassigned</b>@endif</div>
+                <div><small>Account manager</small>@if($selected->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$selected->accountManager" :name="$selected->accountManager->name" :size="28" /><b>{{ $selected->accountManager->name }}</b></div>@else<b>Unassigned</b>@endif</div>
                 <div><small>Contact</small><a href="mailto:{{ $selected->email }}">{{ $selected->email ?: ($selected->contact_name ?: 'No contact recorded') }}</a>@if($selected->phone)<span>{{ $selected->phone }}</span>@endif</div>
             </div>
             <div class="ft-client-detail-stats">
@@ -212,7 +212,7 @@
                 <div class="ft-client-detail-section-head"><h3>Tasks needing attention</h3><a href="{{ route('my-work') }}" wire:navigate>View all tasks</a></div>
                 <table class="ft-client-mini-table"><thead><tr><th>Task</th><th>Due</th><th>Status</th><th>Assignee</th></tr></thead><tbody>
                 @forelse($attentionTasks->take(3) as $task)
-                    <tr><td><a href="{{ route('jobs.index',['open'=>$task->flow_job_id,'task'=>$task->id]) }}" wire:navigate>{{ $task->title }}</a></td><td class="{{ $task->due_date?->isPast()?'ft-text-red':'' }}">{{ $task->due_date?->isPast() ? 'Overdue '.$task->due_date->diffInDays(today()).'d' : ($task->due_date?->format('M j') ?? '—') }}</td><td><span class="ft-client-health {{ $task->needs_attention||$task->status==='Blocked'?'red':'amber' }}">{{ $task->needs_attention?'Needs Attention':$task->status }}</span></td><td>@if($task->assignee)<div class="ft-client-person"><x-ui.avatar :name="$task->assignee->name" :size="25" /><span>{{ $task->assignee->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td></tr>
+                    <tr><td><a href="{{ route('jobs.index',['open'=>$task->flow_job_id,'task'=>$task->id]) }}" wire:navigate>{{ $task->title }}</a></td><td class="{{ $task->due_date?->isPast()?'ft-text-red':'' }}">{{ $task->due_date?->isPast() ? 'Overdue '.$task->due_date->diffInDays(today()).'d' : ($task->due_date?->format('M j') ?? '—') }}</td><td><span class="ft-client-health {{ $task->needs_attention||$task->status==='Blocked'?'red':'amber' }}">{{ $task->needs_attention?'Needs Attention':$task->status }}</span></td><td>@if($task->assignee)<div class="ft-client-person"><x-ui.avatar :user="$task->assignee" :name="$task->assignee->name" :size="25" /><span>{{ $task->assignee->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td></tr>
                 @empty<tr><td colspan="4" class="ft-client-empty">No tasks need attention.</td></tr>@endforelse
                 </tbody></table>
             </div>

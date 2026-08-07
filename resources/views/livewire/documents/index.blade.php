@@ -52,7 +52,7 @@
                                     <td data-label="Document"><div class="ft-doc-file"><span class="ft-file-badge {{ strtolower(pathinfo($doc->name,PATHINFO_EXTENSION)) }}">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b></div></td>
                                     <td data-label="Linked to"><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>
                                     <td data-label="Type">{{ $doc->category ?: 'Other' }}</td><td data-label="Version">v{{ $doc->version }}</td>
-                                    <td data-label="Owner"><div class="person"><x-ui.avatar :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
+                                    <td data-label="Owner"><div class="person"><x-ui.avatar :user="$doc->uploader" :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
                                     <td data-label="Status"><span class="ft-doc-status {{ $docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue') }}">{{ $docStatus }}</span></td>
                                     <td data-label="Updated">{{ $doc->updated_at?->format('M j') }}</td>
                                     <td data-label="Actions"><div class="ft-doc-row-actions"><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener" wire:click.stop>Open</a>@if(auth()->user()->canModule('documents','delete'))<button wire:click.stop="deleteDocument({{ $doc->id }})" wire:confirm="Delete this document?">⋮</button>@else<span>⋮</span>@endif</div></td>

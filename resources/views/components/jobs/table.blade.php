@@ -62,7 +62,7 @@
                         <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
                         <td data-label="Owner">
                             <div class="ft-owner-chip ft-inline-owner-editor" x-data="{ editing:false }">
-                                <x-ui.avatar :name="$job->owner?->name ?? 'Unassigned'" :size="28"/>
+                                <x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="28"/>
                                 <span x-show="!editing" class="ft-inline-owner-name">{{ $job->owner?->name ?? 'Unassigned' }}</span>
                                 @if(app(\App\Services\AccessControlService::class)->canAssignVisibleJob(auth()->user()))
                                     <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>

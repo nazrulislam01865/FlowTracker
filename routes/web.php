@@ -11,6 +11,7 @@ use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\ProfileImageController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\WorkflowSetupController;
@@ -80,6 +81,10 @@ Route::middleware('auth')->group(function () {
             ] : null,
         ]);
     })->name('notifications.unread-count');
+    Route::get('/profile-images/{user}/{filename}', ProfileImageController::class)
+        ->whereNumber('user')
+        ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
+        ->name('profile-images.show');
     Route::get('/profile', ProfileController::class)->name('profile');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 

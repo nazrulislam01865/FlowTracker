@@ -64,7 +64,7 @@
                 <div class="card section-card">
                     <div class="section-head"><h3>Team Workload</h3><a class="link-btn" href="{{ route('reports') }}" wire:navigate>Details</a></div>
                     @forelse($workload as $person)
-                        <div class="workload-row"><div class="person"><x-ui.avatar :name="$person->name" :size="27" />{{ $person->name }}</div><x-ui.progress :value="min(100,$person->open_tasks_count*12)"/><b>{{ $person->open_tasks_count }}</b></div>
+                        <div class="workload-row"><div class="person"><x-ui.avatar :user="$person" :name="$person->name" :size="27" />{{ $person->name }}</div><x-ui.progress :value="min(100,$person->open_tasks_count*12)"/><b>{{ $person->open_tasks_count }}</b></div>
                     @empty
                         <div class="empty-state">No active team workload.</div>
                     @endforelse
@@ -99,7 +99,7 @@
                 <div class="card section-card">
                     <div class="section-head"><h3>Recent Activity</h3><a class="link-btn" href="{{ route('notifications') }}" wire:navigate>All activity</a></div>
                     @forelse($activity as $notification)
-                        <div class="activity"><x-ui.avatar :name="auth()->user()->name" :size="30"/><div><div class="activity-text"><b>{{ $notification->title }}</b><br>{{ $notification->message }}</div><div class="activity-time">{{ $notification->created_at->diffForHumans() }}</div></div></div>
+                        <div class="activity"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="30"/><div><div class="activity-text"><b>{{ $notification->title }}</b><br>{{ $notification->message }}</div><div class="activity-time">{{ $notification->created_at->diffForHumans() }}</div></div></div>
                     @empty
                         <div class="empty-state">No recent activity.</div>
                     @endforelse

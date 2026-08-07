@@ -74,7 +74,7 @@
         <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @foreach($users as $u)
             <tr>
-                <td><div class="person"><x-ui.avatar :name="$u->name"/><div><b>{{ $u->name }}</b><div class="small muted">{{ $u->email }}</div></div></div></td>
+                <td><div class="person"><x-ui.avatar :user="$u" :name="$u->name"/><div><b>{{ $u->name }}</b>@if($u->workspaceMemberships->first()?->job_title)<div class="small muted">{{ $u->workspaceMemberships->first()->job_title }}</div>@endif<div class="small muted">{{ $u->email }}</div></div></div></td>
                 <td>{{ $u->department?->name ?? '—' }}</td>
                 <td><select wire:change="assignRole({{ $u->id }},$event.target.value)" @disabled($u->isSuperAdmin())>@foreach($roles->where('is_active',true) as $role)<option value="{{ $role->id }}" @selected($u->role_id===$role->id)>{{ $role->name }}</option>@endforeach</select></td>
                 <td><span class="tag">{{ str_replace('_',' ',$u->role?->default_scope ?? 'none') }}</span></td>
@@ -104,6 +104,7 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="field"><label>Full name *</label><input wire:model="name">@error('name')<div class="validation-error">{{ $message }}</div>@enderror</div>
+                    <div class="field"><label>Position / job title</label><input wire:model="position" placeholder="e.g. Production Manager" maxlength="120">@error('position')<div class="validation-error">{{ $message }}</div>@enderror</div>
                     <div class="field"><label>Email *</label><input wire:model="email" type="email">@error('email')<div class="validation-error">{{ $message }}</div>@enderror</div>
                     <div class="field"><label>Role *</label><select wire:model="roleId" @disabled($editingUserId && optional($users->firstWhere('id',$editingUserId))->isSuperAdmin())><option value="">Select role</option>@foreach($roles->where('is_active',true) as $r)<option value="{{ $r->id }}">{{ $r->name }}</option>@endforeach</select>@error('roleId')<div class="validation-error">{{ $message }}</div>@enderror</div>
                     <div class="field"><label>Department</label><select wire:model="departmentId"><option value="">No department</option>@foreach($departments as $d)<option value="{{ $d->id }}">{{ $d->name }}</option>@endforeach</select>@error('departmentId')<div class="validation-error">{{ $message }}</div>@enderror</div>

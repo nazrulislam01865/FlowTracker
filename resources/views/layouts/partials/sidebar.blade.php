@@ -22,7 +22,7 @@
     @if($user->canAccess('master.manage'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
     @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
     <div class="sidebar-footer">
-        <div class="user-mini"><x-ui.avatar :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div>
+        <div class="user-mini"><x-ui.avatar :user="$user" :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div>
         <form method="POST" action="{{ route('logout') }}" class="ft-sidebar-logout-form">
             @csrf
             <button type="submit" class="ft-sidebar-logout" aria-label="Log out of FlowTrack">

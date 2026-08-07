@@ -52,7 +52,7 @@
         </div>
         <div class="ft-detail-actions ft-exact-job-team" aria-label="Job team">
             <div class="ft-team-stack">
-                @foreach($team->take(4) as $member)<x-ui.avatar :name="$member->name" :size="28"/>@endforeach
+                @foreach($team->take(4) as $member)<x-ui.avatar :user="$member" :name="$member->name" :size="28"/>@endforeach
                 @if($team->count()>4)<span class="ft-avatar-more small">+{{ $team->count()-4 }}</span>@endif
             </div>
         </div>

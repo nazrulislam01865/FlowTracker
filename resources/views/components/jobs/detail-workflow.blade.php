@@ -58,7 +58,7 @@
                     <span class="ft-phase-count-pill">Phase {{ $job->phase->sequence }} of {{ $job->workflow->phases->count() }}</span>
                 </div>
                 <div class="ft-phase-owner-row">
-                    <x-ui.avatar :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/><b>{{ $job->coordinator?->name ?? 'Unassigned' }}</b><span>·</span>
+                    <x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/><b>{{ $job->coordinator?->name ?? 'Unassigned' }}</b><span>·</span>
                     <span>Entered {{ ($job->phaseHistories->firstWhere('workflow_phase_id',$job->phase->id)?->entered_at ?? $job->created_at)?->format('M j, Y') }}</span><span>·</span>
                     <span>Target {{ $job->delivery_date?->format('M j, Y') ?? '—' }}</span><span>·</span><span>{{ \App\Support\BoardPresenter::phaseDays($job) }} days in phase</span>
                     <button class="ft-link-blue" type="button" wire:click="setDetailTab('overview')">View {{ $currentTasks->count() }} phase tasks</button>
@@ -108,7 +108,7 @@
                 <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
                     <span>Phase owner</span>
                     <b class="ft-planning-value">
-                        <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/>{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
+                        <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/>{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
                         @if($canEditJob)
                             <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit phase owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.phaseOwner.focus())">✎</button>
                             <select x-ref="phaseOwner" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" x-on:change="editing=false" wire:change="updateJobCoordinator({{ $job->id }}, $event.target.value)"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$job->coordinator_id===(int)$user->id)>{{ $user->name }}</option>@endforeach</select>

@@ -11,7 +11,7 @@ class TaskPack extends Model
 
     protected function casts(): array
     {
-        return ['is_active' => 'boolean'];
+        return ['is_active' => 'boolean', 'is_snapshot' => 'boolean'];
     }
 
     /** Legacy operational relation kept so existing Job logic remains compatible. */

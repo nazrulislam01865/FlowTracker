@@ -61,7 +61,12 @@ class JobService
                         ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$search}%"));
                 });
             })
-            ->when($filters['phase'] ?? null, fn ($q, $v) => $q->where('workflow_phase_id', $v))
+            ->when($filters['phase'] ?? null, fn ($q, $v) => $q->where(function ($phaseQuery) use ($v) {
+                $phaseQuery->where('source_workflow_phase_id', $v)
+                    ->orWhere(function ($legacy) use ($v) {
+                        $legacy->whereNull('source_workflow_phase_id')->where('workflow_phase_id', $v);
+                    });
+            }))
             ->when($filters['health'] ?? null, fn ($q, $v) => $q->where('health', $v))
             ->when($filters['client'] ?? null, fn ($q, $v) => $q->where('client_id', $v))
             ->when($filters['owner'] ?? null, fn ($q, $v) => $q->where('owner_id', $v))
@@ -98,8 +103,8 @@ class JobService
             ->with([
                 'client:id,name',
                 'phase:id,name,short_name,sequence',
-                'owner:id,name',
-                'coordinator:id,name',
+                'owner:id,name,profile_image_path',
+                'coordinator:id,name,profile_image_path',
                 'members:id,flow_job_id,user_id',
                 'tasks' => fn ($query) => app(AccessControlService::class)
                     ->applyTaskScope($query, $user)
@@ -107,7 +112,7 @@ class JobService
                     ->whereNull('completed_at')
                     ->where('status', '!=', 'Completed')
                     ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
-                    ->with(['assignee:id,name', 'phase:id,name,sequence'])
+                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence'])
                     ->orderByRaw('due_date is null, due_date asc'),
             ])
             ->withCount('items')
@@ -167,9 +172,13 @@ class JobService
         }
 
         return DB::transaction(function () use ($data, $actor) {
-            $workflow = Workflow::with('phases.taskPack.items.defaultAssignee', 'phases.taskPack.items.defaultDepartment', 'phases.taskPack.items.priority', 'phases.taskPack.items.documentCategory')->findOrFail($data['workflow_id']);
+            $workflow = Workflow::query()
+                ->where('is_snapshot', false)
+                ->where('is_active', true)
+                ->with('phases.taskPack.items.defaultAssignee', 'phases.taskPack.items.defaultDepartment', 'phases.taskPack.items.priority', 'phases.taskPack.items.documentCategory')
+                ->findOrFail($data['workflow_id']);
             $phase = $workflow->phases->firstWhere('id', (int) $data['workflow_phase_id']);
-            abort_unless($phase && $phase->allow_job_start, 422, 'Selected starting phase is not allowed.');
+            abort_unless($phase && $phase->is_active && $phase->allow_job_start, 422, 'Selected starting phase is not allowed.');
 
             $next = (int) FlowJob::withTrashed()->max('id') + 126;
             $draft = (bool) ($data['draft'] ?? false);
@@ -177,7 +186,9 @@ class JobService
                 'job_number' => 'JOB-'.now()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
                 'client_id' => $data['client_id'],
                 'workflow_id' => $workflow->id,
+                'source_workflow_id' => $workflow->id,
                 'workflow_phase_id' => $phase->id,
+                'source_workflow_phase_id' => $phase->id,
                 'started_from_phase_id' => $phase->id,
                 'owner_id' => $data['owner_id'] ?: $actor->id,
                 'coordinator_id' => $data['coordinator_id'] ?: $actor->id,
@@ -212,9 +223,15 @@ class JobService
 
             $this->ensureMembers($job);
 
+            // Freeze the selected Workflow, all phases and Task Packs for this
+            // Job before any operational history/tasks are created. From this
+            // point the Job no longer depends on editable setup records.
+            $job = app(JobWorkflowSnapshotService::class)->snapshot($job, $workflow->id);
+            $snapshotPhase = $job->phase()->firstOrFail();
+
             FlowJobPhaseHistory::create([
                 'flow_job_id' => $job->id,
-                'workflow_phase_id' => $phase->id,
+                'workflow_phase_id' => $snapshotPhase->id,
                 'changed_by' => $actor->id,
                 'phase_owner_id' => $job->coordinator_id,
                 'target_date' => $job->delivery_date,
@@ -223,15 +240,18 @@ class JobService
                 'entered_at' => $draft ? null : now(),
             ]);
 
+            // Create every Task from every snapshotted phase immediately,
+            // including future phases. Draft Jobs keep those Tasks in a
+            // Not Started state until the Job is activated.
+            $this->syncWorkflowTasks($job, $draft ? null : $actor, true);
             if (!$draft) {
-                $this->syncWorkflowTasks($job, $actor);
                 $this->recalculateProgress($job);
             }
 
             $job->activities()->create([
                 'user_id' => $actor->id,
                 'event' => $draft ? 'job.draft_saved' : 'job.created',
-                'description' => $draft ? 'Job saved as draft' : 'Job created at '.$phase->name,
+                'description' => $draft ? 'Job saved as draft' : 'Job created at '.$snapshotPhase->name,
             ]);
 
             $mentionIds = app(MentionService::class)->userIdsFromText((string) $job->description);
@@ -479,7 +499,7 @@ class JobService
         app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Job', $job->job_number.' · Product list updated', 'update', $actor);
     }
 
-    public function syncWorkflowTasks(FlowJob $job, ?User $actor = null): void
+    public function syncWorkflowTasks(FlowJob $job, ?User $actor = null, bool $includeDraft = false): void
     {
         $job->loadMissing([
             'workflow.phases.taskPack.items.defaultAssignee',
@@ -499,7 +519,7 @@ class JobService
             ]);
         }
 
-        if ($job->status === 'Draft') {
+        if ($job->status === 'Draft' && !$includeDraft) {
             return;
         }
 
@@ -587,6 +607,7 @@ class JobService
             $isCompletedPhase = $next->short_name === 'Completed';
             $job->update([
                 'workflow_phase_id' => $next->id,
+                'source_workflow_phase_id' => $next->source_workflow_phase_id ?: $next->id,
                 'status' => $isCompletedPhase ? 'Completed' : 'In Progress',
                 'health' => $isCompletedPhase ? 'Completed' : 'On Track',
                 'next_action' => $next->entry_condition ?: $next->entry_rule,
@@ -615,11 +636,16 @@ class JobService
     {
         $this->assertStatusEditable($job, $actor);
         $job->load('phase', 'workflow.phases');
-        $target = $job->workflow->phases->firstWhere('id', $phaseId);
+        $target = $job->workflow->phases->firstWhere('id', $phaseId)
+            ?: $job->workflow->phases->firstWhere('source_workflow_phase_id', $phaseId);
         abort_unless($target, 422, 'Invalid workflow phase.');
         if ($target->sequence === $job->phase->sequence + 1) return $this->completePhase($job, $actor);
         abort_if($target->sequence > $job->phase->sequence + 1, 422, 'Complete required phase controls before skipping ahead.');
-        $job->update(['workflow_phase_id' => $target->id, 'status' => $target->short_name === 'Completed' ? 'Completed' : 'In Progress']);
+        $job->update([
+            'workflow_phase_id' => $target->id,
+            'source_workflow_phase_id' => $target->source_workflow_phase_id ?: $target->id,
+            'status' => $target->short_name === 'Completed' ? 'Completed' : 'In Progress',
+        ]);
         $this->activateTaskPack($job, $target, $actor);
         $this->recalculateProgress($job->refresh());
         return $job->refresh();
@@ -646,8 +672,9 @@ class JobService
         }
 
         $currentSequence = (int) ($job->phase?->sequence ?? $job->workflow_phase_id);
-        $isCurrent = (int) $phase->id === (int) $job->workflow_phase_id || $activate;
-        $isPast = (int) $phase->sequence < $currentSequence;
+        $isDraft = $job->status === 'Draft';
+        $isCurrent = !$isDraft && ((int) $phase->id === (int) $job->workflow_phase_id || $activate);
+        $isPast = !$isDraft && (int) $phase->sequence < $currentSequence;
 
         foreach ($phase->taskPack->items as $template) {
             $assignee = $template->defaultAssignee;

@@ -28,6 +28,7 @@ class Form extends Component
         if ($taskPackId) {
             $pack = TaskPack::query()
                 ->where('workspace_id', app(TaskPackService::class)->workspaceId())
+                ->where('is_snapshot', false)
                 ->with('items')
                 ->findOrFail($taskPackId);
 

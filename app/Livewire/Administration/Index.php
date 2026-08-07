@@ -20,6 +20,7 @@ class Index extends Component
     public bool $showUserModal = false;
     public ?int $editingUserId = null;
     public string $name = '';
+    public string $position = '';
     public string $email = '';
     public string $password = '';
     public string $passwordConfirmation = '';
@@ -54,6 +55,7 @@ class Index extends Component
 
     public function openUser(?int $id = null): void
     {
+        $this->tab = 'users';
         $this->resetValidation();
         $this->editingUserId = $id;
         $this->password = '';
@@ -62,12 +64,13 @@ class Index extends Component
         if ($id) {
             $user = User::findOrFail($id);
             $this->name = $user->name;
+            $this->position = app(AdminService::class)->positionFor($user) ?? '';
             $this->email = $user->email;
             $this->roleId = $user->role_id;
             $this->departmentId = $user->department_id;
             $this->userActive = (bool) $user->is_active;
         } else {
-            $this->reset(['name','email','roleId','departmentId']);
+            $this->reset(['name','position','email','roleId','departmentId']);
             $this->userActive = true;
         }
 
@@ -79,7 +82,7 @@ class Index extends Component
         $this->showUserModal = false;
         $this->editingUserId = null;
         $this->resetValidation();
-        $this->reset(['name','email','password','passwordConfirmation','roleId','departmentId']);
+        $this->reset(['name','position','email','password','passwordConfirmation','roleId','departmentId']);
         $this->userActive = true;
     }
 
@@ -88,6 +91,7 @@ class Index extends Component
         $editing = $this->editingUserId !== null;
         $rules = [
             'name' => ['required','string','max:255'],
+            'position' => ['nullable','string','max:120'],
             'email' => ['required','email', $editing ? 'unique:users,email,'.$this->editingUserId : 'unique:users,email'],
             'roleId' => ['required','exists:roles,id'],
             'departmentId' => ['nullable','exists:departments,id'],
@@ -101,6 +105,7 @@ class Index extends Component
 
         $payload = [
             'name' => $data['name'],
+            'position' => filled(trim((string) ($data['position'] ?? ''))) ? trim($data['position']) : null,
             'email' => $data['email'],
             'role_id' => $data['roleId'],
             'department_id' => $data['departmentId'],
@@ -193,21 +198,56 @@ class Index extends Component
     public function render()
     {
         $service = app(AdminService::class);
+
+        return view('livewire.administration.index', match ($this->tab) {
+            'roles' => $this->rolesPageData($service),
+            'matrix' => $this->matrixPageData($service),
+            'users' => $this->usersPageData($service),
+            'audit' => ['auditLog' => $service->auditLog()],
+            'security' => ['securitySettings' => $service->securitySettings()],
+            default => $this->dashboardPageData($service),
+        });
+    }
+
+    private function dashboardPageData(AdminService $service): array
+    {
+        return [
+            'summary' => $service->summary(),
+            'roles' => $service->roles(),
+        ];
+    }
+
+    private function rolesPageData(AdminService $service): array
+    {
+        return ['roles' => $service->roles()];
+    }
+
+    private function matrixPageData(AdminService $service): array
+    {
         $roles = $service->roles();
         $selectedRole = $roles->firstWhere('id', $this->selectedRoleId) ?: $roles->first();
-        if ($selectedRole && !$this->selectedRoleId) $this->selectedRoleId = $selectedRole->id;
 
-        return view('livewire.administration.index', [
-            'summary' => $service->summary(),
-            'users' => $service->users(),
+        if ($selectedRole && !$this->selectedRoleId) {
+            $this->selectedRoleId = $selectedRole->id;
+        }
+
+        return [
             'roles' => $roles,
             'selectedRole' => $selectedRole,
             'modules' => AccessControlService::MODULES,
             'actions' => AccessControlService::ACTIONS,
-            'auditLog' => $service->auditLog(),
-            'securitySettings' => $service->securitySettings(),
-            'rules' => $service->notificationRules(),
-            'departments' => Department::where('is_active', true)->orderBy('name')->get(),
-        ]);
+        ];
+    }
+
+    private function usersPageData(AdminService $service): array
+    {
+        return [
+            'users' => $service->users(),
+            'roles' => $service->roleOptions(),
+            'departments' => Department::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
+        ];
     }
 }

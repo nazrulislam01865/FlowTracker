@@ -228,7 +228,7 @@ class Index extends Component
             $this->createAssignmentReady = true;
             $this->ownerId ??= auth()->id();
             $this->coordinatorId ??= auth()->id();
-            $this->workflowId ??= Workflow::where('is_active', true)->orderBy('id')->value('id');
+            $this->workflowId ??= Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id');
             $this->setDefaultStartPhase();
             $this->createWorkflowReady = true;
             return;
@@ -935,6 +935,7 @@ class Index extends Component
             'workflows' => $this->createWorkflowReady
                 ? Workflow::query()
                     ->with('phases.taskPack.templates')
+                    ->where('is_snapshot', false)
                     ->where('is_active', true)
                     ->orderBy('name')
                     ->get()
@@ -1024,7 +1025,7 @@ class Index extends Component
                 ->where('is_active', true)
                 ->orderBy('name')
                 ->get(['id', 'name']),
-            'phases' => WorkflowPhase::where('is_active', true)->orderBy('sequence')->get(['id', 'name', 'short_name', 'sequence']),
+            'phases' => WorkflowPhase::whereNotNull('workflow_template_id')->where('is_active', true)->orderBy('sequence')->get(['id', 'name', 'short_name', 'sequence']),
             'users' => $this->userOptions($user),
             'priorities' => $master->active('priority'),
             'healthOptions' => $this->healthOptions(),
@@ -1038,8 +1039,8 @@ class Index extends Component
         $canAssign = $user->canModule('tasks', 'assign') || $user->canModule('jobs', 'assign');
 
         return $canAssign
-            ? User::where('is_active', true)->orderBy('name')->get(['id', 'name'])
-            : collect([(object) ['id' => $user->id, 'name' => $user->name]]);
+            ? User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'profile_image_path'])
+            : collect([(object) ['id' => $user->id, 'name' => $user->name, 'profile_image_path' => $user->profile_image_path]]);
     }
 
     private function taskStatusOptions(MasterDataService $master)

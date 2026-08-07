@@ -47,7 +47,7 @@
                     </div>
                     <div class="ft-workflow-editor-actions">
                         <a href="{{ route('workflow.edit', $selected->id) }}" wire:navigate class="ft-admin-outline">Edit Details</a>
-                        <button type="button" class="ft-admin-danger" wire:click="deleteWorkflow({{ $selected->id }})" wire:confirm="Delete this Workflow? Workflows already used by Jobs cannot be deleted and must be deactivated instead.">Delete Workflow</button>
+                        <button type="button" class="ft-admin-danger" wire:click="requestDeleteWorkflow({{ $selected->id }})" wire:loading.attr="disabled" wire:target="requestDeleteWorkflow">Delete Workflow</button>
                         <button type="button" class="ft-admin-primary" wire:click="openPhase">＋ Add Phase</button>
                     </div>
                 </div>
@@ -113,6 +113,85 @@
             @endif
         </section>
     </div>
+
+
+    @if($showWorkflowDeleteModal)
+        <div class="ft-reference-overlay" wire:click.self="closeWorkflowDelete"></div>
+        <div class="ft-phase-reference-modal" role="alertdialog" aria-modal="true" aria-label="Delete Workflow permanently" style="width:min(720px,calc(100vw - 32px))">
+            <div class="ft-phase-modal-head">
+                <h2>Delete Workflow permanently?</h2>
+                <button type="button" wire:click="closeWorkflowDelete">×</button>
+            </div>
+            <div class="ft-phase-modal-body">
+                <div class="flash error" style="margin:0">
+                    This permanently deletes this reusable Workflow setup. Existing Job snapshots and Job Tasks are not deleted.
+                </div>
+
+                <div>
+                    <b style="display:block;font-size:15px;color:#15263e">{{ $workflowDeleteImpact['name'] ?? 'Workflow' }}</b>
+                    <span style="display:block;margin-top:4px;color:#61748e;font-size:11px">
+                        FlowTrack checked Jobs created from this Workflow. Existing Jobs use private snapshots and will not be deleted.
+                    </span>
+                </div>
+
+                @if(!($workflowDeleteImpact['can_delete'] ?? true))
+                    <div class="flash error" style="margin:0">
+                        {{ $workflowDeleteImpact['blocked_reason'] ?? 'This Workflow cannot be deleted.' }}
+                    </div>
+                @else
+                    <div class="ft-admin-stats" style="margin:0">
+                        <div><span>Workflow phases</span><b>{{ $workflowDeleteImpact['phase_count'] ?? 0 }}</b></div>
+                        <div><span>Jobs preserved</span><b>{{ $workflowDeleteImpact['job_count'] ?? 0 }}</b></div>
+                        <div><span>Tasks preserved</span><b>{{ $workflowDeleteImpact['task_count'] ?? 0 }}</b></div>
+                    </div>
+
+                    @if(($workflowDeleteImpact['job_count'] ?? 0) > 0)
+                        <div style="border:1px solid #f0d2cf;background:#fffafa;border-radius:10px;padding:12px">
+                            <b style="display:block;font-size:12px;color:#a72822;margin-bottom:8px">Jobs that will remain unchanged</b>
+                            <div style="display:grid;gap:7px;max-height:190px;overflow:auto">
+                                @foreach(($workflowDeleteImpact['jobs'] ?? []) as $job)
+                                    <div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f2e4e2;padding-bottom:6px">
+                                        <span style="font-size:11px"><b>{{ $job['job_number'] }}</b> · {{ $job['title'] }}</span>
+                                        @if($job['trashed'] ?? false)<small style="color:#8a6a67">Already trashed</small>@endif
+                                    </div>
+                                @endforeach
+                            </div>
+                            @if(($workflowDeleteImpact['job_count'] ?? 0) > count($workflowDeleteImpact['jobs'] ?? []))
+                                <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($workflowDeleteImpact['job_count'] ?? 0) - count($workflowDeleteImpact['jobs'] ?? []) }} more linked Jobs.</small>
+                            @endif
+                        </div>
+                    @endif
+
+                    @if(($workflowDeleteImpact['task_count'] ?? 0) > 0)
+                        <div style="border:1px solid #e1e7ef;border-radius:10px;padding:12px">
+                            <b style="display:block;font-size:12px;color:#263b58;margin-bottom:8px">Tasks included in those Jobs</b>
+                            <div style="display:grid;gap:6px">
+                                @foreach(($workflowDeleteImpact['tasks'] ?? []) as $task)
+                                    <span style="font-size:10.5px;color:#526780"><b style="color:#24364f">{{ $task['task_number'] }}</b> · {{ $task['title'] }} @if($task['job_number']) · {{ $task['job_number'] }} @endif</span>
+                                @endforeach
+                            </div>
+                            @if(($workflowDeleteImpact['task_count'] ?? 0) > count($workflowDeleteImpact['tasks'] ?? []))
+                                <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($workflowDeleteImpact['task_count'] ?? 0) - count($workflowDeleteImpact['tasks'] ?? []) }} more Tasks.</small>
+                            @endif
+                        </div>
+                    @endif
+
+                    <p style="margin:0;color:#526780;font-size:11px;line-height:1.5">
+                        Continuing deletes only the reusable Workflow setup and its setup phases. Any older Job that still points directly to this Workflow is first converted to its own private snapshot. No Job, Task, document, comment, or history record is deleted.
+                    </p>
+                @endif
+            </div>
+            <div class="ft-phase-modal-footer">
+                <button type="button" class="ft-admin-cancel" wire:click="closeWorkflowDelete">Cancel</button>
+                @if($workflowDeleteImpact['can_delete'] ?? false)
+                    <button type="button" class="ft-admin-danger" wire:click="confirmDeleteWorkflow" wire:loading.attr="disabled" wire:target="confirmDeleteWorkflow">
+                        <span wire:loading.remove wire:target="confirmDeleteWorkflow">Delete Workflow only</span>
+                        <span wire:loading wire:target="confirmDeleteWorkflow">Deleting…</span>
+                    </button>
+                @endif
+            </div>
+        </div>
+    @endif
 
     @if($showPhaseModal)
         <div class="ft-reference-overlay" wire:click.self="closePhase"></div>

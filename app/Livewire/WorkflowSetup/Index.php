@@ -24,6 +24,9 @@ class Index extends Component
     public string $workflowDescription = '';
     public bool $workflowActive = true;
     public int $workflowVersion = 1;
+    public bool $showWorkflowDeleteModal = false;
+    public ?int $deleteWorkflowId = null;
+    public array $workflowDeleteImpact = [];
 
     public ?int $editPhaseId = null;
     public bool $showPhaseModal = false;
@@ -79,10 +82,54 @@ class Index extends Component
         try { $workflow=WorkflowTemplate::findOrFail($id); app(WorkflowService::class)->toggleWorkflow($id); session()->flash('success','Workflow status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow status updated', $workflow->name.' status was changed.', 'update', null, null, auth()->user()); }
         catch(ValidationException $e){ $this->addError('workflow',collect($e->errors())->flatten()->first()); }
     }
-    public function deleteWorkflow(int $id): void
+    public function requestDeleteWorkflow(int $id): void
     {
-        try { app(WorkflowService::class)->deleteWorkflow($id); $this->selectedWorkflowId=app(WorkflowService::class)->all()->first()?->id; session()->flash('success','Workflow deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow deleted', 'A workflow was deleted.', 'update', null, null, auth()->user()); }
-        catch(ValidationException $e){ $this->addError('workflow',collect($e->errors())->flatten()->first()); }
+        $this->resetValidation('workflow');
+
+        try {
+            $this->workflowDeleteImpact = app(WorkflowService::class)->workflowDeleteImpact($id);
+            $this->deleteWorkflowId = $id;
+            $this->showWorkflowDeleteModal = true;
+        } catch (ValidationException $e) {
+            $this->addError('workflow', collect($e->errors())->flatten()->first());
+        }
+    }
+
+    public function closeWorkflowDelete(): void
+    {
+        $this->showWorkflowDeleteModal = false;
+        $this->deleteWorkflowId = null;
+        $this->workflowDeleteImpact = [];
+    }
+
+    public function confirmDeleteWorkflow(): void
+    {
+        abort_unless($this->deleteWorkflowId, 422);
+
+        try {
+            $result = app(WorkflowService::class)->deleteWorkflow($this->deleteWorkflowId);
+            $this->closeWorkflowDelete();
+            $this->selectedWorkflowId = app(WorkflowService::class)->all()->first()?->id;
+
+            $message = $result['workflow_name'].' permanently deleted. Existing Jobs and Tasks were preserved in their own snapshots.';
+            if ($result['job_count'] > 0) {
+                $message .= ' '.$result['job_count'].' older Job'.($result['job_count'] === 1 ? '' : 's').' were detached from the setup Workflow before deletion.';
+            }
+
+            session()->flash('success', $message);
+            app(\App\Services\NotificationService::class)->notifyUser(
+                auth()->user(),
+                'Workflow permanently deleted',
+                $message,
+                'update',
+                null,
+                null,
+                auth()->user(),
+            );
+        } catch (ValidationException $e) {
+            $this->closeWorkflowDelete();
+            $this->addError('workflow', collect($e->errors())->flatten()->first());
+        }
     }
 
     public function move(int $id,int $direction):void { app(WorkflowService::class)->move(WorkflowPhase::findOrFail($id),$direction); }
@@ -142,7 +189,7 @@ class Index extends Component
             'automaticTransitions'=>$selectedPhases->where('is_active',true)->where('auto_advance_on_ready',true)->count(),
             // These shared datasets are only used by the phase editor.
             'taskPacks' => $this->showPhaseModal
-                ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
                 : collect(),
             'documentCategories' => $this->showPhaseModal
                 ? app(MasterDataService::class)->active('document_category')

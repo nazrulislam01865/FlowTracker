@@ -134,7 +134,7 @@
             <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
                 <span>Job owner</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :name="$job->owner?->name ?? 'Unassigned'" :size="24"/>{{ $job->owner?->name ?? 'Unassigned' }}</span>
+                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="24"/>{{ $job->owner?->name ?? 'Unassigned' }}</span>
                     @if($canAssignJob)
                         <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.ownerSelect.focus())">✎</button>
                         <select x-ref="ownerSelect" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateJobOwner({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
@@ -147,7 +147,7 @@
             <div class="ft-side-row ft-inline-planning-row" x-data="{ editing:false }">
                 <span>Coordinator</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/>{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
+                    <span x-show="!editing" class="ft-planning-person"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="24"/>{{ $job->coordinator?->name ?? 'Unassigned' }}</span>
                     @if($canAssignJob)
                         <button x-show="!editing" type="button" class="ft-inline-edit-button" aria-label="Edit coordinator" title="Edit" x-on:click.stop="editing=true; $nextTick(() => $refs.coordinatorSelect.focus())">✎</button>
                         <select x-ref="coordinatorSelect" x-show="editing" x-on:keydown.escape="editing=false" x-on:blur="editing=false" wire:change="updateJobCoordinator({{ $job->id }}, $event.target.value)" x-on:change="editing=false">
@@ -212,7 +212,7 @@
                                 <span>{{ $phase->sequence }}.{{ $loop->iteration }}</span>
                                 <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
                                 <span class="ft-task-inline-editor" x-data="{ editing:false }">
-                                    <span x-show="!editing" class="ft-task-inline-display"><x-ui.avatar :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/>{{ $task->assignee?->name ?? 'Unassigned' }}</span>
+                                    <span x-show="!editing" class="ft-task-inline-display"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/>{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                                     @if($canAssignTask)
                                         <button x-show="!editing" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="editing=true; $nextTick(() => $refs.taskAssignee.focus())">✎</button>
                                         <select x-ref="taskAssignee" x-show="editing" class="ft-task-inline-input" x-on:keydown.escape="editing=false" x-on:blur="editing=false" x-on:change="editing=false" wire:change="updateTaskAssigneeFromJob({{ $task->id }}, $event.target.value)">

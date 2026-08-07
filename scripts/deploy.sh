@@ -15,6 +15,9 @@ npm run build
 # caches after the new code and schema are in place.
 php artisan optimize:clear
 php artisan migrate --force
+if [[ ! -L public/storage && ! -e public/storage ]]; then
+    php artisan storage:link
+fi
 php artisan optimize
 php artisan queue:restart
 

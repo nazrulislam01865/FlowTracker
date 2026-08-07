@@ -34,6 +34,9 @@ class Index extends Component
     public ?int $documentCategoryId = null;
     public int $dueOffsetDays = 1;
     public bool $itemRequired = true;
+    public bool $showPackDeleteModal = false;
+    public ?int $deletePackId = null;
+    public array $packDeleteImpact = [];
 
     public function mount(): void
     {
@@ -51,7 +54,7 @@ class Index extends Component
     {
         $this->showPackModal = true; $this->editPackId = $id; $this->resetValidation();
         if ($id) {
-            $p = TaskPack::findOrFail($id);
+            $p = TaskPack::where('is_snapshot', false)->findOrFail($id);
             $this->packCode = (string) $p->code; $this->packName = $p->name; $this->packDescription = (string) $p->description; $this->packActive = (bool) $p->is_active;
         } else {
             $this->reset(['packCode','packName','packDescription']); $this->packActive = true;
@@ -73,19 +76,63 @@ class Index extends Component
     public function togglePack(int $id): void
     {
         $this->packsReady = true;
-        try { $pack = TaskPack::findOrFail($id); app(TaskPackService::class)->togglePack($id); session()->flash('success','Task Pack status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack status updated', $pack->name.' status was changed.', 'update', null, null, auth()->user()); }
+        try { $pack = TaskPack::where('is_snapshot', false)->findOrFail($id); app(TaskPackService::class)->togglePack($id); session()->flash('success','Task Pack status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack status updated', $pack->name.' status was changed.', 'update', null, null, auth()->user()); }
         catch (ValidationException $e) { $this->addError('pack', collect($e->errors())->flatten()->first()); }
     }
 
-    public function deletePack(int $id): void
+    public function requestDeletePack(int $id): void
     {
         $this->packsReady = true;
+        $this->resetValidation('pack');
+
         try {
-            app(TaskPackService::class)->deletePack($id);
+            $this->packDeleteImpact = app(TaskPackService::class)->packDeleteImpact($id);
+            $this->deletePackId = $id;
+            $this->showPackDeleteModal = true;
+        } catch (ValidationException $e) {
+            $this->addError('pack', collect($e->errors())->flatten()->first());
+        }
+    }
+
+    public function closePackDelete(): void
+    {
+        $this->showPackDeleteModal = false;
+        $this->deletePackId = null;
+        $this->packDeleteImpact = [];
+    }
+
+    public function confirmDeletePack(): void
+    {
+        abort_unless($this->deletePackId, 422);
+        $this->packsReady = true;
+
+        try {
+            $result = app(TaskPackService::class)->deletePack($this->deletePackId);
+            $this->closePackDelete();
             $this->selectedPackId = app(TaskPackService::class)->all()->first()?->id;
-            session()->flash('success','Task Pack deleted.');
-            app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack deleted', 'A Task Pack was deleted.', 'update', null, null, auth()->user());
-        } catch (ValidationException $e) { $this->addError('pack', collect($e->errors())->flatten()->first()); }
+
+            $message = $result['pack_name'].' permanently deleted. Existing Jobs and Tasks were preserved in their own snapshots.';
+            if ($result['job_count'] > 0) {
+                $message .= ' '.$result['job_count'].' older Job'.($result['job_count'] === 1 ? '' : 's').' were detached from reusable setup data first.';
+            }
+            if ($result['mapped_phase_count'] > 0) {
+                $message .= ' '.$result['mapped_phase_count'].' Workflow phase'.($result['mapped_phase_count'] === 1 ? '' : 's').' kept their place with the Task Pack mapping removed.';
+            }
+
+            session()->flash('success', $message);
+            app(\App\Services\NotificationService::class)->notifyUser(
+                auth()->user(),
+                'Task Pack permanently deleted',
+                $message,
+                'update',
+                null,
+                null,
+                auth()->user(),
+            );
+        } catch (ValidationException $e) {
+            $this->closePackDelete();
+            $this->addError('pack', collect($e->errors())->flatten()->first());
+        }
     }
 
     public function openItem(?int $id = null): void
@@ -109,7 +156,7 @@ class Index extends Component
             'defaultDepartmentId'=>['nullable','exists:master_records,id'], 'priorityId'=>['nullable','exists:master_records,id'], 'documentCategoryId'=>['nullable','exists:master_records,id'],
             'dueOffsetDays'=>['required','integer','min:0','max:3650'], 'itemRequired'=>['boolean'],
         ]);
-        $pack=TaskPack::findOrFail($this->selectedPackId);
+        $pack=TaskPack::where('is_snapshot', false)->findOrFail($this->selectedPackId);
         app(TaskPackService::class)->saveItem($pack,[
             'title'=>$data['itemTitle'],'description'=>$data['itemDescription'],'default_assignee_id'=>$data['defaultAssigneeId'],'default_department_id'=>$data['defaultDepartmentId'],
             'priority_id'=>$data['priorityId'],'document_category_id'=>$data['documentCategoryId'],'due_offset_days'=>$data['dueOffsetDays'],'is_required'=>$data['itemRequired'],

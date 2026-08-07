@@ -300,7 +300,7 @@ class Index extends Component
         $detail = $this->selectedClientId ? $service->detail(auth()->user(), $this->selectedClientId) : null;
 
         $users = (auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'))
-            ? User::where('is_active', true)->orderBy('name')->get(['id','name'])
+            ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
             : collect([auth()->user()]);
 
         return view('livewire.clients.index', [
@@ -310,7 +310,7 @@ class Index extends Component
             'countries' => $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('country')->distinct()->orderBy('country')->pluck('country'),
             'managers' => User::where('is_active', true)
                 ->whereIn('id', $service->visibleQuery(auth()->user())->where('is_active', !$this->showArchived)->whereNotNull('account_manager_id')->distinct()->pluck('account_manager_id'))
-                ->orderBy('name')->get(['id','name']),
+                ->orderBy('name')->get(['id','name','profile_image_path']),
             'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), auth()->user())
                 ->whereHas('client', fn ($client) => $client->where('is_active', !$this->showArchived))
                 ->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),

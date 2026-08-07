@@ -2,12 +2,14 @@
 
 namespace App\Services;
 
+use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\Task;
 use App\Models\TaskPack;
 use App\Models\TaskPackItem;
 use App\Models\TaskPackTask;
 use App\Models\WorkflowPhase;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -21,6 +23,7 @@ class TaskPackService
     {
         return TaskPack::query()
             ->where('workspace_id', $this->workspaceId())
+            ->where('is_snapshot', false)
             ->select(['id', 'workspace_id', 'code', 'name', 'description', 'is_active'])
             ->with([
                 'items' => fn ($query) => $query->select([
@@ -85,7 +88,7 @@ class TaskPackService
 
     public function nextCode(): string
     {
-        $next = ((int) TaskPack::where('workspace_id', $this->workspaceId())->max('id')) + 1;
+        $next = ((int) TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->max('id')) + 1;
         do {
             $code = 'TPK-'.str_pad((string) $next, 3, '0', STR_PAD_LEFT);
             $next++;
@@ -147,37 +150,148 @@ class TaskPackService
             'is_active' => (bool) ($data['is_active'] ?? true),
         ];
         if (Schema::hasColumn('task_packs', 'slug')) $payload['slug'] = Str::slug($data['name']).'-'.strtolower($code);
-        return TaskPack::query()->updateOrCreate(['id' => $id], $payload);
+
+        if ($id) {
+            $pack = TaskPack::query()
+                ->where('workspace_id', $workspaceId)
+                ->where('is_snapshot', false)
+                ->findOrFail($id);
+            $pack->update($payload);
+            return $pack->refresh();
+        }
+
+        return TaskPack::query()->create($payload + ['is_snapshot' => false]);
     }
 
     public function togglePack(int $id): void
     {
         $this->assertManage();
-        $pack = TaskPack::where('workspace_id', $this->workspaceId())->findOrFail($id);
+        $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
         $pack->update(['is_active' => !$pack->is_active]);
     }
 
-    public function deletePack(int $id): void
+    /**
+     * Resolve Task Pack dependencies only when the user opens the destructive
+     * delete dialog. Normal Task Pack rendering remains unchanged and fast.
+     */
+    public function packDeleteImpact(int $id): array
     {
         $this->assertManage();
-        $pack = TaskPack::where('workspace_id', $this->workspaceId())->findOrFail($id);
-        if (DB::table('workflow_phases')->where('task_pack_id', $id)->exists()) {
-            throw ValidationException::withMessages(['pack' => 'This Task Pack is used by a Workflow phase. Remove that mapping first.']);
+        $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
+
+        $mappedPhases = WorkflowPhase::query()
+            ->with(['workflowTemplate:id,name', 'workflow:id,name'])
+            ->where('task_pack_id', $id)
+            ->whereNotNull('workflow_template_id')
+            ->orderBy('workflow_template_id')
+            ->orderBy('sequence')
+            ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'sequence', 'task_pack_id']);
+
+        $sourceWorkflowIds = $mappedPhases
+            ->map(fn (WorkflowPhase $phase) => (int) ($phase->workflow_template_id ?: $phase->workflow_id))
+            ->filter()->unique()->values();
+
+        $jobs = $sourceWorkflowIds->isEmpty()
+            ? collect()
+            : FlowJob::withTrashed()
+                ->where(function ($query) use ($sourceWorkflowIds) {
+                    $query->whereIn('source_workflow_id', $sourceWorkflowIds)
+                        ->orWhere(function ($legacy) use ($sourceWorkflowIds) {
+                            $legacy->whereNull('source_workflow_id')->whereIn('workflow_id', $sourceWorkflowIds);
+                        });
+                })
+                ->orderBy('job_number')
+                ->get(['id', 'job_number', 'title', 'workflow_id', 'source_workflow_id', 'deleted_at']);
+
+        $taskCount = $jobs->isEmpty()
+            ? 0
+            : Task::withTrashed()->whereIn('flow_job_id', $jobs->pluck('id'))->count();
+
+        return [
+            'id' => (int) $pack->id,
+            'name' => (string) $pack->name,
+            'mapped_phase_count' => $mappedPhases->count(),
+            'mapped_phases' => $mappedPhases->take(8)->map(fn (WorkflowPhase $phase) => [
+                'id' => (int) $phase->id,
+                'name' => (string) $phase->name,
+                'sequence' => (int) $phase->sequence,
+                'workflow_name' => (string) ($phase->workflowTemplate?->name ?: $phase->workflow?->name ?: 'Workflow'),
+            ])->all(),
+            'generated_task_count' => 0,
+            'generated_tasks' => [],
+            'job_count' => $jobs->count(),
+            'jobs' => $jobs->take(8)->map(fn (FlowJob $job) => [
+                'id' => (int) $job->id,
+                'job_number' => (string) $job->job_number,
+                'title' => (string) $job->title,
+                'trashed' => $job->deleted_at !== null,
+                'already_snapshotted' => $job->source_workflow_id !== null && (int) $job->workflow_id !== (int) $job->source_workflow_id,
+            ])->all(),
+            'task_count' => $taskCount,
+        ];
+    }
+
+    public function deletePack(int $id): array
+    {
+        $this->assertManage();
+        $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
+
+        $mappedPhases = WorkflowPhase::query()
+            ->where('task_pack_id', $id)
+            ->whereNotNull('workflow_template_id')
+            ->get(['id', 'workflow_id', 'workflow_template_id']);
+        $sourceWorkflowIds = $mappedPhases
+            ->map(fn (WorkflowPhase $phase) => (int) ($phase->workflow_template_id ?: $phase->workflow_id))
+            ->filter()->unique()->values();
+
+        $legacyJobIds = $sourceWorkflowIds->isEmpty()
+            ? []
+            : FlowJob::withTrashed()
+                ->whereIn('workflow_id', $sourceWorkflowIds)
+                ->pluck('id')
+                ->map(fn ($jobId) => (int) $jobId)
+                ->all();
+
+        $protectedJobs = 0;
+        try {
+            DB::transaction(function () use ($pack, $id, $legacyJobIds, &$protectedJobs) {
+                if ($legacyJobIds) {
+                    $protectedJobs = app(JobWorkflowSnapshotService::class)->snapshotJobs($legacyJobIds);
+                }
+
+                // Setup phases keep their structure; deleting a reusable Task
+                // Pack only clears the setup mapping. Existing Jobs use their
+                // own private copied Task Pack and Tasks.
+                WorkflowPhase::query()
+                    ->where('task_pack_id', $id)
+                    ->whereNotNull('workflow_template_id')
+                    ->update(['task_pack_id' => null]);
+
+                TaskPackTask::query()->where('task_pack_id', $id)->delete();
+                TaskPackItem::query()->where('task_pack_id', $id)->delete();
+                $pack->delete();
+            });
+        } catch (QueryException $exception) {
+            if ((string) $exception->getCode() === '23000') {
+                throw ValidationException::withMessages([
+                    'pack' => 'FlowTrack could not safely detach every linked Job. Nothing was deleted. Refresh and try again.',
+                ]);
+            }
+            throw $exception;
         }
-        $itemIds = $pack->items()->pluck('id');
-        if ($itemIds->isNotEmpty() && Task::whereIn('task_pack_task_id', $itemIds)->exists()) {
-            throw ValidationException::withMessages(['pack' => 'Tasks have already been generated from this Task Pack. Deactivate it instead of deleting it.']);
-        }
-        DB::transaction(function () use ($pack, $itemIds) {
-            if (Schema::hasTable('task_pack_tasks')) TaskPackTask::whereIn('id', $itemIds)->delete();
-            $pack->items()->delete();
-            $pack->delete();
-        });
+
+        return [
+            'pack_name' => (string) $pack->name,
+            'job_count' => $protectedJobs,
+            'task_count' => 0,
+            'mapped_phase_count' => $mappedPhases->count(),
+        ];
     }
 
     public function saveItem(TaskPack $pack, array $data, ?int $id = null): TaskPackItem
     {
         $this->assertManage();
+        abort_if((bool) $pack->is_snapshot, 404);
         return DB::transaction(function () use ($pack, $data, $id) {
             $existingItem = $id ? TaskPackItem::query()->findOrFail($id) : null;
             $previousDefaultAssigneeId = $existingItem?->default_assignee_id ? (int) $existingItem->default_assignee_id : null;
@@ -315,7 +429,7 @@ class TaskPackService
         if (!Schema::hasTable('task_pack_items')) return;
         app(MasterDataService::class)->syncLegacy();
         $workspaceId = $this->workspaceId();
-        foreach (TaskPack::query()->where('workspace_id', $workspaceId)->where(fn ($q) => $q->whereNull('code')->orWhere('code', ''))->get() as $pack) {
+        foreach (TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where(fn ($q) => $q->whereNull('code')->orWhere('code', ''))->get() as $pack) {
             $base = strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', (string) ($pack->slug ?: $pack->name)), 0, 8)) ?: 'PACK';
             $pack->update(['code' => $base.'-'.$pack->id]);
         }
@@ -429,6 +543,24 @@ class TaskPackService
             'default_department_id' => $legacyDepartmentId,
         ]);
     }
+    private function taskPackTemplateIds(int $packId): array
+    {
+        $ids = TaskPackItem::query()->where('task_pack_id', $packId)->pluck('id');
+
+        if (Schema::hasTable('task_pack_tasks')) {
+            $ids = $ids->merge(
+                TaskPackTask::query()->where('task_pack_id', $packId)->pluck('id')
+            );
+        }
+
+        return $ids
+            ->map(fn ($templateId) => (int) $templateId)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function assertManage(): void
     {
         $user = auth()->user();

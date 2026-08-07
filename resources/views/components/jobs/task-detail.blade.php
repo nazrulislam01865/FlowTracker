@@ -79,7 +79,7 @@
             <section class="ft-task-property-grid ft-friendly-task-properties">
                 <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
                     <small>Assignee</small>
-                    <div class="ft-task-property-display"><x-ui.avatar :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/><b class="ft-property-value">{{ $task->assignee?->name ?? 'Unassigned' }}</b>@if($canAssignTask)<button type="button" title="Edit assignee" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.assignee?.focus())">✎</button>@endif</div>
+                    <div class="ft-task-property-display"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/><b class="ft-property-value">{{ $task->assignee?->name ?? 'Unassigned' }}</b>@if($canAssignTask)<button type="button" title="Edit assignee" x-on:click.stop="editing=!editing;$nextTick(()=>$refs.assignee?.focus())">✎</button>@endif</div>
                     @if($canAssignTask)<div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="editing=false"><select x-ref="assignee" class="ft-task-property-input" x-on:keydown.escape="editing=false" x-on:change="editing=false" wire:change="updateSelectedTaskField('assignee_id',$event.target.value)"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}" @selected((int)$task->assignee_id===(int)$user->id)>{{ $user->name }}</option>@endforeach</select></div>@endif
                 </div>
                 <div class="ft-task-property" x-data="{editing:false}" :class="{'is-editing':editing}">
@@ -162,7 +162,7 @@
                     <div class="ft-activity-tabs"><button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setTaskActivityTab('all')">All</button><button type="button" class="{{ $activityTab==='comments'?'active':'' }}" wire:click="setTaskActivityTab('comments')">Comments</button><button type="button" class="{{ $activityTab==='history'?'active':'' }}" wire:click="setTaskActivityTab('history')">History</button></div>
                 </div>
                 @if($canEditTask)
-                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
+                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
                 @endif
                 <div class="ft-activity-feed">
                     @forelse($timeline as $entry)
@@ -171,7 +171,7 @@
                             $actorName = $entry->user?->name ?? 'System';
                         @endphp
                         <article class="ft-activity-entry {{ $entry->kind==='comment' ? 'is-comment' : 'is-history' }}">
-                            <div class="ft-activity-entry-avatar"><x-ui.avatar :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
+                            <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$entry->user" :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
                                 <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><time title="{{ $entry->created_at?->format('M j, Y g:i A') }}">{{ $entry->created_at?->diffForHumans() }}</time></div>
                                 <p><x-ui.mention-text :text="$entry->body" /></p>

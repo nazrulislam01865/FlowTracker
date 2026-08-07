@@ -22,7 +22,7 @@ class AdminService
         return [
             'users' => User::where('is_active', true)->whereHas('workspaceMemberships', fn ($q) => $q->where('workspace_id', $this->workspaceId())->where('status', 'active'))->count(),
             'roles' => Role::where('workspace_id', $this->workspaceId())->where('is_active', true)->count(),
-            'task_packs' => TaskPack::count(),
+            'task_packs' => TaskPack::where('is_snapshot', false)->count(),
             'rules' => NotificationRule::where('is_active', true)->count(),
             'access_changes' => Activity::where('event', 'like', 'access.%')->where('created_at', '>=', now()->subDays(30))->count(),
         ];
@@ -30,8 +30,16 @@ class AdminService
 
     public function users()
     {
-        return User::with(['role','department'])
-            ->whereHas('workspaceMemberships', fn ($q) => $q->where('workspace_id', $this->workspaceId()))
+        $workspaceId = $this->workspaceId();
+
+        return User::with([
+                'role',
+                'department',
+                'workspaceMemberships' => fn ($q) => $q
+                    ->where('workspace_id', $workspaceId)
+                    ->select(['id', 'workspace_id', 'user_id', 'job_title']),
+            ])
+            ->whereHas('workspaceMemberships', fn ($q) => $q->where('workspace_id', $workspaceId))
             ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
             ->orderBy('name')->get();
     }
@@ -41,17 +49,28 @@ class AdminService
         return Role::with(['moduleAccess','users'])->where('workspace_id', $this->workspaceId())->orderByDesc('is_system')->orderBy('name')->get();
     }
 
+    public function roleOptions()
+    {
+        return Role::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->orderByDesc('is_system')
+            ->orderBy('name')
+            ->get(['id', 'name', 'slug', 'is_active']);
+    }
+
     public function notificationRules() { return NotificationRule::orderBy('name')->get(); }
-    public function taskPacks() { return TaskPack::with('templates')->get(); }
+    public function taskPacks() { return TaskPack::where('is_snapshot', false)->with('templates')->get(); }
 
     public function createUser(array $data): User
     {
         $actor = auth()->user();
         $this->assertAdministrator($actor);
         $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
+        $position = $this->normalizePosition($data['position'] ?? null);
+        unset($data['position']);
         $data['role_id'] = $role->id;
         $user = User::create(array_merge($data, ['password' => Hash::make($data['password']), 'is_active' => true, 'locale' => 'en']));
-        $this->syncMembership($user);
+        $this->syncMembership($user, ['job_title' => $position]);
         $this->audit($user, 'access.user_created', 'User created and assigned to role '.$user->role?->name, $actor);
         return $user;
     }
@@ -61,6 +80,7 @@ class AdminService
     {
         $this->assertAdministrator($actor);
         $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
+        $position = $this->normalizePosition($data['position'] ?? null);
 
         $changes = [
             'name' => trim($data['name']),
@@ -80,7 +100,7 @@ class AdminService
 
         $passwordChanged = array_key_exists('password', $changes);
         $user->update($changes);
-        $this->syncMembership($user);
+        $this->syncMembership($user, ['job_title' => $position]);
 
         if ($passwordChanged && Schema::hasTable('sessions')) {
             DB::table('sessions')->where('user_id', $user->id)->delete();
@@ -88,6 +108,14 @@ class AdminService
 
         $this->audit($user, 'access.user_updated', 'Updated user '.$user->name.($passwordChanged ? ' and changed password' : ''), $actor);
         return $user->refresh();
+    }
+
+    public function positionFor(User $user): ?string
+    {
+        return WorkspaceMembership::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->where('user_id', $user->id)
+            ->value('job_title');
     }
 
     public function deleteUser(User $user, User $actor): void
@@ -248,13 +276,25 @@ class AdminService
         abort_unless($actor && app(AccessControlService::class)->isAdministrator($actor), 403);
     }
 
-    private function syncMembership(User $user): void
+    private function syncMembership(User $user, array $extra = []): void
     {
         if (!$user->role_id) return;
         WorkspaceMembership::updateOrCreate(
             ['workspace_id' => $this->workspaceId(), 'user_id' => $user->id],
-            ['role_id' => $user->role_id, 'department_id' => $user->department_id, 'status' => $user->is_active ? 'active' : 'inactive', 'joined_at' => $user->created_at ?: now()],
+            array_merge([
+                'role_id' => $user->role_id,
+                'department_id' => $user->department_id,
+                'status' => $user->is_active ? 'active' : 'inactive',
+                'joined_at' => $user->created_at ?: now(),
+            ], $extra),
         );
+    }
+
+    private function normalizePosition(mixed $position): ?string
+    {
+        $position = trim((string) $position);
+
+        return $position !== '' ? $position : null;
     }
 
     private function audit(object $subject, string $event, string $description, ?User $actor = null, array $meta = []): void

@@ -1,3 +1,40 @@
-@props(['name', 'dark' => false, 'size' => null])
-@php($initials = collect(preg_split('/\s+/', trim($name)))->filter()->map(fn($p) => mb_substr($p, 0, 1))->take(2)->implode(''))
-<span {{ $attributes->class(['avatar', 'dark' => $dark])->merge(['style' => $size ? "width:{$size}px;height:{$size}px;font-size:".max(9, round($size/3.4))."px" : null]) }}>{{ $initials ?: 'FT' }}</span>
+@props(['name' => null, 'user' => null, 'src' => null, 'dark' => false, 'size' => null])
+@php
+    $displayName = $user?->name ?? $name ?? 'FlowTrack';
+    $imagePath = $user?->profile_image_path;
+
+    // Serve stored avatars through an application route instead of relying on
+    // public/storage. This works consistently in local/dev and production even
+    // when a filesystem symlink is missing, while the random stored filename
+    // gives us a stable cache-busting URL whenever the photo is replaced.
+    $imageUrl = $src;
+
+    if (! $imageUrl && $imagePath && $user?->id) {
+        $imageUrl = route('profile-images.show', [
+            'user' => $user->id,
+            'filename' => basename($imagePath),
+        ], false);
+    }
+
+    $initials = collect(preg_split('/\s+/', trim($displayName)))
+        ->filter()
+        ->map(fn ($part) => mb_substr($part, 0, 1))
+        ->take(2)
+        ->implode('');
+    $style = $size ? "width:{$size}px;height:{$size}px;font-size:".max(9, round($size / 3.4)).'px' : null;
+@endphp
+<span {{ $attributes->class(['avatar', 'dark' => $dark])->merge(['style' => $style]) }}>
+    @if($imageUrl)
+        <img
+            src="{{ $imageUrl }}"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onerror="this.hidden=true;this.nextElementSibling.hidden=false"
+        >
+        <span hidden aria-hidden="true">{{ $initials ?: 'FT' }}</span>
+    @else
+        {{ $initials ?: 'FT' }}
+    @endif
+</span>

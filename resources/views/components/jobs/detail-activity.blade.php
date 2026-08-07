@@ -27,7 +27,7 @@
     </div>
     @if($canComment)
         <div class="ft-comment-composer ft-friendly-composer">
-            <x-ui.avatar :name="auth()->user()->name" :size="32"/>
+            <x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/>
             <input class="ft-mention-input" wire:model="jobComment" wire:keydown.enter="addJobComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone...">
             <button class="ft-new-job-btn" type="button" wire:click="addJobComment">Comment</button>
         </div>
@@ -41,7 +41,7 @@
             @endphp
             <article class="ft-activity-entry {{ $isComment ? 'is-comment' : 'is-history' }}">
                 <div class="ft-activity-entry-avatar">
-                    <x-ui.avatar :name="$actorName" :size="32"/>
+                    <x-ui.avatar :user="$activity->user" :name="$actorName" :size="32"/>
                     <span>{{ $isComment ? '💬' : '↻' }}</span>
                 </div>
                 <div class="ft-activity-entry-content">

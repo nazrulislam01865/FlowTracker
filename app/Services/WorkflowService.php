@@ -4,9 +4,12 @@ namespace App\Services;
 
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
+use App\Models\TaskPack;
+use App\Models\Task;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
+use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -124,22 +127,126 @@ class WorkflowService
         if (Schema::hasTable('workflows')) Workflow::whereKey($id)->update(['is_active' => $workflow->is_active]);
     }
 
-    public function deleteWorkflow(int $id): void
+    /**
+     * Build the destructive-delete preview only when the user asks to delete a
+     * Workflow. This deliberately stays out of render() so normal setup loads
+     * do not pay for dependency scans.
+     */
+    public function workflowDeleteImpact(int $id): array
     {
         $this->assertManage();
         $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
-        if ($workflow->is_default) throw ValidationException::withMessages(['workflow' => 'The default workflow cannot be deleted.']);
-        if (FlowJob::where('workflow_id', $id)->exists()) throw ValidationException::withMessages(['workflow' => 'Jobs already use this workflow. Deactivate it instead.']);
-        DB::transaction(function () use ($workflow) {
-            $workflow->phases()->delete();
-            if (Schema::hasTable('workflows')) Workflow::whereKey($workflow->id)->delete();
-            $workflow->delete();
-        });
+        $phases = $this->workflowPhases($id);
+        $phaseIds = $phases->pluck('id')->map(fn ($phaseId) => (int) $phaseId)->values()->all();
+        $legacyJobIds = $this->workflowLinkedJobIds($id, $phaseIds);
+
+        $jobs = FlowJob::withTrashed()
+            ->where(function ($query) use ($id, $legacyJobIds) {
+                $query->where('source_workflow_id', $id);
+                if ($legacyJobIds) $query->orWhereIn('id', $legacyJobIds);
+            })
+            ->orderBy('job_number')
+            ->get(['id', 'job_number', 'title', 'workflow_id', 'source_workflow_id', 'deleted_at']);
+
+        $taskQuery = $jobs->isEmpty()
+            ? Task::withTrashed()->whereRaw('1 = 0')
+            : Task::withTrashed()->whereIn('flow_job_id', $jobs->pluck('id'));
+        $taskCount = (clone $taskQuery)->count();
+        $jobMap = $jobs->keyBy('id');
+        $tasks = $taskQuery->orderBy('task_number')->limit(8)->get(['id', 'task_number', 'title', 'flow_job_id'])->map(fn (Task $task) => [
+            'id' => (int) $task->id,
+            'task_number' => (string) $task->task_number,
+            'title' => (string) $task->title,
+            'job_number' => (string) ($jobMap->get($task->flow_job_id)?->job_number ?? ''),
+        ])->all();
+
+        return [
+            'id' => (int) $workflow->id,
+            'name' => (string) $workflow->name,
+            'is_default' => (bool) $workflow->is_default,
+            'can_delete' => !$workflow->is_default,
+            'blocked_reason' => $workflow->is_default
+                ? 'The default workflow is protected. Set another workflow as default first, then delete this one.'
+                : null,
+            'phase_count' => $phases->count(),
+            'phases' => $phases->take(8)->map(fn (WorkflowPhase $phase) => [
+                'id' => (int) $phase->id,
+                'name' => (string) $phase->name,
+                'sequence' => (int) $phase->sequence,
+            ])->all(),
+            'job_count' => $jobs->count(),
+            'jobs' => $jobs->take(8)->map(fn (FlowJob $job) => [
+                'id' => (int) $job->id,
+                'job_number' => (string) $job->job_number,
+                'title' => (string) $job->title,
+                'trashed' => $job->deleted_at !== null,
+                'already_snapshotted' => (int) $job->workflow_id !== (int) $id,
+            ])->all(),
+            'task_count' => $taskCount,
+            'tasks' => $tasks,
+            'legacy_job_count' => count($legacyJobIds),
+        ];
+    }
+
+    /**
+     * Delete only the reusable setup Workflow. Jobs are first detached into
+     * private snapshots when necessary; no Job or Task is deleted.
+     */
+    public function deleteWorkflow(int $id): array
+    {
+        $this->assertManage();
+        $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
+        if ($workflow->is_default) {
+            throw ValidationException::withMessages([
+                'workflow' => 'The default workflow cannot be deleted. Set another workflow as default first.',
+            ]);
+        }
+
+        $phaseIds = $this->workflowPhases($id)->pluck('id')->map(fn ($phaseId) => (int) $phaseId)->all();
+        $legacyJobIds = $this->workflowLinkedJobIds($id, $phaseIds);
+        $protectedJobs = 0;
+
+        try {
+            DB::transaction(function () use ($workflow, $phaseIds, $legacyJobIds, &$protectedJobs) {
+                if ($legacyJobIds) {
+                    $protectedJobs = app(JobWorkflowSnapshotService::class)->snapshotJobs($legacyJobIds, $workflow->id);
+                }
+
+                if ($phaseIds) {
+                    WorkflowPhase::query()->whereIn('id', $phaseIds)->delete();
+                }
+
+                if (Schema::hasTable('workflows')) {
+                    Workflow::query()->whereKey($workflow->id)->where('is_snapshot', false)->delete();
+                }
+
+                $workflow->delete();
+            });
+        } catch (QueryException $exception) {
+            if ((string) $exception->getCode() === '23000') {
+                throw ValidationException::withMessages([
+                    'workflow' => 'FlowTrack could not safely detach every linked Job. Nothing was deleted. Refresh and try again.',
+                ]);
+            }
+            throw $exception;
+        }
+
+        return [
+            'workflow_name' => (string) $workflow->name,
+            'job_count' => $protectedJobs,
+            'task_count' => 0,
+        ];
     }
 
     public function savePhase(WorkflowTemplate $workflow, array $data, ?WorkflowPhase $phase = null): WorkflowPhase
     {
         $this->assertManage();
+        if (!empty($data['task_pack_id'])) {
+            TaskPack::query()
+                ->where('workspace_id', $this->workspaceId())
+                ->where('is_snapshot', false)
+                ->findOrFail((int) $data['task_pack_id']);
+        }
         $document = !empty($data['document_category_id']) ? MasterRecord::find($data['document_category_id']) : null;
 
         // The phase modal does not expose sequence while editing. Preserve the
@@ -194,14 +301,26 @@ class WorkflowService
     public function delete(WorkflowPhase $phase): void
     {
         $this->assertManage();
-        if (FlowJob::where('workflow_phase_id', $phase->id)->orWhere('started_from_phase_id', $phase->id)->exists()) {
-            throw ValidationException::withMessages(['phase' => 'This phase is already used by Jobs. Deactivate it instead of deleting it.']);
-        }
-        DB::transaction(function () use ($phase) {
+        $jobIds = FlowJob::withTrashed()
+            ->where(function ($query) use ($phase) {
+                $query->where('workflow_phase_id', $phase->id)
+                    ->orWhere('started_from_phase_id', $phase->id);
+            })
+            ->pluck('id')
+            ->all();
+
+        DB::transaction(function () use ($phase, $jobIds) {
             $workflowId = $phase->workflow_template_id ?: $phase->workflow_id;
+            if ($jobIds) app(JobWorkflowSnapshotService::class)->snapshotJobs($jobIds, $workflowId);
+
+
             $sequence = $phase->sequence;
             $phase->delete();
-            WorkflowPhase::where('workflow_template_id', $workflowId)->where('sequence', '>', $sequence)->orderBy('sequence')->get()->each(fn ($p) => $p->update(['sequence' => $p->sequence - 1]));
+            WorkflowPhase::where('workflow_template_id', $workflowId)
+                ->where('sequence', '>', $sequence)
+                ->orderBy('sequence')
+                ->get()
+                ->each(fn ($row) => $row->update(['sequence' => $row->sequence - 1]));
         });
     }
 
@@ -209,7 +328,7 @@ class WorkflowService
     {
         if (!Schema::hasTable('workflows') || !Schema::hasTable('workflow_templates')) return;
         $workspaceId = $this->workspaceId();
-        foreach (Workflow::query()->orderBy('id')->get() as $legacy) {
+        foreach (Workflow::query()->where('is_snapshot', false)->orderBy('id')->get() as $legacy) {
             WorkflowTemplate::firstOrCreate(['id' => $legacy->id], [
                 'workspace_id' => $workspaceId,
                 'code' => strtoupper(substr(preg_replace('/[^A-Za-z0-9]/', '', $legacy->slug ?: $legacy->name), 0, 20)) ?: 'WF'.$legacy->id,
@@ -225,7 +344,7 @@ class WorkflowService
         }
         app(MasterDataService::class)->syncLegacy();
         if (Schema::hasColumn('workflow_phases', 'workflow_id')) {
-            foreach (WorkflowPhase::query()->whereNotNull('workflow_id')->get() as $phase) {
+            foreach (WorkflowPhase::query()->whereNotNull('workflow_id')->whereHas('workflow', fn ($workflow) => $workflow->where('is_snapshot', false))->get() as $phase) {
                 $changes = [];
                 if (!$phase->workflow_template_id) $changes['workflow_template_id'] = $phase->workflow_id;
                 if (Schema::hasColumn('workflow_phases','can_skip')) $changes['is_skippable'] = (bool) $phase->can_skip;
@@ -238,6 +357,52 @@ class WorkflowService
             }
         }
     }
+    private function workflowPhases(int $workflowId)
+    {
+        return WorkflowPhase::query()
+            ->where(function ($query) use ($workflowId) {
+                $query->where('workflow_template_id', $workflowId);
+                if (Schema::hasColumn('workflow_phases', 'workflow_id')) {
+                    $query->orWhere('workflow_id', $workflowId);
+                }
+            })
+            ->orderBy('sequence')
+            ->get(['id', 'name', 'sequence']);
+    }
+
+    private function workflowLinkedJobIds(int $workflowId, array $phaseIds): array
+    {
+        $ids = FlowJob::withTrashed()
+            ->where(function ($query) use ($workflowId, $phaseIds) {
+                $query->where('workflow_id', $workflowId);
+                if ($phaseIds) {
+                    $query->orWhereIn('workflow_phase_id', $phaseIds)
+                        ->orWhereIn('started_from_phase_id', $phaseIds);
+                }
+            })
+            ->pluck('id');
+
+        if ($phaseIds) {
+            $ids = $ids
+                ->merge(Task::withTrashed()->whereIn('workflow_phase_id', $phaseIds)->pluck('flow_job_id'));
+
+            if (Schema::hasTable('flow_job_phase_histories')) {
+                $ids = $ids->merge(
+                    DB::table('flow_job_phase_histories')
+                        ->whereIn('workflow_phase_id', $phaseIds)
+                        ->pluck('flow_job_id')
+                );
+            }
+        }
+
+        return $ids
+            ->map(fn ($jobId) => (int) $jobId)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     private function assertManage(): void
     {
         $user = auth()->user();

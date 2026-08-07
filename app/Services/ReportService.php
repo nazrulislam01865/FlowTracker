@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\FlowJobPhaseHistory;
 use App\Models\User;
+use App\Models\WorkflowPhase;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -33,12 +34,34 @@ class ReportService
     {
         $this->authorize($user);
 
-        return app(JobService::class)->activeQuery($user)
+        $rows = app(JobService::class)->activeQuery($user)
             ->reorder()
-            ->selectRaw('workflow_phase_id, count(*) total')
-            ->groupBy('workflow_phase_id')
-            ->with('phase:id,name,short_name,sequence')
+            ->selectRaw('coalesce(source_workflow_phase_id, workflow_phase_id) as phase_key, count(*) total')
+            ->groupByRaw('coalesce(source_workflow_phase_id, workflow_phase_id)')
             ->get();
+
+        $phaseKeys = $rows->pluck('phase_key')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $phases = WorkflowPhase::query()
+            ->whereIn('id', $phaseKeys)
+            ->get(['id', 'name', 'short_name', 'sequence'])
+            ->keyBy('id');
+
+        $missingKeys = $phaseKeys->diff($phases->keys());
+        $snapshotPhases = $missingKeys->isEmpty()
+            ? collect()
+            : WorkflowPhase::query()
+                ->whereIn('source_workflow_phase_id', $missingKeys)
+                ->orderBy('id')
+                ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                ->unique('source_workflow_phase_id')
+                ->keyBy('source_workflow_phase_id');
+
+        foreach ($rows as $row) {
+            $key = (int) $row->phase_key;
+            $row->setRelation('phase', $phases->get($key) ?: $snapshotPhases->get($key));
+        }
+
+        return $rows;
     }
 
     public function workload(User $user)

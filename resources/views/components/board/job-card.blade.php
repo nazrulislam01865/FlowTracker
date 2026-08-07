@@ -73,7 +73,7 @@
                             <div class="ft-phase-task-copy">
                                 <b>{{ $phaseTask->title }}</b>
                                 <div class="ft-phase-task-person">
-                                    <x-ui.avatar :name="$phaseTask->assignee?->name ?? 'Unassigned'" :size="30" />
+                                    <x-ui.avatar :user="$phaseTask->assignee" :name="$phaseTask->assignee?->name ?? 'Unassigned'" :size="30" />
                                     <span>{{ $phaseTask->assignee?->name ?? 'Unassigned' }}</span>
                                 </div>
                             </div>
@@ -91,7 +91,7 @@
             <span class="ft-next-action-label">NEXT ACTION</span>
             <b>{{ $nextTask->title }}</b>
             <div class="ft-next-action-meta">
-                <span class="ft-next-assignee"><x-ui.avatar :name="$nextTask->assignee?->name ?? 'Unassigned'" :size="34" /> {{ $nextTask->assignee?->name ?? 'Unassigned' }}</span>
+                <span class="ft-next-assignee"><x-ui.avatar :user="$nextTask->assignee" :name="$nextTask->assignee?->name ?? 'Unassigned'" :size="34" /> {{ $nextTask->assignee?->name ?? 'Unassigned' }}</span>
                 <span class="ft-next-divider"></span>
                 <span class="ft-next-due {{ $nextTask->due_date?->isPast() ? 'overdue' : '' }}">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>
@@ -103,7 +103,7 @@
         <div class="ft-next-action">
             <span class="ft-next-action-label">NEXT ACTION</span>
             <b>{{ $job->next_action }}</b>
-            <div class="ft-next-action-meta"><span class="ft-next-assignee"><x-ui.avatar :name="$job->coordinator?->name ?? 'Unassigned'" :size="34" /> {{ $job->coordinator?->name ?? 'Unassigned' }}</span></div>
+            <div class="ft-next-action-meta"><span class="ft-next-assignee"><x-ui.avatar :user="$job->coordinator" :name="$job->coordinator?->name ?? 'Unassigned'" :size="34" /> {{ $job->coordinator?->name ?? 'Unassigned' }}</span></div>
         </div>
     @endif
 
@@ -111,7 +111,7 @@
         <span class="ft-job-team-label">Team</span>
         <div class="ft-team-avatars">
             @foreach($team->take(3) as $member)
-                <x-ui.avatar :name="$member->name" :size="32" class="{{ $loop->even ? 'ft-avatar-green' : '' }}" />
+                <x-ui.avatar :user="$member" :name="$member->name" :size="32" class="{{ $loop->even ? 'ft-avatar-green' : '' }}" />
             @endforeach
             @if($team->count() > 3)<span class="ft-avatar-more">+{{ $team->count()-3 }}</span>@endif
         </div>

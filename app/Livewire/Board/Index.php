@@ -37,7 +37,8 @@ class Index extends Component
 
     public function mount(): void
     {
-        $this->workflow = (string) \App\Models\Workflow::where('is_active', true)->orderBy('id')->value('id');
+        $this->workflow = (string) (\App\Models\Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id')
+            ?: \App\Models\FlowJob::query()->whereNotNull('source_workflow_id')->value('source_workflow_id'));
     }
 
     public function setMode(string $mode): void

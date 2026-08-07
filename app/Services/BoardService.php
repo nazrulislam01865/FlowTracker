@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\FlowJob;
 use App\Models\FlowJobPhaseHistory;
 use App\Models\Task;
 use App\Models\User;
@@ -27,7 +28,7 @@ class BoardService
         return $this->jobQuery($user, $filters)
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_id',
-                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
+                'flow_jobs.source_workflow_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
                 'flow_jobs.title', 'flow_jobs.quantity', 'flow_jobs.commercial_value', 'flow_jobs.currency',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
                 'flow_jobs.delivery_date', 'flow_jobs.next_action', 'flow_jobs.needs_attention',
@@ -44,11 +45,11 @@ class BoardService
             ->with([
                 'client:id,name',
                 'phase:id,workflow_id,name,short_name,sequence',
-                'owner:id,name',
-                'coordinator:id,name',
+                'owner:id,name,profile_image_path',
+                'coordinator:id,name,profile_image_path',
                 'items:id,flow_job_id,quantity',
                 'members:id,flow_job_id,user_id',
-                'members.user:id,name',
+                'members.user:id,name,profile_image_path',
                 'tasks' => fn ($query) => app(AccessControlService::class)
                     ->applyTaskScope($query, $user)
                     ->select([
@@ -57,7 +58,7 @@ class BoardService
                         'tasks.completed_at', 'tasks.updated_at',
                     ])
                     ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
-                    ->with(['assignee:id,name', 'phase:id,name,sequence'])
+                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence'])
                     ->orderByRaw('completed_at is null desc')
                     ->orderByRaw('due_date is null, due_date asc'),
                 'latestActivity' => fn ($query) => $query->select([
@@ -67,7 +68,7 @@ class BoardService
                     'activities.user_id',
                     'activities.created_at',
                 ]),
-                'latestActivity.user:id,name',
+                'latestActivity.user:id,name,profile_image_path',
             ])
             ->whereNull('completed_at')
             ->limit(max(1, $limit))
@@ -87,7 +88,7 @@ class BoardService
                 'job:id,job_number,title,client_id,coordinator_id,status,completed_at',
                 'job.client:id,name',
                 'phase:id,name,short_name,sequence',
-                'assignee:id,name',
+                'assignee:id,name,profile_image_path',
             ])
             ->withCount([
                 'checklistItems',
@@ -159,26 +160,56 @@ class BoardService
     public function phases(?int $workflowId = null): Collection
     {
         if (!$workflowId) {
-            $workflowId = Workflow::where('is_active', true)->orderBy('id')->value('id');
+            $workflowId = Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id');
         }
         if (!$workflowId) return collect();
 
         $key = $this->phaseCacheKey($workflowId);
         $expiresAt = now()->addMinutes(5);
-        $resolver = fn () => WorkflowPhase::query()
-            ->where('workflow_id', $workflowId)
-            ->where('is_active', true)
-            ->orderBy('sequence')
-            ->orderBy('id')
-            ->get(['id', 'workflow_id', 'name', 'short_name', 'sequence'])
-            ->map(fn (WorkflowPhase $phase) => [
-                'id' => (int) $phase->id,
-                'workflow_id' => (int) $phase->workflow_id,
-                'name' => (string) $phase->name,
-                'short_name' => (string) ($phase->short_name ?: $phase->name),
-                'sequence' => (int) $phase->sequence,
-            ])
-            ->all();
+        $resolver = function () use ($workflowId) {
+            $sourceRows = WorkflowPhase::query()
+                ->where('workflow_id', $workflowId)
+                ->where('is_active', true)
+                ->orderBy('sequence')
+                ->orderBy('id')
+                ->get(['id', 'workflow_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                ->map(fn (WorkflowPhase $phase) => [
+                    'id' => (int) $phase->id,
+                    'workflow_id' => (int) $workflowId,
+                    'name' => (string) $phase->name,
+                    'short_name' => (string) ($phase->short_name ?: $phase->name),
+                    'sequence' => (int) $phase->sequence,
+                ]);
+
+            $snapshotWorkflowIds = Workflow::query()
+                ->where('is_snapshot', true)
+                ->where('source_workflow_id', $workflowId)
+                ->pluck('id');
+
+            $snapshotRows = $snapshotWorkflowIds->isEmpty()
+                ? collect()
+                : WorkflowPhase::query()
+                    ->whereIn('workflow_id', $snapshotWorkflowIds)
+                    ->whereNotNull('source_workflow_phase_id')
+                    ->where('is_active', true)
+                    ->orderBy('sequence')
+                    ->orderBy('id')
+                    ->get(['id', 'workflow_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                    ->map(fn (WorkflowPhase $phase) => [
+                        'id' => (int) $phase->source_workflow_phase_id,
+                        'workflow_id' => (int) $workflowId,
+                        'name' => (string) $phase->name,
+                        'short_name' => (string) ($phase->short_name ?: $phase->name),
+                        'sequence' => (int) $phase->sequence,
+                    ]);
+
+            return $sourceRows
+                ->concat($snapshotRows)
+                ->unique('id')
+                ->sortBy(['sequence', 'id'])
+                ->values()
+                ->all();
+        };
         $rows = $this->rememberScalarRows(
             $key,
             $expiresAt,
@@ -209,15 +240,28 @@ class BoardService
         if ($includeWorkflows) {
             $workflowKey = $this->workflowCacheKey();
             $workflowExpiresAt = now()->addMinutes(5);
-            $workflowResolver = fn () => Workflow::query()
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name'])
-                ->map(fn (Workflow $workflow) => [
-                    'id' => (int) $workflow->id,
-                    'name' => (string) $workflow->name,
-                ])
-                ->all();
+            $workflowResolver = function () {
+                $setup = Workflow::query()
+                    ->where('is_snapshot', false)
+                    ->where('is_active', true)
+                    ->orderBy('name')
+                    ->get(['id', 'name'])
+                    ->map(fn (Workflow $workflow) => [
+                        'id' => (int) $workflow->id,
+                        'name' => (string) $workflow->name,
+                    ]);
+
+                $jobSnapshots = FlowJob::query()
+                    ->whereNotNull('source_workflow_id')
+                    ->with('workflow:id,name')
+                    ->get(['id', 'workflow_id', 'source_workflow_id'])
+                    ->map(fn (FlowJob $job) => [
+                        'id' => (int) $job->source_workflow_id,
+                        'name' => (string) ($job->workflow?->name ?: 'Archived Workflow'),
+                    ]);
+
+                return $setup->concat($jobSnapshots)->unique('id')->sortBy('name')->values()->all();
+            };
             $workflows = $this->rememberScalarRows(
                 $workflowKey,
                 $workflowExpiresAt,
@@ -380,7 +424,12 @@ class BoardService
 
         $query
             ->when(empty($filters['status']), fn ($q) => $q->whereNotIn('status', JobService::INACTIVE_STATUSES))
-            ->when($filters['workflow'] ?? null, fn ($q, $value) => $q->where('workflow_id', $value))
+            ->when($filters['workflow'] ?? null, fn ($q, $value) => $q->where(function ($workflowQuery) use ($value) {
+                $workflowQuery->where('source_workflow_id', $value)
+                    ->orWhere(function ($legacy) use ($value) {
+                        $legacy->whereNull('source_workflow_id')->where('workflow_id', $value);
+                    });
+            }))
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->whereKey($value))
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($inner) use ($search) {

@@ -33,7 +33,7 @@
     @endif
 
     <div class="ft-task-assignee-row">
-        <div class="ft-task-assignee"><x-ui.avatar :name="$task->assignee?->name ?? 'Unassigned'" :size="38" /><b>{{ $task->assignee?->name ?? 'Unassigned' }}</b></div>
+        <div class="ft-task-assignee"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="38" /><b>{{ $task->assignee?->name ?? 'Unassigned' }}</b></div>
         <span class="ft-inline-date {{ $task->due_date?->isPast() && !$task->completed_at ? 'overdue' : '' }}" x-data="{ editing:false }">
             <button type="button" class="ft-inline-date-display" x-show="!editing" x-on:click.stop="editing=true; $nextTick(() => $refs.dateInput.showPicker ? $refs.dateInput.showPicker() : $refs.dateInput.focus())" title="Set due date">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M7 3v4M17 3v4M3 10h18"/></svg>

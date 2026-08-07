@@ -59,7 +59,7 @@
             @if(!$cardsReady)
                 <span>Loading {{ $mode === 'jobs' ? 'Job' : 'Task' }} Board cards…</span>
             @elseif($mode === 'jobs')
-                <span>Showing <b>{{ $jobs->count() }}</b> Jobs across <b>{{ $jobs->pluck('workflow_id')->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('workflow', $jobs->pluck('workflow_id')->unique()->count()) }}</span>
+                <span>Showing <b>{{ $jobs->count() }}</b> Jobs across <b>{{ $jobs->map(fn($job) => $job->source_workflow_id ?: $job->workflow_id)->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('workflow', $jobs->map(fn($job) => $job->source_workflow_id ?: $job->workflow_id)->unique()->count()) }}</span>
             @else
                 <span>Showing <b>{{ $tasks->count() }}</b> of <b>{{ $taskCounts['open'] + $taskCounts['completed'] }}</b> tasks across <b>{{ $tasks->pluck('flow_job_id')->unique()->count() }}</b> {{ \Illuminate\Support\Str::plural('job', $tasks->pluck('flow_job_id')->unique()->count()) }}</span>
             @endif
@@ -80,7 +80,7 @@
             <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="jobHeaderScroll" x-on:scroll="$refs.jobBodyScroll && ($refs.jobBodyScroll.scrollLeft = $event.target.scrollLeft)">
                 <div class="ft-job-board-header-grid">
                     @foreach($phases as $phase)
-                        @php($phaseJobs = $jobs->where('workflow_phase_id', $phase->id))
+                        @php($phaseJobs = $jobs->filter(fn($job) => (int)($job->source_workflow_phase_id ?: $job->workflow_phase_id) === (int)$phase->id))
                         @if($hideEmptyPhases && $phaseJobs->isEmpty()) @continue @endif
                         <button type="button" class="ft-board-column-head ft-external-lane-head" x-on:click="phaseClosed[{{ $phase->id }}]=!phaseClosed[{{ $phase->id }}]">
                             <span>{{ strtoupper($phase->short_name) }}</span><b>{{ $phaseJobs->count() }}</b>
@@ -94,7 +94,7 @@
         <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll" x-ref="jobBodyScroll" x-on:scroll="$refs.jobHeaderScroll && ($refs.jobHeaderScroll.scrollLeft = $event.target.scrollLeft)">
             <div class="ft-job-board-grid ft-job-board-body-grid">
                 @foreach($phases as $phase)
-                    @php($phaseJobs = $jobs->where('workflow_phase_id', $phase->id))
+                    @php($phaseJobs = $jobs->filter(fn($job) => (int)($job->source_workflow_phase_id ?: $job->workflow_phase_id) === (int)$phase->id))
                     @if($hideEmptyPhases && $phaseJobs->isEmpty()) @continue @endif
                     <section class="ft-board-column ft-job-column ft-board-column-nohead" wire:key="job-phase-{{ $phase->id }}">
                         <button type="button" class="ft-mobile-phase-head" x-on:click="phaseClosed[{{ $phase->id }}]=!phaseClosed[{{ $phase->id }}]">
