@@ -49,6 +49,17 @@ class ListFilterExperienceTest extends TestCase
         $this->assertStringContainsString("->options($user, 'jobs', 'documents'", $documents);
     }
 
+    public function test_task_assignee_picker_uses_compact_initial_results_and_department_metadata(): void
+    {
+        $controller = file_get_contents(app_path('Http/Controllers/FilterOptionController.php'));
+        $service = file_get_contents(app_path('Services/FilterOptionService.php'));
+
+        $this->assertStringContainsString("$type === 'users' && $context === 'task-assignee'", $controller);
+        $this->assertStringContainsString('? 5', $controller);
+        $this->assertStringContainsString("with('department:id,name')", $service);
+        $this->assertStringContainsString("'meta' => (string) ($row->department?->name ?: '')", $service);
+    }
+
     public function test_create_job_product_filter_supports_legacy_products_missing_parent_links(): void
     {
         $service = file_get_contents(app_path('Services/FilterOptionService.php'));

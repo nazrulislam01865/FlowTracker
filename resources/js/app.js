@@ -21,28 +21,6 @@ const bootShell = () => {
     }
 };
 
-const showRealtimeToast = (payload) => {
-    let host = document.getElementById('flowtrackRealtimeToasts');
-    if (!host) {
-        host = document.createElement('div');
-        host.id = 'flowtrackRealtimeToasts';
-        host.className = 'ft-realtime-toasts';
-        document.body.appendChild(host);
-    }
-
-    const item = document.createElement(payload?.url ? 'a' : 'div');
-    item.className = `ft-realtime-toast ft-realtime-toast-${payload?.type || 'info'}`;
-    if (payload?.url) item.href = payload.url;
-    item.innerHTML = `
-        <span class="ft-realtime-toast-dot"></span>
-        <span class="ft-realtime-toast-copy"><strong></strong><small></small></span>
-        <span class="ft-realtime-toast-time">Now</span>`;
-    item.querySelector('strong').textContent = payload?.title || 'FlowTrack update';
-    item.querySelector('small').textContent = payload?.message || '';
-    host.prepend(item);
-    window.setTimeout(() => item.remove(), 6500);
-};
-
 const setRealtimeUnreadCount = (count) => {
     const unread = Math.max(0, Number.parseInt(String(count ?? 0), 10) || 0);
     const bell = document.getElementById('flowtrackNotificationBell');
@@ -108,7 +86,8 @@ const syncUnreadCount = async () => {
 
         if (latestId > (realtimeState.latestNotificationId || 0)) {
             realtimeState.latestNotificationId = latestId;
-            showRealtimeToast({...latest, unread_count: data?.count ?? 0});
+            // Keep the Notifications page/live components in sync without
+            // rendering any floating notification popup.
             window.Livewire?.dispatch?.('flowtrack-notification');
         }
     } catch (_) {
@@ -173,11 +152,13 @@ const bootRealtimeNotifications = () => {
     const channel = pusher.subscribe(channelName);
     channel.bind('flowtrack.notification', (payload) => {
         const notificationId = Number.parseInt(String(payload?.id ?? 0), 10) || 0;
-        const isNew = notificationId === 0 || notificationId > (realtimeState.latestNotificationId || 0);
-        if (notificationId > 0) realtimeState.latestNotificationId = notificationId;
+        const previousLatestId = realtimeState.latestNotificationId || 0;
+        if (notificationId > 0) realtimeState.latestNotificationId = Math.max(notificationId, previousLatestId);
         realtimeState.initialNotificationSynced = true;
+
+        // Realtime notifications are intentionally silent in the page UI.
+        // Keep unread badges and the Notifications page updated immediately.
         markRealtimeUnread(payload);
-        if (isNew) showRealtimeToast(payload);
         window.Livewire?.dispatch?.('flowtrack-notification');
     });
 

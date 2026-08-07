@@ -1,6 +1,8 @@
 @props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
+    $completedProductRows = $productRows->filter(fn ($item) => filled($item->product_name ?? null));
+    $persistedProductRowCount = $productRows->filter(fn ($item) => filled($item->id ?? null))->count();
     $nextTask = \App\Support\JobDetailPresenter::nextTask($job);
     $currentTasks = \App\Support\JobDetailPresenter::phaseTasks($job);
     $done = \App\Support\JobDetailPresenter::completedCount($currentTasks);
@@ -45,28 +47,45 @@
                     <x-ui.inline-save-state />
                 @endif
             </div>
-            <div class="ft-card-section-head"><b>Products &amp; quantities</b><span>{{ $productRows->count() }} product · {{ number_format($productRows->sum('quantity')) }} total units</span></div>
+            <div class="ft-card-section-head"><b>Products &amp; quantities</b><span>{{ $completedProductRows->count() }} product · {{ number_format($completedProductRows->sum('quantity')) }} total units</span></div>
             <table class="ft-mini-grid-table ft-inline-product-table">
                 <thead><tr><th>Category</th><th>Product</th><th>Quantity</th></tr></thead>
                 <tbody>
                 @foreach($productRows as $item)
-                    <tr wire:key="job-item-{{ $item->id ?? $loop->index }}">
+                    @php
+                        $isDraftItem = filled($item->id) && blank($item->product_name);
+                        $categoryNeedsSelection = filled($item->id) && blank($item->category_name);
+                        $productNeedsSelection = filled($item->id) && filled($item->category_name) && blank($item->product_name);
+                        $categoryLabel = $item->category_name ?: 'Select category';
+                        $productLabel = $item->product_name ?: (blank($item->category_name) ? 'Select category first' : 'Select product');
+                        $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
+                    @endphp
+                    <tr wire:key="job-item-{{ $item->id ?? $loop->index }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false }" @class(['ft-inline-product-draft-row' => $isDraftItem])>
                         <td>
                             @if($item->id)
                                 <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($item->category_name ?: 'Uncategorised') })"
+                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
+                                    wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($categoryLabel) })"
+                                    x-init="if (@js($categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                    x-on:click.outside="if (editing && !@js($categoryNeedsSelection)) cancelEdit()"
+                                    x-on:ft-inline-remote-cancel.stop="if (!@js($categoryNeedsSelection)) cancelEdit()"
+                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
                                 >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $item->category_name ?: 'Uncategorised' }}</span>
+                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $categoryLabel }}</span>
                                     @if($canEditJob)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.categorySelect.focus())">✎</button>
-                                        <select x-ref="categorySelect" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input product"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:blur="if (editing) cancelEdit()"
-                                            x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobItem({{ $item->id }}, 'category_name', draftValue))">
-                                            @foreach($categories as $category)<option value="{{ $category->name }}">{{ $category->name }}</option>@endforeach
-                                        </select>
+                                        <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                            <x-ui.inline-remote-catalog
+                                                type="product-categories"
+                                                :value="$item->category_name ?? ''"
+                                                :selected-label="$categoryLabel"
+                                                placeholder="Select category"
+                                                search-label="product category"
+                                                :menu-width="320"
+                                            />
+                                        </div>
                                         <x-ui.inline-save-state compact />
                                     @endif
                                 </div>
@@ -77,19 +96,30 @@
                         <td>
                             @if($item->id)
                                 <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name), display: @js($item->product_name) })"
+                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
+                                    wire:key="{{ $productPickerKey }}"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name ?? ''), display: @js($productLabel) })"
+                                    x-init="if (@js($productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                    x-on:click.outside="if (editing && !@js($productNeedsSelection)) cancelEdit()"
+                                    x-on:ft-inline-remote-cancel.stop="if (!@js($productNeedsSelection)) cancelEdit()"
+                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'product_name', nextValue)).then(async (ok) => { if (ok) await $wire.$refresh(); productSaving = false })"
                                 >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $item->product_name }}</span>
+                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $productLabel }}</span>
                                     @if($canEditJob)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.productInput.focus())">✎</button>
-                                        <select x-ref="productInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input product"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:blur="if (editing) cancelEdit()"
-                                            x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobItem({{ $item->id }}, 'product_name', draftValue))">
-                                            @foreach($products as $product)<option value="{{ $product->name }}">{{ $product->name }}</option>@endforeach
-                                        </select>
+                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || @js(blank($item->category_name))" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="{{ blank($item->category_name) ? 'Select a category first' : 'Edit product' }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                            <x-ui.inline-remote-catalog
+                                                type="products"
+                                                :value="$item->product_name ?? ''"
+                                                :selected-label="$productLabel"
+                                                :placeholder="blank($item->category_name) ? 'Select category first' : 'Select product'"
+                                                search-label="product"
+                                                :params="['category' => (string) ($item->category_name ?? '')]"
+                                                :disabled="blank($item->category_name)"
+                                                :menu-width="340"
+                                            />
+                                        </div>
                                         <x-ui.inline-save-state compact />
                                     @endif
                                 </div>
@@ -99,19 +129,35 @@
                         </td>
                         <td>
                             @if($item->id)
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ number_format((int)$item->quantity) }}</span>
+                                <div class="ft-inline-product-quantity-wrap">
+                                    <div
+                                        class="ft-inline-field-editor ft-inline-edit-shell"
+                                        x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
+                                        x-init="if (@js($isDraftItem)) editing = true"
+                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                    >
+                                        <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ number_format((int)$item->quantity) }}</span>
+                                        @if($canEditJob)
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" aria-label="Edit quantity" title="Edit quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.quantityInput.focus())">✎</button>
+                                            <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
+                                                x-on:keydown.escape.prevent="if (@js($isDraftItem)) { draftValue = value } else { cancelEdit() }"
+                                                x-on:keydown.enter.prevent="$event.target.blur()"
+                                                x-on:blur="if (editing) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { if (!ok) { quantitySaving = false; return; } if (@js($isDraftItem)) { editing = true } else { await $wire.$refresh() } quantitySaving = false }) } else if (!@js($isDraftItem)) { cancelEdit() } }">
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
                                     @if($canEditJob)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit quantity" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.quantityInput.focus())">✎</button>
-                                        <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:keydown.enter.prevent="$event.target.blur()"
-                                            x-on:blur="if (editing) { const next = positiveInteger(draftValue); next === value ? cancelEdit() : commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)) }">
-                                        <x-ui.inline-save-state compact />
+                                        <button
+                                            type="button"
+                                            class="ft-inline-product-delete"
+                                            title="{{ $persistedProductRowCount <= 1 ? 'A Job must keep at least one product' : 'Remove product' }}"
+                                            aria-label="Remove product"
+                                            wire:click.stop="removeJobItem({{ $item->id }})"
+                                            wire:confirm="Remove this product from the Job?"
+                                            wire:loading.attr="disabled"
+                                            wire:target="removeJobItem({{ $item->id }})"
+                                            :disabled="categorySaving || productSaving || quantitySaving || @js($persistedProductRowCount <= 1)"
+                                        >×</button>
                                     @endif
                                 </div>
                             @else
@@ -123,7 +169,7 @@
                 </tbody>
             </table>
             @if($canEditJob)
-                <div class="ft-product-actions"><button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addJobItem({{ $job->id }})">＋ Add product</button></div>
+                <div class="ft-product-actions"><button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addJobItem({{ $job->id }})" wire:loading.attr="disabled" wire:target="addJobItem({{ $job->id }})">＋ Add product</button></div>
             @endif
         </section>
 
@@ -266,6 +312,9 @@
                                     class="ft-task-inline-editor ft-inline-edit-shell"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                    x-on:click.outside="if (editing) cancelEdit()"
+                                    x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue))"
                                 >
                                     <span x-show="!editing" class="ft-task-inline-display ft-inline-person-live">
                                         <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/></span>
@@ -273,14 +322,16 @@
                                         <span x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                                     </span>
                                     @if($canAssignTask)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskAssignee.focus())">✎</button>
-                                        <select x-ref="taskAssignee" x-cloak x-show="editing" x-model="draftValue" class="ft-task-inline-input"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:blur="if (editing) cancelEdit()"
-                                            x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue))">
-                                            <option value="">Unassigned</option>
-                                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
-                                        </select>
+                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                        <div x-cloak x-show="editing" class="ft-task-inline-assignee-picker">
+                                            <x-ui.inline-remote-user
+                                                :value="$task->assignee_id ?? ''"
+                                                :selected-label="$task->assignee?->name ?? 'Unassigned'"
+                                                trigger-class="ft-task-inline-input"
+                                                variant="compact"
+                                                :menu-width="300"
+                                            />
+                                        </div>
                                         <x-ui.inline-save-state compact />
                                     @endif
                                 </span>

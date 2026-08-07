@@ -27,8 +27,8 @@ class FilterOptionService
             'clients' => $this->clients($user, $search, $limit),
             'jobs' => $this->jobs($user, $context, $search, $limit),
             'users' => $this->users($user, $context, $search, $limit),
-            'product-categories' => $this->productCategories($user, $search, $limit),
-            'products' => $this->products($user, $search, $limit, (string) ($constraints['category'] ?? '')),
+            'product-categories' => $this->productCategories($user, $context, $search, $limit),
+            'products' => $this->products($user, $context, $search, $limit, (string) ($constraints['category'] ?? '')),
             'workflows' => $this->workflows($user, $search, $limit),
             default => collect(),
         };
@@ -38,8 +38,8 @@ class FilterOptionService
                 'clients' => $this->clientById($user, $selectedId),
                 'jobs' => $this->jobById($user, $context, $selectedId),
                 'users' => $this->userById($user, $context, $selectedId),
-                'product-categories' => $this->productCategoryByName($user, (string) $selectedId),
-                'products' => $this->productByName($user, (string) $selectedId, (string) ($constraints['category'] ?? '')),
+                'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
+                'products' => $this->productByName($user, $context, (string) $selectedId, (string) ($constraints['category'] ?? '')),
                 'workflows' => $this->workflowById($user, $selectedId),
                 default => null,
             };
@@ -106,23 +106,35 @@ class FilterOptionService
     private function users(User $user, string $context, string $search, int $limit): Collection
     {
         return $this->visibleUsers($user, $context)
+            ->with('department:id,name')
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->orderBy('name')
             ->limit($limit)
-            ->get(['id', 'name'])
-            ->map(fn (User $row) => ['id'=>(int)$row->id, 'label'=>(string)$row->name, 'meta'=>'']);
+            ->get(['id', 'department_id', 'name'])
+            ->map(fn (User $row) => [
+                'id' => (int) $row->id,
+                'label' => (string) $row->name,
+                'meta' => (string) ($row->department?->name ?: ''),
+            ]);
     }
 
     private function userById(User $user, string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
-        $row = $this->visibleUsers($user, $context)->find((int) $id, ['id','name']);
-        return $row ? ['id'=>(int)$row->id, 'label'=>(string)$row->name, 'meta'=>''] : null;
+        $row = $this->visibleUsers($user, $context)
+            ->with('department:id,name')
+            ->find((int) $id, ['id', 'department_id', 'name']);
+
+        return $row ? [
+            'id' => (int) $row->id,
+            'label' => (string) $row->name,
+            'meta' => (string) ($row->department?->name ?: ''),
+        ] : null;
     }
 
-    private function productCategories(User $user, string $search, int $limit): Collection
+    private function productCategories(User $user, string $context, string $search, int $limit): Collection
     {
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeCatalogAccess($user, $context);
 
         return MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
@@ -142,10 +154,10 @@ class FilterOptionService
             ]);
     }
 
-    private function productCategoryByName(User $user, string $name): ?array
+    private function productCategoryByName(User $user, string $context, string $name): ?array
     {
         if ($name === '') return null;
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeCatalogAccess($user, $context);
 
         $row = MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
@@ -161,9 +173,9 @@ class FilterOptionService
         ] : null;
     }
 
-    private function products(User $user, string $search, int $limit, string $category): Collection
+    private function products(User $user, string $context, string $search, int $limit, string $category): Collection
     {
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeCatalogAccess($user, $context);
 
         $workspaceId = app(SetupContext::class)->workspaceId();
         $categoryId = $this->productCategoryId($workspaceId, $category);
@@ -209,10 +221,10 @@ class FilterOptionService
             ]);
     }
 
-    private function productByName(User $user, string $name, string $category): ?array
+    private function productByName(User $user, string $context, string $name, string $category): ?array
     {
         if ($name === '') return null;
-        abort_unless($user->canAccess('jobs.create'), 403);
+        $this->authorizeCatalogAccess($user, $context);
 
         $workspaceId = app(SetupContext::class)->workspaceId();
         $categoryId = $this->productCategoryId($workspaceId, $category);
@@ -269,6 +281,13 @@ class FilterOptionService
         return trim(explode(' ·', $description, 2)[0]);
     }
 
+    private function authorizeCatalogAccess(User $user, string $context): void
+    {
+        $canCreate = $user->canAccess('jobs.create');
+        $canEditFromJobDetail = $context === 'job-detail' && $user->canAccess('jobs.update');
+        abort_unless($canCreate || $canEditFromJobDetail, 403);
+    }
+
     private function workflows(User $user, string $search, int $limit): Collection
     {
         abort_unless($user->canAccess('jobs.create'), 403);
@@ -316,6 +335,12 @@ class FilterOptionService
             }
 
             return User::query()->where('is_active', true)->whereKey($user->id);
+        }
+
+        if ($context === 'task-assignee') {
+            return $user->canModule('tasks', 'assign')
+                ? User::query()->where('is_active', true)
+                : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
         $ids = match ($context) {

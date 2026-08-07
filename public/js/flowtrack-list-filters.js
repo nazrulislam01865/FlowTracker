@@ -20,7 +20,9 @@
         // control that opened it. It may be wider than the trigger, but it
         // never participates in page layout or horizontal board scrolling.
         const availableWidth = Math.max(0, viewportWidth - (edge * 2));
-        const width = Math.min(420, availableWidth);
+        const requestedWidth = Number(component.menuWidth || 420);
+        const preferredWidth = Number.isFinite(requestedWidth) ? Math.max(rect.width, requestedWidth) : 420;
+        const width = Math.min(preferredWidth, availableWidth);
         const alignRight = rect.left + width > viewportWidth - edge;
 
         const roomBelow = Math.max(0, viewportHeight - rect.bottom - edge - gap);
@@ -31,14 +33,14 @@
         const availableHeight = Math.max(120, Math.min(naturalHeight, openAbove ? roomAbove : roomBelow || naturalHeight));
 
         component.menuStyle = [
-            'position:absolute',
-            `width:${Math.round(width)}px`,
-            `max-width:${Math.round(availableWidth)}px`,
-            `max-height:${Math.round(availableHeight)}px`,
-            alignRight ? 'right:0' : 'left:0',
-            alignRight ? 'left:auto' : 'right:auto',
-            openAbove ? `bottom:calc(100% + ${gap}px)` : `top:calc(100% + ${gap}px)`,
-            openAbove ? 'top:auto' : 'bottom:auto',
+            'position:absolute!important',
+            `width:${Math.round(width)}px!important`,
+            `max-width:${Math.round(availableWidth)}px!important`,
+            `max-height:${Math.round(availableHeight)}px!important`,
+            alignRight ? 'right:0!important' : 'left:0!important',
+            alignRight ? 'left:auto!important' : 'right:auto!important',
+            openAbove ? `bottom:calc(100% + ${gap}px)!important` : `top:calc(100% + ${gap}px)!important`,
+            openAbove ? 'top:auto!important' : 'bottom:auto!important',
         ].join(';');
     };
 
@@ -61,6 +63,7 @@
         return {
             ...positioningMethods,
             searchable: true,
+            menuWidth: Number(config.menuWidth || 420),
             open: false,
             query: '',
             loading: false,

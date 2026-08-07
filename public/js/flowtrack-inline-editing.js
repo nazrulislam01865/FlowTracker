@@ -4,64 +4,26 @@
     const state = {
         pending: new Map(),
         errors: new Map(),
-        savedTimer: null,
-        host: null,
-        label: null,
-        dot: null,
         toasts: null,
     };
 
     const ensureUi = () => {
-        if (state.host?.isConnected) return;
+        if (state.toasts?.isConnected) return;
 
-        const host = document.createElement('div');
-        host.id = 'flowtrackInlineSync';
-        host.className = 'ft-inline-global-sync';
-        host.setAttribute('role', 'status');
-        host.setAttribute('aria-live', 'polite');
-        host.hidden = true;
-        host.innerHTML = '<span class="ft-inline-global-dot" aria-hidden="true"></span><span class="ft-inline-global-label">All changes saved</span>';
-
+        // Inline saves no longer use a floating global status notification.
+        // Keep only actionable failure toasts with Retry/Dismiss controls.
         const toasts = document.createElement('div');
         toasts.id = 'flowtrackInlineToasts';
         toasts.className = 'ft-inline-toast-region';
         toasts.setAttribute('aria-live', 'assertive');
 
-        document.body.append(host, toasts);
-        state.host = host;
-        state.label = host.querySelector('.ft-inline-global-label');
-        state.dot = host.querySelector('.ft-inline-global-dot');
+        document.body.append(toasts);
         state.toasts = toasts;
     };
 
     const updateGlobal = () => {
-        ensureUi();
-        if (state.savedTimer) {
-            window.clearTimeout(state.savedTimer);
-            state.savedTimer = null;
-        }
-
-        const pending = state.pending.size;
-        const errors = state.errors.size;
-        state.host.hidden = false;
-        state.host.classList.toggle('is-saving', pending > 0);
-        state.host.classList.toggle('is-error', pending === 0 && errors > 0);
-        state.host.classList.toggle('is-saved', pending === 0 && errors === 0);
-
-        if (pending > 0) {
-            state.label.textContent = `Saving ${pending} change${pending === 1 ? '' : 's'}…`;
-            return;
-        }
-
-        if (errors > 0) {
-            state.label.textContent = errors === 1 ? '1 change needs attention' : `${errors} changes need attention`;
-            return;
-        }
-
-        state.label.textContent = 'All changes saved';
-        state.savedTimer = window.setTimeout(() => {
-            if (state.pending.size === 0 && state.errors.size === 0 && state.host) state.host.hidden = true;
-        }, 1800);
+        // Intentionally silent. Per-field saving/error state remains available
+        // and failures still use the actionable toast region.
     };
 
     const removeToast = (key) => {
@@ -118,10 +80,7 @@
     const resetGlobalState = () => {
         state.pending.clear();
         state.errors.clear();
-        if (state.savedTimer) window.clearTimeout(state.savedTimer);
-        state.savedTimer = null;
         if (state.toasts) state.toasts.innerHTML = '';
-        if (state.host) state.host.hidden = true;
     };
 
     document.addEventListener('livewire:navigating', resetGlobalState);
@@ -182,6 +141,22 @@
                 if (this.status === 'saving') return false;
                 this.draftValue = this.value;
                 this.editing = true;
+                return true;
+            },
+
+            openRemotePicker(source) {
+                if (!this.beginEdit()) return false;
+
+                this.$nextTick(() => {
+                    const host = source?.closest?.('.ft-inline-edit-shell');
+                    const picker = host?.querySelector?.('[data-ft-inline-remote-picker]');
+                    if (!picker) return;
+
+                    picker.dispatchEvent(new CustomEvent('ft-inline-remote-open', {
+                        detail: { value: this.value, label: this.display },
+                    }));
+                });
+
                 return true;
             },
 

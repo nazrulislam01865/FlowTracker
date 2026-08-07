@@ -23,7 +23,6 @@
     @elseif($selectedTask)
         <x-jobs.task-detail
             :task="$selectedTask"
-            :users="$users"
             :mention-users="$mentionUsers"
             :task-progress="$taskProgress"
             :task-statuses="$taskStatuses"

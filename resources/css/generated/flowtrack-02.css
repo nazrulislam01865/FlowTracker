@@ -1,16 +1,4 @@
 
-.ft-row-actions .ft-inline-search{height:32px;border:1px solid #d9e3ef;border-radius:6px;display:flex;align-items:center;padding:0 8px;gap:5px;background:#fff}
-.ft-row-actions .ft-inline-search input{border:0!important;height:28px!important;width:145px;padding:0!important;outline:0;font-size:10px}
-.ft-row-actions .ft-inline-search span{color:#6f8198}
-.ft-task-card-heading .ft-outline-btn,.ft-task-card-heading .ft-new-job-btn{height:32px;padding:0 10px;font-size:10px;border-radius:6px}
-.ft-phase-load-note{display:flex;gap:18px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e5ebf2;padding:6px 12px;color:#71839a;font-size:9px}
-.ft-overview-task-card .ft-phase-task-table{border:0;border-radius:0}
-.ft-overview-task-card .ft-phase-group-head{height:34px;background:#fff;grid-template-columns:18px 20px minmax(220px,1fr) auto 80px 28px;padding:0 10px}
-.ft-overview-task-card .ft-phase-group-head b{width:18px;height:18px;border-radius:5px;background:#e8eef5;color:#536984;font-size:9px}
-.ft-overview-task-card .ft-phase-group-head b.current-number{background:#7c2bd9;color:#fff}
-.ft-overview-task-card .ft-phase-group-head strong{font-size:10px}
-.ft-overview-task-card .ft-phase-group-head small{font-size:9px;text-align:right}
-.ft-overview-task-card .ft-phase-group-head em{width:80px!important;background:#e8edf3}
 .ft-overview-task-card .ft-phase-group-head em:before{width:var(--phase-progress,0%);background:#7c2bd9}
 .ft-phase-task-columns{display:grid;grid-template-columns:minmax(245px,1fr) 190px 135px 190px 55px;gap:10px;padding:7px 12px 6px 53px;border-bottom:1px solid #e6ecf3;color:#657890;text-transform:uppercase;font-size:8px;font-weight:700}
 .ft-overview-task-card .ft-phase-task-line{grid-template-columns:42px minmax(200px,1fr) 190px 135px 190px 55px;padding:8px 12px;font-size:10px;min-height:42px}
@@ -598,3 +586,30 @@
     .ft-task-job-group-title{font-size:11px}
     .ft-task-job-group-meta{font-size:9px}
 }
+
+/* 2026-08-04: dynamic Job list/detail inline editing + responsive filters */
+.ft-exact-jobs-list .ft-job-filter-grid{
+    grid-template-columns:minmax(320px,2fr) repeat(6,minmax(118px,1fr)) auto auto;
+    align-items:stretch;
+}
+.ft-exact-jobs-list .ft-job-filter-grid>*{min-width:0}
+.ft-job-more-filter-grid{display:grid;grid-template-columns:repeat(2,minmax(180px,260px));gap:9px;padding:0 10px 10px;border-bottom:1px solid #e2e8f0}
+.ft-job-more-filter-grid select{height:38px;border:1px solid #d8e2ee;border-radius:8px;background:#fff;padding:0 12px;color:#162844;font-weight:600;font-size:11px}
+.ft-exact-jobs-list .filter-more.active{border-color:#75a2ff;color:#0f63f3;background:#f6f9ff}
+.ft-inline-owner-editor{min-width:145px;padding:3px 5px}
+.ft-inline-owner-editor select{min-width:0;max-width:150px;border:0;background:transparent;color:#10233e;font:inherit;font-weight:700;outline:0;cursor:pointer;padding-right:18px}
+.ft-inline-owner-editor select:disabled{opacity:1;cursor:default}
+.ft-inline-date-editor{padding:0 5px;min-width:118px;background:#f3f7fc}
+.ft-inline-date-editor input{width:108px;border:0;background:transparent;color:inherit;font:inherit;font-weight:700;outline:0;padding:0 2px}
+.ft-inline-date-editor input:disabled{opacity:1;color:inherit}
+
+.ft-inline-product-table .ft-inline-cell-input{width:100%;min-width:0;border:1px solid transparent;background:transparent;border-radius:6px;padding:5px 7px;color:#10233e;font:inherit;font-weight:600;outline:0}
+.ft-inline-product-table .ft-inline-cell-input:hover,.ft-inline-product-table .ft-inline-cell-input:focus{border-color:#a9c4f7;background:#fff;box-shadow:0 0 0 2px rgba(37,99,235,.05)}
+.ft-inline-product-table .ft-inline-cell-input.quantity{max-width:110px}
+.ft-inline-product-table .ft-inline-cell-input:disabled{border-color:transparent;background:transparent;opacity:1;color:inherit}
+
+.ft-inline-planning-row{grid-template-columns:105px minmax(0,1fr)!important}
+.ft-inline-planning-row b{min-width:0}
+.ft-inline-planning-row select,.ft-inline-planning-row input{width:100%;min-width:0;height:30px;border:1px solid transparent;border-radius:6px;background:transparent;color:#0b1d36;font:inherit;font-weight:750;outline:0;padding:0 5px}
+.ft-inline-planning-row select:hover,.ft-inline-planning-row select:focus,.ft-inline-planning-row input:hover,.ft-inline-planning-row input:focus{border-color:#a9c4f7;background:#fff;box-shadow:0 0 0 2px rgba(37,99,235,.05)}
+.ft-inline-planning-row select:disabled,.ft-inline-planning-row input:disabled{opacity:1;color:inherit;appearance:none}

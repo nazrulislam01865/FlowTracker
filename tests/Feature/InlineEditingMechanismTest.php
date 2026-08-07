@@ -89,6 +89,27 @@ class InlineEditingMechanismTest extends TestCase
         $this->assertStringContainsString('this.value = previousValue', $runtime);
         $this->assertStringContainsString('retry()', $runtime);
         $this->assertStringContainsString('requestSequence', $runtime);
-        $this->assertStringContainsString('Saving ${pending} change', $runtime);
+        $this->assertStringNotContainsString('flowtrackInlineSync', $runtime);
+        $this->assertStringNotContainsString('All changes saved', $runtime);
+        $this->assertStringContainsString('flowtrackInlineToasts', $runtime);
+    }
+
+    public function test_notifications_remain_in_notification_center_without_realtime_popups(): void
+    {
+        $tasks = file_get_contents(app_path('Services/TaskService.php'));
+        $notifications = file_get_contents(app_path('Services/NotificationService.php'));
+        $notificationModel = file_get_contents(app_path('Models/FlowNotification.php'));
+        $profile = file_get_contents(app_path('Livewire/Profile/Index.php'));
+        $runtime = file_get_contents(resource_path('js/app.js'));
+
+        $this->assertStringContainsString("$isAssignment ? 'Task assigned: '", $tasks);
+        $this->assertStringContainsString("'Task assigned: '.$task->title", $notifications);
+        $this->assertStringNotContainsString('hide_task_assignment_notifications', $notificationModel);
+        $this->assertStringContainsString("['Task assignments', 'When a task is assigned to you']", $profile);
+        $this->assertStringNotContainsString('showRealtimeToast', $runtime);
+        $this->assertStringNotContainsString('ft-realtime-toast', $runtime);
+        $this->assertStringNotContainsString('isSuppressedRealtimeNotification', $runtime);
+        $this->assertStringContainsString('markRealtimeUnread(payload);', $runtime);
+        $this->assertStringContainsString("window.Livewire?.dispatch?.('flowtrack-notification');", $runtime);
     }
 }

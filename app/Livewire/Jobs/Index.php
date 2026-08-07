@@ -528,29 +528,49 @@ class Index extends Component
         };
 
         return $this->persistInlineEdit($label, function () use ($itemId, $field, $value) {
-            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
+            $user = auth()->user();
+            abort_unless($user->canAccess('jobs.update'), 403);
             abort_unless($this->selectedJobId, 422);
+
+            $job = app(JobService::class)->findVisible($user, $this->selectedJobId);
+            $item = FlowJobItem::where('flow_job_id', $job->id)->findOrFail($itemId);
+
             if ($field === 'category_name') {
                 abort_unless(app(MasterDataService::class)->active('product_category')->contains('name', (string) $value), 422, 'Select a valid active product category.');
             }
             if ($field === 'product_name') {
-                abort_unless(app(MasterDataService::class)->active('product')->contains('name', (string) $value), 422, 'Select a valid active product.');
+                abort_if(blank($item->category_name), 422, 'Select a product category first.');
+                $validProduct = app(\App\Services\FilterOptionService::class)
+                    ->options($user, 'products', 'job-detail', '', (string) $value, 20, [
+                        'category' => (string) $item->category_name,
+                    ])
+                    ->contains(fn ($option) => (string) ($option['id'] ?? '') === (string) $value);
+                abort_unless($validProduct, 422, 'Select a valid active product for this category.');
             }
-            $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
-            $item = FlowJobItem::where('flow_job_id', $job->id)->findOrFail($itemId);
-            app(JobService::class)->updateItem($job, $item, $field, $value, auth()->user());
+
+            app(JobService::class)->updateItem($job, $item, $field, $value, $user);
         });
     }
 
     public function addJobItem(int $jobId): void
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-        $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-        $master = app(MasterDataService::class);
-        $productRecord = $master->active('product')->first();
-        $category = $productRecord?->parent?->name ?: ($master->active('product_category')->first()?->name ?: 'General');
-        $product = $productRecord?->name ?: 'New product';
-        app(JobService::class)->addItem($job, $category, $product, 1, auth()->user());
+        $user = auth()->user();
+        abort_unless($user->canAccess('jobs.update'), 403);
+        $job = app(JobService::class)->findVisible($user, $jobId);
+
+        // Keep a single unfinished row at a time so repeated clicks cannot
+        // accumulate invisible/partial product records.
+        if ($job->items()->where(fn ($query) => $query
+            ->whereNull('product_name')
+            ->orWhere('product_name', '')
+        )->exists()) {
+            return;
+        }
+
+        // Add an intentionally blank draft row. The Job Details view renders
+        // category, product, and quantity as editable controls immediately so
+        // the user chooses the actual values instead of receiving master-data defaults.
+        app(JobService::class)->addItem($job, '', '', 1, $user);
     }
 
     public function removeJobItem(int $itemId): void
@@ -1125,7 +1145,6 @@ class Index extends Component
         return [
             'selectedJob' => null,
             'selectedTask' => $task,
-            'users' => $this->userOptions($user),
             'taskStatuses' => $this->taskStatusOptions($master),
             'priorities' => $master->active('priority'),
             'availableDocuments' => $availableDocuments,
@@ -1152,8 +1171,10 @@ class Index extends Component
             'taskStatuses' => $this->taskStatusOptions($master),
             'users' => $this->userOptions($user),
             'priorities' => $master->active('priority'),
-            'products' => $this->detailTab === 'overview' ? $master->active('product') : collect(),
-            'categories' => $this->detailTab === 'overview' ? $master->active('product_category') : collect(),
+            // Product/category options on Job Details are loaded remotely only
+            // when an inline dropdown opens, avoiding full catalog payloads.
+            'products' => collect(),
+            'categories' => collect(),
             'availableDocuments' => $availableDocuments,
             'healthOptions' => $this->healthOptions(),
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),

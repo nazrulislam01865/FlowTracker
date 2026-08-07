@@ -1,6 +1,5 @@
 @props([
     'task',
-    'users',
     'mentionUsers'=>collect(),
     'taskProgress',
     'taskStatuses'=>collect(),
@@ -85,21 +84,25 @@
                     class="ft-task-property ft-inline-edit-shell"
                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
                     :class="{ 'is-editing': editing, 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                    x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateSelectedTaskField('assignee_id', draftValue))"
                 >
                     <small>Assignee</small>
                     <div class="ft-task-property-display ft-inline-person-live">
                         <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/></span>
                         <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
                         <b class="ft-property-value" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</b>
-                        @if($canAssignTask)<button type="button" :disabled="status === 'saving'" title="Edit assignee" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.assignee?.focus())">✎</button>@endif
+                        @if($canAssignTask)<button type="button" :disabled="status === 'saving'" title="Edit assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
                     </div>
                     @if($canAssignTask)
                         <div class="ft-task-property-popover" x-cloak x-show="editing" x-on:click.outside="cancelEdit()">
-                            <select x-ref="assignee" x-model="draftValue" class="ft-task-property-input"
-                                x-on:keydown.escape.prevent="cancelEdit()"
-                                x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateSelectedTaskField('assignee_id', draftValue))">
-                                <option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
-                            </select>
+                            <x-ui.inline-remote-user
+                                :value="$task->assignee_id ?? ''"
+                                :selected-label="$task->assignee?->name ?? 'Unassigned'"
+                                trigger-class="ft-task-property-input"
+                                variant="property"
+                                :menu-width="340"
+                            />
                         </div>
                         <x-ui.inline-save-state compact />
                     @endif

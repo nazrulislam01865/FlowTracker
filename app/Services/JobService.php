@@ -445,6 +445,9 @@ class JobService
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
         abort_unless(in_array($field, ['category_name', 'product_name', 'quantity'], true), 422, 'This Job item field cannot be edited inline.');
 
+        $wasDraft = blank($item->product_name);
+        $originalCategory = (string) ($item->category_name ?? '');
+
         if ($field === 'quantity') {
             $value = max(1, (int) $value);
         } else {
@@ -453,38 +456,78 @@ class JobService
         }
 
         $item->update([$field => $value]);
-        $items = $job->items()->orderBy('sort_order')->get();
-        $first = $items->first();
-        $job->update([
-            'product' => $first?->product_name,
-            'category' => $first?->category_name,
-            'quantity' => (int) $items->sum('quantity'),
-        ]);
+
+        // Category and product are a dependent pair. A real category change
+        // always clears the previous product so the user explicitly chooses a
+        // product from the newly selected category. This keeps the inline UI
+        // deterministic and prevents stale category/product combinations.
+        if ($field === 'category_name' && (string) $value !== $originalCategory && filled($item->product_name)) {
+            $item->update(['product_name' => null]);
+        }
+
+        $this->syncItemSummary($job);
+        $item = $item->refresh();
+
+        // A newly inserted blank row is only a UI draft. Do not generate a
+        // product-update activity/notification until the user actually chooses
+        // a product; the Notifications page still receives the normal event
+        // once the new row becomes a real product line.
+        if ($wasDraft && blank($item->product_name)) {
+            return $item;
+        }
+
+        if ($wasDraft && $field === 'product_name') {
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Job']);
+            app(NotificationService::class)->notifyJobParticipants(
+                $job->refresh(),
+                'Product added to Job',
+                $job->job_number.' · '.$item->product_name.' · '.number_format($item->quantity).' units',
+                'update',
+                $actor,
+            );
+            return $item;
+        }
+
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_updated', 'description' => 'Product and quantity details updated']);
         app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job product updated', $job->job_number.' · Product/category/quantity changed', 'update', $actor);
-        return $item->refresh();
+        return $item;
     }
 
     public function addItem(FlowJob $job, string $category, string $product, int $quantity, User $actor): FlowJobItem
     {
         $this->assertEditable($job, $actor);
+        $category = trim($category);
+        $product = trim($product);
+
+        // Older Jobs can still rely on the summary columns without a persisted
+        // flow_job_items row. Preserve that existing line before inserting the
+        // new blank draft so Add product never erases legacy product data.
+        if (!$job->items()->exists() && filled($job->product)) {
+            FlowJobItem::create([
+                'flow_job_id' => $job->id,
+                'category_name' => $job->category,
+                'product_name' => $job->product,
+                'quantity' => max(1, (int) $job->quantity),
+                'sort_order' => 0,
+            ]);
+        }
+
         $item = FlowJobItem::create([
             'flow_job_id' => $job->id,
-            'category_name' => trim($category),
-            'product_name' => trim($product),
+            'category_name' => $category !== '' ? $category : null,
+            'product_name' => $product !== '' ? $product : null,
             'quantity' => max(1, $quantity),
             'sort_order' => ((int) $job->items()->max('sort_order')) + 1,
         ]);
 
-        $items = $job->items()->orderBy('sort_order')->get();
-        $first = $items->first();
-        $job->update([
-            'product' => $first?->product_name,
-            'category' => $first?->category_name,
-            'quantity' => (int) $items->sum('quantity'),
-        ]);
-        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Job']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Job', $job->job_number.' · '.$item->product_name.' · '.number_format($item->quantity).' units', 'update', $actor);
+        $this->syncItemSummary($job);
+
+        // Blank rows are drafts opened by “Add product”; wait until a product
+        // is selected before recording the normal Product added notification.
+        if ($product !== '') {
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Job']);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Job', $job->job_number.' · '.$item->product_name.' · '.number_format($item->quantity).' units', 'update', $actor);
+        }
 
         return $item->refresh();
     }
@@ -494,16 +537,27 @@ class JobService
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
         abort_if($job->items()->count() <= 1, 422, 'A Job must keep at least one product.');
+        $wasDraft = blank($item->product_name);
         $item->delete();
+        $this->syncItemSummary($job);
+
+        if (!$wasDraft) {
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_removed', 'description' => 'Product removed from Job']);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Job', $job->job_number.' · Product list updated', 'update', $actor);
+        }
+    }
+
+    private function syncItemSummary(FlowJob $job): void
+    {
         $items = $job->items()->orderBy('sort_order')->get();
-        $first = $items->first();
+        $completeItems = $items->filter(fn (FlowJobItem $row) => filled($row->product_name))->values();
+        $first = $completeItems->first();
+
         $job->update([
             'product' => $first?->product_name,
             'category' => $first?->category_name,
-            'quantity' => (int) $items->sum('quantity'),
+            'quantity' => (int) $completeItems->sum('quantity'),
         ]);
-        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_removed', 'description' => 'Product removed from Job']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Job', $job->job_number.' · Product list updated', 'update', $actor);
     }
 
     public function syncWorkflowTasks(FlowJob $job, ?User $actor = null, bool $includeDraft = false): void

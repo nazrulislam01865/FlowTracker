@@ -1335,7 +1335,7 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-document-link-action{display:flex;justify-content:flex-end;margin-top:8px}.ft-document-link-action .ft-outline-btn{min-height:34px}
 
 /* ========================================================================== */
-/* Client management reference + readable create forms + realtime toasts      */
+/* Client management reference + readable create forms      */
 /* ========================================================================== */
 .ft-clients-reference{color:#0d1c34;font-size:12px}.ft-clients-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:16px}.ft-clients-page-head h1{font-size:26px;line-height:1.05;letter-spacing:-.035em;margin:0 0 5px}.ft-clients-page-head p{font-size:13px;color:#61738e;margin:0}.ft-clients-new{height:42px;padding:0 17px;border:1px solid #1465ef;border-radius:8px;background:#1767e8;color:#fff;font-weight:750;box-shadow:0 5px 13px rgba(23,103,232,.12)}
 .ft-clients-layout{display:grid;grid-template-columns:minmax(0,2.15fr) minmax(390px,.95fr);gap:16px;align-items:start}.ft-clients-main{min-width:0}.ft-clients-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px;margin-bottom:13px}.ft-client-metric{min-height:78px;border:1px solid #dce5ef;border-radius:10px;background:#fff;padding:13px 15px;display:flex;align-items:center;gap:13px;text-align:left;box-shadow:0 2px 7px rgba(18,43,75,.025)}.ft-client-metric.is-active{border-color:#9cbcff;box-shadow:0 0 0 2px rgba(23,103,232,.05)}.ft-client-metric-icon{width:42px;height:42px;border-radius:12px;display:grid;place-items:center;font-size:21px;font-weight:800;flex:0 0 auto}.ft-client-metric-blue{color:#1666ef;background:#eaf1ff}.ft-client-metric-green{color:#12a55b;background:#eaf9f0}.ft-client-metric-amber{color:#f06422;background:#fff0e6}.ft-client-metric-purple{color:#8a35dd;background:#f3eaff}.ft-client-metric small{display:block;color:#5e718d;font-size:10px;margin-bottom:2px}.ft-client-metric b{display:block;font-size:22px;line-height:1.05;letter-spacing:-.02em}
@@ -1348,11 +1348,11 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-create-job-page{font-size:13px}.ft-create-shell{max-width:1180px}.ft-create-breadcrumb{font-size:12px}.ft-create-title h1{font-size:26px}.ft-create-title p{font-size:13px;margin:6px 0 16px}.ft-create-section{padding:16px 18px;margin-bottom:12px}.ft-create-section-title{margin-bottom:14px}.ft-create-section-title>span{width:26px;height:26px;font-size:12px}.ft-create-section-title h2{font-size:17px}.ft-create-fields{gap:13px}.ft-create-field>b,.ft-product-row label>b{font-size:12px}.ft-create-field input,.ft-create-field select,.ft-create-field textarea,.ft-product-row input,.ft-product-row select{min-height:44px;font-size:13px;border-radius:8px}.ft-create-field textarea{min-height:88px;padding-top:11px}.ft-create-field>small{font-size:10px}.ft-locked-input{height:44px;font-size:13px}.ft-product-row{padding:12px 14px}.ft-product-delete{height:44px}.ft-product-row-footer button{height:34px;font-size:11px}.ft-product-row-footer span{font-size:11px}.ft-workflow-summary{height:35px;font-size:10.5px}.ft-create-note{font-size:10.5px}.ft-create-upload{min-height:68px}.ft-create-upload b{font-size:12px}.ft-create-upload small{font-size:10px}.ft-create-upload>a{height:38px;font-size:10.5px}.ft-create-upload-list span{font-size:10.5px}.ft-create-actions button,.ft-client-form-actions button{height:42px;font-size:11.5px}
 .ft-create-client-page{font-size:13px}.ft-client-create-top h1{font-size:26px}.ft-client-create-top p{font-size:13px}.ft-back-clients{height:40px;font-size:12px}.ft-client-form-head{padding:18px 20px 16px}.ft-client-form-head h2{font-size:23px}.ft-client-form-head p{font-size:13px}.ft-client-form-body{padding:18px 20px 20px;gap:17px}.ft-client-field>b{font-size:12px}.ft-client-field input,.ft-client-field select,.ft-client-field textarea{min-height:42px;font-size:13px}.ft-client-field textarea{min-height:82px}.ft-client-field>small{font-size:10.5px}.ft-client-code-box{height:42px;font-size:14px}.ft-client-form-actions{padding:14px 20px}
 
-.ft-realtime-toasts{position:fixed;right:18px;top:82px;z-index:120;display:flex;flex-direction:column;gap:8px;width:min(390px,calc(100vw - 28px));pointer-events:none}.ft-realtime-toast{pointer-events:auto;display:grid;grid-template-columns:10px minmax(0,1fr) auto;gap:10px;align-items:start;padding:12px 13px;border:1px solid #dce5ef;border-radius:10px;background:#fff;box-shadow:0 12px 35px rgba(9,27,52,.16);text-decoration:none;color:#14243c;animation:ftToastIn .2s ease-out}.ft-realtime-toast-dot{width:8px;height:8px;border-radius:50%;background:#2563eb;margin-top:5px}.ft-realtime-toast-risk .ft-realtime-toast-dot{background:#ef4444}.ft-realtime-toast-assignment .ft-realtime-toast-dot{background:#7c3aed}.ft-realtime-toast-comment .ft-realtime-toast-dot{background:#16a34a}.ft-realtime-toast-copy strong{display:block;font-size:12px;margin-bottom:3px}.ft-realtime-toast-copy small{display:block;font-size:10px;color:#65778e;line-height:1.4}.ft-realtime-toast-time{font-size:9px;color:#8795a7}@keyframes ftToastIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:none}}
+
 
 @media(max-width:1350px){.ft-clients-layout{grid-template-columns:minmax(0,1fr) 360px}.ft-client-filter-card{grid-template-columns:minmax(220px,1.4fr) repeat(2,minmax(115px,1fr));}.ft-client-filter-card select:nth-of-type(3),.ft-client-filter-card select:nth-of-type(4),.ft-client-filter-card>button{grid-row:2}.ft-client-filter-card>button{justify-self:start}.ft-clients-metrics{gap:9px}}
 @media(max-width:1080px){.ft-clients-layout{grid-template-columns:1fr}.ft-client-detail-card{position:static}.ft-client-detail-card{order:-1}.ft-client-detail-section{overflow:auto}.ft-client-filter-card{grid-template-columns:repeat(3,minmax(0,1fr))}.ft-client-filter-search{grid-column:1/-1}.ft-client-filter-card select:nth-of-type(3),.ft-client-filter-card select:nth-of-type(4),.ft-client-filter-card>button{grid-row:auto}.ft-clients-metrics{grid-template-columns:repeat(2,1fr)}}
-@media(max-width:700px){.ft-clients-page-head{align-items:center}.ft-clients-page-head h1{font-size:23px}.ft-clients-page-head p{font-size:11px}.ft-clients-new{height:38px;padding:0 11px;font-size:11px}.ft-clients-metrics{grid-template-columns:1fr 1fr}.ft-client-metric{min-height:66px;padding:10px}.ft-client-metric-icon{width:36px;height:36px;font-size:17px}.ft-client-metric b{font-size:18px}.ft-client-filter-card{grid-template-columns:1fr 1fr}.ft-client-filter-search{grid-column:1/-1}.ft-client-filter-card>button{height:38px}.ft-client-quick-row{display:grid;grid-template-columns:1fr 1fr}.ft-client-quick-row button{width:100%}.ft-client-detail-head{grid-template-columns:46px minmax(0,1fr) auto}.ft-client-detail-logo{width:43px;height:43px}.ft-client-detail-head>.ft-client-more{display:none}.ft-open-client{grid-column:3}.ft-client-detail-contact{grid-template-columns:1fr}.ft-client-detail-stats{grid-template-columns:1fr 1fr}.ft-client-detail-stats div:nth-child(2){border-right:0}.ft-client-detail-stats div:nth-child(-n+2){border-bottom:1px solid #dce5ef}.ft-client-pagination{align-items:flex-start;flex-direction:column}.ft-client-pagination>div{width:100%;flex-wrap:wrap}.ft-create-title h1,.ft-client-create-top h1{font-size:23px}.ft-create-field input,.ft-create-field select,.ft-create-field textarea,.ft-product-row input,.ft-product-row select,.ft-client-field input,.ft-client-field select,.ft-client-field textarea{font-size:14px}.ft-realtime-toasts{left:14px;right:14px;top:76px;width:auto}}
+@media(max-width:700px){.ft-clients-page-head{align-items:center}.ft-clients-page-head h1{font-size:23px}.ft-clients-page-head p{font-size:11px}.ft-clients-new{height:38px;padding:0 11px;font-size:11px}.ft-clients-metrics{grid-template-columns:1fr 1fr}.ft-client-metric{min-height:66px;padding:10px}.ft-client-metric-icon{width:36px;height:36px;font-size:17px}.ft-client-metric b{font-size:18px}.ft-client-filter-card{grid-template-columns:1fr 1fr}.ft-client-filter-search{grid-column:1/-1}.ft-client-filter-card>button{height:38px}.ft-client-quick-row{display:grid;grid-template-columns:1fr 1fr}.ft-client-quick-row button{width:100%}.ft-client-detail-head{grid-template-columns:46px minmax(0,1fr) auto}.ft-client-detail-logo{width:43px;height:43px}.ft-client-detail-head>.ft-client-more{display:none}.ft-open-client{grid-column:3}.ft-client-detail-contact{grid-template-columns:1fr}.ft-client-detail-stats{grid-template-columns:1fr 1fr}.ft-client-detail-stats div:nth-child(2){border-right:0}.ft-client-detail-stats div:nth-child(-n+2){border-bottom:1px solid #dce5ef}.ft-client-pagination{align-items:flex-start;flex-direction:column}.ft-client-pagination>div{width:100%;flex-wrap:wrap}.ft-create-title h1,.ft-client-create-top h1{font-size:23px}.ft-create-field input,.ft-create-field select,.ft-create-field textarea,.ft-product-row input,.ft-product-row select,.ft-client-field input,.ft-client-field select,.ft-client-field textarea{font-size:14px}}
 
 /* Task details attachment area — match the compact reference layout. */
 .ft-task-upload-zone{
@@ -2454,3 +2454,42 @@ body:has(.ft-client-preview-backdrop){
    expand/collapse buttons over the page-header action. */
 .ft-list-active-row .ft-list-filter-actions .ft-board-group-controls{position:static!important;display:inline-flex!important;align-items:center!important;gap:7px!important;width:auto!important;margin:0!important;grid-column:auto!important;flex:0 0 auto!important}
 .ft-list-active-row .ft-list-filter-actions .ft-board-group-controls .ft-filter-collapse{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;margin:0!important;transform:none!important}
+
+/* 2026-08-07: Job Overview searchable assignee popover must not be clipped by
+   the phase/task table's rounded overflow container. */
+.ft-exact-job-detail .ft-overview-task-card,
+.ft-exact-job-detail .ft-overview-task-card .ft-phase-task-table{
+    overflow:visible!important;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-task-inline-assignee-picker,
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-remote-user{
+    position:relative;
+    z-index:1240;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-remote-user-menu{
+    z-index:1300!important;
+}
+
+/* Job Details catalog inline editing uses the shared searchable remote menu.
+   Keep the closed/editing controls at the exact table typography and dimensions
+   already used by the native inline fields; only the option-loading technique changes. */
+.ft-inline-catalog-editor{position:relative;overflow:visible;width:100%}
+.ft-inline-catalog-picker{position:relative;width:100%;min-width:0;overflow:visible}
+.ft-inline-remote-catalog{position:relative;width:100%;min-width:0;font:inherit;overflow:visible}
+.ft-inline-remote-catalog-trigger{box-sizing:border-box;display:flex!important;align-items:center;justify-content:space-between;gap:6px;min-width:135px;max-width:100%;height:32px;text-align:left;cursor:pointer;font:inherit;font-weight:600}
+.ft-inline-remote-catalog-trigger>span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ft-inline-remote-catalog-trigger .ft-filter-chevron{flex:0 0 auto}
+.ft-inline-remote-catalog.is-disabled .ft-inline-remote-catalog-trigger{cursor:not-allowed;color:#708096}
+.ft-inline-remote-catalog-menu{z-index:1350!important}
+.ft-inline-product-table,.ft-inline-product-table tbody,.ft-inline-product-table tr,.ft-inline-product-table td{overflow:visible}
+.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-search,
+.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-option{font-size:11px}
+.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-message{font-size:10px}
+.ft-inline-product-draft-row .ft-inline-cell-input{border-color:#a9c4f7;background:#fff}
+.ft-inline-product-quantity-wrap{display:flex;align-items:center;gap:7px;min-width:0}
+.ft-inline-product-quantity-wrap>.ft-inline-field-editor{flex:1 1 auto;min-width:0}
+.ft-inline-product-delete{flex:0 0 26px;width:26px;height:26px;border:1px solid transparent;border-radius:6px;background:transparent;color:#7c8ca3;font:inherit;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
+.ft-inline-product-delete:hover,.ft-inline-product-delete:focus-visible{border-color:#f2b8b8;background:#fff6f6;color:#b42318;outline:0}
+.ft-inline-product-delete:disabled{opacity:.45;cursor:not-allowed}
+.ft-add-product-inline:disabled{opacity:.55;cursor:wait}
+

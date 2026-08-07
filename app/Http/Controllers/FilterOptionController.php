@@ -18,14 +18,25 @@ class FilterOptionController
             'category' => ['nullable','string','max:255'],
         ]);
 
+        $context = (string) ($data['context'] ?? '');
+        $search = trim((string) ($data['q'] ?? ''));
+
+        // Inline pickers stay intentionally compact when first opened.
+        // Once the user searches (2+ characters), return the normal larger result set.
+        $compactInitialList = strlen($search) < 2 && (
+            ($type === 'users' && $context === 'task-assignee')
+            || ($context === 'job-detail' && in_array($type, ['product-categories', 'products'], true))
+        );
+        $limit = $compactInitialList ? 5 : 20;
+
         return response()->json([
             'items' => $service->options(
                 $request->user(),
                 $type,
-                (string) ($data['context'] ?? ''),
-                (string) ($data['q'] ?? ''),
+                $context,
+                $search,
                 $data['selected'] ?? null,
-                20,
+                $limit,
                 ['category' => (string) ($data['category'] ?? '')],
             )->values(),
         ]);
