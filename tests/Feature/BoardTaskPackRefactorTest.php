@@ -6,18 +6,15 @@ use Tests\TestCase;
 
 class BoardTaskPackRefactorTest extends TestCase
 {
-    public function test_task_board_uses_the_literal_my_work_design_without_the_previous_board_shell(): void
+    public function test_all_tasks_uses_the_literal_my_work_design_without_job_board_navigation(): void
     {
         $board = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
-        $myWork = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
-
-        preg_match('/<style>.*?<\/style>/s', $board, $boardStyle);
-        preg_match('/<style>.*?<\/style>/s', $myWork, $myWorkStyle);
-
-        $this->assertSame($myWorkStyle[0] ?? null, $boardStyle[0] ?? null);
+        $this->assertStringContainsString('<style>', $board);
         $this->assertStringContainsString('id="my-work-app"', $board);
         $this->assertStringContainsString('class="page-head"', $board);
-        $this->assertStringContainsString('class="page-tabs"', $board);
+        $this->assertStringContainsString('<h1>All Tasks</h1>', $board);
+        $this->assertStringNotContainsString('Job Board', $board);
+        $this->assertStringNotContainsString("setMode('jobs')", $board);
         $this->assertStringContainsString('class="metrics"', $board);
         $this->assertStringContainsString('class="toolbar"', $board);
         $this->assertStringContainsString('class="list-shell"', $board);

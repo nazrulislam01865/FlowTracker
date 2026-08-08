@@ -42,7 +42,7 @@ body{background:#f3f6fb;color:#172033}
 #my-work-app .spinner{display:inline-block;width:12px;height:12px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:spin .6s linear infinite}
 #my-work-app .loading-copy{display:flex;align-items:center;gap:6px}
 #my-work-app .list-shell{overflow:hidden;border:1px solid #d8e1ec;border-radius:11px;background:#fff}
-#my-work-app .task-head,#my-work-app .task-row{display:grid;grid-template-columns:minmax(230px,1.75fr) minmax(115px,.75fr) 92px 124px minmax(95px,.65fr) minmax(92px,.62fr) 48px;align-items:center;gap:8px}
+#my-work-app .task-head,#my-work-app .task-row{display:grid;grid-template-columns:minmax(220px,1.6fr) minmax(100px,.65fr) minmax(130px,.82fr) 128px 118px minmax(88px,.58fr) minmax(84px,.55fr) 48px;align-items:center;gap:8px}
 #my-work-app .task-head{min-height:32px;padding:0 11px;border-bottom:1px solid #dce3ec;background:#f8fafc;color:#69778e;font-size:7px;font-weight:780;letter-spacing:.04em;text-transform:uppercase}
 #my-work-app .order-group{border-bottom:1px solid #dce3ec;content-visibility:auto;contain:layout paint style;contain-intrinsic-size:205px}
 #my-work-app .order-group:last-child{border-bottom:0}
@@ -71,9 +71,17 @@ body{background:#f3f6fb;color:#172033}
 #my-work-app .task-link:hover{color:#155ce9;text-decoration:underline}
 #my-work-app .task-ref{display:block;margin-top:3px;color:#7c899c;font-size:7px}
 #my-work-app .phase{overflow:hidden;color:#5a687f;font-size:8px;text-overflow:ellipsis;white-space:nowrap}
-#my-work-app .due{font-size:8px}
-#my-work-app .due.overdue{color:#c43f3f;font-weight:750}
-#my-work-app .due.today{color:#9a6208;font-weight:750}
+#my-work-app .assignee{display:flex;min-width:0;align-items:center;gap:6px;color:#4d5d74;font-size:8px}
+#my-work-app .assignee .avatar{flex:0 0 auto}
+#my-work-app .assignee-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#my-work-app .due-editor{display:flex;min-width:0;align-items:center;gap:3px;position:relative}
+#my-work-app .due-editor .ft-task-inline-display{min-width:0;overflow:hidden;color:#4f5f76;font-size:8px;text-overflow:ellipsis;white-space:nowrap}
+#my-work-app .due-editor.overdue .ft-task-inline-display{color:#c43f3f;font-weight:750}
+#my-work-app .due-editor.today .ft-task-inline-display{color:#9a6208;font-weight:750}
+#my-work-app .due-editor .ft-inline-edit-button{width:20px;height:20px;font-size:10px}
+#my-work-app .due-editor .ft-task-inline-input{width:118px;max-width:100%;height:29px;padding:0 4px;font-size:8.5px}
+#my-work-app .due-editor .ft-inline-save-state{position:absolute;top:100%;left:0;z-index:3;margin:1px 0 0;padding:1px 3px;border-radius:4px;background:#fff;box-shadow:0 1px 4px rgba(28,48,77,.08)}
+#my-work-app .due-editor .ft-inline-save-state:not(.is-saving):not(.is-saved):not(.is-error){display:none}
 #my-work-app .status-select{width:100%;height:30px;padding:0 22px 0 7px;border:1px solid #cfdbea;border-radius:7px;background:#fff;color:#344057;font-size:7.5px}
 #my-work-app .updated{color:#718097;font-size:7.5px}
 #my-work-app .row-action{display:grid;width:42px;height:28px;place-items:center;border:1px solid #cbd8e8;border-radius:7px;background:#fff;color:#155ce9;font-size:7.5px;font-weight:750;text-decoration:none}
@@ -94,7 +102,7 @@ body{background:#f3f6fb;color:#172033}
 @media(max-width:1180px){
     #my-work-app .metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
     #my-work-app .task-head{display:none}
-    #my-work-app .task-row{grid-template-columns:minmax(190px,1.35fr) minmax(105px,.75fr) 84px 116px 88px 85px 48px}
+    #my-work-app .task-row{grid-template-columns:minmax(175px,1.2fr) 88px minmax(112px,.82fr) 116px 108px 82px 78px 44px}
     #my-work-app .order-head{grid-template-columns:22px minmax(170px,1fr) minmax(110px,.7fr) minmax(100px,.7fr) minmax(85px,.6fr) auto}
     #my-work-app .order-progress{display:none}
 }
@@ -104,10 +112,11 @@ body{background:#f3f6fb;color:#172033}
     #my-work-app .toolbar{align-items:stretch;flex-wrap:wrap}
     #my-work-app .search-wrap{width:100%;flex-basis:100%}
     #my-work-app .sort{flex:1}
-    #my-work-app .task-row{grid-template-columns:minmax(0,1.4fr) 86px 108px 44px;grid-template-areas:"task due status action" "phase updated flag action";row-gap:6px;min-height:78px}
+    #my-work-app .task-row{grid-template-columns:minmax(0,1.35fr) minmax(110px,.85fr) 100px 44px;grid-template-areas:"task assignee due action" "phase status flag action" "updated updated flag action";row-gap:6px;min-height:94px}
     #my-work-app .task-main{grid-area:task}
     #my-work-app .phase{grid-area:phase}
-    #my-work-app .due{grid-area:due}
+    #my-work-app .assignee{grid-area:assignee}
+    #my-work-app .due-editor{grid-area:due}
     #my-work-app .status-select{grid-area:status}
     #my-work-app .updated{grid-area:updated}
     #my-work-app .task-row>.flag{grid-area:flag;justify-self:start}
@@ -130,7 +139,7 @@ body{background:#f3f6fb;color:#172033}
     #my-work-app .toolbar{padding:8px}
     #my-work-app .quick-filters{width:100%;overflow:auto}
     #my-work-app .chip{flex:0 0 auto}
-    #my-work-app .task-row{grid-template-columns:minmax(0,1fr) 95px 42px;grid-template-areas:"task status action" "phase due action" "updated flag action";padding:9px;min-height:105px}
+    #my-work-app .task-row{grid-template-columns:minmax(0,1fr) 102px 42px;grid-template-areas:"task status action" "assignee due action" "phase flag action" "updated updated action";padding:9px;min-height:126px}
     #my-work-app .footer{align-items:flex-start;flex-direction:column}
     #my-work-app .pages{width:100%}
     #my-work-app .page-button{flex:1}
@@ -138,32 +147,33 @@ body{background:#f3f6fb;color:#172033}
 }
 @media(prefers-reduced-motion:reduce){#my-work-app *,#my-work-app *::before,#my-work-app *::after{animation:none!important;transition:none!important}}
 
-/* Readability adjustment only for My Work content; shared shell/sidebar typography remains global. */
-.lang-btn{font-size:12px}
-#my-work-app .page-head h1{font-size:24px}
-#my-work-app .page-head p{font-size:11px}
-#my-work-app .page-tab{font-size:10px}
-#my-work-app .metric small{font-size:9px}
-#my-work-app .metric strong{font-size:19px}
-#my-work-app .metric i{font-size:11px}
-#my-work-app .search{font-size:10px}
-#my-work-app .clear{font-size:8.5px}
-#my-work-app .chip{font-size:9px}
-#my-work-app .sort{font-size:9px}
-#my-work-app .load-state{font-size:8.5px}
-#my-work-app .task-head{font-size:8px}
-#my-work-app .collapse{font-size:12px}
-#my-work-app .order-id,#my-work-app .order-title{font-size:10px}
-#my-work-app .order-client,#my-work-app .order-stage{font-size:9px}
-#my-work-app .health,#my-work-app .flag{font-size:8px}
-#my-work-app .order-progress,#my-work-app .task-count{font-size:8.5px}
-#my-work-app .task-link{font-size:10px}
-#my-work-app .task-ref{font-size:8px}
-#my-work-app .phase,#my-work-app .due{font-size:9px}
-#my-work-app .status-select,#my-work-app .updated,#my-work-app .row-action{font-size:8.5px}
-#my-work-app .empty{font-size:10px}
-#my-work-app .empty strong{font-size:12px}
-#my-work-app .footer,#my-work-app .page-button{font-size:9px}
+/* 2026-08-08: Slightly larger My Work typography for readability without changing the layout. */
+.lang-btn{font-size:13px}
+#my-work-app .page-head h1{font-size:25px}
+#my-work-app .page-head p{font-size:12px}
+#my-work-app .page-tab{font-size:11px}
+#my-work-app .metric small{font-size:10px}
+#my-work-app .metric strong{font-size:20px}
+#my-work-app .metric i{font-size:12px}
+#my-work-app .search{font-size:11px}
+#my-work-app .clear{font-size:9.5px}
+#my-work-app .chip{font-size:10px}
+#my-work-app .sort{font-size:10px}
+#my-work-app .load-state{font-size:9.5px}
+#my-work-app .task-head{font-size:9px}
+#my-work-app .collapse{font-size:13px}
+#my-work-app .order-id,#my-work-app .order-title{font-size:11px}
+#my-work-app .order-client,#my-work-app .order-stage{font-size:10px}
+#my-work-app .health,#my-work-app .flag{font-size:9px}
+#my-work-app .order-progress,#my-work-app .task-count{font-size:9.5px}
+#my-work-app .task-link{font-size:11px}
+#my-work-app .task-ref{font-size:9px}
+#my-work-app .phase,#my-work-app .assignee,#my-work-app .due-editor .ft-task-inline-display{font-size:10px}
+#my-work-app .due-editor .ft-task-inline-input{font-size:9.5px}
+#my-work-app .status-select,#my-work-app .updated,#my-work-app .row-action{font-size:9.5px}
+#my-work-app .empty{font-size:11px}
+#my-work-app .empty strong{font-size:13px}
+#my-work-app .footer,#my-work-app .page-button{font-size:10px}
 </style>
 
     <div class="page-head">
@@ -171,7 +181,7 @@ body{background:#f3f6fb;color:#172033}
             <h1>My Work</h1>
             <p>Your assigned tasks, grouped by Order and ranked by what needs action first.</p>
         </div>
-        <a class="row-action" style="width:auto;padding:0 10px" href="<?php echo e(route('board')); ?>" wire:navigate>All Tasks</a>
+        <a class="row-action" style="width:auto;padding:0 10px" href="<?php echo e(route('all-tasks')); ?>" wire:navigate>All Tasks</a>
     </div>
 
     <nav class="page-tabs" aria-label="My Work view">
@@ -222,7 +232,7 @@ body{background:#f3f6fb;color:#172033}
         </div>
 
         <section class="list-shell" aria-label="My tasks grouped by Order">
-            <div class="task-head"><span>Task</span><span>Phase</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
+            <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
             <div>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $workGroups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
@@ -273,7 +283,67 @@ body{background:#f3f6fb;color:#172033}
                                         <span class="task-ref"><?php echo e($task['number']); ?></span>
                                     </div>
                                     <span class="phase"><?php echo e($task['phase']); ?></span>
-                                    <time class="due <?php echo e($task['dueTone']); ?>"><?php echo e($task['due']); ?></time>
+                                    <span class="assignee" title="<?php echo e($task['assignee']); ?>">
+                                        <?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['name' => $task['assignee'],'src' => $task['assigneeAvatar'],'size' => 22]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['assignee']),'src' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['assigneeAvatar']),'size' => 22]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $attributes = $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+                                        <span class="assignee-name"><?php echo e($task['assignee']); ?></span>
+                                    </span>
+                                    <span
+                                        class="due-editor ft-inline-edit-shell <?php echo e($task['dueTone']); ?>"
+                                        x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('my-work-task-'.$task['id'].'-due-date')->toHtml() ?>, label: 'task due date', value: <?php echo \Illuminate\Support\Js::from($task['dueValue'])->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($task['dueDisplay'])->toHtml() ?> })"
+                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                    >
+                                        <span x-show="!editing" x-text="display" class="ft-task-inline-display"><?php echo e($task['dueDisplay']); ?></span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task['canEdit']): ?>
+                                            <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button compact" title="Edit due date" aria-label="Edit due date for <?php echo e($task['title']); ?>" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.myWorkDue.showPicker ? $refs.myWorkDue.showPicker() : $refs.myWorkDue.focus())">✎</button>
+                                            <input x-ref="myWorkDue" x-cloak x-show="editing" x-model="draftValue" class="ft-task-inline-input" type="date"
+                                                x-on:keydown.escape.prevent="cancelEdit()"
+                                                x-on:blur="if (editing) cancelEdit()"
+                                                x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDate(<?php echo e($task['id']); ?>, draftValue))">
+                                            <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </span>
                                     <select class="status-select" <?php if($task['canEdit']): ?> x-on:change="saveStatus($event)" <?php else: ?> disabled <?php endif; ?> aria-label="Status for <?php echo e($task['title']); ?>">
                                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!in_array($task['status'], $statusOptions, true)): ?><option value="<?php echo e($task['status']); ?>" selected><?php echo e($task['status']); ?></option><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $statusOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $statusOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($statusOption); ?>" <?php if($statusOption === $task['status']): echo 'selected'; endif; ?>><?php echo e($statusOption); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>

@@ -16,9 +16,10 @@
     @if($user->canAccess('tasks.view'))<x-ui.nav-link route="my-work" label="My Work" :badge="$myWork" icon="work" />@endif
     @if($user->canAccess('jobs.view'))<x-ui.nav-link route="jobs.index" label="Orders" icon="jobs" />@endif
     @if($user->canAccess('clients.view'))<x-ui.nav-link route="clients.index" label="Clients" icon="clients" />@endif
-    @if($user->canAccess('tasks.view'))<x-ui.nav-link route="board" label="Board" icon="board" />@endif
+    @if($user->canAccess('tasks.view'))<x-ui.nav-link route="all-tasks" label="All Task" icon="board" />@endif
     @if($user->canAccess('documents.view'))<x-ui.nav-link route="documents.index" label="Documents" icon="documents" />@endif
-    @if($user->canAccess('reports.view'))<x-ui.nav-link route="reports" label="Reports" icon="reports" />@endif
+    {{-- Reports is intentionally hidden from the sidebar while the page is disabled. --}}
+    {{-- @if($user->canAccess('reports.view'))<x-ui.nav-link route="reports" label="Reports" icon="reports" />@endif --}}
     <div class="sidebar-section">Administration</div>
     <x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />
     @if($user->canAccess('workflow.manage'))

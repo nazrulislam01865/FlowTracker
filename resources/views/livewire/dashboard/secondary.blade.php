@@ -27,7 +27,7 @@
 <div class="ft-dashboard-secondary-sections">
     <div class="ft-grid ft-grid-balanced">
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div><a class="ft-link" href="{{ route('reports') }}" wire:navigate>Details</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive">
                     <colgroup><col style="width:29%"><col style="width:16%"><col style="width:18%"><col style="width:19%"><col style="width:18%"></colgroup>
@@ -41,7 +41,7 @@
                             @endphp
                             <tr wire:key="dashboard-assignee-{{ $person->id }}">
                                 <td data-label="Assignee"><span class="ft-person"><x-ui.avatar :user="$person" :name="$person->name" :size="22" /><span class="ft-cell-clip">{{ $person->name }}</span></span></td>
-                                <td data-label="Ongoing"><a class="ft-text-link" href="{{ route('board') }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
+                                <td data-label="Ongoing"><a class="ft-text-link" href="{{ route('all-tasks') }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
                                 <td data-label="Done">{{ $person->done_count }}</td>
                                 <td data-label="On time">{{ $onTime }}%</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:{{ $workloadPct }}%"></span></i>{{ $workloadLabel }}</span></td>
@@ -55,7 +55,7 @@
         </section>
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current jobs</div></div><a class="ft-link" href="{{ route('board') }}" wire:navigate>View all tasks</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current jobs</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>View all tasks</a></div>
             <div class="ft-risk-list">
                 @forelse($attentionTasks as $task)
                     @php
@@ -101,7 +101,7 @@
         </section>
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="{{ route('board') }}" wire:navigate>Open board</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>Open all tasks</a></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive">
                     <colgroup><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>

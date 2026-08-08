@@ -101,6 +101,7 @@
 .ft-activity-feed{padding:4px 16px 10px}
 .ft-activity-entry{display:grid;grid-template-columns:36px minmax(0,1fr);gap:10px;padding:11px 0;border-bottom:1px solid #edf1f5;position:relative}
 .ft-activity-entry:last-child{border-bottom:0}
+.ft-activity-entry.is-focused-comment{margin-inline:-8px;padding-inline:8px;border-radius:8px;background:#eef5ff;box-shadow:0 0 0 1px #b7d0ff inset;scroll-margin-top:110px}
 .ft-activity-entry-avatar{position:relative;width:34px;height:34px}
 .ft-activity-entry-avatar>span{position:absolute;right:-3px;bottom:-3px;width:16px;height:16px;border-radius:50%;display:grid;place-items:center;background:#eef4ff;border:2px solid #fff;font-size:8px;line-height:1}
 .ft-activity-entry.is-comment .ft-activity-entry-avatar>span{background:#eaf2ff}

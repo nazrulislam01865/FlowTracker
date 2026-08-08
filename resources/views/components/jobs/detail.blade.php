@@ -13,6 +13,7 @@
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
     'activityPage'=>1,
+    'focusComment'=>null,
     'jobDocumentUploads'=>[],
     'showDocumentPicker'=>false,
 ])
@@ -79,6 +80,7 @@
             :job-task-search="$jobTaskSearch"
             :activity-tab="$activityTab"
             :activity-page="$activityPage"
+            :focus-comment="$focusComment"
             :job-document-uploads="$jobDocumentUploads"
         />
     @elseif($detailTab==='workflow')

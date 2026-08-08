@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 class MyWorkService
 {
-    public const JOBS_PER_PAGE = 10;
+    public const JOBS_PER_PAGE = 3;
 
     /**
      * Paginate Jobs, never individual tasks. The first query selects only a
@@ -74,7 +74,7 @@ class MyWorkService
                 ->orderBy('my_work_jobs.job_number'),
         };
 
-        $paginator = $groupsQuery->paginate(max(1, min(25, $perPage)), ['*'], $pageName);
+        $paginator = $groupsQuery->paginate(max(1, min(self::JOBS_PER_PAGE, $perPage)), ['*'], $pageName);
         $jobIds = collect($paginator->items())->pluck('flow_job_id')->map(fn ($id) => (int) $id)->values();
 
         if ($jobIds->isEmpty()) {
@@ -108,7 +108,7 @@ class MyWorkService
             ])
             ->with([
                 'phase:id,name,short_name,sequence',
-                'assignee:id,name',
+                'assignee:id,name,profile_image_path',
             ]);
 
         $this->orderTasks($tasks, (string) ($filters['sort'] ?? 'action'), $today);
@@ -374,7 +374,14 @@ class MyWorkService
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
             'phase' => (string) ($task->phase?->short_name ?: $task->phase?->name ?: 'No phase'),
+            'assignee' => (string) ($task->assignee?->name ?: 'Unassigned'),
+            'assigneeId' => $task->assignee?->id ? (int) $task->assignee->id : null,
+            'assigneeAvatar' => ($task->assignee?->id && $task->assignee?->profile_image_path)
+                ? route('profile-images.show', ['user' => $task->assignee->id, 'filename' => basename($task->assignee->profile_image_path)], false)
+                : null,
             'due' => $dueLabel,
+            'dueValue' => $dueDate ?: '',
+            'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',
             'dueTone' => $dueTone,
             'status' => (string) $task->status,
             'flag' => $flag,

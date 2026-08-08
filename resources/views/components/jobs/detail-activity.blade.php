@@ -1,7 +1,7 @@
-@props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1])
+@props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1,'focusComment'=>null])
 @php
     $canComment = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
-    $activities = $job->activities->sortByDesc('created_at')->values();
+    $activities = $job->activities->sortByDesc(fn($activity) => sprintf('%020d-%020d', $activity->created_at?->getTimestamp() ?? 0, $activity->id ?? 0))->values();
     if ($activityTab === 'comments') {
         $activities = $activities->where('event','job.comment')->values();
     } elseif ($activityTab === 'history') {
@@ -39,7 +39,12 @@
                 $actorName = $activity->user?->name ?? 'System';
                 $eventLabel = $isComment ? 'Comment' : \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event));
             @endphp
-            <article class="ft-activity-entry {{ $isComment ? 'is-comment' : 'is-history' }}">
+            @php
+                $activityFocusKey = $isComment ? 'job-'.$activity->id : null;
+                $activityAnchor = $isComment ? 'job-comment-'.$activity->id : null;
+                $isFocusedComment = $activityFocusKey !== null && $focusComment === $activityFocusKey;
+            @endphp
+            <article @if($activityAnchor) id="{{ $activityAnchor }}" @endif class="ft-activity-entry {{ $isComment ? 'is-comment' : 'is-history' }} {{ $isFocusedComment ? 'is-focused-comment' : '' }}" @if($isFocusedComment) x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" @endif>
                 <div class="ft-activity-entry-avatar">
                     <x-ui.avatar :user="$activity->user" :name="$actorName" :size="32"/>
                     <span>{{ $isComment ? '💬' : '↻' }}</span>

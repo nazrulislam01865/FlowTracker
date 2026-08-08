@@ -26,6 +26,26 @@ class MasterDataService
         'task_flag' => 'Task Flags',
     ];
 
+    /**
+     * Stable prefixes used for automatically generated Master Data codes.
+     *
+     * Existing records keep their historical codes. New records created from
+     * Master Data use the next available PREFIX-### value for their type.
+     */
+    public const CODE_PREFIXES = [
+        'department' => 'DEP',
+        'product_category' => 'CAT',
+        'product' => 'PRD',
+        'supplier' => 'SUP',
+        'production_unit' => 'PUN',
+        'shipment_method' => 'SHM',
+        'currency' => 'CUR',
+        'document_category' => 'DOC',
+        'priority' => 'PRI',
+        'task_status' => 'TST',
+        'task_flag' => 'TFL',
+    ];
+
     private const LEGACY_GROUPS = [
         'department' => 'departments',
         'product_category' => 'product_categories',
@@ -74,6 +94,39 @@ class MasterDataService
         );
 
         return collect($rows)->map(fn (array $attributes) => (new MasterRecord())->newFromBuilder($attributes));
+    }
+
+    public function nextCode(string $type): string
+    {
+        abort_unless(array_key_exists($type, self::LABELS), 404);
+
+        $prefix = self::CODE_PREFIXES[$type];
+        $workspaceId = $this->workspaceId();
+        $pattern = '/^'.preg_quote($prefix, '/').'-(\d+)$/';
+
+        // Include soft-deleted rows because the database unique index still
+        // reserves their code. This prevents a deleted code from being reused.
+        $highest = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType($type)
+            ->where('code', 'like', $prefix.'-%')
+            ->pluck('code')
+            ->reduce(function (int $max, string $code) use ($pattern): int {
+                if (!preg_match($pattern, strtoupper($code), $matches)) return $max;
+                return max($max, (int) $matches[1]);
+            }, 0);
+
+        $next = $highest + 1;
+        do {
+            $code = $prefix.'-'.str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+            $next++;
+        } while (MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType($type)
+            ->where('code', $code)
+            ->exists());
+
+        return $code;
     }
 
     public function save(string $type, array $data, ?int $id = null): MasterRecord

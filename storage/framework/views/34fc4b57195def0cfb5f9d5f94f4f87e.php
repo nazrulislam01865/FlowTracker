@@ -27,8 +27,8 @@
 
     <section class="ft-kpis" aria-label="Key metrics">
         <a class="ft-kpi" href="<?php echo e(route('jobs.index')); ?>" wire:navigate><span class="ft-kpi-label">Active Jobs <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value"><?php echo e($metrics['activeJobs']); ?></strong><span class="ft-kpi-foot">Across all active phases</span></a>
-        <a class="ft-kpi" href="<?php echo e(route('board')); ?>" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value"><?php echo e($metrics['needsAttention']); ?></strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
-        <a class="ft-kpi" href="<?php echo e(route('board')); ?>" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value"><?php echo e($metrics['overdueTasks']); ?></strong><span class="ft-kpi-foot">Require immediate update</span></a>
+        <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value"><?php echo e($metrics['needsAttention']); ?></strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
+        <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value"><?php echo e($metrics['overdueTasks']); ?></strong><span class="ft-kpi-foot">Require immediate update</span></a>
         <a class="ft-kpi" href="<?php echo e(route('clients.index')); ?>" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value"><?php echo e($metrics['activeClients']); ?></strong><span class="ft-kpi-foot">Current active client records</span></a>
         <div class="ft-kpi" aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value"><?php echo e($metrics['openInquiries']); ?></strong><span class="ft-kpi-foot">Inquiry module not configured</span></div>
         <a class="ft-kpi" href="<?php echo e(route('notifications')); ?>" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value"><?php echo e($metrics['taggedComments']); ?></strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
@@ -81,7 +81,7 @@ unset($__split);
 ?>
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div><a class="ft-link" href="<?php echo e(route('reports')); ?>" wire:navigate>Details</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div></div>
             <div class="ft-analytics">
                 <div class="ft-health">
                     <div class="ft-health-content">
@@ -97,7 +97,7 @@ unset($__split);
                     <div class="ft-mix-summary"><span>Task mix by flag</span><span><strong><?php echo e($operationalHealth['flaggedTotal']); ?></strong> flagged tasks</span></div>
                     <div class="ft-mix-list">
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $operationalHealth['flags']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $flag): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                            <div class="ft-mix-row"><a href="<?php echo e(route('board')); ?>" wire:navigate><?php echo e($flag['label']); ?></a><i class="ft-mix-track"><span class="ft-mix-fill <?php echo e($flag['tone']); ?>" style="width:<?php echo e($flag['width']); ?>%"></span></i><b><?php echo e($flag['count']); ?></b></div>
+                            <div class="ft-mix-row"><a href="<?php echo e(route('all-tasks')); ?>" wire:navigate><?php echo e($flag['label']); ?></a><i class="ft-mix-track"><span class="ft-mix-fill <?php echo e($flag['tone']); ?>" style="width:<?php echo e($flag['width']); ?>%"></span></i><b><?php echo e($flag['count']); ?></b></div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     </div>
                 </div>

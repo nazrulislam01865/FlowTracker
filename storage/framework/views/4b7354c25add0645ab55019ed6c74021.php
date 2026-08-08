@@ -44,7 +44,7 @@ unset($__defined_vars, $__key, $__value); ?>
 ?>
 
 <div id="ft-orders-page" class="ft-orders-prototype">
-    <?php if (! $__env->hasRenderedOnce('dd5fb652-5d9c-4992-9dca-6d87ff69ebf3')): $__env->markAsRenderedOnce('dd5fb652-5d9c-4992-9dca-6d87ff69ebf3'); ?>
+    <?php if (! $__env->hasRenderedOnce('323b862d-be97-4a23-93a3-2acbf9e4006b')): $__env->markAsRenderedOnce('323b862d-be97-4a23-93a3-2acbf9e4006b'); ?>
         <style>
             .ft-orders-prototype{color-scheme:light;--navy:#0d1b2b;--navy-active:#22466f;--blue:#2463eb;--blue-soft:#edf3ff;--canvas:#f3f6fb;--surface:#fff;--line:#dbe3ed;--text:#172033;--muted:#62728a;--green:#147e5b;--green-soft:#edf9f4;--amber:#a56708;--amber-soft:#fff6e5;--red:#c43f3f;--red-soft:#fff0f0;--purple:#6f54cf;--purple-soft:#f1edff;width:100%;min-width:0;color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
             .ft-orders-prototype button,.ft-orders-prototype input,.ft-orders-prototype a{font:inherit}.ft-orders-prototype button,.ft-orders-prototype a{-webkit-tap-highlight-color:transparent}.ft-orders-prototype button{cursor:pointer}.ft-orders-prototype a{color:inherit}

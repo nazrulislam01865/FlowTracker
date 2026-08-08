@@ -12,9 +12,11 @@ use App\Http\Controllers\JobsController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationsController;
+use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
-use App\Http\Controllers\ReportsController;
+// Reports page is intentionally disabled for now.
+// use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\UserEditController;
 use App\Http\Controllers\WorkflowSetupController;
@@ -67,7 +69,7 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('jobs.index', $request->query());
     })->middleware('permission:jobs.view')->name('jobs.legacy');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');
-    Route::get('/board', BoardController::class)->middleware('permission:tasks.view')->name('board');
+    Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
     Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');
     Route::get('/documents/{document}/open', function (Document $document) {
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();
@@ -82,8 +84,10 @@ Route::middleware('auth')->group(function () {
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();
         return Storage::disk((string) config('flowtrack.document_disk', 'public'))->download($document->path, $document->name);
     })->name('documents.download');
-    Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
+    // Reports page is intentionally disabled for now.
+    // Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
     Route::get('/notifications', NotificationsController::class)->name('notifications');
+    Route::get('/notifications/{notification}/open', NotificationOpenController::class)->whereNumber('notification')->name('notifications.open');
     Route::get('/notifications/unread-count', function () {
         $user = auth()->user();
         $service = app(\App\Services\NotificationService::class);

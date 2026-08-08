@@ -15,7 +15,7 @@
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-9">
     <script src="/js/flowtrack-inline-editing.js?v=20260807-3"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260808-2"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260808-4"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -35,7 +35,7 @@
     ])
     <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-3">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
-    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-1">@endif
+    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-2">@endif
     @livewireStyles
 </head>
 <body>

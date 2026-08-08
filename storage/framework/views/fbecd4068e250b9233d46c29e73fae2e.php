@@ -30,7 +30,7 @@
     <div class="attention-item" style="<?php echo e($n->read_at?'opacity:.62':''); ?>">
         <span class="signal <?php echo e($n->type==='risk'?'red':($n->type==='assignment'?'purple':($n->type==='approval'?'amber':'purple'))); ?>"></span>
         <div><div class="item-title"><?php echo e($n->title); ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$n->read_at): ?><span class="badge b-blue">New</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div><div class="item-meta"><?php echo e($n->message); ?> · <?php echo e($n->created_at->diffForHumans()); ?></div></div>
-        <a class="mini-btn" href="<?php echo e($url); ?>" wire:navigate wire:click="markRead(<?php echo e($n->id); ?>)">Open</a>
+        <a class="mini-btn" href="<?php echo e($url); ?>">Open</a>
     </div>
 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
     <div class="empty-state">No notifications.</div>

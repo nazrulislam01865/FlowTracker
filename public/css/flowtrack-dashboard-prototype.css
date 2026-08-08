@@ -202,3 +202,44 @@
 @media (prefers-reduced-motion:reduce) {
   .ft-dashboard-prototype .ft-heading, .ft-dashboard-prototype .ft-kpi, .ft-dashboard-prototype .ft-panel { opacity:1; animation:none; }
 }
+
+
+/* 2026-08-08: Slightly larger Dashboard typography for readability without changing component sizing. */
+.ft-dashboard-welcome{font-size:12px}
+.ft-dashboard-prototype .ft-heading h1{font-size:clamp(21px,2vw,25px)}
+.ft-dashboard-prototype .ft-heading p{font-size:13px}
+.ft-dashboard-prototype .ft-action{font-size:10px}
+.ft-dashboard-prototype .ft-action-icon{font-size:14px}
+.ft-dashboard-prototype .ft-page-tab{font-size:11px}
+.ft-dashboard-prototype .ft-kpi-label{font-size:11px}
+.ft-dashboard-prototype .ft-kpi-value{font-size:25px}
+.ft-dashboard-prototype .ft-kpi-foot{font-size:10px}
+.ft-dashboard-prototype .ft-panel-title{font-size:14px}
+.ft-dashboard-prototype #unread-count{font-size:8.5px}
+.ft-dashboard-prototype .ft-panel-note{font-size:10px}
+.ft-dashboard-prototype .ft-link{font-size:11px}
+.ft-dashboard-prototype .ft-tab{font-size:10px}
+.ft-dashboard-prototype .ft-mention-copy{font-size:10px}
+.ft-dashboard-prototype .ft-mention-meta,.ft-dashboard-prototype .ft-mention-time{font-size:9px}
+.ft-dashboard-prototype .ft-avatar{font-size:10px}
+.ft-dashboard-prototype .ft-person .avatar{font-size:8px !important}
+.ft-dashboard-prototype .ft-mini-avatar{font-size:8px}
+.ft-dashboard-prototype .ft-donut-value{font-size:17px}
+.ft-dashboard-prototype .ft-donut-value small{font-size:8px}
+.ft-dashboard-prototype .ft-health-list{font-size:10px}
+.ft-dashboard-prototype .ft-mix-summary{font-size:9px}
+.ft-dashboard-prototype .ft-mix-summary strong{font-size:19px}
+.ft-dashboard-prototype .ft-mix-row{font-size:9px}
+.ft-dashboard-prototype .ft-table th{font-size:9px}
+.ft-dashboard-prototype .ft-table td{font-size:9.5px}
+.ft-dashboard-prototype .ft-ref{font-size:8.5px}
+.ft-dashboard-prototype .ft-pill,.ft-dashboard-prototype .ft-flag{font-size:8.5px}
+.ft-dashboard-prototype .ft-view{font-size:9px}
+.ft-dashboard-prototype .ft-risk-name{font-size:10px}
+.ft-dashboard-prototype .ft-risk-meta{font-size:9px}
+.ft-dashboard-prototype .ft-activity-icon{font-size:10px}
+.ft-dashboard-prototype .ft-activity strong{font-size:10px}
+.ft-dashboard-prototype .ft-activity-copy{font-size:9px}
+.ft-dashboard-prototype .ft-activity-time{font-size:8.5px}
+.ft-dashboard-prototype .ft-panel-empty,.ft-dashboard-prototype .ft-table-empty-row td{font-size:10px}
+@media(max-width:680px){.ft-dashboard-prototype .ft-table.responsive td::before{font-size:8px}}

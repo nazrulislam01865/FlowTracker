@@ -26,7 +26,7 @@ class Index extends Component
     use HandlesInlineEdits;
     use WithPagination;
 
-    public string $mode = 'jobs';
+    public string $mode = 'tasks';
     public ?string $message = null;
 
     public string $workflow = '';
@@ -48,42 +48,13 @@ class Index extends Component
     public array $expandedJobs = [];
     public bool $taskGroupsExpanded = true;
 
-    public function mount(): void
-    {
-        $workspaceId = app(\App\Services\SetupContext::class)->workspaceId();
-        $this->workflow = (string) (\App\Models\WorkflowTemplate::query()
-            ->where('workspace_id', $workspaceId)
-            ->where('is_active', true)
-            ->orderByDesc('is_default')
-            ->orderBy('id')
-            ->value('id') ?: '');
-    }
-
     public function setMode(string $mode): void
     {
-        $this->mode = in_array($mode, ['tasks', 'jobs'], true) ? $mode : 'jobs';
-        // A mode switch is already a Livewire request. Render the bounded
-        // target view immediately instead of triggering another wire:init.
-        $this->cardsReady = true;
-        $this->cardLimit = 60;
+        // Job Board is intentionally disabled; keep this legacy action task-only.
+        $this->mode = 'tasks';
         $this->message = null;
-
-        if ($this->mode === 'tasks') {
-            // Task Board intentionally mirrors My Work. Do not carry hidden
-            // Job Board-only filters into the literal My Work-style surface.
-            $this->job = '';
-            $this->client = '';
-            $this->assignee = '';
-            $this->status = '';
-            $this->due = '';
-            $this->taskQuick = 'all';
-            $this->taskSort = 'action';
-
-            $service = app(BoardTaskPackService::class);
-            $this->taskPackMetrics = $service->metrics(auth()->user());
-            $this->taskPackStatusOptions = $service->statusOptions();
-        }
-
+        $this->taskQuick = 'all';
+        $this->taskSort = 'action';
         $this->resetPage('taskPackPage');
     }
 
@@ -321,10 +292,6 @@ class Index extends Component
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
-        if ($this->mode !== 'tasks') {
-            return;
-        }
-
         $service = app(BoardTaskPackService::class);
         $this->taskPackMetrics = $service->metrics(auth()->user());
         $this->taskPackStatusOptions = $service->statusOptions();
@@ -341,36 +308,20 @@ class Index extends Component
 
     public function render()
     {
-        $user = auth()->user();
-        $service = app(BoardService::class);
-
-        // Keep render() small and branch before any heavy query. The Job Board
-        // and Task Pack list now execute only the queries required by that mode.
-        $data = $this->mode === 'jobs'
-            ? $this->jobBoardData($user, $service)
-            : $this->taskPackBoardData($user);
-
-        return view('livewire.board.index', $data);
+        // Job Board is disabled. This endpoint is now the task-only All Tasks page.
+        return view('livewire.board.index', $this->taskPackBoardData(auth()->user()));
     }
 
     private function boardBaseData(User $user): array
     {
-        $options = app(\App\Services\FilterOptionService::class);
-        $jobMode = $this->mode === 'jobs';
-
         return [
             'jobs' => collect(),
             'phases' => collect(),
-            // Task Board is a literal My Work-style surface and does not render
-            // the old seven-field Board filter shell. Skip those lookup queries
-            // entirely in task mode.
-            'jobFilterOptions' => $jobMode ? $options->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 5) : collect(),
-            'clientFilterOptions' => $jobMode ? $options->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 5) : collect(),
-            'assigneeFilterOptions' => $jobMode ? $options->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 5) : collect(),
-            'statusFilterOptions' => $jobMode ? $options->options($user, 'job-statuses', 'board', '', $this->status, 5) : collect(),
-            'workflowFilterOptions' => $jobMode
-                ? $options->options($user, 'workflows', 'board', '', $this->workflow !== '' ? (int) $this->workflow : null, 5)
-                : collect(),
+            'jobFilterOptions' => collect(),
+            'clientFilterOptions' => collect(),
+            'assigneeFilterOptions' => collect(),
+            'statusFilterOptions' => collect(),
+            'workflowFilterOptions' => collect(),
             'hasMoreCards' => false,
             'taskPackGroups' => collect(),
             'taskPackPaginator' => null,

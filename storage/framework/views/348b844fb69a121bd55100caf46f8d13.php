@@ -27,7 +27,7 @@
 <div class="ft-dashboard-secondary-sections">
     <div class="ft-grid ft-grid-balanced">
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div><a class="ft-link" href="<?php echo e(route('reports')); ?>" wire:navigate>Details</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive">
                     <colgroup><col style="width:29%"><col style="width:16%"><col style="width:18%"><col style="width:19%"><col style="width:18%"></colgroup>
@@ -62,7 +62,7 @@
 <?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?><span class="ft-cell-clip"><?php echo e($person->name); ?></span></span></td>
-                                <td data-label="Ongoing"><a class="ft-text-link" href="<?php echo e(route('board')); ?>" wire:navigate><?php echo e($person->ongoing_count); ?> ↗</a></td>
+                                <td data-label="Ongoing"><a class="ft-text-link" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><?php echo e($person->ongoing_count); ?> ↗</a></td>
                                 <td data-label="Done"><?php echo e($person->done_count); ?></td>
                                 <td data-label="On time"><?php echo e($onTime); ?>%</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:<?php echo e($workloadPct); ?>%"></span></i><?php echo e($workloadLabel); ?></span></td>
@@ -76,7 +76,7 @@
         </section>
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current jobs</div></div><a class="ft-link" href="<?php echo e(route('board')); ?>" wire:navigate>View all tasks</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current jobs</div></div><a class="ft-link" href="<?php echo e(route('all-tasks')); ?>" wire:navigate>View all tasks</a></div>
             <div class="ft-risk-list">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $attentionTasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <?php
@@ -122,7 +122,7 @@
         </section>
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="<?php echo e(route('board')); ?>" wire:navigate>Open board</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="<?php echo e(route('all-tasks')); ?>" wire:navigate>Open all tasks</a></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive">
                     <colgroup><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>

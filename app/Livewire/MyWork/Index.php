@@ -114,8 +114,14 @@ class Index extends Component
     #[Renderless]
     public function updateTaskDueDate(int $taskId, ?string $date): array
     {
+        $date = trim((string) $date);
+
         return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
             $actor = auth()->user();
+            if ($date !== '') {
+                validator(['date' => $date], ['date' => ['date']])->validate();
+            }
+
             $task = app(MyWorkService::class)->findPersonalVisibleTask($actor, $taskId);
             app(TaskService::class)->updateDueDate($task, $date ?: null, $actor);
         });

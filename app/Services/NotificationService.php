@@ -193,11 +193,10 @@ class NotificationService
 
     public function urlFor(FlowNotification $notification): string
     {
-        if ($notification->flow_task_id) {
-            return route('jobs.index', array_filter(['open' => $notification->flow_job_id, 'task' => $notification->flow_task_id]));
-        }
-        if ($notification->flow_job_id) return route('jobs.index', ['open' => $notification->flow_job_id]);
-        return route('notifications');
+        // Always open through the notification resolver. It verifies current
+        // access, repairs stale job/task pairings, marks the notification read,
+        // and deep-links comment notifications to the exact comment when possible.
+        return route('notifications.open', ['notification' => $notification->id]);
     }
 
     private function createMentionNotification(

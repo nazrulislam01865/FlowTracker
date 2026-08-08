@@ -5,6 +5,29 @@
         .replace(/[_-]+/g, ' ')
         .replace(/\s+/g, ' ');
 
+    const measureNaturalMenuHeight = (menu, heightCap) => {
+        // positionDropdown() runs while the menu may already have an inline
+        // max-height from an earlier scroll position. Measuring scrollHeight
+        // while that flex container is constrained can return the constrained
+        // height itself (for example 120px). Reusing that value on the next
+        // reposition made the dropdown permanently shrink after scrolling.
+        // Temporarily remove only that constraint, measure the real content,
+        // then restore it until Alpine applies the newly calculated style.
+        const previousMaxHeight = menu.style.getPropertyValue('max-height');
+        const previousPriority = menu.style.getPropertyPriority('max-height');
+
+        menu.style.setProperty('max-height', 'none', 'important');
+        const measuredHeight = menu.scrollHeight;
+
+        if (previousMaxHeight) {
+            menu.style.setProperty('max-height', previousMaxHeight, previousPriority);
+        } else {
+            menu.style.removeProperty('max-height');
+        }
+
+        return Math.min(heightCap, Math.max(120, measuredHeight || heightCap));
+    };
+
     const positionDropdown = (component) => {
         const trigger = component.$refs?.trigger;
         const menu = component.$refs?.menu;
@@ -28,7 +51,7 @@
         const roomBelow = Math.max(0, viewportHeight - rect.bottom - edge - gap);
         const roomAbove = Math.max(0, rect.top - edge - gap);
         const heightCap = component.searchable === false ? 300 : 360;
-        const naturalHeight = Math.min(heightCap, Math.max(120, menu.scrollHeight || heightCap));
+        const naturalHeight = measureNaturalMenuHeight(menu, heightCap);
         const openAbove = roomBelow < Math.min(190, naturalHeight) && roomAbove > roomBelow;
         const availableHeight = Math.max(120, Math.min(naturalHeight, openAbove ? roomAbove : roomBelow || naturalHeight));
 

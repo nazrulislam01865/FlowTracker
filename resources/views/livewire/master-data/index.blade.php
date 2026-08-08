@@ -70,7 +70,12 @@
             <div class="modal-head"><h2>{{ $editId?'Edit':'Add' }} {{ $labels[$group] }} Record</h2><button class="close-btn" wire:click="close">×</button></div>
             <div class="modal-body">
                 <div class="form-grid">
-                    <div class="field"><label>Code *</label><input wire:model="code" maxlength="40">@error('code')<div class="validation-error">{{ $message }}</div>@enderror</div>
+                    <div class="field">
+                        <label>Code</label>
+                        <div class="ft-admin-locked">{{ $code }}</div>
+                        <small class="small muted">{{ $editId ? 'System code is permanently locked.' : 'Automatically generated and permanently locked.' }}</small>
+                        @error('code')<div class="validation-error">{{ $message }}</div>@enderror
+                    </div>
                     <div class="field"><label>Name *</label><input wire:model="name">@error('name')<div class="validation-error">{{ $message }}</div>@enderror</div>
                     @if($group === 'product')
                         <div class="field"><label>Product category</label><select wire:model="parentId"><option value="">No category</option>@foreach($parents as $p)<option value="{{ $p->id }}">{{ $p->name }}</option>@endforeach</select>@error('parentId')<div class="validation-error">{{ $message }}</div>@enderror</div>

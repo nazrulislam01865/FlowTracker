@@ -6,17 +6,17 @@ use Tests\TestCase;
 
 class ProgressivePageRenderingTest extends TestCase
 {
-    public function test_board_defers_heavy_cards_but_keeps_each_mode_branch_specific(): void
+    public function test_all_tasks_server_renders_the_paginated_task_page_without_job_board_bootstrap(): void
     {
         $component = file_get_contents(app_path('Livewire/Board/Index.php'));
         $view = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
 
-        $this->assertStringContainsString('public bool $cardsReady = false;', $component);
-        $this->assertStringContainsString('function loadBoardCards()', $component);
-        $this->assertStringContainsString('$this->cardsReady', $component);
-        $this->assertStringContainsString('wire:init="loadBoardCards"', $view);
-        $this->assertStringContainsString('@if(!$cardsReady)', $view);
-        $this->assertStringContainsString('livewire.shared.board-cards-placeholder', $view);
+        $this->assertStringContainsString('public string $mode = \'tasks\';', $component);
+        $this->assertStringContainsString('return view(\'livewire.board.index\', $this->taskPackBoardData(auth()->user()));', $component);
+        $this->assertStringNotContainsString('wire:init="loadBoardCards"', $view);
+        $this->assertStringNotContainsString('livewire.shared.board-cards-placeholder', $view);
+        $this->assertStringContainsString('<h1>All Tasks</h1>', $view);
+        $this->assertStringNotContainsString('Job Board', $view);
     }
 
     public function test_my_work_server_renders_a_bounded_first_page_instead_of_waiting_for_wire_init(): void

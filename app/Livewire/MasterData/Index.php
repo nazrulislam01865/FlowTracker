@@ -42,12 +42,13 @@ class Index extends Component
 
     public function open(?int $id = null): void
     {
+        $service = app(MasterDataService::class);
         $this->recordsReady = true;
         $this->showModal = true;
         $this->editId = $id;
         $this->resetValidation();
         if ($id) {
-            $r = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
+            $r = MasterRecord::where('workspace_id', $service->workspaceId())->findOrFail($id);
             abort_unless($r->type === $this->group, 404);
             $this->code = $r->code;
             $this->name = $r->name;
@@ -58,8 +59,9 @@ class Index extends Component
             $this->metadataJson = $r->metadata ? json_encode($r->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
         } else {
             $this->reset(['code','name','description','parentId','metadataJson']);
+            $this->code = $service->nextCode($this->group);
             $this->status = 'active';
-            $this->sortOrder = (int) MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->where('type', $this->group)->max('sort_order') + 1;
+            $this->sortOrder = (int) MasterRecord::where('workspace_id', $service->workspaceId())->where('type', $this->group)->max('sort_order') + 1;
         }
     }
 
@@ -78,7 +80,16 @@ class Index extends Component
 
     public function save(): void
     {
-        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $service = app(MasterDataService::class);
+        $workspaceId = $service->workspaceId();
+
+        // Refresh the generated code at submit time in case another user added
+        // a record after this modal was opened. Existing records keep their
+        // original code permanently.
+        if (!$this->editId) {
+            $this->code = $service->nextCode($this->group);
+        }
+
         $data = $this->validate([
             'code' => ['required','string','max:40'],
             'name' => ['required','string','max:255'],
@@ -102,7 +113,7 @@ class Index extends Component
             }
         }
 
-        app(MasterDataService::class)->save($this->group, [
+        $service->save($this->group, [
             'code' => $data['code'],
             'name' => $data['name'],
             'description' => $data['description'],

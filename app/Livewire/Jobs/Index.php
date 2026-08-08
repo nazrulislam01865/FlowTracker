@@ -5,9 +5,11 @@ namespace App\Livewire\Jobs;
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\FlowJobItem;
+use App\Models\FlowTaskComment;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workflow;
@@ -54,6 +56,9 @@ class Index extends Component
 
     #[Url(as: 'task', history: true)]
     public ?int $selectedTaskId = null;
+
+    #[Url(as: 'comment', history: true)]
+    public ?string $focusComment = null;
     public bool $taskEditMode = false;
     public string $detailTab = 'overview';
     public array $expandedPhaseIds = [];
@@ -101,6 +106,8 @@ class Index extends Component
         $this->search = (string) request('search', '');
         $this->selectedJobId = request()->integer('open') ?: null;
         $this->selectedTaskId = request()->integer('task') ?: null;
+        $requestedComment = trim((string) request('comment', $this->focusComment ?? ''));
+        $this->focusComment = $requestedComment !== '' ? $requestedComment : null;
         $this->showCreate = request()->boolean('create');
 
         if ($this->showCreate) {
@@ -114,11 +121,19 @@ class Index extends Component
         if ($this->selectedTaskId) {
             $this->taskEditMode = true;
             $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
-            $this->selectedJobId = $this->selectedJobId ?: $task->flow_job_id;
+            $this->selectedJobId = (int) $task->flow_job_id;
             $this->loadTaskForm($this->selectedTaskId);
+            $this->applyFocusedComment();
         }
 
-        if ($this->selectedJobId) $this->prepareSelectedJob($this->selectedJobId);
+        // A task deep-link is authorized by the task scope above. Do not run
+        // the separate Job scope here as well: roles can legitimately have a
+        // task in scope while the parent Order is outside their Job list scope.
+        // Requiring both scopes caused valid tagged-comment links to 404.
+        if ($this->selectedJobId && !$this->selectedTaskId) {
+            $this->prepareSelectedJob($this->selectedJobId);
+            $this->applyFocusedComment();
+        }
     }
 
     public function updatedWorkflowId(): void
@@ -329,6 +344,7 @@ class Index extends Component
     {
         $this->selectedJobId = $id;
         $this->selectedTaskId = null;
+        $this->focusComment = null;
         $this->taskEditMode = false;
         $this->detailTab = 'overview';
         $this->jobTaskSearch = '';
@@ -346,6 +362,7 @@ class Index extends Component
     {
         $this->selectedJobId = null;
         $this->selectedTaskId = null;
+        $this->focusComment = null;
         $this->taskEditMode = false;
         $this->expandedPhaseIds = [];
         $this->jobTaskSearch = '';
@@ -751,6 +768,7 @@ class Index extends Component
 
         $this->selectedJobId = (int) $task->flow_job_id;
         $this->selectedTaskId = $task->id;
+        $this->focusComment = null;
         $this->taskEditMode = $editMode;
         $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
@@ -785,7 +803,7 @@ class Index extends Component
         }
     }
 
-    public function closeTask(): void { $this->selectedTaskId = null; $this->taskEditMode = false; $this->taskComment = ''; $this->newChecklistItem = ''; $this->taskActivityTab = 'all'; $this->taskActivityPage = 1; $this->taskDocumentUploads = []; $this->taskExistingDocumentId = null; $this->showTaskDocumentPicker = false; }
+    public function closeTask(): void { $this->selectedTaskId = null; $this->focusComment = null; $this->taskEditMode = false; $this->taskComment = ''; $this->newChecklistItem = ''; $this->taskActivityTab = 'all'; $this->taskActivityPage = 1; $this->taskDocumentUploads = []; $this->taskExistingDocumentId = null; $this->showTaskDocumentPicker = false; }
     public function markTaskComplete(): void
     {
         abort_unless($this->selectedTaskId, 422);
@@ -1049,6 +1067,69 @@ class Index extends Component
         $this->newChecklistItem = '';
         $this->taskActivityTab = 'all';
         $this->taskActivityPage = 1;
+    }
+
+    private function applyFocusedComment(): void
+    {
+        $focus = trim((string) $this->focusComment);
+        if ($focus === '') return;
+
+        if ($this->selectedTaskId && preg_match('/^task-(\d+)$/', $focus, $matches) === 1) {
+            $comment = FlowTaskComment::query()
+                ->where('flow_task_id', $this->selectedTaskId)
+                ->find((int) $matches[1]);
+
+            if (!$comment) {
+                $this->focusComment = null;
+                return;
+            }
+
+            $newerCount = FlowTaskComment::query()
+                ->where('flow_task_id', $this->selectedTaskId)
+                ->where(function ($query) use ($comment): void {
+                    $query->where('created_at', '>', $comment->created_at)
+                        ->orWhere(function ($sameTime) use ($comment): void {
+                            $sameTime->where('created_at', $comment->created_at)->where('id', '>', $comment->id);
+                        });
+                })
+                ->count();
+
+            $this->taskActivityTab = 'comments';
+            $this->taskActivityPage = intdiv($newerCount, 30) + 1;
+            return;
+        }
+
+        if ($this->selectedJobId && !$this->selectedTaskId && preg_match('/^job-(\d+)$/', $focus, $matches) === 1) {
+            $activity = Activity::query()
+                ->where('subject_type', FlowJob::class)
+                ->where('subject_id', $this->selectedJobId)
+                ->where('event', 'job.comment')
+                ->find((int) $matches[1]);
+
+            if (!$activity) {
+                $this->focusComment = null;
+                return;
+            }
+
+            $newerCount = Activity::query()
+                ->where('subject_type', FlowJob::class)
+                ->where('subject_id', $this->selectedJobId)
+                ->where('event', 'job.comment')
+                ->where(function ($query) use ($activity): void {
+                    $query->where('created_at', '>', $activity->created_at)
+                        ->orWhere(function ($sameTime) use ($activity): void {
+                            $sameTime->where('created_at', $activity->created_at)->where('id', '>', $activity->id);
+                        });
+                })
+                ->count();
+
+            $this->detailTab = 'overview';
+            $this->jobActivityTab = 'comments';
+            $this->jobActivityPage = intdiv($newerCount, 10) + 1;
+            return;
+        }
+
+        $this->focusComment = null;
     }
 
     private function setDefaultStartPhase(): void

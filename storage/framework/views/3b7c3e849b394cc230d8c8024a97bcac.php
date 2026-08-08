@@ -15,7 +15,7 @@
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('favicon.ico')); ?>">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-9">
     <script src="/js/flowtrack-inline-editing.js?v=20260807-3"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260808-2"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260808-4"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -35,7 +35,7 @@
     ]); ?>
     <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-3">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-2"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

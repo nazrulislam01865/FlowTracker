@@ -10,7 +10,7 @@
     <div class="attention-item" style="{{ $n->read_at?'opacity:.62':'' }}">
         <span class="signal {{ $n->type==='risk'?'red':($n->type==='assignment'?'purple':($n->type==='approval'?'amber':'purple')) }}"></span>
         <div><div class="item-title">{{ $n->title }} @if(!$n->read_at)<span class="badge b-blue">New</span>@endif</div><div class="item-meta">{{ $n->message }} · {{ $n->created_at->diffForHumans() }}</div></div>
-        <a class="mini-btn" href="{{ $url }}" wire:navigate wire:click="markRead({{ $n->id }})">Open</a>
+        <a class="mini-btn" href="{{ $url }}">Open</a>
     </div>
 @empty
     <div class="empty-state">No notifications.</div>

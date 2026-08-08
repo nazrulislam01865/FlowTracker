@@ -1,123 +1,8 @@
-<div wire:init="loadBoardCards" class="{{ $mode === 'jobs' ? 'ft-board-page ft-operations-board' : '' }}" x-data="{ draggedTask:null, draggedJob:null, allGroupsOpen:true, phaseClosed:{} }">
-    @if($mode === 'jobs')
-    <div class="ft-board-sticky-header">
-        <div class="ft-board-page-head">
-            <div>
-                <h1>Operations Board</h1>
-                <p>{{ $mode === 'tasks'
-                    ? ($taskPackAdministratorView ? 'All active Job Task Pack lists' : 'Full Task Pack lists for Jobs associated with your assigned tasks')
-                    : 'Track work across all active Jobs' }}</p>
-            </div>
-            <div class="ft-board-head-actions">@if(auth()->user()->canModule('jobs','create'))<a class="ft-new-job-btn ft-dashboard-action-match" href="{{ route('jobs.index', ['create'=>1]) }}" wire:navigate><span class="ft-dashboard-action-match-icon">+</span>New Order</a>@endif</div>
-        </div>
-
-        @if($message)<div class="flash">{{ $message }}</div>@endif
-
-        <div class="ft-board-tabs ft-reference-tabs">
-            <button type="button" class="{{ $mode === 'jobs' ? 'active' : '' }}" wire:click="setMode('jobs')">Job Board</button>
-            <button type="button" class="{{ $mode === 'tasks' ? 'active' : '' }}" wire:click="setMode('tasks')">Task Board</button>
-        </div>
-
-        <section class="ft-board-control-card ft-reference-filter-card ft-list-filter-shell">
-            <div class="ft-list-filter-grid">
-                <x-ui.list-search property="search" :value="$search" placeholder="Order ID, task, client or assignee…" />
-                <x-ui.remote-filter label="Order" property="job" type="jobs" :context="$mode === 'jobs' ? 'board' : 'board-task-pack'" :value="$job" placeholder="All orders" :initial-options="$jobFilterOptions" />
-                <x-ui.remote-filter label="Client" property="client" type="clients" :context="$mode === 'jobs' ? 'board' : 'board-task-pack'" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
-                <x-ui.remote-filter label="Assignee" property="assignee" type="users" :context="$mode === 'jobs' ? 'board' : 'board-task-pack'" :value="$assignee" placeholder="Anyone" :initial-options="$assigneeFilterOptions" />
-                <x-ui.remote-filter label="Status" property="status" :type="$mode === 'jobs' ? 'job-statuses' : 'task-statuses'" :context="$mode === 'jobs' ? 'board' : 'board-task-pack'" :value="$status" placeholder="All statuses" :initial-options="$statusFilterOptions" wire:key="board-status-filter-{{ $mode }}" />
-                <x-ui.select-filter label="Due" property="due" :value="$due" placeholder="Any date" :options="collect([['id'=>'overdue','label'=>'Overdue'],['id'=>'today','label'=>'Due today'],['id'=>'week','label'=>'Due this week'],['id'=>'month','label'=>'Next 30 days'],['id'=>'none','label'=>'No due date']])" />
-                @if($mode === 'jobs')
-                    <x-ui.remote-filter label="Workflow" property="workflow" type="workflows" context="board" :value="$workflow" placeholder="Select workflow" :clearable="false" :initial-options="$workflowFilterOptions" />
-                    <x-ui.select-filter label="Sort" property="sort" :value="$sort" placeholder="Delivery date" :clearable="false" :options="collect([['id'=>'delivery','label'=>'Delivery date'],['id'=>'updated','label'=>'Recently updated'],['id'=>'priority','label'=>'Priority']])" />
-                @else
-                    <x-ui.select-filter label="Sort" property="taskSort" :value="$taskSort" placeholder="Action priority" :clearable="false" :options="collect([['id'=>'action','label'=>'Action priority'],['id'=>'due','label'=>'Due soon'],['id'=>'job','label'=>'Order number'],['id'=>'updated','label'=>'Recently updated']])" />
-                @endif
-            </div>
-            @php
-                $chips = collect();
-                if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
-                if($job) $chips->push(['key'=>'job','label'=>'Job: '.(collect($jobFilterOptions)->firstWhere('id',(int)$job)['label'] ?? 'Selected')]);
-                if($client) $chips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$client)['label'] ?? 'Selected')]);
-                if($assignee) $chips->push(['key'=>'assignee','label'=>'Assignee: '.(collect($assigneeFilterOptions)->firstWhere('id',(int)$assignee)['label'] ?? 'Selected')]);
-                if($status) $chips->push(['key'=>'status','label'=>'Status: '.$status]);
-                if($due) $chips->push(['key'=>'due','label'=>'Due: '.(['overdue'=>'Overdue','today'=>'Due today','week'=>'Due this week','month'=>'Next 30 days','none'=>'No due date'][$due] ?? $due)]);
-            @endphp
-            <div class="ft-list-active-row">
-                <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
-                <div class="ft-list-filter-actions">
-                    @if($chips->isNotEmpty())<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
-                    @if($mode === 'jobs')
-                        <span class="ft-board-group-controls" aria-label="Order group controls"><button type="button" class="ft-filter-collapse" wire:click="expandVisibleJobs('{{ $jobs->pluck('id')->implode(',') }}')" title="Expand all order cards"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button><button type="button" class="ft-filter-collapse" wire:click="collapseAll" title="Collapse all order cards"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button></span>
-                    @else
-                        <span class="ft-board-group-controls" aria-label="Task order group controls"><button type="button" class="ft-filter-collapse" wire:click="expandAllTaskGroups" title="Expand all orders"><svg viewBox="0 0 24 24"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg></button><button type="button" class="ft-filter-collapse" wire:click="collapseAllTaskGroups" title="Collapse all orders"><svg viewBox="0 0 24 24"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg></button></span>
-                    @endif
-                </div>
-            </div>
-        </section>
-
-    </div>
-    @endif
-
-    @if($mode === 'jobs')
-
-
-        @if(!$cardsReady)
-            @include('livewire.shared.board-cards-placeholder', ['columns' => max(3, $phases->count())])
-        @else
-        <div class="ft-lane-sticky-header">
-            <div class="ft-board-horizontal-scroll ft-lane-header-scroll" x-ref="jobHeaderScroll" x-on:scroll="$refs.jobBodyScroll && ($refs.jobBodyScroll.scrollLeft = $event.target.scrollLeft)">
-                <div class="ft-job-board-header-grid">
-                    @foreach($phases as $phase)
-                        @php
-                            $phaseJobs = $jobs->filter(fn($job) => (int)($job->source_workflow_phase_id ?: $job->workflow_phase_id) === (int)$phase->id);
-                        @endphp
-                        @if($hideEmptyPhases && $phaseJobs->isEmpty()) @continue @endif
-                        <button type="button" class="ft-board-column-head ft-external-lane-head" x-on:click="phaseClosed[{{ $phase->id }}]=!phaseClosed[{{ $phase->id }}]">
-                            <span>{{ strtoupper($phase->short_name) }}</span><b>{{ $phaseJobs->count() }}</b>
-                            <svg :class="{'rotated':phaseClosed[{{ $phase->id }}]}" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
-                        </button>
-                    @endforeach
-                </div>
-            </div>
-        </div>
-
-        <div class="ft-board-horizontal-scroll ft-board-lanes-scroll ft-board-body-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,job,client,assignee,status,due,workflow,sort" x-ref="jobBodyScroll" x-on:scroll="$refs.jobHeaderScroll && ($refs.jobHeaderScroll.scrollLeft = $event.target.scrollLeft)">
-            <div class="ft-job-board-grid ft-job-board-body-grid">
-                @foreach($phases as $phase)
-                    @php
-                        $phaseJobs = $jobs->filter(fn($job) => (int)($job->source_workflow_phase_id ?: $job->workflow_phase_id) === (int)$phase->id);
-                    @endphp
-                    @if($hideEmptyPhases && $phaseJobs->isEmpty()) @continue @endif
-                    <section class="ft-board-column ft-job-column ft-board-column-nohead" wire:key="job-phase-{{ $phase->id }}">
-                        <button type="button" class="ft-mobile-phase-head" x-on:click="phaseClosed[{{ $phase->id }}]=!phaseClosed[{{ $phase->id }}]">
-                            <span>{{ $phase->short_name }}</span><b>{{ $phaseJobs->count() }}</b>
-                            <svg :class="{'rotated':phaseClosed[{{ $phase->id }}]}" viewBox="0 0 24 24"><path d="m6 9 6 6 6-6"/></svg>
-                        </button>
-                        <div class="ft-board-column-list" x-show="!phaseClosed[{{ $phase->id }}]" x-on:dragover.prevent x-on:drop.prevent="if(draggedJob){$wire.moveJob(draggedJob,{{ $phase->id }});draggedJob=null}">
-                            @forelse($phaseJobs as $jobRow)
-                                @php
-                                    $canMoveJob = app(\App\Services\AccessControlService::class)->canChangeVisibleJobStatus(auth()->user(), $jobRow);
-                                @endphp
-                                @if($canMoveJob)
-                                    <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="true" x-on:dragstart="draggedJob={{ $jobRow->id }}" x-on:dragend="draggedJob=null" wire:key="job-card-{{ $jobRow->id }}" />
-                                @else
-                                    <x-board.job-card :job="$jobRow" :expanded="in_array($jobRow->id,$expandedJobs,true)" draggable="false" wire:key="job-card-{{ $jobRow->id }}" />
-                                @endif
-                            @empty
-                                <div class="ft-board-empty-column">No Orders</div>
-                            @endforelse
-                        </div>
-                    </section>
-                @endforeach
-            </div>
-        </div>
-        @endif
-    @else
-        <div
-            id="my-work-app"
-            x-data="{ metrics: @js($taskPackMetrics) }"
-            x-on:board-task-metrics.window="metrics = $event.detail"
-        >
+<div
+    id="my-work-app"
+    x-data="{ metrics: @js($taskPackMetrics) }"
+    x-on:board-task-metrics.window="metrics = $event.detail"
+>
 <style>
 /* FlowTrack My Work content follows the supplied prototype; the application shell/sidebar inherits the shared FlowTrack layout. */
 body{background:#f3f6fb;color:#172033}
@@ -253,193 +138,180 @@ body{background:#f3f6fb;color:#172033}
 }
 @media(prefers-reduced-motion:reduce){#my-work-app *,#my-work-app *::before,#my-work-app *::after{animation:none!important;transition:none!important}}
 
-/* Readability adjustment only for My Work content; shared shell/sidebar typography remains global. */
-.lang-btn{font-size:12px}
-#my-work-app .page-head h1{font-size:24px}
-#my-work-app .page-head p{font-size:11px}
-#my-work-app .page-tab{font-size:10px}
-#my-work-app .metric small{font-size:9px}
-#my-work-app .metric strong{font-size:19px}
-#my-work-app .metric i{font-size:11px}
-#my-work-app .search{font-size:10px}
-#my-work-app .clear{font-size:8.5px}
-#my-work-app .chip{font-size:9px}
-#my-work-app .sort{font-size:9px}
-#my-work-app .load-state{font-size:8.5px}
-#my-work-app .task-head{font-size:8px}
-#my-work-app .collapse{font-size:12px}
-#my-work-app .order-id,#my-work-app .order-title{font-size:10px}
-#my-work-app .order-client,#my-work-app .order-stage{font-size:9px}
-#my-work-app .health,#my-work-app .flag{font-size:8px}
-#my-work-app .order-progress,#my-work-app .task-count{font-size:8.5px}
-#my-work-app .task-link{font-size:10px}
-#my-work-app .task-ref{font-size:8px}
-#my-work-app .phase,#my-work-app .due{font-size:9px}
-#my-work-app .status-select,#my-work-app .updated,#my-work-app .row-action{font-size:8.5px}
-#my-work-app .empty{font-size:10px}
-#my-work-app .empty strong{font-size:12px}
-#my-work-app .footer,#my-work-app .page-button{font-size:9px}
+/* 2026-08-08: Slightly larger All Tasks typography for readability without changing the layout. */
+.lang-btn{font-size:13px}
+#my-work-app .page-head h1{font-size:25px}
+#my-work-app .page-head p{font-size:12px}
+#my-work-app .ft-board-tabs button{font-size:12px}
+#my-work-app .page-tab{font-size:11px}
+#my-work-app .metric small{font-size:10px}
+#my-work-app .metric strong{font-size:20px}
+#my-work-app .metric i{font-size:12px}
+#my-work-app .search{font-size:11px}
+#my-work-app .clear{font-size:9.5px}
+#my-work-app .chip{font-size:10px}
+#my-work-app .sort{font-size:10px}
+#my-work-app .load-state{font-size:9.5px}
+#my-work-app .task-head{font-size:9px}
+#my-work-app .collapse{font-size:13px}
+#my-work-app .order-id,#my-work-app .order-title{font-size:11px}
+#my-work-app .order-client,#my-work-app .order-stage{font-size:10px}
+#my-work-app .health,#my-work-app .flag{font-size:9px}
+#my-work-app .order-progress,#my-work-app .task-count{font-size:9.5px}
+#my-work-app .task-link{font-size:11px}
+#my-work-app .task-ref{font-size:9px}
+#my-work-app .phase,#my-work-app .due{font-size:10px}
+#my-work-app .status-select,#my-work-app .updated,#my-work-app .row-action{font-size:9.5px}
+#my-work-app .empty{font-size:11px}
+#my-work-app .empty strong{font-size:13px}
+#my-work-app .footer,#my-work-app .page-button{font-size:10px}
 </style>
 
-            <div class="page-head">
-                <div>
-                    <h1>Task Board</h1>
-                    <p>{{ $taskPackAdministratorView
-                        ? 'All active Job tasks, grouped by Order and ranked by what needs action first.'
-                        : 'Tasks from Jobs associated with your assigned work, grouped by Order and ranked by what needs action first.' }}</p>
-                </div>
+    <div class="page-head">
+        <div>
+            <h1>All Tasks</h1>
+            <p>{{ $taskPackAdministratorView
+                ? 'All active Job tasks, grouped by Order and ranked by what needs action first.'
+                : 'Tasks from Jobs associated with your assigned work, grouped by Order and ranked by what needs action first.' }}</p>
+        </div>
+    </div>
+
+    <section class="work-view" aria-busy="false">
+        <div class="metrics" aria-label="All Tasks work summary">
+            <button type="button" class="metric amber {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention">{{ $taskPackMetrics['attention'] ?? 0 }}</strong></span><i>⚑</i></button>
+            <button type="button" class="metric red {{ $taskQuick === 'overdue' ? 'active' : '' }}" wire:click="setTaskQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue">{{ $taskPackMetrics['overdue'] ?? 0 }}</strong></span><i>!</i></button>
+            <button type="button" class="metric amber {{ $taskQuick === 'today' ? 'active' : '' }}" wire:click="setTaskQuick('today')"><span><small>Due today</small><strong x-text="metrics.today">{{ $taskPackMetrics['today'] ?? 0 }}</strong></span><i>◷</i></button>
+            <button type="button" class="metric {{ $taskQuick === 'upcoming' ? 'active' : '' }}" wire:click="setTaskQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming">{{ $taskPackMetrics['upcoming'] ?? 0 }}</strong></span><i>→</i></button>
+            <button type="button" class="metric {{ $taskQuick === 'waiting' ? 'active' : '' }}" wire:click="setTaskQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting">{{ $taskPackMetrics['waiting'] ?? 0 }}</strong></span><i>⌛</i></button>
+        </div>
+
+        <div class="toolbar">
+            <label class="search-wrap">
+                <span class="search-icon">⌕</span>
+                <input class="search" type="search" wire:model.live.debounce.400ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search All Tasks">
+                @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
+            </label>
+            <div class="quick-filters">
+                <button type="button" class="chip {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')">Needs action</button>
+                <button type="button" class="chip {{ $taskQuick === 'all' ? 'active' : '' }}" wire:click="setTaskQuick('all')">All tasks</button>
+                <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('mentions')">Mentions (<span x-text="metrics.mentions">{{ $taskPackMetrics['mentions'] ?? 0 }}</span>)</button>
             </div>
+            <select class="sort" wire:model.live="taskSort" aria-label="Sort All Tasks">
+                <option value="action">Sort: Action priority</option>
+                <option value="due">Sort: Due soon</option>
+                <option value="job">Sort: Order number</option>
+            </select>
+        </div>
 
-            <div class="ft-board-tabs ft-reference-tabs" aria-label="Board navigation">
-                <button type="button" class="{{ $mode === 'jobs' ? 'active' : '' }}" wire:click="setMode('jobs')">Job Board</button>
-                <button type="button" class="{{ $mode === 'tasks' ? 'active' : '' }}" wire:click="setMode('tasks')">Task Board</button>
-            </div>
+        <div class="load-state">
+            <span>
+                @if($taskPackPaginator && $taskPackPaginator->total())
+                    Showing {{ $taskPackGroups->count() }} of {{ $taskPackPaginator->total() }} matching Orders · {{ $taskPackTaskCount }} visible tasks
+                @elseif($taskPackAdministratorView)
+                    Showing all active Job Task Packs
+                @else
+                    Showing associated Job Task Packs only
+                @endif
+            </span>
+            <span class="loading-copy">
+                <span wire:loading.remove wire:target="search,taskQuick,taskSort,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 400 ms</span>
+                <span wire:loading.delay.long wire:target="search,taskQuick,taskSort,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+            </span>
+        </div>
 
-            <section class="work-view" aria-busy="false">
-                <div class="metrics" aria-label="Task Board work summary">
-                    <button type="button" class="metric amber {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention">{{ $taskPackMetrics['attention'] ?? 0 }}</strong></span><i>⚑</i></button>
-                    <button type="button" class="metric red {{ $taskQuick === 'overdue' ? 'active' : '' }}" wire:click="setTaskQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue">{{ $taskPackMetrics['overdue'] ?? 0 }}</strong></span><i>!</i></button>
-                    <button type="button" class="metric amber {{ $taskQuick === 'today' ? 'active' : '' }}" wire:click="setTaskQuick('today')"><span><small>Due today</small><strong x-text="metrics.today">{{ $taskPackMetrics['today'] ?? 0 }}</strong></span><i>◷</i></button>
-                    <button type="button" class="metric {{ $taskQuick === 'upcoming' ? 'active' : '' }}" wire:click="setTaskQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming">{{ $taskPackMetrics['upcoming'] ?? 0 }}</strong></span><i>→</i></button>
-                    <button type="button" class="metric {{ $taskQuick === 'waiting' ? 'active' : '' }}" wire:click="setTaskQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting">{{ $taskPackMetrics['waiting'] ?? 0 }}</strong></span><i>⌛</i></button>
-                </div>
+        <section class="list-shell" aria-label="All Tasks grouped by Order">
+            <div class="task-head"><span>Task</span><span>Phase</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
-                <div class="toolbar">
-                    <label class="search-wrap">
-                        <span class="search-icon">⌕</span>
-                        <input class="search" type="search" wire:model.live.debounce.400ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search Task Board">
-                        @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
-                    </label>
-                    <div class="quick-filters">
-                        <button type="button" class="chip {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')">Needs action</button>
-                        <button type="button" class="chip {{ $taskQuick === 'all' ? 'active' : '' }}" wire:click="setTaskQuick('all')">All my tasks</button>
-                        <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('mentions')">Mentions (<span x-text="metrics.mentions">{{ $taskPackMetrics['mentions'] ?? 0 }}</span>)</button>
-                    </div>
-                    <select class="sort" wire:model.live="taskSort" aria-label="Sort Task Board">
-                        <option value="action">Sort: Action priority</option>
-                        <option value="due">Sort: Due soon</option>
-                        <option value="job">Sort: Order number</option>
-                    </select>
-                </div>
+            <div>
+                @forelse($taskPackGroups as $group)
+                    <article class="order-group" wire:key="board-task-order-{{ $group['id'] }}" x-data="{ open: true }">
+                        <header class="order-head">
+                            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
+                            <span class="order-identity">
+                                @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
+                                <span class="order-title">{{ $group['title'] }}</span>
+                            </span>
+                            <span class="order-client">{{ $group['client'] }}</span>
+                            <span class="order-stage">{{ $group['stage'] }}</span>
+                            <span class="health {{ $group['healthTone'] }}">{{ $group['health'] }}</span>
+                            <span class="order-progress"><i class="progress-track"><i style="width:{{ $group['progress'] }}%"></i></i>{{ $group['progress'] }}%</span>
+                            <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
+                        </header>
 
-                <div class="load-state">
-                    <span>
-                        @if($taskPackPaginator && $taskPackPaginator->total())
-                            Showing {{ $taskPackGroups->count() }} of {{ $taskPackPaginator->total() }} matching Orders · {{ $taskPackTaskCount }} visible tasks
-                        @elseif($taskPackAdministratorView)
-                            Showing all active Job Task Packs
-                        @else
-                            Showing associated Job Task Packs only
-                        @endif
-                    </span>
-                    <span class="loading-copy">
-                        <span wire:loading.remove wire:target="search,taskQuick,taskSort,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 400 ms</span>
-                        <span wire:loading.delay.long wire:target="search,taskQuick,taskSort,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
-                    </span>
-                </div>
-
-                <section class="list-shell" aria-label="Task Board tasks grouped by Order">
-                    <div class="task-head"><span>Task</span><span>Phase</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
-
-                    <div>
-                        @forelse($taskPackGroups as $group)
-                            <article class="order-group" wire:key="board-task-order-{{ $group['id'] }}" x-data="{ open: true }">
-                                <header class="order-head">
-                                    <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
-                                    <span class="order-identity">
-                                        @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
-                                        <span class="order-title">{{ $group['title'] }}</span>
-                                    </span>
-                                    <span class="order-client">{{ $group['client'] }}</span>
-                                    <span class="order-stage">{{ $group['stage'] }}</span>
-                                    <span class="health {{ $group['healthTone'] }}">{{ $group['health'] }}</span>
-                                    <span class="order-progress"><i class="progress-track"><i style="width:{{ $group['progress'] }}%"></i></i>{{ $group['progress'] }}%</span>
-                                    <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
-                                </header>
-
-                                <div class="task-rows" x-show="open">
-                                    @foreach($group['tasks'] as $task)
-                                        <div
-                                            class="task-row"
-                                            wire:key="board-task-{{ $task['id'] }}"
-                                            x-data="{
-                                                saving:false,
-                                                version:@js($task['version']),
-                                                currentStatus:@js($task['status']),
-                                                async saveStatus(event){
-                                                    const select=event.currentTarget;
-                                                    const previous=this.currentStatus;
-                                                    const next=select.value;
-                                                    if(next===previous||this.saving)return;
-                                                    this.saving=true;
-                                                    select.disabled=true;
-                                                    try{
-                                                        const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                                        if(!result?.ok){select.value=previous;return;}
-                                                        this.currentStatus=result.status||next;
-                                                        this.version=result.version||this.version;
-                                                        if(result.metrics)window.dispatchEvent(new CustomEvent('board-task-metrics',{detail:result.metrics}));
-                                                    }catch(error){select.value=previous;}
-                                                    finally{this.saving=false;select.disabled=false;}
-                                                }
-                                            }"
-                                            x-bind:class="{ 'saving': saving }"
-                                        >
-                                            <div class="task-main">
-                                                @if($task['route'])<a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>@else<span class="task-link">{{ $task['title'] }}</span>@endif
-                                                <span class="task-ref">{{ $task['number'] }}</span>
-                                            </div>
-                                            <span class="phase">{{ $task['phase'] }}</span>
-                                            <time class="due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
-                                            <select class="status-select" @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                                @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>@endif
-                                                @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
-                                            </select>
-                                            <span class="flag {{ $task['flagTone'] }}">{{ $task['flag'] }}</span>
-                                            <span class="updated">{{ $task['updated'] }}</span>
-                                            @if($task['route'])<a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>@else<span class="row-action" aria-disabled="true">—</span>@endif
-                                        </div>
-                                    @endforeach
+                        <div class="task-rows" x-show="open">
+                            @foreach($group['tasks'] as $task)
+                                <div
+                                    class="task-row"
+                                    wire:key="board-task-{{ $task['id'] }}"
+                                    x-data="{
+                                        saving:false,
+                                        version:@js($task['version']),
+                                        currentStatus:@js($task['status']),
+                                        async saveStatus(event){
+                                            const select=event.currentTarget;
+                                            const previous=this.currentStatus;
+                                            const next=select.value;
+                                            if(next===previous||this.saving)return;
+                                            this.saving=true;
+                                            select.disabled=true;
+                                            try{
+                                                const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
+                                                if(!result?.ok){select.value=previous;return;}
+                                                this.currentStatus=result.status||next;
+                                                this.version=result.version||this.version;
+                                                if(result.metrics)window.dispatchEvent(new CustomEvent('board-task-metrics',{detail:result.metrics}));
+                                            }catch(error){select.value=previous;}
+                                            finally{this.saving=false;select.disabled=false;}
+                                        }
+                                    }"
+                                    x-bind:class="{ 'saving': saving }"
+                                >
+                                    <div class="task-main">
+                                        @if($task['route'])<a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>@else<span class="task-link">{{ $task['title'] }}</span>@endif
+                                        <span class="task-ref">{{ $task['number'] }}</span>
+                                    </div>
+                                    <span class="phase">{{ $task['phase'] }}</span>
+                                    <time class="due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
+                                    <select class="status-select" @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
+                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>@endif
+                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                    </select>
+                                    <span class="flag {{ $task['flagTone'] }}">{{ $task['flag'] }}</span>
+                                    <span class="updated">{{ $task['updated'] }}</span>
+                                    @if($task['route'])<a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>@else<span class="row-action" aria-disabled="true">—</span>@endif
                                 </div>
-                            </article>
-                        @empty
-                            <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
-                        @endforelse
-                    </div>
+                            @endforeach
+                        </div>
+                    </article>
+                @empty
+                    <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
+                @endforelse
+            </div>
 
-                    <footer class="footer">
-                        <span>
-                            @if($taskPackPaginator && $taskPackPaginator->total())
-                                Orders {{ $taskPackPaginator->firstItem() }}–{{ $taskPackPaginator->lastItem() }} of {{ $taskPackPaginator->total() }} · {{ $taskPackTaskCount }} tasks on this page
-                            @elseif($taskPackAdministratorView)
-                                All active Job tasks
-                            @else
-                                Associated Job tasks
-                            @endif
-                        </span>
-                        @php
-                            $currentPage = $taskPackPaginator?->currentPage() ?? 1;
-                            $lastPage = max(1, $taskPackPaginator?->lastPage() ?? 1);
-                            $pageStart = max(1, $currentPage - 2);
-                            $pageEnd = min($lastPage, $currentPage + 2);
-                        @endphp
-                        <nav class="pages" aria-label="Pagination">
-                            <button type="button" class="page-button" wire:click="previousPage('taskPackPage')" @disabled(!$taskPackPaginator || $taskPackPaginator->onFirstPage())>Previous</button>
-                            @for($pageNumber = $pageStart; $pageNumber <= $pageEnd; $pageNumber++)
-                                <button type="button" class="page-button {{ $pageNumber === $currentPage ? 'active' : '' }}" wire:click="gotoPage({{ $pageNumber }}, 'taskPackPage')" @if($pageNumber === $currentPage) aria-current="page" @endif>{{ $pageNumber }}</button>
-                            @endfor
-                            <button type="button" class="page-button" wire:click="nextPage('taskPackPage')" @disabled(!$taskPackPaginator || !$taskPackPaginator->hasMorePages())>Next</button>
-                        </nav>
-                    </footer>
-                </section>
-            </section>
-        </div>
-
-    @endif
-
-    @if($mode === 'jobs' && $cardsReady && $hasMoreCards)
-        <div class="ft-board-load-more">
-            <button type="button" class="ft-outline-btn" wire:click="loadMore">Load 60 more</button>
-        </div>
-    @endif
+            <footer class="footer">
+                <span>
+                    @if($taskPackPaginator && $taskPackPaginator->total())
+                        Orders {{ $taskPackPaginator->firstItem() }}–{{ $taskPackPaginator->lastItem() }} of {{ $taskPackPaginator->total() }} · {{ $taskPackTaskCount }} tasks on this page
+                    @elseif($taskPackAdministratorView)
+                        All active Job tasks
+                    @else
+                        Associated Job tasks
+                    @endif
+                </span>
+                @php
+                    $currentPage = $taskPackPaginator?->currentPage() ?? 1;
+                    $lastPage = max(1, $taskPackPaginator?->lastPage() ?? 1);
+                    $pageStart = max(1, $currentPage - 2);
+                    $pageEnd = min($lastPage, $currentPage + 2);
+                @endphp
+                <nav class="pages" aria-label="Pagination">
+                    <button type="button" class="page-button" wire:click="previousPage('taskPackPage')" @disabled(!$taskPackPaginator || $taskPackPaginator->onFirstPage())>Previous</button>
+                    @for($pageNumber = $pageStart; $pageNumber <= $pageEnd; $pageNumber++)
+                        <button type="button" class="page-button {{ $pageNumber === $currentPage ? 'active' : '' }}" wire:click="gotoPage({{ $pageNumber }}, 'taskPackPage')" @if($pageNumber === $currentPage) aria-current="page" @endif>{{ $pageNumber }}</button>
+                    @endfor
+                    <button type="button" class="page-button" wire:click="nextPage('taskPackPage')" @disabled(!$taskPackPaginator || !$taskPackPaginator->hasMorePages())>Next</button>
+                </nav>
+            </footer>
+        </section>
+    </section>
 </div>

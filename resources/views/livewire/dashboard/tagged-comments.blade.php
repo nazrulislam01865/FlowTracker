@@ -11,12 +11,10 @@
     <div class="ft-mentions">
         @forelse($mentions as $mention)
             @php
-                $route = $mention->flow_task_id
-                    ? route('jobs.index', ['open' => $mention->flow_job_id, 'task' => $mention->flow_task_id])
-                    : ($mention->flow_job_id ? route('jobs.index', ['open' => $mention->flow_job_id]) : route('notifications'));
+                $route = app(\App\Services\NotificationService::class)->urlFor($mention);
                 $initials = collect(preg_split('/\s+/', trim($mention->title)))->filter()->take(2)->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
             @endphp
-            <a class="ft-mention {{ $mention->read_at ? '' : 'unread' }}" href="{{ $route }}" wire:navigate wire:key="dashboard-mention-{{ $mention->id }}">
+            <a class="ft-mention {{ $mention->read_at ? '' : 'unread' }}" href="{{ $route }}" wire:key="dashboard-mention-{{ $mention->id }}">
                 <span class="ft-avatar">{{ $initials ?: '@' }}</span>
                 <span><strong class="ft-mention-copy">{{ $mention->title }}: <strong>“{{ str($mention->message)->limit(90) }}”</strong></strong><span class="ft-mention-meta">{{ $mention->task?->task_number ?: ($mention->job?->displayOrderNumber() ?: 'Notification') }}</span></span>
                 <time class="ft-mention-time">{{ $mention->created_at?->diffForHumans() }}</time>

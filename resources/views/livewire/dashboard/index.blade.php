@@ -27,8 +27,8 @@
 
     <section class="ft-kpis" aria-label="Key metrics">
         <a class="ft-kpi" href="{{ route('jobs.index') }}" wire:navigate><span class="ft-kpi-label">Active Jobs <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value">{{ $metrics['activeJobs'] }}</strong><span class="ft-kpi-foot">Across all active phases</span></a>
-        <a class="ft-kpi" href="{{ route('board') }}" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value">{{ $metrics['needsAttention'] }}</strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
-        <a class="ft-kpi" href="{{ route('board') }}" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value">{{ $metrics['overdueTasks'] }}</strong><span class="ft-kpi-foot">Require immediate update</span></a>
+        <a class="ft-kpi" href="{{ route('all-tasks') }}" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value">{{ $metrics['needsAttention'] }}</strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
+        <a class="ft-kpi" href="{{ route('all-tasks') }}" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value">{{ $metrics['overdueTasks'] }}</strong><span class="ft-kpi-foot">Require immediate update</span></a>
         <a class="ft-kpi" href="{{ route('clients.index') }}" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value">{{ $metrics['activeClients'] }}</strong><span class="ft-kpi-foot">Current active client records</span></a>
         <div class="ft-kpi" aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value">{{ $metrics['openInquiries'] }}</strong><span class="ft-kpi-foot">Inquiry module not configured</span></div>
         <a class="ft-kpi" href="{{ route('notifications') }}" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value">{{ $metrics['taggedComments'] }}</strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
@@ -56,7 +56,7 @@
         <livewire:dashboard.tagged-comments />
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div><a class="ft-link" href="{{ route('reports') }}" wire:navigate>Details</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-analytics">
                 <div class="ft-health">
                     <div class="ft-health-content">
@@ -72,7 +72,7 @@
                     <div class="ft-mix-summary"><span>Task mix by flag</span><span><strong>{{ $operationalHealth['flaggedTotal'] }}</strong> flagged tasks</span></div>
                     <div class="ft-mix-list">
                         @foreach($operationalHealth['flags'] as $flag)
-                            <div class="ft-mix-row"><a href="{{ route('board') }}" wire:navigate>{{ $flag['label'] }}</a><i class="ft-mix-track"><span class="ft-mix-fill {{ $flag['tone'] }}" style="width:{{ $flag['width'] }}%"></span></i><b>{{ $flag['count'] }}</b></div>
+                            <div class="ft-mix-row"><a href="{{ route('all-tasks') }}" wire:navigate>{{ $flag['label'] }}</a><i class="ft-mix-track"><span class="ft-mix-fill {{ $flag['tone'] }}" style="width:{{ $flag['width'] }}%"></span></i><b>{{ $flag['count'] }}</b></div>
                         @endforeach
                     </div>
                 </div>

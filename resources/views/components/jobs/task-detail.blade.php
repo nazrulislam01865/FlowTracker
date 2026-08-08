@@ -9,6 +9,7 @@
     'availableDocuments'=>collect(),
     'activityTab'=>'all',
     'activityPage'=>1,
+    'focusComment'=>null,
     'taskDocumentUploads'=>[],
     'showTaskDocumentPicker'=>false,
     'editMode'=>false,
@@ -34,12 +35,12 @@
     $currentTaskFlag = $task->needs_attention ? (trim((string) $task->attention_reason) ?: 'Management attention') : '';
     $taskFlagNames = $taskFlags->pluck('name')->map(fn($name)=>trim((string)$name))->filter()->values();
     $commentEvents = $task->comments->map(fn($comment)=>(object)[
-        'kind'=>'comment','event'=>'task.comment','user'=>$comment->user,'body'=>$comment->body,'created_at'=>$comment->created_at,
+        'id'=>(int)$comment->id,'kind'=>'comment','event'=>'task.comment','user'=>$comment->user,'body'=>$comment->body,'created_at'=>$comment->created_at,
     ]);
     $activityEvents = $task->activities->reject(fn($activity)=>$activity->event==='task.comment')->map(fn($activity)=>(object)[
-        'kind'=>'activity','event'=>$activity->event,'user'=>$activity->user,'body'=>$activity->description,'created_at'=>$activity->created_at,
+        'id'=>(int)$activity->id,'kind'=>'activity','event'=>$activity->event,'user'=>$activity->user,'body'=>$activity->description,'created_at'=>$activity->created_at,
     ]);
-    $timeline = $commentEvents->concat($activityEvents)->sortByDesc('created_at')->values();
+    $timeline = $commentEvents->concat($activityEvents)->sortByDesc(fn($entry) => sprintf('%020d-%020d', $entry->created_at?->getTimestamp() ?? 0, $entry->id ?? 0))->values();
     if($activityTab==='comments') $timeline = $timeline->where('kind','comment')->values();
     if($activityTab==='history') $timeline = $timeline->where('kind','activity')->values();
     $activityPerPage = 30;
@@ -250,7 +251,12 @@
                             $actorName = $entry->user?->name ?? 'System';
                             $entryLocalTime = $entry->created_at?->copy()->timezone($displayTimezone);
                         @endphp
-                        <article class="ft-activity-entry {{ $entry->kind==='comment' ? 'is-comment' : 'is-history' }}">
+                        @php
+                            $entryFocusKey = $entry->kind === 'comment' ? 'task-'.$entry->id : null;
+                            $entryAnchor = $entry->kind === 'comment' ? 'task-comment-'.$entry->id : null;
+                            $isFocusedComment = $entryFocusKey !== null && $focusComment === $entryFocusKey;
+                        @endphp
+                        <article @if($entryAnchor) id="{{ $entryAnchor }}" @endif class="ft-activity-entry {{ $entry->kind==='comment' ? 'is-comment' : 'is-history' }} {{ $isFocusedComment ? 'is-focused-comment' : '' }}" @if($isFocusedComment) x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" @endif>
                             <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$entry->user" :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
                                 <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time></div>

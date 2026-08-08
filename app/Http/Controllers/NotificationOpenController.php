@@ -1,0 +1,114 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use App\Models\Activity;
+use App\Models\FlowJob;
+use App\Models\FlowNotification;
+use App\Models\FlowTaskComment;
+use App\Services\AccessControlService;
+use App\Services\DashboardService;
+use App\Services\JobService;
+use App\Services\ShellDataService;
+use App\Services\TaskService;
+use Illuminate\Http\RedirectResponse;
+
+class NotificationOpenController extends Controller
+{
+    public function __invoke(FlowNotification $notification): RedirectResponse
+    {
+        $user = auth()->user();
+        abort_unless((int) $notification->user_id === (int) $user->id, 403);
+
+        if ($notification->read_at === null) {
+            $notification->forceFill(['read_at' => now()])->save();
+            app(DashboardService::class)->forgetMentions((int) $user->id);
+            app(ShellDataService::class)->forget((int) $user->id);
+        }
+
+        $access = app(AccessControlService::class);
+
+        if ($notification->flow_task_id) {
+            $task = app(TaskService::class)
+                ->visibleQuery($user)
+                ->select(['tasks.id', 'tasks.flow_job_id'])
+                ->find((int) $notification->flow_task_id);
+
+            if ($task && $access->can($user, 'jobs', 'view')) {
+                $params = [
+                    'open' => (int) $task->flow_job_id,
+                    'task' => (int) $task->id,
+                ];
+                $commentId = $this->taskCommentId($notification, (int) $task->id);
+                if ($commentId) $params['comment'] = 'task-'.$commentId;
+
+                $url = route('jobs.index', $params);
+                if ($commentId) $url .= '#task-comment-'.$commentId;
+
+                return redirect()->to($url);
+            }
+
+            if ($task) {
+                return redirect()
+                    ->route('my-work', ['filter' => 'mentions'])
+                    ->with('warning', 'This mention belongs to a task you can view, but your role cannot open Order details.');
+            }
+        }
+
+        if ($notification->flow_job_id && $access->can($user, 'jobs', 'view')) {
+            $job = app(JobService::class)
+                ->visibleQuery($user)
+                ->select(['flow_jobs.id'])
+                ->find((int) $notification->flow_job_id);
+
+            if ($job) {
+                $params = ['open' => (int) $job->id];
+                $activityId = $this->jobCommentActivityId($notification, (int) $job->id);
+                if ($activityId) $params['comment'] = 'job-'.$activityId;
+
+                $url = route('jobs.index', $params);
+                if ($activityId) $url .= '#job-comment-'.$activityId;
+
+                return redirect()->to($url);
+            }
+        }
+
+        return redirect()
+            ->route('notifications')
+            ->with('warning', 'The comment or record linked to this notification is no longer available.');
+    }
+
+    private function taskCommentId(FlowNotification $notification, int $taskId): ?int
+    {
+        if (!in_array((string) $notification->type, ['mention', 'comment'], true)) return null;
+
+        $query = FlowTaskComment::query()
+            ->where('flow_task_id', $taskId)
+            ->where('body', (string) $notification->message);
+
+        if ($notification->created_at) {
+            $query->where('created_at', '<=', $notification->created_at);
+        }
+
+        $id = $query->latest('created_at')->latest('id')->value('id');
+        return $id ? (int) $id : null;
+    }
+
+    private function jobCommentActivityId(FlowNotification $notification, int $jobId): ?int
+    {
+        if (!in_array((string) $notification->type, ['mention', 'comment'], true)) return null;
+
+        $query = Activity::query()
+            ->where('subject_type', FlowJob::class)
+            ->where('subject_id', $jobId)
+            ->where('event', 'job.comment')
+            ->where('description', (string) $notification->message);
+
+        if ($notification->created_at) {
+            $query->where('created_at', '<=', $notification->created_at);
+        }
+
+        $id = $query->latest('created_at')->latest('id')->value('id');
+        return $id ? (int) $id : null;
+    }
+}

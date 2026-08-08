@@ -18,12 +18,23 @@ class ListFilterExperienceTest extends TestCase
         $this->assertStringContainsString("x-on:input.debounce.300ms", file_get_contents(resource_path('views/components/ui/remote-filter.blade.php')));
     }
 
+    public function test_dropdown_repositioning_measures_unconstrained_height_so_scroll_cannot_permanently_shrink_it(): void
+    {
+        $runtime = file_get_contents(public_path('js/flowtrack-list-filters.js'));
+        $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertStringContainsString('measureNaturalMenuHeight', $runtime);
+        $this->assertStringContainsString("menu.style.setProperty('max-height', 'none', 'important')", $runtime);
+        $this->assertStringContainsString('const measuredHeight = menu.scrollHeight;', $runtime);
+        $this->assertStringContainsString('const naturalHeight = measureNaturalMenuHeight(menu, heightCap);', $runtime);
+        $this->assertStringContainsString('/js/flowtrack-list-filters.js?v=20260808-4', $layout);
+    }
+
     public function test_list_pages_share_the_same_filter_components(): void
     {
         $views = [
             resource_path('views/components/jobs/table.blade.php'),
             resource_path('views/livewire/clients/index.blade.php'),
-            resource_path('views/livewire/board/index.blade.php'),
             resource_path('views/livewire/documents/index.blade.php'),
         ];
 
@@ -34,6 +45,10 @@ class ListFilterExperienceTest extends TestCase
             $this->assertStringContainsString('ft-list-filter-chip', $source, $view);
             $this->assertStringContainsString('Updating…', $source, $view);
         }
+
+        $allTasks = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
+        $this->assertStringNotContainsString('ft-list-filter-shell', $allTasks);
+        $this->assertStringContainsString('wire:model.live.debounce.400ms="search"', $allTasks);
     }
 
     public function test_heavy_filter_lookups_are_not_loaded_as_full_lists_on_board_my_work_or_documents(): void

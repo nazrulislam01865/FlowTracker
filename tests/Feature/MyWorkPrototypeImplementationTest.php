@@ -63,4 +63,23 @@ class MyWorkPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('select.disabled=true', $view);
         $this->assertStringContainsString('select.value=previous', $view);
     }
+
+    public function test_my_work_shows_assignee_and_reuses_inline_due_date_editing(): void
+    {
+        $service = file_get_contents(app_path('Services/MyWorkService.php'));
+        $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
+        $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
+
+        $this->assertStringContainsString('<span>Assignee</span>', $view);
+        $this->assertStringContainsString("'assignee' => (string) (\$task->assignee?->name ?: 'Unassigned')", $service);
+        $this->assertStringContainsString("'assignee:id,name,profile_image_path'", $service);
+        $this->assertStringContainsString("'dueValue' => \$dueDate ?: ''", $service);
+        $this->assertStringContainsString("'dueDisplay' => \$task->due_date?->format('M j, Y') ?? 'Set due date'", $service);
+        $this->assertStringContainsString("window.FlowTrackInlineEdit({ key: @js('my-work-task-'", $view);
+        $this->assertStringContainsString('x-ref="myWorkDue"', $view);
+        $this->assertStringContainsString('$wire.updateTaskDueDate(', $view);
+        $this->assertMatchesRegularExpression('/#\[Renderless\]\s+public function updateTaskDueDate\b/', $component);
+        $this->assertStringContainsString("validator(['date' => \$date], ['date' => ['date']])->validate();", $component);
+    }
+
 }

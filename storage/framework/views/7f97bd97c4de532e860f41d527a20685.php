@@ -11,12 +11,10 @@
     <div class="ft-mentions">
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $mentions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $mention): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
             <?php
-                $route = $mention->flow_task_id
-                    ? route('jobs.index', ['open' => $mention->flow_job_id, 'task' => $mention->flow_task_id])
-                    : ($mention->flow_job_id ? route('jobs.index', ['open' => $mention->flow_job_id]) : route('notifications'));
+                $route = app(\App\Services\NotificationService::class)->urlFor($mention);
                 $initials = collect(preg_split('/\s+/', trim($mention->title)))->filter()->take(2)->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
             ?>
-            <a class="ft-mention <?php echo e($mention->read_at ? '' : 'unread'); ?>" href="<?php echo e($route); ?>" wire:navigate <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-mention-'.e($mention->id).''; ?>wire:key="dashboard-mention-<?php echo e($mention->id); ?>">
+            <a class="ft-mention <?php echo e($mention->read_at ? '' : 'unread'); ?>" href="<?php echo e($route); ?>" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-mention-'.e($mention->id).''; ?>wire:key="dashboard-mention-<?php echo e($mention->id); ?>">
                 <span class="ft-avatar"><?php echo e($initials ?: '@'); ?></span>
                 <span><strong class="ft-mention-copy"><?php echo e($mention->title); ?>: <strong>“<?php echo e(str($mention->message)->limit(90)); ?>”</strong></strong><span class="ft-mention-meta"><?php echo e($mention->task?->task_number ?: ($mention->job?->displayOrderNumber() ?: 'Notification')); ?></span></span>
                 <time class="ft-mention-time"><?php echo e($mention->created_at?->diffForHumans()); ?></time>
