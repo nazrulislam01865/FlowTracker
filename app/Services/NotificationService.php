@@ -166,7 +166,7 @@ class NotificationService
         $this->fanOutAfterCommit(
             [$task->assignee->id],
             'Task assigned: '.$task->title,
-            ($task->job?->job_number ? $task->job->job_number.' · ' : '').($task->phase?->name ?: 'Task').' · '.($task->due_date?->format('M j, Y') ?: 'No due date'),
+            ($task->job?->displayOrderNumber() ? $task->job->displayOrderNumber().' · ' : '').($task->phase?->name ?: 'Task').' · '.($task->due_date?->format('M j, Y') ?: 'No due date'),
             'assignment',
             $task->job?->id,
             $task->id,
@@ -183,7 +183,7 @@ class NotificationService
         $this->notifyJobParticipants(
             $job,
             'Job assigned: '.$job->title,
-            $job->job_number.' · '.($job->client?->name ?: 'Client').' · '.($job->phase?->name ?: 'Workflow started'),
+            $job->displayOrderNumber().' · '.($job->client?->name ?: 'Client').' · '.($job->phase?->name ?: 'Workflow started'),
             'assignment',
             $actor,
             $extraUserIds,
@@ -284,7 +284,7 @@ class NotificationService
             'title' => $notification->title,
             'message' => $notification->message,
             'job_id' => $job?->id,
-            'job_number' => $job?->job_number,
+            'job_number' => $job?->displayOrderNumber(),
             'task_id' => $task?->id,
             'task_number' => $task?->task_number,
             'url' => $this->urlFor($notification),

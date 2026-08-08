@@ -46,7 +46,7 @@ class Index extends Component
     public string $jobStatusFilter = '';
     public string $sort = 'updated_desc';
     public bool $showMoreFilters = false;
-    public int $perPage = 10;
+    public int $perPage = 25;
     public array $selectedJobIds = [];
 
     #[Url(as: 'open', history: true)]
@@ -159,7 +159,7 @@ class Index extends Component
         }
 
         if (preg_match('/^jobItems\.(\d+)\.(category|product)$/', $property, $matches) !== 1) {
-            abort(422, 'Unsupported Create Job selector.');
+            abort(422, 'Unsupported Create Order selector.');
         }
 
         $index = (int) $matches[1];
@@ -272,9 +272,9 @@ class Index extends Component
 
         $this->resetJobSelection();
         session()->flash('success', match ($action) {
-            'deactivate' => 'Selected Jobs deactivated.',
-            'cancel' => 'Selected Jobs cancelled.',
-            'delete' => 'Selected Jobs deleted.',
+            'deactivate' => 'Selected Orders deactivated.',
+            'cancel' => 'Selected Orders cancelled.',
+            'delete' => 'Selected Orders deleted.',
         });
     }
     public function openCreate(): void
@@ -288,8 +288,8 @@ class Index extends Component
 
     public function closeCreate(): void
     {
-        $this->showCreate = false;
         $this->resetCreateForm();
+        $this->redirectRoute('jobs.index', navigate: true);
     }
 
     public function loadCreateSection(string $section): void
@@ -320,7 +320,7 @@ class Index extends Component
             return;
         }
 
-        abort(422, 'Unknown Create Job section.');
+        abort(422, 'Unknown Create Order section.');
     }
     public function addProductRow(): void { $this->jobItems[] = ['category' => '', 'product' => '', 'quantity' => 1]; }
     public function removeProductRow(int $index): void { if (count($this->jobItems) <= 1) return; unset($this->jobItems[$index]); $this->jobItems = array_values($this->jobItems); }
@@ -353,6 +353,8 @@ class Index extends Component
         $this->jobDocumentTaskId = null;
         $this->existingDocumentId = null;
         $this->showDocumentPicker = false;
+
+        $this->redirectRoute('jobs.index', navigate: true);
     }
 
     public function setDetailTab(string $tab): void
@@ -391,7 +393,7 @@ class Index extends Component
         abort_unless(auth()->user()->canAccess('jobs.create'), 403);
 
         if (!$this->createCatalogReady || !$this->createAssignmentReady || !$this->createWorkflowReady) {
-            $this->addError('createLoading', 'Please wait for the remaining Create Job fields to finish loading.');
+            $this->addError('createLoading', 'Please wait for the remaining Create Order fields to finish loading.');
             return;
         }
 
@@ -438,7 +440,7 @@ class Index extends Component
             app(\App\Services\DocumentService::class)->store($upload, [
                 'flow_job_id' => $job->id,
                 'client_id' => $job->client_id,
-                'category' => 'Job attachment',
+                'category' => 'Order attachment',
             ], auth()->user());
         }
 
@@ -447,13 +449,13 @@ class Index extends Component
         $this->selectedJobId = $job->id;
         $this->detailTab = 'overview';
         $this->prepareSelectedJob($job->id);
-        session()->flash('success', $draft ? 'Job draft saved.' : 'Job created and all configured Workflow Task Packs were loaded.');
+        session()->flash('success', $draft ? 'Order draft saved.' : 'Order created and all configured Workflow Task Packs were loaded.');
     }
 
     #[Renderless]
     public function updateJobOwner(int $jobId, mixed $ownerId): array
     {
-        return $this->persistInlineEdit('Job owner', function () use ($jobId, $ownerId) {
+        return $this->persistInlineEdit('Order owner', function () use ($jobId, $ownerId) {
             abort_unless(auth()->user()->canModule('jobs','assign'), 403);
             $ownerId = $ownerId === '' ? null : (int) $ownerId;
             if ($ownerId) User::where('is_active', true)->findOrFail($ownerId);
@@ -465,7 +467,7 @@ class Index extends Component
     #[Renderless]
     public function updateJobCoordinator(int $jobId, mixed $coordinatorId): array
     {
-        return $this->persistInlineEdit('Job coordinator', function () use ($jobId, $coordinatorId) {
+        return $this->persistInlineEdit('Order coordinator', function () use ($jobId, $coordinatorId) {
             abort_unless(auth()->user()->canModule('jobs','assign'), 403);
             $coordinatorId = $coordinatorId === '' ? null : (int) $coordinatorId;
             if ($coordinatorId) User::where('is_active', true)->findOrFail($coordinatorId);
@@ -501,7 +503,7 @@ class Index extends Component
     #[Renderless]
     public function updateJobHealth(int $jobId, mixed $health): array
     {
-        return $this->persistInlineEdit('Job health', function () use ($jobId, $health) {
+        return $this->persistInlineEdit('Order health', function () use ($jobId, $health) {
             abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $health = trim((string) $health);
             abort_if($health === '', 422, 'Health is required.');
@@ -513,7 +515,7 @@ class Index extends Component
     #[Renderless]
     public function updateJobTextField(int $jobId, string $field, mixed $value): array
     {
-        $label = $field === 'title' ? 'Job name' : 'Job description';
+        $label = $field === 'title' ? 'Order name' : 'Order description';
 
         return $this->persistInlineEdit($label, function () use ($jobId, $field, $value) {
             abort_unless(auth()->user()->canAccess('jobs.update'), 403);
@@ -636,7 +638,7 @@ class Index extends Component
 
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
-        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Job.');
+        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Order.');
 
         foreach ($this->jobDocumentUploads as $upload) {
             app(\App\Services\DocumentService::class)->store($upload, [
@@ -672,7 +674,7 @@ class Index extends Component
 
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
-        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Job.');
+        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Order.');
         $source = Document::findOrFail((int) $this->existingDocumentId);
         abort_unless((int) $source->client_id === (int) $job->client_id, 403, 'The selected document does not belong to this client.');
         app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user());
@@ -918,7 +920,7 @@ class Index extends Component
         ]);
         app(\App\Services\NotificationService::class)->notifyJobParticipants(
             $job,
-            'New comment on '.$job->job_number,
+            'New comment on '.$job->displayOrderNumber(),
             $body,
             'comment',
             $actor,
@@ -927,7 +929,7 @@ class Index extends Component
         );
         app(\App\Services\NotificationService::class)->notifyMentionedUsers(
             $mentionIds,
-            $actor->name.' mentioned you in '.$job->job_number,
+            $actor->name.' mentioned you in '.$job->displayOrderNumber(),
             $body,
             $job,
             null,
@@ -1275,24 +1277,16 @@ class Index extends Component
 
     private function jobsTableData(User $user): array
     {
-        $service = app(JobService::class);
-        $filters = $this->jobFilters();
-        $jobs = $service->paginate($user, $filters, $this->perPage);
-
-        $options = app(\App\Services\FilterOptionService::class);
+        // The Orders list is intentionally its own lightweight render branch.
+        // It does not hydrate filter catalogs, task collections, members or
+        // inline-edit option lists that are not visible in the supplied
+        // performance prototype.
+        $jobs = app(JobService::class)->paginateOrders($user, $this->search, $this->perPage);
 
         return [
             'selectedJob' => null,
             'selectedTask' => null,
             'jobs' => $jobs,
-            'clientFilterOptions' => $options->options($user, 'clients', 'jobs', '', $this->client !== '' ? (int) $this->client : null, 5),
-            'ownerFilterOptions' => $options->options($user, 'users', 'jobs', '', $this->owner !== '' ? (int) $this->owner : null, 5),
-            'phaseFilterOptions' => $options->options($user, 'phases', 'jobs', '', $this->phase !== '' ? (int) $this->phase : null, 5),
-            'priorityFilterOptions' => $options->options($user, 'priorities', 'jobs', '', $this->priorityFilter, 5),
-            'jobStatusFilterOptions' => $options->options($user, 'job-statuses', 'jobs', '', $this->jobStatusFilter, 5),
-            'healthFilterOptions' => $options->options($user, 'job-healths', 'jobs', '', $this->health, 5),
-            'users' => $this->userOptions($user),
-            'allFilteredJobsSelected' => $jobs->total() > 0 && count($this->selectedJobIds) === $jobs->total(),
         ];
     }
 

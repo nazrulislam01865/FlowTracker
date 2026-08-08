@@ -126,6 +126,75 @@ class JobService
             ->paginate($perPage);
     }
 
+
+    /**
+     * Performance-oriented Orders list query used by the prototype-faithful
+     * list page. It renders the first page on the server, selects only fields
+     * visible in the list and eager-loads only the compact relations needed by
+     * each row. Completed Orders remain visible; cancelled/inactive records do
+     * not appear in the operational Orders list.
+     */
+    public function paginateOrders(User $user, string $search = '', int $perPage = 25): LengthAwarePaginator
+    {
+        $search = trim($search);
+        $tokens = collect(preg_split('/\s+/', $search) ?: [])
+            ->filter()
+            ->take(6)
+            ->values();
+
+        $query = $this->visibleQuery($user)
+            ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES);
+
+        foreach ($tokens as $token) {
+            $token = (string) $token;
+            $legacyToken = preg_replace('/^ORDER-/i', 'JOB-', $token) ?: $token;
+            $like = '%'.$token.'%';
+            $legacyLike = '%'.$legacyToken.'%';
+
+            $query->where(function (Builder $match) use ($like, $legacyLike) {
+                $match->where('flow_jobs.job_number', 'like', $like)
+                    ->orWhere('flow_jobs.job_number', 'like', $legacyLike)
+                    ->orWhere('flow_jobs.order_number', 'like', $like)
+                    ->orWhere('flow_jobs.title', 'like', $like)
+                    ->orWhere('flow_jobs.product', 'like', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
+                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('name', 'like', $like))
+                    ->orWhereHas('items', fn (Builder $item) => $item
+                        ->where('product_name', 'like', $like)
+                        ->orWhere('category_name', 'like', $like))
+                    ->orWhereHas('createdActivity.user', fn (Builder $creator) => $creator->where('name', 'like', $like));
+            });
+        }
+
+        return $query
+            ->reorder()
+            ->orderByDesc('flow_jobs.created_at')
+            ->orderByDesc('flow_jobs.id')
+            ->select([
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number',
+                'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id',
+                'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity',
+                'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority',
+                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention',
+                'flow_jobs.completed_at', 'flow_jobs.created_at',
+            ])
+            ->with([
+                'client:id,name',
+                'phase:id,name,short_name,sequence',
+                'owner:id,name,profile_image_path',
+                'items:id,flow_job_id,product_name,category_name,quantity,sort_order',
+                'createdActivity' => fn ($activity) => $activity->select([
+                    'activities.id',
+                    'activities.subject_type',
+                    'activities.subject_id',
+                    'activities.user_id',
+                    'activities.created_at',
+                ]),
+                'createdActivity.user:id,name,profile_image_path',
+            ])
+            ->paginate(max(1, min($perPage, 50)));
+    }
+
     public function summaryCounts(User $user): array
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d');
@@ -190,7 +259,7 @@ class JobService
             $next = (int) FlowJob::withTrashed()->max('id') + 126;
             $draft = (bool) ($data['draft'] ?? false);
             $job = FlowJob::create([
-                'job_number' => 'JOB-'.app(WorkspaceSettingsService::class)->localNow()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
+                'job_number' => 'ORDER-'.app(WorkspaceSettingsService::class)->localNow()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
                 'client_id' => $data['client_id'],
                 'workflow_id' => $workflow->id,
                 'source_workflow_id' => $workflow->id,
@@ -297,7 +366,7 @@ class JobService
             'event' => 'job.delivery_date_updated',
             'description' => $deliveryDate ? 'Delivery date changed to '.$deliveryDate : 'Delivery date cleared',
         ]);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job delivery date updated', $job->job_number.' · '.($deliveryDate ? 'Delivery '.$deliveryDate : 'Delivery date cleared'), 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order delivery date updated', $job->displayOrderNumber().' · '.($deliveryDate ? 'Delivery '.$deliveryDate : 'Delivery date cleared'), 'update', $actor);
         return $job->refresh();
     }
 
@@ -306,8 +375,8 @@ class JobService
         abort_unless(app(AccessControlService::class)->canAssignJob($actor, $job), 403);
         $job->update(['owner_id' => $ownerId]);
         $this->ensureMembers($job);
-        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.owner_updated', 'description' => 'Job owner updated']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job owner updated', $job->job_number.' · Owner is now '.($job->owner?->name ?? 'Unassigned'), 'assignment', $actor, array_filter([$ownerId]));
+        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.owner_updated', 'description' => 'Order owner updated']);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order owner updated', $job->job_number.' · Owner is now '.($job->owner?->name ?? 'Unassigned'), 'assignment', $actor, array_filter([$ownerId]));
         return $job->refresh();
     }
 
@@ -317,8 +386,8 @@ class JobService
         $job->update(['coordinator_id' => $coordinatorId]);
         $this->ensureMembers($job);
         $job->phaseHistories()->whereNull('completed_at')->update(['phase_owner_id' => $coordinatorId]);
-        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.coordinator_updated', 'description' => 'Job coordinator updated']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job coordinator updated', $job->job_number.' · Coordinator is now '.($job->coordinator?->name ?? 'Unassigned'), 'assignment', $actor, array_filter([$coordinatorId]));
+        $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.coordinator_updated', 'description' => 'Order coordinator updated']);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order coordinator updated', $job->job_number.' · Coordinator is now '.($job->coordinator?->name ?? 'Unassigned'), 'assignment', $actor, array_filter([$coordinatorId]));
         return $job->refresh();
     }
 
@@ -327,7 +396,7 @@ class JobService
         $this->assertEditable($job, $actor);
         $job->update(['priority' => $priority]);
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.priority_updated', 'description' => 'Job priority changed to '.$priority]);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job priority updated', $job->job_number.' · Priority changed to '.$priority, 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order priority updated', $job->job_number.' · Priority changed to '.$priority, 'update', $actor);
         return $job->refresh();
     }
 
@@ -337,7 +406,7 @@ class JobService
         $job->update(['health' => $health]);
         $job->phaseHistories()->whereNull('completed_at')->update(['health_override' => $health]);
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.health_updated', 'description' => 'Job health changed to '.$health]);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job health updated', $job->job_number.' · Health changed to '.$health, in_array($health, ['Needs Attention','At Risk','Delayed','Blocked'], true) ? 'risk' : 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order health updated', $job->job_number.' · Health changed to '.$health, in_array($health, ['Needs Attention','At Risk','Delayed','Blocked'], true) ? 'risk' : 'update', $actor);
         return $job->refresh();
     }
 
@@ -349,9 +418,9 @@ class JobService
         $job->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.deactivated',
-            'description' => 'Job deactivated'.($old && $old !== 'Inactive' ? ' from '.$old : ''),
+            'description' => 'Order deactivated'.($old && $old !== 'Inactive' ? ' from '.$old : ''),
         ]);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job deactivated', $job->job_number.' · '.$job->title, 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order deactivated', $job->displayOrderNumber().' · '.$job->title, 'update', $actor);
         return $job->refresh();
     }
 
@@ -364,10 +433,10 @@ class JobService
             $job->activities()->create([
                 'user_id' => $actor->id,
                 'event' => 'job.cancelled',
-                'description' => 'Job cancelled',
+                'description' => 'Order cancelled',
             ]);
         });
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job cancelled', $job->job_number.' · '.$job->title, 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order cancelled', $job->displayOrderNumber().' · '.$job->title, 'update', $actor);
         return $job->refresh();
     }
 
@@ -379,11 +448,11 @@ class JobService
 
         // Notify participants before the soft delete so record-scope checks can
         // still resolve the Job for each recipient.
-        app(NotificationService::class)->notifyJobParticipants($job->fresh(), 'Job deleted', $job->job_number.' · '.$job->title, 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->fresh(), 'Order deleted', $job->displayOrderNumber().' · '.$job->title, 'update', $actor);
         $job->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.deleted',
-            'description' => 'Job deleted',
+            'description' => 'Order deleted',
         ]);
         $job->delete();
         app(DashboardService::class)->forget($actor->id);
@@ -477,11 +546,11 @@ class JobService
         }
 
         if ($wasDraft && $field === 'product_name') {
-            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Job']);
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Order']);
             app(NotificationService::class)->notifyJobParticipants(
                 $job->refresh(),
-                'Product added to Job',
-                $job->job_number.' · '.$item->product_name.' · '.number_format($item->quantity).' units',
+                'Product added to Order',
+                $job->displayOrderNumber().' · '.$item->product_name.' · '.number_format($item->quantity).' units',
                 'update',
                 $actor,
             );
@@ -489,7 +558,7 @@ class JobService
         }
 
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_updated', 'description' => 'Product and quantity details updated']);
-        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Job product updated', $job->job_number.' · Product/category/quantity changed', 'update', $actor);
+        app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Order product updated', $job->job_number.' · Product/category/quantity changed', 'update', $actor);
         return $item;
     }
 
@@ -525,8 +594,8 @@ class JobService
         // Blank rows are drafts opened by “Add product”; wait until a product
         // is selected before recording the normal Product added notification.
         if ($product !== '') {
-            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Job']);
-            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Job', $job->job_number.' · '.$item->product_name.' · '.number_format($item->quantity).' units', 'update', $actor);
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_added', 'description' => 'Product added to Order']);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product added to Order', $job->displayOrderNumber().' · '.$item->product_name.' · '.number_format($item->quantity).' units', 'update', $actor);
         }
 
         return $item->refresh();
@@ -542,8 +611,8 @@ class JobService
         $this->syncItemSummary($job);
 
         if (!$wasDraft) {
-            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_removed', 'description' => 'Product removed from Job']);
-            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Job', $job->job_number.' · Product list updated', 'update', $actor);
+            $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.product_removed', 'description' => 'Product removed from Order']);
+            app(NotificationService::class)->notifyJobParticipants($job->refresh(), 'Product removed from Order', $job->job_number.' · Product list updated', 'update', $actor);
         }
     }
 

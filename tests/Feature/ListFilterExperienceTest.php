@@ -22,7 +22,6 @@ class ListFilterExperienceTest extends TestCase
     {
         $views = [
             resource_path('views/components/jobs/table.blade.php'),
-            resource_path('views/livewire/my-work/index.blade.php'),
             resource_path('views/livewire/clients/index.blade.php'),
             resource_path('views/livewire/board/index.blade.php'),
             resource_path('views/livewire/documents/index.blade.php'),
@@ -69,5 +68,17 @@ class ListFilterExperienceTest extends TestCase
         $this->assertStringContainsString("where('description', $category)", $service);
         $this->assertStringContainsString("where('description', 'like', $category.' ·%')", $service);
         $this->assertStringContainsString('Older demo/legacy Product rows did not always have parent_id set.', $master);
+    }
+
+    public function test_my_work_uses_the_grouped_personal_work_prototype_instead_of_the_shared_filter_grid(): void
+    {
+        $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
+        $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
+
+        $this->assertStringContainsString('ft-mywork-v2-metrics', $view);
+        $this->assertStringContainsString('wire:model.live.debounce.400ms="search"', $view);
+        $this->assertStringContainsString('Mentions (', $view);
+        $this->assertStringContainsString('use WithPagination;', $component);
+        $this->assertStringNotContainsString('ft-list-filter-shell', $view);
     }
 }

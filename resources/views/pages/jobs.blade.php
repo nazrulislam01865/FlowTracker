@@ -1,4 +1,8 @@
 @extends('layouts.app')
 @section('content')
-<livewire:jobs.index />
+@if(request()->hasAny(['open', 'task', 'create']))
+    <livewire:jobs.index />
+@else
+    <livewire:orders.index />
+@endif
 @endsection

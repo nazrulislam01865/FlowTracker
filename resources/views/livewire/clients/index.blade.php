@@ -17,7 +17,7 @@
             <p>{{ $showArchived ? 'Review inactive clients and restore them when needed.' : 'Monitor client Jobs, task delivery, account health and outstanding balances.' }}</p>
         </div>
         @if(auth()->user()->canModule('clients','create'))
-            <button class="ft-clients-new" type="button" wire:click="openCreate">＋ New Client</button>
+            <button class="ft-clients-new ft-dashboard-action-match" type="button" wire:click="openCreate"><span class="ft-dashboard-action-match-icon">+</span>New Client</button>
         @endif
     </div>
 
@@ -213,10 +213,10 @@
             </div>
 
             <div class="ft-client-detail-section">
-                <div class="ft-client-detail-section-head"><h3>Active Jobs</h3><a href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>View all jobs</a></div>
+                <div class="ft-client-detail-section-head"><h3>Active Orders</h3><a href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>View all orders</a></div>
                 <table class="ft-client-mini-table"><thead><tr><th>Job ID</th><th>Job name</th><th>Phase</th><th>Progress</th><th>Next delivery</th><th>Health</th></tr></thead><tbody>
                 @forelse($activeJobs->take(3) as $job)
-                    <tr><td><a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a></td><td>{{ $job->title }}</td><td>{{ $job->phase?->name ?? '—' }}</td><td><b>{{ $job->progress }}%</b><div class="ft-mini-progress"><span style="width:{{ $job->progress }}%"></span></div></td><td>{{ $job->delivery_date?->format('M j') ?? '—' }}</td><td><span class="ft-health-dot {{ in_array($job->health,['Needs Attention','Blocked','Delayed'])?'red':($job->health==='At Risk'?'amber':'green') }}"></span></td></tr>
+                    <tr><td><a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a></td><td>{{ $job->title }}</td><td>{{ $job->phase?->name ?? '—' }}</td><td><b>{{ $job->progress }}%</b><div class="ft-mini-progress"><span style="width:{{ $job->progress }}%"></span></div></td><td>{{ $job->delivery_date?->format('M j') ?? '—' }}</td><td><span class="ft-health-dot {{ in_array($job->health,['Needs Attention','Blocked','Delayed'])?'red':($job->health==='At Risk'?'amber':'green') }}"></span></td></tr>
                 @empty<tr><td colspan="6" class="ft-client-empty">No active Jobs.</td></tr>@endforelse
                 </tbody></table>
             </div>

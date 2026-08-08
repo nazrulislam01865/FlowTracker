@@ -17,7 +17,7 @@
     <div class="ft-activity-head">
         <div>
             <h2>Activity</h2>
-            <p>Comments and Job changes, with who changed what and when.</p>
+            <p>Comments and Order changes, with who changed what and when.</p>
         </div>
         <div class="ft-activity-tabs">
             <button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setJobActivityTab('all')">All</button>

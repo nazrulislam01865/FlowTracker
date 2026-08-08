@@ -59,8 +59,8 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertSet('workflowPhaseId', null)
             ->assertSet('clientId', null)
             ->assertSet('jobItems', [])
-            ->assertSee('Manage active jobs from request to collection')
-            ->assertDontSee('Create new job');
+            ->assertSee('Fast access to every active and completed order')
+            ->assertDontSee('Create new order');
     }
 
     public function test_open_create_switches_from_the_list_to_create_only_data(): void
@@ -77,9 +77,9 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertSet('createWorkflowReady', false)
             ->assertSet('workflowId', null)
             ->assertCount('jobItems', 1)
-            ->assertSee('Job basics')
+            ->assertSee('Order basics')
             ->assertSee('Loading this section when needed')
-            ->assertDontSee('Manage active jobs from request to collection')
+            ->assertDontSee('Fast access to every active and completed order')
             ->call('loadCreateSection', 'catalog')
             ->assertSet('createCatalogReady', true)
             ->call('loadCreateSection', 'assignment')
@@ -88,8 +88,8 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertSet('createWorkflowReady', true)
             ->assertSet('workflowId', $workflow->id)
             ->assertSet('workflowPhaseId', $phase->id)
-            ->assertSee('Create new job')
-            ->assertDontSee('Manage active jobs from request to collection')
+            ->assertSee('Create new order')
+            ->assertDontSee('Fast access to every active and completed order')
             ->call('closeCreate')
             ->assertSet('showCreate', false)
             ->assertSet('createCatalogReady', false)
@@ -97,8 +97,39 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertSet('createWorkflowReady', false)
             ->assertSet('workflowId', null)
             ->assertSet('jobItems', [])
-            ->assertSee('Manage active jobs from request to collection')
-            ->assertDontSee('Create new job');
+            ->assertSee('Fast access to every active and completed order')
+            ->assertDontSee('Create new order');
+    }
+
+    public function test_orders_list_includes_active_and_completed_but_not_inactive_records(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [$client, $workflow, $phase] = $this->jobDependencies();
+
+        $active = $this->createJob($client, $workflow, $phase, 'JOB-ORDER-ACTIVE');
+        $completed = $this->createJob($client, $workflow, $phase, 'JOB-ORDER-COMPLETE', 'Completed', now());
+        $this->createJob($client, $workflow, $phase, 'JOB-ORDER-INACTIVE', 'Inactive');
+        $this->createJob($client, $workflow, $phase, 'JOB-ORDER-CANCELLED', 'Cancelled');
+
+        $ids = collect(app(JobService::class)->paginateOrders($user, '', 25)->items())->pluck('id')->all();
+
+        $this->assertContains($active->id, $ids);
+        $this->assertContains($completed->id, $ids);
+        $this->assertCount(2, $ids);
+    }
+
+    public function test_order_prefix_search_finds_legacy_job_numbers(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [$client, $workflow, $phase] = $this->jobDependencies();
+
+        $job = $this->createJob($client, $workflow, $phase, 'JOB-2026-00999');
+
+        $orders = app(JobService::class)->paginateOrders($user, 'ORDER-2026-00999', 25);
+
+        $this->assertSame(1, $orders->total());
+        $this->assertSame($job->id, $orders->items()[0]->id);
+        $this->assertSame('ORDER-2026-00999', $orders->items()[0]->displayOrderNumber());
     }
 
     public function test_active_job_query_does_not_count_hidden_or_deleted_jobs(): void

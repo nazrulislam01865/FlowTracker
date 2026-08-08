@@ -1,7 +1,7 @@
 <nav class="mobile-bottom">
     <a href="{{ route('dashboard') }}" wire:navigate class="{{ request()->routeIs('dashboard')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>Home</a>
     <a href="{{ route('my-work') }}" wire:navigate class="{{ request()->routeIs('my-work')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/></svg>My Work</a>
-    <a href="{{ route('jobs.index') }}" wire:navigate class="{{ request()->routeIs('jobs.index')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v13H4z"/></svg>Jobs</a>
+    <a href="{{ route('jobs.index') }}" wire:navigate class="{{ request()->routeIs('jobs.index')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v13H4z"/></svg>Orders</a>
     <a href="{{ route('board') }}" wire:navigate class="{{ request()->routeIs('board')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="5" height="16"/><rect x="10" y="4" width="5" height="10"/><rect x="17" y="4" width="4" height="13"/></svg>Board</a>
     <a href="{{ route('documents.index') }}" wire:navigate class="{{ request()->routeIs('documents.index')?'active':'' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6v20h12V8z"/></svg>Files</a>
 </nav>

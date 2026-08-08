@@ -1,5 +1,5 @@
 <div class="ft-documents-page">
-    <div class="ft-doc-page-head"><div><h1>Documents</h1><p>Find, upload and manage files across every Job, phase and task.</p></div>@if(auth()->user()->canModule('documents','create'))<button class="primary" wire:click="openUpload">⇧ Upload document</button>@endif</div>
+    <div class="ft-doc-page-head"><div><h1>Documents</h1><p>Find, upload and manage files across every Order, phase and task.</p></div>@if(auth()->user()->canModule('documents','create'))<button class="primary" wire:click="openUpload">⇧ Upload document</button>@endif</div>
     @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
 
     <div class="ft-doc-layout">
@@ -13,8 +13,8 @@
 
             <div class="ft-list-filter-shell">
                 <div class="ft-list-filter-grid">
-                    <x-ui.list-search property="search" :value="$search" placeholder="File name, document number, Job or task…" />
-                    <x-ui.remote-filter label="Job" property="job" type="jobs" context="documents" :value="$job" placeholder="All jobs" :initial-options="$jobFilterOptions" />
+                    <x-ui.list-search property="search" :value="$search" placeholder="File name, document number, Order or task…" />
+                    <x-ui.remote-filter label="Order" property="job" type="jobs" context="documents" :value="$job" placeholder="All orders" :initial-options="$jobFilterOptions" />
                     <x-ui.remote-filter label="Client" property="client" type="clients" context="documents" :value="$client" placeholder="All clients" :initial-options="$clientFilterOptions" />
                     <x-ui.remote-filter label="Phase" property="phase" type="phases" context="documents" :value="$phase" placeholder="All phases" :initial-options="$phaseFilterOptions" />
                     <x-ui.remote-filter label="Document type" property="category" type="document-categories" context="documents" :value="$category" placeholder="All types" :initial-options="$categoryFilterOptions" />
@@ -57,7 +57,7 @@
                     <div class="ft-doc-job-group">
                         <button class="ft-doc-job-head" @if($jobId) wire:click="toggleJob({{ $jobId }})" @endif>
                             <span class="ft-doc-chevron">{{ $expanded?'⌄':'›' }}</span>
-                            <b>{{ $first->job?->job_number ?? 'General documents' }} @if($first->job) · {{ $first->job->title }} @endif</b>
+                            <b>{{ $first->job?->displayOrderNumber() ?? 'General documents' }} @if($first->job) · {{ $first->job->title }} @endif</b>
                             <span class="ft-doc-job-meta">{{ $first->job?->client?->name ?? 'No client' }} @if($first->job) <em>|</em> Phase: {{ $first->job?->phase?->sequence ?? '—' }} <em>·</em> Tasks: {{ $first->job?->tasks?->count() ?? 0 }} <em>·</em> Documents: {{ $docs->count() }} @endif</span>
                         </button>
                         @if($expanded)
@@ -68,7 +68,7 @@
                                 @endphp
                                 <tr class="{{ $selected?->id===$doc->id?'selected':'' }}" wire:click="selectDocument({{ $doc->id }})">
                                     <td data-label="Document"><div class="ft-doc-file"><span class="ft-file-badge {{ strtolower(pathinfo($doc->name,PATHINFO_EXTENSION)) }}">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b></div></td>
-                                    <td data-label="Linked to"><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Job' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>
+                                    <td data-label="Linked to"><b>{{ $doc->task?->phase?->name ?? $doc->job?->phase?->name ?? 'Order' }}</b><span>{{ $doc->task?->title ?? $doc->job?->title ?? 'General' }}</span></td>
                                     <td data-label="Type">{{ $doc->category ?: 'Other' }}</td><td data-label="Version">v{{ $doc->version }}</td>
                                     <td data-label="Owner"><div class="person"><x-ui.avatar :user="$doc->uploader" :name="$doc->uploader?->name ?? 'System'"/><span>{{ $doc->uploader?->name ?? 'System' }}</span></div></td>
                                     <td data-label="Status"><span class="ft-doc-status {{ $docStatus==='Approved'?'green':($docStatus==='Needs attention'?'amber':'blue') }}">{{ $docStatus }}</span></td>
@@ -89,7 +89,7 @@
             @if($selected)
                 <div class="ft-doc-detail-title"><span class="ft-file-large">{{ strtoupper(pathinfo($selected->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><h3>{{ $selected->name }}</h3><div><span class="ft-doc-status blue">{{ $selected->is_final?'Approved':'Current' }}</span> <span class="tag">v{{ $selected->version }}</span> · {{ number_format($selected->size/1024) }} KB</div></div></div>
                 <div class="ft-doc-side-list">
-                    <div><span>Job</span><a href="{{ $selected->job ? route('jobs.index',['open'=>$selected->flow_job_id]) : '#' }}" wire:navigate>{{ $selected->job?->job_number ?? '—' }}</a></div>
+                    <div><span>Order</span><a href="{{ $selected->job ? route('jobs.index',['open'=>$selected->flow_job_id]) : '#' }}" wire:navigate>{{ $selected->job?->displayOrderNumber() ?? '—' }}</a></div>
                     <div><span>Client</span><b>{{ $selected->job?->client?->name ?? $selected->client?->name ?? '—' }}</b></div>
                     <div><span>Phase</span><b>{{ $selected->task?->phase?->name ?? $selected->job?->phase?->name ?? '—' }}</b></div>
                     <div><span>Task</span><b>{{ $selected->task?->title ?? '—' }}</b></div>
@@ -109,7 +109,7 @@
             <div class="modal-head">
                 <div>
                     <h2>Upload document</h2>
-                    <div class="small muted">Link the file to a visible Job and optionally to one of your assigned tasks.</div>
+                    <div class="small muted">Link the file to a visible Order and optionally to one of your assigned tasks.</div>
                 </div>
                 <button type="button" class="close-btn" wire:click="closeUpload">×</button>
             </div>
@@ -117,11 +117,11 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="field">
-                        <label>Job *</label>
+                        <label>Order *</label>
                         <select wire:model.live="uploadJobId">
-                            <option value="">Select Job</option>
+                            <option value="">Select Order</option>
                             @foreach($jobs as $j)
-                                <option value="{{ $j->id }}">{{ $j->job_number }} · {{ $j->title }}</option>
+                                <option value="{{ $j->id }}">{{ $j->displayOrderNumber() }} · {{ $j->title }}</option>
                             @endforeach
                         </select>
                         @error('uploadJobId')<div class="validation-error">{{ $message }}</div>@enderror
@@ -130,7 +130,7 @@
                     <div class="field">
                         <label>Task</label>
                         <select wire:model="uploadTaskId">
-                            <option value="">Job-level document</option>
+                            <option value="">Order-level document</option>
                             @foreach($uploadTasks as $task)
                                 <option value="{{ $task->id }}">{{ $task->phase?->short_name }} · {{ $task->title }}</option>
                             @endforeach

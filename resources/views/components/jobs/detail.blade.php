@@ -24,18 +24,18 @@
     <div class="ft-detail-toolbar ft-exact-job-header">
         <div class="ft-job-heading-copy">
             <div class="ft-detail-breadcrumb ft-id-breadcrumb">
-                <span>Jobs</span><span>/</span>
-                <a class="ft-copyable-id-link" href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
-                <button type="button" class="ft-copy-id-btn" title="Copy Job ID" aria-label="Copy {{ $job->job_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->job_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                <span>Orders</span><span>/</span>
+                <a class="ft-copyable-id-link" href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
+                <button type="button" class="ft-copy-id-btn" title="Copy Order ID" aria-label="Copy {{ $job->displayOrderNumber() }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->displayOrderNumber())); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
             </div>
             <h1
                 class="ft-editable-job-title ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-title'), label: 'Job name', value: @js($job->title), display: @js($job->title) })"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-title'), label: 'Order name', value: @js($job->title), display: @js($job->title) })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
                 <span x-show="!editing" x-text="display">{{ $job->title }}</span>
                 @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-pencil" aria-label="Edit job title" title="Edit job name" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.jobTitle.focus())">✎</button>
+                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-pencil" aria-label="Edit order title" title="Edit order name" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.jobTitle.focus())">✎</button>
                     <input x-ref="jobTitle" x-cloak x-show="editing" x-model="draftValue" type="text" maxlength="255"
                         x-on:keydown.escape.prevent="cancelEdit()"
                         x-on:keydown.enter.prevent="$event.target.blur()"
@@ -50,7 +50,7 @@
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>
             </div>
         </div>
-        <div class="ft-detail-actions ft-exact-job-team" aria-label="Job team">
+        <div class="ft-detail-actions ft-exact-job-team" aria-label="Order team">
             <div class="ft-team-stack">
                 @foreach($team->take(4) as $member)<x-ui.avatar :user="$member" :name="$member->name" :size="28"/>@endforeach
                 @if($team->count()>4)<span class="ft-avatar-more small">+{{ $team->count()-4 }}</span>@endif

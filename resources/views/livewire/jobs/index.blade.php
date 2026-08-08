@@ -58,27 +58,8 @@
     @else
         <x-jobs.table
             :jobs="$jobs"
-            :client-filter-options="$clientFilterOptions"
-            :owner-filter-options="$ownerFilterOptions"
-            :phase-filter-options="$phaseFilterOptions"
-            :users="$users"
-            :priority-filter-options="$priorityFilterOptions"
-            :health-filter-options="$healthFilterOptions"
-            :job-status-filter-options="$jobStatusFilterOptions"
             :search-filter="$search"
-            :phase-filter="$phase"
-            :health-filter="$health"
-            :client-filter="$client"
-            :owner-filter="$owner"
-            :delivery-filter="$delivery"
-            :invoice-filter="$invoice"
-            :priority-filter-value="$priorityFilter"
-            :job-status-filter-value="$jobStatusFilter"
-            :sort-value="$sort"
-            :show-more-filters="$showMoreFilters"
-            :selected-job-ids="$selectedJobIds"
-            :all-filtered-jobs-selected="$allFilteredJobsSelected"
-            wire:key="jobs-table"
+            wire:key="orders-list"
         />
     @endif
 </div>

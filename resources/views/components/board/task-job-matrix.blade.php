@@ -17,18 +17,18 @@
             wire:key="{{ $keyPrefix }}-job-{{ $resolvedJobId }}-{{ $groupStateKey }}"
         >
             <div class="ft-task-job-row-head">
-                <button type="button" class="ft-task-job-row-toggle" x-on:click="open = !open" :title="open ? 'Collapse job tasks' : 'Expand job tasks'" :aria-expanded="open.toString()">
+                <button type="button" class="ft-task-job-row-toggle" x-on:click="open = !open" :title="open ? 'Collapse order tasks' : 'Expand order tasks'" :aria-expanded="open.toString()">
                     <svg :class="{'rotated': !open}" viewBox="0 0 24 24" aria-hidden="true"><path d="m6 9 6 6 6-6"/></svg>
                 </button>
 
                 @if($job)
-                    <a class="ft-task-job-row-number" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+                    <a class="ft-task-job-row-number" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
                     <span class="ft-task-job-copy" aria-hidden="true">▣</span>
                     <span class="ft-task-job-dot">·</span>
                     <a class="ft-task-job-row-title" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->title }}</a>
                     <span class="ft-task-job-client-pill">{{ $job->client?->name ?? 'No client' }}</span>
                 @else
-                    <span class="ft-task-job-row-number">No job</span>
+                    <span class="ft-task-job-row-number">No order</span>
                 @endif
                 <span class="ft-task-job-row-total">{{ $jobTasks->count() }} {{ \Illuminate\Support\Str::plural('task', $jobTasks->count()) }}</span>
             </div>

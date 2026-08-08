@@ -3,131 +3,155 @@
 namespace App\Livewire\MyWork;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
-use App\Livewire\Concerns\UsesPagePlaceholder;
-
-use App\Models\User;
-use App\Services\BoardService;
-use App\Services\MasterDataService;
+use App\Models\Task;
+use App\Services\MyWorkService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
+use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use UsesPagePlaceholder;
     use HandlesInlineEdits;
+    use WithPagination;
+
+    #[Url(as: 'q', history: true)]
     public string $search = '';
-    public string $job = '';
-    public string $client = '';
-    public string $status = '';
-    public string $priority = '';
-    public string $assignee = '';
-    public string $due = '';
-    public bool $tasksReady = false;
-    public int $cardLimit = 60;
 
-    public function clearFilters(): void
+    #[Url(as: 'filter', history: true)]
+    public string $quick = 'all';
+
+    #[Url(as: 'sort', history: true)]
+    public string $sort = 'action';
+
+    public array $metrics = [];
+    public array $statusOptions = [];
+    public int $perPage = MyWorkService::JOBS_PER_PAGE;
+    public bool $administratorView = false;
+
+    private const QUICK_FILTERS = ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
+    private const SORTS = ['action', 'due', 'job'];
+
+    public function mount(): void
     {
-        $this->tasksReady = true;
+        if (!in_array($this->quick, self::QUICK_FILTERS, true)) $this->quick = 'attention';
+        if (!in_array($this->sort, self::SORTS, true)) $this->sort = 'action';
+
+        $user = auth()->user();
+        $service = app(MyWorkService::class);
+        $this->administratorView = app(\App\Services\AccessControlService::class)->isAdministrator($user);
+        $this->metrics = $service->metrics($user);
+        $this->statusOptions = $service->statusOptions();
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->resetPage('workPage');
+    }
+
+    public function updatedSort(string $value): void
+    {
+        if (!in_array($value, self::SORTS, true)) $this->sort = 'action';
+        $this->resetPage('workPage');
+    }
+
+    public function setQuick(string $quick): void
+    {
+        abort_unless(in_array($quick, self::QUICK_FILTERS, true), 422);
+        $this->quick = $quick;
+        $this->resetPage('workPage');
+    }
+
+    public function clearSearch(): void
+    {
         $this->search = '';
-        $this->job = '';
-        $this->client = '';
-        $this->status = '';
-        $this->priority = '';
-        $this->assignee = '';
-        $this->due = '';
-        $this->cardLimit = 60;
+        $this->resetPage('workPage');
     }
 
-    public function clearFilter(string $filter): void
+    #[Renderless]
+    public function updateTaskStatus(int $taskId, string $status, string $version): array
     {
-        abort_unless(in_array($filter, ['search','job','client','status','priority','assignee','due'], true), 422);
-        $this->{$filter} = '';
-        $this->tasksReady = true;
-        $this->cardLimit = 60;
-    }
-
-    public function updated(string $property): void
-    {
-        if (in_array($property, ['search', 'job', 'client', 'status', 'priority', 'assignee', 'due'], true)) {
-            $this->tasksReady = true;
-            $this->cardLimit = 60;
-        }
-    }
-
-    public function loadMore(): void
-    {
-        $this->tasksReady = true;
-        $this->cardLimit = min(300, $this->cardLimit + 60);
-    }
-
-    public function loadMyWorkTasks(): void
-    {
-        $this->tasksReady = true;
-    }
-
-    public function moveTask(int $taskId, string $status): void
-    {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         $status = trim($status);
-        abort_if($status === '', 422, 'Task status is required.');
+        $updatedTask = null;
+        $result = $this->persistInlineEdit('task status', function () use ($taskId, $status, $version, &$updatedTask): void {
+            $actor = auth()->user();
+            $allowed = $this->statusOptions ?: app(MyWorkService::class)->statusOptions();
+            validator(['status' => $status], [
+                'status' => ['required', Rule::in($allowed)],
+            ])->validate();
 
-        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($taskId);
-        app(TaskService::class)->moveStatus($task, $status, auth()->user());
+            $personalTask = app(MyWorkService::class)->findPersonalVisibleTask($actor, $taskId);
+            $task = Task::query()
+                ->whereKey($personalTask->id)
+                ->lockForUpdate()
+                ->firstOrFail();
+
+            if ((string) $task->getRawOriginal('updated_at') !== $version) {
+                throw ValidationException::withMessages([
+                    'status' => 'This task changed since the list was loaded. Refresh My Work and try again.',
+                ]);
+            }
+
+            $updatedTask = app(TaskService::class)->moveStatus($task, $status, $actor);
+        });
+
+        if (($result['ok'] ?? false) && $updatedTask instanceof Task) {
+            $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
+            $result['status'] = (string) $updatedTask->status;
+            $result['completed'] = BoardLaneResolver::isCompleted($updatedTask->status);
+            $this->metrics = app(MyWorkService::class)->metrics(auth()->user());
+            $result['metrics'] = $this->metrics;
+        }
+
+        return $result;
     }
 
     #[Renderless]
     public function updateTaskDueDate(int $taskId, ?string $date): array
     {
         return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
-            abort_unless(auth()->user()->canAccess('tasks.update'), 403);
-            $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($taskId);
-            app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+            $actor = auth()->user();
+            $task = app(MyWorkService::class)->findPersonalVisibleTask($actor, $taskId);
+            app(TaskService::class)->updateDueDate($task, $date ?: null, $actor);
         });
     }
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
-        // Re-render this screen when Pusher reports a visible Job/Task change.
+        $service = app(MyWorkService::class);
+        $this->metrics = $service->metrics(auth()->user());
+        $this->statusOptions = $service->statusOptions();
+        $this->dispatch(
+            'my-work-metrics',
+            attention: $this->metrics['attention'] ?? 0,
+            overdue: $this->metrics['overdue'] ?? 0,
+            today: $this->metrics['today'] ?? 0,
+            upcoming: $this->metrics['upcoming'] ?? 0,
+            waiting: $this->metrics['waiting'] ?? 0,
+            mentions: $this->metrics['mentions'] ?? 0,
+        );
     }
 
     public function render()
     {
-        return view('livewire.my-work.index', $this->myWorkPageData(auth()->user()));
-    }
-
-    private function myWorkPageData(User $user): array
-    {
-        $service = app(BoardService::class);
-        $master = app(MasterDataService::class);
-        $filters = [
+        $service = app(MyWorkService::class);
+        $page = $service->paginate(auth()->user(), [
             'search' => $this->search,
-            'job' => $this->job,
-            'client' => $this->client,
-            'status' => $this->status,
-            'priority' => $this->priority,
-            'assignee' => $this->assignee,
-            'due' => $this->due,
-            'open_only' => strcasecmp($this->status, 'Completed') !== 0,
-        ];
+            'quick' => $this->quick,
+            'sort' => $this->sort,
+        ], $this->perPage, 'workPage');
 
-        $taskRows = $this->tasksReady
-            ? $service->tasks($user, $filters, $this->cardLimit + 1)
-            : collect();
-        $optionService = app(\App\Services\FilterOptionService::class);
-
-        return [
-            'tasks' => $taskRows->take($this->cardLimit)->values(),
-            'hasMoreCards' => $taskRows->count() > $this->cardLimit,
-            'jobFilterOptions' => $optionService->options($user, 'jobs', 'my-work', '', $this->job !== '' ? (int) $this->job : null, 5),
-            'clientFilterOptions' => $optionService->options($user, 'clients', 'my-work', '', $this->client !== '' ? (int) $this->client : null, 5),
-            'assigneeFilterOptions' => $optionService->options($user, 'users', 'my-work', '', $this->assignee !== '' ? (int) $this->assignee : null, 5),
-            'taskStatuses' => collect(BoardLaneResolver::taskStatuses($master->active('task_status')->pluck('name'))),
-            'statusFilterOptions' => $optionService->options($user, 'task-statuses', 'my-work', '', $this->status, 5),
-            'priorityFilterOptions' => $optionService->options($user, 'priorities', 'my-work', '', $this->priority, 5),
-        ];
+        return view('livewire.my-work.index', [
+            'workGroups' => $page['groups'],
+            'workPaginator' => $page['paginator'],
+            'visibleTaskCount' => $page['visibleTaskCount'],
+            'searchNeedsMoreCharacters' => trim($this->search) !== '' && mb_strlen(trim($this->search)) < 2,
+        ]);
     }
 }

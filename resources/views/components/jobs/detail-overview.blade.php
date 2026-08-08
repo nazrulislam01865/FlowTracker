@@ -23,19 +23,19 @@
 
     <div class="ft-overview-top-grid">
         <section class="ft-detail-card ft-overview-card">
-            <h2>Job overview</h2>
+            <h2>Order overview</h2>
             <div
                 class="ft-editable-copy ft-editable-description ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-description'), label: 'Job description', value: @js($job->description ?? ''), display: @js($job->description ?: 'No job description recorded.') })"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-description'), label: 'Order description', value: @js($job->description ?? ''), display: @js($job->description ?: 'No order description recorded.') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
                 <div class="ft-edit-display-row" x-show="!editing">
                     <span>
-                        <span x-show="String(value) === String(serverValue)">@if($job->description)<x-ui.mention-text :text="$job->description" />@else No job description recorded. @endif</span>
+                        <span x-show="String(value) === String(serverValue)">@if($job->description)<x-ui.mention-text :text="$job->description" />@else No order description recorded. @endif</span>
                         <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
                     </span>
                     @if($canEditJob)
-                        <button type="button" :disabled="status === 'saving'" class="ft-inline-edit-button" aria-label="Edit job description" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
+                        <button type="button" :disabled="status === 'saving'" class="ft-inline-edit-button" aria-label="Edit order description" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
                     @endif
                 </div>
                 @if($canEditJob)
@@ -43,7 +43,7 @@
                         <textarea x-ref="descriptionEditor" x-model="draftValue" rows="3" class="ft-mention-input" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" x-on:keydown.escape.prevent="cancelEdit()"></textarea>
                         <div>
                             <button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button>
-                            <button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No job description recorded.', () => $wire.updateJobTextField({{ $job->id }}, 'description', draftValue))">Save</button>
+                            <button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No order description recorded.', () => $wire.updateJobTextField({{ $job->id }}, 'description', draftValue))">Save</button>
                         </div>
                     </div>
                     <x-ui.inline-save-state />
@@ -156,10 +156,10 @@
                                 <button
                                     type="button"
                                     class="ft-inline-product-delete"
-                                    title="{{ $persistedProductRowCount <= 1 ? 'A Job must keep at least one product' : 'Remove product' }}"
+                                    title="{{ $persistedProductRowCount <= 1 ? 'An Order must keep at least one product' : 'Remove product' }}"
                                     aria-label="Remove product"
                                     wire:click.stop="removeJobItem({{ $item->id }})"
-                                    wire:confirm="Remove this product from the Job?"
+                                    wire:confirm="Remove this product from the Order?"
                                     wire:loading.attr="disabled"
                                     wire:target="removeJobItem({{ $item->id }})"
                                     :disabled="categorySaving || productSaving || quantitySaving || @js($persistedProductRowCount <= 1)"
@@ -214,10 +214,10 @@
             </div>
             <div
                 class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Job owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Order owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
-                <span>Job owner</span>
+                <span>Order owner</span>
                 <b class="ft-planning-value">
                     <span x-show="!editing" class="ft-inline-person-live ft-planning-person-value">
                         <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="24"/></span>

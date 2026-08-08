@@ -32,7 +32,7 @@
             <div class="ft-client-view-section-head">
                 <h3>Contact Information</h3>
                 <div class="ft-client-view-actions">
-                    @if($canDelete)<button type="button" class="ft-client-delete-btn" wire:click="deleteClient({{ $client->id }})" wire:confirm="Delete this client? Clients with Job history will be archived so existing records remain intact.">Delete Client</button>@endif
+                    @if($canDelete)<button type="button" class="ft-client-delete-btn" wire:click="deleteClient({{ $client->id }})" wire:confirm="Delete this client? Clients with Order history will be archived so existing records remain intact.">Delete Client</button>@endif
                     @if($canEdit && !$editing)<button type="button" class="ft-client-edit-btn" wire:click="editClient({{ $client->id }})">Edit Client</button>@endif
                 </div>
             </div>
@@ -61,19 +61,19 @@
             @endif
 
             <div class="ft-client-jobs-head">
-                <h3>Active Jobs</h3>
-                @if(auth()->user()->canModule('jobs','create'))<a class="ft-new-job-btn" href="{{ route('jobs.index',['create'=>1,'client'=>$client->id]) }}" wire:navigate>＋ New Job</a>@endif
+                <h3>Active Orders</h3>
+                @if(auth()->user()->canModule('jobs','create'))<a class="ft-new-job-btn" href="{{ route('jobs.index',['create'=>1,'client'=>$client->id]) }}" wire:navigate>＋ New Order</a>@endif
             </div>
             <div class="ft-client-jobs-list">
                 @forelse($active as $job)
                     <div class="ft-client-job-row">
-                        <a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+                        <a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
                         <div><b>{{ $job->title }}</b><small>{{ $job->phase?->name ?? '—' }}</small></div>
                         <div><b>{{ $job->progress }}%</b><div class="ft-mini-progress"><span style="width:{{ $job->progress }}%"></span></div></div>
                         <div><small>{{ $job->delivery_date?->format('M j, Y') ?? 'No delivery date' }}</small></div>
                     </div>
                 @empty
-                    <div class="ft-client-empty" style="padding:34px;text-align:center">No Jobs have been created for this client.</div>
+                    <div class="ft-client-empty" style="padding:34px;text-align:center">No Orders have been created for this client.</div>
                 @endforelse
             </div>
         </div>

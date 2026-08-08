@@ -14,13 +14,13 @@
 @endphp
 <div {{ $attributes->class('ft-create-job-page') }}>
     <div class="ft-create-shell">
-        <div class="ft-create-breadcrumb">Jobs / Create job</div>
-        <div class="ft-create-title"><h1>Create new job</h1><p>Set the job scope, products, ownership and workflow.</p></div>
+        <div class="ft-create-breadcrumb">Orders / Create order</div>
+        <div class="ft-create-title"><h1>Create new order</h1><p>Set the order scope, products, ownership and workflow.</p></div>
 
         <section class="ft-create-section">
-            <div class="ft-create-section-title"><span>1</span><h2>Job basics</h2></div>
+            <div class="ft-create-section-title"><span>1</span><h2>Order basics</h2></div>
             <div class="ft-create-fields">
-                <label class="ft-create-field"><b>Job code</b><div class="ft-locked-input">Generated automatically <span>♙</span></div></label>
+                <label class="ft-create-field"><b>Order code</b><div class="ft-locked-input">Generated automatically <span>♙</span></div></label>
                 <div class="ft-create-field">
                     <x-ui.remote-filter
                         class="ft-create-remote-select"
@@ -39,7 +39,7 @@
                     @error('clientId')<small class="validation-error">{{ $message }}</small>@enderror
                 </div>
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
-                <label class="ft-create-field"><b>Job title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                <label class="ft-create-field"><b>Order title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea></label>
             </div>
         </section>
@@ -108,7 +108,7 @@
                 <div class="ft-create-field">
                     <x-ui.remote-filter
                         class="ft-create-remote-select"
-                        label="Job owner *"
+                        label="Order owner *"
                         property="ownerId"
                         type="users"
                         context="create-job"
@@ -170,7 +170,7 @@
                 </div>
                 </div>
             @else
-                <div class="ft-create-note">Your role does not allow document uploads during Job creation.</div>
+                <div class="ft-create-note">Your role does not allow document uploads during Order creation.</div>
             @endif
             @if(count($jobAttachments))<div class="ft-create-upload-list">@foreach($jobAttachments as $file)<span>{{ $file->getClientOriginalName() }}</span>@endforeach</div>@endif
             @error('jobAttachments.*')<small class="validation-error">{{ $message }}</small>@enderror
@@ -179,7 +179,7 @@
         <div class="ft-create-actions">
             <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
             <button type="button" class="ft-create-draft" wire:click="saveDraft" @disabled(!$createReady)>Save draft</button>
-            <button type="button" class="ft-create-primary" wire:click="createJob" @disabled(!$createReady)>Create job</button>
+            <button type="button" class="ft-create-primary" wire:click="createJob" @disabled(!$createReady)>Create order</button>
         </div>
         @error('createLoading')<div class="validation-error">{{ $message }}</div>@enderror
     </div>

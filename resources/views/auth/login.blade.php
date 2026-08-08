@@ -20,7 +20,7 @@
                 @endif
             </div>
 
-            <h1>One Job. Every phase. Clear ownership.</h1>
+            <h1>One Order. Every phase. Clear ownership.</h1>
             <p>A practical workspace for promotional-product sales, artwork, samples, manufacturing, shipping, invoicing and collection.</p>
 
             <div class="flow-preview">
@@ -58,7 +58,7 @@
             </div>
 
             <h2>Welcome back</h2>
-            <p>Sign in to manage Jobs, assignments and client delivery.</p>
+            <p>Sign in to manage Orders, assignments and client delivery.</p>
 
             <div class="field">
                 <label for="email">Email</label>

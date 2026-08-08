@@ -37,5 +37,21 @@ class FlowJob extends Model
     public function members(): HasMany { return $this->hasMany(FlowJobMember::class, 'flow_job_id'); }
     public function phaseHistories(): HasMany { return $this->hasMany(FlowJobPhaseHistory::class, 'flow_job_id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
+    public function createdActivity(): MorphOne { return $this->morphOne(Activity::class, 'subject')->oldestOfMany(); }
     public function latestActivity(): MorphOne { return $this->morphOne(Activity::class, 'subject')->latestOfMany(); }
+
+    /**
+     * The database keeps the legacy job_number column for backwards
+     * compatibility, while the product UI now presents this entity as an
+     * Order. Existing JOB-* identifiers are therefore displayed as ORDER-*
+     * without breaking foreign keys, URLs, notifications, or imports.
+     */
+    public function displayOrderNumber(): string
+    {
+        $number = (string) $this->job_number;
+
+        return str_starts_with($number, 'JOB-')
+            ? 'ORDER-'.substr($number, 4)
+            : $number;
+    }
 }

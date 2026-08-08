@@ -1,128 +1,148 @@
-@props([
-    'jobs','clientFilterOptions','ownerFilterOptions','phaseFilterOptions','users','priorityFilterOptions','healthFilterOptions','jobStatusFilterOptions',
-    'searchFilter'=>'','phaseFilter'=>'','healthFilter'=>'','clientFilter'=>'','ownerFilter'=>'','deliveryFilter'=>'','invoiceFilter'=>'','priorityFilterValue'=>'','jobStatusFilterValue'=>'','sortValue'=>'updated_desc','showMoreFilters'=>false,'selectedJobIds'=>[],
-    'allFilteredJobsSelected'=>false,
-])
-<div {{ $attributes->class('ft-list-page ft-jobs-list-page ft-exact-jobs-list') }}>
-    <div class="ft-list-head">
-        <div><h1>Jobs</h1><p>Manage active jobs from request to collection</p></div>
-        <div class="ft-list-actions">@if(auth()->user()->canModule('jobs','export'))<button class="ft-outline-btn" type="button">Export</button>@endif<button class="ft-outline-btn" type="button">Columns</button>@if(auth()->user()->canModule('jobs','create'))<button class="ft-new-job-btn" wire:click="openCreate">＋ New Job</button>@endif</div>
+@props(['jobs', 'searchFilter' => '', 'clearAction' => 'clearSearch'])
+@php
+    $tone = static function (?string $value): string {
+        $value = (string) $value;
+        if (preg_match('/delayed|issue|overdue|blocked|attention/i', $value)) return 'red';
+        if (preg_match('/risk|wait|reply|hold|revision|delay|due|urgent|high/i', $value)) return 'amber';
+        if (preg_match('/track|ready|invoice|warehouse|shipping|completed/i', $value)) return 'green';
+        if (preg_match('/artwork|sample|client/i', $value)) return 'purple';
+        return 'blue';
+    };
+    $currentPage = $jobs->currentPage();
+    $lastPage = $jobs->lastPage();
+    $pageNumbers = collect(range(1, max(1, $lastPage)))
+        ->filter(fn ($page) => $lastPage <= 7 || $page === 1 || $page === $lastPage || abs($page - $currentPage) <= 1)
+        ->values();
+@endphp
+
+<div id="ft-orders-page" class="ft-orders-prototype">
+    @once
+        <style>
+            .ft-orders-prototype{color-scheme:light;--navy:#0d1b2b;--navy-active:#22466f;--blue:#2463eb;--blue-soft:#edf3ff;--canvas:#f3f6fb;--surface:#fff;--line:#dbe3ed;--text:#172033;--muted:#62728a;--green:#147e5b;--green-soft:#edf9f4;--amber:#a56708;--amber-soft:#fff6e5;--red:#c43f3f;--red-soft:#fff0f0;--purple:#6f54cf;--purple-soft:#f1edff;width:100%;min-width:0;color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+            .ft-orders-prototype button,.ft-orders-prototype input,.ft-orders-prototype a{font:inherit}.ft-orders-prototype button,.ft-orders-prototype a{-webkit-tap-highlight-color:transparent}.ft-orders-prototype button{cursor:pointer}.ft-orders-prototype a{color:inherit}
+            .ft-orders-prototype .ft-page-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px;margin-bottom:15px}.ft-orders-prototype .ft-page-head h1{margin:0 0 3px;font-size:23px;line-height:1.1;letter-spacing:-.025em}.ft-orders-prototype .ft-page-head p{margin:0;color:#60708b;font-size:11px}.ft-orders-prototype .ft-actions{display:flex;flex:0 0 auto;gap:8px}.ft-orders-prototype .ft-button{min-height:36px;padding:0 13px;border:1px solid #d4deec;border-radius:9px;background:#fff;color:#233047;font-size:10px;font-weight:750}.ft-orders-prototype .ft-button.primary{border-color:var(--blue);background:var(--blue);color:#fff;box-shadow:0 5px 13px rgba(36,99,235,.18)}.ft-orders-prototype .ft-button:hover{border-color:#9fb8e7}.ft-orders-prototype .ft-button.primary:hover{background:#1e57cf}
+            .ft-orders-prototype .ft-list-shell{min-width:0;overflow:hidden;border:1px solid var(--line);border-radius:13px;background:var(--surface);box-shadow:0 1px 2px rgba(25,45,75,.02)}.ft-orders-prototype .ft-search-bar{display:flex;min-width:0;align-items:center;gap:10px;padding:11px 12px;border-bottom:1px solid var(--line)}.ft-orders-prototype .ft-search{position:relative;width:min(610px,100%);min-width:0}.ft-orders-prototype .ft-search-icon{position:absolute;left:12px;top:50%;color:#72829a;font-size:14px;transform:translateY(-50%);pointer-events:none}.ft-orders-prototype .ft-search input{width:100%;height:40px;padding:0 68px 0 36px;border:1px solid #cfdae9;border-radius:10px;outline:0;background:#fff;color:var(--text);font-size:11px}.ft-orders-prototype .ft-search input:focus{border-color:#7ba2f3;box-shadow:0 0 0 3px rgba(36,99,235,.1)}.ft-orders-prototype .ft-search-clear{position:absolute;right:9px;top:50%;display:none;padding:4px 6px;border:0;background:transparent;color:#5e6e85;font-size:9px;transform:translateY(-50%)}.ft-orders-prototype .ft-search-clear.show{display:block}.ft-orders-prototype .ft-search-state{display:flex;min-width:0;align-items:center;gap:7px;margin-left:auto;color:#64748b;font-size:9px;white-space:nowrap}.ft-orders-prototype .ft-live-dot{width:6px;height:6px;border-radius:50%;background:#20a36f}.ft-orders-prototype .ft-spinner{width:13px;height:13px;border:2px solid #dce5f2;border-top-color:var(--blue);border-radius:50%;animation:ft-orders-spin .6s linear infinite}
+            .ft-orders-prototype .ft-job-head,.ft-orders-prototype .ft-job-row{display:grid;grid-template-columns:minmax(108px,.78fr) minmax(135px,.95fr) minmax(92px,.7fr) minmax(185px,1.45fr) minmax(92px,.72fr) 72px minmax(82px,.68fr) minmax(120px,.9fr) 78px 42px;column-gap:8px;align-items:center;min-width:0}.ft-orders-prototype .ft-job-head{min-height:34px;padding:0 12px;border-bottom:1px solid var(--line);background:#f8fafc;color:#6c7a90;font-size:7.5px;font-weight:800;letter-spacing:.035em;text-transform:uppercase}.ft-orders-prototype .ft-job-list{min-width:0}.ft-orders-prototype .ft-job-row{position:relative;min-height:74px;padding:9px 12px;border-bottom:1px solid #e5eaf1;background:#fff;content-visibility:auto;contain-intrinsic-size:74px}.ft-orders-prototype .ft-job-row:last-child{border-bottom:0}.ft-orders-prototype .ft-job-row:hover{background:#fbfdff}.ft-orders-prototype .ft-cell{min-width:0}.ft-orders-prototype .ft-cell::before{display:none}.ft-orders-prototype .ft-id{display:inline-block;max-width:100%;overflow:hidden;color:#125be6;font-size:10px;font-weight:800;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-id:hover{text-decoration:underline}.ft-orders-prototype .ft-sub{display:block;max-width:100%;margin-top:3px;overflow:hidden;color:#77869b;font-size:8px;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-client{display:block;max-width:100%;overflow:hidden;color:#263248;font-size:9px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-product{display:block;max-width:100%;margin-top:3px;overflow:hidden;color:#526078;font-size:8px;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-product-detail{display:block;max-width:100%;margin-top:2px;overflow:hidden;color:#77869b;font-size:7.5px;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-created-name{display:block;overflow:hidden;color:#2d3950;font-size:9px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-created-on{display:block;margin-top:3px;color:#758399;font-size:8px}.ft-orders-prototype .ft-inquiry-link{display:inline-block;max-width:100%;overflow:hidden;color:#155ce9;font-size:8.5px;font-weight:750;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-inquiry-link:hover{text-decoration:underline}.ft-orders-prototype .ft-standard-empty{display:inline-block;color:#8995a6;font-size:8px;font-style:italic}.ft-orders-prototype .ft-chips{display:flex;max-width:100%;flex-wrap:wrap;gap:4px}.ft-orders-prototype .ft-pill{display:inline-flex;max-width:100%;align-items:center;padding:3px 6px;overflow:hidden;border-radius:9px;font-size:7.5px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-pill.blue{background:var(--blue-soft);color:#225fd4}.ft-orders-prototype .ft-pill.green{background:var(--green-soft);color:var(--green)}.ft-orders-prototype .ft-pill.amber{background:var(--amber-soft);color:var(--amber)}.ft-orders-prototype .ft-pill.red{background:var(--red-soft);color:var(--red)}.ft-orders-prototype .ft-pill.purple{background:var(--purple-soft);color:var(--purple)}.ft-orders-prototype .ft-owner{display:flex;min-width:0;align-items:center;gap:7px}.ft-orders-prototype .ft-owner-copy{min-width:0}.ft-orders-prototype .ft-owner-name{display:block;overflow:hidden;font-size:9px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}.ft-orders-prototype .ft-due{display:block;margin-top:2px;color:#67768c;font-size:8px}.ft-orders-prototype .ft-due.overdue{color:var(--red);font-weight:750}.ft-orders-prototype .ft-order-avatar{display:grid;place-items:center;width:28px;height:28px;flex:0 0 28px;overflow:hidden;border-radius:50%;background:#dce8ff;color:#315da8;font-size:8px;font-weight:800}.ft-orders-prototype .ft-order-avatar img{width:100%;height:100%;object-fit:cover}.ft-orders-prototype .ft-progress{display:flex;align-items:center;gap:7px;color:#59677d;font-size:8px}.ft-orders-prototype .ft-progress-track{width:min(70px,70%);height:6px;overflow:hidden;border-radius:5px;background:#e8edf3}.ft-orders-prototype .ft-progress-fill{display:block;height:100%;border-radius:5px;background:var(--blue)}.ft-orders-prototype .ft-view{display:grid;place-items:center;width:34px;height:30px;border:1px solid #d0dbeb;border-radius:8px;background:#fff;color:#155ce9;font-size:8px;font-weight:800;text-decoration:none}.ft-orders-prototype .ft-view:hover{background:var(--blue-soft)}.ft-orders-prototype .ft-empty{padding:42px 16px;color:#65748b;text-align:center;font-size:11px}.ft-orders-prototype .ft-empty strong{display:block;margin-bottom:5px;color:#273349;font-size:13px}
+            .ft-orders-prototype .ft-list-footer{display:flex;align-items:center;justify-content:space-between;gap:12px;min-height:55px;padding:9px 12px;border-top:1px solid var(--line);background:#fbfcfe}.ft-orders-prototype .ft-result-count{color:#66758c;font-size:9px}.ft-orders-prototype .ft-page-buttons{display:flex;align-items:center;gap:5px}.ft-orders-prototype .ft-page-button{min-width:76px;min-height:34px;border:1px solid #cfdbea;border-radius:9px;background:#fff;color:#23436e;font-size:9px;font-weight:750}.ft-orders-prototype .ft-page-button:hover{border-color:#8facdf;background:var(--blue-soft)}.ft-orders-prototype .ft-page-button[disabled]{cursor:default;opacity:.45}.ft-orders-prototype .ft-page-number{width:34px;min-width:34px;height:34px;border:1px solid #cfdbea;border-radius:8px;background:#fff;color:#40506a;font-size:9px;font-weight:750}.ft-orders-prototype .ft-page-number.active{border-color:var(--blue);background:var(--blue);color:#fff}.ft-orders-prototype .ft-page-ellipsis{color:#74839a;font-size:9px}.ft-orders-prototype .ft-load-skeleton{display:none;gap:7px;padding:8px 12px;border-top:1px solid var(--line)}.ft-orders-prototype .ft-skeleton-line{height:11px;border-radius:5px;background:linear-gradient(90deg,#edf1f6 25%,#f8fafc 45%,#edf1f6 65%);background-size:240% 100%;animation:ft-orders-shimmer 1s linear infinite}.ft-orders-prototype .ft-skeleton-line:nth-child(2){width:82%}
+            
+            @keyframes ft-orders-spin{to{transform:rotate(360deg)}}@keyframes ft-orders-shimmer{to{background-position:-240% 0}}@keyframes ft-orders-reveal{from{opacity:0;transform:translateY(5px)}to{opacity:1;transform:translateY(0)}}.ft-orders-prototype .ft-job-row{animation:ft-orders-reveal .22s ease both}.ft-orders-prototype .ft-job-row:nth-child(2){animation-delay:.025s}.ft-orders-prototype .ft-job-row:nth-child(3){animation-delay:.05s}.ft-orders-prototype .ft-job-row:nth-child(4){animation-delay:.075s}.ft-orders-prototype .ft-job-row:nth-child(5){animation-delay:.1s}
+            @media(max-width:1380px){.ft-orders-prototype .ft-job-head{display:none}.ft-orders-prototype .ft-job-row{grid-template-columns:minmax(140px,1fr) minmax(125px,.8fr) minmax(130px,.9fr) 42px;grid-template-areas:"identity created inquiry view" "brief brief owner progress" "stage health flag progress";row-gap:8px;min-height:128px}.ft-orders-prototype .ft-job-row .ft-cell::before{content:attr(data-label);display:block;margin-bottom:3px;color:#8793a5;font-size:7px;font-weight:750;letter-spacing:.04em;text-transform:uppercase}.ft-orders-prototype .ft-identity{grid-area:identity}.ft-orders-prototype .ft-created-cell{grid-area:created}.ft-orders-prototype .ft-inquiry-cell{grid-area:inquiry}.ft-orders-prototype .ft-brief{grid-area:brief}.ft-orders-prototype .ft-stage-cell{grid-area:stage}.ft-orders-prototype .ft-health-cell{grid-area:health}.ft-orders-prototype .ft-flag-cell{grid-area:flag}.ft-orders-prototype .ft-owner-cell{grid-area:owner}.ft-orders-prototype .ft-progress-cell{grid-area:progress}.ft-orders-prototype .ft-view{grid-area:view}.ft-orders-prototype .ft-progress-cell{justify-self:end;width:100%}.ft-orders-prototype .ft-progress-track{flex:1}}
+            @media(max-width:820px){.ft-orders-prototype .ft-page-head{align-items:flex-start}.ft-orders-prototype .ft-page-head p{max-width:420px}.ft-orders-prototype .ft-search-bar{align-items:stretch;flex-wrap:wrap}.ft-orders-prototype .ft-search{width:100%}.ft-orders-prototype .ft-search-state{width:100%;margin-left:0}}
+            @media(max-width:680px){.ft-orders-prototype .ft-page-head{align-items:flex-start}.ft-orders-prototype .ft-page-head h1{font-size:20px}.ft-orders-prototype .ft-page-head p{font-size:10px}.ft-orders-prototype .ft-button{min-height:34px;padding-inline:11px}.ft-orders-prototype .ft-job-row{grid-template-columns:minmax(0,1fr) minmax(105px,.7fr) 38px;grid-template-areas:"identity identity view" "created inquiry inquiry" "brief brief brief" "stage health health" "flag flag flag" "owner progress progress";padding:11px;row-gap:9px;min-height:228px}.ft-orders-prototype .ft-view{justify-self:end}.ft-orders-prototype .ft-progress-cell{max-width:145px}.ft-orders-prototype .ft-list-footer{align-items:flex-start;flex-direction:column}.ft-orders-prototype .ft-page-buttons{width:100%}.ft-orders-prototype .ft-page-button{flex:1}}
+            @media(max-width:390px){.ft-orders-prototype .ft-page-head p{display:none}.ft-orders-prototype .ft-search input{padding-right:54px}}
+            @media(prefers-reduced-motion:reduce){.ft-orders-prototype *,.ft-orders-prototype *::before,.ft-orders-prototype *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+        </style>
+    @endonce
+
+    <div class="ft-page-head">
+        <div><h1>Orders</h1><p>Fast access to every active and completed order</p></div>
+        <div class="ft-actions">
+            @if(auth()->user()->canAccess('jobs.create'))
+                <a class="ft-new-job-btn ft-dashboard-action-match" href="{{ route('jobs.index', ['create' => 1]) }}" wire:navigate><span class="ft-dashboard-action-match-icon">+</span>New Order</a>
+            @endif
+        </div>
     </div>
 
-    <section class="ft-job-table-card ft-prototype-list-card">
-        <div class="ft-list-filter-shell" aria-label="Job search and filters">
-            <div class="ft-list-filter-grid">
-                <x-ui.list-search property="search" :value="$searchFilter" placeholder="Job number, order, title, client or product…" />
-                <x-ui.remote-filter label="Phase" property="phase" type="phases" context="jobs" :value="$phaseFilter" placeholder="All phases" :initial-options="$phaseFilterOptions" />
-                <x-ui.remote-filter label="Health" property="health" type="job-healths" context="jobs" :value="$healthFilter" placeholder="All health" :initial-options="$healthFilterOptions" />
-                <x-ui.remote-filter label="Owner" property="owner" type="users" context="jobs" :value="$ownerFilter" placeholder="Anyone" :initial-options="$ownerFilterOptions" />
-                <x-ui.remote-filter label="Client" property="client" type="clients" context="jobs" :value="$clientFilter" placeholder="All clients" :initial-options="$clientFilterOptions" />
-                <x-ui.select-filter label="Delivery" property="delivery" :value="$deliveryFilter" placeholder="Any date" :options="collect([['id'=>'week','label'=>'Due this week'],['id'=>'overdue','label'=>'Overdue'],['id'=>'none','label'=>'No delivery date']])" />
-                <x-ui.select-filter label="Invoice" property="invoice" :value="$invoiceFilter" placeholder="Any invoice" :options="collect([['id'=>'pending','label'=>'Quotation pending'],['id'=>'draft','label'=>'Draft / value recorded']])" />
-                <x-ui.remote-filter label="Priority" property="priorityFilter" type="priorities" context="jobs" :value="$priorityFilterValue" placeholder="All priorities" :initial-options="$priorityFilterOptions" />
-                <x-ui.remote-filter label="Job status" property="jobStatusFilter" type="job-statuses" context="jobs" :value="$jobStatusFilterValue" placeholder="All statuses" :initial-options="$jobStatusFilterOptions" />
-            </div>
-            @php
-                $activeChips = collect();
-                if($searchFilter) $activeChips->push(['key'=>'search','label'=>'Search: '.$searchFilter]);
-                if($phaseFilter) $activeChips->push(['key'=>'phase','label'=>'Phase: '.(collect($phaseFilterOptions)->firstWhere('id',(int)$phaseFilter)['label'] ?? $phaseFilter)]);
-                if($healthFilter) $activeChips->push(['key'=>'health','label'=>'Health: '.$healthFilter]);
-                if($ownerFilter) $activeChips->push(['key'=>'owner','label'=>'Owner: '.(collect($ownerFilterOptions)->firstWhere('id',(int)$ownerFilter)['label'] ?? 'Selected')]);
-                if($clientFilter) $activeChips->push(['key'=>'client','label'=>'Client: '.(collect($clientFilterOptions)->firstWhere('id',(int)$clientFilter)['label'] ?? 'Selected')]);
-                if($deliveryFilter) $activeChips->push(['key'=>'delivery','label'=>'Delivery: '.(['week'=>'Due this week','overdue'=>'Overdue','none'=>'No delivery date'][$deliveryFilter] ?? $deliveryFilter)]);
-                if($invoiceFilter) $activeChips->push(['key'=>'invoice','label'=>'Invoice: '.(['pending'=>'Quotation pending','draft'=>'Draft / value recorded'][$invoiceFilter] ?? $invoiceFilter)]);
-                if($priorityFilterValue) $activeChips->push(['key'=>'priorityFilter','label'=>'Priority: '.$priorityFilterValue]);
-                if($jobStatusFilterValue) $activeChips->push(['key'=>'jobStatusFilter','label'=>'Status: '.$jobStatusFilterValue]);
-            @endphp
-            <div class="ft-list-active-row">
-                <div class="ft-list-filter-chips" aria-live="polite">
-                    @forelse($activeChips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')" aria-label="Remove {{ $chip['label'] }}">×</button></span>@empty<span>No filters applied</span>@endforelse
-                </div>
-                @if($activeChips->isNotEmpty())<button class="ft-list-clear-all" wire:click="clearFilters" type="button">Clear all filters</button>@endif
+    <section class="ft-list-shell" aria-label="Orders list">
+        <div class="ft-search-bar">
+            <label class="ft-search">
+                <span class="ft-search-icon">⌕</span>
+                <input
+                    type="search"
+                    autocomplete="off"
+                    placeholder="Search order, inquiry, client, product, creator or owner"
+                    aria-label="Search orders"
+                    wire:model.live.debounce.350ms="search"
+                >
+                <button @class(['ft-search-clear','show'=>filled($searchFilter)]) wire:click="{{ $clearAction }}" type="button">Clear</button>
+            </label>
+            <div class="ft-search-state">
+                <i class="ft-spinner" wire:loading wire:target="search,gotoPage,previousPage,nextPage" aria-hidden="true"></i>
+                <span wire:loading.remove wire:target="search,gotoPage,previousPage,nextPage">
+                    @if(filled($searchFilter))
+                        {{ number_format($jobs->total()) }} {{ \Illuminate\Support\Str::plural('order', $jobs->total()) }} found for “{{ $searchFilter }}”
+                    @else
+                        Type to search all {{ number_format($jobs->total()) }} orders · results update after 350 ms
+                    @endif
+                </span>
+                <span wire:loading wire:target="search,gotoPage,previousPage,nextPage">Searching orders…</span>
+                <i class="ft-live-dot" aria-hidden="true"></i>
             </div>
         </div>
 
-        @if(count($selectedJobIds))
-            <div class="ft-job-bulk-bar">
-                <div><b>{{ count($selectedJobIds) }}</b> Job{{ count($selectedJobIds) === 1 ? '' : 's' }} selected@if($allFilteredJobsSelected) · all filtered Jobs@endif</div>
-                <div class="ft-job-bulk-actions">
-                    @if(auth()->user()->canModule('jobs','edit'))
-                        <button type="button" class="ft-outline-btn" wire:click="bulkUpdateJobs('deactivate')">Deactivate</button>
-                        <button type="button" class="ft-outline-btn" wire:click="bulkUpdateJobs('cancel')" wire:confirm="Cancel the selected Jobs?">Cancel Jobs</button>
-                    @endif
-                    @if(auth()->user()->canModule('jobs','delete'))
-                        <button type="button" class="ft-danger-outline-btn" wire:click="bulkUpdateJobs('delete')" wire:confirm="Delete the selected Jobs? This removes them from active FlowTrack views.">Delete</button>
-                    @endif
-                </div>
-            </div>
-        @endif
+        <div class="ft-job-head" aria-hidden="true">
+            <span>Created by / on</span><span>Order</span><span>Inquiry</span><span>Client / Products</span><span>Order stage</span><span>Health</span><span>Flag</span><span>Owner / Delivery</span><span>Progress</span><span>View</span>
+        </div>
 
-        <div class="ft-job-table-wrap ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,phase,health,owner,client,delivery,invoice,priorityFilter,jobStatusFilter,sort">
-            <table class="ft-job-table">
-                <thead><tr><th><label class="ft-checkbox-head"><input type="checkbox" wire:click="toggleSelectAllJobs" @checked($allFilteredJobsSelected) @disabled($jobs->total() === 0) aria-label="Select all {{ $jobs->total() }} filtered Jobs"><span>Select all</span></label></th><th>Job / Order</th><th>Client / Brief</th><th>Product / Qty</th><th>Phase</th><th>Next Action</th><th>Health</th><th>Owner</th><th>Delivery ↓</th><th>Progress</th><th>Invoice</th><th>•••</th></tr></thead>
-                <tbody>
-                @forelse($jobs as $job)
-                    @php
-                        $next = \App\Support\BoardPresenter::nextTask($job);
-                    @endphp
-                    <tr wire:key="job-row-{{ $job->id }}">
-                        <td data-label="Select"><input type="checkbox" wire:model.live="selectedJobIds" value="{{ $job->id }}" aria-label="Select {{ $job->job_number }}"></td>
-                        <td data-label="Job / Order"><button class="ft-table-job-link" wire:click="openJob({{ $job->id }})">{{ $job->job_number }}</button><div class="ft-table-sub">{{ $job->order_number ?: 'RFQ-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</div></td>
-                        <td data-label="Client / Brief"><b>{{ $job->client?->name }}</b><div class="ft-table-sub">{{ \Illuminate\Support\Str::limit($job->title, 36) }}</div></td>
-                        <td data-label="Product / Qty"><b>{{ $job->product ?: 'Product' }}</b><div class="ft-table-sub">{{ max(1,(int) $job->items_count) }} product · {{ number_format($job->quantity) }} pcs</div></td>
-                        <td data-label="Phase"><span class="ft-soft-pill blue">{{ $job->phase?->short_name ?? '—' }}</span></td>
-                        <td data-label="Next Action"><b>{{ $next?->title ?? ($job->next_action ?: 'Review client requirement') }}</b><div class="ft-table-due {{ ($next?->due_date && \App\Support\UserLocalTime::isDatePast($next->due_date)) ? 'overdue' : '' }}">@if($next?->due_date){{ \App\Support\UserLocalTime::isDatePast($next->due_date) ? 'Overdue '.$next->due_date->format('M j') : 'Due '.$next->due_date->format('M j') }}@else — @endif</div></td>
-                        <td data-label="Health"><span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->needs_attention ? 'Needs Attention' : $job->health) }}">{{ $job->needs_attention ? 'Needs Attention' : $job->health }}</span></td>
-                        <td data-label="Owner">
-                            <div
-                                class="ft-owner-chip ft-inline-owner-editor ft-inline-edit-shell"
-                                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Job owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
-                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                            >
-                                <span class="ft-inline-person-live" x-show="!editing">
-                                    <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="28"/></span>
-                                    <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
-                                    <span class="ft-inline-owner-name" x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
-                                </span>
-                                @if(app(\App\Services\AccessControlService::class)->canAssignVisibleJob(auth()->user()))
-                                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit Job owner" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.ownerSelect.focus())">✎</button>
-                                    <select x-ref="ownerSelect" x-cloak x-show="editing" x-model="draftValue" aria-label="Edit Job owner"
-                                        x-on:keydown.escape.prevent="cancelEdit()"
-                                        x-on:blur="if (editing) cancelEdit()"
-                                        x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobOwner({{ $job->id }}, draftValue))">
-                                        <option value="">Unassigned</option>
-                                        @foreach($users as $u)<option value="{{ $u->id }}">{{ $u->name }}</option>@endforeach
-                                    </select>
-                                    <x-ui.inline-save-state compact />
-                                @endif
-                            </div>
-                        </td>
-                        <td data-label="Delivery">
-                            <div
-                                class="ft-date-chip ft-inline-date-editor ft-inline-edit-shell {{ ($job->delivery_date && \App\Support\UserLocalTime::isDatePast($job->delivery_date)) && !$job->completed_at ? 'overdue' : '' }}"
-                                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set date') })"
-                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                            >
-                                <span x-show="!editing" class="ft-inline-date-text" x-text="display">{{ $job->delivery_date?->format('M j') ?? 'Set date' }}</span>
-                                @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit delivery date" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.deliveryDate.showPicker ? $refs.deliveryDate.showPicker() : $refs.deliveryDate.focus())">✎</button>
-                                    <input x-ref="deliveryDate" x-cloak x-show="editing" x-model="draftValue" type="date" aria-label="Edit delivery date"
-                                        x-on:keydown.escape.prevent="cancelEdit()"
-                                        x-on:blur="if (editing) cancelEdit()"
-                                        x-on:change="commit($event.target.value, formatDate($event.target.value, true), () => $wire.updateJobDeliveryDate({{ $job->id }}, draftValue))">
-                                    <x-ui.inline-save-state compact />
-                                @endif
-                            </div>
-                        </td>
-                        <td data-label="Progress"><div class="ft-table-progress"><span style="width:{{ $job->progress }}%"></span></div><small>{{ $job->progress }}%</small></td>
-                        <td data-label="Invoice"><span class="ft-soft-pill {{ $job->commercial_value > 0 ? 'blue' : 'amber' }}">{{ $job->commercial_value > 0 ? 'Draft $'.number_format($job->commercial_value,0) : 'Quotation pending' }}</span></td>
-                        <td data-label="Actions"><button class="ft-table-kebab" wire:click="openJob({{ $job->id }})">•••</button></td>
-                    </tr>
-                @empty<tr><td colspan="12"><div class="empty-state">No Jobs match the selected filters.</div></td></tr>@endforelse
-                </tbody>
-            </table>
+        <div class="ft-job-list">
+            @forelse($jobs as $job)
+                @php
+                    $creator = $job->createdActivity?->user ?? $job->owner;
+                    $creatorName = $creator?->name ?? 'System';
+                    $ownerName = $job->owner?->name ?? 'Unassigned';
+                    $ownerInitials = collect(preg_split('/\\s+/', trim($ownerName)))->filter()->map(fn($part)=>mb_substr($part,0,1))->take(2)->implode('');
+                    $ownerImage = $job->owner?->profile_image_path && $job->owner?->id
+                        ? route('profile-images.show', ['user'=>$job->owner->id,'filename'=>basename($job->owner->profile_image_path)], false)
+                        : null;
+                    $items = $job->items;
+                    $productRows = $items->isNotEmpty()
+                        ? $items
+                        : collect([(object)['product_name'=>$job->product ?: 'Product','quantity'=>(int)$job->quantity]]);
+                    $totalUnits = (int) $productRows->sum(fn($item)=>(int)($item->quantity ?? 0));
+                    $productNames = $productRows->pluck('product_name')->filter()->values();
+                    $health = $job->completed_at ? 'Completed' : ($job->needs_attention ? 'Needs Attention' : ($job->health ?: 'On Track'));
+                    $stage = $job->phase?->short_name ?? $job->status ?? '—';
+                    $flag = $job->needs_attention ? 'Needs Attention' : (in_array($job->priority, ['Urgent','High'], true) ? $job->priority : null);
+                    $deliveryOverdue = $job->delivery_date && !$job->completed_at && \App\Support\UserLocalTime::isDatePast($job->delivery_date);
+                @endphp
+                <article class="ft-job-row" wire:key="order-row-{{ $job->id }}">
+                    <div class="ft-cell ft-created-cell" data-label="Created by / on"><span class="ft-created-name">{{ $creatorName }}</span><time class="ft-created-on">{{ $job->created_at?->format('M j, Y') ?? '—' }}</time></div>
+                    <div class="ft-cell ft-identity" data-label="Order"><a class="ft-id" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a><span class="ft-sub">{{ $job->order_number ?: 'REF-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</span></div>
+                    <div class="ft-cell ft-inquiry-cell" data-label="Inquiry"><span class="ft-standard-empty">Not linked</span></div>
+                    <div class="ft-cell ft-brief" data-label="Client / products">
+                        <span class="ft-client">{{ $job->client?->name ?? '—' }}</span>
+                        @if($productRows->count() === 1)
+                            <span class="ft-product">{{ $productNames->first() ?: 'Product' }}</span>
+                            <span class="ft-product-detail">{{ number_format($totalUnits) }} {{ \Illuminate\Support\Str::plural('pc', $totalUnits) }}</span>
+                        @else
+                            <span class="ft-product">{{ $productRows->count() }} ordered products · {{ number_format($totalUnits) }} pcs</span>
+                            <span class="ft-product-detail" title="{{ $productNames->implode(' · ') }}">{{ $productNames->implode(' · ') }}</span>
+                        @endif
+                    </div>
+                    <div class="ft-cell ft-stage-cell" data-label="Order stage"><span class="ft-pill {{ $tone($stage) }}">{{ $stage }}</span></div>
+                    <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill {{ $tone($health) }}">{{ $health }}</span></div>
+                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $tone($flag) }}">{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
+                    <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">
+                        <div class="ft-owner">
+                            <span class="ft-order-avatar">@if($ownerImage)<img src="{{ $ownerImage }}" alt="" loading="lazy" decoding="async">@else{{ $ownerInitials ?: 'FT' }}@endif</span>
+                            <span class="ft-owner-copy"><span class="ft-owner-name">{{ $ownerName }}</span><time class="ft-due {{ $deliveryOverdue ? 'overdue' : '' }}">{{ $job->delivery_date ? 'Due '.$job->delivery_date->format('M j') : 'No delivery date' }}</time></span>
+                        </div>
+                    </div>
+                    <div class="ft-cell ft-progress ft-progress-cell" data-label="Progress"><span class="ft-progress-track"><span class="ft-progress-fill" style="width:{{ max(0,min(100,(int)$job->progress)) }}%"></span></span><span>{{ (int)$job->progress }}%</span></div>
+                    <a class="ft-view" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate aria-label="View {{ $job->displayOrderNumber() }}">View</a>
+                </article>
+            @empty
+                <div class="ft-empty"><strong>No matching orders</strong>Try another order, inquiry, client, product, creator or owner.</div>
+            @endforelse
+        </div>
+
+        <div class="ft-load-skeleton" wire:loading.delay.grid wire:target="search,gotoPage,previousPage,nextPage" aria-hidden="true"><span class="ft-skeleton-line"></span><span class="ft-skeleton-line"></span></div>
+
+        <div class="ft-list-footer">
+            <span class="ft-result-count">@if($jobs->total()) Showing {{ $jobs->firstItem() }}–{{ $jobs->lastItem() }} of {{ number_format($jobs->total()) }} orders @else No orders found @endif</span>
+            <nav class="ft-page-buttons" aria-label="Orders pagination">
+                <button class="ft-page-button" type="button" wire:click="previousPage" @disabled($jobs->onFirstPage())>Previous</button>
+                <span class="ft-page-buttons">
+                    @php $previousRenderedPage = null; @endphp
+                    @foreach($pageNumbers as $pageNumber)
+                        @if($previousRenderedPage !== null && $pageNumber - $previousRenderedPage > 1)<span class="ft-page-ellipsis">…</span>@endif
+                        <button type="button" class="ft-page-number {{ $pageNumber === $currentPage ? 'active' : '' }}" wire:click="gotoPage({{ $pageNumber }})" @if($pageNumber === $currentPage) aria-current="page" @endif>{{ $pageNumber }}</button>
+                        @php $previousRenderedPage = $pageNumber; @endphp
+                    @endforeach
+                </span>
+                <button class="ft-page-button" type="button" wire:click="nextPage" @disabled(!$jobs->hasMorePages())>Next</button>
+            </nav>
         </div>
     </section>
 
-    <div class="ft-list-pagination"><span>Showing <b>{{ $jobs->firstItem() ?? 0 }}–{{ $jobs->lastItem() ?? 0 }}</b> of {{ $jobs->total() }} jobs</span><div><span>Show</span><select wire:model.live="perPage"><option value="10">10</option><option value="20">20</option><option value="30">30</option><option value="40">40</option></select><span>per page</span></div><div class="ft-page-actions"><button wire:click="previousPage" @disabled($jobs->onFirstPage())>Previous</button><span>Page {{ $jobs->currentPage() }} of {{ $jobs->lastPage() }}</span><button wire:click="nextPage" @disabled(!$jobs->hasMorePages())>Next</button></div></div>
 </div>

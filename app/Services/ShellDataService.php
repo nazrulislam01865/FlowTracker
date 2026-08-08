@@ -17,14 +17,7 @@ class ShellDataService
                     ->whereNull('read_at')
                     ->count(),
                 'open_my_work' => $user->canModule('tasks', 'view')
-                    ? app(TaskService::class)
-                        ->visibleQuery($user)
-                        ->whereNull('completed_at')
-                        ->whereHas('job', fn ($job) => $job
-                            ->whereHas('client', fn ($client) => $client->where('is_active', true))
-                            ->whereNull('completed_at')
-                            ->whereNotIn('status', JobService::INACTIVE_STATUSES))
-                        ->count()
+                    ? app(MyWorkService::class)->openTaskCount($user)
                     : 0,
             ];
         });

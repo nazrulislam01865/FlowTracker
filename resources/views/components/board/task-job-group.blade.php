@@ -12,7 +12,7 @@
             </a>
             <div class="ft-task-job-group-meta">
                 @if($job)
-                    <a href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+                    <a href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
                     <span>·</span>
                 @endif
                 <span>{{ $job?->client?->name ?? 'No client' }}</span>

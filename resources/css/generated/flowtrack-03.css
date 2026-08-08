@@ -1,465 +1,4 @@
 
-
-/* Job Board: separate sticky phase header and normal page-scrolling columns. */
-.ft-job-board-header-grid,
-.ft-job-board-body-grid{
-    display:grid;
-    grid-auto-flow:column;
-    grid-auto-columns:315px;
-    gap:11px;
-    align-items:start;
-    min-width:max-content;
-}
-.ft-job-board-header-grid .ft-external-lane-head{
-    height:46px;
-    border:1px solid #d7e0eb;
-    border-radius:11px 11px 0 0;
-    background:#eef3f8;
-}
-.ft-job-board-body-grid .ft-board-column-nohead{
-    border-radius:0 0 11px 11px;
-    min-height:470px;
-    margin-top:0;
-}
-.ft-job-board-body-grid .ft-board-column-list{
-    padding-top:9px;
-}
-
-/* Task Board / My Work: one status header row, then one full-width row per Job. */
-.ft-task-board-status-header,
-.ft-task-job-row-grid{
-    display:grid;
-    grid-template-columns:repeat(var(--ft-lane-count), var(--ft-task-lane-width, 340px));
-    min-width:max-content;
-}
-.ft-task-board-status-header{
-    border:1px solid #d8e1ec;
-    border-radius:11px 11px 0 0;
-    overflow:hidden;
-    background:#f8fafc;
-}
-.ft-task-status-head{
-    height:48px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:10px;
-    padding:0 12px;
-    border-right:1px solid #d8e1ec;
-    background:#f8fafc;
-    color:#14233a;
-    font-size:12px;
-    font-weight:850;
-    letter-spacing:.025em;
-    white-space:nowrap;
-}
-.ft-task-status-head:last-child{border-right:0}
-.ft-task-status-head b{
-    display:inline-grid;
-    place-items:center;
-    min-width:24px;
-    height:22px;
-    padding:0 6px;
-    border-radius:10px;
-    background:#e6edf5;
-    color:#344760;
-    font-size:10px;
-    font-weight:850;
-}
-
-.ft-task-job-matrix{
-    --ft-task-lane-width:340px;
-    min-width:calc(var(--ft-lane-count) * var(--ft-task-lane-width));
-    border:1px solid #d8e1ec;
-    border-top:0;
-    border-radius:0 0 11px 11px;
-    overflow:hidden;
-    background:#fff;
-}
-.ft-task-job-matrix-group{
-    border-bottom:1px solid #d8e1ec;
-    background:#fff;
-}
-.ft-task-job-matrix-group:last-child{border-bottom:0}
-.ft-task-job-row-head{
-    min-height:58px;
-    display:flex;
-    align-items:center;
-    gap:9px;
-    padding:0 18px;
-    background:#fff;
-    border-bottom:1px solid #d8e1ec;
-    box-shadow:0 5px 13px rgba(21,43,72,.035);
-    color:#10223b;
-}
-.ft-task-job-row-toggle{
-    flex:0 0 26px;
-    width:26px;
-    height:26px;
-    border:0;
-    background:transparent;
-    display:grid;
-    place-items:center;
-    cursor:pointer;
-    color:#243a57;
-    padding:0;
-}
-.ft-task-job-row-toggle svg{
-    width:16px;
-    height:16px;
-    fill:none;
-    stroke:currentColor;
-    stroke-width:2.2;
-    transition:transform .16s ease;
-}
-.ft-task-job-row-toggle svg.rotated{transform:rotate(-90deg)}
-.ft-task-job-row-number,
-.ft-task-job-row-title{
-    color:#10223b;
-    text-decoration:none;
-    font-size:14px;
-    font-weight:850;
-    white-space:nowrap;
-}
-.ft-task-job-row-number:hover,
-.ft-task-job-row-title:hover{color:#1767e8;text-decoration:underline;text-underline-offset:2px}
-.ft-task-job-copy{font-size:12px;color:#667a94}
-.ft-task-job-dot{font-size:15px;color:#334760}
-.ft-task-job-client-pill{
-    display:inline-flex;
-    align-items:center;
-    min-height:25px;
-    padding:0 10px;
-    border-radius:13px;
-    background:#edf2f7;
-    color:#64758a;
-    font-size:10.5px;
-    font-weight:750;
-    white-space:nowrap;
-}
-.ft-task-job-row-total{
-    margin-left:auto;
-    color:#73849a;
-    font-size:10px;
-    font-weight:700;
-    white-space:nowrap;
-}
-.ft-task-job-status-cell{
-    min-height:185px;
-    padding:12px;
-    border-right:1px solid #d8e1ec;
-    background:#fff;
-}
-.ft-task-job-status-cell:last-child{border-right:0}
-.ft-task-job-status-cell .ft-task-board-card{
-    width:100%;
-    margin:0 0 10px!important;
-}
-.ft-task-job-status-cell .ft-task-board-card:last-child{margin-bottom:0!important}
-.ft-task-job-empty-cell{
-    min-height:72px;
-    display:grid;
-    place-items:center;
-    color:#93a3b8;
-    font-size:11px;
-}
-.ft-task-job-matrix-empty{
-    min-height:140px;
-    display:grid;
-    place-items:center;
-    color:#7e8fa5;
-    font-size:12px;
-}
-
-/* The control at the right side of Quick filters now controls board/job rows,
-   never the filter fields themselves. */
-.ft-board-page .ft-filter-collapse{
-    position:absolute!important;
-    right:0!important;
-    top:9px!important;
-    margin:0!important;
-    background:#fff!important;
-    z-index:2;
-}
-.ft-board-page .ft-board-reference-filter-grid,
-.ft-board-page .ft-mywork-filter-grid{display:grid!important}
-
-/* Responsive filter bars and boards. */
-@media(max-width:1380px){
-    .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:300px}
-    .ft-task-job-matrix{--ft-task-lane-width:320px}
-}
-@media(max-width:1100px){
-    .ft-board-page .ft-board-quick-row{
-        display:flex;
-        flex-wrap:wrap;
-        overflow:visible!important;
-        align-items:center;
-        padding-right:48px;
-    }
-    .ft-board-page .ft-quick-chip{flex:0 1 auto}
-    .ft-task-job-row-head{padding:0 13px}
-    .ft-task-job-row-number,.ft-task-job-row-title{font-size:12.5px}
-}
-@media(max-width:900px){
-    .ft-lane-sticky-header{top:68px}
-    .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:min(86vw,320px)}
-    .ft-task-job-matrix{--ft-task-lane-width:min(88vw,330px)}
-    .ft-task-job-row-head{min-height:54px;gap:7px}
-    .ft-task-job-row-total{display:none}
-}
-@media(max-width:760px){
-    .ft-board-page .ft-board-quick-row{padding-right:44px;gap:7px}
-    .ft-board-page .ft-quick-label{flex:0 0 100%}
-    .ft-board-page .ft-quick-chip{flex:1 1 calc(33.333% - 7px);min-width:112px;justify-content:center}
-    .ft-board-page .ft-filter-collapse{top:4px!important}
-    .ft-task-job-client-pill{max-width:130px;overflow:hidden;text-overflow:ellipsis}
-}
-@media(max-width:620px){
-    .ft-lane-sticky-header{top:68px;margin-left:-14px;margin-right:-14px}
-    .ft-task-status-head{height:44px;font-size:10.5px}
-    .ft-task-job-matrix{--ft-task-lane-width:min(88vw,315px)}
-    .ft-task-job-row-head{padding:0 9px;min-height:50px}
-    .ft-task-job-row-number,.ft-task-job-row-title{font-size:11px;max-width:150px;overflow:hidden;text-overflow:ellipsis}
-    .ft-task-job-copy,.ft-task-job-dot{display:none}
-    .ft-task-job-client-pill{font-size:9px;max-width:105px}
-    .ft-task-job-status-cell{padding:8px;min-height:150px}
-}
-@media(max-width:520px){
-    .ft-board-page .ft-quick-chip{flex:1 1 calc(50% - 7px);min-width:0}
-    .ft-task-job-row-title{display:none}
-}
-/* Alignment correction for the synchronized task header/body horizontal grids. */
-.ft-task-board-status-header,.ft-task-job-matrix{--ft-task-lane-width:340px}
-.ft-task-job-matrix{width:max-content;min-width:100%}
-@media(max-width:1380px){.ft-task-board-status-header,.ft-task-job-matrix{--ft-task-lane-width:320px}}
-@media(max-width:900px){.ft-task-board-status-header,.ft-task-job-matrix{--ft-task-lane-width:min(88vw,330px)}}
-@media(max-width:620px){.ft-task-board-status-header,.ft-task-job-matrix{--ft-task-lane-width:min(88vw,315px)}}
-
-
-/* ==========================================================================
-   Inline edit affordances + equal responsive filters — 2026-08-04
-   Editable values stay read-only until their pencil button is clicked.
-   ========================================================================== */
-[x-cloak]{display:none!important}
-
-.ft-inline-edit-button{
-    flex:0 0 auto;
-    width:26px;
-    height:26px;
-    border:0;
-    border-radius:6px;
-    background:transparent;
-    color:#245a96;
-    display:inline-grid;
-    place-items:center;
-    padding:0;
-    cursor:pointer;
-    font-size:13px;
-    line-height:1;
-}
-.ft-inline-edit-button:hover{background:#eef5ff;color:#0f63f3}
-.ft-inline-edit-button.compact{width:22px;height:22px;font-size:11px}
-
-.ft-inline-field-editor,
-.ft-planning-value,
-.ft-edit-display-row{
-    display:flex;
-    align-items:center;
-    gap:6px;
-    min-width:0;
-}
-.ft-inline-field-value{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-planning-value{justify-content:flex-end}
-.ft-planning-value>span:not(.ft-planning-person){min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-planning-person{display:inline-flex;align-items:center;gap:7px;min-width:0}
-.ft-editable-description{position:relative}
-.ft-editable-description .ft-edit-display-row{justify-content:space-between;align-items:flex-start}
-.ft-editable-description textarea{
-    width:100%;
-    min-height:76px;
-    resize:vertical;
-    border:1px solid #a9c4f7;
-    border-radius:7px;
-    background:#fff;
-    color:#10233e;
-    font:inherit;
-    padding:9px 10px;
-    outline:0;
-}
-.ft-editable-job-title{display:flex;align-items:center;gap:7px;min-width:0}
-.ft-editable-job-title input{
-    width:min(580px,70vw);
-    height:38px;
-    border:1px solid #a9c4f7;
-    border-radius:7px;
-    background:#fff;
-    color:#061731;
-    font:inherit;
-    font-weight:800;
-    padding:0 10px;
-    outline:0;
-}
-.ft-inline-product-table .ft-inline-cell-input{
-    border-color:#a9c4f7;
-    background:#fff;
-}
-.ft-inline-owner-editor{display:flex;align-items:center;gap:6px}
-.ft-inline-owner-name{min-width:0;max-width:115px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-weight:700}
-.ft-inline-date-editor{display:inline-flex;align-items:center;gap:4px;min-height:32px}
-.ft-inline-date-text{font-weight:700;white-space:nowrap}
-.ft-job-inline-date{display:inline-flex!important;align-items:center;gap:3px}
-.ft-job-inline-date .ft-inline-date-display{display:inline-flex;align-items:center}
-
-/* Board and My Work filters: every input/select/button uses one uniform size.
-   auto-fit keeps the bar responsive without hard-coded uneven columns. */
-.ft-board-page .ft-board-reference-filter-grid,
-.ft-board-page .ft-mywork-filter-grid{
-    display:grid!important;
-    grid-template-columns:repeat(auto-fit,minmax(150px,1fr))!important;
-    gap:8px!important;
-    width:100%;
-}
-.ft-board-page .ft-board-reference-filter-grid>*,
-.ft-board-page .ft-mywork-filter-grid>*{
-    width:100%!important;
-    min-width:0!important;
-    max-width:none!important;
-    height:42px!important;
-    min-height:42px!important;
-}
-.ft-board-page .ft-board-reference-filter-grid .ft-filter-search,
-.ft-board-page .ft-mywork-filter-grid .ft-filter-search{
-    height:42px!important;
-}
-.ft-board-page .ft-board-reference-filter-grid .ft-filter-search input,
-.ft-board-page .ft-mywork-filter-grid .ft-filter-search input,
-.ft-board-page .ft-board-reference-filter-grid select,
-.ft-board-page .ft-mywork-filter-grid select,
-.ft-board-page .ft-board-reference-filter-grid .ft-clear-wide,
-.ft-board-page .ft-mywork-filter-grid .ft-clear-wide{
-    width:100%!important;
-    height:42px!important;
-    min-height:42px!important;
-    border-radius:8px!important;
-    box-sizing:border-box;
-}
-.ft-board-page .ft-board-reference-filter-grid .ft-clear-wide,
-.ft-board-page .ft-mywork-filter-grid .ft-clear-wide{
-    grid-column:auto!important;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-}
-
-/* Quick-filter buttons are also consistent in size while remaining responsive. */
-.ft-board-page .ft-board-quick-row{
-    display:flex;
-    flex-wrap:wrap;
-    align-items:center;
-    gap:8px!important;
-    min-width:0!important;
-    overflow:visible!important;
-    padding-right:48px!important;
-}
-.ft-board-page .ft-quick-chip{
-    width:138px;
-    min-width:138px;
-    height:38px;
-    min-height:38px!important;
-    display:inline-flex;
-    align-items:center;
-    justify-content:center;
-    gap:5px;
-    padding:0 10px!important;
-    box-sizing:border-box;
-}
-.ft-board-page .ft-quick-chip b{margin-left:0!important}
-
-@media(max-width:1100px){
-    .ft-board-page .ft-board-reference-filter-grid,
-    .ft-board-page .ft-mywork-filter-grid{
-        grid-template-columns:repeat(3,minmax(0,1fr))!important;
-    }
-    .ft-board-page .ft-quick-chip{
-        width:calc(33.333% - 6px);
-        min-width:140px;
-        flex:1 1 140px;
-    }
-}
-@media(max-width:760px){
-    .ft-board-page .ft-board-reference-filter-grid,
-    .ft-board-page .ft-mywork-filter-grid{
-        grid-template-columns:repeat(2,minmax(0,1fr))!important;
-    }
-    .ft-board-page .ft-quick-label{flex:0 0 100%}
-    .ft-board-page .ft-quick-chip{
-        width:calc(50% - 4px);
-        min-width:0;
-        flex:1 1 calc(50% - 4px);
-    }
-}
-@media(max-width:430px){
-    .ft-board-page .ft-board-reference-filter-grid,
-    .ft-board-page .ft-mywork-filter-grid{
-        grid-template-columns:1fr!important;
-    }
-    .ft-board-page .ft-quick-chip{
-        width:100%;
-        flex-basis:100%;
-    }
-}
-
-/* Keep card content tied to the actual entity and prevent accidental clipping. */
-.ft-task-board-card .ft-task-title,
-.ft-job-card .ft-job-card-title a{overflow-wrap:anywhere}
-.ft-task-board-card .ft-task-job-ref,
-.ft-job-card .ft-job-reference{min-width:0}
-
-/* Job detail interaction corrections: explicit pencil-to-edit fields and Task Pack-only documents. */
-.ft-exact-job-detail .ft-overview-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}
-.ft-product-actions{display:flex;align-items:center;justify-content:flex-start;padding-top:9px}
-.ft-add-product-inline{padding:0;font-size:11px}
-.ft-inline-product-table select.ft-inline-cell-input{min-width:135px;max-width:100%;height:32px}
-.ft-task-inline-editor{display:flex!important;align-items:center;gap:6px;min-width:0;position:relative}
-.ft-task-inline-display{display:flex;align-items:center;gap:6px;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ft-task-inline-input{height:31px;min-width:0;width:100%;max-width:190px;border:1px solid #9fbff5;border-radius:7px;background:#fff;padding:0 8px;color:#0b1d36;font:inherit;font-size:10px}
-.ft-overview-task-card .ft-inline-edit-button{flex:0 0 auto}
-.ft-livewire-upload-zone{cursor:pointer}
-.ft-livewire-upload-zone>input[type=file]{display:none!important}
-.ft-upload-ready-row{display:flex;align-items:center;justify-content:flex-end;gap:10px;margin-top:9px;padding-top:9px;border-top:1px solid #e4ebf3;font-size:10px;color:#536985}
-.ft-upload-ready-row .ft-new-job-btn{height:32px;font-size:10px}
-.ft-existing-document-picker{margin-top:10px;padding:12px;border:1px solid #d9e4f1;border-radius:9px;background:#f8fbff;display:grid;grid-template-columns:minmax(0,1fr) auto;gap:9px;align-items:end}
-.ft-existing-document-picker .ft-card-row-head{grid-column:1/-1}
-.ft-existing-document-picker .ft-card-row-head p{margin:2px 0 0;font-size:9px}
-.ft-existing-document-picker select{width:100%;height:36px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;padding:0 10px}
-.ft-existing-document-picker .ft-new-job-btn,.ft-existing-document-picker .ft-outline-btn{height:36px;font-size:10px}
-.ft-empty-taskpack-docs{margin-top:9px;padding:12px;border:1px dashed #cbd8e7;border-radius:8px;background:#f8fafc;color:#60728a;font-size:10px}
-.ft-document-purpose-select{width:100%;height:38px!important;margin-top:6px}
-.ft-doc-task-caption{display:block;margin-top:2px;color:#6b7e96;font-size:8px}
-.ft-doc-delete-button{border:1px solid #fecaca;background:#fff;color:#dc2626;border-radius:5px;min-width:24px;height:24px;margin-left:7px}
-.ft-taskpack-readiness-only>div{grid-template-columns:22px 22px minmax(150px,1fr) 1.2fr 100px 95px!important}
-.ft-attachment-row>a{margin-left:auto}
-.ft-attachment-row .ft-doc-delete-button{margin-left:0}
-
-@media(max-width:1300px){
-    .ft-exact-job-detail .ft-overview-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
-}
-@media(max-width:900px){
-    .ft-existing-document-picker{grid-template-columns:1fr}
-    .ft-existing-document-picker .ft-card-row-head{grid-column:1}
-    .ft-existing-document-picker .ft-new-job-btn,.ft-existing-document-picker .ft-outline-btn{width:100%}
-    .ft-taskpack-readiness-only>div{grid-template-columns:22px 22px minmax(0,1fr)!important}
-    .ft-taskpack-readiness-only strong,.ft-taskpack-readiness-only em,.ft-taskpack-readiness-only button{grid-column:3}
-}
-@media(max-width:800px){
-    .ft-exact-job-detail .ft-overview-metrics{grid-template-columns:1fr}
-    .ft-task-inline-input{max-width:none}
-}
-
-/* Task detail dynamic editing, checklist, attention and activity */
-.ft-task-property-input{width:100%;height:34px;border:1px solid #9fbff5;border-radius:7px;background:#fff;padding:0 8px;color:#0b1d36;font-weight:700;font-size:11px}
-.ft-inline-description-editor textarea{width:100%;min-height:92px;border:1px solid #9fbff5;border-radius:8px;padding:10px;color:#0b1d36;font:inherit;resize:vertical}
 .ft-inline-description-editor>div{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.ft-inline-description-editor .ft-outline-btn,.ft-inline-description-editor .ft-new-job-btn{height:34px}
 .ft-checklist-add-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #e3eaf2;background:#f8fbff}
 .ft-checklist-add-row input{height:36px;border:1px solid #d8e2ee;border-radius:7px;padding:0 10px}.ft-checklist-add-row .ft-outline-btn,.ft-checklist-add-row .ft-new-job-btn{height:36px}
@@ -835,4 +374,433 @@
     .ft-client-table td[data-label="Client"],.ft-client-table td[data-label="Actions"]{grid-column:auto}
     .ft-client-detail-contact,.ft-client-detail-stats{grid-template-columns:1fr!important}
     .ft-client-detail-stats div{border-right:0!important;border-bottom:1px solid #dce5ef!important}.ft-client-detail-stats div:last-child{border-bottom:0!important}
+}
+
+/* Documents: filters, metrics, groups and actual rows stay readable on all widths. */
+@media(max-width:1100px){
+    .ft-doc-layout{grid-template-columns:1fr!important}
+    .ft-doc-detail-panel{position:static!important;width:100%;min-width:0}
+    .ft-doc-filterbar{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    .ft-doc-search{grid-column:1/-1!important}
+}
+@media(max-width:760px){
+    .ft-doc-page-head{flex-direction:column;align-items:stretch}.ft-doc-page-head .primary{width:100%}
+    .ft-doc-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-doc-filterbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-doc-search,.ft-doc-clear{grid-column:1/-1!important}
+    .ft-doc-expand-row{align-items:stretch;flex-direction:column;gap:8px}.ft-doc-expand-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}.ft-doc-expand-row button{width:100%}
+    .ft-doc-job-head{grid-template-columns:22px minmax(0,1fr)!important;gap:6px!important}.ft-doc-job-meta{grid-column:2!important;justify-self:start!important;white-space:normal;line-height:1.4}
+    .ft-doc-table-scroll{overflow:visible!important;padding:8px}
+    .ft-doc-table{min-width:0!important;width:100%;display:block}
+    .ft-doc-table thead{display:none}
+    .ft-doc-table tbody{display:grid;gap:9px}
+    .ft-doc-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #dfe6ef;border-radius:9px;overflow:hidden;background:#fff}
+    .ft-doc-table td{display:flex!important;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;padding:9px!important;border:0!important;border-bottom:1px solid #edf1f5!important;background:#fff!important}
+    .ft-doc-table td:before{content:attr(data-label);font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:#74849a;font-weight:800}
+    .ft-doc-table td[data-label="Document"],.ft-doc-table td[data-label="Actions"]{grid-column:1/-1}
+    .ft-doc-table td[data-label="Actions"]{border-bottom:0!important}.ft-doc-row-actions{width:100%;justify-content:flex-end}
+    .ft-doc-file b{max-width:100%!important;white-space:normal!important;overflow:visible!important}
+    .ft-doc-pagination{align-items:flex-start!important;flex-direction:column}.ft-doc-pagination>div{width:100%;justify-content:space-between;flex-wrap:wrap}
+    .ft-doc-upload-modal .form-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:480px){
+    .ft-doc-metrics,.ft-doc-filterbar{grid-template-columns:1fr!important}
+    .ft-doc-search,.ft-doc-clear{grid-column:auto!important}
+    .ft-doc-expand-row>div:last-child{grid-template-columns:1fr}
+    .ft-doc-table tr{grid-template-columns:1fr}.ft-doc-table td[data-label="Document"],.ft-doc-table td[data-label="Actions"]{grid-column:auto}
+    .ft-doc-detail-title{align-items:flex-start}.ft-doc-side-list>div{grid-template-columns:1fr!important;gap:3px!important}
+}
+
+/* Roles & Access: tabs wrap into a grid and permission options become cards on mobile. */
+@media(max-width:900px){
+    .ft-access-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible!important;border:1px solid #dbe4ef;border-radius:10px;padding:5px;gap:5px}
+    .ft-access-tabs button{white-space:normal!important;border:0!important;border-radius:7px;padding:10px!important;text-align:center}.ft-access-tabs button.active{background:#eaf1ff;color:#1663eb}
+    .ft-role-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-access-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-access-grid-2{grid-template-columns:1fr!important}
+    .ft-matrix-toolbar{grid-template-columns:1fr!important}
+}
+@media(max-width:700px){
+    .ft-access-head{flex-direction:column}.ft-access-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.ft-access-actions button{width:100%}
+    .ft-access-tabs{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-role-grid{grid-template-columns:1fr!important}
+    .ft-role-buttons{display:grid;grid-template-columns:1fr 1fr}
+    .ft-role-matrix-wrap{overflow:visible!important;background:transparent!important;border:0!important;box-shadow:none!important}
+    .ft-role-matrix{min-width:0!important;width:100%;display:block}
+    .ft-role-matrix thead{display:none}
+    .ft-role-matrix tbody{display:grid;gap:10px}
+    .ft-role-matrix tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #dfe6ef;border-radius:10px;overflow:hidden;background:#fff}
+    .ft-role-matrix td{display:flex!important;align-items:center;justify-content:space-between;gap:8px;min-width:0;border:0!important;border-bottom:1px solid #edf1f5!important;padding:10px!important;text-align:right!important}
+    .ft-role-matrix td:first-child{grid-column:1/-1;position:static!important;min-width:0!important;background:#f8fafc!important;text-align:left!important;display:block!important}
+    .ft-role-matrix td:not(:first-child):before{content:attr(data-label);font-size:9px;color:#65758c;font-weight:750;text-align:left}
+    .ft-role-matrix td:last-child{grid-column:1/-1;border-bottom:0!important}.ft-scope-select{width:100%;min-width:0!important}
+    .ft-user-access-table{min-width:720px}
+    .ft-audit-row{grid-template-columns:32px minmax(0,1fr)}.ft-audit-row code{grid-column:2;justify-self:start}
+}
+@media(max-width:480px){
+    .ft-access-tabs{grid-template-columns:1fr!important}
+    .ft-access-metrics{grid-template-columns:1fr!important}
+    .ft-access-actions{grid-template-columns:1fr}
+    .ft-role-buttons{grid-template-columns:1fr}
+    .ft-role-matrix tr{grid-template-columns:1fr}.ft-role-matrix td:first-child,.ft-role-matrix td:last-child{grid-column:auto}
+}
+
+/* Jobs quick-filter grid breakpoints — final override after the legacy mobile overflow rule. */
+@media(max-width:1100px){.ft-exact-jobs-list .ft-list-view-tabs{grid-template-columns:repeat(3,minmax(0,1fr))!important}}
+@media(max-width:700px){.ft-exact-jobs-list .ft-list-view-tabs{grid-template-columns:repeat(2,minmax(0,1fr))!important}}
+@media(max-width:420px){.ft-exact-jobs-list .ft-list-view-tabs{grid-template-columns:1fr!important}}
+
+
+/* 2026-08-04: compact responsive document/board group controls. */
+.ft-doc-filterbar{display:grid!important;grid-template-columns:minmax(260px,1.8fr) repeat(6,minmax(120px,1fr))!important;gap:8px!important;align-items:center;overflow:visible!important}
+.ft-doc-filterbar>*{min-width:0!important;width:100%!important;box-sizing:border-box}
+.ft-doc-filterbar select,.ft-doc-filterbar input,.ft-doc-filterbar .ft-doc-clear{height:42px!important;min-height:42px!important;border:1px solid #d7e0eb!important;background:#fff!important;border-radius:9px!important;color:#273951!important;font-size:11px!important}
+.ft-doc-filterbar .ft-doc-clear{display:flex;align-items:center;justify-content:center;font-weight:750;cursor:pointer}
+.ft-doc-expand-row{justify-content:flex-end!important;margin:6px 0 9px!important}
+.ft-group-toggle-actions,.ft-board-group-controls{display:inline-flex!important;align-items:center;gap:7px;flex:0 0 auto}
+.ft-double-chevron-btn,.ft-board-group-controls .ft-filter-collapse{width:38px!important;height:38px!important;min-width:38px!important;display:grid!important;place-items:center!important;border:1px solid #d7e0eb!important;border-radius:9px!important;background:#fff!important;color:#17304f!important;padding:0!important;cursor:pointer}
+.ft-double-chevron-btn:hover,.ft-board-group-controls .ft-filter-collapse:hover{border-color:#8db4f7!important;background:#f5f8ff!important;color:#1762e9!important}
+.ft-double-chevron-btn svg,.ft-board-group-controls .ft-filter-collapse svg{width:18px!important;height:18px!important;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.ft-board-page .ft-board-quick-row{padding-right:0!important}
+.ft-board-group-controls{margin-left:auto}
+.ft-login-session-message{margin-bottom:14px;padding:10px 12px;border:1px solid #fecaca;border-radius:8px;background:#fff1f2;color:#b42318}
+@media(max-width:1450px){.ft-doc-filterbar{grid-template-columns:repeat(4,minmax(0,1fr))!important}.ft-doc-filterbar .ft-doc-search{grid-column:span 2!important}}
+@media(max-width:900px){.ft-doc-filterbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}.ft-doc-filterbar .ft-doc-search{grid-column:1/-1!important}}
+@media(max-width:520px){.ft-doc-filterbar{grid-template-columns:1fr!important}.ft-doc-filterbar .ft-doc-search{grid-column:auto!important}.ft-doc-expand-row{align-items:center!important;flex-direction:row!important}.ft-doc-expand-row>div:last-child{display:inline-flex!important;grid-template-columns:none!important;width:auto!important}.ft-double-chevron-btn{width:40px!important;height:40px!important}.ft-board-group-controls{width:auto!important;flex:0 0 auto!important}}
+
+/* =====================================================================
+   Mobile / tablet hardening — Jobs, My Work and Operations Board
+   2026-08-05
+   The desktop board layout is unchanged. On small screens the board stops
+   behaving like a wide spreadsheet and becomes a vertical, touch-friendly UI.
+   ===================================================================== */
+.ft-mobile-lane-label,
+.ft-mobile-phase-head{display:none}
+
+@media (max-width: 1024px){
+    .ft-board-page,
+    .ft-jobs-list-page{min-width:0!important;width:100%!important}
+
+    .ft-board-page-head,
+    .ft-list-head{gap:12px!important;flex-wrap:wrap!important}
+    .ft-board-page-head>div:first-child,
+    .ft-list-head>div:first-child{min-width:0;flex:1 1 260px}
+    .ft-board-head-actions,
+    .ft-list-actions{flex:0 0 auto}
+
+    .ft-board-page .ft-board-reference-filter-grid,
+    .ft-board-page .ft-mywork-filter-grid{
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+        gap:8px!important;
+    }
+    .ft-board-page .ft-board-reference-filter-grid .ft-filter-search,
+    .ft-board-page .ft-mywork-filter-grid .ft-filter-search{grid-column:1/-1!important}
+
+    .ft-board-page .ft-board-quick-row{
+        display:grid!important;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:8px!important;
+        padding-right:0!important;
+        overflow:visible!important;
+    }
+    .ft-board-page .ft-quick-label{grid-column:1/-1!important}
+    .ft-board-page .ft-quick-chip{
+        width:100%!important;min-width:0!important;max-width:none!important;
+        flex:none!important;height:40px!important;padding:0 8px!important;
+    }
+    .ft-board-group-controls{
+        grid-column:1/-1;
+        margin-left:0!important;
+        justify-self:end;
+    }
+
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{
+        grid-template-columns:repeat(3,minmax(0,1fr))!important;
+        overflow:visible!important;
+    }
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:1/-1!important}
+}
+
+@media (max-width: 760px){
+    /* Page headers */
+    .ft-board-page-head,
+    .ft-list-head{align-items:stretch!important;flex-direction:column!important}
+    .ft-board-head-actions,
+    .ft-list-actions{width:100%!important;display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important}
+    .ft-board-head-actions>*:only-child,
+    .ft-list-actions>*:only-child{grid-column:1/-1}
+    .ft-board-head-actions .ft-new-job-btn,
+    .ft-list-actions .ft-new-job-btn,
+    .ft-list-actions .ft-outline-btn{width:100%!important;min-width:0!important}
+
+    /* Filters become a touch-friendly 2-column form. */
+    .ft-board-page .ft-board-reference-filter-grid,
+    .ft-board-page .ft-mywork-filter-grid,
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+        gap:8px!important;
+    }
+    .ft-board-page .ft-board-reference-filter-grid .ft-filter-search,
+    .ft-board-page .ft-mywork-filter-grid .ft-filter-search,
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:1/-1!important}
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-clear-link{
+        width:100%!important;min-height:42px!important;display:flex!important;align-items:center;justify-content:center;
+        border:1px solid #d8e2ee!important;border-radius:8px!important;background:#fff!important;
+    }
+
+    /* Quick filters never scroll sideways. */
+    .ft-board-page .ft-board-quick-row{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-board-page .ft-quick-label,
+    .ft-board-group-controls{grid-column:1/-1!important}
+
+    /* On phones/tablets the synchronized desktop lane header is replaced by
+       an inline label inside each real lane. This removes board-wide horizontal
+       scrolling while preserving the Job grouping. */
+    .ft-board-page .ft-lane-sticky-header{display:none!important}
+    .ft-board-page .ft-board-horizontal-scroll,
+    .ft-board-page .ft-board-lanes-scroll,
+    .ft-board-page .ft-board-body-scroll{
+        overflow-x:visible!important;overflow-y:visible!important;
+        width:100%!important;max-width:100%!important;padding-bottom:0!important;
+    }
+
+    /* Task Board + My Work: one Job, then only its populated statuses. */
+    .ft-task-job-matrix{
+        width:100%!important;min-width:0!important;border-top:1px solid #d8e1ec!important;
+        border-radius:11px!important;overflow:visible!important;background:transparent!important;
+    }
+    .ft-task-job-matrix-group{
+        width:100%!important;border:1px solid #d8e1ec!important;border-radius:12px!important;
+        overflow:hidden!important;margin-bottom:12px!important;box-shadow:0 5px 16px rgba(20,42,72,.035);
+    }
+    .ft-task-job-row-head{
+        min-height:58px!important;padding:10px 12px!important;gap:7px!important;flex-wrap:wrap!important;
+    }
+    .ft-task-job-row-number{font-size:12px!important}
+    .ft-task-job-row-title{font-size:12px!important;max-width:55vw!important;overflow:hidden;text-overflow:ellipsis}
+    .ft-task-job-client-pill{max-width:52vw!important;overflow:hidden;text-overflow:ellipsis}
+    .ft-task-job-row-total{display:block!important;margin-left:auto!important}
+    .ft-task-job-row-grid{
+        display:block!important;width:100%!important;min-width:0!important;
+    }
+    .ft-task-job-status-cell{
+        display:none!important;width:100%!important;min-height:0!important;border:0!important;border-top:1px solid #e2e8f0!important;
+        padding:10px!important;background:#fff!important;
+    }
+    .ft-task-job-status-cell.has-tasks{display:block!important}
+    .ft-mobile-lane-label{
+        display:flex!important;align-items:center;justify-content:space-between;gap:8px;
+        margin:-2px 0 9px;padding:7px 9px;border-radius:8px;background:#f2f6fb;color:#243a57;
+        font-size:10px;font-weight:850;text-transform:uppercase;letter-spacing:.035em;
+    }
+    .ft-mobile-lane-label b{
+        display:inline-grid;place-items:center;min-width:24px;height:22px;border-radius:10px;background:#e2e9f2;font-size:10px;
+    }
+    .ft-task-job-status-cell .ft-task-board-card{width:100%!important;max-width:none!important;margin:0 0 9px!important}
+
+    /* Job Board: each workflow phase becomes a full-width vertical section. */
+    .ft-job-board-grid,
+    .ft-job-board-body-grid{
+        display:block!important;width:100%!important;min-width:0!important;
+    }
+    .ft-job-board-body-grid .ft-board-column-nohead{
+        width:100%!important;min-height:0!important;margin:0 0 12px!important;border-radius:12px!important;
+        overflow:hidden!important;background:#f5f8fc!important;
+    }
+    .ft-mobile-phase-head{
+        display:flex!important;width:100%!important;min-height:46px!important;align-items:center;gap:8px;
+        border:0;border-bottom:1px solid #d8e1ec;background:#eef3f8;color:#14243c;padding:0 12px;
+        font-weight:850;text-align:left;cursor:pointer;
+    }
+    .ft-mobile-phase-head span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .ft-mobile-phase-head b{
+        display:inline-grid;place-items:center;min-width:25px;height:23px;padding:0 6px;border:1px solid #d7e0eb;border-radius:9px;background:#fff;font-size:10px;
+    }
+    .ft-mobile-phase-head svg{width:17px;height:17px;margin-left:auto;fill:none;stroke:currentColor;stroke-width:2;transition:.15s}
+    .ft-mobile-phase-head svg.rotated{transform:rotate(-90deg)}
+    .ft-job-board-body-grid .ft-board-column-list{min-height:0!important;padding:9px!important}
+    .ft-job-board-body-grid .ft-job-card{width:100%!important;max-width:none!important}
+
+    /* Jobs list becomes cards instead of a 1460px table. */
+    .ft-job-table-card{overflow:visible!important;background:transparent!important;border:0!important;box-shadow:none!important}
+    .ft-job-table-wrap{overflow:visible!important}
+    .ft-job-table{display:block!important;width:100%!important;min-width:0!important}
+    .ft-job-table thead{display:none!important}
+    .ft-job-table tbody{display:grid!important;gap:10px!important}
+    .ft-job-table tbody tr{
+        display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));
+        border:1px solid #dce5ef;border-radius:12px;background:#fff;overflow:hidden;
+        box-shadow:0 4px 14px rgba(20,42,72,.03);
+    }
+    .ft-job-table tbody td{
+        display:flex!important;flex-direction:column!important;align-items:flex-start!important;justify-content:center;
+        gap:4px!important;min-width:0!important;border:0!important;border-bottom:1px solid #edf1f5!important;
+        padding:10px!important;font-size:11px!important;background:#fff!important;
+    }
+    .ft-job-table tbody td:before{
+        content:attr(data-label);font-size:8px;line-height:1;text-transform:uppercase;letter-spacing:.05em;color:#74849a;font-weight:800;
+    }
+    .ft-job-table tbody td[data-label="Job / Order"],
+    .ft-job-table tbody td[data-label="Client / Brief"],
+    .ft-job-table tbody td[data-label="Next Action"]{grid-column:1/-1}
+    .ft-job-table tbody td[data-label="Select"]{position:absolute;right:14px;margin-top:4px;width:auto!important;border:0!important;background:transparent!important;z-index:2}
+    .ft-job-table tbody td[data-label="Select"]:before{display:none}
+    .ft-job-table tbody td[data-label="Actions"]{border-bottom:0!important;align-items:flex-end!important}
+    .ft-job-table .ft-owner-chip{min-width:0!important;width:100%!important;padding-left:0!important}
+    .ft-job-table .ft-date-chip{max-width:100%!important}
+    .ft-job-table .ft-table-progress{width:min(130px,75%)!important}
+    .ft-job-table .ft-table-sub{max-width:100%!important;white-space:normal!important}
+
+    .ft-list-pagination{flex-direction:column!important;align-items:stretch!important}
+    .ft-list-pagination>div{width:100%!important;justify-content:space-between!important;flex-wrap:wrap!important}
+    .ft-page-actions{justify-content:space-between!important}
+}
+
+@media (max-width: 480px){
+    .ft-board-page,
+    .ft-jobs-list-page{padding-left:0!important;padding-right:0!important}
+    .ft-board-page .ft-board-reference-filter-grid,
+    .ft-board-page .ft-mywork-filter-grid,
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct{grid-template-columns:1fr!important}
+    .ft-board-page .ft-board-reference-filter-grid .ft-filter-search,
+    .ft-board-page .ft-mywork-filter-grid .ft-filter-search,
+    .ft-exact-jobs-list .ft-job-filter-grid.ft-job-filter-grid-direct .ft-job-list-search{grid-column:auto!important}
+    .ft-board-page .ft-board-quick-row{grid-template-columns:1fr 1fr!important}
+    .ft-board-page .ft-quick-label,
+    .ft-board-group-controls{grid-column:1/-1!important}
+    .ft-board-page .ft-quick-chip{height:39px!important;font-size:10px!important}
+
+    .ft-board-tabs{display:grid!important;grid-template-columns:1fr 1fr;width:100%}
+    .ft-board-tabs button{width:100%!important;text-align:center!important}
+    .ft-workflow-filter{grid-template-columns:1fr!important}
+    .ft-workflow-filter select{width:100%!important}
+
+    .ft-task-job-row-title{display:none!important}
+    .ft-task-job-client-pill{max-width:58vw!important}
+    .ft-task-job-row-total{flex:0 0 100%;margin-left:33px!important}
+
+    .ft-job-table tbody tr{grid-template-columns:1fr!important}
+    .ft-job-table tbody td[data-label="Job / Order"],
+    .ft-job-table tbody td[data-label="Client / Brief"],
+    .ft-job-table tbody td[data-label="Next Action"]{grid-column:auto}
+    .ft-job-table tbody td[data-label="Select"]{right:10px}
+
+    .ft-exact-jobs-list .ft-list-view-tabs{grid-template-columns:1fr 1fr!important;gap:7px!important}
+    .ft-exact-jobs-list .ft-list-view-chip{height:auto!important;min-height:40px!important;padding:7px 8px!important;font-size:10px!important}
+    .ft-job-bulk-actions{display:grid!important;grid-template-columns:1fr!important}
+}
+
+/* 2026-08-05: Jobs ID + Users & Assignments controls */
+.ft-exact-jobs-list .ft-table-job-link{
+    display:inline-block!important;
+    white-space:nowrap!important;
+    word-break:keep-all!important;
+    overflow-wrap:normal!important;
+    hyphens:none!important;
+}
+.ft-exact-jobs-list .ft-job-table th:nth-child(2),
+.ft-exact-jobs-list .ft-job-table td:nth-child(2){
+    min-width:150px!important;
+    width:150px;
+}
+.ft-user-row-actions{display:flex;align-items:center;gap:7px;white-space:nowrap}
+.ft-user-row-actions .ghost,.ft-user-delete-btn{height:32px;border-radius:7px;padding:0 10px;font-size:11px;font-weight:750;display:inline-flex;align-items:center;justify-content:center}
+.ft-user-delete-btn{border:1px solid #fecaca;background:#fff5f5;color:#c62828;cursor:pointer}
+.ft-user-delete-btn:hover{background:#feecec;border-color:#fca5a5}
+.ft-user-delete-btn:disabled{cursor:not-allowed;opacity:.45}
+.ft-user-modal .ft-access-info{margin-bottom:0}
+@media (max-width:700px){
+    .ft-user-access-table{min-width:820px!important}
+    .ft-user-row-actions{white-space:normal}
+}
+
+/* 2026-08-05: remove accidental mobile header whitespace on My Work / Board / Jobs.
+   The tablet rule uses a 260px flex-basis for the title block while the header is
+   horizontal. Once the header becomes a column that basis turns into vertical
+   height, creating the large empty area seen on phones. */
+@media (max-width: 760px){
+    .ft-board-page .ft-board-page-head,
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-page-head>div:first-child,
+    .ft-jobs-list-page .ft-list-head>div:first-child,
+    .ft-exact-jobs-list .ft-list-head>div:first-child{
+        flex:0 0 auto!important;
+        flex-basis:auto!important;
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-head-actions,
+    .ft-jobs-list-page .ft-list-actions,
+    .ft-exact-jobs-list .ft-list-actions{
+        flex:0 0 auto!important;
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-page-head{margin-bottom:10px!important}
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{margin-bottom:10px!important}
+}
+
+@media (max-width: 480px){
+    .ft-board-page .ft-board-page-head,
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{gap:8px!important}
+}
+
+/* 2026-08-05: full-width client list with click-to-open summary modal. */
+.ft-clients-layout.ft-clients-layout-full{
+    display:block;
+}
+.ft-clients-layout-full .ft-clients-main{
+    width:100%;
+    max-width:none;
+}
+.ft-client-preview-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:1200;
+    display:grid;
+    place-items:center;
+    padding:24px;
+    overflow:auto;
+    overscroll-behavior:contain;
+    background:rgba(13,28,52,.48);
+    backdrop-filter:blur(3px);
+}
+.ft-client-preview-modal{
+    position:relative!important;
+    top:auto!important;
+    width:min(860px,calc(100vw - 48px))!important;
+    min-width:0!important;
+    max-height:calc(100vh - 48px);
+    overflow:auto;
+    border-radius:16px;
+    box-shadow:0 24px 70px rgba(13,28,52,.28);
+    outline:none;
+}
+.ft-client-preview-modal .ft-client-detail-head{
+    position:relative;
+    grid-template-columns:54px minmax(0,1fr) auto;
+    padding:22px 64px 18px 24px;
+}
+.ft-client-preview-modal .ft-client-detail-contact{
+    padding:12px 24px 18px;
+}
+.ft-client-preview-modal .ft-client-detail-stats{
+    margin:0 24px;
+}
+.ft-client-preview-modal .ft-client-detail-section{
+    padding:22px 24px 0;
+    overflow-x:auto;
+}
+.ft-client-preview-modal .ft-client-detail-section-head h3{
+    font-size:16px;
+}
+.ft-client-preview-modal .ft-client-detail-section-head a,
+.ft-client-preview-modal .ft-view-client-work{
+    font-size:12px;
 }

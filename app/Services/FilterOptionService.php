@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
+use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
@@ -25,7 +26,7 @@ class FilterOptionService
         $search = trim($search);
 
         $items = match ($type) {
-            'clients' => $this->clients($user, $search, $limit),
+            'clients' => $this->clients($user, $context, $search, $limit),
             'jobs' => $this->jobs($user, $context, $search, $limit),
             'users' => $this->users($user, $context, $search, $limit),
             'product-categories' => $this->productCategories($user, $context, $search, $limit),
@@ -43,7 +44,7 @@ class FilterOptionService
 
         if (filled($selectedId) && !$items->contains(fn ($item) => (string) $item['id'] === (string) $selectedId)) {
             $selected = match ($type) {
-                'clients' => $this->clientById($user, $selectedId),
+                'clients' => $this->clientById($user, $context, $selectedId),
                 'jobs' => $this->jobById($user, $context, $selectedId),
                 'users' => $this->userById($user, $context, $selectedId),
                 'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
@@ -64,9 +65,16 @@ class FilterOptionService
         return $items->unique(fn ($item) => (string) $item['id'])->take($limit)->values();
     }
 
-    private function clients(User $user, string $search, int $limit): Collection
+    private function clients(User $user, string $context, string $search, int $limit): Collection
     {
-        return app(ClientService::class)->visibleQuery($user)
+        $query = $context === 'board-task-pack'
+            ? Client::query()->whereIn(
+                'clients.id',
+                app(BoardTaskPackService::class)->visibleJobQuery($user)->reorder()->select('flow_jobs.client_id'),
+            )
+            : app(ClientService::class)->visibleQuery($user);
+
+        return $query
             ->where('is_active', true)
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
                 ->where('name', 'like', $search.'%')
@@ -82,18 +90,26 @@ class FilterOptionService
             ]);
     }
 
-    private function clientById(User $user, int|string $id): ?array
+    private function clientById(User $user, string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
-        $row = app(ClientService::class)->visibleQuery($user)->where('is_active', true)->find((int) $id, ['id', 'name', 'country']);
+        $query = $context === 'board-task-pack'
+            ? Client::query()->whereIn(
+                'clients.id',
+                app(BoardTaskPackService::class)->visibleJobQuery($user)->reorder()->select('flow_jobs.client_id'),
+            )
+            : app(ClientService::class)->visibleQuery($user);
+        $row = $query->where('is_active', true)->find((int) $id, ['id', 'name', 'country']);
         return $row ? ['id'=>(int)$row->id, 'label'=>(string)$row->name, 'meta'=>(string)($row->country ?: '')] : null;
     }
 
     private function jobs(User $user, string $context, string $search, int $limit): Collection
     {
-        $query = $context === 'documents'
-            ? app(JobService::class)->visibleQuery($user)->whereHas('client', fn ($client) => $client->where('is_active', true))
-            : app(JobService::class)->activeQuery($user);
+        $query = match ($context) {
+            'documents' => app(JobService::class)->visibleQuery($user)->whereHas('client', fn ($client) => $client->where('is_active', true)),
+            'board-task-pack' => app(BoardTaskPackService::class)->visibleJobQuery($user),
+            default => app(JobService::class)->activeQuery($user),
+        };
 
         return $query
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
@@ -105,7 +121,7 @@ class FilterOptionService
             ->get(['id', 'job_number', 'title', 'client_id', 'updated_at'])
             ->map(fn (FlowJob $job) => [
                 'id' => (int) $job->id,
-                'label' => trim($job->job_number.' — '.$job->title),
+                'label' => trim($job->displayOrderNumber().' — '.$job->title),
                 'meta' => (string) ($job->client?->name ?: ''),
             ]);
     }
@@ -113,9 +129,13 @@ class FilterOptionService
     private function jobById(User $user, string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
-        $query = $context === 'documents' ? app(JobService::class)->visibleQuery($user) : app(JobService::class)->activeQuery($user);
+        $query = match ($context) {
+            'documents' => app(JobService::class)->visibleQuery($user),
+            'board-task-pack' => app(BoardTaskPackService::class)->visibleJobQuery($user),
+            default => app(JobService::class)->activeQuery($user),
+        };
         $job = $query->with('client:id,name')->find((int) $id, ['id','job_number','title','client_id']);
-        return $job ? ['id'=>(int)$job->id, 'label'=>trim($job->job_number.' — '.$job->title), 'meta'=>(string)($job->client?->name ?: '')] : null;
+        return $job ? ['id'=>(int)$job->id, 'label'=>trim($job->displayOrderNumber().' — '.$job->title), 'meta'=>(string)($job->client?->name ?: '')] : null;
     }
 
     private function users(User $user, string $context, string $search, int $limit): Collection
@@ -518,6 +538,23 @@ class FilterOptionService
             return $user->canModule('tasks', 'assign')
                 ? User::query()->where('is_active', true)
                 : User::query()->where('is_active', true)->whereKey($user->id);
+        }
+
+        if ($context === 'board-task-pack') {
+            $visibleJobIds = app(BoardTaskPackService::class)
+                ->visibleJobQuery($user)
+                ->reorder()
+                ->select('flow_jobs.id');
+
+            $assigneeIds = Task::query()
+                ->whereIn('flow_job_id', $visibleJobIds)
+                ->whereNotNull('assignee_id')
+                ->select('assignee_id')
+                ->distinct();
+
+            return User::query()
+                ->where('is_active', true)
+                ->whereIn('id', $assigneeIds);
         }
 
         $access = app(AccessControlService::class);

@@ -239,7 +239,7 @@ class TaskPackService
             'job_count' => $jobCount,
             'jobs' => $jobs->map(fn (FlowJob $job) => [
                 'id' => (int) $job->id,
-                'job_number' => (string) $job->job_number,
+                'job_number' => (string) $job->displayOrderNumber(),
                 'title' => (string) $job->title,
                 'trashed' => $job->deleted_at !== null,
                 'already_snapshotted' => $job->source_workflow_id !== null

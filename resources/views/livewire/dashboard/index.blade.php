@@ -1,114 +1,84 @@
-<div wire:init="loadSecondaryDashboard">
-    <x-ui.page-head title="Management Dashboard" :subtitle="app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('l, F j').' · Exceptions, workload and delivery health'" />
+@php
+    $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
+    $canCreateOrder = auth()->user()->canAccess('jobs.create');
+    $canCreateClient = auth()->user()->canModule('clients', 'create');
+@endphp
 
-    <div class="metrics ft-auto-metrics">
-        @foreach([
-            ['Active Jobs',$metrics['activeJobs'],'Across all active phases'],
-            ['Needs Attention',$metrics['riskJobs'],'Risk, delay or blocker'],
-            ['Overdue Tasks',$metrics['overdueTasks'],'Require immediate update'],
-            ['Pending Approvals',$metrics['pendingApprovals'],'Client or internal'],
-            ['Shipping Now',$metrics['shipping'],'Currently in a shipping phase']
-        ] as $metric)
-            <div class="card metric">
-                <div class="metric-label">{{ $metric[0] }}</div>
-                <div class="metric-value">{{ $metric[1] }}</div>
-                <div class="metric-foot">{{ $metric[2] }}</div>
-                <div class="metric-icon">◎</div>
-            </div>
-        @endforeach
+<div class="ft-dashboard-prototype">
+    <div class="ft-heading">
+        <div class="ft-heading-copy">
+            <h1>Management Dashboard</h1>
+            <p>{{ $today->format('l, F j') }} · Exceptions, workload, inquiries and delivery health</p>
+        </div>
+        <nav class="ft-quick-actions" aria-label="Quick actions">
+            @if($canCreateOrder)
+                <a class="ft-action primary" href="{{ route('jobs.index', ['create' => 1]) }}" wire:navigate><span class="ft-action-icon">+</span>Create Order</a>
+            @endif
+            <span class="ft-action" aria-disabled="true" title="Inquiry management is not available in this FlowTrack build"><span class="ft-action-icon">+</span>Create Inquiry</span>
+            @if($canCreateClient)
+                <a class="ft-action" href="{{ route('clients.index', ['create' => 1]) }}" wire:navigate><span class="ft-action-icon">+</span>Add Client</a>
+            @endif
+        </nav>
     </div>
 
-    <div class="grid-2">
-        <div class="ft-island-shell">
-            <div class="card section-card">
-                <div class="section-head"><h3>Needs Attention</h3><a class="link-btn" href="{{ route('jobs.index') }}" wire:navigate>View all Jobs</a></div>
-                <div class="attention-list">
-                    @forelse($attentionJobs as $job)
-                        @php
-                            $flaggedTask = $job->tasks->first();
-                        @endphp
-                        <a class="attention-item" href="{{ $flaggedTask ? route('jobs.index',['open'=>$job->id,'task'=>$flaggedTask->id]) : route('jobs.index',['open'=>$job->id]) }}" wire:navigate>
-                            <span class="signal red"></span>
-                            <div>
-                                <div class="item-title">{{ $flaggedTask?->title ?: ($job->next_action ?: $job->title) }}</div>
-                                <div class="item-meta">{{ $job->job_number }} · {{ $job->client?->name ?? 'No client' }} · {{ $flaggedTask ? 'Marked as attention needed' : ($job->phase?->short_name ?? 'Needs attention') }}</div>
-                            </div>
-                            <x-ui.badge :label="$flaggedTask ? 'Needs Attention' : $job->health" />
-                        </a>
-                    @empty
-                        <div class="empty-state">No Jobs or tasks need attention.</div>
-                    @endforelse
-                </div>
-            </div>
-        </div>
+    <nav class="ft-page-tabs" aria-label="Dashboard views">
+        <span class="ft-page-tab active">Dashboard</span>
+    </nav>
 
-        <div class="ft-island-shell">
-            @if($secondaryReady)
-                <div class="card section-card">
-                    <div class="section-head"><h3>Jobs by Phase</h3><a class="link-btn" href="{{ route('board') }}" wire:navigate>Open board</a></div>
-                    <div class="phase-list">
-                        @forelse($phaseCounts->sortBy(fn($row) => $row->phase?->sequence ?? PHP_INT_MAX)->take(6) as $row)
-                            <div class="phase-row"><span>{{ $row->phase?->short_name ?? 'Unassigned' }}</span><x-ui.progress :value="min(100,max(8,$row->total*16))" /><b>{{ $row->total }}</b></div>
-                        @empty
-                            <div class="empty-state">No active Jobs by phase.</div>
-                        @endforelse
+    <section class="ft-kpis" aria-label="Key metrics">
+        <a class="ft-kpi" href="{{ route('jobs.index') }}" wire:navigate><span class="ft-kpi-label">Active Jobs <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value">{{ $metrics['activeJobs'] }}</strong><span class="ft-kpi-foot">Across all active phases</span></a>
+        <a class="ft-kpi" href="{{ route('board') }}" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value">{{ $metrics['needsAttention'] }}</strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
+        <a class="ft-kpi" href="{{ route('board') }}" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value">{{ $metrics['overdueTasks'] }}</strong><span class="ft-kpi-foot">Require immediate update</span></a>
+        <a class="ft-kpi" href="{{ route('clients.index') }}" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value">{{ $metrics['activeClients'] }}</strong><span class="ft-kpi-foot">Current active client records</span></a>
+        <div class="ft-kpi" aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value">{{ $metrics['openInquiries'] }}</strong><span class="ft-kpi-foot">Inquiry module not configured</span></div>
+        <a class="ft-kpi" href="{{ route('notifications') }}" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value">{{ $metrics['taggedComments'] }}</strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
+    </section>
+
+    <div class="ft-grid">
+        <section class="ft-panel" id="inquiries">
+            <div class="ft-panel-head">
+                <div><h2 class="ft-panel-title">Open enquiries</h2><div class="ft-panel-note">Pre-job opportunities, ownership, quotation progress and follow-up flags</div></div>
+                <span class="ft-link" aria-disabled="true">View all enquiries</span>
+            </div>
+            <div class="ft-table-wrap">
+                <table class="ft-table responsive">
+                    <colgroup><col style="width:17%"><col style="width:25%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:8%"></colgroup>
+                    <thead><tr><th>Inquiry ID</th><th>Client</th><th>Assignee Name</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
+                    <tbody>
+                        <tr class="ft-table-empty-row"><td colspan="6">No inquiry records are available in this FlowTrack build.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div class="ft-grid ft-grid-primary">
+        <livewire:dashboard.tagged-comments />
+
+        <section class="ft-panel">
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div><a class="ft-link" href="{{ route('reports') }}" wire:navigate>Details</a></div>
+            <div class="ft-analytics">
+                <div class="ft-health">
+                    <div class="ft-health-content">
+                        <div class="ft-donut" style="background:conic-gradient(#2eb67d 0 {{ $operationalHealth['healthyPct'] }}%, #f2b84b {{ $operationalHealth['healthyPct'] }}% {{ $operationalHealth['riskStart'] }}%, #ed5b5b {{ $operationalHealth['riskStart'] }}% 100%)"><div class="ft-donut-value">{{ $operationalHealth['totalJobs'] }}<small>active jobs</small></div></div>
+                        <div class="ft-health-list">
+                            <div class="ft-health-row"><span><i></i>Healthy</span><b>{{ $operationalHealth['healthy'] }}</b></div>
+                            <div class="ft-health-row"><span><i></i>Watch</span><b>{{ $operationalHealth['watch'] }}</b></div>
+                            <div class="ft-health-row"><span><i></i>At risk</span><b>{{ $operationalHealth['atRisk'] }}</b></div>
+                        </div>
                     </div>
                 </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Jobs by Phase', 'rows' => 5])
-            @endif
-        </div>
+                <div class="ft-flag-mix">
+                    <div class="ft-mix-summary"><span>Task mix by flag</span><span><strong>{{ $operationalHealth['flaggedTotal'] }}</strong> flagged tasks</span></div>
+                    <div class="ft-mix-list">
+                        @foreach($operationalHealth['flags'] as $flag)
+                            <div class="ft-mix-row"><a href="{{ route('board') }}" wire:navigate>{{ $flag['label'] }}</a><i class="ft-mix-track"><span class="ft-mix-fill {{ $flag['tone'] }}" style="width:{{ $flag['width'] }}%"></span></i><b>{{ $flag['count'] }}</b></div>
+                        @endforeach
+                    </div>
+                </div>
+            </div>
+        </section>
     </div>
 
-    <div class="grid-3">
-        <div class="ft-island-shell">
-            @if($secondaryReady)
-                <div class="card section-card">
-                    <div class="section-head"><h3>Team Workload</h3><a class="link-btn" href="{{ route('reports') }}" wire:navigate>Details</a></div>
-                    @forelse($workload as $person)
-                        <div class="workload-row"><div class="person"><x-ui.avatar :user="$person" :name="$person->name" :size="27" />{{ $person->name }}</div><x-ui.progress :value="min(100,$person->open_tasks_count*12)"/><b>{{ $person->open_tasks_count }}</b></div>
-                    @empty
-                        <div class="empty-state">No active team workload.</div>
-                    @endforelse
-                </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Team Workload', 'rows' => 5])
-            @endif
-        </div>
-
-        <div class="ft-island-shell">
-            @if($secondaryReady)
-                <div class="card section-card">
-                    <div class="section-head"><h3>Upcoming Deliveries</h3><a class="link-btn" href="{{ route('jobs.index') }}" wire:navigate>View Jobs</a></div>
-                    <table class="mini-table">
-                        <thead><tr><th>Job</th><th>Client</th><th>Delivery</th></tr></thead>
-                        <tbody>
-                            @forelse($deliveries as $job)
-                                <tr><td><a class="job-link" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ str($job->job_number)->afterLast('-') }}</a><div class="muted small truncate" style="max-width:125px">{{ $job->title }}</div></td><td>{{ str($job->client?->name ?? '—')->before(' ') }}</td><td>{{ $job->delivery_date?->format('M j, Y') }}</td></tr>
-                            @empty
-                                <tr><td colspan="3"><div class="empty-state">No upcoming deliveries.</div></td></tr>
-                            @endforelse
-                        </tbody>
-                    </table>
-                </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Upcoming Deliveries', 'rows' => 5])
-            @endif
-        </div>
-
-        <div class="ft-island-shell">
-            @if($secondaryReady)
-                <div class="card section-card">
-                    <div class="section-head"><h3>Recent Activity</h3><a class="link-btn" href="{{ route('notifications') }}" wire:navigate>All activity</a></div>
-                    @forelse($activity as $notification)
-                        <div class="activity"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="30"/><div><div class="activity-text"><b>{{ $notification->title }}</b><br>{{ $notification->message }}</div><div class="activity-time">{{ $notification->created_at->diffForHumans() }}</div></div></div>
-                    @empty
-                        <div class="empty-state">No recent activity.</div>
-                    @endforelse
-                </div>
-            @else
-                @include('livewire.dashboard.secondary-placeholder', ['title' => 'Recent Activity', 'rows' => 5])
-            @endif
-        </div>
-    </div>
+    <livewire:dashboard.secondary lazy />
 </div>

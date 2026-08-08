@@ -62,7 +62,10 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|countries|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
-    Route::get('/jobs', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
+    Route::get('/orders', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
+    Route::get('/jobs', function (\Illuminate\Http\Request $request) {
+        return redirect()->route('jobs.index', $request->query());
+    })->middleware('permission:jobs.view')->name('jobs.legacy');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');
     Route::get('/board', BoardController::class)->middleware('permission:tasks.view')->name('board');
     Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');

@@ -55,7 +55,7 @@
             <div class="ft-detail-breadcrumb ft-id-breadcrumb">
                 <a href="{{ route('my-work') }}" wire:navigate>My Work</a>
                 @if($job)
-                    <span>/</span><a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+                    <span>/</span><a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
                 @endif
                 <span>/</span><span>{{ $task->task_number }}</span>
             </div>
@@ -78,7 +78,7 @@
                 @if($task->phase?->name)<span class="ft-task-title-phase">· {{ $task->phase->name }}</span>@endif
             </div>
         </div>
-        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to job details" aria-label="Back to job details">×</button></div>
+        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
 
@@ -225,14 +225,14 @@
                 @error('taskDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
                 @if($canLinkDocument && $showTaskDocumentPicker)
                     <div class="ft-existing-document-picker ft-task-document-picker">
-                        <select wire:model="taskExistingDocumentId"><option value="">Select a stored document</option>@foreach($availableDocuments as $stored)<option value="{{ $stored->id }}">{{ $stored->name }} · {{ $stored->job?->job_number ?? 'Archive' }}</option>@endforeach</select>
+                        <select wire:model="taskExistingDocumentId"><option value="">Select a stored document</option>@foreach($availableDocuments as $stored)<option value="{{ $stored->id }}">{{ $stored->name }} · {{ $stored->job?->displayOrderNumber() ?? 'Archive' }}</option>@endforeach</select>
                         <button class="ft-new-job-btn" type="button" wire:click="attachExistingToSelectedTask">Link document</button>
                         <button class="ft-outline-btn" type="button" wire:click="toggleTaskDocumentPicker">Cancel</button>
                     </div>
                     @error('taskExistingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
                 @endif
                 @foreach($task->documents->sortByDesc('created_at') as $doc)<div class="ft-attachment-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b><small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if($canDeleteDocument)<button type="button" class="ft-doc-delete-button" wire:click="deleteSelectedTaskDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</div>@endforeach
-                <p class="ft-upload-note">Every file uploaded here is linked to this task and appears in Job Documents. A required document is counted only when this Task Pack task defines that document type.</p>
+                <p class="ft-upload-note">Every file uploaded here is linked to this task and appears in Order Documents. A required document is counted only when this Task Pack task defines that document type.</p>
             </section>
 
             <section class="ft-detail-card ft-task-activity-card ft-friendly-activity">
@@ -299,7 +299,7 @@
                 @endif
             </section>
 
-            <section class="ft-detail-card ft-job-context-card"><h2>Job context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Job health</span><b class="{{ $job?->needs_attention ? 'danger-text' : '' }}"><span class="{{ $job?->needs_attention ? 'ft-red-dot' : '' }}"></span>{{ $job?->needs_attention ? 'Needs Attention' : $job?->health }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Job progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open job details ↗</button></section>
+            <section class="ft-detail-card ft-job-context-card"><h2>Order context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Order health</span><b class="{{ $job?->needs_attention ? 'danger-text' : '' }}"><span class="{{ $job?->needs_attention ? 'ft-red-dot' : '' }}"></span>{{ $job?->needs_attention ? 'Needs Attention' : $job?->health }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Order progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open order details ↗</button></section>
 
         </aside>
     </div>

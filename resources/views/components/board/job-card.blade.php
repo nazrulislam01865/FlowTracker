@@ -27,7 +27,7 @@
 
     <h3 class="ft-job-card-title"><a href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->title }}</a></h3>
     <div class="ft-job-reference">
-        <a href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->job_number }}</a>
+        <a href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
         <span>·</span>
         <span>{{ $job->client?->name ?? 'No client' }}</span>
     </div>

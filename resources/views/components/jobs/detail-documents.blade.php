@@ -77,7 +77,7 @@
                                 <select wire:model="existingDocumentId">
                                     <option value="">Select a stored document</option>
                                     @foreach($availableDocuments as $doc)
-                                        <option value="{{ $doc->id }}">{{ $doc->name }} · {{ $doc->job?->job_number ?? 'Document archive' }}</option>
+                                        <option value="{{ $doc->id }}">{{ $doc->name }} · {{ $doc->job?->displayOrderNumber() ?? 'Document archive' }}</option>
                                     @endforeach
                                 </select>
                                 <button class="ft-new-job-btn" type="button" wire:click="attachExistingDocument">Link selected document</button>

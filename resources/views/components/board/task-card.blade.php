@@ -20,7 +20,7 @@
 
     <a class="ft-task-title" href="{{ route('jobs.index', ['open'=>$task->flow_job_id, 'task'=>$task->id]) }}" wire:navigate>{{ $task->title }}</a>
     <div class="ft-task-job-ref">
-        <a href="{{ route('jobs.index', ['open'=>$task->flow_job_id]) }}" wire:navigate>{{ $task->job?->job_number }}</a>
+        <a href="{{ route('jobs.index', ['open'=>$task->flow_job_id]) }}" wire:navigate>{{ $task->job?->displayOrderNumber() }}</a>
         <span>·</span><span>{{ $task->job?->client?->name ?? 'No client' }}</span>
     </div>
     <div class="ft-task-phase-name">{{ $task->phase?->name ?? '—' }}</div>

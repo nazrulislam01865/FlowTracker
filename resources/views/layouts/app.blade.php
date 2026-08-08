@@ -33,8 +33,9 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-2">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-3">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
+    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-1">@endif
     @livewireStyles
 </head>
 <body>
@@ -43,7 +44,7 @@
     <div id="sidebarShade" class="mobile-sidebar-shade"></div>
     <main class="main">
         @include('layouts.partials.topbar')
-        <div class="content">
+        <div class="content {{ request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : '' }}">
             @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>

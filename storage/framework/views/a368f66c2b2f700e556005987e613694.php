@@ -1,0 +1,70 @@
+<?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
+
+$__newAttributes = [];
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['name' => null, 'user' => null, 'src' => null, 'dark' => false, 'size' => null]));
+
+foreach ($attributes->all() as $__key => $__value) {
+    if (in_array($__key, $__propNames)) {
+        $$__key = $$__key ?? $__value;
+    } else {
+        $__newAttributes[$__key] = $__value;
+    }
+}
+
+$attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
+
+unset($__propNames);
+unset($__newAttributes);
+
+foreach (array_filter((['name' => null, 'user' => null, 'src' => null, 'dark' => false, 'size' => null]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+    $$__key = $$__key ?? $__value;
+}
+
+$__defined_vars = get_defined_vars();
+
+foreach ($attributes->all() as $__key => $__value) {
+    if (array_key_exists($__key, $__defined_vars)) unset($$__key);
+}
+
+unset($__defined_vars, $__key, $__value); ?>
+<?php
+    $displayName = $user?->name ?? $name ?? 'FlowTrack';
+    $imagePath = $user?->profile_image_path;
+
+    // Serve stored avatars through an application route instead of relying on
+    // public/storage. This works consistently in local/dev and production even
+    // when a filesystem symlink is missing, while the random stored filename
+    // gives us a stable cache-busting URL whenever the photo is replaced.
+    $imageUrl = $src;
+
+    if (! $imageUrl && $imagePath && $user?->id) {
+        $imageUrl = route('profile-images.show', [
+            'user' => $user->id,
+            'filename' => basename($imagePath),
+        ], false);
+    }
+
+    $initials = collect(preg_split('/\s+/', trim($displayName)))
+        ->filter()
+        ->map(fn ($part) => mb_substr($part, 0, 1))
+        ->take(2)
+        ->implode('');
+    $style = $size ? "width:{$size}px;height:{$size}px;font-size:".max(9, round($size / 3.4)).'px' : null;
+?>
+<span <?php echo e($attributes->class(['avatar', 'dark' => $dark])->merge(['style' => $style])); ?>>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($imageUrl): ?>
+        <img
+            src="<?php echo e($imageUrl); ?>"
+            alt=""
+            aria-hidden="true"
+            loading="lazy"
+            decoding="async"
+            onerror="this.hidden=true;this.nextElementSibling.hidden=false"
+        >
+        <span hidden aria-hidden="true"><?php echo e($initials ?: 'FT'); ?></span>
+    <?php else: ?>
+        <?php echo e($initials ?: 'FT'); ?>
+
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+</span>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/ui/avatar.blade.php ENDPATH**/ ?>

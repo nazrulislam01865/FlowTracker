@@ -4,22 +4,28 @@ namespace App\Livewire\Board;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Models\Task;
 use App\Models\User;
-
 use App\Services\BoardService;
+use App\Services\BoardTaskPackService;
 use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
+use Livewire\WithPagination;
 use Throwable;
 
 class Index extends Component
 {
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
+    use WithPagination;
+
     public string $mode = 'jobs';
     public ?string $message = null;
 
@@ -31,9 +37,14 @@ class Index extends Component
     public string $status = '';
     public string $due = '';
     public string $sort = 'delivery';
+    public string $taskSort = 'action';
+    public string $taskQuick = 'all';
+    public array $taskPackMetrics = [];
+    public array $taskPackStatusOptions = [];
     public bool $hideEmptyPhases = false;
     public bool $cardsReady = false;
     public int $cardLimit = 60;
+    public int $taskPackPerPage = BoardTaskPackService::JOBS_PER_PAGE;
     public array $expandedJobs = [];
     public bool $taskGroupsExpanded = true;
 
@@ -51,11 +62,42 @@ class Index extends Component
     public function setMode(string $mode): void
     {
         $this->mode = in_array($mode, ['tasks', 'jobs'], true) ? $mode : 'jobs';
-        // A mode switch is already a Livewire request, so render the requested
-        // board directly instead of adding a second follow-up request.
+        // A mode switch is already a Livewire request. Render the bounded
+        // target view immediately instead of triggering another wire:init.
         $this->cardsReady = true;
         $this->cardLimit = 60;
         $this->message = null;
+
+        if ($this->mode === 'tasks') {
+            // Task Board intentionally mirrors My Work. Do not carry hidden
+            // Job Board-only filters into the literal My Work-style surface.
+            $this->job = '';
+            $this->client = '';
+            $this->assignee = '';
+            $this->status = '';
+            $this->due = '';
+            $this->taskQuick = 'all';
+            $this->taskSort = 'action';
+
+            $service = app(BoardTaskPackService::class);
+            $this->taskPackMetrics = $service->metrics(auth()->user());
+            $this->taskPackStatusOptions = $service->statusOptions();
+        }
+
+        $this->resetPage('taskPackPage');
+    }
+
+    public function setTaskQuick(string $quick): void
+    {
+        abort_unless(in_array($quick, ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'], true), 422);
+        $this->taskQuick = $quick;
+        $this->resetPage('taskPackPage');
+    }
+
+    public function clearTaskSearch(): void
+    {
+        $this->search = '';
+        $this->resetPage('taskPackPage');
     }
 
     public function clearFilters(): void
@@ -68,22 +110,33 @@ class Index extends Component
         $this->status = '';
         $this->due = '';
         $this->cardLimit = 60;
+        $this->resetPage('taskPackPage');
     }
 
     public function clearFilter(string $filter): void
     {
-        abort_unless(in_array($filter, ['search','job','client','assignee','status','due'], true), 422);
+        abort_unless(in_array($filter, ['search', 'job', 'client', 'assignee', 'status', 'due'], true), 422);
         $this->{$filter} = '';
         $this->cardsReady = true;
         $this->cardLimit = 60;
+        $this->resetPage('taskPackPage');
     }
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort'], true)) {
+        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort', 'taskSort', 'taskQuick'], true)) {
             $this->cardsReady = true;
             $this->cardLimit = 60;
+            if ($this->mode === 'tasks') {
+                $this->resetPage('taskPackPage');
+            }
         }
+    }
+
+    public function updatedTaskPackPerPage(int|string $value): void
+    {
+        $this->taskPackPerPage = in_array((int) $value, [10, 20], true) ? (int) $value : BoardTaskPackService::JOBS_PER_PAGE;
+        $this->resetPage('taskPackPage');
     }
 
     public function loadMore(): void
@@ -156,6 +209,60 @@ class Index extends Component
         $this->message = 'Board updated successfully.';
     }
 
+    /**
+     * Task Pack list status edits are renderless: only the changed row is
+     * updated optimistically in the browser, so Livewire does not re-run the
+     * grouped list queries after every status change.
+     */
+    #[Renderless]
+    public function updateTaskStatus(int $taskId, string $status, string $version): array
+    {
+        $status = trim($status);
+        $updatedTask = null;
+
+        $result = $this->persistInlineEdit('task status', function () use ($taskId, $status, $version, &$updatedTask): void {
+            $actor = auth()->user();
+            abort_unless($actor->canAccess('tasks.update'), 403);
+
+            $allowed = app(MasterDataService::class)
+                ->active('task_status')
+                ->pluck('name')
+                ->map(fn ($value) => trim((string) $value))
+                ->filter()
+                ->unique(fn ($value) => strtolower($value))
+                ->values()
+                ->all();
+
+            validator(['status' => $status], [
+                'status' => ['required', Rule::in($allowed)],
+            ])->validate();
+
+            // Keep mutation authorization strict. Normal users may read the
+            // surrounding Job's tasks, but TaskService still permits edits only
+            // within their configured task scope.
+            $visibleTask = app(TaskService::class)->visibleQuery($actor)->findOrFail($taskId);
+            $task = Task::query()->whereKey($visibleTask->id)->lockForUpdate()->firstOrFail();
+
+            if ((string) $task->getRawOriginal('updated_at') !== $version) {
+                throw ValidationException::withMessages([
+                    'status' => 'This task changed since the Board was loaded. Refresh and try again.',
+                ]);
+            }
+
+            $updatedTask = app(TaskService::class)->moveStatus($task, $status, $actor);
+        });
+
+        if (($result['ok'] ?? false) && $updatedTask instanceof Task) {
+            $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
+            $result['status'] = (string) $updatedTask->status;
+            $result['completed'] = BoardLaneResolver::isCompleted((string) $updatedTask->status);
+            $this->taskPackMetrics = app(BoardTaskPackService::class)->metrics(auth()->user());
+            $result['metrics'] = $this->taskPackMetrics;
+        }
+
+        return $result;
+    }
+
     #[Renderless]
     public function updateTaskDueDate(int $taskId, ?string $date): array
     {
@@ -206,18 +313,30 @@ class Index extends Component
     {
         return [
             'search' => $this->search,
-            'job' => $this->job,
-            'client' => $this->client,
-            'assignee' => $this->assignee,
-            'status' => $this->status,
-            'due' => $this->due,
+            'quick' => $this->taskQuick,
+            'sort' => $this->taskSort,
         ];
     }
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
-        // Re-render this screen when Pusher reports a visible Job/Task change.
+        if ($this->mode !== 'tasks') {
+            return;
+        }
+
+        $service = app(BoardTaskPackService::class);
+        $this->taskPackMetrics = $service->metrics(auth()->user());
+        $this->taskPackStatusOptions = $service->statusOptions();
+        $this->dispatch(
+            'board-task-metrics',
+            attention: $this->taskPackMetrics['attention'] ?? 0,
+            overdue: $this->taskPackMetrics['overdue'] ?? 0,
+            today: $this->taskPackMetrics['today'] ?? 0,
+            upcoming: $this->taskPackMetrics['upcoming'] ?? 0,
+            waiting: $this->taskPackMetrics['waiting'] ?? 0,
+            mentions: $this->taskPackMetrics['mentions'] ?? 0,
+        );
     }
 
     public function render()
@@ -225,9 +344,11 @@ class Index extends Component
         $user = auth()->user();
         $service = app(BoardService::class);
 
+        // Keep render() small and branch before any heavy query. The Job Board
+        // and Task Pack list now execute only the queries required by that mode.
         $data = $this->mode === 'jobs'
             ? $this->jobBoardData($user, $service)
-            : $this->taskBoardData($user, $service);
+            : $this->taskPackBoardData($user);
 
         return view('livewire.board.index', $data);
     }
@@ -235,21 +356,26 @@ class Index extends Component
     private function boardBaseData(User $user): array
     {
         $options = app(\App\Services\FilterOptionService::class);
-        $statusType = $this->mode === 'jobs' ? 'job-statuses' : 'task-statuses';
+        $jobMode = $this->mode === 'jobs';
 
         return [
             'jobs' => collect(),
-            'tasks' => collect(),
             'phases' => collect(),
-            'jobFilterOptions' => $options->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 5),
-            'clientFilterOptions' => $options->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 5),
-            'assigneeFilterOptions' => $options->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 5),
-            'statusFilterOptions' => $options->options($user, $statusType, 'board', '', $this->status, 5),
-            'workflowFilterOptions' => $this->mode === 'jobs'
+            // Task Board is a literal My Work-style surface and does not render
+            // the old seven-field Board filter shell. Skip those lookup queries
+            // entirely in task mode.
+            'jobFilterOptions' => $jobMode ? $options->options($user, 'jobs', 'board', '', $this->job !== '' ? (int) $this->job : null, 5) : collect(),
+            'clientFilterOptions' => $jobMode ? $options->options($user, 'clients', 'board', '', $this->client !== '' ? (int) $this->client : null, 5) : collect(),
+            'assigneeFilterOptions' => $jobMode ? $options->options($user, 'users', 'board', '', $this->assignee !== '' ? (int) $this->assignee : null, 5) : collect(),
+            'statusFilterOptions' => $jobMode ? $options->options($user, 'job-statuses', 'board', '', $this->status, 5) : collect(),
+            'workflowFilterOptions' => $jobMode
                 ? $options->options($user, 'workflows', 'board', '', $this->workflow !== '' ? (int) $this->workflow : null, 5)
                 : collect(),
-            'taskStatuses' => collect(),
             'hasMoreCards' => false,
+            'taskPackGroups' => collect(),
+            'taskPackPaginator' => null,
+            'taskPackTaskCount' => 0,
+            'taskPackAdministratorView' => app(\App\Services\AccessControlService::class)->isAdministrator($user),
         ];
     }
 
@@ -264,24 +390,32 @@ class Index extends Component
         $data['hasMoreCards'] = $jobRows->count() > $this->cardLimit;
         $data['jobs'] = $jobRows->take($this->cardLimit)->values();
         $data['phases'] = $service->phases($this->workflow ? (int) $this->workflow : null);
+
         return $data;
     }
 
-    private function taskBoardData(User $user, BoardService $service): array
+    private function taskPackBoardData(User $user): array
     {
         $data = $this->boardBaseData($user);
-        $filters = $this->taskFilters();
-        $taskRows = $this->cardsReady
-            ? $service->tasks($user, $filters, $this->cardLimit + 1)
-            : collect();
+        $service = app(BoardTaskPackService::class);
+        $page = $service->paginate(
+            $user,
+            $this->taskFilters(),
+            $this->taskPackPerPage,
+            'taskPackPage',
+        );
 
-        $data['hasMoreCards'] = $taskRows->count() > $this->cardLimit;
-        $data['tasks'] = $taskRows->take($this->cardLimit)->values();
-        $data['taskStatuses'] = collect(BoardLaneResolver::taskStatuses(
-            app(MasterDataService::class)->active('task_status')->pluck('name')
-        ));
+        if ($this->taskPackStatusOptions === []) {
+            $this->taskPackStatusOptions = $service->statusOptions();
+        }
+        if ($this->taskPackMetrics === []) {
+            $this->taskPackMetrics = $service->metrics($user);
+        }
+
+        $data['taskPackGroups'] = $page['groups'];
+        $data['taskPackPaginator'] = $page['paginator'];
+        $data['taskPackTaskCount'] = $page['visibleTaskCount'];
 
         return $data;
     }
-
 }

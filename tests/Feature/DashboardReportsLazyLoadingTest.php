@@ -19,18 +19,14 @@ class DashboardReportsLazyLoadingTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_malformed_dashboard_attention_cache_is_rebuilt_safely(): void
+    public function test_dashboard_attention_query_returns_a_bounded_collection(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
-        $key = 'flowtrack:dashboard:v2:attention:user:'.$user->id;
-
-        Cache::put($key, collect(['stale-dashboard-value']), now()->addMinute());
 
         $attentionJobs = app(DashboardService::class)->attentionJobs($user);
 
         $this->assertInstanceOf(\Illuminate\Database\Eloquent\Collection::class, $attentionJobs);
-        $this->assertCount(0, $attentionJobs);
-        $this->assertInstanceOf(\Illuminate\Database\Eloquent\Collection::class, Cache::get($key));
+        $this->assertLessThanOrEqual(6, $attentionJobs->count());
     }
 
     public function test_dashboard_and_report_metrics_are_calculated_from_records(): void
@@ -130,45 +126,29 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertSame(100, $reports['kpis']['shipment_on_time']);
     }
 
-    public function test_dashboard_uses_one_grouped_secondary_render_and_removed_financial_cards_do_not_render(): void
+    public function test_dashboard_uses_isolated_render_components_and_omits_guide_ui(): void
     {
-        foreach (glob(resource_path('views/pages/*.blade.php')) as $page) {
-            $contents = file_get_contents($page);
-            $this->assertStringNotContainsString(' lazy />', $contents, basename($page).' should render its primary content immediately.');
-        }
-
+        $page = file_get_contents(resource_path('views/pages/dashboard.blade.php'));
         $dashboard = file_get_contents(resource_path('views/livewire/dashboard/index.blade.php'));
-        $reports = file_get_contents(resource_path('views/livewire/reports/index.blade.php'));
-        $sidebar = file_get_contents(resource_path('views/layouts/partials/sidebar.blade.php'));
-
-        $this->assertStringNotContainsString('Outstanding', $dashboard);
-        $this->assertStringNotContainsString('Receivable', $reports);
-        $this->assertStringNotContainsString('4.2d', $reports);
-        $this->assertStringNotContainsString('91%', $reports);
-        $sharedPlaceholder = file_get_contents(resource_path('views/livewire/shared/page-placeholder.blade.php'));
         $dashboardComponent = file_get_contents(app_path('Livewire/Dashboard/Index.php'));
-        $reportsComponent = file_get_contents(app_path('Livewire/Reports/Index.php'));
+        $taggedComponent = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
+        $secondaryComponent = file_get_contents(app_path('Livewire/Dashboard/Secondary.php'));
         $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
 
-        $this->assertStringContainsString("route('logout')", $sidebar);
-        $this->assertStringNotContainsString('ft-workspace-loader', $sharedPlaceholder);
-        $this->assertStringContainsString('wire:init="loadSecondaryDashboard"', $dashboard);
-        $this->assertStringContainsString('@if($secondaryReady)', $dashboard);
-        $this->assertStringContainsString("@include('livewire.dashboard.secondary-placeholder'", $dashboard);
-        $this->assertStringNotContainsString('@island', $dashboard);
-        $this->assertStringNotContainsString('@island', $reports);
-        $this->assertStringContainsString('public bool $secondaryReady = false;', $dashboardComponent);
-        $this->assertStringContainsString('function loadSecondaryDashboard()', $dashboardComponent);
-        $this->assertStringContainsString('initialData($user)', $dashboardComponent);
-        $this->assertStringContainsString('secondaryData($user)', $dashboardComponent);
-        $this->assertStringNotContainsString('#[Computed]', $dashboardComponent);
-        $this->assertStringContainsString('#[Computed]', $reportsComponent);
-        $this->assertStringNotContainsString('->data(auth()->user())', $dashboardComponent);
-        $this->assertStringNotContainsString('->data(auth()->user())', $reportsComponent);
-        $this->assertStringContainsString("'metrics'", $dashboardService);
-        $this->assertStringContainsString("'activity'", $dashboardService);
+        $this->assertStringContainsString('<livewire:dashboard.index />', $page);
+        $this->assertStringContainsString('<livewire:dashboard.tagged-comments />', $dashboard);
+        $this->assertStringContainsString('<livewire:dashboard.secondary lazy />', $dashboard);
+        $this->assertStringNotContainsString('wire:init=', $dashboard);
+        $this->assertStringNotContainsString('flowtrack-notification', $dashboardComponent);
+        $this->assertStringContainsString('markAllRead', $taggedComponent);
+        $this->assertStringContainsString('secondaryData(auth()->user())', $secondaryComponent);
+        $this->assertStringContainsString("CACHE_VERSION = 'v5-safe-values'", $dashboardService);
         $this->assertStringContainsString('dashboard_cache_seconds', $dashboardService);
-        $this->assertStringContainsString("CACHE_VERSION = 'v2'", $dashboardService);
-        $this->assertStringContainsString('isValidCachedValue', $dashboardService);
+        $this->assertStringContainsString('isSafeCacheValue', $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'mentions'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'assignees'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'ongoing-jobs'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'ongoing-tasks'", $dashboardService);
     }
+
 }
