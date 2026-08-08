@@ -38,7 +38,7 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("'activities.subject_id'", $service);
         $this->assertStringNotContainsString("'createdActivity:id,subject_type,subject_id,user_id,created_at'", $service);
         $this->assertStringNotContainsString("'tasks' => fn", substr($service, strpos($service, 'public function paginateOrders'), strpos($service, 'public function summaryCounts') - strpos($service, 'public function paginateOrders')));
-        $this->assertStringContainsString('label="Orders"', $sidebar);
+        $this->assertStringContainsString('label="Order"', $sidebar);
         $this->assertStringContainsString("Route::get('/orders'", $routes);
     }
 }

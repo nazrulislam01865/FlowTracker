@@ -25,7 +25,7 @@ class FilterOptionController
         // Once the user searches (2+ characters), return the normal larger result set.
         $compactInitialList = strlen($search) < 2 && (
             in_array($type, ['clients','jobs','users','workflows','priorities','task-statuses','document-categories','countries','job-statuses','job-healths','phases'], true)
-            || ($context === 'job-detail' && in_array($type, ['product-categories', 'products'], true))
+            || (in_array($context, ['job-detail', 'create-inquiry'], true) && in_array($type, ['product-categories', 'products'], true))
         );
         $limit = $compactInitialList ? 5 : 20;
 

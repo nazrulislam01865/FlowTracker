@@ -162,6 +162,10 @@ class JobService
                     ->orWhereHas('items', fn (Builder $item) => $item
                         ->where('product_name', 'like', $like)
                         ->orWhere('category_name', 'like', $like))
+                    ->orWhereHas('sourceInquiry', fn (Builder $inquiry) => $inquiry
+                        ->where('inquiry_number', 'like', $like)
+                        ->orWhere('reference_number', 'like', $like)
+                        ->orWhere('subject', 'like', $like))
                     ->orWhereHas('createdActivity.user', fn (Builder $creator) => $creator->where('name', 'like', $like));
             });
         }
@@ -172,7 +176,7 @@ class JobService
             ->orderByDesc('flow_jobs.id')
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number',
-                'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id',
+                'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.source_inquiry_id',
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority',
                 'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention',
@@ -180,6 +184,7 @@ class JobService
             ])
             ->with([
                 'client:id,name',
+                'sourceInquiry:id,inquiry_number,reference_number',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'items:id,flow_job_id,product_name,category_name,quantity,sort_order',

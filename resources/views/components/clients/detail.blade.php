@@ -41,6 +41,7 @@
                 <div class="ft-client-edit-form">
                     <label><span>Client name *</span><input wire:model="clientName">@error('clientName')<small class="validation-error">{{ $message }}</small>@enderror</label>
                     <label><span>Country</span><input wire:model="clientCountry"></label>
+                    <label><span>Office address</span><input wire:model="officeAddress"></label>
                     <label><span>Primary contact</span><input wire:model="contactName"></label>
                     <label><span>Email</span><input type="email" wire:model="email">@error('email')<small class="validation-error">{{ $message }}</small>@enderror</label>
                     <label><span>Phone</span><input wire:model="phone"></label>
@@ -55,6 +56,7 @@
                     <b>{{ $client->contact_name ?: 'No primary contact recorded' }}</b>
                     <div>{{ $client->email ?: 'No email recorded' }}</div>
                     <div>{{ $client->phone ?: 'No phone recorded' }}</div>
+                    <div>Office address: {{ $client->office_address ?: 'Not set' }}</div>
                     <div>Preferred language: {{ $client->preferred_language ?: 'English' }}</div>
                     @if($client->notes)<div style="margin-top:8px;color:#60738d">{{ $client->notes }}</div>@endif
                 </div>

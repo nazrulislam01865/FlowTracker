@@ -34,6 +34,7 @@ class Index extends Component
     public string $clientCode = '';
     public string $clientName = '';
     public string $clientCountry = '';
+    public string $officeAddress = '';
     public string $contactName = '';
     public string $email = '';
     public string $phone = '';
@@ -111,6 +112,7 @@ class Index extends Component
         $data = $this->validate([
             'clientName' => ['required','string','max:255'],
             'clientCountry' => ['nullable','string','max:120'],
+            'officeAddress' => ['nullable','string','max:500'],
             'contactName' => ['nullable','string','max:255'],
             'email' => ['nullable','email','max:255'],
             'phone' => ['nullable','string','max:60'],
@@ -126,7 +128,7 @@ class Index extends Component
 
         $client = Client::create([
             'code' => $this->nextClientCode(), 'name' => $data['clientName'],
-            'country' => $data['clientCountry'] ?: null, 'contact_name' => $data['contactName'] ?: null,
+            'country' => $data['clientCountry'] ?: null, 'office_address' => $data['officeAddress'] ?: null, 'contact_name' => $data['contactName'] ?: null,
             'email' => $data['email'] ?: null, 'phone' => $data['phone'] ?: null,
             'account_manager_id' => $data['accountManagerId'], 'preferred_language' => $data['preferredLanguage'],
             'outstanding_balance' => $data['outstandingBalance'], 'notes' => $data['notes'] ?: null, 'is_active' => true,
@@ -201,6 +203,7 @@ class Index extends Component
         $this->actionMenuClientId = null;
         $this->clientName = $client->name;
         $this->clientCountry = $client->country ?? '';
+        $this->officeAddress = $client->office_address ?? '';
         $this->contactName = $client->contact_name ?? '';
         $this->email = $client->email ?? '';
         $this->phone = $client->phone ?? '';
@@ -225,6 +228,7 @@ class Index extends Component
         $data = $this->validate([
             'clientName' => ['required','string','max:255'],
             'clientCountry' => ['nullable','string','max:120'],
+            'officeAddress' => ['nullable','string','max:500'],
             'contactName' => ['nullable','string','max:255'],
             'email' => ['nullable','email','max:255'],
             'phone' => ['nullable','string','max:60'],
@@ -239,7 +243,7 @@ class Index extends Component
         }
 
         $client->update([
-            'name' => $data['clientName'], 'country' => $data['clientCountry'] ?: null,
+            'name' => $data['clientName'], 'country' => $data['clientCountry'] ?: null, 'office_address' => $data['officeAddress'] ?: null,
             'contact_name' => $data['contactName'] ?: null, 'email' => $data['email'] ?: null,
             'phone' => $data['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'],
             'preferred_language' => $data['preferredLanguage'], 'outstanding_balance' => $data['outstandingBalance'],

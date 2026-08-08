@@ -23,6 +23,7 @@ class MasterDataService
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
         'task_status' => 'Task Statuses',
+        'inquiry_status' => 'Inquiry Statuses',
         'task_flag' => 'Task Flags',
     ];
 
@@ -43,6 +44,7 @@ class MasterDataService
         'document_category' => 'DOC',
         'priority' => 'PRI',
         'task_status' => 'TST',
+        'inquiry_status' => 'IST',
         'task_flag' => 'TFL',
     ];
 
@@ -57,6 +59,7 @@ class MasterDataService
         'document_category' => 'document_categories',
         'priority' => 'priorities',
         'task_status' => 'task_statuses',
+        'inquiry_status' => 'inquiry_statuses',
     ];
 
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
@@ -193,6 +196,9 @@ class MasterDataService
         }
         if (Schema::hasColumn('workflow_phases', 'document_category_id') && DB::table('workflow_phases')->where('document_category_id', $id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This record is used by a Workflow phase and cannot be deleted. Deactivate it instead.']);
+        }
+        if ($record->type === 'inquiry_status' && Schema::hasTable('inquiries') && DB::table('inquiries')->where('workspace_id', $record->workspace_id)->where('status', $record->name)->exists()) {
+            throw ValidationException::withMessages(['record' => 'This Inquiry Status is already used by an Inquiry and cannot be deleted. Deactivate it instead.']);
         }
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         if (Schema::hasTable('master_values')) MasterValue::where('group_key', $legacyGroup)->where('code', $record->code)->delete();

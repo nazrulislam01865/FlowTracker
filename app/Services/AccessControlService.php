@@ -15,6 +15,7 @@ class AccessControlService
     public const MODULES = [
         'dashboard' => ['name' => 'Dashboard', 'group' => 'General'],
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
+        'inquiries' => ['name' => 'Inquiries', 'group' => 'Commercial'],
         'jobs' => ['name' => 'Jobs', 'group' => 'Commercial'],
         'tasks' => ['name' => 'Tasks & Checklists', 'group' => 'Operations'],
         'quotation' => ['name' => 'Quotations', 'group' => 'Commercial'],
@@ -35,6 +36,9 @@ class AccessControlService
     private const LEGACY = [
         'dashboard.view' => ['dashboard','view'],
         'jobs.view' => ['jobs','view'],
+        'inquiries.view' => ['inquiries','view'],
+        'inquiries.create' => ['inquiries','create'],
+        'inquiries.update' => ['inquiries','edit'],
         'jobs.create' => ['jobs','create'],
         'jobs.update' => ['jobs','edit'],
         'tasks.view' => ['tasks','view'],

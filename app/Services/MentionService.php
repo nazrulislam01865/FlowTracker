@@ -118,7 +118,6 @@ class MentionService
         return $this->formatUsers(
             User::query()
                 ->where('is_active', true)
-                ->where('id', '!=', $actor->getKey())
                 ->orderBy('name')
                 ->get(['id', 'name', 'email'])
         );

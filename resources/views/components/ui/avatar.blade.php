@@ -33,8 +33,8 @@
             decoding="async"
             onerror="this.hidden=true;this.nextElementSibling.hidden=false"
         >
-        <span hidden aria-hidden="true">{{ $initials ?: 'FT' }}</span>
+        <span class="avatar-initials" hidden aria-hidden="true">{{ $initials ?: 'FT' }}</span>
     @else
-        {{ $initials ?: 'FT' }}
+        <span class="avatar-initials" aria-hidden="true">{{ $initials ?: 'FT' }}</span>
     @endif
 </span>

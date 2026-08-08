@@ -13,9 +13,9 @@
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <title><?php echo e($title ?? 'FlowTrack'); ?> — <?php echo e($branding['name'] ?? config('app.name','FlowTrack')); ?></title>
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('favicon.ico')); ?>">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-9">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
     <script src="/js/flowtrack-inline-editing.js?v=20260807-3"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260808-4"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260808-5"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -33,9 +33,10 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ]); ?>
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-3">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-4">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-2"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-3"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('inquiries.*')): ?><link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260809-07"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
@@ -46,7 +47,7 @@
     <main class="main">
         <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
         <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?>">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile','inquiries.*')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>
     </main>

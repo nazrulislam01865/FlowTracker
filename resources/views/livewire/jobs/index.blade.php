@@ -27,6 +27,7 @@
             :task-progress="$taskProgress"
             :task-statuses="$taskStatuses"
             :priorities="$priorities"
+            :task-flags="$taskFlags"
             :available-documents="$availableDocuments"
             :activity-tab="$taskActivityTab"
             :activity-page="$taskActivityPage"

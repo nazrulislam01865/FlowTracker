@@ -64,7 +64,7 @@
                     @endphp
                     <tr wire:key="job-item-{{ $item->id ?? $loop->index }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, draftProductReady: @js(filled($item->product_name)) }" @class(['ft-inline-product-draft-row' => $isDraftItem])>
                         <td>
-                            @if($item->id && $isDraftItem)
+                            @if($item->id)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
@@ -96,7 +96,7 @@
                             @endif
                         </td>
                         <td>
-                            @if($item->id && $isDraftItem)
+                            @if($item->id)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="{{ $productPickerKey }}"
@@ -131,22 +131,22 @@
                         </td>
                         <td class="ft-product-quantity-cell">
                             @if($item->id)
-                                @if($isDraftItem)
-                                    <div
-                                        class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
-                                        x-init="editing = true"
-                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    >
+                                <div
+                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
+                                    @if($isDraftItem) x-init="editing = true" @endif
+                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                >
+                                    <span x-show="!editing" class="ft-inline-field-value" x-text="display">{{ number_format((int)$item->quantity) }}</span>
+                                    @if($canEditJob)
+                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
                                         <input x-ref="quantityInput" data-job-item-quantity x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
-                                            x-on:keydown.escape.prevent="draftValue = value"
+                                            x-on:keydown.escape.prevent="cancelEdit()"
                                             x-on:keydown.enter.prevent="$event.target.blur()"
-                                            x-on:blur="if (editing && !categorySaving && !productSaving && !quantitySaving) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { quantitySaving = false; if (ok) await $wire.$refresh(); else editing = true }) } else if (draftProductReady) { editing = false; $wire.$refresh() } }">
+                                            x-on:blur="if (editing && !categorySaving && !productSaving && !quantitySaving) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { quantitySaving = false; if (ok && @js($isDraftItem)) await $wire.$refresh(); else if (!ok) editing = true }) } else { editing = false; if (@js($isDraftItem) && draftProductReady) $wire.$refresh() } }">
                                         <x-ui.inline-save-state compact />
-                                    </div>
-                                @else
-                                    <span class="ft-readonly-product-value">{{ number_format((int)$item->quantity) }}</span>
-                                @endif
+                                    @endif
+                                </div>
                             @else
                                 {{ number_format((int)$item->quantity) }}
                             @endif
@@ -297,9 +297,9 @@
                                     x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue))"
                                 >
                                     <span x-show="!editing" class="ft-task-inline-display ft-inline-person-live">
-                                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/></span>
+                                        <span class="ft-inline-avatar-slot" x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/></span>
                                         <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
-                                        <span x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
+                                        <span class="ft-inline-person-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                                     </span>
                                     @if($canAssignTask)
                                         <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>

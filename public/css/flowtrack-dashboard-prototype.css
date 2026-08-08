@@ -58,7 +58,7 @@
 .ft-dashboard-prototype .ft-grid { display:grid; gap:12px; margin-top:12px; min-width:0; }
 .ft-dashboard-prototype .ft-grid-primary { grid-template-columns:repeat(2,minmax(0,1fr)); }
 .ft-dashboard-prototype .ft-grid-balanced { grid-template-columns:repeat(2,minmax(0,1fr)); }
-.ft-dashboard-prototype .ft-panel { min-width:0; overflow:hidden; border:1px solid var(--dashboard-line); border-radius:12px; background:var(--dashboard-surface); content-visibility:auto; contain:layout paint style; contain-intrinsic-size:260px; }
+.ft-dashboard-prototype .ft-panel { min-width:0; overflow:hidden; border:1px solid var(--dashboard-line); border-radius:12px; background:var(--dashboard-surface); content-visibility:visible; contain:none; }
 .ft-dashboard-prototype .ft-panel-head { display:flex; min-width:0; align-items:center; justify-content:space-between; gap:10px; padding:13px 14px 9px; }
 .ft-dashboard-prototype .ft-panel-title { margin:0; font-size:13px; font-weight:780; }
 .ft-dashboard-prototype #unread-count { display:inline-flex; margin-left:5px; padding:2px 6px; border-radius:8px; background:var(--dashboard-blue-soft); color:#245fcf; font-size:7.5px; font-weight:780; vertical-align:2px; white-space:nowrap; }
@@ -151,15 +151,12 @@
 .ft-dashboard-prototype .ft-placeholder-lines { display:grid; gap:10px; padding:8px 14px 14px; }
 .ft-dashboard-prototype .ft-placeholder-lines span { height:38px; border-radius:8px; background:#f3f6fa; }
 
-@keyframes ft-dashboard-reveal { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:translateY(0); } }
-.ft-dashboard-prototype .ft-heading, .ft-dashboard-prototype .ft-kpi, .ft-dashboard-prototype .ft-panel { opacity:0; animation:ft-dashboard-reveal .34s cubic-bezier(.2,.7,.2,1) both; }
-.ft-dashboard-prototype .ft-heading { animation-delay:.02s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(1) { animation-delay:.06s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(2) { animation-delay:.09s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(3) { animation-delay:.12s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(4) { animation-delay:.15s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(5) { animation-delay:.18s; }
-.ft-dashboard-prototype .ft-kpi:nth-child(6) { animation-delay:.21s; }
+/* Keep dashboard content permanently paint-stable. Livewire can morph child
+   components after realtime/session requests; entrance animations on those
+   nodes make the entire dashboard appear to flash on higher-latency servers. */
+.ft-dashboard-prototype .ft-heading,
+.ft-dashboard-prototype .ft-kpi,
+.ft-dashboard-prototype .ft-panel { opacity:1; animation:none; transform:none; }
 
 @media (max-width:1180px) {
   .ft-dashboard-prototype .ft-kpis { grid-template-columns:repeat(3,minmax(0,1fr)); }

@@ -61,10 +61,9 @@ unset($__defined_vars, $__key, $__value); ?>
             decoding="async"
             onerror="this.hidden=true;this.nextElementSibling.hidden=false"
         >
-        <span hidden aria-hidden="true"><?php echo e($initials ?: 'FT'); ?></span>
+        <span class="avatar-initials" hidden aria-hidden="true"><?php echo e($initials ?: 'FT'); ?></span>
     <?php else: ?>
-        <?php echo e($initials ?: 'FT'); ?>
-
+        <span class="avatar-initials" aria-hidden="true"><?php echo e($initials ?: 'FT'); ?></span>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </span>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/ui/avatar.blade.php ENDPATH**/ ?>

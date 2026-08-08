@@ -17,8 +17,12 @@ class AllTasksNavigationTest extends TestCase
         $this->assertStringContainsString("Route::get('/all-tasks'", $routes);
         $this->assertStringContainsString("name('all-tasks')", $routes);
 
+        $this->assertStringContainsString('route="my-work" label="My Task"', $sidebar);
+        $this->assertLessThan(strpos($sidebar, 'route="jobs.index"'), strpos($sidebar, 'route="my-work"'));
+        $this->assertLessThan(strpos($sidebar, 'route="all-tasks"'), strpos($sidebar, 'route="jobs.index"'));
         $this->assertStringContainsString('route="all-tasks" label="All Task"', $sidebar);
         $this->assertStringNotContainsString('route="board"', $sidebar);
+        $this->assertStringContainsString('My Task</a>', $mobile);
         $this->assertStringContainsString("route('all-tasks')", $mobile);
         $this->assertStringNotContainsString("route('board')", $mobile);
 

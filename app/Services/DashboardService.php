@@ -8,12 +8,13 @@ use App\Models\FlowNotification;
 use App\Models\Task;
 use App\Models\User;
 use Closure;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v5-safe-values';
+    private const CACHE_VERSION = 'v6-real-comment-mentions';
 
     private const SECTIONS = [
         'summary',
@@ -124,14 +125,11 @@ class DashboardService
 
     public function mentions(User $user): Collection
     {
-        // Do not cache Eloquent model collections. Database/file cache stores
-        // serialize objects, which can become __PHP_Incomplete_Class after a
-        // deployment or class-map change. This query is intentionally bounded
-        // and runs only inside the isolated TaggedComments component.
-        return FlowNotification::query()
+        // Tagged Comments must be backed by a real persisted Job/Task comment.
+        // This deliberately excludes stale/demo mention notifications and mentions
+        // created from editable descriptions or other non-comment text fields.
+        return $this->realCommentMentionQuery($user)
             ->select(['id', 'user_id', 'flow_job_id', 'flow_task_id', 'type', 'title', 'message', 'read_at', 'created_at'])
-            ->where('user_id', $user->id)
-            ->where('type', 'mention')
             ->with([
                 'job:id,job_number,title,client_id',
                 'job.client:id,name',
@@ -144,11 +142,59 @@ class DashboardService
 
     public function unreadMentionCount(User $user): int
     {
-        return (int) $this->remember($user, 'mention-count', fn () => FlowNotification::query()
-            ->where('user_id', $user->id)
-            ->where('type', 'mention')
+        return (int) $this->remember(
+            $user,
+            'mention-count',
+            fn () => $this->realCommentMentionQuery($user)->whereNull('read_at')->count(),
+        );
+    }
+
+    public function markAllCommentMentionsRead(User $user): void
+    {
+        $this->realCommentMentionQuery($user)
             ->whereNull('read_at')
-            ->count());
+            ->update(['read_at' => now()]);
+
+        $this->forgetMentions($user);
+    }
+
+    /**
+     * Only mention notifications that can be proven to originate from an actual
+     * Job comment or Task comment belong in Dashboard > Tagged comments.
+     */
+    private function realCommentMentionQuery(User $user): Builder
+    {
+        return FlowNotification::query()
+            ->where('flow_notifications.user_id', $user->id)
+            ->where('flow_notifications.type', 'mention')
+            ->where(function (Builder $mentions): void {
+                $mentions
+                    ->where(function (Builder $taskMention): void {
+                        $taskMention
+                            ->whereNotNull('flow_notifications.flow_task_id')
+                            ->whereExists(function ($comments): void {
+                                $comments
+                                    ->selectRaw('1')
+                                    ->from('flow_task_comments')
+                                    ->whereColumn('flow_task_comments.flow_task_id', 'flow_notifications.flow_task_id')
+                                    ->whereColumn('flow_task_comments.body', 'flow_notifications.message');
+                            });
+                    })
+                    ->orWhere(function (Builder $jobMention): void {
+                        $jobMention
+                            ->whereNull('flow_notifications.flow_task_id')
+                            ->whereNotNull('flow_notifications.flow_job_id')
+                            ->whereExists(function ($activities): void {
+                                $activities
+                                    ->selectRaw('1')
+                                    ->from('activities')
+                                    ->where('activities.subject_type', FlowJob::class)
+                                    ->whereColumn('activities.subject_id', 'flow_notifications.flow_job_id')
+                                    ->where('activities.event', 'job.comment')
+                                    ->whereColumn('activities.description', 'flow_notifications.message');
+                            });
+                    });
+            });
     }
 
     public function operationalHealth(User $user): array

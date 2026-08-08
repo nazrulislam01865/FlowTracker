@@ -48,7 +48,7 @@
             @endif
 
             <div class="ft-list-filter-shell {{ $showArchived ? 'is-archived' : '' }}">
-                <div class="ft-list-filter-grid">
+                <div class="ft-list-filter-grid ft-client-filter-grid">
                     <x-ui.list-search property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
                     <x-ui.remote-filter label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
                     <x-ui.remote-filter label="Country" property="country" type="countries" :context="$showArchived ? 'clients-archived' : 'clients'" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
@@ -63,20 +63,14 @@
                     if($jobHealth) $chips->push(['key'=>'jobHealth','label'=>'Health: '.$jobHealth]);
                     if($outstanding) $chips->push(['key'=>'outstanding','label'=>'Outstanding: '.(['positive'=>'Has balance','high'=>'$10,000+','zero'=>'No balance'][$outstanding] ?? $outstanding)]);
                 @endphp
+                @if($chips->isNotEmpty() || $quick !== 'all')
                 <div class="ft-list-active-row">
-                    <div class="ft-list-filter-chips">@forelse($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@empty<span>No filters applied</span>@endforelse</div>
-                    @if($chips->isNotEmpty() || $quick !== 'all')<button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>@endif
+                    <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
+                    <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
                 </div>
+                @endif
             </div>
 
-            @if(!$showArchived)
-            <div class="ft-client-quick-row">
-                <button type="button" wire:click="setQuick('all')" class="{{ $quick==='all'?'active':'' }}">All clients <span>{{ $summary['clients'] }}</span></button>
-                <button type="button" wire:click="setQuick('active_jobs')" class="{{ $quick==='active_jobs'?'active':'' }}">Active Jobs <span>{{ $summary['clients_active'] }}</span></button>
-                <button type="button" wire:click="setQuick('attention')" class="{{ $quick==='attention'?'active':'' }}">Needs attention <span>{{ $summary['clients_attention'] }}</span></button>
-                <button type="button" wire:click="setQuick('outstanding')" class="{{ $quick==='outstanding'?'active':'' }}">Outstanding balance <span>{{ $summary['clients_outstanding'] }}</span></button>
-            </div>
-            @endif
 
             <div class="ft-client-list-card">
                 <div class="ft-client-table-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,manager,country,jobHealth,outstanding,quick">
@@ -140,10 +134,24 @@
                                 <td data-label="Next delivery">{{ $clientRow->next_delivery_at ? \Carbon\Carbon::parse($clientRow->next_delivery_at)->format('M j') : '—' }}</td>
                                 <td data-label="Outstanding"><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
                                 <td data-label="Updated">{{ $clientRow->updated_at?->diffForHumans(short:true) }}</td>
-                                <td data-label="Actions" class="ft-client-action-cell">
-                                    <button type="button" class="ft-client-more" wire:click.stop="toggleClientMenu({{ $clientRow->id }})" aria-label="Client actions">⋮</button>
+                                <td
+                                    data-label="Actions"
+                                    class="ft-client-action-cell"
+                                    x-data="window.FlowTrackFloatingActionMenu()"
+                                    x-on:resize.window="positionMenu()"
+                                    x-on:scroll.window="positionMenu()"
+                                >
+                                    <button x-ref="trigger" type="button" class="ft-client-more" wire:click.stop="toggleClientMenu({{ $clientRow->id }})" aria-label="Client actions">⋮</button>
                                     @if($actionMenuClientId === (int)$clientRow->id)
-                                        <div class="ft-client-action-menu" x-on:click.stop>
+                                        <div
+                                            x-ref="menu"
+                                            x-cloak
+                                            x-show="menuStyle !== ''"
+                                            x-init="$nextTick(() => positionMenu())"
+                                            x-bind:style="menuStyle"
+                                            class="ft-client-action-menu"
+                                            x-on:click.stop
+                                        >
                                             <button type="button" wire:click.stop="viewClient({{ $clientRow->id }})">View client</button>
                                             @php
                                                 $access = app(\App\Services\AccessControlService::class);

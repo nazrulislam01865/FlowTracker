@@ -1,76 +1,4 @@
-
-.ft-client-preview-modal .ft-client-mini-table th{
-    font-size:10px;
-    padding:10px 8px;
-}
-.ft-client-preview-modal .ft-client-mini-table td{
-    font-size:10.5px;
-    padding:13px 8px;
-}
-.ft-client-preview-modal .ft-view-client-work{
-    padding:24px;
-}
-.ft-client-preview-close{
-    position:absolute;
-    top:14px;
-    right:14px;
-    z-index:2;
-    width:36px;
-    height:36px;
-    border:1px solid #d6e1ec;
-    border-radius:50%;
-    background:#fff;
-    color:#526783;
-    font-size:25px;
-    line-height:1;
-    cursor:pointer;
-    box-shadow:0 4px 12px rgba(13,28,52,.08);
-}
-.ft-client-preview-close:hover,
-.ft-client-preview-close:focus-visible{
-    border-color:#8fb2fa;
-    color:#1265ef;
-    outline:3px solid rgba(18,101,239,.12);
-}
-
-@media(max-width:760px){
-    .ft-client-preview-backdrop{
-        place-items:end center;
-        padding:12px;
-    }
-    .ft-client-preview-modal{
-        position:relative!important;
-        width:100%!important;
-        max-height:calc(100vh - 24px);
-        border-radius:15px;
-    }
-    .ft-client-preview-modal .ft-client-detail-head{
-        grid-template-columns:46px minmax(0,1fr)!important;
-        padding:18px 52px 14px 16px;
-    }
-    .ft-client-preview-modal .ft-open-client{
-        grid-column:1/-1!important;
-        width:100%;
-        justify-content:center;
-    }
-    .ft-client-preview-modal .ft-client-detail-contact,
-    .ft-client-preview-modal .ft-client-detail-stats{
-        margin-left:16px;
-        margin-right:16px;
-    }
-    .ft-client-preview-modal .ft-client-detail-contact{
-        padding:8px 0 14px;
-    }
-    .ft-client-preview-modal .ft-client-detail-section{
-        padding-left:16px;
-        padding-right:16px;
-    }
-}
-.ft-clients-layout-full .ft-client-table tbody tr{
-    cursor:pointer;
-}
-.ft-client-list-modes{display:flex;align-items:center;gap:8px;margin:0 0 16px}.ft-client-list-modes button{display:inline-flex;align-items:center;gap:8px;border:1px solid #d8e2ed;border-radius:9px;background:#fff;color:#526783;padding:9px 13px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.ft-client-list-modes button span{display:inline-flex;min-width:22px;height:20px;align-items:center;justify-content:center;border-radius:10px;background:#edf2f7;color:#526783;font-size:10px}.ft-client-list-modes button.active{border-color:#1265ef;background:#eef5ff;color:#1265ef}.ft-client-list-modes button.active span{background:#1265ef;color:#fff}@media(max-width:620px){.ft-client-list-modes{display:grid;grid-template-columns:1fr 1fr}.ft-client-list-modes button{justify-content:center}}
-.ft-client-filter-card.is-archived{grid-template-columns:minmax(280px,1.8fr) repeat(3,minmax(150px,.7fr)) auto}.ft-archived-client-table{min-width:900px}.ft-archived-client-table tbody tr{cursor:default}.ft-archived-client-table tbody tr:hover{background:#fafcff}.ft-client-logo.is-archived{background:#edf1f5;color:#62748b}.ft-archived-status{display:inline-flex;align-items:center;border:1px solid #d6dee8;border-radius:999px;background:#f2f5f8;color:#5d6f85;padding:4px 8px;font-size:9px;font-weight:750}.ft-archived-client-table td>small{color:#77889d}.ft-archived-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap}.ft-archived-actions button{height:32px;border-radius:7px;padding:0 11px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.ft-archive-view{border:1px solid #d7e1ec;background:#fff;color:#536781}.ft-archive-restore{border:1px solid #a8c4fa;background:#edf4ff;color:#1265ef}.ft-archive-view:hover{background:#f5f8fb}.ft-archive-restore:hover{background:#dfebff}@media(max-width:1080px){.ft-client-filter-card.is-archived{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-client-filter-card.is-archived .ft-client-filter-search{grid-column:1/-1}}@media(max-width:700px){.ft-archived-actions{justify-content:flex-start;flex-wrap:wrap}}
+.ft-archive-restore{border:1px solid #a8c4fa;background:#edf4ff;color:#1265ef}.ft-archive-view:hover{background:#f5f8fb}.ft-archive-restore:hover{background:#dfebff}@media(max-width:1080px){.ft-client-filter-card.is-archived{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-client-filter-card.is-archived .ft-client-filter-search{grid-column:1/-1}}@media(max-width:700px){.ft-archived-actions{justify-content:flex-start;flex-wrap:wrap}}
 .ft-clients-layout-full .ft-client-table tbody tr:focus-visible{
     outline:3px solid rgba(18,101,239,.16);
     outline-offset:-3px;
@@ -912,6 +840,45 @@ a.ft-new-job-btn:active {
 .ft-clients-reference .ft-client-quick-row button{height:32px;padding:0 11px;font-size:10px}
 @media(max-width:700px){.ft-clients-reference .ft-client-metric{min-height:62px;padding:8px 9px}.ft-clients-reference .ft-client-metric-icon{width:33px;height:33px;font-size:16px}.ft-clients-reference .ft-client-metric b{font-size:18px}.ft-clients-reference .ft-list-filter-shell{padding:9px 10px 6px}}
 
+/* 2026-08-08 Client list cleanup: keep the filter row balanced after removing
+   the duplicate quick-filter strip. The search gets more room on wide screens,
+   then the controls collapse predictably without leaving awkward partial rows. */
+.ft-clients-reference .ft-client-filter-grid{
+    grid-template-columns:minmax(280px,1.7fr) repeat(4,minmax(150px,1fr))!important;
+    align-items:end;
+}
+.ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{
+    grid-template-columns:minmax(280px,1.8fr) repeat(3,minmax(160px,1fr))!important;
+}
+.ft-clients-reference .ft-list-filter-shell{margin-bottom:12px}
+.ft-clients-reference .ft-list-active-row{justify-content:flex-end}
+.ft-clients-reference .ft-list-filter-chips:empty{display:none}
+@media(max-width:1180px){
+    .ft-clients-reference .ft-client-filter-grid,
+    .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:span 2!important}
+}
+@media(max-width:760px){
+    .ft-clients-reference .ft-client-filter-grid,
+    .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:1/-1!important}
+}
+@media(max-width:520px){
+    .ft-clients-reference .ft-client-filter-grid,
+    .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:1fr!important}
+    .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:auto!important}
+}
+
+/* Client row action menus are positioned against the viewport by Alpine/JS.
+   This lets the last table row open upward when necessary and prevents the
+   table's horizontal-scroll container from turning the menu into extra scroll. */
+.ft-clients-reference .ft-client-action-menu{
+    position:fixed!important;
+    top:auto;right:auto;bottom:auto;left:auto;
+    width:168px;
+    z-index:1200!important;
+}
+
 /* Dashboard primary-action parity for Orders, Clients, and Board page headers. */
 .ft-dashboard-action-match {
     display:inline-flex !important;
@@ -948,6 +915,100 @@ a.ft-new-job-btn:active {
     line-height:1;
 }
 
+
+
+/* 2026-08-08: keep Job Details task assignee avatar/fallback, name and edit icon
+   vertically centered in the Assignee column, including the Unassigned fallback. */
+.ft-exact-job-detail .ft-overview-task-card .ft-task-inline-editor{
+    align-items:center!important;
+    min-height:28px;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-task-inline-display.ft-inline-person-live{
+    display:inline-flex;
+    align-items:center!important;
+    gap:8px;
+    min-height:24px;
+    line-height:1.2;
+    overflow:visible;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-avatar-slot{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    flex:0 0 24px;
+    width:24px;
+    height:24px;
+    line-height:0;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-avatar-slot>.avatar,
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-generated-avatar{
+    flex:0 0 24px;
+    width:24px!important;
+    height:24px!important;
+    margin:0;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-person-name{
+    display:inline-flex;
+    align-items:center;
+    min-width:0;
+    min-height:24px;
+    line-height:24px;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ft-exact-job-detail .ft-overview-task-card .ft-task-inline-editor>.ft-inline-edit-button{
+    align-self:center;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    line-height:1;
+    margin:0;
+}
+
+
+/* 2026-08-08: compact Task Details @mention picker and center all avatar fallbacks. */
+.avatar>.avatar-initials{
+    width:100%;
+    height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    line-height:1!important;
+    text-align:center;
+    margin:0;
+    padding:0;
+}
+.avatar>.avatar-initials[hidden]{display:none!important}
+.ft-exact-job-detail .ft-overview-task-card .ft-inline-generated-avatar{
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    line-height:1!important;
+    text-align:center;
+}
+.ft-mention-menu{
+    max-height:240px;
+    padding:4px;
+    border-radius:9px;
+}
+.ft-mention-option{
+    gap:8px;
+    min-height:36px;
+    padding:5px 7px;
+    border-radius:7px;
+}
+.ft-mention-avatar{
+    width:24px;
+    height:24px;
+    flex-basis:24px;
+    font-size:8.5px;
+    font-weight:800;
+    line-height:1;
+}
+.ft-mention-copy{gap:1px;line-height:1.15}
+.ft-mention-copy strong{font-size:10px;font-weight:700;line-height:1.15}
+.ft-mention-copy small{font-size:8px;font-weight:500;line-height:1.15}
 
 .ft-board-load-more {
     display: flex;

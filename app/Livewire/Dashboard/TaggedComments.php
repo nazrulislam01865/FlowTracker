@@ -18,13 +18,7 @@ class TaggedComments extends Component
 
     public function markAllRead(): void
     {
-        FlowNotification::query()
-            ->where('user_id', auth()->id())
-            ->where('type', 'mention')
-            ->whereNull('read_at')
-            ->update(['read_at' => now()]);
-
-        app(DashboardService::class)->forgetMentions((int) auth()->id());
+        app(DashboardService::class)->markAllCommentMentionsRead(auth()->user());
     }
 
     public function render()

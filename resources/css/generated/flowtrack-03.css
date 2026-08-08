@@ -1,18 +1,4 @@
 
-.ft-inline-description-editor>div{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.ft-inline-description-editor .ft-outline-btn,.ft-inline-description-editor .ft-new-job-btn{height:34px}
-.ft-checklist-add-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #e3eaf2;background:#f8fbff}
-.ft-checklist-add-row input{height:36px;border:1px solid #d8e2ee;border-radius:7px;padding:0 10px}.ft-checklist-add-row .ft-outline-btn,.ft-checklist-add-row .ft-new-job-btn{height:36px}
-.ft-checklist-row .completed{text-decoration:line-through;color:#72839a}.ft-checklist-delete{border:0!important;background:transparent!important;color:#d22e24!important;font-size:18px!important;line-height:1}.ft-checklist-permission-note{margin:0;padding:8px 14px;color:#6b7e96;font-size:10px;border-top:1px solid #e3eaf2;background:#fafcff}.ft-checklist-validation{margin:0 14px 8px}
-.ft-task-timeline{padding-top:4px}.ft-timeline-item{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #e3eaf2}.ft-timeline-item p{margin:3px 0 2px;color:#334b67;line-height:1.45}.ft-timeline-item>small{text-align:right;color:#6b7e96;font-size:9px;line-height:1.45}.ft-activity-kind{display:inline-flex!important;width:max-content;background:#edf2f7;border-radius:8px;padding:2px 6px;color:#5c6f87!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.03em}
-.ft-task-card-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ft-attention-pill{display:inline-flex;align-items:center;border-radius:7px;background:#fff0ef;color:#c62828;padding:4px 7px;font-size:9px;font-weight:800}
-.ft-management-card .danger-text{color:#c62828}.ft-document-match-note{display:block;margin:5px 0 9px;color:#6b7e96;font-size:9px}.ft-doc-table-wrap{overflow-x:auto}.ft-doc-table{min-width:760px}
-.ft-activity-card .ft-activity-line .ft-activity-kind{justify-self:end}.ft-activity-card .ft-comment-composer input{min-width:0}
-
-@media(max-width:800px){
-  .ft-checklist-add-row{grid-template-columns:1fr}.ft-checklist-add-row .ft-outline-btn,.ft-checklist-add-row .ft-new-job-btn{width:100%}
-  .ft-timeline-item{grid-template-columns:28px minmax(0,1fr)}.ft-timeline-item>small{grid-column:2;text-align:left}
-  .ft-task-property-input{height:38px}
-}
 
 /* ================================================================
    FlowTrack role matrix + document archive redesign
@@ -805,3 +791,75 @@
 .ft-client-preview-modal .ft-view-client-work{
     font-size:12px;
 }
+.ft-client-preview-modal .ft-client-mini-table th{
+    font-size:10px;
+    padding:10px 8px;
+}
+.ft-client-preview-modal .ft-client-mini-table td{
+    font-size:10.5px;
+    padding:13px 8px;
+}
+.ft-client-preview-modal .ft-view-client-work{
+    padding:24px;
+}
+.ft-client-preview-close{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:2;
+    width:36px;
+    height:36px;
+    border:1px solid #d6e1ec;
+    border-radius:50%;
+    background:#fff;
+    color:#526783;
+    font-size:25px;
+    line-height:1;
+    cursor:pointer;
+    box-shadow:0 4px 12px rgba(13,28,52,.08);
+}
+.ft-client-preview-close:hover,
+.ft-client-preview-close:focus-visible{
+    border-color:#8fb2fa;
+    color:#1265ef;
+    outline:3px solid rgba(18,101,239,.12);
+}
+
+@media(max-width:760px){
+    .ft-client-preview-backdrop{
+        place-items:end center;
+        padding:12px;
+    }
+    .ft-client-preview-modal{
+        position:relative!important;
+        width:100%!important;
+        max-height:calc(100vh - 24px);
+        border-radius:15px;
+    }
+    .ft-client-preview-modal .ft-client-detail-head{
+        grid-template-columns:46px minmax(0,1fr)!important;
+        padding:18px 52px 14px 16px;
+    }
+    .ft-client-preview-modal .ft-open-client{
+        grid-column:1/-1!important;
+        width:100%;
+        justify-content:center;
+    }
+    .ft-client-preview-modal .ft-client-detail-contact,
+    .ft-client-preview-modal .ft-client-detail-stats{
+        margin-left:16px;
+        margin-right:16px;
+    }
+    .ft-client-preview-modal .ft-client-detail-contact{
+        padding:8px 0 14px;
+    }
+    .ft-client-preview-modal .ft-client-detail-section{
+        padding-left:16px;
+        padding-right:16px;
+    }
+}
+.ft-clients-layout-full .ft-client-table tbody tr{
+    cursor:pointer;
+}
+.ft-client-list-modes{display:flex;align-items:center;gap:8px;margin:0 0 16px}.ft-client-list-modes button{display:inline-flex;align-items:center;gap:8px;border:1px solid #d8e2ed;border-radius:9px;background:#fff;color:#526783;padding:9px 13px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.ft-client-list-modes button span{display:inline-flex;min-width:22px;height:20px;align-items:center;justify-content:center;border-radius:10px;background:#edf2f7;color:#526783;font-size:10px}.ft-client-list-modes button.active{border-color:#1265ef;background:#eef5ff;color:#1265ef}.ft-client-list-modes button.active span{background:#1265ef;color:#fff}@media(max-width:620px){.ft-client-list-modes{display:grid;grid-template-columns:1fr 1fr}.ft-client-list-modes button{justify-content:center}}
+.ft-client-filter-card.is-archived{grid-template-columns:minmax(280px,1.8fr) repeat(3,minmax(150px,.7fr)) auto}.ft-archived-client-table{min-width:900px}.ft-archived-client-table tbody tr{cursor:default}.ft-archived-client-table tbody tr:hover{background:#fafcff}.ft-client-logo.is-archived{background:#edf1f5;color:#62748b}.ft-archived-status{display:inline-flex;align-items:center;border:1px solid #d6dee8;border-radius:999px;background:#f2f5f8;color:#5d6f85;padding:4px 8px;font-size:9px;font-weight:750}.ft-archived-client-table td>small{color:#77889d}.ft-archived-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap}.ft-archived-actions button{height:32px;border-radius:7px;padding:0 11px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.ft-archive-view{border:1px solid #d7e1ec;background:#fff;color:#536781}

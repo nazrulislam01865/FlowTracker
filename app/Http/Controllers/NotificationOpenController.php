@@ -6,9 +6,11 @@ use App\Models\Activity;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
 use App\Models\FlowTaskComment;
+use App\Models\InquiryTask;
 use App\Services\AccessControlService;
 use App\Services\DashboardService;
 use App\Services\JobService;
+use App\Services\InquiryService;
 use App\Services\ShellDataService;
 use App\Services\TaskService;
 use Illuminate\Http\RedirectResponse;
@@ -27,6 +29,20 @@ class NotificationOpenController extends Controller
         }
 
         $access = app(AccessControlService::class);
+
+        if ($notification->inquiry_task_id || $notification->inquiry_id) {
+            $inquiryId = (int) ($notification->inquiry_id ?: InquiryTask::query()->whereKey($notification->inquiry_task_id)->value('inquiry_id'));
+            $inquiry = $inquiryId ? app(InquiryService::class)->visibleQuery($user)->select(['inquiries.id'])->find($inquiryId) : null;
+            if ($inquiry) {
+                $params = ['open' => (int) $inquiry->id];
+                if ($notification->inquiry_task_id) {
+                    $params['task'] = (int) $notification->inquiry_task_id;
+                } elseif (in_array((string) $notification->type, ['mention', 'comment'], true)) {
+                    $params['tab'] = 'activity';
+                }
+                return redirect()->route('inquiries.index', $params);
+            }
+        }
 
         if ($notification->flow_task_id) {
             $task = app(TaskService::class)

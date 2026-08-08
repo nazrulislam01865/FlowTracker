@@ -1,16 +1,24 @@
 
-const flowtrackTimezoneState = { syncing: false };
+const flowtrackTimezoneState = { syncing: false, attemptedTimezone: null };
 
 const syncBrowserTimezone = async () => {
     if (flowtrackTimezoneState.syncing || !window.Intl?.DateTimeFormat) return false;
 
     const url = document.querySelector('meta[name="flowtrack-timezone-sync-url"]')?.content;
-    const current = document.querySelector('meta[name="flowtrack-display-timezone"]')?.content;
+    const timezoneMeta = document.querySelector('meta[name="flowtrack-display-timezone"]');
+    const current = timezoneMeta?.content;
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     if (!url || !csrf || !timezone || timezone === current) return false;
 
+    // Never reload the page just to persist a display time zone. On a cloud
+    // deployment a dropped/non-sticky session could otherwise cause an
+    // endless reload loop that repeatedly re-mounts Livewire and flickers the
+    // whole dashboard. One successful sync is enough for this browser tab.
+    if (flowtrackTimezoneState.attemptedTimezone === timezone) return false;
+
     flowtrackTimezoneState.syncing = true;
+    flowtrackTimezoneState.attemptedTimezone = timezone;
     try {
         const response = await fetch(url, {
             method: 'POST',
@@ -21,11 +29,14 @@ const syncBrowserTimezone = async () => {
                 'X-Requested-With': 'XMLHttpRequest',
             },
             credentials: 'same-origin',
+            cache: 'no-store',
             body: JSON.stringify({ timezone }),
         });
         if (!response.ok) return false;
 
-        window.location.reload();
+        // Keep the current page stable. Server-rendered dates will use the new
+        // time zone on the next normal request/navigation.
+        if (timezoneMeta) timezoneMeta.content = timezone;
         return true;
     } catch (_) {
         return false;
@@ -305,9 +316,9 @@ const bootMentionInputs = (root = document) => {
             if (!input.isConnected || menu.hidden) return;
 
             const inputRect = input.getBoundingClientRect();
-            const menuWidth = Math.min(Math.max(240, inputRect.width), Math.max(240, window.innerWidth - 24));
+            const menuWidth = Math.min(Math.max(260, Math.min(inputRect.width, 380)), Math.max(260, window.innerWidth - 24));
             const left = Math.min(Math.max(12, inputRect.left), Math.max(12, window.innerWidth - menuWidth - 12));
-            const estimatedHeight = Math.min(280, Math.max(56, matches.length * 48 + 12));
+            const estimatedHeight = Math.min(240, Math.max(48, matches.length * 38 + 10));
             const spaceBelow = window.innerHeight - inputRect.bottom;
             const top = spaceBelow >= estimatedHeight + 12
                 ? inputRect.bottom + 5

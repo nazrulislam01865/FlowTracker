@@ -126,7 +126,7 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertSame(100, $reports['kpis']['shipment_on_time']);
     }
 
-    public function test_dashboard_uses_isolated_render_components_and_omits_guide_ui(): void
+    public function test_dashboard_uses_stable_render_components_and_omits_guide_ui(): void
     {
         $page = file_get_contents(resource_path('views/pages/dashboard.blade.php'));
         $dashboard = file_get_contents(resource_path('views/livewire/dashboard/index.blade.php'));
@@ -134,15 +134,26 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $taggedComponent = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
         $secondaryComponent = file_get_contents(app_path('Livewire/Dashboard/Secondary.php'));
         $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
+        $appJs = file_get_contents(resource_path('js/app.js'));
+        $dashboardCss = file_get_contents(public_path('css/flowtrack-dashboard-prototype.css'));
 
         $this->assertStringContainsString('<livewire:dashboard.index />', $page);
         $this->assertStringContainsString('<livewire:dashboard.tagged-comments />', $dashboard);
-        $this->assertStringContainsString('<livewire:dashboard.secondary lazy />', $dashboard);
+        $this->assertStringContainsString('<livewire:dashboard.secondary />', $dashboard);
+        $this->assertStringNotContainsString('<livewire:dashboard.secondary lazy />', $dashboard);
         $this->assertStringNotContainsString('wire:init=', $dashboard);
+        $this->assertStringNotContainsString('window.location.reload()', $appJs);
+        $this->assertStringContainsString('attemptedTimezone', $appJs);
+        $this->assertStringContainsString('animation:none', $dashboardCss);
+        $this->assertStringContainsString('content-visibility:visible', $dashboardCss);
         $this->assertStringNotContainsString('flowtrack-notification', $dashboardComponent);
         $this->assertStringContainsString('markAllRead', $taggedComponent);
+        $this->assertStringContainsString('markAllCommentMentionsRead', $taggedComponent);
+        $this->assertStringContainsString('realCommentMentionQuery', $dashboardService);
+        $this->assertStringContainsString('flow_task_comments', $dashboardService);
+        $this->assertStringContainsString("activities.event', 'job.comment'", $dashboardService);
         $this->assertStringContainsString('secondaryData(auth()->user())', $secondaryComponent);
-        $this->assertStringContainsString("CACHE_VERSION = 'v5-safe-values'", $dashboardService);
+        $this->assertStringContainsString("CACHE_VERSION = 'v6-real-comment-mentions'", $dashboardService);
         $this->assertStringContainsString('dashboard_cache_seconds', $dashboardService);
         $this->assertStringContainsString('isSafeCacheValue', $dashboardService);
         $this->assertStringNotContainsString("return $this->remember($user, 'mentions'", $dashboardService);

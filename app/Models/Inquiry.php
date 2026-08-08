@@ -1,0 +1,43 @@
+<?php
+
+namespace App\Models;
+
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
+use Illuminate\Database\Eloquent\Relations\MorphMany;
+
+class Inquiry extends Model
+{
+    use SoftDeletes;
+
+    protected $guarded = [];
+
+    protected function casts(): array
+    {
+        return [
+            'received_date' => 'date',
+            'required_delivery_date' => 'date',
+            'initial_follow_up_date' => 'date',
+            'target_price' => 'decimal:4',
+            // Query-only alias used by the Inquiry list. Casting it here keeps
+            // the earliest task start timestamp timezone-safe when formatted.
+            'inquiry_started_at' => 'datetime',
+            'completed_at' => 'datetime',
+        ];
+    }
+
+    public function client(): BelongsTo { return $this->belongsTo(Client::class); }
+    public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
+    public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function sourceTaskPack(): BelongsTo { return $this->belongsTo(TaskPack::class, 'source_task_pack_id'); }
+    public function sourceWorkflow(): BelongsTo { return $this->belongsTo(WorkflowTemplate::class, 'source_workflow_template_id'); }
+    public function convertedJob(): BelongsTo { return $this->belongsTo(FlowJob::class, 'converted_job_id'); }
+    public function items(): HasMany { return $this->hasMany(InquiryItem::class)->orderBy('sort_order'); }
+    public function tasks(): HasMany { return $this->hasMany(InquiryTask::class)->orderBy('sequence'); }
+    public function currentTask(): HasOne { return $this->hasOne(InquiryTask::class)->whereNull('completed_at')->orderBy('sequence'); }
+    public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
+    public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
+}

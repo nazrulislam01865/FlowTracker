@@ -1,8 +1,4 @@
-.ft-timeline-item:before{content:"";position:absolute;left:13px;top:35px;bottom:-8px;width:1px;background:#dfe7f0}.ft-timeline-item:last-child:before{display:none}.ft-timeline-item p{margin:2px 0;color:#49607d;font-size:8px}.ft-timeline-item small{font-size:8px;color:#60748f}
-.ft-exact-task-detail aside .ft-detail-card{padding:16px}.ft-exact-task-detail aside .ft-detail-card h2{font-size:14px}
-.ft-management-card .ft-attention-row{grid-template-columns:125px minmax(0,1fr) auto;padding:13px 0;font-size:10px}.ft-management-card .ft-attention-row:first-of-type{border-top:0}.ft-management-card .ft-attention-row button{border:0;background:transparent;padding:0;font-size:9px}
-.ft-red-doc-icon,.ft-red-flag{color:#ef3340;margin-right:7px}.ft-red-dot{width:8px;height:8px;border-radius:50%;background:#ef3340;display:inline-block;margin-right:6px}
-.ft-job-context-link{font-size:13px;margin-bottom:7px}.ft-job-context-card>b{font-size:11px;margin:8px 0 12px}.ft-job-context-card div{grid-template-columns:120px minmax(0,1fr);margin:9px 0;font-size:10px}.ft-job-context-card div span{color:#58708d}.ft-context-progress{grid-template-columns:120px auto!important}.ft-context-progress .ft-line-progress{grid-column:2;width:100%;height:5px;margin-top:-2px;background:#e9edf3}.ft-context-progress .ft-line-progress span{background:linear-gradient(90deg,#2769f0,#cc12e4)}.ft-open-job{display:block;text-align:center;margin-top:15px;font-size:11px}
+.ft-context-progress .ft-line-progress{grid-column:2;width:100%;height:5px;margin-top:-2px;background:#e9edf3}.ft-context-progress .ft-line-progress span{background:linear-gradient(90deg,#2769f0,#cc12e4)}.ft-open-job{display:block;text-align:center;margin-top:15px;font-size:11px}
 .ft-dependency-card p{font-size:10px;margin:9px 0}.ft-dependency-card p span{color:#687b94}.ft-check-circle{width:17px;height:17px;border-radius:50%;background:#1aa057;color:#fff;display:inline-grid;place-items:center;font-size:9px;margin-right:6px}.ft-task-meta-card{font-size:9px;padding:12px 16px!important}.ft-task-meta-card span{padding:0 7px;color:#98a5b5}
 
 /* Jobs list reference */
@@ -1060,3 +1056,17 @@
 /* Task detail dynamic editing, checklist, attention and activity */
 .ft-task-property-input{width:100%;height:34px;border:1px solid #9fbff5;border-radius:7px;background:#fff;padding:0 8px;color:#0b1d36;font-weight:700;font-size:11px}
 .ft-inline-description-editor textarea{width:100%;min-height:92px;border:1px solid #9fbff5;border-radius:8px;padding:10px;color:#0b1d36;font:inherit;resize:vertical}
+.ft-inline-description-editor>div{display:flex;justify-content:flex-end;gap:8px;margin-top:8px}.ft-inline-description-editor .ft-outline-btn,.ft-inline-description-editor .ft-new-job-btn{height:34px}
+.ft-checklist-add-row{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:8px;align-items:center;padding:10px 14px;border-top:1px solid #e3eaf2;background:#f8fbff}
+.ft-checklist-add-row input{height:36px;border:1px solid #d8e2ee;border-radius:7px;padding:0 10px}.ft-checklist-add-row .ft-outline-btn,.ft-checklist-add-row .ft-new-job-btn{height:36px}
+.ft-checklist-row .completed{text-decoration:line-through;color:#72839a}.ft-checklist-delete{border:0!important;background:transparent!important;color:#d22e24!important;font-size:18px!important;line-height:1}.ft-checklist-permission-note{margin:0;padding:8px 14px;color:#6b7e96;font-size:10px;border-top:1px solid #e3eaf2;background:#fafcff}.ft-checklist-validation{margin:0 14px 8px}
+.ft-task-timeline{padding-top:4px}.ft-timeline-item{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:10px;align-items:start;padding:10px 0;border-top:1px solid #e3eaf2}.ft-timeline-item p{margin:3px 0 2px;color:#334b67;line-height:1.45}.ft-timeline-item>small{text-align:right;color:#6b7e96;font-size:9px;line-height:1.45}.ft-activity-kind{display:inline-flex!important;width:max-content;background:#edf2f7;border-radius:8px;padding:2px 6px;color:#5c6f87!important;font-size:8px!important;text-transform:uppercase;letter-spacing:.03em}
+.ft-task-card-badges{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.ft-attention-pill{display:inline-flex;align-items:center;border-radius:7px;background:#fff0ef;color:#c62828;padding:4px 7px;font-size:9px;font-weight:800}
+.ft-management-card .danger-text{color:#c62828}.ft-document-match-note{display:block;margin:5px 0 9px;color:#6b7e96;font-size:9px}.ft-doc-table-wrap{overflow-x:auto}.ft-doc-table{min-width:760px}
+.ft-activity-card .ft-activity-line .ft-activity-kind{justify-self:end}.ft-activity-card .ft-comment-composer input{min-width:0}
+
+@media(max-width:800px){
+  .ft-checklist-add-row{grid-template-columns:1fr}.ft-checklist-add-row .ft-outline-btn,.ft-checklist-add-row .ft-new-job-btn{width:100%}
+  .ft-timeline-item{grid-template-columns:28px minmax(0,1fr)}.ft-timeline-item>small{grid-column:2;text-align:left}
+  .ft-task-property-input{height:38px}
+}

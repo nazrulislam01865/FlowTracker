@@ -15,7 +15,7 @@ class NotificationService
 {
     public function list(User $user)
     {
-        return FlowNotification::with(['job','task'])
+        return FlowNotification::with(['job','task','inquiry','inquiryTask'])
             ->where('user_id', $user->id)
             ->latest()
             ->get();
@@ -23,7 +23,7 @@ class NotificationService
 
     public function paginate(User $user, int $perPage = 30)
     {
-        return FlowNotification::with(['job','task'])
+        return FlowNotification::with(['job','task','inquiry','inquiryTask'])
             ->where('user_id', $user->id)
             ->latest()
             ->paginate($perPage, ['*'], 'notificationsPage');

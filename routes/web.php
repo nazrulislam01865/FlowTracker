@@ -9,6 +9,7 @@ use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentsController;
 use App\Http\Controllers\FilterOptionController;
 use App\Http\Controllers\JobsController;
+use App\Http\Controllers\InquiriesController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationsController;
@@ -64,6 +65,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|countries|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
+    Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
     Route::get('/orders', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/jobs', function (\Illuminate\Http\Request $request) {
         return redirect()->route('jobs.index', $request->query());
@@ -71,6 +73,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');
     Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
     Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');
+    Route::get('/inquiries/documents/{document}/open', function (\App\Models\InquiryDocument $document) {
+        $inquiry = app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
+        return Storage::disk((string) config('flowtrack.document_disk', 'public'))->response(
+            $document->path,
+            $document->name,
+            ['Content-Disposition' => 'inline; filename=\"'.addslashes($document->name).'\"']
+        );
+    })->name('inquiries.documents.open');
     Route::get('/documents/{document}/open', function (Document $document) {
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();
         return Storage::disk((string) config('flowtrack.document_disk', 'public'))->response(

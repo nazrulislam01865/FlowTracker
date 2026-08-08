@@ -689,6 +689,32 @@
   padding:0 11px;
   font-size:10px;
 }
+/* Client page filter layout after removing the duplicate quick-filter strip. */
+.ft-clients-reference .ft-client-filter-grid{
+  grid-template-columns:minmax(280px,1.7fr) repeat(4,minmax(150px,1fr));
+  align-items:end;
+}
+.ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{
+  grid-template-columns:minmax(280px,1.8fr) repeat(3,minmax(160px,1fr));
+}
+.ft-clients-reference .ft-list-active-row{justify-content:flex-end}
+.ft-clients-reference .ft-list-filter-chips:empty{display:none}
+@media(max-width:1180px){
+  .ft-clients-reference .ft-client-filter-grid,
+  .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
+  .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:span 2!important}
+}
+@media(max-width:760px){
+  .ft-clients-reference .ft-client-filter-grid,
+  .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:1/-1!important}
+}
+@media(max-width:520px){
+  .ft-clients-reference .ft-client-filter-grid,
+  .ft-clients-reference .ft-list-filter-shell.is-archived .ft-client-filter-grid{grid-template-columns:1fr}
+  .ft-clients-reference .ft-client-filter-grid>.ft-jl-control-search{grid-column:auto!important}
+}
+
 @media(max-width:700px){
   .ft-clients-reference .ft-client-metric{
     min-height:62px;

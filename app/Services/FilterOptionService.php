@@ -320,7 +320,8 @@ class FilterOptionService
     {
         $canCreate = $user->canAccess('jobs.create');
         $canEditFromJobDetail = $context === 'job-detail' && $user->canAccess('jobs.update');
-        abort_unless($canCreate || $canEditFromJobDetail, 403);
+        $canCreateInquiry = $context === 'create-inquiry' && $user->canModule('inquiries', 'create');
+        abort_unless($canCreate || $canEditFromJobDetail || $canCreateInquiry, 403);
     }
 
     private function workflows(User $user, string $context, string $search, int $limit): Collection
@@ -521,6 +522,11 @@ class FilterOptionService
             return;
         }
 
+        if ($context === 'create-inquiry') {
+            abort_unless($user->canModule('inquiries', 'create'), 403);
+            return;
+        }
+
         abort_unless($user->canAccess('jobs.create'), 403);
     }
 
@@ -532,6 +538,12 @@ class FilterOptionService
             }
 
             return User::query()->where('is_active', true)->whereKey($user->id);
+        }
+
+        if ($context === 'create-inquiry') {
+            return $user->canModule('inquiries', 'create')
+                ? User::query()->where('is_active', true)
+                : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
         if ($context === 'task-assignee') {

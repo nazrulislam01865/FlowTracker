@@ -49,7 +49,7 @@ class FlowTrackDemoSeeder extends Seeder
             ['quality','Quality Inspector'],['shipment','Shipping Executive'],['accounts','Accounts Officer'],['sampling','Sample Coordinator'],
         ])->mapWithKeys(fn ($r) => [$r[0] => Role::updateOrCreate(['slug'=>$r[0]], ['name'=>$r[1]])]);
 
-        foreach (['dashboard.view','jobs.view','jobs.create','jobs.update','tasks.view','tasks.update','clients.view','documents.view','reports.view','notifications.view','workflow.manage','master.manage','users.manage'] as $slug) {
+        foreach (['dashboard.view','jobs.view','jobs.create','jobs.update','inquiries.view','inquiries.create','inquiries.update','tasks.view','tasks.update','clients.view','documents.view','reports.view','notifications.view','workflow.manage','master.manage','users.manage'] as $slug) {
             [$module] = explode('.', $slug, 2);
             Permission::firstOrCreate(['slug'=>$slug], ['module'=>$module,'name'=>ucwords(str_replace(['.','-'],' ',$slug))]);
         }
@@ -58,7 +58,7 @@ class FlowTrackDemoSeeder extends Seeder
             $isManager = $role->slug === 'operations-manager';
             foreach (AccessControlService::MODULES as $module => $meta) {
                 $allowed = match ($module) {
-                    'dashboard','jobs','tasks','documents','notifications' => true,
+                    'dashboard','jobs','inquiries','tasks','documents','notifications' => true,
                     'clients','reports' => in_array($role->slug, ['operations-manager','sales-manager','sales-executive','accounts'], true),
                     'quotation' => in_array($role->slug, ['operations-manager','sales-manager','sales-executive','sourcing'], true),
                     'artwork' => in_array($role->slug, ['operations-manager','designer'], true),
@@ -69,8 +69,8 @@ class FlowTrackDemoSeeder extends Seeder
                     default => false,
                 };
                 $actions = $allowed ? ['view'] : [];
-                if ($allowed && in_array($module, ['jobs','tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'create';
-                if ($allowed && in_array($module, ['tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'edit_own';
+                if ($allowed && in_array($module, ['jobs','inquiries','tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'create';
+                if ($allowed && in_array($module, ['inquiries','tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'edit_own';
                 if ($allowed && $module === 'documents') $actions[] = 'link';
                 if ($allowed && $module === 'reports') $actions[] = 'export';
                 if ($isManager && $allowed) $actions = array_values(array_unique(array_merge($actions, ['edit_all','assign','export'])));
@@ -150,6 +150,7 @@ class FlowTrackDemoSeeder extends Seeder
             'document_categories'=>[['REQ','Client Requirement','References and specifications'],['QUO','Quotation','Commercial quotation versions'],['ART','Artwork','Working artwork files'],['APR','Artwork Approval','Final approved artwork'],['SAM','Sample Approval','Swatch or sample confirmation'],['QCI','Quality Inspection','QC evidence and reports'],['SHP','Shipping Document','Packing list, AWB and B/L'],['INV','Invoice','Invoice and payment documents']],
             'priorities'=>[['LOW','Low','Normal monitoring'],['MED','Medium','Standard business priority'],['HIG','High','Close monitoring required'],['CRI','Critical','Immediate management attention']],
             'task_statuses'=>[['READY','Ready','Can be started'],['IP','In Progress','Work underway'],['WC','Waiting for Client','External client dependency'],['WS','Waiting for Supplier','External supplier dependency'],['REV','Revision Required','Returned for correction'],['BLK','Blocked','Cannot continue'],['CMP','Completed','Work finished']],
+            'inquiry_statuses'=>[['IST-001','In Progress','Inquiry is actively being worked'],['IST-002','Waiting for Client','Waiting for client input or confirmation'],['IST-003','Waiting for Supplier','Waiting for supplier input or confirmation'],['IST-004','On Hold','Inquiry is temporarily paused']],
         ];
         foreach ($masterGroups as $group => $rows) {
             foreach ($rows as $r) MasterValue::updateOrCreate(['group_key'=>$group,'code'=>$r[0]], ['name'=>$r[1],'description'=>$r[2],'is_active'=>true]);

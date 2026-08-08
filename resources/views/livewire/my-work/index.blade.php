@@ -235,7 +235,7 @@ body{background:#f3f6fb;color:#172033}
             <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
             <div>
-                @forelse($workGroups as $group)
+                @foreach($workGroups as $group)
                     <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: true }">
                         <header class="order-head">
                             <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
@@ -313,9 +313,11 @@ body{background:#f3f6fb;color:#172033}
                             @endforeach
                         </div>
                     </article>
-                @empty
+                @endforeach
+
+                @if($workGroups->isEmpty())
                     <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
-                @endforelse
+                @endif
             </div>
 
             <footer class="footer">

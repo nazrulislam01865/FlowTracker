@@ -78,6 +78,46 @@
         },
     };
 
+    const positionFloatingActionMenu = (component) => {
+        const trigger = component.$refs?.trigger;
+        const menu = component.$refs?.menu;
+        if (!trigger || !menu) return;
+
+        const triggerRect = trigger.getBoundingClientRect();
+        const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+        const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+        const edge = 10;
+        const gap = 6;
+        const width = menu.offsetWidth || 168;
+        const height = menu.offsetHeight || 120;
+        const roomBelow = viewportHeight - triggerRect.bottom - edge - gap;
+        const roomAbove = triggerRect.top - edge - gap;
+        const openAbove = roomBelow < height && roomAbove > roomBelow;
+        const maxLeft = Math.max(edge, viewportWidth - width - edge);
+        const left = Math.min(Math.max(edge, triggerRect.right - width), maxLeft);
+        const preferredTop = openAbove
+            ? triggerRect.top - height - gap
+            : triggerRect.bottom + gap;
+        const maxTop = Math.max(edge, viewportHeight - height - edge);
+        const top = Math.min(Math.max(edge, preferredTop), maxTop);
+
+        component.menuStyle = [
+            'position:fixed!important',
+            `left:${Math.round(left)}px!important`,
+            `top:${Math.round(top)}px!important`,
+            'right:auto!important',
+            'bottom:auto!important',
+            'z-index:1200!important',
+        ].join(';');
+    };
+
+    window.FlowTrackFloatingActionMenu = () => ({
+        menuStyle: '',
+        positionMenu() {
+            this.$nextTick(() => positionFloatingActionMenu(this));
+        },
+    });
+
     window.FlowTrackRemoteFilter = (config) => {
         const initialItems = Array.isArray(config.initialItems) ? config.initialItems : [];
         const initialCache = new Map();

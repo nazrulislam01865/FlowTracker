@@ -187,7 +187,7 @@
                     <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
                 </p>
                 @if($canEditTask)
-                    <div x-cloak x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" x-model="draftValue" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" x-on:keydown.escape.prevent="cancelEdit()"></textarea><div><button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No description has been provided for this task.', () => $wire.updateSelectedTaskField('description', draftValue))">Save</button></div></div>
+                    <div x-cloak x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" x-model="draftValue" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users='@json($mentionUsers->values())' x-on:keydown.escape.prevent="cancelEdit()"></textarea><div><button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No description has been provided for this task.', () => $wire.updateSelectedTaskField('description', draftValue))">Save</button></div></div>
                     <x-ui.inline-save-state />
                 @endif
             </section>
@@ -242,7 +242,7 @@
                     <div class="ft-activity-tabs"><button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setTaskActivityTab('all')">All</button><button type="button" class="{{ $activityTab==='comments'?'active':'' }}" wire:click="setTaskActivityTab('comments')">Comments</button><button type="button" class="{{ $activityTab==='history'?'active':'' }}" wire:click="setTaskActivityTab('history')">History</button></div>
                 </div>
                 @if($canEditTask)
-                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
+                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users='@json($mentionUsers->values())' placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
                 @endif
                 <div class="ft-activity-feed">
                     @forelse($timeline as $entry)

@@ -80,5 +80,5 @@
         </section>
     </div>
 
-    <livewire:dashboard.secondary lazy />
+    <livewire:dashboard.secondary />
 </div>

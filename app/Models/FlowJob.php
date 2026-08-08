@@ -26,6 +26,7 @@ class FlowJob extends Model
     }
 
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }
+    public function sourceInquiry(): BelongsTo { return $this->belongsTo(Inquiry::class, 'source_inquiry_id'); }
     public function workflow(): BelongsTo { return $this->belongsTo(Workflow::class); }
     public function phase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'workflow_phase_id'); }
     public function startedFromPhase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'started_from_phase_id'); }

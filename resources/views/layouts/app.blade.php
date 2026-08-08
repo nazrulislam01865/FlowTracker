@@ -13,9 +13,9 @@
     @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260807-9">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
     <script src="/js/flowtrack-inline-editing.js?v=20260807-3"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260808-4"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260808-5"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -33,9 +33,10 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-3">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-4">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
-    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260808-2">@endif
+    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-3">@endif
+    @if(request()->routeIs('inquiries.*'))<link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260809-07">@endif
     @livewireStyles
 </head>
 <body>
@@ -45,7 +46,7 @@
     <main class="main">
         @include('layouts.partials.topbar')
         <div class="content {{ request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : '' }}">
-            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile'))<div class="flash">{{ session('success') }}</div>@endif
+            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile','inquiries.*'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>
     </main>

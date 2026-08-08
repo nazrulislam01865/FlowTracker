@@ -47,3 +47,14 @@ php artisan flowtrack:sync-legacy
 ```
 
 Legacy synchronization no longer runs during normal page requests. China-specific deployment notes and diagnostics are in [`CHINA_PERFORMANCE_UPDATE.md`](CHINA_PERFORMANCE_UPDATE.md).
+
+## Inquiry Status / Taskflow update
+
+This build adds **Inquiry Statuses** to Master Data. The Inquiry list and Overview status editor now use the active values from that Master Data type. Run migrations before using the updated Inquiry screen:
+
+```bash
+php artisan migrate --force
+php artisan optimize:clear
+```
+
+The Inquiry Details UI now calls the task sequence **Taskflow**. The configured Workflow Setup remains the source used when creating an Inquiry; only the Inquiry detail-facing terminology changed.
