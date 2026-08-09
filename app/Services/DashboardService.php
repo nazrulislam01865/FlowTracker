@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
+use App\Models\Inquiry;
+use App\Models\InquiryTask;
 use App\Models\Task;
 use App\Models\User;
 use Closure;
@@ -14,7 +16,9 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v6-real-comment-mentions';
+    private const CACHE_VERSION = 'v8-all-context-mentions';
+
+    private ?int $clientLifecycleVersion = null;
 
     private const SECTIONS = [
         'summary',
@@ -123,20 +127,42 @@ class DashboardService
         });
     }
 
-    public function mentions(User $user): Collection
+    public function mentions(User $user, string $filter = 'all', int $limit = 12): Collection
     {
-        // Tagged Comments must be backed by a real persisted Job/Task comment.
-        // This deliberately excludes stale/demo mention notifications and mentions
-        // created from editable descriptions or other non-comment text fields.
-        return $this->realCommentMentionQuery($user)
-            ->select(['id', 'user_id', 'flow_job_id', 'flow_task_id', 'type', 'title', 'message', 'read_at', 'created_at'])
+        // A mention is a first-class notification. Do not try to rediscover its
+        // source by comparing the notification message with a comment body: rich
+        // text normalization, description mentions, and Inquiry mentions make that
+        // brittle. The foreign-key context is the durable source of truth.
+        $query = $this->dashboardMentionQuery($user);
+
+        match ($filter) {
+            'unread' => $query->whereNull('flow_notifications.read_at'),
+            'job' => $query
+                ->whereNotNull('flow_notifications.flow_job_id')
+                ->whereNull('flow_notifications.flow_task_id'),
+            'task' => $query->whereNotNull('flow_notifications.flow_task_id'),
+            'inquiry' => $query->where(function (Builder $inquiryMentions): void {
+                $inquiryMentions
+                    ->whereNotNull('flow_notifications.inquiry_id')
+                    ->orWhereNotNull('flow_notifications.inquiry_task_id');
+            }),
+            default => null,
+        };
+
+        return $query
+            ->select([
+                'id', 'user_id', 'flow_job_id', 'flow_task_id', 'inquiry_id',
+                'inquiry_task_id', 'type', 'title', 'message', 'read_at', 'created_at',
+            ])
             ->with([
                 'job:id,job_number,title,client_id',
                 'job.client:id,name',
                 'task:id,task_number,title,flow_job_id',
+                'inquiry:id,inquiry_number,subject',
+                'inquiryTask:id,inquiry_id,title',
             ])
             ->latest('id')
-            ->limit(12)
+            ->limit(max(1, min(50, $limit)))
             ->get();
     }
 
@@ -145,24 +171,31 @@ class DashboardService
         return (int) $this->remember(
             $user,
             'mention-count',
-            fn () => $this->realCommentMentionQuery($user)->whereNull('read_at')->count(),
+            fn () => $this->dashboardMentionQuery($user)->whereNull('read_at')->count(),
         );
     }
 
-    public function markAllCommentMentionsRead(User $user): void
+    public function markAllMentionsRead(User $user): void
     {
-        $this->realCommentMentionQuery($user)
+        $this->dashboardMentionQuery($user)
             ->whereNull('read_at')
             ->update(['read_at' => now()]);
 
         $this->forgetMentions($user);
     }
 
+    /** Backwards-compatible alias for older callers. */
+    public function markAllCommentMentionsRead(User $user): void
+    {
+        $this->markAllMentionsRead($user);
+    }
+
     /**
-     * Only mention notifications that can be proven to originate from an actual
-     * Job comment or Task comment belong in Dashboard > Tagged comments.
+     * Dashboard Tagged Comments intentionally includes mentions created from both
+     * comments and descriptions across Orders, Tasks and Inquiries. Orphaned or
+     * soft-deleted records are excluded without executing content-matching queries.
      */
-    private function realCommentMentionQuery(User $user): Builder
+    private function dashboardMentionQuery(User $user): Builder
     {
         return FlowNotification::query()
             ->where('flow_notifications.user_id', $user->id)
@@ -172,26 +205,47 @@ class DashboardService
                     ->where(function (Builder $taskMention): void {
                         $taskMention
                             ->whereNotNull('flow_notifications.flow_task_id')
-                            ->whereExists(function ($comments): void {
-                                $comments
+                            ->whereExists(function ($tasks): void {
+                                $tasks
                                     ->selectRaw('1')
-                                    ->from('flow_task_comments')
-                                    ->whereColumn('flow_task_comments.flow_task_id', 'flow_notifications.flow_task_id')
-                                    ->whereColumn('flow_task_comments.body', 'flow_notifications.message');
+                                    ->from('tasks')
+                                    ->whereColumn('tasks.id', 'flow_notifications.flow_task_id')
+                                    ->whereNull('tasks.deleted_at');
                             });
                     })
                     ->orWhere(function (Builder $jobMention): void {
                         $jobMention
                             ->whereNull('flow_notifications.flow_task_id')
                             ->whereNotNull('flow_notifications.flow_job_id')
-                            ->whereExists(function ($activities): void {
-                                $activities
+                            ->whereExists(function ($jobs): void {
+                                $jobs
                                     ->selectRaw('1')
-                                    ->from('activities')
-                                    ->where('activities.subject_type', FlowJob::class)
-                                    ->whereColumn('activities.subject_id', 'flow_notifications.flow_job_id')
-                                    ->where('activities.event', 'job.comment')
-                                    ->whereColumn('activities.description', 'flow_notifications.message');
+                                    ->from('flow_jobs')
+                                    ->whereColumn('flow_jobs.id', 'flow_notifications.flow_job_id')
+                                    ->whereNull('flow_jobs.deleted_at');
+                            });
+                    })
+                    ->orWhere(function (Builder $inquiryTaskMention): void {
+                        $inquiryTaskMention
+                            ->whereNotNull('flow_notifications.inquiry_task_id')
+                            ->whereExists(function ($tasks): void {
+                                $tasks
+                                    ->selectRaw('1')
+                                    ->from('inquiry_tasks')
+                                    ->whereColumn('inquiry_tasks.id', 'flow_notifications.inquiry_task_id')
+                                    ->whereNull('inquiry_tasks.deleted_at');
+                            });
+                    })
+                    ->orWhere(function (Builder $inquiryMention): void {
+                        $inquiryMention
+                            ->whereNull('flow_notifications.inquiry_task_id')
+                            ->whereNotNull('flow_notifications.inquiry_id')
+                            ->whereExists(function ($inquiries): void {
+                                $inquiries
+                                    ->selectRaw('1')
+                                    ->from('inquiries')
+                                    ->whereColumn('inquiries.id', 'flow_notifications.inquiry_id')
+                                    ->whereNull('inquiries.deleted_at');
                             });
                     });
             });
@@ -377,30 +431,40 @@ class DashboardService
 
     private function remember(User $user, string $section, Closure $resolver): mixed
     {
-        $seconds = max(10, (int) config('performance.dashboard_cache_seconds', 45));
+        $seconds = max(
+            10,
+            (int) config('performance.dashboard_cache_seconds', 45)
+        );
+
         $key = $this->cacheKey($section, (int) $user->id);
 
-        $cached = Cache::get($key);
-        if ($cached !== null && !$this->isSafeCacheValue($cached)) {
-            // Self-heal any stale serialized model/collection values left by an
-            // older deployment. Dashboard cache is intentionally scalar/array only.
+        $missing = new \stdClass();
+
+        $cached = Cache::get($key, $missing);
+
+        if ($cached !== $missing) {
+            if ($this->isSafeCacheValue($cached)) {
+                return $cached;
+            }
+
             Cache::forget($key);
         }
 
-        return Cache::remember(
+        $value = $resolver();
+
+        if (!$this->isSafeCacheValue($value)) {
+            throw new \LogicException(
+                'Dashboard cache values must contain only arrays, scalars, or null.'
+            );
+        }
+
+        Cache::put(
             $key,
-            now()->addSeconds($seconds),
-            function () use ($resolver, $key) {
-                $value = $resolver();
-
-                if (!$this->isSafeCacheValue($value)) {
-                    Cache::forget($key);
-                    throw new \LogicException('Dashboard cache values must contain only arrays, scalars, or null.');
-                }
-
-                return $value;
-            },
+            $value,
+            now()->addSeconds($seconds)
         );
+
+        return $value;
     }
 
     private function isSafeCacheValue(mixed $value): bool
@@ -424,6 +488,13 @@ class DashboardService
 
     private function cacheKey(string $section, int $userId): string
     {
-        return 'flowtrack:dashboard:'.self::CACHE_VERSION.':clients-'.app(ClientService::class)->lifecycleVersion().':'.$section.':user:'.$userId;
+        $clientVersion = $this->clientLifecycleVersion ??=
+            app(ClientService::class)->lifecycleVersion();
+
+        return 'flowtrack:dashboard:'
+            .self::CACHE_VERSION
+            .':clients-'.$clientVersion
+            .':'.$section
+            .':user:'.$userId;
     }
 }

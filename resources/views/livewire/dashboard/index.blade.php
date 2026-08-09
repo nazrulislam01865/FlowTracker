@@ -53,7 +53,7 @@
     </div>
 
     <div class="ft-grid ft-grid-primary">
-        <livewire:dashboard.tagged-comments />
+        <livewire:dashboard.tagged-comments lazy />
 
         <section class="ft-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
@@ -80,5 +80,5 @@
         </section>
     </div>
 
-    <livewire:dashboard.secondary />
+    <livewire:dashboard.secondary lazy />
 </div>

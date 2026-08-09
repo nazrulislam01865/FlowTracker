@@ -29,7 +29,7 @@
         <div class="toolbar">
             <label class="search-wrap">
                 <span class="search-icon">⌕</span>
-                <input class="search" type="search" wire:model.live.debounce.400ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search my work">
+                <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search my work">
                 @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
             </label>
             <div class="quick-filters">
@@ -47,7 +47,7 @@
         <div class="load-state">
             <span>
                 @if($searchNeedsMoreCharacters)
-                    Type 2 characters to search broadly. Order and task numbers can be searched by prefix.
+                    Type 3 characters to search broadly. Order and task reference prefixes can be searched sooner.
                 @elseif($workPaginator->total())
                     Showing {{ $workGroups->count() }} of {{ $workPaginator->total() }} matching Orders · {{ $visibleTaskCount }} visible tasks
                 @else
@@ -55,7 +55,7 @@
                 @endif
             </span>
             <span class="loading-copy">
-                <span wire:loading.remove wire:target="search,quick,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage">Results update after 400 ms</span>
+                <span wire:loading.remove wire:target="search,quick,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
                 <span wire:loading.delay.long wire:target="search,quick,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
             </span>
         </div>

@@ -29,6 +29,9 @@ class InquiryService
 {
     public const WORKING_STATUSES = ['In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold'];
     public const FINAL_STATUSES = ['Converted', 'Dead'];
+    public const AUTO_READY_STATUS = 'Ready';
+    public const AUTO_IN_PROGRESS_STATUS = 'In Progress';
+    public const AUTO_COMPLETED_STATUS = 'Completed';
 
     public function workspaceId(): int
     {
@@ -214,7 +217,14 @@ class InquiryService
             $assignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
-            $status = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Closed' : (string) $inquiry->status);
+            $status = match (true) {
+                $inquiry->result === 'converted' => 'Converted',
+                $inquiry->result === 'dead' => 'Closed',
+                (string) $inquiry->status === 'Draft' => 'Draft',
+                $total > 0 && $done === $total => self::AUTO_COMPLETED_STATUS,
+                $done > 0 || filled($inquiry->inquiry_started_at) => self::AUTO_IN_PROGRESS_STATUS,
+                default => self::AUTO_READY_STATUS,
+            };
             $progressPercent = $total > 0 ? max(0, min(100, (int) round(($done / $total) * 100))) : 0;
 
             return [
@@ -288,13 +298,13 @@ class InquiryService
                 'received_date' => $data['received_date'],
                 'request_source' => blank($data['request_source'] ?? null) ? null : $data['request_source'],
                 'subject' => trim((string) $data['subject']),
-                'requirement_notes' => blank($data['requirement_notes'] ?? null) ? null : trim((string) $data['requirement_notes']),
+                'requirement_notes' => app(RichTextService::class)->normalize($data['requirement_notes'] ?? null, 10000, 'requirement_notes'),
                 'target_price' => filled($data['target_price'] ?? null) ? $data['target_price'] : null,
                 'currency' => ($data['currency'] ?? null) ?: 'USD',
                 'required_delivery_date' => ($data['required_delivery_date'] ?? null) ?: null,
                 'priority' => ($data['priority'] ?? null) ?: 'Medium',
                 'initial_follow_up_date' => ($data['initial_follow_up_date'] ?? null) ?: null,
-                'status' => $draft ? 'Draft' : $this->defaultInquiryStatus(),
+                'status' => $draft ? 'Draft' : self::AUTO_READY_STATUS,
             ]);
 
             foreach (array_values($data['items'] ?? []) as $index => $item) {
@@ -315,11 +325,11 @@ class InquiryService
                     'source_task_pack_item_id' => ($task['source_id'] ?? null) ?: null,
                     'assignee_id' => ($task['assignee_id'] ?? null) ?: null,
                     'title' => trim((string) $task['name']),
-                    'description' => blank($task['description'] ?? null) ? null : trim((string) $task['description']),
+                    'description' => app(RichTextService::class)->normalize($task['description'] ?? null, 10000, 'description'),
                     'sequence' => $index + 1,
                     'due_date' => ($task['due_date'] ?? null) ?: null,
-                    'status' => $draft ? 'Waiting' : ($index === 0 ? 'In Progress' : 'Waiting'),
-                    'started_at' => ! $draft && $index === 0 ? now() : null,
+                    'status' => 'Waiting',
+                    'started_at' => null,
                     'requires_submission' => (bool) ($task['requires_submission'] ?? false),
                     'submission_label' => blank($task['submission_label'] ?? null) ? null : trim((string) $task['submission_label']),
                 ]);
@@ -330,6 +340,19 @@ class InquiryService
             if (!$draft) {
                 $first = $inquiry->tasks()->orderBy('sequence')->first();
                 if ($first) $this->notifyTaskAssigned($first, $actor);
+
+                if (filled($inquiry->requirement_notes)) {
+                    $this->notifyMentions($inquiry, null, (string) $inquiry->requirement_notes, $actor);
+                }
+
+                $inquiry->tasks()
+                    ->whereNotNull('description')
+                    ->get(['id', 'inquiry_id', 'description'])
+                    ->each(function (InquiryTask $task) use ($inquiry, $actor): void {
+                        if (filled($task->description)) {
+                            $this->notifyMentions($inquiry, $task, (string) $task->description, $actor);
+                        }
+                    });
             }
 
             return $inquiry->refresh();
@@ -485,13 +508,10 @@ class InquiryService
             $newDisplay = $priority;
             $update['priority'] = $priority;
         } else {
-            $description = trim((string) $value);
-            if (mb_strlen($description) > 10000) {
-                throw ValidationException::withMessages(['requirement_notes' => 'Inquiry description must be 10,000 characters or fewer.']);
-            }
-            $oldDisplay = trim((string) ($inquiry->requirement_notes ?? ''));
-            $newDisplay = $description;
-            $update['requirement_notes'] = $description === '' ? null : $description;
+            $description = app(RichTextService::class)->normalize((string) $value, 10000, 'requirement_notes');
+            $oldDisplay = (string) ($inquiry->requirement_notes ?? '');
+            $newDisplay = (string) ($description ?? '');
+            $update['requirement_notes'] = $description;
         }
 
         if ($oldDisplay === $newDisplay) return $inquiry->refresh();
@@ -506,6 +526,7 @@ class InquiryService
         };
         if ($field === 'requirement_notes') {
             $this->activity($inquiry, $actor, 'inquiry.field_updated', 'Inquiry description updated.');
+            $this->notifyMentions($inquiry->refresh(), null, $newDisplay, $actor);
         } else {
             $oldActivityDisplay = $oldDisplay !== '' ? $oldDisplay : 'empty';
             $newActivityDisplay = $newDisplay !== '' ? $newDisplay : 'empty';
@@ -519,18 +540,20 @@ class InquiryService
     {
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_if(in_array((string) $inquiry->status, self::FINAL_STATUSES, true) || $inquiry->result, 422, 'A completed Inquiry cannot change working status.');
-        abort_unless($this->inquiryStatusOptions()->contains($status), 422, 'Select an active Inquiry Status from Master Data.');
-        $wasDraft = (string) $inquiry->status === 'Draft';
-        $inquiry->update(['status' => $status]);
-        if ($wasDraft) {
+
+        // Working lifecycle status is task-driven. The only legacy/manual transition
+        // retained here is activating a Draft; after that, task progress owns status.
+        if ((string) $inquiry->status === 'Draft') {
+            $inquiry->update(['status' => self::AUTO_READY_STATUS]);
             $first = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->first();
             if ($first) {
-                $first->update(['status' => 'In Progress', 'started_at' => $first->started_at ?: now()]);
+                $first->update(['status' => 'Waiting', 'started_at' => null]);
                 $this->notifyTaskAssigned($first, $actor);
             }
+            $this->activity($inquiry, $actor, 'inquiry.status_changed', 'Inquiry activated and is Ready to start.');
         }
-        $this->activity($inquiry, $actor, 'inquiry.status_changed', 'Inquiry status changed to '.$status.'.');
-        return $inquiry->refresh();
+
+        return $this->syncAutomaticStatus($inquiry, $actor);
     }
 
     public function updateTask(InquiryTask $task, array $data, User $actor): InquiryTask
@@ -539,26 +562,29 @@ class InquiryService
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->completed_at, 422, 'Completed tasks are locked.');
 
-        // Open Inquiry tasks may be prepared before they become the active task.
-        // Sequence still controls completion; editing a future task does not unlock it.
+        // Open Inquiry tasks may be prepared independently. Completion is allowed
+        // whenever that task itself is explicitly moved to In Progress.
         $isActive = $this->isActiveTask($task);
         $allowedStatuses = array_merge(['Waiting'], self::WORKING_STATUSES);
         $nextStatus = in_array((string) ($data['status'] ?? ''), $allowedStatuses, true)
             ? (string) $data['status']
             : ($isActive ? 'In Progress' : 'Waiting');
-        if ($isActive && $nextStatus === 'Waiting') $nextStatus = 'In Progress';
-
         $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
-        $task->update([
+        $taskUpdate = [
             'assignee_id' => ($data['assignee_id'] ?? null) ?: null,
             'due_date' => ($data['due_date'] ?? null) ?: null,
             'status' => $nextStatus,
-        ]);
+        ];
+        if (in_array($nextStatus, self::WORKING_STATUSES, true) && !$task->started_at) {
+            $taskUpdate['started_at'] = now();
+        }
+        $task->update($taskUpdate);
         if ((int) ($task->assignee_id ?? 0) !== (int) ($oldAssigneeId ?? 0)) {
             $this->forgetMyTaskShell($oldAssigneeId);
             $this->notifyTaskAssigned($task, $actor);
         }
         $this->activity($task->inquiry, $actor, 'inquiry.task_updated', $task->title.' updated — '.$task->status.'.', ['inquiry_task_id' => $task->id]);
+        $this->syncAutomaticStatus($task->inquiry, $actor);
         return $task->refresh();
     }
 
@@ -586,7 +612,7 @@ class InquiryService
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->completed_at, 422, 'This task is already completed.');
-        abort_unless($this->isActiveTask($task), 422, 'Complete the previous taskflow task first.');
+        abort_unless(strcasecmp(trim((string) $task->status), 'In Progress') === 0, 422, 'Task must be In Progress before completion.');
         if ($task->requires_submission && !$task->documents()->exists()) {
             throw ValidationException::withMessages(['task' => 'Required file must be uploaded before completion.']);
         }
@@ -596,17 +622,12 @@ class InquiryService
             $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
             $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', ['inquiry_task_id' => $task->id]);
 
-            $next = $task->inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->first();
-            if ($next) {
-                $next->update(['status' => 'In Progress', 'started_at' => $next->started_at ?: now()]);
-                $task->inquiry->update(['status' => $this->defaultInquiryStatus()]);
-                $this->activity($task->inquiry, $actor, 'inquiry.task_started', $next->title.' started as the next active Inquiry task.', ['inquiry_task_id' => $next->id]);
-                $this->notifyTaskAssigned($next, $actor);
-            } else {
-                $task->inquiry->update(['status' => 'Ready for Decision']);
-                $this->activity($task->inquiry, $actor, 'inquiry.ready_for_decision', 'All Inquiry taskflow tasks are complete. Final decision is now available.');
+            $remaining = $task->inquiry->tasks()->whereNull('completed_at')->exists();
+            if (!$remaining) {
+                $this->activity($task->inquiry, $actor, 'inquiry.ready_for_decision', 'All Inquiry taskflow tasks are complete. The Inquiry is now Completed and the final decision is available.');
             }
 
+            $this->syncAutomaticStatus($task->inquiry, $actor);
             return $task->refresh();
         });
     }
@@ -633,17 +654,16 @@ class InquiryService
                 'source_task_pack_item_id' => null,
                 'assignee_id' => ($data['assignee_id'] ?? null) ?: null,
                 'title' => trim((string) ($data['name'] ?? '')),
-                'description' => blank($data['description'] ?? null) ? null : trim((string) $data['description']),
+                'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'sequence' => $lastSequence + 1,
                 'due_date' => ($data['due_date'] ?? null) ?: null,
-                'status' => $hasOpenTask ? 'Waiting' : 'In Progress',
-                'started_at' => $hasOpenTask ? null : now(),
+                'status' => 'Waiting',
+                'started_at' => null,
                 'requires_submission' => (bool) ($data['requires_submission'] ?? false),
                 'submission_label' => blank($data['submission_label'] ?? null) ? null : trim((string) $data['submission_label']),
             ]);
 
             if (!$hasOpenTask) {
-                $lockedInquiry->update(['status' => $this->defaultInquiryStatus()]);
                 $this->notifyTaskAssigned($task, $actor);
             }
 
@@ -654,6 +674,10 @@ class InquiryService
                 $task->title.' added to the Inquiry taskflow.',
                 ['inquiry_task_id' => $task->id],
             );
+            if (filled($task->description)) {
+                $this->notifyMentions($lockedInquiry, $task, (string) $task->description, $actor);
+            }
+            $this->syncAutomaticStatus($lockedInquiry, $actor);
 
             return $task->refresh();
         });
@@ -704,7 +728,7 @@ class InquiryService
                     'source_task_pack_item_id' => ($row['source_id'] ?? null) ?: null,
                     'assignee_id' => ($row['assignee_id'] ?? null) ?: null,
                     'title' => trim((string) $row['name']),
-                    'description' => blank($row['description'] ?? null) ? null : trim((string) $row['description']),
+                    'description' => app(RichTextService::class)->normalize($row['description'] ?? null, 10000, 'description'),
                     'sequence' => $index + 1,
                     'due_date' => ($row['due_date'] ?? null) ?: null,
                     'requires_submission' => (bool) ($row['requires_submission'] ?? false),
@@ -734,7 +758,7 @@ class InquiryService
         });
     }
 
-    public function upload(Inquiry $inquiry, UploadedFile $file, User $actor, ?InquiryTask $task = null): InquiryDocument
+    public function upload(Inquiry $inquiry, UploadedFile $file, User $actor, ?InquiryTask $task = null, ?string $note = null): InquiryDocument
     {
         abort_unless($this->canEdit($actor, $inquiry) || ($task && $this->canEditTask($actor, $task)), 403);
         if ($task) {
@@ -756,6 +780,7 @@ class InquiryService
             'path' => $path,
             'mime_type' => $file->getMimeType(),
             'size' => $file->getSize(),
+            'note' => filled($note) ? trim((string) $note) : null,
         ]);
 
         $this->activity(
@@ -789,6 +814,40 @@ class InquiryService
             'inquiry_document_id' => $document->id,
             'source_document_id' => $source->id,
         ]);
+
+        return $document;
+    }
+
+    public function linkExistingDocumentToTask(InquiryTask $task, Document $source, User $actor, ?string $note = null): InquiryDocument
+    {
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'link'), 403);
+        abort_unless((int) ($source->client_id ?? 0) === (int) $task->inquiry->client_id, 403, 'The selected document does not belong to this client.');
+
+        $document = InquiryDocument::create([
+            'inquiry_id' => $task->inquiry_id,
+            'inquiry_task_id' => $task->id,
+            'uploaded_by' => $actor->id,
+            'name' => $source->name,
+            'path' => $source->path,
+            'mime_type' => $source->mime_type,
+            'size' => $source->size,
+            'note' => filled($note) ? trim((string) $note) : null,
+        ]);
+
+        $this->activity(
+            $task->inquiry,
+            $actor,
+            'inquiry.task_document_linked',
+            $document->name.' linked to '.$task->title.' from Documents.',
+            [
+                'inquiry_task_id' => $task->id,
+                'inquiry_document_id' => $document->id,
+                'source_document_id' => $source->id,
+            ],
+        );
 
         return $document;
     }
@@ -840,6 +899,8 @@ class InquiryService
     public function addInquiryComment(Inquiry $inquiry, string $body, User $actor): Activity
     {
         abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 403);
+        $body = app(RichTextService::class)->normalize($body, 5000, 'inquiryComment');
+        abort_if(!$body, 422, 'Comment cannot be empty.');
         $activity = $this->activity($inquiry, $actor, 'inquiry.comment', $body, ['comment' => true]);
         $this->notifyMentions($inquiry, null, $body, $actor);
         return $activity;
@@ -847,6 +908,8 @@ class InquiryService
 
     public function addTaskComment(InquiryTask $task, string $body, User $actor): InquiryTaskComment
     {
+        $body = app(RichTextService::class)->normalize($body, 5000, 'taskComment');
+        abort_if(!$body, 422, 'Comment cannot be empty.');
         $task->loadMissing('inquiry');
         abort_unless($this->visibleQuery($actor)->whereKey($task->inquiry_id)->exists(), 403);
         abort_if(!$task->completed_at && !$this->isActiveTask($task), 422, 'Future task comments stay locked until the task starts.');
@@ -943,10 +1006,10 @@ class InquiryService
                 'owner_id' => $ownerId,
                 'coordinator_id' => $ownerId,
                 'delivery_date' => $inquiry->required_delivery_date?->toDateString(),
-                'description' => trim(collect([
+                'description' => app(RichTextService::class)->prependText(
                     $inquiry->reference_number ? 'Source Inquiry: '.$inquiry->inquiry_number.' · Reference '.$inquiry->reference_number : 'Source Inquiry: '.$inquiry->inquiry_number,
                     $inquiry->requirement_notes,
-                ])->filter()->implode("\n\n")),
+                ),
                 'draft' => false,
             ], $actor);
 
@@ -1197,15 +1260,61 @@ class InquiryService
     {
         $open = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->get();
         foreach ($open as $index => $task) {
-            $update = ['status' => $index === 0 ? (in_array($task->status, self::WORKING_STATUSES, true) ? $task->status : 'In Progress') : 'Waiting'];
-            if ($index === 0 && (string) $inquiry->status !== 'Draft' && ! $task->started_at) $update['started_at'] = now();
-            $task->update($update);
+            if ($index === 0) {
+                $task->update([
+                    'status' => $task->started_at && in_array((string) $task->status, self::WORKING_STATUSES, true)
+                        ? $task->status
+                        : 'Waiting',
+                ]);
+                continue;
+            }
+
+            // Future tasks stay queued until the sequence reaches them.
+            if (!$task->started_at) $task->update(['status' => 'Waiting']);
         }
-        if ($open->isEmpty() && $inquiry->tasks()->exists()) {
-            $inquiry->update(['status' => 'Ready for Decision']);
-        } elseif ($open->isNotEmpty() && $inquiry->status === 'Ready for Decision') {
-            $inquiry->update(['status' => $this->defaultInquiryStatus()]);
+
+        $this->syncAutomaticStatus($inquiry);
+    }
+
+    public function syncAutomaticStatus(Inquiry $inquiry, ?User $actor = null): Inquiry
+    {
+        $inquiry->refresh();
+        if ($inquiry->result || (string) $inquiry->status === 'Draft') return $inquiry;
+
+        $tasks = $inquiry->tasks()
+            ->get(['id', 'status', 'started_at', 'completed_at']);
+        $total = $tasks->count();
+        $completed = $tasks->whereNotNull('completed_at')->count();
+        $hasStarted = $tasks->contains(fn (InquiryTask $task) => $task->started_at !== null || $task->completed_at !== null);
+
+        $nextStatus = match (true) {
+            $total > 0 && $completed === $total => self::AUTO_COMPLETED_STATUS,
+            $hasStarted => self::AUTO_IN_PROGRESS_STATUS,
+            default => self::AUTO_READY_STATUS,
+        };
+
+        $update = ['status' => $nextStatus];
+        if ($nextStatus === self::AUTO_COMPLETED_STATUS) {
+            $update['completed_at'] = $inquiry->completed_at ?: now();
+        } elseif ($inquiry->completed_at && !$inquiry->result) {
+            $update['completed_at'] = null;
         }
+
+        $statusChanged = (string) $inquiry->status !== $nextStatus;
+        $completedChanged = ($update['completed_at'] ?? null) != $inquiry->completed_at;
+        if ($statusChanged || $completedChanged) {
+            $inquiry->update($update);
+            if ($statusChanged && $actor) {
+                $this->activity(
+                    $inquiry,
+                    $actor,
+                    'inquiry.status_auto_changed',
+                    'Inquiry status automatically changed to '.$nextStatus.' based on Taskflow progress.',
+                );
+            }
+        }
+
+        return $inquiry->refresh();
     }
 
     private function activity(Inquiry $inquiry, User $actor, string $event, string $description, array $meta = []): Activity
@@ -1240,11 +1349,15 @@ class InquiryService
     {
         $ids = app(MentionService::class)->userIdsFromText($body);
         if ($ids === []) return;
-        User::query()->whereIn('id', $ids)->where('is_active', true)->get()->each(function (User $recipient) use ($inquiry, $task, $body, $actor): void {
-            if ((int) $recipient->id === (int) $actor->id) return;
-            if (!$this->visibleQuery($recipient)->whereKey($inquiry->id)->exists()) return;
-            $this->createNotification($recipient, $inquiry, $task, $actor->name.' mentioned you in '.$inquiry->inquiry_number, $body, 'mention');
-        });
+
+        app(NotificationService::class)->notifyInquiryMentionedUsers(
+            $ids,
+            $actor->name.' mentioned you in '.$inquiry->inquiry_number,
+            $body,
+            $inquiry,
+            $task,
+            $actor,
+        );
     }
 
     private function createNotification(User $recipient, Inquiry $inquiry, ?InquiryTask $task, string $title, string $message, string $type): void

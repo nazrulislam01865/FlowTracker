@@ -6,6 +6,7 @@
     'triggerClass' => '',
     'variant' => 'compact',
     'menuWidth' => 300,
+    'searchPlaceholder' => 'Search assignee…',
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
@@ -62,7 +63,7 @@
             x-model="query"
             x-on:input.debounce.300ms="searchOptions()"
             x-on:keydown.arrow-down.prevent="focusFirst()"
-            placeholder="Search assignee…"
+            placeholder="{{ $searchPlaceholder }}"
             autocomplete="off"
         >
 

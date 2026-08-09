@@ -30,20 +30,20 @@
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
                 <div class="ft-edit-display-row" x-show="!editing">
-                    <span>
-                        <span x-show="String(value) === String(serverValue)">@if($job->description)<x-ui.mention-text :text="$job->description" />@else No order description recorded. @endif</span>
-                        <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
-                    </span>
+                    <div class="ft-rich-text-content ft-editable-rich-display">
+                        <div x-show="!hasRichTextOverride">@if($job->description)<x-ui.mention-text :text="$job->description" />@else No order description recorded. @endif</div>
+                        <div x-cloak x-show="hasRichTextOverride" x-html="richTextOverrideHtml"></div>
+                    </div>
                     @if($canEditJob)
-                        <button type="button" :disabled="status === 'saving'" class="ft-inline-edit-button" aria-label="Edit order description" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.descriptionEditor.focus())">✎</button>
+                        <button type="button" :disabled="status === 'saving'" class="ft-inline-edit-button" aria-label="Edit order description" title="Edit" x-on:click.stop="beginRichTextEdit($refs.descriptionEditor)">✎</button>
                     @endif
                 </div>
                 @if($canEditJob)
                     <div x-cloak x-show="editing" class="ft-inline-description-editor">
-                        <textarea x-ref="descriptionEditor" x-model="draftValue" rows="3" class="ft-mention-input" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" x-on:keydown.escape.prevent="cancelEdit()"></textarea>
-                        <div>
-                            <button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button>
-                            <button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No order description recorded.', () => $wire.updateJobTextField({{ $job->id }}, 'description', draftValue))">Save</button>
+                        <textarea x-ref="descriptionEditor" rows="3" class="ft-mention-input" data-rich-text autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}">{{ $job->description ?? '' }}</textarea>
+                        <div class="ft-inline-description-actions">
+                            <button type="button" class="ft-outline-btn" x-on:click="cancelRichTextEdit($refs.descriptionEditor)">Cancel</button>
+                            <button type="button" class="ft-new-job-btn" data-rich-text-submit :disabled="status === 'saving'" x-on:click="saveRichText($refs.descriptionEditor, 'No order description recorded.', (clean) => $wire.updateJobTextField({{ $job->id }}, 'description', clean))">Save</button>
                         </div>
                     </div>
                     <x-ui.inline-save-state />
@@ -216,6 +216,9 @@
                 class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
                 x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Order owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned'), avatarUrl: @js($job->owner?->profileImageUrl() ?? '') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                x-on:click.outside="if (editing) cancelEdit()"
+                x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateJobOwner({{ $job->id }}, draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
             >
                 <span>Order owner</span>
                 <b class="ft-planning-value">
@@ -224,11 +227,18 @@
                         <span x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
                     </span>
                     @if($canAssignJob)
-                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.ownerSelect.focus())">✎</button>
-                        <select x-ref="ownerSelect" x-cloak x-show="editing" x-model="draftValue" class="ft-planning-inline-select" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event, 'Unassigned'), () => $wire.updateJobOwner({{ $job->id }}, draftValue))">
-                            <option value="">Unassigned</option>
-                            @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
-                        </select>
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                        <div x-cloak x-show="editing" class="ft-task-inline-assignee-picker">
+                            <x-ui.inline-remote-user
+                                :value="$job->owner_id ?? ''"
+                                :selected-label="$job->owner?->name ?? 'Unassigned'"
+                                context="job-owner"
+                                search-placeholder="Search owner…"
+                                trigger-class="ft-planning-inline-select"
+                                variant="compact"
+                                :menu-width="300"
+                            />
+                        </div>
                         <x-ui.inline-save-state compact />
                     @endif
                 </b>

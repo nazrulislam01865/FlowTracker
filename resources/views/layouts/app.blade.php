@@ -11,11 +11,12 @@
         <meta name="flowtrack-logout-url" content="{{ route('logout') }}">
         <meta name="flowtrack-timezone-sync-url" content="{{ route('session.timezone') }}">
         <meta name="flowtrack-display-timezone" content="{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}">
+        <meta name="flowtrack-rich-text-upload-url" content="{{ route('rich-text-images.store') }}">
     @endauth
     <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
-    <script src="/js/flowtrack-inline-editing.js?v=20260809-avatar-1"></script>
+    <script src="/js/flowtrack-inline-editing.js?v=20260809-richtext-save-ui-3"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260808-5"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
@@ -41,7 +42,7 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260809-11">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-05">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260809-2">

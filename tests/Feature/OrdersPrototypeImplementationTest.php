@@ -21,6 +21,9 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('Order stage', $view);
         $this->assertStringContainsString('Owner / Delivery', $view);
         $this->assertStringContainsString('Search order, inquiry, client, product, creator or owner', $view);
+        $this->assertStringContainsString('wire:model.live.debounce.700ms="search"', $view);
+        $this->assertStringContainsString('results update after 700 ms', $view);
+        $this->assertStringNotContainsString('wire:model.live.debounce.350ms="search"', $view);
         $this->assertStringContainsString('+ New Order', $view);
         $this->assertStringNotContainsString('ft-job-bulk-bar', $view);
         $this->assertStringNotContainsString('toggleSelectAllJobs', $view);
@@ -38,6 +41,9 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("'activities.subject_id'", $service);
         $this->assertStringNotContainsString("'createdActivity:id,subject_type,subject_id,user_id,created_at'", $service);
         $this->assertStringNotContainsString("'tasks' => fn", substr($service, strpos($service, 'public function paginateOrders'), strpos($service, 'public function summaryCounts') - strpos($service, 'public function paginateOrders')));
+        $this->assertStringContainsString('if ($searchLength > 0 && $searchLength < 3)', $service);
+        $this->assertStringContainsString("preg_match('/^(ORDER|JOB|ORD)[-0-9]/i', \$token)", $service);
+        $this->assertStringContainsString("\$like = \$looksLikeReference ? \$token.'%' : '%'.\$token.'%'", $service);
         $this->assertStringContainsString('label="Order"', $sidebar);
         $this->assertStringContainsString("Route::get('/orders'", $routes);
     }

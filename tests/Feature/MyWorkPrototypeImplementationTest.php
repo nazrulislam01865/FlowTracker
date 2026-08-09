@@ -41,7 +41,7 @@ class MyWorkPrototypeImplementationTest extends TestCase
 
         $this->assertStringContainsString("->groupBy('tasks.flow_job_id')", $service);
         $this->assertStringContainsString("->fromSub(\$grouped, 'my_work_groups')", $service);
-        $this->assertStringContainsString('->paginate(max(1, min(25, $perPage))', $service);
+        $this->assertStringContainsString('->paginate(max(1, min(self::JOBS_PER_PAGE, $perPage))', $service);
         $this->assertStringContainsString("->whereIn('tasks.flow_job_id', \$jobIds)", $service);
         $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $service);
         $this->assertStringContainsString('$administratorAllTasks', $service);

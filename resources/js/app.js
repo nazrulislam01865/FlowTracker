@@ -1,3 +1,4 @@
+import { bootRichTextEditors, observeRichTextEditors, bootLivewireRichTextHooks, bootRichTextImageViewer, scheduleRichTextRefresh } from './rich-text';
 
 const flowtrackTimezoneState = { syncing: false, attemptedTimezone: null };
 
@@ -107,7 +108,7 @@ const markRealtimeUnread = (payload = {}) => {
 const clearRealtimeUnread = () => setRealtimeUnreadCount(0);
 
 const realtimeState = { pusherBooted: false, connected: false, unreadTimer: null, listenerBound: false, latestNotificationId: null, initialNotificationSynced: false };
-const unreadFallbackIntervalMs = 15000;
+const unreadFallbackIntervalMs = 60000;
 
 const syncUnreadCount = async () => {
     const url = document.querySelector('meta[name="flowtrack-notification-count-url"]')?.content;
@@ -169,32 +170,49 @@ const bootRealtimeNotifications = () => {
     const authEndpoint = document.querySelector('meta[name="flowtrack-pusher-auth"]')?.content;
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
 
-    startUnreadFallback();
-
+    // Poll only when realtime notifications are unavailable.
     if (!window.Pusher || !key || !cluster || !channelName || !authEndpoint || !csrf) {
+        startUnreadFallback();
         return;
     }
 
     realtimeState.pusherBooted = true;
+
     const pusher = new window.Pusher(key, {
         cluster,
         forceTLS: true,
         channelAuthorization: {
             endpoint: authEndpoint,
             transport: 'ajax',
-            headers: {'X-CSRF-TOKEN': csrf, 'X-Requested-With': 'XMLHttpRequest'},
+            headers: {
+                'X-CSRF-TOKEN': csrf,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
         },
     });
 
     pusher.connection.bind('connected', () => {
         realtimeState.connected = true;
+
+        // Pusher is working, so polling is unnecessary.
+        stopUnreadFallback();
+
+        // One synchronization after connecting is enough.
         syncUnreadCount();
     });
-    ['disconnected', 'unavailable', 'failed'].forEach((state) => pusher.connection.bind(state, () => {
-        realtimeState.connected = false;
-        startUnreadFallback();
-    }));
-    pusher.connection.bind('error', () => startUnreadFallback());
+
+    ['disconnected', 'unavailable', 'failed'].forEach((state) => {
+        pusher.connection.bind(state, () => {
+            realtimeState.connected = false;
+            startUnreadFallback();
+        });
+    });
+
+    pusher.connection.bind('error', () => {
+        if (!realtimeState.connected) {
+            startUnreadFallback();
+        }
+    });
 
     const channel = pusher.subscribe(channelName);
     channel.bind('flowtrack.notification', (payload) => {
@@ -256,7 +274,9 @@ const bootSessionSafety = () => {
         flowtrackSessionState.ownerChecked = true;
         checkFlowtrackSessionOwner();
     }
-    if (!flowtrackSessionState.statusTimer) flowtrackSessionState.statusTimer = window.setInterval(checkFlowtrackSessionOwner, 60000);
+    if (!flowtrackSessionState.statusTimer) {
+        flowtrackSessionState.statusTimer = window.setInterval(checkFlowtrackSessionOwner, 300000);
+    }
     if (!flowtrackSessionState.idleTimer) flowtrackSessionState.idleTimer = window.setInterval(checkFlowtrackIdle, 30000);
 };
 
@@ -273,8 +293,8 @@ const parseMentionUsers = (input) => {
 
 const mentionInputsWithin = (root) => {
     const inputs = [];
-    if (root instanceof Element && root.matches('[data-mention-users]')) inputs.push(root);
-    root.querySelectorAll?.('[data-mention-users]').forEach((input) => inputs.push(input));
+    if (root instanceof Element && root.matches('[data-mention-users]:not([data-rich-text])')) inputs.push(root);
+    root.querySelectorAll?.('[data-mention-users]:not([data-rich-text])').forEach((input) => inputs.push(input));
     return inputs;
 };
 
@@ -641,6 +661,10 @@ const boot = () => {
     bootRealtimeNotifications();
     bootLivewireNotificationEvents();
     bootSessionSafety();
+    bootRichTextEditors();
+    observeRichTextEditors();
+    bootLivewireRichTextHooks();
+    bootRichTextImageViewer();
     bootMentionInputs();
     observeMentionInputs();
     bootLivewireMentionHooks();
@@ -649,11 +673,32 @@ const boot = () => {
 
 document.addEventListener('DOMContentLoaded', boot);
 document.addEventListener('livewire:init', () => {
+    bootRichTextEditors();
+    observeRichTextEditors();
+    bootLivewireRichTextHooks();
+    bootRichTextImageViewer();
     bootMentionInputs();
     observeMentionInputs();
     bootLivewireMentionHooks();
 });
+document.addEventListener('livewire:navigating', (event) => {
+    // Livewire 4 replaces the page body for wire:navigate. Enhance rich-text
+    // fields in the onSwap phase so the browser never paints the temporary raw
+    // textarea, and recreate the image viewer if the old body removed it.
+    event.detail?.onSwap?.(() => {
+        scheduleRichTextRefresh();
+        observeRichTextEditors();
+        bootRichTextImageViewer();
+    });
+});
+
 document.addEventListener('livewire:navigated', () => {
+    // Rich text is deliberately first: a notification/session integration
+    // should never be able to block editor or image-viewer initialization.
+    scheduleRichTextRefresh();
+    observeRichTextEditors();
+    bootLivewireRichTextHooks();
+    bootRichTextImageViewer();
     syncBrowserTimezone();
     bootShell();
     bootRealtimeNotifications();

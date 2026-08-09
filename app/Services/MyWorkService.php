@@ -180,17 +180,29 @@ class MyWorkService
         $tomorrow = $today->copy()->addDay()->toDateString();
         $weekEnd = $today->copy()->addDays(7)->toDateString();
 
-        $mentions = DB::table('flow_notifications')
+        $taskMentions = DB::table('flow_notifications')
             ->select('flow_task_id')
             ->where('user_id', $user->id)
             ->where('type', 'mention')
             ->whereNotNull('flow_task_id')
             ->groupBy('flow_task_id');
 
+        // An Order-level comment mention belongs in My Work too. In that case
+        // there is no flow_task_id, so expose the user's otherwise-visible tasks
+        // from that Order when the Mentions filter is selected.
+        $jobMentions = DB::table('flow_notifications')
+            ->select('flow_job_id')
+            ->where('user_id', $user->id)
+            ->where('type', 'mention')
+            ->whereNull('flow_task_id')
+            ->whereNotNull('flow_job_id')
+            ->groupBy('flow_job_id');
+
         $query = DB::table('tasks')
             ->join('flow_jobs as my_work_metric_jobs', 'my_work_metric_jobs.id', '=', 'tasks.flow_job_id')
             ->join('clients as my_work_metric_clients', 'my_work_metric_clients.id', '=', 'my_work_metric_jobs.client_id')
-            ->leftJoinSub($mentions, 'my_work_metric_mentions', fn ($join) => $join->on('my_work_metric_mentions.flow_task_id', '=', 'tasks.id'))
+            ->leftJoinSub($taskMentions, 'my_work_metric_task_mentions', fn ($join) => $join->on('my_work_metric_task_mentions.flow_task_id', '=', 'tasks.id'))
+            ->leftJoinSub($jobMentions, 'my_work_metric_job_mentions', fn ($join) => $join->on('my_work_metric_job_mentions.flow_job_id', '=', 'tasks.flow_job_id'))
             ->whereNull('tasks.deleted_at')
             ->whereNull('tasks.completed_at')
             ->whereNull('my_work_metric_jobs.deleted_at')
@@ -219,7 +231,7 @@ class MyWorkService
                 [$tomorrow, $weekEnd],
             )
             ->selectRaw("SUM(CASE WHEN LOWER(tasks.status) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
-            ->selectRaw('SUM(CASE WHEN my_work_metric_mentions.flow_task_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
+            ->selectRaw('SUM(CASE WHEN my_work_metric_task_mentions.flow_task_id IS NOT NULL OR my_work_metric_job_mentions.flow_job_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
             ->first();
 
         return [
@@ -304,18 +316,31 @@ class MyWorkService
             $like = '%'.$search.'%';
             $prefix = $search.'%';
             $looksLikeReference = preg_match('/^(JOB|TSK|TASK|ORD)[-0-9]/i', $search) === 1;
+            $referencePrefixOnly = mb_strlen($search) < 3 && $this->looksLikeReferencePrefix($search);
 
-            $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference) {
-                $inner->where('tasks.task_number', 'like', $looksLikeReference ? $prefix : $like)
-                    ->orWhere('tasks.title', 'like', $like)
-                    ->orWhere('tasks.attention_reason', 'like', $like)
-                    ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
-                    ->orWhereHas('job', fn (Builder $job) => $job
-                        ->where('job_number', 'like', $looksLikeReference ? $prefix : $like)
-                        ->orWhere('order_number', 'like', $looksLikeReference ? $prefix : $like)
-                        ->orWhere('title', 'like', $like)
-                        ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like)));
-            });
+            if ($referencePrefixOnly) {
+                // A recognised two-character reference prefix is useful, but
+                // it must never fan out into title/client/assignee contains
+                // searches. Keep this tiny-input path index-friendly.
+                $query->where(function (Builder $inner) use ($prefix) {
+                    $inner->where('tasks.task_number', 'like', $prefix)
+                        ->orWhereHas('job', fn (Builder $job) => $job
+                            ->where('job_number', 'like', $prefix)
+                            ->orWhere('order_number', 'like', $prefix));
+                });
+            } else {
+                $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference) {
+                    $inner->where('tasks.task_number', 'like', $looksLikeReference ? $prefix : $like)
+                        ->orWhere('tasks.title', 'like', $like)
+                        ->orWhere('tasks.attention_reason', 'like', $like)
+                        ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
+                        ->orWhereHas('job', fn (Builder $job) => $job
+                            ->where('job_number', 'like', $looksLikeReference ? $prefix : $like)
+                            ->orWhere('order_number', 'like', $looksLikeReference ? $prefix : $like)
+                            ->orWhere('title', 'like', $like)
+                            ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like)));
+                });
+            }
         }
 
         $this->applyQuickFilter($query, $user, (string) ($filters['quick'] ?? 'all'));
@@ -353,9 +378,17 @@ class MyWorkService
         return fn ($notification) => $notification
             ->selectRaw('1')
             ->from('flow_notifications')
-            ->whereColumn('flow_notifications.flow_task_id', 'tasks.id')
             ->where('flow_notifications.user_id', $user->id)
-            ->where('flow_notifications.type', 'mention');
+            ->where('flow_notifications.type', 'mention')
+            ->where(function ($mention) {
+                $mention
+                    ->whereColumn('flow_notifications.flow_task_id', 'tasks.id')
+                    ->orWhere(function ($jobMention) {
+                        $jobMention
+                            ->whereNull('flow_notifications.flow_task_id')
+                            ->whereColumn('flow_notifications.flow_job_id', 'tasks.flow_job_id');
+                    });
+            });
     }
 
     private function orderTasks(Builder $query, string $sort, string $today): void
@@ -457,9 +490,21 @@ class MyWorkService
         return 'green';
     }
 
-    private function searchIsUsable(string $search): bool
+    public function searchIsUsable(string $search): bool
     {
-        if (mb_strlen($search) >= 2) return true;
-        return preg_match('/^(JOB|TSK|TASK|ORD)[-0-9]/i', $search) === 1;
+        $search = trim($search);
+        $length = mb_strlen($search);
+
+        if ($length >= 3) return true;
+        if ($length < 2) return false;
+
+        // Permit known two-character reference prefixes without permitting
+        // arbitrary two-character global contains searches.
+        return $this->looksLikeReferencePrefix($search);
+    }
+
+    private function looksLikeReferencePrefix(string $search): bool
+    {
+        return preg_match('/^(JO|TS|TA|OR)$/i', trim($search)) === 1;
     }
 }

@@ -135,17 +135,19 @@
                     autocomplete="off"
                     placeholder="Search order, inquiry, client, product, creator or owner"
                     aria-label="Search orders"
-                    wire:model.live.debounce.350ms="search"
+                    wire:model.live.debounce.700ms="search"
                 >
                 <button @class(['ft-search-clear','show'=>filled($searchFilter)]) wire:click="{{ $clearAction }}" type="button">Clear</button>
             </label>
             <div class="ft-search-state">
                 <i class="ft-spinner" wire:loading wire:target="search,gotoPage,previousPage,nextPage" aria-hidden="true"></i>
                 <span wire:loading.remove wire:target="search,gotoPage,previousPage,nextPage">
-                    @if(filled($searchFilter))
+                    @if(filled($searchFilter) && mb_strlen(trim((string) $searchFilter)) < 3)
+                        Type at least 3 characters to search · showing all {{ number_format($jobs->total()) }} orders
+                    @elseif(filled($searchFilter))
                         {{ number_format($jobs->total()) }} {{ \Illuminate\Support\Str::plural('order', $jobs->total()) }} found for “{{ $searchFilter }}”
                     @else
-                        Type to search all {{ number_format($jobs->total()) }} orders · results update after 350 ms
+                        Type to search all {{ number_format($jobs->total()) }} orders · results update after 700 ms
                     @endif
                 </span>
                 <span wire:loading wire:target="search,gotoPage,previousPage,nextPage">Searching orders…</span>

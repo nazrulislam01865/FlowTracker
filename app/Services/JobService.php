@@ -137,6 +137,15 @@ class JobService
     public function paginateOrders(User $user, string $search = '', int $perPage = 25): LengthAwarePaginator
     {
         $search = trim($search);
+        $searchLength = mb_strlen($search);
+
+        // Avoid fan-out searches across Jobs, clients, owners, items,
+        // inquiries and creator activity for inputs that are too short to
+        // narrow the result set meaningfully.
+        if ($searchLength > 0 && $searchLength < 3) {
+            $search = '';
+        }
+
         $tokens = collect(preg_split('/\s+/', $search) ?: [])
             ->filter()
             ->take(6)
@@ -148,8 +157,9 @@ class JobService
         foreach ($tokens as $token) {
             $token = (string) $token;
             $legacyToken = preg_replace('/^ORDER-/i', 'JOB-', $token) ?: $token;
-            $like = '%'.$token.'%';
-            $legacyLike = '%'.$legacyToken.'%';
+            $looksLikeReference = preg_match('/^(ORDER|JOB|ORD)[-0-9]/i', $token) === 1;
+            $like = $looksLikeReference ? $token.'%' : '%'.$token.'%';
+            $legacyLike = $looksLikeReference ? $legacyToken.'%' : '%'.$legacyToken.'%';
 
             $query->where(function (Builder $match) use ($like, $legacyLike) {
                 $match->where('flow_jobs.job_number', 'like', $like)
@@ -226,6 +236,141 @@ class JobService
         ];
     }
 
+    /**
+     * Load the small, always-visible Order shell without hydrating the full
+     * workflow/task/document/activity graph. Tab-specific data is loaded by
+     * loadVisibleDetailTab() only when that tab is rendered.
+     */
+    public function findVisibleBase(User $user, int $id): FlowJob
+    {
+        return $this->visibleQuery($user)
+            ->with([
+                'client:id,name',
+                'phase:id,name,short_name,sequence',
+                'owner:id,name,profile_image_path',
+                'coordinator:id,name,profile_image_path',
+                'members.user:id,name,profile_image_path',
+            ])
+            ->withCount('documents')
+            ->findOrFail($id);
+    }
+
+    /**
+     * Hydrate only the relations required by the active Order detail tab.
+     * Keeping these relation sets explicit prevents an Order open from
+     * loading comments, histories, documents and workflow setup data that the
+     * user has not asked to see.
+     */
+    public function loadVisibleDetailTab(FlowJob $job, User $user, string $tab): FlowJob
+    {
+        abort_unless(in_array($tab, ['overview', 'workflow', 'documents'], true), 422);
+
+        if ($tab === 'overview') {
+            $job->load([
+                'workflow.phases.taskPack.items.documentCategory',
+                'items',
+                'tasks' => fn ($query) => app(AccessControlService::class)
+                    ->applyTaskScope($query, $user)
+                    ->with([
+                        'assignee:id,name,profile_image_path',
+                        'phase:id,name,short_name,sequence',
+                        'template',
+                        'documentCategory',
+                        'setupTemplate.documentCategory',
+                    ]),
+                // The current Overview Blade visibly renders attachments.
+                // Activity itself is paginated separately so opening an Order
+                // never hydrates its entire history.
+                'documents.uploader:id,name,profile_image_path',
+                'documents.task:id,title',
+            ]);
+
+            return $job;
+        }
+
+        if ($tab === 'workflow') {
+            $job->load([
+                'workflow.phases.taskPack.items.documentCategory',
+                'phase.taskPack.items.documentCategory',
+                'phaseHistories.phase',
+                'phaseHistories.actor:id,name,profile_image_path',
+                'tasks' => fn ($query) => app(AccessControlService::class)
+                    ->applyTaskScope($query, $user)
+                    ->with([
+                        'assignee:id,name,profile_image_path',
+                        'phase:id,name,short_name,sequence',
+                        'template',
+                        'documentCategory',
+                        'setupTemplate.documentCategory',
+                    ]),
+                // Workflow only needs document identity/category to calculate
+                // Task Pack requirement completion; uploader/file metadata is
+                // reserved for the Documents tab.
+                'documents:id,flow_job_id,task_id,category',
+            ]);
+
+            return $job;
+        }
+
+        $job->load([
+            'workflow.phases.taskPack.items.documentCategory',
+            'phase.taskPack.items.documentCategory',
+            'tasks' => fn ($query) => app(AccessControlService::class)
+                ->applyTaskScope($query, $user)
+                ->with([
+                    'assignee:id,name,profile_image_path',
+                    'phase:id,name,short_name,sequence',
+                    'template',
+                    'documentCategory',
+                    'setupTemplate.documentCategory',
+                ]),
+            'documents.uploader:id,name,profile_image_path',
+            'documents.task:id,title',
+        ]);
+
+        return $job;
+    }
+
+    /**
+     * Load only the visible page of Overview activity. The previous Order
+     * detail query hydrated the complete activity history for every open.
+     */
+    public function loadVisibleOverviewActivity(
+        FlowJob $job,
+        string $activityTab = 'all',
+        int $page = 1,
+        int $perPage = 10,
+    ): FlowJob {
+        $activityTab = in_array($activityTab, ['all', 'comments', 'history'], true)
+            ? $activityTab
+            : 'all';
+        $perPage = max(1, min($perPage, 50));
+
+        $query = $job->activities()
+            ->with('user:id,name,profile_image_path')
+            ->when($activityTab === 'comments', fn ($activity) => $activity->where('event', 'job.comment'))
+            ->when($activityTab === 'history', fn ($activity) => $activity->where(fn ($events) => $events
+                ->whereNull('event')
+                ->orWhere('event', '!=', 'job.comment')));
+
+        $total = (clone $query)->count();
+        $pages = max(1, (int) ceil($total / $perPage));
+        $page = min(max(1, $page), $pages);
+
+        $rows = $query
+            ->orderByDesc('created_at')
+            ->orderByDesc('id')
+            ->forPage($page, $perPage)
+            ->get();
+
+        $job->setRelation('activities', $rows);
+        $job->setAttribute('activity_total_count', $total);
+        $job->setAttribute('activity_current_page', $page);
+        $job->setAttribute('activity_per_page', $perPage);
+
+        return $job;
+    }
+
     public function findVisible(User $user, int $id): FlowJob
     {
         return $this->visibleQuery($user)->with([
@@ -279,7 +424,7 @@ class JobService
                 'quantity' => $data['quantity'] ?? 0,
                 'delivery_date' => $data['delivery_date'] ?? null,
                 'priority' => $data['priority'] ?? 'Medium',
-                'description' => $data['description'] ?? null,
+                'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'status' => $draft ? 'Draft' : 'New',
                 'health' => 'On Track',
                 'progress' => 0,
@@ -475,7 +620,9 @@ class JobService
             abort_if(mb_strlen($value) > 255, 422, 'Job title is too long.');
         }
 
-        $storedValue = $field === 'description' && $value === '' ? null : $value;
+        $storedValue = $field === 'description'
+            ? app(RichTextService::class)->normalize($value, 10000, 'description')
+            : $value;
         $mentionIds = $field === 'description'
             ? app(MentionService::class)->userIdsFromText($storedValue)
             : [];

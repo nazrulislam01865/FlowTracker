@@ -36,7 +36,7 @@ class MentionService
     {
         if (blank($text)) return [];
 
-        $text = (string) $text;
+        $text = app(RichTextService::class)->plainText((string) $text);
         $ids = collect();
 
         // Canonical autocomplete token: @john.smith.42
@@ -95,10 +95,21 @@ class MentionService
     public function render(?string $text): string
     {
         $text = (string) $text;
-        $users = $this->renderUsers();
-        $escaped = e($text);
+        $richText = app(RichTextService::class);
 
-        $rendered = preg_replace_callback(
+        if ($richText->isRich($text)) {
+            $safeHtml = $richText->safeHtml($text) ?? '';
+            return $this->renderTokens($safeHtml);
+        }
+
+        return nl2br($this->renderTokens(e($text)));
+    }
+
+    private function renderTokens(string $safeContent): string
+    {
+        $users = $this->renderUsers();
+
+        return preg_replace_callback(
             '/@\[([^\]\r\n]+)\]\((\d+)\)|(?<![\pL\pN._-])@([\pL\pN][\pL\pN._-]*\.(\d+))\b/u',
             function (array $match) use ($users): string {
                 $id = (int) ($match[2] ?: ($match[4] ?? 0));
@@ -107,10 +118,8 @@ class MentionService
 
                 return '<span class="ft-user-mention" title="'.e($user->name).'">@'.e($user->name).'</span>';
             },
-            $escaped,
-        );
-
-        return nl2br($rendered ?? $escaped);
+            $safeContent,
+        ) ?? $safeContent;
     }
 
     private function activeUserOptions(User $actor): Collection

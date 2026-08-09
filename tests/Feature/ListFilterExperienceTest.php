@@ -91,7 +91,9 @@ class ListFilterExperienceTest extends TestCase
         $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
 
         $this->assertStringContainsString('ft-mywork-v2-metrics', $view);
-        $this->assertStringContainsString('wire:model.live.debounce.400ms="search"', $view);
+        $this->assertStringContainsString('wire:model.live.debounce.650ms="search"', $view);
+        $this->assertStringContainsString('Type 3 characters to search broadly.', $view);
+        $this->assertStringContainsString('Results update after 650 ms', $view);
         $this->assertStringContainsString('Mentions (', $view);
         $this->assertStringContainsString('use WithPagination;', $component);
         $this->assertStringNotContainsString('ft-list-filter-shell', $view);

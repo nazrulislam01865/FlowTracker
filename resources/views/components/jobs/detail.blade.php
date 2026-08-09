@@ -62,7 +62,7 @@
     <nav class="ft-detail-tabs ft-exact-tabs">
         @foreach($tabs as $key=>$label)
             <button class="{{ $detailTab===$key ? 'active' : '' }}" wire:click="setDetailTab('{{ $key }}')">
-                {{ $label }} @if($key==='documents')<span>{{ $job->documents->count() }}</span>@endif
+                {{ $label }} @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
             </button>
         @endforeach
     </nav>

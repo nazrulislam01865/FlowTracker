@@ -32,6 +32,7 @@ class MyWorkLoadingRegressionTest extends TestCase
         $this->assertStringContainsString("DB::table('tasks')", $service);
         $this->assertStringContainsString("->join('flow_jobs as my_work_metric_jobs'", $service);
         $this->assertStringContainsString("->join('clients as my_work_metric_clients'", $service);
-        $this->assertStringContainsString("->leftJoinSub(\$mentions, 'my_work_metric_mentions'", $service);
+        $this->assertStringContainsString("->leftJoinSub(\$taskMentions, 'my_work_metric_task_mentions'", $service);
+        $this->assertStringContainsString("->leftJoinSub(\$jobMentions, 'my_work_metric_job_mentions'", $service);
     }
 }

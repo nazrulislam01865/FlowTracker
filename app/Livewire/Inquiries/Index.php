@@ -5,6 +5,7 @@ namespace App\Livewire\Inquiries;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
 use App\Models\Document;
+use App\Models\Client;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\InquiryService;
@@ -38,6 +39,21 @@ class Index extends Component
     public string $referenceNumber = '';
     public string $subject = '';
     public string $requirementNotes = '';
+    public string $requestSource = 'Email';
+    public ?int $createOwnerId = null;
+
+    // Quick client creation from Create Inquiry.
+    public bool $showCreateClientModal = false;
+    public string $newClientName = '';
+    public string $newClientContactName = '';
+    public string $newClientEmail = '';
+    public string $newClientPhone = '';
+    public string $newClientCountry = '';
+    public bool $useNewClientContactForInquiry = true;
+    public bool $showCreateContactModal = false;
+    public string $newContactName = '';
+    public string $newContactEmail = '';
+    public string $newContactPhone = '';
     public int $createWorkflowTaskCount = 0;
     public int $createWorkflowPhaseCount = 0;
     public ?int $createWorkflowId = null;
@@ -55,6 +71,12 @@ class Index extends Component
     public array $inquiryUploads = [];
     public array $taskQuickUploads = [];
     public $taskUpload = null;
+    public bool $showTaskDocumentModal = false;
+    public ?int $taskDocumentModalTaskId = null;
+    public string $taskDocumentSource = 'upload';
+    public $taskDocumentUpload = null;
+    public ?int $taskExistingDocumentId = null;
+    public string $taskDocumentNote = '';
     public string $taskComment = '';
     public string $inquiryComment = '';
     public string $inquiryActivityTab = 'all';
@@ -95,10 +117,10 @@ class Index extends Component
         if ($open = request()->integer('open')) {
             app(InquiryService::class)->findVisible(auth()->user(), $open);
             $this->selectedInquiryId = $open;
-            $requestedTab = (string) request()->query('tab', 'overview');
-            if (in_array($requestedTab, ['overview', 'workflow'], true)) $this->detailTab = $requestedTab;
+            // The separate Taskflow tab was removed; old workflow URLs now land on Overview.
+            $this->detailTab = 'overview';
             if ($taskId = request()->integer('task')) {
-                $this->detailTab = 'workflow';
+                $this->detailTab = 'overview';
                 $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId);
                 if ((int) $task->inquiry_id === $open) {
                     // Task deep-links now highlight the row in the inline workflow.
@@ -125,13 +147,133 @@ class Index extends Component
         $this->showCreate = true;
         $this->selectedInquiryId = null;
         $this->selectedTaskId = null;
+        $this->createOwnerId ??= (int) auth()->id();
         $this->loadCreateOptions();
+        $this->loadUserOptions();
     }
 
     public function cancelCreate(): void
     {
         $this->showCreate = false;
         $this->resetCreateForm();
+    }
+
+    public function openCreateClientModal(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('clients', 'create'), 403);
+        $this->resetCreateClientModal();
+        $this->showCreateClientModal = true;
+    }
+
+    public function closeCreateClientModal(): void
+    {
+        $this->showCreateClientModal = false;
+        $this->showCreateContactModal = false;
+        $this->resetCreateClientModal();
+        $this->resetValidation([
+            'newClientName', 'newClientContactName', 'newClientEmail',
+            'newClientPhone', 'newClientCountry',
+        ]);
+    }
+
+    public function createClientAndSelect(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('clients', 'create'), 403);
+
+        $data = $this->validate([
+            'newClientName' => ['required', 'string', 'max:255'],
+            'newClientContactName' => ['nullable', 'string', 'max:255'],
+            'newClientEmail' => ['nullable', 'email', 'max:255'],
+            'newClientPhone' => ['nullable', 'string', 'max:60'],
+            'newClientCountry' => ['nullable', 'string', 'max:120'],
+            'useNewClientContactForInquiry' => ['boolean'],
+        ]);
+
+        $client = Client::create([
+            'code' => $this->nextClientCode(),
+            'name' => trim($data['newClientName']),
+            'country' => trim((string) $data['newClientCountry']) ?: null,
+            'contact_name' => trim((string) $data['newClientContactName']) ?: null,
+            'email' => trim((string) $data['newClientEmail']) ?: null,
+            'phone' => trim((string) $data['newClientPhone']) ?: null,
+            'account_manager_id' => auth()->id(),
+            'preferred_language' => 'English',
+            'outstanding_balance' => 0,
+            'is_active' => true,
+        ]);
+
+        $this->clientId = (int) $client->id;
+        $this->selectedClientLabel = (string) $client->name;
+        $this->clientContact = $this->useNewClientContactForInquiry
+            ? (string) ($client->contact_name ?: '')
+            : '';
+        $this->clientFilterOptions = app(\App\Services\FilterOptionService::class)
+            ->options(auth()->user(), 'clients', 'create-inquiry', '', $client->id, 6)
+            ->all();
+
+        $this->showCreateClientModal = false;
+        $this->resetCreateClientModal();
+        $this->resetValidation('clientId');
+
+        try {
+            app(\App\Services\NotificationService::class)->notifyUser(
+                auth()->user(),
+                'Client created',
+                $client->name.' was created from Create Inquiry.',
+                'update',
+                null,
+                null,
+                auth()->user(),
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
+    public function openCreateContactModal(): void
+    {
+        abort_unless($this->showCreate && $this->clientId, 422, 'Select a client first.');
+        $client = app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->findOrFail((int) $this->clientId);
+        abort_unless($this->canEditClientRecord($client), 403);
+        $this->newContactName = '';
+        $this->newContactEmail = '';
+        $this->newContactPhone = '';
+        $this->showCreateContactModal = true;
+    }
+
+    public function closeCreateContactModal(): void
+    {
+        $this->showCreateContactModal = false;
+        $this->newContactName = '';
+        $this->newContactEmail = '';
+        $this->newContactPhone = '';
+        $this->resetValidation(['newContactName', 'newContactEmail', 'newContactPhone']);
+    }
+
+    public function saveCreateContact(): void
+    {
+        abort_unless($this->showCreate && $this->clientId, 422, 'Select a client first.');
+        $data = $this->validate([
+            'newContactName' => ['required', 'string', 'max:255'],
+            'newContactEmail' => ['nullable', 'email', 'max:255'],
+            'newContactPhone' => ['nullable', 'string', 'max:60'],
+        ]);
+
+        $client = app(\App\Services\ClientService::class)
+            ->visibleQuery(auth()->user())
+            ->findOrFail((int) $this->clientId);
+        abort_unless($this->canEditClientRecord($client), 403);
+        $client->update([
+            'contact_name' => trim($data['newContactName']),
+            'email' => trim((string) $data['newContactEmail']) ?: $client->email,
+            'phone' => trim((string) $data['newContactPhone']) ?: $client->phone,
+        ]);
+
+        $this->clientContact = (string) $client->contact_name;
+        $this->showCreateContactModal = false;
+        $this->newContactName = '';
+        $this->newContactEmail = '';
+        $this->newContactPhone = '';
     }
 
     public function updatedClientId($value): void
@@ -216,14 +358,13 @@ class Index extends Component
 
     public function setDetailTab(string $tab): void
     {
+        // Overview is now the single Inquiry details page. Keep this method for
+        // backward compatibility with stale Livewire DOM/history entries.
         abort_unless(in_array($tab, ['overview', 'workflow'], true), 422);
-        $this->detailTab = $tab;
+        $this->detailTab = 'overview';
         $this->selectedTaskId = null;
-        if ($tab !== 'workflow') $this->showAddTaskForm = false;
-        if ($tab === 'overview') {
-            $this->resetPage('inquiryDocumentsPage');
-            $this->resetPage('inquiryActivityPage');
-        }
+        $this->resetPage('inquiryDocumentsPage');
+        $this->resetPage('inquiryActivityPage');
     }
 
     #[Renderless]
@@ -262,7 +403,7 @@ class Index extends Component
         $inquiry = $this->selectedInquiry(['owner:id,name,profile_image_path']);
         $saved = app(InquiryService::class)->updateDetailField($inquiry, $field, $value, auth()->user());
 
-        return [
+        $result = [
             'ok' => true,
             'value' => match ($field) {
                 'owner_id' => $saved->owner_id,
@@ -273,6 +414,13 @@ class Index extends Component
                 default => (string) $saved->{$field},
             },
         ];
+
+        if ($field === 'requirement_notes') {
+            $result['displayHtml'] = app(\App\Services\MentionService::class)
+                ->render((string) ($saved->requirement_notes ?? ''));
+        }
+
+        return $result;
     }
 
     #[Renderless]
@@ -377,6 +525,78 @@ class Index extends Component
         session()->flash('success', 'Inquiry task completed.');
     }
 
+    public function openTaskDocumentModal(int $taskId): void
+    {
+        $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        abort_unless(app(InquiryService::class)->canEditTask(auth()->user(), $task), 403);
+        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+
+        $this->resetTaskDocumentModal();
+        $this->taskDocumentModalTaskId = $taskId;
+        $this->showTaskDocumentModal = true;
+    }
+
+    public function closeTaskDocumentModal(): void
+    {
+        $this->showTaskDocumentModal = false;
+        $this->resetTaskDocumentModal();
+        $this->resetValidation([
+            'taskDocumentUpload',
+            'taskExistingDocumentId',
+            'taskDocumentNote',
+        ]);
+    }
+
+    public function setTaskDocumentSource(string $source): void
+    {
+        abort_unless(in_array($source, ['upload', 'existing'], true), 422);
+        if ($source === 'existing') {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+        }
+
+        $this->taskDocumentSource = $source;
+        $this->taskDocumentUpload = null;
+        $this->taskExistingDocumentId = null;
+        $this->resetValidation(['taskDocumentUpload', 'taskExistingDocumentId']);
+    }
+
+    public function saveTaskDocument(): void
+    {
+        abort_unless($this->taskDocumentModalTaskId, 422);
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), (int) $this->taskDocumentModalTaskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        abort_unless($service->canEditTask(auth()->user(), $task), 403);
+        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+
+        $this->validate([
+            'taskDocumentSource' => ['required', Rule::in(['upload', 'existing'])],
+            'taskDocumentNote' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $note = trim($this->taskDocumentNote);
+        $note = $note !== '' ? $note : null;
+
+        if ($this->taskDocumentSource === 'upload') {
+            $this->validate([
+                'taskDocumentUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+            ]);
+            $service->upload($task->inquiry, $this->taskDocumentUpload, auth()->user(), $task, $note);
+        } else {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+            $this->validate(['taskExistingDocumentId' => ['required', 'integer', 'exists:documents,id']]);
+            $source = app(AccessControlService::class)
+                ->applyDocumentScope(Document::query()->whereKey((int) $this->taskExistingDocumentId), auth()->user())
+                ->firstOrFail();
+            $service->linkExistingDocumentToTask($task, $source, auth()->user(), $note);
+        }
+
+        $this->showTaskDocumentModal = false;
+        $this->resetTaskDocumentModal();
+        session()->flash('success', 'Document added to '.$task->title.'.');
+    }
+
     public function uploadTaskFile(): void
     {
         $this->validate(['taskUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai']]);
@@ -403,7 +623,7 @@ class Index extends Component
 
     public function addTaskComment(): void
     {
-        $this->validate(['taskComment' => ['required', 'string', 'max:5000']]);
+        $this->validate(['taskComment' => ['required', 'string', 'max:60000']]);
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), (int) $this->selectedTaskId, ['inquiry']);
         app(InquiryService::class)->addTaskComment($task, trim($this->taskComment), auth()->user());
         $this->taskComment = '';
@@ -463,7 +683,7 @@ class Index extends Component
 
     public function addInquiryComment(): void
     {
-        $this->validate(['inquiryComment' => ['required', 'string', 'max:5000']]);
+        $this->validate(['inquiryComment' => ['required', 'string', 'max:60000']]);
         app(InquiryService::class)->addInquiryComment($this->selectedInquiry(), trim($this->inquiryComment), auth()->user());
         $this->inquiryComment = '';
         $this->resetPage('inquiryActivityPage');
@@ -504,7 +724,7 @@ class Index extends Component
 
         $data = $this->validate([
             'newTaskName' => ['required', 'string', 'max:255'],
-            'newTaskDescription' => ['nullable', 'string', 'max:5000'],
+            'newTaskDescription' => ['nullable', 'string', 'max:60000'],
             'newTaskAssigneeId' => ['nullable', 'exists:users,id'],
             'newTaskDueDate' => ['nullable', 'date'],
             'newTaskRequiresSubmission' => ['boolean'],
@@ -593,7 +813,7 @@ class Index extends Component
         $this->validate([
             'managerRows' => ['required', 'array', 'min:1'],
             'managerRows.*.name' => ['required', 'string', 'max:255'],
-            'managerRows.*.description' => ['nullable', 'string', 'max:5000'],
+            'managerRows.*.description' => ['nullable', 'string', 'max:60000'],
             'managerRows.*.assignee_id' => ['nullable', 'exists:users,id'],
             'managerRows.*.due_date' => ['nullable', 'date'],
             'managerRows.*.requires_submission' => ['boolean'],
@@ -667,22 +887,18 @@ class Index extends Component
             'client:id,name',
             'creator:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
+            'sourceWorkflow:id,name',
             'currentTask:id,inquiry_id,assignee_id,title,due_date,status,started_at,completed_at',
             'currentTask.assignee:id,name,profile_image_path',
         ];
-        if ($this->detailTab === 'workflow') {
+        if ($this->detailTab === 'overview') {
+            // Overview owns the fully interactive Inquiry Taskflow. Load its task graph once.
             $with['tasks'] = fn ($query) => $query
                 ->with([
                     'assignee:id,name,profile_image_path',
-                    'documents:id,inquiry_id,inquiry_task_id,name,created_at',
+                    'documents:id,inquiry_id,inquiry_task_id,name,note,created_at',
                 ])
                 ->withCount(['documents', 'comments'])
-                ->orderBy('sequence');
-        } elseif ($this->detailTab === 'overview') {
-            // Overview shows the complete Inquiry taskflow in read-only form.
-            // Keep this eager load intentionally light: no task comments/documents.
-            $with['tasks'] = fn ($query) => $query
-                ->with('assignee:id,name,profile_image_path')
                 ->orderBy('sequence');
         }
 
@@ -706,13 +922,23 @@ class Index extends Component
                 ->limit(60)
                 ->get(['id','name','flow_job_id','task_id','client_id'])
             : collect();
+        $taskDocumentModalTask = $this->showTaskDocumentModal && $this->taskDocumentModalTaskId
+            ? $inquiry->tasks->firstWhere('id', (int) $this->taskDocumentModalTaskId)
+            : null;
+        $availableTaskDocuments = $this->showTaskDocumentModal
+            && $this->taskDocumentSource === 'existing'
+            && $user->canModule('documents', 'link')
+            ? app(AccessControlService::class)->applyDocumentScope(Document::query(), $user)
+                ->where('client_id', $inquiry->client_id)
+                ->latest('id')
+                ->limit(80)
+                ->get(['id', 'name', 'flow_job_id', 'task_id', 'client_id', 'size', 'mime_type'])
+            : collect();
         // Inquiry task management is inline on the workflow tab. Avoid loading
         // task documents/comments into a modal on every task deep-link/render.
         $task = null;
         $canEditInquiry = $service->canEditVisible($user, $inquiry);
-        $activeTask = $this->detailTab === 'workflow'
-            ? $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at)
-            : $inquiry->currentTask;
+        $activeTask = $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at) ?: $inquiry->currentTask;
         $canEditActiveTask = $activeTask
             ? ($canEditInquiry || ((int) $activeTask->assignee_id === (int) $user->id && $user->canModule('inquiries', 'view')))
             : false;
@@ -725,11 +951,13 @@ class Index extends Component
             'inquiryActivities' => $activities,
             'inquiryMentionUsers' => $mentionUsers,
             'availableInquiryDocuments' => $availableInquiryDocuments,
+            'taskDocumentModalTask' => $taskDocumentModalTask,
+            'availableTaskDocuments' => $availableTaskDocuments,
+            'canLinkDocuments' => $user->canModule('documents', 'link'),
             'canEditInquiry' => $canEditInquiry,
             'canEditActiveTask' => $canEditActiveTask,
             'canAddInquiryTask' => app(AccessControlService::class)->isAdministrator($user) && !$inquiry->result,
             'inquiryPriorities' => $this->detailTab === 'overview' ? app(\App\Services\MasterDataService::class)->active('priority') : collect(),
-            'inquiryStatusOptions' => $service->inquiryStatusOptions(),
             'canCreateOrder' => $user->canModule('jobs', 'create'),
             'selectedTaskIsActive' => false,
             'selectedTaskCanEdit' => false,
@@ -743,7 +971,9 @@ class Index extends Component
             'referenceNumber' => ['nullable', 'string', 'max:255'],
             'clientContact' => ['nullable', 'string', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
-            'requirementNotes' => ['nullable', 'string', 'max:10000'],
+            'requirementNotes' => ['nullable', 'string', 'max:60000'],
+            'requestSource' => ['required', Rule::in(['Email', 'Phone', 'Other'])],
+            'createOwnerId' => ['required', 'exists:users,id'],
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
         ]);
@@ -770,14 +1000,14 @@ class Index extends Component
             'reference_number' => $data['referenceNumber'],
             'client_contact' => $data['clientContact'],
             'received_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
-            'request_source' => null,
+            'request_source' => $data['requestSource'],
             'subject' => $data['subject'],
             'requirement_notes' => $data['requirementNotes'],
             'target_price' => null,
             'currency' => 'USD',
             'required_delivery_date' => null,
             'priority' => 'Medium',
-            'owner_id' => auth()->id(),
+            'owner_id' => (int) $data['createOwnerId'],
             'initial_follow_up_date' => null,
             'items' => [],
             'tasks' => $tasks,
@@ -863,6 +1093,15 @@ class Index extends Component
         $this->managerTemplateId ??= $this->taskPackOptions[0]['id'] ?? null;
     }
 
+    private function resetTaskDocumentModal(): void
+    {
+        $this->taskDocumentModalTaskId = null;
+        $this->taskDocumentSource = 'upload';
+        $this->taskDocumentUpload = null;
+        $this->taskExistingDocumentId = null;
+        $this->taskDocumentNote = '';
+    }
+
     private function selectedInquiry(array $with = []): Inquiry
     {
         abort_unless($this->selectedInquiryId, 404);
@@ -906,10 +1145,50 @@ class Index extends Component
         $this->referenceNumber = '';
         $this->subject = '';
         $this->requirementNotes = '';
+        $this->requestSource = 'Email';
+        $this->createOwnerId = (int) auth()->id();
+        $this->showCreateClientModal = false;
+        $this->showCreateContactModal = false;
+        $this->newContactName = '';
+        $this->newContactEmail = '';
+        $this->newContactPhone = '';
+        $this->resetCreateClientModal();
         $this->createAttachments = [];
         $this->createWorkflowId = null;
         $this->selectedWorkflowLabel = '';
         $this->resetCreateCollections();
+    }
+
+    private function canEditClientRecord(Client $client): bool
+    {
+        $access = app(AccessControlService::class);
+        if ($access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(), 'clients')) {
+            return true;
+        }
+
+        return $access->canEditOwn(auth()->user(), 'clients')
+            && (int) ($client->account_manager_id ?? 0) === (int) auth()->id();
+    }
+
+    private function resetCreateClientModal(): void
+    {
+        $this->newClientName = '';
+        $this->newClientContactName = '';
+        $this->newClientEmail = '';
+        $this->newClientPhone = '';
+        $this->newClientCountry = '';
+        $this->useNewClientContactForInquiry = true;
+    }
+
+    private function nextClientCode(): string
+    {
+        $next = (int) Client::max('id') + 1;
+        do {
+            $code = 'CL-'.str_pad((string) $next, 3, '0', STR_PAD_LEFT);
+            $next++;
+        } while (Client::where('code', $code)->exists());
+
+        return $code;
     }
 
     private function tone(string $status): string

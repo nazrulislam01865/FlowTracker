@@ -140,6 +140,9 @@
             retryAction: null,
             clearTimer: null,
             requestSequence: 0,
+            lastResponse: null,
+            hasRichTextOverride: false,
+            richTextOverrideHtml: '',
 
             beginEdit() {
                 if (this.status === 'saving') return false;
@@ -167,6 +170,57 @@
             cancelEdit() {
                 this.draftValue = this.value;
                 this.editing = false;
+            },
+
+            beginRichTextEdit(source) {
+                if (!this.beginEdit()) return false;
+                this.$nextTick(() => {
+                    source?.__flowtrackRichTextSetValue?.(this.value);
+                    source?.focus?.();
+                });
+                return true;
+            },
+
+            cancelRichTextEdit(source) {
+                source?.__flowtrackRichTextSetValue?.(this.value);
+                this.cancelEdit();
+            },
+
+            async saveRichText(source, emptyDisplay, requestFactory) {
+                if (!source || typeof requestFactory !== 'function' || this.status === 'saving') return false;
+
+                const raw = typeof source.__flowtrackRichTextValueAsync === 'function'
+                    ? await source.__flowtrackRichTextValueAsync()
+                    : (typeof source.__flowtrackRichTextValue === 'function'
+                        ? source.__flowtrackRichTextValue()
+                        : source.value);
+                const clean = normalize(raw).trim();
+                this.draftValue = clean;
+
+                const ok = await this.commit(
+                    clean,
+                    clean ? 'Description updated.' : emptyDisplay,
+                    () => requestFactory(clean),
+                );
+
+                if (!ok) return false;
+
+                // Description updates are Renderless Livewire actions. Do not
+                // force a second $refresh() request after the database save.
+                // Instead, close the editor and use the server-rendered safe
+                // HTML returned by the save action so the new text/images are
+                // visible immediately without a full page refresh.
+                const displayHtml = this.lastResponse && typeof this.lastResponse === 'object'
+                    ? this.lastResponse.displayHtml
+                    : null;
+
+                if (typeof displayHtml === 'string') {
+                    this.richTextOverrideHtml = displayHtml;
+                    this.hasRichTextOverride = true;
+                }
+
+                this.editing = false;
+                return true;
             },
 
             selectedLabel(event, fallback = '') {
@@ -212,6 +266,7 @@
                 const hasAvatarOverride = nextOptions && Object.prototype.hasOwnProperty.call(nextOptions, 'avatarUrl');
                 const nextAvatarUrl = hasAvatarOverride ? normalize(nextOptions.avatarUrl) : this.savedAvatarUrl;
                 if (normalizedValue === this.savedValue && normalizedDisplay === this.savedDisplay) {
+                    this.lastResponse = null;
                     this.value = this.savedValue;
                     this.display = this.savedDisplay;
                     this.draftValue = this.savedValue;
@@ -228,6 +283,7 @@
                 const previousAvatarUrl = this.savedAvatarUrl;
                 const sequence = ++this.requestSequence;
                 const token = bus.start(this.key, this.label);
+                this.lastResponse = null;
 
                 this.attemptedValue = normalizedValue;
                 this.attemptedDisplay = normalizedDisplay;
@@ -256,13 +312,20 @@
                     const responseHasAvatar = response && typeof response === 'object'
                         && Object.prototype.hasOwnProperty.call(response, 'avatarUrl');
                     const confirmedAvatarUrl = responseHasAvatar ? normalize(response.avatarUrl) : nextAvatarUrl;
+                    const responseHasValue = response && typeof response === 'object'
+                        && Object.prototype.hasOwnProperty.call(response, 'value');
+                    const confirmedValue = responseHasValue ? normalize(response.value) : normalizedValue;
 
-                    this.savedValue = normalizedValue;
+                    this.lastResponse = response && typeof response === 'object' ? response : null;
+                    this.value = confirmedValue;
+                    this.draftValue = confirmedValue;
+                    this.savedValue = confirmedValue;
                     this.savedDisplay = normalizedDisplay;
                     if (hasAvatarOverride || responseHasAvatar) {
                         this.avatarUrl = confirmedAvatarUrl;
                         this.savedAvatarUrl = confirmedAvatarUrl;
                     }
+                    this.editing = false;
                     this.status = 'saved';
                     bus.success(token, this.key);
                     this.clearTimer = window.setTimeout(() => {
@@ -277,6 +340,7 @@
                     this.avatarUrl = previousAvatarUrl;
                     this.savedAvatarUrl = previousAvatarUrl;
                     this.draftValue = previousValue;
+                    this.lastResponse = null;
                     this.status = 'error';
                     this.error = errorMessage(error, this.label);
 

@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class InquiryPrototypeImplementationTest extends TestCase
 {
-    public function test_inquiry_create_uses_workflow_setup_and_task_pack_tasks(): void
+    public function test_inquiry_create_matches_prototype_and_uses_workflow_setup(): void
     {
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
@@ -14,25 +14,29 @@ class InquiryPrototypeImplementationTest extends TestCase
         $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
 
         $this->assertStringContainsString('<h1>Create Inquiry</h1>', $view);
-        $this->assertStringContainsString('property="createWorkflowId"', $view);
-        $this->assertStringContainsString('type="workflows"', $view);
-        $this->assertStringNotContainsString('Workflow Setup is the source of truth', $view);
-        $this->assertStringContainsString('<b>Title *</b>', $view);
-        $this->assertStringContainsString('<b>Description</b>', $view);
-        $this->assertStringNotContainsString('<b>Inquiry subject *</b>', $view);
-        $this->assertStringNotContainsString('<b>Client requirement / notes</b>', $view);
+        $this->assertStringContainsString('How was this inquiry received? *', $view);
+        $this->assertStringContainsString('＋ New client', $view);
+        $this->assertStringContainsString('Client contact', $view);
+        $this->assertStringContainsString('Reference number', $view);
+        $this->assertStringContainsString('Assigned to', $view);
+        $this->assertStringContainsString('Inquiry title *', $view);
+        $this->assertStringContainsString('Request details', $view);
+        $this->assertStringContainsString('ft-inquiry-selected-file-preview', $view);
+        $this->assertStringContainsString('$upload->temporaryUrl()', $view);
+        $this->assertStringContainsString('What happens next', $view);
+        $this->assertStringContainsString('Add new client', $view);
+        $this->assertStringContainsString('Add &amp; select client', $view);
+        $this->assertStringContainsString('wire:click="createClientAndSelect"', $view);
+        $this->assertStringContainsString("wire:click=\"setCreateSelector('createWorkflowId'", $view);
         $this->assertStringContainsString("->options(\$user, 'workflows', 'create-inquiry', 'Inquiry', null, 20)", $component);
         $this->assertStringContainsString("'Inquiry Workflow'", $component);
-        $this->assertStringContainsString('.inquiry-workflow-selector-wrap{width:100%;max-width:none', $css);
-        $this->assertStringNotContainsString('No Task Pack tasks are configured for this Workflow', $view);
-        $this->assertStringNotContainsString('Auto-generated on save', $view);
-        $this->assertSame(1, substr_count($view, "@error('createWorkflowId')"));
-        $this->assertStringNotContainsString('Inquiry received date *', $view);
-        $this->assertStringNotContainsString('<h2>Commercial information</h2>', $view);
-        $this->assertStringNotContainsString('Request source</b><select wire:model="requestSource"', $view);
-        $this->assertStringNotContainsString('wire:click="addCreateTask"', $view);
+        $this->assertStringContainsString("'request_source' => \$data['requestSource']", $component);
+        $this->assertStringContainsString("'owner_id' => (int) \$data['createOwnerId']", $component);
+        $this->assertStringContainsString('public function createClientAndSelect(): void', $component);
+        $this->assertStringContainsString('.ft-inquiry-prototype .ft-inquiry-create-v3', $css);
+        $this->assertStringContainsString('.ft-inquiry-prototype .ft-inquiry-quick-client-modal', $css);
 
-        $this->assertStringContainsString("app(InquiryService::class)->workflowRows", $component);
+        $this->assertStringContainsString('app(InquiryService::class)->workflowRows', $component);
         $this->assertStringContainsString("'source_workflow_template_id' => (int) \$data['createWorkflowId']", $component);
         $this->assertStringContainsString('public function workflowRows(int $workflowId', $service);
         $this->assertStringContainsString("'phases.taskPack.items.defaultAssignee:id,name'", $service);
@@ -47,7 +51,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("if (\$this->showCreate) return view('livewire.inquiries.index', \$this->createPageData());", $component);
         $this->assertStringContainsString("if (\$this->selectedInquiryId) return view('livewire.inquiries.index', \$this->detailPageData(\$user));", $component);
         $this->assertStringContainsString("public string \$detailTab = 'overview';", $component);
-        $this->assertStringContainsString("request()->query('tab', 'overview')", $component);
+        $this->assertStringContainsString("The separate Taskflow tab was removed", $component);
         $this->assertStringContainsString("in_array(\$tab, ['overview', 'workflow'], true)", $component);
         $this->assertStringNotContainsString("setDetailTab('documents')", $view);
         $this->assertStringNotContainsString("setDetailTab('activity')", $view);
@@ -70,32 +74,55 @@ class InquiryPrototypeImplementationTest extends TestCase
 
         $this->assertStringContainsString('id="tab-workflow"', $view);
         $this->assertStringContainsString("updateInquiryField('requirement_notes'", $view);
-        $this->assertStringContainsString('deleteTaskDocument(', $view);
+        $taskflow = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
+        $this->assertStringContainsString('deleteTaskDocument(', $taskflow);
         $this->assertStringNotContainsString('<small>Client contact</small>', $view);
         $this->assertStringNotContainsString('<small>Office address</small>', $view);
         $this->assertStringNotContainsString('<small>Workflow</small>', $view);
         $this->assertStringContainsString("'requirement_notes'", $component);
         $this->assertStringContainsString('public function removeTaskDocument', $service);
         $this->assertStringContainsString('#tab-workflow .ft-inquiry-task-document-row', $css);
-        $this->assertStringContainsString('>Taskflow</button>', $view);
-        $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', $view);
+        $this->assertStringNotContainsString('>Taskflow</button>', $view);
+        $this->assertStringNotContainsString("@elseif(\$detailTab === 'workflow')", $view);
+        $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', $taskflow);
         $this->assertStringNotContainsString("<small>Assignee</small>", $view);
-        $this->assertStringContainsString('$service->inquiryStatusOptions()', $component);
-        $this->assertStringContainsString('ft-inquiry-overview-task-card', $view);
-        $this->assertStringContainsString('<span>Started at</span>', $view);
-        $this->assertStringContainsString('View only', $view);
+        $this->assertStringNotContainsString("'inquiryStatusOptions' =>", $component);
+        $this->assertStringContainsString("@include('livewire.inquiries._taskflow')", $view);
+        $this->assertStringContainsString("\$canCompleteThisTask", $taskflow);
+        $this->assertStringContainsString("strcasecmp(trim((string) $task->status), 'In Progress')", $taskflow);
+        $this->assertStringNotContainsString("Complete the previous taskflow task first.", $service);
+        $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php')));
+        $this->assertStringNotContainsString('View only', $view);
         $this->assertStringContainsString("'started_at'=>'datetime'", $taskModel);
         $this->assertStringContainsString("timestamp('started_at')", $migration);
-        $this->assertStringContainsString("'started_at' => ! \$draft && \$index === 0 ? now() : null", $service);
-        $this->assertStringContainsString("'started_at' => \$next->started_at ?: now()", $service);
-        $this->assertStringContainsString("elseif (\$this->detailTab === 'overview')", $component);
-        $this->assertStringContainsString('.ft-inquiry-overview-task-columns', $css);
+        $this->assertStringContainsString("'status' => 'Waiting'", $service);
+        $this->assertStringContainsString("'started_at' => null", $service);
+        $this->assertStringContainsString("Task must be In Progress before completion.", $service);
+        $this->assertStringContainsString("if (\$this->detailTab === 'overview')", $component);
+        $this->assertStringContainsString('.ft-inquiry-task-document-modal', $css);
+        $this->assertStringContainsString('openTaskDocumentModal(', $taskflow);
+        $this->assertStringContainsString('Add new document to task', $view);
+        $this->assertStringContainsString('Choose existing', $view);
+        $this->assertStringContainsString('Document note (optional)', $view);
+        $this->assertStringContainsString('public function linkExistingDocumentToTask', $service);
         $this->assertStringContainsString('class="inquiry-list-table"', $view);
         $this->assertStringContainsString('ft-inquiry-created-by', $view);
         $this->assertStringContainsString('View <span aria-hidden="true">→</span>', $view);
         $this->assertStringContainsString('min-width:1420px', $css);
         $this->assertStringNotContainsString('<span class="sub">Assignee</span>', $view);
         $this->assertStringNotContainsString('<span class="sub">Due date</span>', $view);
+        $this->assertStringContainsString('ft-inquiry-header-meta', $view);
+        $this->assertStringContainsString('Client <strong>{{ $inquiry->client?->name', $view);
+        $this->assertStringContainsString('Reference <strong>{{ $inquiry->reference_number', $view);
+        $this->assertStringContainsString('Created by <strong>{{ $inquiry->creator?->name', $view);
+        $this->assertStringNotContainsString('ft-inquiry-information-legacy">', $view);
+        $this->assertStringNotContainsString('Not created yet', $view);
+        $this->assertStringContainsString('ft-inquiry-auto-status-property', $view);
+        $this->assertStringNotContainsString('inquiryOverviewStatus', $view);
+        $this->assertStringContainsString("public const AUTO_READY_STATUS = 'Ready';", $service);
+        $this->assertStringContainsString("public const AUTO_IN_PROGRESS_STATUS = 'In Progress';", $service);
+        $this->assertStringContainsString("public const AUTO_COMPLETED_STATUS = 'Completed';", $service);
+        $this->assertStringContainsString('public function syncAutomaticStatus(Inquiry $inquiry', $service);
     }
 
     public function test_inquiry_tasks_are_not_merged_into_my_task(): void

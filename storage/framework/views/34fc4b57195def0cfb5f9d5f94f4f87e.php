@@ -1,0 +1,135 @@
+<?php
+    $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
+    $canCreateOrder = auth()->user()->canAccess('jobs.create');
+    $canCreateClient = auth()->user()->canModule('clients', 'create');
+?>
+
+<div class="ft-dashboard-prototype">
+    <div class="ft-heading">
+        <div class="ft-heading-copy">
+            <h1>Management Dashboard</h1>
+            <p><?php echo e($today->format('l, F j')); ?> · Exceptions, workload, inquiries and delivery health</p>
+        </div>
+        <nav class="ft-quick-actions" aria-label="Quick actions">
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateOrder): ?>
+                <a class="ft-action primary" href="<?php echo e(route('jobs.index', ['create' => 1])); ?>" wire:navigate><span class="ft-action-icon">+</span>Create Order</a>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <span class="ft-action" aria-disabled="true" title="Inquiry management is not available in this FlowTrack build"><span class="ft-action-icon">+</span>Create Inquiry</span>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateClient): ?>
+                <a class="ft-action" href="<?php echo e(route('clients.index', ['create' => 1])); ?>" wire:navigate><span class="ft-action-icon">+</span>Add Client</a>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        </nav>
+    </div>
+
+    <nav class="ft-page-tabs" aria-label="Dashboard views">
+        <span class="ft-page-tab active">Dashboard</span>
+    </nav>
+
+    <section class="ft-kpis" aria-label="Key metrics">
+        <a class="ft-kpi" href="<?php echo e(route('jobs.index')); ?>" wire:navigate><span class="ft-kpi-label">Active Jobs <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value"><?php echo e($metrics['activeJobs']); ?></strong><span class="ft-kpi-foot">Across all active phases</span></a>
+        <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value"><?php echo e($metrics['needsAttention']); ?></strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
+        <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value"><?php echo e($metrics['overdueTasks']); ?></strong><span class="ft-kpi-foot">Require immediate update</span></a>
+        <a class="ft-kpi" href="<?php echo e(route('clients.index')); ?>" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value"><?php echo e($metrics['activeClients']); ?></strong><span class="ft-kpi-foot">Current active client records</span></a>
+        <div class="ft-kpi" aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value"><?php echo e($metrics['openInquiries']); ?></strong><span class="ft-kpi-foot">Inquiry module not configured</span></div>
+        <a class="ft-kpi" href="<?php echo e(route('notifications')); ?>" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value"><?php echo e($metrics['taggedComments']); ?></strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
+    </section>
+
+    <div class="ft-grid">
+        <section class="ft-panel" id="inquiries">
+            <div class="ft-panel-head">
+                <div><h2 class="ft-panel-title">Open enquiries</h2><div class="ft-panel-note">Pre-job opportunities, ownership, quotation progress and follow-up flags</div></div>
+                <span class="ft-link" aria-disabled="true">View all enquiries</span>
+            </div>
+            <div class="ft-table-wrap">
+                <table class="ft-table responsive">
+                    <colgroup><col style="width:17%"><col style="width:25%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:8%"></colgroup>
+                    <thead><tr><th>Inquiry ID</th><th>Client</th><th>Assignee Name</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
+                    <tbody>
+                        <tr class="ft-table-empty-row"><td colspan="6">No inquiry records are available in this FlowTrack build.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div class="ft-grid ft-grid-primary">
+        <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('dashboard.tagged-comments', ['lazy' => true]);
+
+$__keyOuter = $__key ?? null;
+
+$__key = null;
+$__componentSlots = [];
+
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1781049492-0', $__key);
+
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
+
+echo $__html;
+
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
+
+        <section class="ft-panel">
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div></div>
+            <div class="ft-analytics">
+                <div class="ft-health">
+                    <div class="ft-health-content">
+                        <div class="ft-donut" style="background:conic-gradient(#2eb67d 0 <?php echo e($operationalHealth['healthyPct']); ?>%, #f2b84b <?php echo e($operationalHealth['healthyPct']); ?>% <?php echo e($operationalHealth['riskStart']); ?>%, #ed5b5b <?php echo e($operationalHealth['riskStart']); ?>% 100%)"><div class="ft-donut-value"><?php echo e($operationalHealth['totalJobs']); ?><small>active jobs</small></div></div>
+                        <div class="ft-health-list">
+                            <div class="ft-health-row"><span><i></i>Healthy</span><b><?php echo e($operationalHealth['healthy']); ?></b></div>
+                            <div class="ft-health-row"><span><i></i>Watch</span><b><?php echo e($operationalHealth['watch']); ?></b></div>
+                            <div class="ft-health-row"><span><i></i>At risk</span><b><?php echo e($operationalHealth['atRisk']); ?></b></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="ft-flag-mix">
+                    <div class="ft-mix-summary"><span>Task mix by flag</span><span><strong><?php echo e($operationalHealth['flaggedTotal']); ?></strong> flagged tasks</span></div>
+                    <div class="ft-mix-list">
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $operationalHealth['flags']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $flag): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <div class="ft-mix-row"><a href="<?php echo e(route('all-tasks')); ?>" wire:navigate><?php echo e($flag['label']); ?></a><i class="ft-mix-track"><span class="ft-mix-fill <?php echo e($flag['tone']); ?>" style="width:<?php echo e($flag['width']); ?>%"></span></i><b><?php echo e($flag['count']); ?></b></div>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('dashboard.secondary', ['lazy' => true]);
+
+$__keyOuter = $__key ?? null;
+
+$__key = null;
+$__componentSlots = [];
+
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1781049492-1', $__key);
+
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
+
+echo $__html;
+
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
+</div>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/dashboard/index.blade.php ENDPATH**/ ?>

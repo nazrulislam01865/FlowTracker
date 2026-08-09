@@ -16,6 +16,7 @@ use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
+use App\Http\Controllers\RichTextImageController;
 // Reports page is intentionally disabled for now.
 // use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\TaskPackSetupController;
@@ -126,7 +127,7 @@ Route::middleware('auth')->group(function () {
                 'id' => $latest->id,
                 'type' => $latest->type,
                 'title' => $latest->title,
-                'message' => $latest->message,
+                'message' => app(\App\Services\RichTextService::class)->plainText($latest->message),
                 'url' => $service->urlFor($latest),
                 'created_at' => $latest->created_at?->toIso8601String(),
             ] : null,
@@ -136,6 +137,14 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('user')
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('profile-images.show');
+    Route::post('/rich-text-images', [RichTextImageController::class, 'store'])
+        ->name('rich-text-images.store');
+    Route::get('/rich-text-images/{filename}/download', [RichTextImageController::class, 'download'])
+        ->where('filename', '[A-Za-z0-9-]+\.(?:jpg|jpeg|png|webp|gif)')
+        ->name('rich-text-images.download');
+    Route::get('/rich-text-images/{filename}', [RichTextImageController::class, 'show'])
+        ->where('filename', '[A-Za-z0-9-]+\.(?:jpg|jpeg|png|webp|gif)')
+        ->name('rich-text-images.show');
     Route::get('/profile', ProfileController::class)->name('profile');
     Route::get('/users/{user}/edit', UserEditController::class)->whereNumber('user')->name('users.edit');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');

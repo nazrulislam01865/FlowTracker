@@ -8,10 +8,10 @@
         </div>
     </div>
     @if($canEditInquiry)
-        <div class="ft-comment-composer ft-friendly-composer">
+        <div class="ft-comment-composer ft-friendly-composer ft-rich-comment-composer">
             <x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/>
-            <input class="ft-mention-input" wire:model="inquiryComment" wire:keydown.enter="addInquiryComment" autocomplete="off" data-mention-users='@json($inquiryMentionUsers->values())' placeholder="Write a comment. Type @ to mention someone...">
-            <button class="ft-new-job-btn" type="button" wire:click="addInquiryComment">Comment</button>
+            <textarea class="ft-mention-input" data-rich-text data-rich-text-compact wire:model="inquiryComment" rows="2" autocomplete="off" data-mention-users='@json($inquiryMentionUsers->values())' placeholder="Write a comment. Type @ to mention someone or paste a screenshot..."></textarea>
+            <button class="ft-new-job-btn" data-rich-text-submit type="button" wire:click="addInquiryComment">Comment</button>
         </div>
     @endif
     <div class="ft-activity-feed">
@@ -25,7 +25,7 @@
                 <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$activity->user" :name="$actorName" :size="32"/><span>{{ $isComment ? '💬' : '↻' }}</span></div>
                 <div class="ft-activity-entry-content">
                     <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $isComment ? 'comment' : 'history' }}">{{ $isComment ? 'Comment' : 'Change' }}</span></div><time>{{ $activity->created_at?->diffForHumans() }}</time></div>
-                    <p><x-ui.mention-text :text="$activity->description" /></p>
+                    <div class="ft-rich-text-content"><x-ui.mention-text :text="$activity->description" /></div>
                     <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $activity->created_at ? \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y · g:i A') : '—' }}</span></div>
                 </div>
             </article>

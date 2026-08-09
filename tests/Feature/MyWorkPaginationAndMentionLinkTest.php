@@ -45,4 +45,39 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString('is-focused-comment', $taskDetail);
         $this->assertStringContainsString('is-focused-comment', $jobActivity);
     }
+
+    public function test_mentions_include_self_mentions_order_mentions_and_dashboard_realtime_refresh(): void
+    {
+        $notificationService = file_get_contents(app_path('Services/NotificationService.php'));
+        $myWork = file_get_contents(app_path('Services/MyWorkService.php'));
+        $dashboard = file_get_contents(app_path('Livewire/Dashboard/Index.php'));
+        $tagged = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
+
+        $this->assertStringNotContainsString('->reject(fn ($id) => $actor && $id === (int) $actor->id)', $notificationService);
+        $this->assertStringContainsString("->whereColumn('flow_notifications.flow_task_id', 'tasks.id')", $myWork);
+        $this->assertStringContainsString("->whereColumn('flow_notifications.flow_job_id', 'tasks.flow_job_id')", $myWork);
+        $this->assertStringContainsString("->leftJoinSub(\$jobMentions, 'my_work_metric_job_mentions'", $myWork);
+        $this->assertStringContainsString("#[On('flowtrack-notification')]", $dashboard);
+        $this->assertStringContainsString("#[On('flowtrack-notification')]", $tagged);
+    }
+    public function test_dashboard_mentions_include_descriptions_and_inquiries_with_realtime_delivery(): void
+    {
+        $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
+        $notificationService = file_get_contents(app_path('Services/NotificationService.php'));
+        $inquiryService = file_get_contents(app_path('Services/InquiryService.php'));
+        $tagged = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
+        $taggedView = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
+
+        $this->assertStringContainsString('dashboardMentionQuery', $dashboardService);
+        $this->assertStringContainsString("flow_notifications.inquiry_id", $dashboardService);
+        $this->assertStringContainsString("flow_notifications.inquiry_task_id", $dashboardService);
+        $this->assertStringNotContainsString("flow_task_comments.body', 'flow_notifications.message'", $dashboardService);
+        $this->assertStringContainsString('notifyInquiryMentionedUsers', $notificationService);
+        $this->assertStringContainsString("'inquiry_id' => $inquiry?->id", $notificationService);
+        $this->assertStringContainsString('$this->notifyMentions($inquiry->refresh(), null, $newDisplay, $actor);', $inquiryService);
+        $this->assertStringNotContainsString('if ((int) $recipient->id === (int) $actor->id) return;', $inquiryService);
+        $this->assertStringContainsString("'inquiry'", $tagged);
+        $this->assertStringContainsString("'inquiry' => 'Inquiries'", $taggedView);
+    }
+
 }

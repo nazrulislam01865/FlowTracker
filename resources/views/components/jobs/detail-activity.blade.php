@@ -1,17 +1,14 @@
 @props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1,'focusComment'=>null])
 @php
     $canComment = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
-    $activities = $job->activities->sortByDesc(fn($activity) => sprintf('%020d-%020d', $activity->created_at?->getTimestamp() ?? 0, $activity->id ?? 0))->values();
-    if ($activityTab === 'comments') {
-        $activities = $activities->where('event','job.comment')->values();
-    } elseif ($activityTab === 'history') {
-        $activities = $activities->reject(fn($activity) => $activity->event === 'job.comment')->values();
-    }
-    $activityPerPage = 10;
-    $activityTotal = $activities->count();
+    // JobService already applies the selected activity filter and database
+    // pagination. Keeping only the visible page here prevents large Orders
+    // from hydrating their complete activity history on every render.
+    $activities = $job->activities->values();
+    $activityPerPage = max(1, (int) ($job->activity_per_page ?? 10));
+    $activityTotal = max(0, (int) ($job->activity_total_count ?? $activities->count()));
     $activityPages = max(1, (int) ceil($activityTotal / $activityPerPage));
-    $activityCurrentPage = min(max(1, (int) $activityPage), $activityPages);
-    $activities = $activities->forPage($activityCurrentPage, $activityPerPage)->values();
+    $activityCurrentPage = min(max(1, (int) ($job->activity_current_page ?? $activityPage)), $activityPages);
 @endphp
 <section class="ft-detail-card ft-activity-card ft-friendly-activity {{ $compact ? 'compact' : '' }}">
     <div class="ft-activity-head">
@@ -26,10 +23,10 @@
         </div>
     </div>
     @if($canComment)
-        <div class="ft-comment-composer ft-friendly-composer">
+        <div class="ft-comment-composer ft-friendly-composer ft-rich-comment-composer">
             <x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/>
-            <input class="ft-mention-input" wire:model="jobComment" wire:keydown.enter="addJobComment" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone...">
-            <button class="ft-new-job-btn" type="button" wire:click="addJobComment">Comment</button>
+            <textarea class="ft-mention-input" data-rich-text data-rich-text-compact wire:model="jobComment" rows="2" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Write a comment. Type @ to mention someone or paste a screenshot..."></textarea>
+            <button class="ft-new-job-btn" data-rich-text-submit type="button" wire:click="addJobComment">Comment</button>
         </div>
     @endif
     <div class="ft-activity-feed">
@@ -54,7 +51,7 @@
                         <div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $isComment ? 'comment' : 'history' }}">{{ $isComment ? 'Comment' : 'Change' }}</span></div>
                         <time title="{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                     </div>
-                    <p><x-ui.mention-text :text="$activity->description" /></p>
+                    <div class="ft-rich-text-content"><x-ui.mention-text :text="$activity->description" /></div>
                     <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y · g:i A') }}</span></div>
                 </div>
             </article>

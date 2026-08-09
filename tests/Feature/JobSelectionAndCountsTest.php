@@ -118,6 +118,83 @@ class JobSelectionAndCountsTest extends TestCase
         $this->assertCount(2, $ids);
     }
 
+    public function test_order_search_ignores_one_and_two_character_free_text(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [$client, $workflow, $phase] = $this->jobDependencies();
+
+        $this->createJob($client, $workflow, $phase, 'JOB-SHORT-ONE');
+        $this->createJob($client, $workflow, $phase, 'JOB-SHORT-TWO');
+
+        $service = app(JobService::class);
+
+        $this->assertSame(2, $service->paginateOrders($user, 'z', 25)->total());
+        $this->assertSame(2, $service->paginateOrders($user, 'zz', 25)->total());
+        $this->assertSame(0, $service->paginateOrders($user, 'zzz', 25)->total());
+    }
+
+    public function test_find_visible_base_does_not_hydrate_the_full_order_graph(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [$client, $workflow, $phase] = $this->jobDependencies();
+        $job = $this->createJob($client, $workflow, $phase, 'JOB-LIGHTWEIGHT-DETAIL');
+
+        $loaded = app(JobService::class)->findVisibleBase($user, $job->id);
+
+        $this->assertTrue($loaded->relationLoaded('client'));
+        $this->assertTrue($loaded->relationLoaded('phase'));
+        $this->assertTrue($loaded->relationLoaded('owner'));
+        $this->assertTrue($loaded->relationLoaded('coordinator'));
+        $this->assertTrue($loaded->relationLoaded('members'));
+        $this->assertArrayHasKey('documents_count', $loaded->getAttributes());
+
+        $this->assertFalse($loaded->relationLoaded('workflow'));
+        $this->assertFalse($loaded->relationLoaded('items'));
+        $this->assertFalse($loaded->relationLoaded('tasks'));
+        $this->assertFalse($loaded->relationLoaded('documents'));
+        $this->assertFalse($loaded->relationLoaded('activities'));
+        $this->assertFalse($loaded->relationLoaded('phaseHistories'));
+    }
+
+    public function test_order_detail_relations_are_loaded_per_active_tab(): void
+    {
+        $user = User::factory()->create(['is_super_admin' => true]);
+        [$client, $workflow, $phase] = $this->jobDependencies();
+        $job = $this->createJob($client, $workflow, $phase, 'JOB-TAB-SPLIT');
+        $service = app(JobService::class);
+
+        $overview = $service->findVisibleBase($user, $job->id);
+        $service->loadVisibleDetailTab($overview, $user, 'overview');
+        $this->assertTrue($overview->relationLoaded('workflow'));
+        $this->assertTrue($overview->relationLoaded('items'));
+        $this->assertTrue($overview->relationLoaded('tasks'));
+        $this->assertTrue($overview->relationLoaded('documents'));
+        $this->assertFalse($overview->relationLoaded('phaseHistories'));
+        $this->assertFalse($overview->relationLoaded('activities'));
+
+        $service->loadVisibleOverviewActivity($overview, 'all', 1, 10);
+        $this->assertTrue($overview->relationLoaded('activities'));
+        $this->assertSame(0, (int) $overview->activity_total_count);
+
+        $workflowTab = $service->findVisibleBase($user, $job->id);
+        $service->loadVisibleDetailTab($workflowTab, $user, 'workflow');
+        $this->assertTrue($workflowTab->relationLoaded('workflow'));
+        $this->assertTrue($workflowTab->relationLoaded('phaseHistories'));
+        $this->assertTrue($workflowTab->relationLoaded('tasks'));
+        $this->assertTrue($workflowTab->relationLoaded('documents'));
+        $this->assertFalse($workflowTab->relationLoaded('items'));
+        $this->assertFalse($workflowTab->relationLoaded('activities'));
+
+        $documentsTab = $service->findVisibleBase($user, $job->id);
+        $service->loadVisibleDetailTab($documentsTab, $user, 'documents');
+        $this->assertTrue($documentsTab->relationLoaded('workflow'));
+        $this->assertTrue($documentsTab->relationLoaded('tasks'));
+        $this->assertTrue($documentsTab->relationLoaded('documents'));
+        $this->assertFalse($documentsTab->relationLoaded('items'));
+        $this->assertFalse($documentsTab->relationLoaded('activities'));
+        $this->assertFalse($documentsTab->relationLoaded('phaseHistories'));
+    }
+
     public function test_order_prefix_search_finds_legacy_job_numbers(): void
     {
         $user = User::factory()->create(['is_super_admin' => true]);

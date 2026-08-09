@@ -93,7 +93,7 @@ class TaskService
         } elseif ($field === 'start_date') {
             $new = filled($value) ? (string) $value : null;
         } elseif ($field === 'description') {
-            $new = trim((string) $value) ?: null;
+            $new = app(RichTextService::class)->normalize((string) $value, 10000, 'description');
         } elseif ($field === 'title') {
             $new = trim((string) $value);
             abort_if($new === '', 422, 'Task name is required.');
@@ -123,6 +123,10 @@ class TaskService
         ];
         $oldDisplay = $field === 'assignee_id' ? (User::find($old)?->name ?? 'Unassigned') : $old;
         $newDisplay = $field === 'assignee_id' ? (User::find($new)?->name ?? 'Unassigned') : $new;
+        if ($field === 'description') {
+            $oldDisplay = app(RichTextService::class)->plainText((string) $oldDisplay);
+            $newDisplay = app(RichTextService::class)->plainText((string) $newDisplay);
+        }
         $mentionIds = $field === 'description'
             ? app(MentionService::class)->userIdsFromText((string) $new)
             : [];
@@ -235,11 +239,12 @@ class TaskService
     public function addComment(Task $task, string $body, User $actor): FlowTaskComment
     {
         abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
-        $body = trim($body);
-        abort_if($body === '', 422, 'Comment cannot be empty.');
+        $body = app(RichTextService::class)->normalize($body, 5000, 'comment');
+        abort_if(!$body, 422, 'Comment cannot be empty.');
         $mentionIds = app(MentionService::class)->userIdsFromText($body);
         $comment = $task->comments()->create(['user_id' => $actor->id, 'body' => $body]);
-        $this->record($task, $actor, 'task.comment', 'Comment: '.$body, [
+        $activityBody = app(RichTextService::class)->plainText($body);
+        $this->record($task, $actor, 'task.comment', 'Comment: '.$activityBody, [
             'comment_id' => $comment->id,
             'body' => $body,
             'mention_user_ids' => $mentionIds,

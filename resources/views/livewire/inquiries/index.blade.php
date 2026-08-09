@@ -110,42 +110,129 @@
         </section>
 
     @elseif($mode === 'create')
-        <section class="view">
-            <div class="formwrap">
+        @php
+            $createNow = app(\App\Services\WorkspaceSettingsService::class)->localNow();
+            $selectedWorkflow = collect($workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createWorkflowId);
+            $selectedWorkflowName = (string) ($selectedWorkflow['label'] ?? $selectedWorkflowLabel ?: 'Select workflow');
+            $workflowOptionCount = count($workflowFilterOptions);
+            $selectedOwner = collect($userOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createOwnerId);
+            $selectedOwnerName = (string) ($selectedOwner['name'] ?? auth()->user()->name);
+        @endphp
+        <section class="view ft-inquiry-create-v3" x-on:keydown.meta.enter.window="$wire.createInquiry()" x-on:keydown.ctrl.enter.window="$wire.createInquiry()">
+            <div class="formwrap ft-inquiry-create-shell">
                 <div class="crumb">Inquiries / New Inquiry</div>
-                <div class="formtop"><div><h1>Create Inquiry</h1><p>Capture the client request and create the inquiry taskflow before any order exists.</p></div></div>
-                <div class="formcard">
-                    <section class="section">
-                        <div class="sectiontitle"><span>1</span><h2>Client request</h2></div>
-                        <div class="inquiry-create-stack">
-                            <div class="field">
-                                <x-ui.remote-filter
-                                    class="ft-create-remote-select inquiry-create-remote"
-                                    label="Client *"
-                                    property="clientId"
-                                    type="clients"
-                                    context="create-inquiry"
-                                    action="setCreateSelector"
-                                    :value="$clientId"
-                                    placeholder="Select client"
-                                    :selected-label="$selectedClientLabel ?: null"
-                                    :initial-options="$clientFilterOptions"
-                                    :clearable="false"
-                                    wire:key="inquiry-create-client-selector"
-                                />
+                <div class="formtop ft-inquiry-create-heading">
+                    <div>
+                        <h1>Create Inquiry</h1>
+                        <p>Capture a new client request from email or phone. The inquiry workflow starts automatically.</p>
+                    </div>
+                </div>
+
+                <div class="formcard ft-inquiry-create-card">
+                    <section class="section ft-inquiry-create-section ft-inquiry-create-details">
+                        <div class="sectiontitle ft-inquiry-step-title"><span>1</span><h2>Inquiry details</h2></div>
+
+                        <div class="ft-inquiry-create-grid ft-inquiry-create-grid-top">
+                            <div class="ft-inquiry-create-field">
+                                <label>How was this inquiry received? *</label>
+                                <div class="ft-inquiry-source-switch" role="group" aria-label="How was this inquiry received?">
+                                    @foreach(['Email' => '✉', 'Phone' => '☎', 'Other' => '•••'] as $source => $icon)
+                                        <button type="button" class="{{ $requestSource === $source ? 'is-active' : '' }}" wire:click="$set('requestSource', '{{ $source }}')">
+                                            <span aria-hidden="true">{{ $icon }}</span>{{ $source }}
+                                        </button>
+                                    @endforeach
+                                </div>
+                                @error('requestSource')<small class="field-error">{{ $message }}</small>@enderror
+                            </div>
+
+                            <div class="ft-inquiry-create-field">
+                                <label>Received</label>
+                                <div class="ft-inquiry-received-control">
+                                    <span>Today, {{ $createNow->format('g:i A') }}</span>
+                                    <button type="button" title="Received time is set automatically" aria-label="Received time is set automatically">✎</button>
+                                </div>
+                                <small class="ft-inquiry-field-help">Set automatically</small>
+                            </div>
+                        </div>
+
+                        <div class="ft-inquiry-create-grid ft-inquiry-create-grid-client">
+                            <div class="ft-inquiry-create-field">
+                                <label>Client *</label>
+                                <div class="ft-inquiry-client-control-row">
+                                    <x-ui.remote-filter
+                                        class="ft-create-remote-select inquiry-create-remote ft-inquiry-client-selector"
+                                        label="Client"
+                                        property="clientId"
+                                        type="clients"
+                                        context="create-inquiry"
+                                        action="setCreateSelector"
+                                        :value="$clientId"
+                                        placeholder="Search or select client..."
+                                        :selected-label="$selectedClientLabel ?: null"
+                                        :initial-options="$clientFilterOptions"
+                                        :clearable="false"
+                                        wire:key="inquiry-create-client-selector-{{ $clientId ?: 'none' }}-{{ substr(md5($selectedClientLabel ?: 'none'), 0, 8) }}"
+                                    />
+                                    @if(auth()->user()->canModule('clients','create'))
+                                        <button class="secondary ft-inquiry-new-client-btn" type="button" wire:click="openCreateClientModal">＋ New client</button>
+                                    @endif
+                                </div>
                                 @error('clientId')<small class="field-error">{{ $message }}</small>@enderror
                             </div>
-                            <label class="field"><b>Client contact</b><input value="{{ $clientContact ?: 'No contact recorded' }}" readonly></label>
-                            <label class="field"><b>Reference Number</b><input wire:model="referenceNumber" placeholder="Client / external reference number"></label>
-                            <label class="field"><b>Title *</b><input wire:model="subject" placeholder="Enter inquiry title"></label>
-                            <label class="field"><b>Description</b><textarea wire:model="requirementNotes" placeholder="Describe the client requirement"></textarea></label>
+
+                            <div class="ft-inquiry-create-field">
+                                <label>Client contact</label>
+                                <div class="ft-inquiry-client-control-row">
+                                    <div class="ft-inquiry-contact-select-wrap">
+                                        <select wire:model="clientContact" @disabled(!$clientId || !$clientContact)>
+                                            @if($clientId && $clientContact)
+                                                <option value="{{ $clientContact }}">{{ $clientContact }}</option>
+                                            @else
+                                                <option value="">{{ $clientId ? 'No contact recorded' : 'Select a client first' }}</option>
+                                            @endif
+                                        </select>
+                                    </div>
+                                    <button class="secondary ft-inquiry-new-contact-btn" type="button" wire:click="openCreateContactModal" @disabled(!$clientId)>＋ New contact</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="ft-inquiry-create-grid">
+                            <label class="ft-inquiry-create-field">
+                                <span>Reference number</span>
+                                <input wire:model="referenceNumber" placeholder="Email or client reference (optional)">
+                            </label>
+
+                            <label class="ft-inquiry-create-field">
+                                <span>Assigned to</span>
+                                <select wire:model="createOwnerId">
+                                    @foreach($userOptions as $userOption)
+                                        <option value="{{ $userOption['id'] }}">{{ (int) $userOption['id'] === (int) auth()->id() ? 'Me · ' : '' }}{{ $userOption['name'] }}</option>
+                                    @endforeach
+                                </select>
+                                @error('createOwnerId')<small class="field-error">{{ $message }}</small>@enderror
+                            </label>
+                        </div>
+
+                        <label class="ft-inquiry-create-field ft-inquiry-create-field-full">
+                            <span>Inquiry title *</span>
+                            <input wire:model="subject" placeholder="e.g. 5,000 embroidered polo shirts for September">
+                            @error('subject')<small class="field-error">{{ $message }}</small>@enderror
+                        </label>
+
+                        <div class="ft-inquiry-create-field ft-inquiry-create-field-full ft-inquiry-request-details">
+                            <label>Request details</label>
+                            <textarea data-rich-text wire:model="requirementNotes" placeholder="Paste or summarize the client's request, including quantities, specifications, target date and any special instructions..."></textarea>
+                            <small class="ft-inquiry-field-tip"><b>Tip:</b> Include quantity, product, deadline and delivery location.</small>
                         </div>
                     </section>
 
-                    <section class="section">
-                        <div class="sectiontitle"><span>2</span><h2>Initial attachments</h2></div>
+                    <section class="section ft-inquiry-create-section ft-inquiry-attachments-section">
+                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
+                            <span>2</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
+                        </div>
                         <div
-                            class="inquiry-dropzone"
+                            class="inquiry-dropzone ft-inquiry-prototype-dropzone"
                             x-data="{ dragging: false }"
                             x-bind:class="{ 'is-dragging': dragging }"
                             x-on:dragenter.prevent="dragging = true"
@@ -161,62 +248,156 @@
                             <input x-ref="createAttachmentInput" class="file-input" type="file" wire:model="createAttachments" multiple>
                             <div class="inquiry-dropzone-icon" aria-hidden="true">⇧</div>
                             <div class="inquiry-dropzone-copy">
-                                <strong>Drag & drop client files here</strong>
-                                <span>Artwork, specifications, request emails, reference images and supporting documents. Up to 20 MB per file.</span>
+                                <strong>Drop client files here</strong>
+                                <span class="ft-inquiry-drop-or">or <b>browse files</b></span>
+                                <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB per file</small>
                             </div>
-                            <button class="secondary inquiry-dropzone-button" type="button" x-on:click.stop="$refs.createAttachmentInput.click()">＋ Choose files</button>
+                            <button class="secondary inquiry-dropzone-button" type="button" x-on:click.stop="$refs.createAttachmentInput.click()">Choose files</button>
                         </div>
                         <div class="inquiry-upload-state" wire:loading wire:target="createAttachments">Uploading files…</div>
                         @if(count($createAttachments))
-                            <div class="inquiry-selected-files">
+                            <div class="inquiry-selected-files ft-inquiry-selected-files">
                                 <div class="inquiry-selected-files-title">Selected files <span>{{ count($createAttachments) }}</span></div>
-                                <div class="attach-list">
+                                <div class="ft-inquiry-selected-file-grid">
                                     @foreach($createAttachments as $upload)
-                                        <span class="attach-chip">□ {{ $upload->getClientOriginalName() }}</span>
+                                        @php
+                                            $attachmentName = (string) $upload->getClientOriginalName();
+                                            $attachmentExtension = strtolower((string) pathinfo($attachmentName, PATHINFO_EXTENSION));
+                                            $attachmentMime = method_exists($upload, 'getMimeType') ? (string) $upload->getMimeType() : '';
+                                            $attachmentIsImage = str_starts_with($attachmentMime, 'image/')
+                                                || in_array($attachmentExtension, ['jpg', 'jpeg', 'png', 'webp', 'gif'], true);
+                                            $attachmentPreviewUrl = $attachmentIsImage && method_exists($upload, 'temporaryUrl')
+                                                ? $upload->temporaryUrl()
+                                                : null;
+                                            $attachmentSize = method_exists($upload, 'getSize') ? (int) $upload->getSize() : 0;
+                                            $attachmentSizeLabel = $attachmentSize >= 1048576
+                                                ? number_format($attachmentSize / 1048576, 1).' MB'
+                                                : ($attachmentSize > 0 ? max(1, (int) round($attachmentSize / 1024)).' KB' : 'Selected file');
+                                        @endphp
+                                        <article class="ft-inquiry-selected-file-card" wire:key="create-attachment-{{ $loop->index }}-{{ md5($attachmentName) }}">
+                                            @if($attachmentPreviewUrl)
+                                                <a
+                                                    class="ft-inquiry-selected-file-preview"
+                                                    href="{{ $attachmentPreviewUrl }}"
+                                                    target="_blank"
+                                                    rel="noopener"
+                                                    title="Open image preview"
+                                                    aria-label="Open preview of {{ $attachmentName }}"
+                                                >
+                                                    <img src="{{ $attachmentPreviewUrl }}" alt="Preview of {{ $attachmentName }}">
+                                                    <span>Preview</span>
+                                                </a>
+                                            @else
+                                                <div class="ft-inquiry-selected-file-type" aria-hidden="true">
+                                                    <span>▤</span>
+                                                    <b>{{ $attachmentExtension !== '' ? strtoupper($attachmentExtension) : 'FILE' }}</b>
+                                                </div>
+                                            @endif
+                                            <div class="ft-inquiry-selected-file-meta">
+                                                <strong title="{{ $attachmentName }}">{{ $attachmentName }}</strong>
+                                                <span>{{ $attachmentExtension !== '' ? strtoupper($attachmentExtension) : 'FILE' }} · {{ $attachmentSizeLabel }}</span>
+                                            </div>
+                                        </article>
                                     @endforeach
                                 </div>
                             </div>
                         @endif
                     </section>
 
-                    <section class="section inquiry-workflow-create-section">
-                        <div class="sectiontitle"><span>3</span><h2>Inquiry taskflow & tasks</h2></div>
-
-                        <div class="inquiry-workflow-selector-wrap">
-                            <x-ui.remote-filter
-                                class="ft-create-remote-select inquiry-create-remote inquiry-workflow-selector"
-                                label="Workflow *"
-                                property="createWorkflowId"
-                                type="workflows"
-                                context="create-inquiry"
-                                action="setCreateSelector"
-                                :value="$createWorkflowId"
-                                placeholder="Select workflow"
-                                :selected-label="$selectedWorkflowLabel ?: null"
-                                :initial-options="$workflowFilterOptions"
-                                :clearable="false"
-                                wire:key="inquiry-create-workflow-selector"
-                            />
-                            @if($createWorkflowId && $createWorkflowTaskCount === 0)
-                                <small class="field-error">This Workflow has no active Task Pack tasks.</small>
-                            @else
-                                @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
-                            @endif
+                    <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
+                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
+                            <span>3</span><h2>What happens next</h2>
+                            @if($workflowOptionCount > 0)<em>{{ $workflowOptionCount }} {{ \Illuminate\Support\Str::plural('workflow', $workflowOptionCount) }} available</em>@endif
                         </div>
 
-                        @if($createWorkflowId && $createWorkflowTaskCount > 0)
-                            <div class="ft-workflow-summary inquiry-create-workflow-summary">
-                                <span>ⓘ {{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
+                        <div class="ft-inquiry-workflow-card" :class="{ 'is-open': workflowOpen }">
+                            <div class="ft-inquiry-workflow-selected" role="button" tabindex="0" x-on:click="workflowOpen = !workflowOpen" x-on:keydown.enter.prevent="workflowOpen = !workflowOpen" x-on:keydown.space.prevent="workflowOpen = !workflowOpen" :aria-expanded="workflowOpen.toString()">
+                                <span class="ft-inquiry-workflow-icon">✓</span>
+                                <span class="ft-inquiry-workflow-copy">
+                                    <small>Default workflow</small>
+                                    <strong>{{ $selectedWorkflowName }}</strong>
+                                    <span>{{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
+                                </span>
                                 @if(auth()->user()->canAccess('workflow.manage'))
-                                    <a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>
+                                    <a href="{{ route('workflow.setup') }}" wire:navigate x-on:click.stop>Preview workflow ↗</a>
                                 @endif
+                                <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
                             </div>
+
+                            <div class="ft-inquiry-workflow-options" x-cloak x-show="workflowOpen">
+                                @foreach($workflowFilterOptions as $workflowOption)
+                                    <button type="button" class="ft-inquiry-workflow-option {{ (int) ($workflowOption['id'] ?? 0) === (int) $createWorkflowId ? 'is-selected' : '' }}"
+                                        wire:click="setCreateSelector('createWorkflowId', '{{ $workflowOption['id'] }}')"
+                                        x-on:click="workflowOpen = false">
+                                        <span class="ft-inquiry-workflow-radio"></span>
+                                        <span><strong>{{ $workflowOption['label'] }}</strong><small>{{ $workflowOption['meta'] ?: 'Inquiry workflow' }}</small></span>
+                                    </button>
+                                @endforeach
+                            </div>
+                        </div>
+                        @if($createWorkflowId && $createWorkflowTaskCount === 0)
+                            <small class="field-error">This Workflow has no active Task Pack tasks.</small>
+                        @else
+                            @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
                         @endif
+                        <p class="ft-inquiry-workflow-footnote">Tasks are created when you select Create inquiry.</p>
                     </section>
 
-                    <div class="formactions"><button class="secondary" type="button" wire:click="cancelCreate">Cancel</button><button class="secondary" type="button" wire:click="saveDraft">Save Draft</button><button class="primary" type="button" wire:click="createInquiry">Create</button></div>
+                    <div class="formactions ft-inquiry-create-actions">
+                        <span>Required fields are marked with *</span>
+                        <div>
+                            <button class="secondary" type="button" wire:click="cancelCreate">Cancel</button>
+                            <button class="secondary" type="button" wire:click="saveDraft" wire:loading.attr="disabled" wire:target="saveDraft">Save draft</button>
+                            <button class="primary" type="button" wire:click="createInquiry" wire:loading.attr="disabled" wire:target="createInquiry">Create inquiry <kbd>⌘ Enter</kbd></button>
+                        </div>
+                    </div>
                 </div>
             </div>
+
+            @if($showCreateClientModal)
+                <div class="ft-inquiry-modal-backdrop" wire:key="inquiry-quick-client-modal" wire:click.self="closeCreateClientModal">
+                    <section class="ft-inquiry-quick-client-modal" role="dialog" aria-modal="true" aria-labelledby="quick-client-title">
+                        <header>
+                            <div><h2 id="quick-client-title">Add new client</h2><p>Create the client with minimum information. You can complete the profile later.</p></div>
+                            <button type="button" wire:click="closeCreateClientModal" aria-label="Close">×</button>
+                        </header>
+                        <div class="ft-inquiry-quick-client-body">
+                            <label class="ft-inquiry-modal-field ft-inquiry-modal-field-full"><span>Client name *</span><input wire:model="newClientName" placeholder="Company or client name">@error('newClientName')<small class="field-error">{{ $message }}</small>@enderror<small>This is the only required field.</small></label>
+
+                            <div class="ft-inquiry-modal-divider"></div>
+                            <div class="ft-inquiry-modal-subhead"><strong>Primary contact (optional)</strong><span>Add contact details if they were provided with the inquiry.</span></div>
+                            <label class="ft-inquiry-modal-field ft-inquiry-modal-field-full"><span>Contact name</span><input wire:model="newClientContactName" placeholder="Full name"></label>
+                            <div class="ft-inquiry-modal-grid">
+                                <label class="ft-inquiry-modal-field"><span>Email</span><input type="email" wire:model="newClientEmail" placeholder="name@company.com">@error('newClientEmail')<small class="field-error">{{ $message }}</small>@enderror</label>
+                                <label class="ft-inquiry-modal-field"><span>Phone</span><input wire:model="newClientPhone" placeholder="Phone number"></label>
+                            </div>
+                            <label class="ft-inquiry-contact-checkbox"><input type="checkbox" wire:model="useNewClientContactForInquiry"><span>Use this person as the inquiry contact</span></label>
+                            <label class="ft-inquiry-modal-field ft-inquiry-modal-field-full"><span>Country / region</span><input list="ft-country-regions" wire:model="newClientCountry" placeholder="Select country or region"><datalist id="ft-country-regions"><option value="Bangladesh"><option value="China"><option value="Hong Kong"><option value="India"><option value="United Kingdom"><option value="United States"><option value="Vietnam"><option value="Cambodia"><option value="Pakistan"><option value="Sri Lanka"><option value="United Arab Emirates"></datalist></label>
+                            <div class="ft-inquiry-client-info">ⓘ <span>The new client will be selected automatically in this inquiry.</span></div>
+                        </div>
+                        <footer>
+                            <span>Required fields are marked with *</span>
+                            <div><button type="button" class="secondary" wire:click="closeCreateClientModal">Cancel</button><button type="button" class="primary" wire:click="createClientAndSelect" wire:loading.attr="disabled" wire:target="createClientAndSelect">Add &amp; select client</button></div>
+                        </footer>
+                    </section>
+                </div>
+            @endif
+
+            @if($showCreateContactModal)
+                <div class="ft-inquiry-modal-backdrop" wire:key="inquiry-quick-contact-modal" wire:click.self="closeCreateContactModal">
+                    <section class="ft-inquiry-quick-client-modal ft-inquiry-quick-contact-modal" role="dialog" aria-modal="true" aria-labelledby="quick-contact-title">
+                        <header><div><h2 id="quick-contact-title">Add client contact</h2><p>Add the primary contact for {{ $selectedClientLabel ?: 'this client' }} and use it in this inquiry.</p></div><button type="button" wire:click="closeCreateContactModal" aria-label="Close">×</button></header>
+                        <div class="ft-inquiry-quick-client-body">
+                            <label class="ft-inquiry-modal-field ft-inquiry-modal-field-full"><span>Contact name *</span><input wire:model="newContactName" placeholder="Full name">@error('newContactName')<small class="field-error">{{ $message }}</small>@enderror</label>
+                            <div class="ft-inquiry-modal-grid">
+                                <label class="ft-inquiry-modal-field"><span>Email</span><input type="email" wire:model="newContactEmail" placeholder="name@company.com">@error('newContactEmail')<small class="field-error">{{ $message }}</small>@enderror</label>
+                                <label class="ft-inquiry-modal-field"><span>Phone</span><input wire:model="newContactPhone" placeholder="Phone number"></label>
+                            </div>
+                        </div>
+                        <footer><span></span><div><button type="button" class="secondary" wire:click="closeCreateContactModal">Cancel</button><button type="button" class="primary" wire:click="saveCreateContact" wire:loading.attr="disabled" wire:target="saveCreateContact">Add contact</button></div></footer>
+                    </section>
+                </div>
+            @endif
         </section>
 
     @else
@@ -226,12 +407,20 @@
             $completedTasks = (int) $inquiry->completed_tasks_count;
             $readyForDecision = !$inquiry->result && $totalTasks > 0 && $completedTasks === $totalTasks;
             $currentTask = $inquiry->currentTask;
-            $detailStatus = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Closed' : $inquiry->status);
-            $resultLabel = $inquiry->result === 'converted' ? ($inquiry->convertedJob?->displayOrderNumber() ?: 'Converted') : ($inquiry->result === 'dead' ? 'Closed — '.$inquiry->dead_reason : 'Not decided');
+            $firstStartedTask = $inquiry->tasks->whereNotNull('started_at')->sortBy('started_at')->first();
+            $lastCompletedTask = $inquiry->tasks->whereNotNull('completed_at')->sortByDesc('completed_at')->first();
+            $inquiryStartAt = $firstStartedTask?->started_at;
+            $inquiryCompletedAt = $inquiry->completed_at ?: ($readyForDecision ? $lastCompletedTask?->completed_at : null);
+            $detailStatus = match (true) {
+                $inquiry->result === 'converted' => 'Converted',
+                $inquiry->result === 'dead' => 'Closed',
+                (string) $inquiry->status === 'Draft' => 'Draft',
+                $readyForDecision => \App\Services\InquiryService::AUTO_COMPLETED_STATUS,
+                $completedTasks > 0 || $inquiryStartAt !== null => \App\Services\InquiryService::AUTO_IN_PROGRESS_STATUS,
+                default => \App\Services\InquiryService::AUTO_READY_STATUS,
+            };
         @endphp
         <section class="view inquiry-detail-view" x-data="{
-            deadOpen:false,
-            convertOpen:false,
             inquiryStatus:@js($detailStatus),
             statusTone(status){
                 if (String(status).includes('Converted') || String(status).includes('Completed')) return 'green';
@@ -239,15 +428,6 @@
                 if (String(status).includes('Ready') || String(status).includes('On Hold')) return 'amber';
                 if (String(status).includes('Waiting')) return 'purple';
                 return 'blue';
-            },
-            async saveInquiryStatus(event){
-                const previous=this.inquiryStatus;
-                try{
-                    const result=await $wire.updateInquiryStatus(event.currentTarget.value);
-                    this.inquiryStatus=result?.status || event.currentTarget.value;
-                }catch(error){
-                    event.currentTarget.value=previous;
-                }
             },
             async saveTaskStatus(event, taskId){
                 const previous=this.inquiryStatus;
@@ -283,38 +463,37 @@
                             @endif
                         </h1>
                     </div>
+                    <div class="ft-inquiry-header-meta" aria-label="Inquiry information">
+                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Client <strong>{{ $inquiry->client?->name ?: '—' }}</strong></span></span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item ft-inquiry-header-reference">
+                            <span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7l4 4V20.5H7z"></path><path d="M14 3.5v4h4"></path></svg></span>
+                            <span>Reference <strong>{{ $inquiry->reference_number ?: '—' }}</strong></span>
+                            @if($inquiry->reference_number)
+                                <button type="button" class="ft-copy-id-btn ft-inquiry-header-copy" title="Copy Reference Number" aria-label="Copy reference number {{ $inquiry->reference_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($inquiry->reference_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                            @endif
+                        </span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Created by <strong>{{ $inquiry->creator?->name ?: 'System' }}</strong></span></span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span><span>Created <strong>{{ $inquiry->created_at ? \App\Support\UserLocalTime::format($inquiry->created_at, 'M j, Y') : '—' }}@if($inquiry->created_at) at {{ \App\Support\UserLocalTime::format($inquiry->created_at, 'g:i A') }}@endif</strong></span></span>
+                    </div>
                 </div>
             </div>
 
             <div class="tabs">
-                <button class="tab {{ $detailTab === 'overview' ? 'active' : '' }}" type="button" wire:click="setDetailTab('overview')">Overview</button>
-                <button class="tab {{ $detailTab === 'workflow' ? 'active' : '' }}" type="button" wire:click="setDetailTab('workflow')">Taskflow</button>
+                <button class="tab active" type="button">Overview</button>
             </div>
-
-            @if($detailTab !== 'overview')
-                <div class="summary">
-                    <div class="summarycard"><small>Current task</small><strong>{{ $currentTask?->title ?: ($readyForDecision ? 'Ready for Decision' : 'No active task') }}</strong></div>
-                    <div class="summarycard"><small>Taskflow progress</small><strong>{{ $completedTasks }} of {{ $totalTasks }} completed</strong><div class="bar" style="margin-top:7px;width:100%"><i style="width:{{ $totalTasks ? ($completedTasks / $totalTasks * 100) : 0 }}%"></i></div></div>
-                    <div class="summarycard"><small>Next due date</small><strong>{{ $currentTask?->due_date?->format('M j, Y') ?: '—' }}</strong></div>
-                    <div class="summarycard"><small>Result</small><strong>{{ $resultLabel }}</strong></div>
-                </div>
-            @endif
 
             @if($detailTab === 'overview')
                 <div class="tabpane ft-task-detail-page ft-exact-task-detail ft-inquiry-task-overview-exact">
                     <section class="ft-task-property-grid ft-friendly-task-properties ft-inquiry-overview-properties">
-                        <div
-                            class="ft-task-property ft-inline-edit-shell"
-                            x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-'.$inquiry->id.'-status'), label: 'Inquiry status', value: @js($detailStatus), display: @js($detailStatus) })"
-                            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                            x-on:click.outside="if (editing) cancelEdit()"
-                        >
+                        <div class="ft-task-property ft-inquiry-auto-status-property">
                             <small>Status</small>
-                            <div x-show="!editing" class="ft-task-property-display"><span class="status-dot blue"></span><b class="ft-property-value" x-text="display">{{ $detailStatus }}</b>@if($canEditInquiry && !$inquiry->result)<button type="button" :disabled="status === 'saving'" title="Edit status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryOverviewStatus?.showPicker ? $refs.inquiryOverviewStatus.showPicker() : $refs.inquiryOverviewStatus?.focus())">✎</button>@endif</div>
-                            @if($canEditInquiry && !$inquiry->result)
-                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select x-ref="inquiryOverviewStatus" x-model="draftValue" class="ft-task-property-inline-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), async () => { const result=await $wire.updateInquiryStatus(draftValue); if(result?.status) inquiryStatus=result.status; return result; })">@unless($inquiryStatusOptions->contains($detailStatus))<option value="{{ $detailStatus }}" disabled>{{ $detailStatus }} (inactive)</option>@endunless @foreach($inquiryStatusOptions as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select></div>
-                                <x-ui.inline-save-state compact />
-                            @endif
+                            <div class="ft-task-property-display">
+                                <span class="status-dot" x-bind:class="statusTone(inquiryStatus)"></span>
+                                <b class="ft-property-value" x-text="inquiryStatus">{{ $detailStatus }}</b>
+                            </div>
                         </div>
 
                         <div
@@ -347,41 +526,12 @@
 
                         <div class="ft-task-property">
                             <small>Start date</small>
-                            <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $inquiry->created_at ? \App\Support\UserLocalTime::format($inquiry->created_at, 'M j, Y') : '—' }}</b></div>
+                            <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value">{{ $inquiryStartAt ? \App\Support\UserLocalTime::format($inquiryStartAt, 'M j, Y') : '—' }}</b></div>
                         </div>
 
                         <div class="ft-task-property ft-task-completed-property">
                             <small>Completed On</small>
-                            <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value ft-completed-date-time"><span>{{ $inquiry->completed_at ? \App\Support\UserLocalTime::format($inquiry->completed_at, 'M j, Y') : '—' }}</span>@if($inquiry->completed_at)<span class="ft-completed-time">{{ \App\Support\UserLocalTime::format($inquiry->completed_at, 'g:i A') }}</span>@endif</b></div>
-                        </div>
-                    </section>
-
-                    <section class="info-card ft-inquiry-information-legacy">
-                        <header class="info-head"><h3>Inquiry information</h3><p>Client request and Inquiry details.</p></header>
-                        <div class="info-body">
-                            <div class="kv ft-inquiry-information-kv">
-                                <div><small>Client</small><strong>{{ $inquiry->client?->name ?: '—' }}</strong></div>
-                                <div>
-                                    <small>Reference Number</small>
-                                    @if($inquiry->reference_number)
-                                        <div class="ft-inquiry-reference-copy">
-                                            <strong class="ft-inquiry-reference-value" title="{{ $inquiry->reference_number }}">{{ $inquiry->reference_number }}</strong>
-                                            <button
-                                                type="button"
-                                                class="ft-copy-id-btn"
-                                                title="Copy Reference Number"
-                                                aria-label="Copy reference number {{ $inquiry->reference_number }}"
-                                                onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($inquiry->reference_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)"
-                                            >⧉</button>
-                                        </div>
-                                    @else
-                                        <strong>—</strong>
-                                    @endif
-                                </div>
-                                <div><small>Created by</small><strong>{{ $inquiry->creator?->name ?: 'System' }}</strong></div>
-                                <div><small>Created at</small><strong>{{ $inquiry->created_at ? \App\Support\UserLocalTime::format($inquiry->created_at, 'M j, Y · g:i A') : '—' }}</strong></div>
-                                <div><small>Order</small><strong>@if($inquiry->convertedJob)<a href="{{ route('jobs.index', ['open' => $inquiry->convertedJob->id]) }}" wire:navigate>{{ $inquiry->convertedJob->displayOrderNumber() }}</a>@else Not created yet @endif</strong></div>
-                            </div>
+                            <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value ft-completed-date-time"><span>{{ $inquiryCompletedAt ? \App\Support\UserLocalTime::format($inquiryCompletedAt, 'M j, Y') : '—' }}</span>@if($inquiryCompletedAt)<span class="ft-completed-time">{{ \App\Support\UserLocalTime::format($inquiryCompletedAt, 'g:i A') }}</span>@endif</b></div>
                         </div>
                     </section>
 
@@ -393,250 +543,124 @@
                         <div class="ft-inquiry-description-head">
                             <h2>Description</h2>
                             @if($canEditInquiry && !$inquiry->result)
-                                <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit description" aria-label="Edit Inquiry description" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.inquiryDescription.focus(); $refs.inquiryDescription.setSelectionRange($refs.inquiryDescription.value.length, $refs.inquiryDescription.value.length); })">✎</button>
+                                <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit description" aria-label="Edit Inquiry description" x-on:click.stop="beginRichTextEdit($refs.inquiryDescription)">✎</button>
                             @endif
                         </div>
-                        <p x-show="!editing" x-text="display">{{ $inquiry->requirement_notes ?: 'No description has been provided for this Inquiry.' }}</p>
+                        <div x-show="!editing" class="ft-rich-text-content ft-inquiry-description-content">
+                            <div x-show="!hasRichTextOverride">@if($inquiry->requirement_notes)<x-ui.mention-text :text="$inquiry->requirement_notes" />@else No description has been provided for this Inquiry. @endif</div>
+                            <div x-cloak x-show="hasRichTextOverride" x-html="richTextOverrideHtml"></div>
+                        </div>
                         @if($canEditInquiry && !$inquiry->result)
-                            <div x-cloak x-show="editing" class="ft-inquiry-description-editor">
-                                <textarea x-ref="inquiryDescription" x-model="draftValue" maxlength="10000" placeholder="Add the client requirement or Inquiry description..."
-                                    x-on:keydown.escape.prevent="cancelEdit()"
-                                    x-on:keydown.ctrl.enter.prevent="$event.target.blur()"
-                                    x-on:keydown.meta.enter.prevent="$event.target.blur()"
-                                    x-on:blur="if (editing) { const clean=draftValue.trim(); commit(clean, clean || 'No description has been provided for this Inquiry.', () => $wire.updateInquiryField('requirement_notes', clean)); }"></textarea>
-                                <div class="ft-inquiry-description-editor-foot"><span>Ctrl/⌘ + Enter to save</span><x-ui.inline-save-state compact /></div>
+                            <div x-cloak x-show="editing" class="ft-inquiry-description-editor ft-inline-description-editor">
+                                <textarea x-ref="inquiryDescription" data-rich-text placeholder="Add the client requirement or Inquiry description, or paste screenshots here...">{{ $inquiry->requirement_notes ?? '' }}</textarea>
+                                <div class="ft-inquiry-description-editor-actions">
+                                    <button type="button" class="secondary" x-on:click="cancelRichTextEdit($refs.inquiryDescription)">Cancel</button>
+                                    <button type="button" class="primary" data-rich-text-submit :disabled="status === 'saving'" x-on:click="saveRichText($refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => $wire.updateInquiryField('requirement_notes', clean))">Save</button>
+                                    <x-ui.inline-save-state compact />
+                                </div>
                             </div>
                         @endif
                     </section>
 
-                    @php
-                        $overviewTasks = $inquiry->tasks;
-                        $overviewTaskTotal = $overviewTasks->count();
-                        $overviewTaskCompleted = $overviewTasks->whereNotNull('completed_at')->count();
-                        $overviewTaskProgress = $overviewTaskTotal ? round(($overviewTaskCompleted / $overviewTaskTotal) * 100) : 0;
-                        $overviewActiveTaskId = $overviewTasks->first(fn ($task) => ! $task->completed_at)?->id;
-                    @endphp
-                    <section class="ft-detail-card ft-inquiry-overview-task-card" aria-label="Inquiry tasks">
-                        <div class="ft-inquiry-overview-task-head">
-                            <div>
-                                <h2>All tasks</h2>
-                                <p>{{ $overviewTaskTotal }} task{{ $overviewTaskTotal === 1 ? '' : 's' }} in this Inquiry</p>
-                            </div>
-                            <span class="ft-inquiry-view-only-badge">View only</span>
-                        </div>
-                        <div class="ft-inquiry-overview-task-note">
-                            <span>◉ All {{ $overviewTaskTotal }} Taskflow task{{ $overviewTaskTotal === 1 ? '' : 's' }} are shown</span>
-                            <span>Current saved status</span>
-                        </div>
-                        <div class="ft-inquiry-overview-task-group-head">
-                            <b>1</b>
-                            <strong>Taskflow</strong>
-                            <small>{{ $overviewTaskCompleted }} of {{ $overviewTaskTotal }} complete</small>
-                            <em style="--inquiry-task-progress:{{ $overviewTaskProgress }}%"></em>
-                        </div>
-                        <div class="ft-inquiry-overview-task-columns" aria-hidden="true">
-                            <span>Task</span>
-                            <span>Assignee</span>
-                            <span>Due date</span>
-                            <span>Started at</span>
-                            <span>Status</span>
-                        </div>
-                        <div class="ft-inquiry-overview-task-rows">
-                            @forelse($overviewTasks as $overviewTask)
-                                @php
-                                    $overviewTaskStatus = strtolower((string) $overviewTask->status);
-                                    $overviewTaskTone = match (true) {
-                                        $overviewTask->completed_at !== null || str_contains($overviewTaskStatus, 'complete') => 'green',
-                                        str_contains($overviewTaskStatus, 'revision') || str_contains($overviewTaskStatus, 'blocked') => 'red',
-                                        str_contains($overviewTaskStatus, 'waiting') || str_contains($overviewTaskStatus, 'hold') => 'amber',
-                                        default => 'blue',
-                                    };
-                                @endphp
-                                <div class="ft-inquiry-overview-task-row {{ (int) $overviewActiveTaskId === (int) $overviewTask->id ? 'is-current' : '' }}" wire:key="inquiry-overview-task-{{ $overviewTask->id }}">
-                                    <div class="ft-inquiry-overview-task-name">
-                                        <span>{{ $loop->iteration }}</span>
-                                        <strong>{{ $overviewTask->title }}</strong>
-                                    </div>
-                                    <div class="ft-inquiry-overview-task-assignee">
-                                        <x-ui.avatar :user="$overviewTask->assignee" :name="$overviewTask->assignee?->name ?? 'Unassigned'" :size="26"/>
-                                        <span>{{ $overviewTask->assignee?->name ?? 'Unassigned' }}</span>
-                                    </div>
-                                    <span class="ft-inquiry-overview-task-date">{{ $overviewTask->due_date?->format('M j, Y') ?? '—' }}</span>
-                                    <span class="ft-inquiry-overview-task-started">
-                                        @if($overviewTask->started_at)
-                                            <b>{{ \App\Support\UserLocalTime::format($overviewTask->started_at, 'M j, Y') }}</b>
-                                            <small>{{ \App\Support\UserLocalTime::format($overviewTask->started_at, 'g:i A') }}</small>
-                                        @else
-                                            <b>—</b>
-                                            <small>Not started</small>
-                                        @endif
-                                    </span>
-                                    <span class="pill {{ $overviewTaskTone }} ft-inquiry-overview-task-status">{{ $overviewTask->status }}</span>
-                                </div>
-                            @empty
-                                <div class="ft-inquiry-overview-task-empty">No Taskflow tasks configured for this Inquiry.</div>
-                            @endforelse
-                        </div>
-                    </section>
+                    <div id="tab-workflow" class="ft-inquiry-overview-taskflow ft-inquiry-workflow-pane">
+                        @include('livewire.inquiries._taskflow')
+                    </div>
 
                     @include('livewire.inquiries._attachments')
                     @include('livewire.inquiries._activity')
                 </div>
-            @elseif($detailTab === 'workflow')
-                @php
-                    $activeTaskId = $inquiry->tasks->first(fn ($task) => !$task->completed_at)?->id;
-                @endphp
-                <div id="tab-workflow" class="tabpane ft-inquiry-workflow-pane">
-                    <section class="panel">
-                        <header class="panelhead"><div><h2>Inquiry Taskflow</h2><p>Open tasks can be prepared at any time; completion still follows the taskflow sequence.</p></div><div class="task-control-row"><span class="task-count-pill">{{ $totalTasks }} Tasks</span><span class="manage-badge">Sequential taskflow</span>@if($canAddInquiryTask)<button class="primary" type="button" wire:click="openAddTaskForm" style="min-height:34px">＋ Add Task</button>@endif</div></header>
-                        <div class="ft-inquiry-task-grid-head" aria-hidden="true">
-                            <span>#</span><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Files</span><span>Action</span>
-                        </div>
-                        <div class="ft-inquiry-task-list">
-                            @forelse($inquiry->tasks as $i => $task)
-                                @php
-                                    $state = $task->completed_at ? 'done' : ((int)$task->id === (int)$activeTaskId ? 'active' : 'wait');
-                                    $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
-                                    $canEditThisTask = $state !== 'done' && !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
-                                    $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
-                                @endphp
-                                <div class="ft-inquiry-task-row {{ $state }} {{ $taskDeepLinked ? 'is-highlighted' : '' }}" wire:key="inquiry-task-row-{{ $task->id }}">
-                                    <div class="ft-inquiry-task-step"><span>{{ $state === 'done' ? '✓' : $i + 1 }}</span></div>
-                                    <div class="ft-inquiry-task-copy">
-                                        <strong>{{ $task->title }}</strong>
-                                        <p>{{ $task->description ?: 'No instructions added.' }}</p>
-                                        @if($task->requires_submission)<span class="reqfile {{ $fileOk ? 'ok' : '' }}">{{ $fileOk ? '✓ File submitted' : '□ Required file' }}</span>@endif
-                                    </div>
+            @endif
 
-                                    <div class="ft-inquiry-assignee-inline ft-inline-edit-shell"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
-                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                        x-on:click.outside="if (editing) cancelEdit()"
-                                        x-on:ft-inline-remote-cancel.stop="cancelEdit()"
-                                        x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeInline({{ $task->id }}, draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })">
-                                        <div class="ft-inquiry-inline-display-row">
-                                            <div x-show="!editing" class="ft-inquiry-assignee-display">
-                                                <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="28" /></span>
-                                                <span class="ft-inquiry-assignee-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
-                                            </div>
-                                            @if($canEditThisTask)<button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
-                                        </div>
-                                        @if($canEditThisTask)
-                                            <div x-cloak x-show="editing" class="ft-inquiry-assignee-picker">
-                                                <x-ui.inline-remote-user :value="$task->assignee_id ?? ''" :selected-label="$task->assignee?->name ?? 'Unassigned'" trigger-class="ft-task-inline-input" variant="compact" :menu-width="260" />
-                                            </div>
-                                            <x-ui.inline-save-state compact />
-                                        @endif
-                                    </div>
-
-                                    <div class="ft-inquiry-task-date ft-inline-edit-shell"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j, Y') ?? 'Set due date') })"
-                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
-                                        <div class="ft-inquiry-inline-display-row" x-show="!editing">
-                                            <span class="ft-inquiry-inline-value" x-text="display">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
-                                            @if($canEditThisTask)<button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryDue.showPicker ? $refs.inquiryDue.showPicker() : $refs.inquiryDue.focus())">✎</button>@endif
-                                        </div>
-                                        @if($canEditThisTask)
-                                            <input x-ref="inquiryDue" x-cloak x-show="editing" x-model="draftValue" class="ft-inquiry-inline-input" type="date"
-                                                x-on:keydown.escape.prevent="cancelEdit()"
-                                                x-on:blur="if (editing) cancelEdit()"
-                                                x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueInline({{ $task->id }}, draftValue))">
-                                            <x-ui.inline-save-state compact />
-                                        @endif
-                                    </div>
-                                    <div class="task-status-cell">
-                                        @if($state === 'done')
-                                            <span class="ft-inquiry-status-pill done">Completed</span>
-                                        @else
-                                            <div class="ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
-                                                <div class="ft-inquiry-inline-display-row" x-show="!editing">
-                                                    <span class="pill ft-inquiry-inline-status" x-bind:class="statusTone(display)" x-text="display">{{ $task->status }}</span>
-                                                    @if($canEditThisTask)<button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit status" aria-label="Edit task status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryStatus.focus())">✎</button>@endif
-                                                </div>
-                                                @if($canEditThisTask)
-                                                    <select x-ref="inquiryStatus" x-cloak x-show="editing" class="ft-inquiry-inline-input" x-model="draftValue"
-                                                        x-on:keydown.escape.prevent="cancelEdit()"
-                                                        x-on:blur="if (editing) cancelEdit()"
-                                                        x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; return result; })">
-                                                        @if($state === 'wait')<option value="Waiting">Waiting</option>@endif
-                                                        @foreach(\App\Services\InquiryService::WORKING_STATUSES as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
-                                                    </select>
-                                                    <x-ui.inline-save-state compact />
-                                                @endif
-                                            </div>
-                                        @endif
-                                    </div>
-                                    <div class="ft-inquiry-task-files">
-                                        @if($canEditThisTask)
-                                            <label class="ft-inquiry-attach-button file-label">＋ Attach<input class="file-input" type="file" wire:model="taskQuickUploads.{{ $task->id }}"></label>
-                                        @endif
-                                        <span><b>{{ $task->documents_count }}</b> file{{ $task->documents_count === 1 ? '' : 's' }}</span>
-                                    </div>
-                                    <div class="ft-inquiry-task-action">
-                                        @if($state === 'done')
-                                            <span class="ft-inquiry-complete-state">✓ Completed</span>
-                                        @elseif($state === 'wait')
-                                            <button class="ft-inquiry-action-button" type="button" disabled>Waiting</button>
-                                        @else
-                                            <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline({{ $task->id }})" wire:loading.attr="disabled" wire:target="completeTaskInline({{ $task->id }})" @disabled(!$canEditThisTask || !$fileOk)>{{ !$fileOk ? 'File required' : 'Complete' }}</button>
-                                        @endif
-                                    </div>
-                                </div>
-                                @if($task->documents->isNotEmpty())
-                                    <div class="ft-inquiry-task-document-list" wire:key="inquiry-task-documents-{{ $task->id }}">
-                                        @foreach($task->documents as $taskDocument)
-                                            <div class="ft-inquiry-task-document-row" wire:key="inquiry-task-document-{{ $taskDocument->id }}">
-                                                <span class="ft-inquiry-task-file-type">{{ strtoupper(pathinfo($taskDocument->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
-                                                <div class="ft-inquiry-task-file-copy">
-                                                    <b title="{{ $taskDocument->name }}">{{ $taskDocument->name }}</b>
-                                                    <small>{{ $taskDocument->created_at ? \App\Support\UserLocalTime::format($taskDocument->created_at, 'M j, Y, g:i A') : '—' }}</small>
-                                                </div>
-                                                <div class="ft-inquiry-task-file-actions">
-                                                    <a href="{{ route('inquiries.documents.open', $taskDocument) }}" target="_blank" rel="noopener">Open</a>
-                                                    @if($canEditThisTask)
-                                                        <button type="button" class="ft-inquiry-task-file-remove" wire:click="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})" wire:loading.attr="disabled" wire:target="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})" title="Remove attachment" aria-label="Remove {{ $taskDocument->name }}">×</button>
-                                                    @endif
-                                                </div>
-                                            </div>
-                                        @endforeach
-                                    </div>
-                                @endif
-                            @empty
-                                <div class="ft-inquiry-empty-workflow">No taskflow tasks configured.</div>
-                            @endforelse
-                        </div>
-
-                        @if($showAddTaskForm && $canAddInquiryTask)
-                            <div class="ft-inquiry-add-task" wire:key="inquiry-add-task-form">
-                                <div class="ft-inquiry-add-task-head">
-                                    <div><strong>Add taskflow task</strong><span>The task is appended after the existing taskflow. If the taskflow was already complete, this new task becomes active.</span></div>
-                                    <button class="ft-inquiry-add-task-close" type="button" wire:click="cancelAddTask" aria-label="Close add task form">×</button>
-                                </div>
-                                <div class="ft-inquiry-add-task-grid">
-                                    <label class="ft-inquiry-add-task-field ft-inquiry-add-task-field-wide"><span>Task name *</span><input type="text" wire:model="newTaskName" placeholder="Task name"></label>
-                                    <label class="ft-inquiry-add-task-field"><span>Assignee</span><select wire:model="newTaskAssigneeId"><option value="">Unassigned</option>@foreach($userOptions as $userOption)<option value="{{ $userOption['id'] }}">{{ $userOption['name'] }}</option>@endforeach</select></label>
-                                    <label class="ft-inquiry-add-task-field"><span>Due date</span><input type="date" wire:model="newTaskDueDate" onclick="this.showPicker && this.showPicker()"></label>
-                                    <label class="ft-inquiry-add-task-field ft-inquiry-add-task-field-wide"><span>Instructions</span><textarea wire:model="newTaskDescription" placeholder="Describe what must be completed for this task."></textarea></label>
-                                    <label class="ft-inquiry-add-task-field"><span>Submission</span><select wire:model.live.boolean="newTaskRequiresSubmission"><option value="0">No required file</option><option value="1">Required file</option></select></label>
-                                    @if($newTaskRequiresSubmission)<label class="ft-inquiry-add-task-field"><span>Required file</span><input type="text" wire:model="newTaskSubmissionLabel" placeholder="Submission name"></label>@endif
-                                </div>
-                                @error('newTaskName')<div class="ft-inquiry-add-task-error">{{ $message }}</div>@enderror
-                                <div class="ft-inquiry-add-task-actions"><button class="secondary" type="button" wire:click="cancelAddTask">Cancel</button><button class="primary" type="button" wire:click="addInquiryTask" wire:loading.attr="disabled" wire:target="addInquiryTask">Add Task</button></div>
+            @if($showTaskDocumentModal && $taskDocumentModalTask)
+                <div class="ft-inquiry-task-document-modal-backdrop" wire:key="inquiry-task-document-modal" wire:click.self="closeTaskDocumentModal">
+                    <section class="ft-inquiry-task-document-modal" role="dialog" aria-modal="true" aria-labelledby="task-document-modal-title">
+                        <header class="ft-inquiry-task-document-modal-head">
+                            <div>
+                                <h2 id="task-document-modal-title">Add new document to task</h2>
+                                <p>Upload a new file or choose a document that already exists.</p>
                             </div>
-                        @endif
-                    </section>
+                            <button type="button" class="ft-inquiry-task-document-modal-close" wire:click="closeTaskDocumentModal" aria-label="Close">×</button>
+                        </header>
 
-                    <section class="decision {{ $readyForDecision ? 'ready-decision' : '' }}">
-                        <div class="decisiontop"><div><h3>Final Inquiry Decision</h3><p>{{ $readyForDecision ? 'All configured Inquiry tasks and required submissions are complete. Record the client outcome now.' : 'Complete every task currently configured in this Inquiry taskflow. Then choose whether the Inquiry becomes an Order or is closed.' }}</p></div><span class="pill {{ $readyForDecision ? 'amber' : ($inquiry->result === 'converted' ? 'green' : ($inquiry->result === 'dead' ? 'red' : 'amber')) }}">{{ $readyForDecision ? 'Decision Required' : ($inquiry->result ? 'Completed' : 'Locked') }}</span></div>
-                        <div class="decisionactions"><button class="primary" type="button" x-on:click="convertOpen=true" @disabled(!$readyForDecision || !$canCreateOrder)>Convert to Order</button><button class="danger" type="button" x-on:click="deadOpen=true" @disabled(!$readyForDecision)>Close Inquiry</button></div>
-                        <div class="deadreason" x-bind:class="deadOpen ? 'show' : ''"><select wire:model="deadReason"><option>Price too high</option><option>Client cancelled</option><option>Lost to competitor</option><option>MOQ issue</option><option>Delivery issue</option><option>No response</option><option>Other</option></select><input wire:model="deadNote" placeholder="Optional note"><button class="danger" type="button" wire:click="markDead" x-on:click="deadOpen=false">Confirm Close</button></div>
-                        @if($inquiry->result === 'converted')<div class="successbox show"><strong>Converted successfully</strong><span>Order <b>{{ $inquiry->convertedJob?->displayOrderNumber() }}</b> was created from this inquiry. The Order starts its own workflow and keeps this inquiry as the source reference.</span></div>@endif
-                        @if($inquiry->result === 'dead')<div class="deadbox show"><strong>Inquiry closed</strong><span>Reason: {{ $inquiry->dead_reason }}{{ $inquiry->dead_note ? '. '.$inquiry->dead_note : '' }}</span></div>@endif
+                        <div class="ft-inquiry-task-document-modal-body">
+                            <div class="ft-inquiry-task-document-target">
+                                <span class="ft-inquiry-task-document-target-icon">▣</span>
+                                <div>
+                                    <small>ATTACHING TO</small>
+                                    <strong>{{ $taskDocumentModalTask->title }}</strong>
+                                    <span>INQ-TASK-{{ str_pad((string) $taskDocumentModalTask->id, 5, '0', STR_PAD_LEFT) }} &nbsp;·&nbsp; {{ $inquiry->sourceWorkflow?->name ?? 'Inquiry Taskflow' }}</span>
+                                </div>
+                                <span class="ft-inquiry-task-document-target-lock">▣&nbsp; Task selected</span>
+                            </div>
+
+                            <div class="ft-inquiry-task-document-source-label">Document source</div>
+                            <div class="ft-inquiry-task-document-source-tabs">
+                                <button type="button" class="{{ $taskDocumentSource === 'upload' ? 'active' : '' }}" wire:click="setTaskDocumentSource('upload')">
+                                    <span>↥</span> Upload new
+                                </button>
+                                <button type="button" class="{{ $taskDocumentSource === 'existing' ? 'active' : '' }}" wire:click="setTaskDocumentSource('existing')" @disabled(!$canLinkDocuments)>
+                                    <span>▤</span> Choose existing
+                                </button>
+                            </div>
+
+                            @if($taskDocumentSource === 'upload')
+                                <label class="ft-inquiry-task-document-dropzone">
+                                    <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
+                                    <span class="ft-inquiry-task-document-upload-icon">⇧</span>
+                                    @if($taskDocumentUpload)
+                                        <strong>{{ $taskDocumentUpload->getClientOriginalName() }}</strong>
+                                        <b>File selected — choose another file</b>
+                                        <small>{{ number_format(max(1, (int) ceil($taskDocumentUpload->getSize() / 1024))) }} KB · ready to add</small>
+                                    @else
+                                        <strong>Drop a file here</strong>
+                                        <b>or browse files</b>
+                                        <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small>
+                                    @endif
+                                </label>
+                                @error('taskDocumentUpload')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
+                            @else
+                                <div class="ft-inquiry-task-document-existing">
+                                    @if($availableTaskDocuments->isEmpty())
+                                        <div class="ft-inquiry-task-document-existing-empty">No existing client documents are available.</div>
+                                    @else
+                                        <label>
+                                            <span>Choose an existing document</span>
+                                            <select wire:model="taskExistingDocumentId">
+                                                <option value="">Select a document...</option>
+                                                @foreach($availableTaskDocuments as $sourceDocument)
+                                                    <option value="{{ $sourceDocument->id }}">{{ $sourceDocument->name }}</option>
+                                                @endforeach
+                                            </select>
+                                        </label>
+                                    @endif
+                                </div>
+                                @error('taskExistingDocumentId')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
+                            @endif
+
+                            <label class="ft-inquiry-task-document-note">
+                                <span>Document note (optional)</span>
+                                <input type="text" wire:model="taskDocumentNote" placeholder="Add a short note about this document...">
+                            </label>
+                            @error('taskDocumentNote')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
+
+                            <div class="ft-inquiry-task-document-info">
+                                <span>ⓘ</span>
+                                <p>This document will appear directly under <strong>{{ $taskDocumentModalTask->title }}</strong>.</p>
+                            </div>
+                        </div>
+
+                        <footer class="ft-inquiry-task-document-modal-actions">
+                            <button type="button" class="secondary" wire:click="closeTaskDocumentModal">Cancel</button>
+                            <button type="button" class="primary" wire:click="saveTaskDocument" wire:loading.attr="disabled" wire:target="saveTaskDocument,taskDocumentUpload"
+                                @disabled($taskDocumentSource === 'upload' ? !$taskDocumentUpload : !$taskExistingDocumentId)>
+                                <span wire:loading.remove wire:target="saveTaskDocument">Add document</span>
+                                <span wire:loading wire:target="saveTaskDocument">Adding...</span>
+                            </button>
+                        </footer>
                     </section>
                 </div>
             @endif
 
-            <div class="modal" x-bind:class="convertOpen ? 'show' : ''" x-on:click.self="convertOpen=false"><div class="modalcard"><div class="modalhead"><h3>Convert inquiry to order?</h3><button class="close" type="button" x-on:click="convertOpen=false">×</button></div><div class="modalbody"><div class="pair"><div class="pairbox"><small>Inquiry</small><strong>{{ $inquiry->inquiry_number }}</strong></div><div class="arrow">→</div><div class="pairbox"><small>New Order</small><strong>Auto-generated on create</strong></div></div><div class="modalnote">Client, inquiry reference, requirement details and delivery information will carry into the new Order. Inquiry task history remains on the Inquiry.</div></div><div class="modalactions"><button class="secondary" type="button" x-on:click="convertOpen=false">Cancel</button><button class="primary" type="button" wire:click="convertToOrder" x-on:click="convertOpen=false">Create Order</button></div></div></div>
         </section>
     @endif
 </div>

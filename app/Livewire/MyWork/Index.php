@@ -188,7 +188,7 @@ class Index extends Component
             'workGroups' => $page['groups'],
             'workPaginator' => $page['paginator'],
             'visibleTaskCount' => $page['visibleTaskCount'],
-            'searchNeedsMoreCharacters' => trim($this->search) !== '' && mb_strlen(trim($this->search)) < 2,
+            'searchNeedsMoreCharacters' => trim($this->search) !== '' && ! app(MyWorkService::class)->searchIsUsable($this->search),
         ]);
     }
 }

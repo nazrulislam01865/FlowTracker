@@ -5,6 +5,8 @@ namespace App\Services;
 use App\Jobs\DeliverRealtimeNotification;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
+use App\Models\Inquiry;
+use App\Models\InquiryTask;
 use App\Models\Task;
 use App\Models\User;
 use Illuminate\Support\Collection;
@@ -133,7 +135,6 @@ class NotificationService
         $ids = collect($recipientIds)
             ->map(fn ($id) => (int) $id)
             ->filter()
-            ->reject(fn ($id) => $actor && $id === (int) $actor->id)
             ->unique()
             ->values()
             ->all();
@@ -154,6 +155,61 @@ class NotificationService
                 ->where('is_active', true)
                 ->get()
                 ->each(fn (User $recipient) => $this->createMentionNotification($recipient, $title, $message, $job, $task, $actor));
+        });
+    }
+
+    public function notifyInquiryMentionedUsers(
+        array $recipientIds,
+        string $title,
+        string $message,
+        Inquiry $inquiry,
+        ?InquiryTask $inquiryTask = null,
+        ?User $actor = null,
+    ): void {
+        $ids = collect($recipientIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($ids === []) return;
+
+        $inquiryId = (int) $inquiry->id;
+        $inquiryTaskId = $inquiryTask?->id ? (int) $inquiryTask->id : null;
+
+        $this->runAfterCommit(function () use ($ids, $title, $message, $inquiryId, $inquiryTaskId): void {
+            $inquiry = Inquiry::withTrashed()->find($inquiryId);
+            if (!$inquiry || $inquiry->trashed()) return;
+
+            $inquiryTask = $inquiryTaskId ? InquiryTask::withTrashed()->find($inquiryTaskId) : null;
+            if ($inquiryTask?->trashed()) $inquiryTask = null;
+
+            User::query()
+                ->whereIn('id', $ids)
+                ->where('is_active', true)
+                ->get()
+                ->each(function (User $recipient) use ($title, $message, $inquiry, $inquiryTask): void {
+                    $visible = app(InquiryService::class)
+                        ->visibleQuery($recipient)
+                        ->whereKey($inquiry->id)
+                        ->exists();
+                    if (!$visible) return;
+
+                    $notification = FlowNotification::create([
+                        'user_id' => $recipient->id,
+                        'flow_job_id' => null,
+                        'flow_task_id' => null,
+                        'inquiry_id' => $inquiry->id,
+                        'inquiry_task_id' => $inquiryTask?->id,
+                        'type' => 'mention',
+                        'title' => $title,
+                        'message' => $message,
+                    ]);
+
+                    $this->forgetRecipientCaches($recipient);
+                    $this->deliverRealtime($recipient, $notification, null, null, $inquiry, $inquiryTask);
+                });
         });
     }
 
@@ -273,6 +329,8 @@ class NotificationService
         FlowNotification $notification,
         ?FlowJob $job,
         ?Task $task,
+        ?Inquiry $inquiry = null,
+        ?InquiryTask $inquiryTask = null,
     ): void {
         $pusher = app(PusherChannelService::class);
         if (!$pusher->enabled()) return;
@@ -281,11 +339,14 @@ class NotificationService
             'id' => $notification->id,
             'type' => $notification->type,
             'title' => $notification->title,
-            'message' => $notification->message,
+            'message' => app(RichTextService::class)->plainText($notification->message),
             'job_id' => $job?->id,
             'job_number' => $job?->displayOrderNumber(),
             'task_id' => $task?->id,
             'task_number' => $task?->task_number,
+            'inquiry_id' => $inquiry?->id,
+            'inquiry_number' => $inquiry?->inquiry_number,
+            'inquiry_task_id' => $inquiryTask?->id,
             'url' => $this->urlFor($notification),
             'created_at' => $notification->created_at?->toIso8601String(),
             'unread_count' => $this->unreadCount($recipient),

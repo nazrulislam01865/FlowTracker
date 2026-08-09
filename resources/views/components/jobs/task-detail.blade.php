@@ -179,14 +179,14 @@
                 x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-description'), label: 'task description', value: @js($effectiveDescription ?? ''), display: @js($effectiveDescription ?: 'No description has been provided for this task.') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
-                @if($canEditTask)<button x-show="!editing" :disabled="status === 'saving'" class="ft-card-edit" type="button" title="Edit description" x-on:click="if (beginEdit()) $nextTick(() => $refs.description.focus())">✎</button>@endif
+                @if($canEditTask)<button x-show="!editing" :disabled="status === 'saving'" class="ft-card-edit" type="button" title="Edit description" x-on:click="beginRichTextEdit($refs.description)">✎</button>@endif
                 <h2>Description</h2>
-                <p x-show="!editing">
-                    <span x-show="String(value) === String(serverValue)">@if($effectiveDescription)<x-ui.mention-text :text="$effectiveDescription" />@else No description has been provided for this task. @endif</span>
-                    <span x-cloak x-show="String(value) !== String(serverValue)" x-text="display"></span>
-                </p>
+                <div x-show="!editing" class="ft-rich-text-content">
+                    <div x-show="!hasRichTextOverride">@if($effectiveDescription)<x-ui.mention-text :text="$effectiveDescription" />@else No description has been provided for this task. @endif</div>
+                    <div x-cloak x-show="hasRichTextOverride" x-html="richTextOverrideHtml"></div>
+                </div>
                 @if($canEditTask)
-                    <div x-cloak x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" x-model="draftValue" class="ft-mention-input" rows="4" autocomplete="off" data-mention-users='@json($mentionUsers->values())' x-on:keydown.escape.prevent="cancelEdit()"></textarea><div><button type="button" class="ft-outline-btn" x-on:click="cancelEdit()">Cancel</button><button type="button" class="ft-new-job-btn" x-on:click="commit(draftValue.trim(), draftValue.trim() || 'No description has been provided for this task.', () => $wire.updateSelectedTaskField('description', draftValue))">Save</button></div></div>
+                    <div x-cloak x-show="editing" class="ft-inline-description-editor"><textarea x-ref="description" class="ft-mention-input" data-rich-text rows="4" autocomplete="off" data-mention-users='@json($mentionUsers->values())'>{{ $effectiveDescription ?? '' }}</textarea><div class="ft-inline-description-actions"><button type="button" class="ft-outline-btn" x-on:click="cancelRichTextEdit($refs.description)">Cancel</button><button type="button" class="ft-new-job-btn" data-rich-text-submit :disabled="status === 'saving'" x-on:click="saveRichText($refs.description, 'No description has been provided for this task.', (clean) => $wire.updateSelectedTaskField('description', clean))">Save</button></div></div>
                     <x-ui.inline-save-state />
                 @endif
             </section>
@@ -241,7 +241,7 @@
                     <div class="ft-activity-tabs"><button type="button" class="{{ $activityTab==='all'?'active':'' }}" wire:click="setTaskActivityTab('all')">All</button><button type="button" class="{{ $activityTab==='comments'?'active':'' }}" wire:click="setTaskActivityTab('comments')">Comments</button><button type="button" class="{{ $activityTab==='history'?'active':'' }}" wire:click="setTaskActivityTab('history')">History</button></div>
                 </div>
                 @if($canEditTask)
-                    <div class="ft-comment-composer ft-friendly-composer"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/><input class="ft-mention-input" wire:model="taskComment" wire:keydown.enter="addTaskComment" autocomplete="off" data-mention-users='@json($mentionUsers->values())' placeholder="Write a comment. Type @ to mention someone..."><button class="ft-new-job-btn" type="button" wire:click="addTaskComment">Comment</button></div>
+                    <div class="ft-comment-composer ft-friendly-composer ft-rich-comment-composer"><x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/><textarea class="ft-mention-input" data-rich-text data-rich-text-compact wire:model="taskComment" rows="2" autocomplete="off" data-mention-users='@json($mentionUsers->values())' placeholder="Write a comment. Type @ to mention someone or paste a screenshot..."></textarea><button class="ft-new-job-btn" data-rich-text-submit type="button" wire:click="addTaskComment">Comment</button></div>
                 @endif
                 <div class="ft-activity-feed">
                     @forelse($timeline as $entry)
@@ -259,7 +259,7 @@
                             <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$entry->user" :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
                                 <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time></div>
-                                <p><x-ui.mention-text :text="$entry->body" /></p>
+                                <div class="ft-rich-text-content"><x-ui.mention-text :text="$entry->body" /></div>
                                 <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $entryLocalTime?->format('M j, Y · g:i A') }}</span></div>
                             </div>
                         </article>

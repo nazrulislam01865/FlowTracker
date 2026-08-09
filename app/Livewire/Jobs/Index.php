@@ -396,7 +396,12 @@ class Index extends Component
     public function expandAllJobPhases(): void
     {
         if (!$this->selectedJobId) return;
-        $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+
+        $job = app(JobService::class)->visibleQuery(auth()->user())
+            ->with(['workflow.phases:id,workflow_id'])
+            ->select(['id', 'workflow_id'])
+            ->findOrFail($this->selectedJobId);
+
         $this->expandedPhaseIds = $job->workflow->phases->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
     }
 
@@ -540,12 +545,24 @@ class Index extends Component
     public function updateJobTextField(int $jobId, string $field, mixed $value): array
     {
         $label = $field === 'title' ? 'Order name' : 'Order description';
+        $updatedJob = null;
 
-        return $this->persistInlineEdit($label, function () use ($jobId, $field, $value) {
+        $result = $this->persistInlineEdit($label, function () use ($jobId, $field, $value, &$updatedJob) {
             abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-            app(JobService::class)->updateTextField($job, $field, (string) $value, auth()->user());
+            $updatedJob = app(JobService::class)->updateTextField($job, $field, (string) $value, auth()->user());
         });
+
+        if (($result['ok'] ?? false) && $updatedJob) {
+            $result['value'] = (string) ($updatedJob->{$field} ?? '');
+
+            if ($field === 'description') {
+                $result['displayHtml'] = app(\App\Services\MentionService::class)
+                    ->render($result['value']);
+            }
+        }
+
+        return $result;
     }
 
     #[Renderless]
@@ -835,7 +852,7 @@ class Index extends Component
 
     public function addTaskComment(): void
     {
-        if (!$this->selectedTaskId || trim($this->taskComment) === '') return;
+        if (!$this->selectedTaskId || !app(\App\Services\RichTextService::class)->hasContent($this->taskComment)) return;
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
         app(TaskService::class)->addComment($task, $this->taskComment, auth()->user());
         $this->taskComment = '';
@@ -895,6 +912,12 @@ class Index extends Component
             $result['avatarUrl'] = $updatedTask->assignee?->profileImageUrl();
         }
 
+        if ($field === 'description' && ($result['ok'] ?? false) && $updatedTask) {
+            $result['value'] = (string) ($updatedTask->description ?? '');
+            $result['displayHtml'] = app(\App\Services\MentionService::class)
+                ->render($result['value']);
+        }
+
         return $result;
     }
 
@@ -943,8 +966,8 @@ class Index extends Component
     public function addJobComment(): void
     {
         abort_unless($this->selectedJobId, 422);
-        $body = trim($this->jobComment);
-        if ($body === '') return;
+        $body = app(\App\Services\RichTextService::class)->normalize($this->jobComment, 5000, 'jobComment');
+        if (!$body) return;
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         abort_unless(app(\App\Services\AccessControlService::class)->canEditJob(auth()->user(), $job), 403);
         $actor = auth()->user();
@@ -1220,7 +1243,16 @@ class Index extends Component
     private function setDefaultDocumentTask(?FlowJob $job = null): void
     {
         if (!$this->selectedJobId && !$job) return;
-        $job ??= app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+
+        if (!$job) {
+            $user = auth()->user();
+            $service = app(JobService::class);
+            $job = $service->findVisibleBase($user, $this->selectedJobId);
+            $service->loadVisibleDetailTab($job, $user, 'documents');
+        } elseif (!$job->relationLoaded('tasks')) {
+            app(JobService::class)->loadVisibleDetailTab($job, auth()->user(), 'documents');
+        }
+
         $valid = $job->tasks->first(fn ($task) => (int) $task->id === (int) $this->jobDocumentTaskId && ($task->document_category_id || $task->setupTemplate?->document_category_id));
         if ($valid) return;
 
@@ -1349,7 +1381,19 @@ class Index extends Component
     private function jobPageData(User $user): array
     {
         $master = app(MasterDataService::class);
-        $selected = app(JobService::class)->findVisible($user, $this->selectedJobId);
+        $jobService = app(JobService::class);
+        $selected = $jobService->findVisibleBase($user, $this->selectedJobId);
+        $jobService->loadVisibleDetailTab($selected, $user, $this->detailTab);
+
+        if ($this->detailTab === 'overview') {
+            $jobService->loadVisibleOverviewActivity(
+                $selected,
+                $this->jobActivityTab,
+                $this->jobActivityPage,
+                10,
+            );
+        }
+
         $availableDocuments = $this->detailTab === 'documents'
             ? app(DocumentService::class)
                 ->query($user, ['client' => $selected->client_id])
@@ -1362,16 +1406,18 @@ class Index extends Component
         return [
             'selectedJob' => $selected,
             'selectedTask' => null,
-            'taskStatuses' => $this->taskStatusOptions($master),
-            'users' => $this->userOptions($user),
-            'priorities' => $master->active('priority'),
+            'taskStatuses' => $this->detailTab === 'overview' ? $this->taskStatusOptions($master) : collect(),
+            'users' => $this->detailTab === 'overview' ? $this->userOptions($user) : collect(),
+            'priorities' => $this->detailTab === 'overview' ? $master->active('priority') : collect(),
             // Product/category options on Job Details are loaded remotely only
             // when an inline dropdown opens, avoiding full catalog payloads.
             'products' => collect(),
             'categories' => collect(),
             'availableDocuments' => $availableDocuments,
-            'healthOptions' => $this->healthOptions(),
-            'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),
+            'healthOptions' => $this->detailTab === 'workflow' ? $this->healthOptions() : collect(),
+            'mentionUsers' => $this->detailTab === 'overview'
+                ? app(\App\Services\MentionService::class)->optionsForJob($selected, $user)
+                : collect(),
         ];
     }
 

@@ -79,20 +79,16 @@ final class JobDetailPresenter
                 && $candidate->title === $item->title
             );
 
-            $task ??= Task::query()
-                ->with(['documents','documentCategory','setupTemplate.documentCategory'])
-                ->where('flow_job_id', $job->id)
-                ->where('workflow_phase_id', $phase->id)
-                ->where('task_pack_task_id', $item->id)
-                ->first();
-
+            // Required-document presentation must use the task collection
+            // prepared by JobService. Never issue a per-item fallback query
+            // from a presenter: on large Task Packs that becomes an N+1.
             if (!$task) continue;
 
             $name = $item->documentCategory?->name
                 ?: $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            $received = $task->documents->filter(fn ($document) =>
+            $received = self::documentsForTask($job, $task)->filter(fn ($document) =>
                 strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
             )->count();
 
@@ -122,7 +118,7 @@ final class JobDetailPresenter
             $name = $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            $received = $task->documents->filter(fn ($document) =>
+            $received = self::documentsForTask($job, $task)->filter(fn ($document) =>
                 strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
             )->count();
 
@@ -140,6 +136,22 @@ final class JobDetailPresenter
         return $requirements
             ->unique(fn ($row) => $row->phase->id.'-'.$row->task->id.'-'.strtolower(trim($row->name)))
             ->values();
+    }
+
+    private static function documentsForTask(FlowJob $job, Task $task): Collection
+    {
+        if ($job->relationLoaded('documents')) {
+            return $job->documents
+                ->where('task_id', $task->id)
+                ->values();
+        }
+
+        // A presenter must not trigger a lazy relationship query. Legacy
+        // callers using findVisible() already eager-load task documents; the
+        // lightweight detail tabs eager-load the Order document collection.
+        return $task->relationLoaded('documents')
+            ? $task->documents
+            : collect();
     }
 
     public static function requiredDocuments(FlowJob $job): Collection

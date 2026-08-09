@@ -554,6 +554,12 @@ class FilterOptionService
                 : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
+        if ($context === 'job-owner') {
+            return $user->canModule('jobs', 'assign')
+                ? User::query()->where('is_active', true)
+                : User::query()->where('is_active', true)->whereKey($user->id);
+        }
+
         if ($context === 'board-task-pack') {
             $visibleJobIds = app(BoardTaskPackService::class)
                 ->visibleJobQuery($user)
