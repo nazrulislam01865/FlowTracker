@@ -46,6 +46,10 @@
                 <div class="validation-error ft-login-session-message" role="alert">
                     Your {{ config('session.lifetime', 30) }}-minute session has expired. Please sign in again.
                 </div>
+            @elseif (request()->query('reason') === 'session-refresh')
+                <div class="validation-error ft-login-session-message" role="alert">
+                    Your browser session was refreshed securely. Please sign in again.
+                </div>
             @endif
 
             <div class="brand ft-login-brand ft-login-brand-form" style="margin-bottom:30px">

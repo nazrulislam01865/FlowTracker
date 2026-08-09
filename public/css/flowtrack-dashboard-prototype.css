@@ -240,3 +240,158 @@
 .ft-dashboard-prototype .ft-activity-time{font-size:8.5px}
 .ft-dashboard-prototype .ft-panel-empty,.ft-dashboard-prototype .ft-table-empty-row td{font-size:10px}
 @media(max-width:680px){.ft-dashboard-prototype .ft-table.responsive td::before{font-size:8px}}
+
+/* 2026-08-09: mobile alignment refinement for the secondary dashboard sections.
+   The generic responsive tables remain data-driven, but job/task cards get a
+   deliberate information hierarchy instead of falling into uneven auto cells. */
+@media (max-width:680px) {
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-head {
+    align-items:flex-start;
+    padding:14px 14px 10px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-head > div {
+    min-width:0;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-title {
+    line-height:1.2;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-note {
+    margin-top:3px;
+    line-height:1.35;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-head > .ft-link {
+    margin-top:2px;
+    text-align:right;
+    white-space:nowrap;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table-wrap {
+    padding:0 12px 12px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table.responsive tbody {
+    gap:9px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table.responsive tr:not(.ft-table-empty-row) {
+    gap:9px 14px;
+    padding:11px 12px;
+    border-radius:10px;
+    align-items:start;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table.responsive td {
+    min-width:0;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table.responsive td::before {
+    margin-bottom:3px;
+    line-height:1.1;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table.responsive td:last-child {
+    align-self:start;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-text-link,
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-cell-clip {
+    overflow-wrap:anywhere;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-load {
+    min-height:22px;
+    flex-wrap:wrap;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-load-track {
+    width:46px;
+  }
+
+  /* Ongoing jobs: identity and View share the top line; related facts align below. */
+  .ft-dashboard-prototype .ft-dashboard-jobs-table tr:not(.ft-table-empty-row) {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+    grid-template-areas:
+      "job job action"
+      "client status action"
+      "flag flag action";
+  }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="Job"] { grid-area:job; }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="Client"] { grid-area:client; }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="Status"] { grid-area:status; }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="Flag"] { grid-area:flag; }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="View"] {
+    grid-area:action;
+    align-self:center;
+    justify-self:end;
+  }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table td[data-label="View"]::before { display:none; }
+
+  /* Ongoing tasks: keep the action fixed at the right while task metadata forms
+     two balanced columns. This removes the orphaned View row on phones. */
+  .ft-dashboard-prototype .ft-dashboard-tasks-table tr:not(.ft-table-empty-row) {
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr) auto;
+    grid-template-areas:
+      "task task action"
+      "job assignee action"
+      "status flag action";
+  }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="Task"] { grid-area:task; }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="Job"] { grid-area:job; }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="Assignee"] { grid-area:assignee; }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="Status"] { grid-area:status; }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="Flag"] { grid-area:flag; }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="View"] {
+    grid-area:action;
+    align-self:center;
+    justify-self:end;
+  }
+  .ft-dashboard-prototype .ft-dashboard-tasks-table td[data-label="View"]::before { display:none; }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table .ft-view,
+  .ft-dashboard-prototype .ft-dashboard-tasks-table .ft-view {
+    min-width:44px;
+    height:30px;
+    padding-inline:9px;
+  }
+
+  .ft-dashboard-prototype .ft-dashboard-assignee-table .ft-person {
+    min-height:26px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-assignee-table td[data-label="Workload"] .ft-load {
+    justify-content:flex-start;
+  }
+  .ft-dashboard-prototype .ft-dashboard-clients-table td[data-label="At risk"] .ft-flag {
+    min-width:34px;
+    justify-content:center;
+  }
+
+  .ft-dashboard-prototype .ft-dashboard-attention-panel .ft-risk-list {
+    gap:8px;
+    padding:0 12px 12px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-attention-panel .ft-risk {
+    align-items:center;
+    gap:6px 10px;
+    padding:10px 11px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-attention-panel .ft-risk-name {
+    min-width:0;
+    white-space:normal;
+    line-height:1.25;
+  }
+  .ft-dashboard-prototype .ft-dashboard-attention-panel .ft-risk-meta {
+    line-height:1.35;
+    overflow-wrap:anywhere;
+  }
+}
+
+@media (max-width:430px) {
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-head {
+    gap:8px;
+    padding-inline:12px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-panel-head > .ft-link {
+    max-width:42%;
+    white-space:normal;
+    line-height:1.2;
+  }
+  .ft-dashboard-prototype .ft-dashboard-secondary-sections .ft-table-wrap,
+  .ft-dashboard-prototype .ft-dashboard-attention-panel .ft-risk-list {
+    padding-right:10px;
+    padding-left:10px;
+  }
+  .ft-dashboard-prototype .ft-dashboard-jobs-table tr:not(.ft-table-empty-row),
+  .ft-dashboard-prototype .ft-dashboard-tasks-table tr:not(.ft-table-empty-row) {
+    column-gap:10px;
+  }
+}

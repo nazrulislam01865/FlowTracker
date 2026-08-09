@@ -118,6 +118,7 @@
     window.FlowTrackInlineEdit = (config = {}) => {
         const initialValue = normalize(config.value);
         const initialDisplay = normalize(config.display ?? config.value);
+        const initialAvatarUrl = normalize(config.avatarUrl);
 
         return {
             key: String(config.key || `inline-${Math.random().toString(36).slice(2)}`),
@@ -127,12 +128,15 @@
             display: initialDisplay,
             savedValue: initialValue,
             savedDisplay: initialDisplay,
+            avatarUrl: initialAvatarUrl,
+            savedAvatarUrl: initialAvatarUrl,
             draftValue: initialValue,
             editing: false,
             status: '',
             error: '',
             attemptedValue: null,
             attemptedDisplay: null,
+            attemptedOptions: null,
             retryAction: null,
             clearTimer: null,
             requestSequence: 0,
@@ -200,29 +204,38 @@
                     .toUpperCase() || '?';
             },
 
-            async commit(nextValue, nextDisplay, requestFactory) {
+            async commit(nextValue, nextDisplay, requestFactory, nextOptions = {}) {
                 if (typeof requestFactory !== 'function' || this.status === 'saving') return false;
 
                 const normalizedValue = normalize(nextValue);
                 const normalizedDisplay = normalize(nextDisplay ?? nextValue);
+                const hasAvatarOverride = nextOptions && Object.prototype.hasOwnProperty.call(nextOptions, 'avatarUrl');
+                const nextAvatarUrl = hasAvatarOverride ? normalize(nextOptions.avatarUrl) : this.savedAvatarUrl;
                 if (normalizedValue === this.savedValue && normalizedDisplay === this.savedDisplay) {
                     this.value = this.savedValue;
                     this.display = this.savedDisplay;
                     this.draftValue = this.savedValue;
+                    if (hasAvatarOverride) {
+                        this.avatarUrl = nextAvatarUrl;
+                        this.savedAvatarUrl = nextAvatarUrl;
+                    }
                     this.editing = false;
                     return true;
                 }
 
                 const previousValue = this.savedValue;
                 const previousDisplay = this.savedDisplay;
+                const previousAvatarUrl = this.savedAvatarUrl;
                 const sequence = ++this.requestSequence;
                 const token = bus.start(this.key, this.label);
 
                 this.attemptedValue = normalizedValue;
                 this.attemptedDisplay = normalizedDisplay;
+                this.attemptedOptions = { ...nextOptions };
                 this.retryAction = requestFactory;
                 this.value = normalizedValue;
                 this.display = normalizedDisplay;
+                if (hasAvatarOverride) this.avatarUrl = nextAvatarUrl;
                 this.draftValue = normalizedValue;
                 this.editing = false;
                 this.status = 'saving';
@@ -240,8 +253,16 @@
                         throw inlineError;
                     }
 
+                    const responseHasAvatar = response && typeof response === 'object'
+                        && Object.prototype.hasOwnProperty.call(response, 'avatarUrl');
+                    const confirmedAvatarUrl = responseHasAvatar ? normalize(response.avatarUrl) : nextAvatarUrl;
+
                     this.savedValue = normalizedValue;
                     this.savedDisplay = normalizedDisplay;
+                    if (hasAvatarOverride || responseHasAvatar) {
+                        this.avatarUrl = confirmedAvatarUrl;
+                        this.savedAvatarUrl = confirmedAvatarUrl;
+                    }
                     this.status = 'saved';
                     bus.success(token, this.key);
                     this.clearTimer = window.setTimeout(() => {
@@ -253,6 +274,8 @@
 
                     this.value = previousValue;
                     this.display = previousDisplay;
+                    this.avatarUrl = previousAvatarUrl;
+                    this.savedAvatarUrl = previousAvatarUrl;
                     this.draftValue = previousValue;
                     this.status = 'error';
                     this.error = errorMessage(error, this.label);
@@ -270,7 +293,7 @@
             retry() {
                 if (!this.retryAction || this.attemptedValue === null || this.status === 'saving') return false;
                 bus.clearError(this.key);
-                return this.commit(this.attemptedValue, this.attemptedDisplay, this.retryAction);
+                return this.commit(this.attemptedValue, this.attemptedDisplay, this.retryAction, this.attemptedOptions || {});
             },
         };
     };

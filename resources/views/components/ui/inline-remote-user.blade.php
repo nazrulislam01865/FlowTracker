@@ -70,7 +70,7 @@
             type="button"
             class="ft-remote-filter-option ft-remote-filter-clear"
             x-show="selectedValue"
-            x-on:click="clearSelection(); $dispatch('ft-inline-remote-selected', { value: '', label: @js($placeholder) })"
+            x-on:click="clearSelection(); $dispatch('ft-inline-remote-selected', { value: '', label: @js($placeholder), avatarUrl: '' })"
         >
             <span>{{ $placeholder }}</span><small>Clear</small>
         </button>
@@ -87,7 +87,7 @@
                     type="button"
                     class="ft-remote-filter-option"
                     :aria-selected="String(item.id) === String(selectedValue)"
-                    x-on:click="select(item); $dispatch('ft-inline-remote-selected', { value: String(item.id), label: item.label })"
+                    x-on:click="select(item); $dispatch('ft-inline-remote-selected', { value: String(item.id), label: item.label, avatarUrl: String(item.avatarUrl || '') })"
                 >
                     <span x-text="item.label"></span>
                     <small x-text="item.meta || (String(item.id) === String(selectedValue) ? 'Selected' : '')"></small>

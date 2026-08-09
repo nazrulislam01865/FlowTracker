@@ -16,7 +16,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('<h1>Create Inquiry</h1>', $view);
         $this->assertStringContainsString('property="createWorkflowId"', $view);
         $this->assertStringContainsString('type="workflows"', $view);
-        $this->assertStringContainsString('Workflow Setup is the source of truth', $view);
+        $this->assertStringNotContainsString('Workflow Setup is the source of truth', $view);
         $this->assertStringContainsString('<b>Title *</b>', $view);
         $this->assertStringContainsString('<b>Description</b>', $view);
         $this->assertStringNotContainsString('<b>Inquiry subject *</b>', $view);
@@ -24,7 +24,9 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("->options(\$user, 'workflows', 'create-inquiry', 'Inquiry', null, 20)", $component);
         $this->assertStringContainsString("'Inquiry Workflow'", $component);
         $this->assertStringContainsString('.inquiry-workflow-selector-wrap{width:100%;max-width:none', $css);
-        $this->assertStringContainsString('Task Pack Setup', $view);
+        $this->assertStringNotContainsString('No Task Pack tasks are configured for this Workflow', $view);
+        $this->assertStringNotContainsString('Auto-generated on save', $view);
+        $this->assertSame(1, substr_count($view, "@error('createWorkflowId')"));
         $this->assertStringNotContainsString('Inquiry received date *', $view);
         $this->assertStringNotContainsString('<h2>Commercial information</h2>', $view);
         $this->assertStringNotContainsString('Request source</b><select wire:model="requestSource"', $view);

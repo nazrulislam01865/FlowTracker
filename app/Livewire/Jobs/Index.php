@@ -472,13 +472,20 @@ class Index extends Component
     #[Renderless]
     public function updateJobOwner(int $jobId, mixed $ownerId): array
     {
-        return $this->persistInlineEdit('Order owner', function () use ($jobId, $ownerId) {
+        $owner = null;
+        $result = $this->persistInlineEdit('Order owner', function () use ($jobId, $ownerId, &$owner) {
             abort_unless(auth()->user()->canModule('jobs','assign'), 403);
             $ownerId = $ownerId === '' ? null : (int) $ownerId;
-            if ($ownerId) User::where('is_active', true)->findOrFail($ownerId);
+            $owner = $ownerId ? User::where('is_active', true)->findOrFail($ownerId) : null;
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
             app(JobService::class)->updateOwner($job, $ownerId, auth()->user());
         });
+
+        if ($result['ok'] ?? false) {
+            $result['avatarUrl'] = $owner?->profileImageUrl();
+        }
+
+        return $result;
     }
 
     #[Renderless]
@@ -609,14 +616,21 @@ class Index extends Component
     #[Renderless]
     public function updateTaskAssigneeFromJob(int $taskId, mixed $assigneeId): array
     {
-        return $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId) {
+        $assignee = null;
+        $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, &$assignee) {
             abort_unless(auth()->user()->canModule('tasks','assign'), 403);
             abort_unless($this->selectedJobId, 422);
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
             $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
-            if ($assigneeId) User::where('is_active', true)->findOrFail($assigneeId);
+            $assignee = $assigneeId ? User::where('is_active', true)->findOrFail($assigneeId) : null;
             app(TaskService::class)->updateDetailField($task, 'assignee_id', $assigneeId, auth()->user());
         });
+
+        if ($result['ok'] ?? false) {
+            $result['avatarUrl'] = $assignee?->profileImageUrl();
+        }
+
+        return $result;
     }
 
     #[Renderless]
@@ -874,6 +888,11 @@ class Index extends Component
                 completedDate: $completedLocal?->format('M j, Y') ?? '—',
                 completedTime: $completedLocal?->format('g:i A') ?? ''
             );
+        }
+
+        if ($field === 'assignee_id' && ($result['ok'] ?? false) && $updatedTask) {
+            $updatedTask->loadMissing('assignee:id,name,profile_image_path');
+            $result['avatarUrl'] = $updatedTask->assignee?->profileImageUrl();
         }
 
         return $result;

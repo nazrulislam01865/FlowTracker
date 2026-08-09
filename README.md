@@ -58,3 +58,29 @@ php artisan optimize:clear
 ```
 
 The Inquiry Details UI now calls the task sequence **Taskflow**. The configured Workflow Setup remains the source used when creating an Inquiry; only the Inquiry detail-facing terminology changed.
+
+## Order Details document UX update — 2026-08-09
+
+The Order Details → Documents tab has been reorganized for faster daily use without changing the document data model or upload/link behavior:
+
+- compact document summary and required-document progress;
+- a two-step upload/link area that clearly separates requirement selection from file selection;
+- workflow phases shown as collapsible groups instead of a wide document table;
+- each requirement shows its task, missing/received state, linked files, and direct action in one card;
+- task attachments are visually separated from required Task Pack documents;
+- responsive layouts for desktop, tablet, mobile, and narrow mobile screens.
+
+No migration is required for this UI update.
+
+### 2026-08-09 — Order detail centering refinement
+- Mobile workflow phase stepper is centered when the configured phases fit within the viewport; longer workflows remain horizontally scrollable.
+- Mobile Task Pack document requirement cards center the requirement content/action group and give the Upload button a balanced full-width target inside that centered group.
+- Desktop layouts are unchanged.
+
+## Dashboard + All Tasks alignment update — 2026-08-09
+
+Mobile/tablet alignment was refined for the Dashboard secondary sections and the All Tasks task list. Ongoing jobs/tasks now use deliberate responsive card grids, Dashboard headings/actions wrap safely, and All Tasks uses a compact tablet layout plus full-width status controls on phones. No database or workflow behavior changed.
+
+## 2026-08-09 session stability update
+
+The project now normalizes session-cookie transport settings per request, prevents caching of dynamic CSRF-bearing HTML, gracefully recovers from stale CSRF sessions, and preloads the scoped Inquiry stylesheet in the authenticated shell to remove the first-navigation design flash. See `SESSION_419_AND_INQUIRY_FLASH_FIX.md`.

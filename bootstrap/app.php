@@ -4,10 +4,13 @@ use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
 use Illuminate\Http\Request;
+use Illuminate\Session\TokenMismatchException;
 use App\Http\Middleware\EnsureSuperAdmin;
 use App\Http\Middleware\EnsurePermission;
 use App\Http\Middleware\EnsureSingleLoginSession;
 use App\Http\Middleware\MonitorPerformance;
+use App\Http\Middleware\NormalizeSessionCookie;
+use App\Http\Middleware\PreventDynamicPageCaching;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -16,11 +19,43 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        $middleware->alias(['super.admin' => EnsureSuperAdmin::class, 'permission' => EnsurePermission::class]);
-        $middleware->web(append: [MonitorPerformance::class, EnsureSingleLoginSession::class]);
+        $middleware->alias([
+            'super.admin' => EnsureSuperAdmin::class,
+            'permission' => EnsurePermission::class,
+        ]);
+
+        // This must run before Laravel's StartSession middleware. It prevents
+        // SESSION_DOMAIN / Secure / SameSite transport mismatches from causing
+        // a fresh browser or alternate host to lose its session and hit 419.
+        $middleware->web(
+            prepend: [NormalizeSessionCookie::class],
+            append: [MonitorPerformance::class, EnsureSingleLoginSession::class, PreventDynamicPageCaching::class],
+        );
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*'),
         );
+
+        // Never expose Laravel's raw "419 Page Expired" screen to users. CSRF
+        // stays fully enabled; on a mismatch we send the browser through a
+        // clean session recovery GET so the next page receives a fresh token.
+        $exceptions->render(function (TokenMismatchException $exception, Request $request) {
+            $recoverUrl = route('session.recover');
+
+            if ($request->expectsJson() || $request->ajax() || $request->header('X-Livewire')) {
+                return response()->json([
+                    'message' => 'Your secure session changed and needs to be refreshed.',
+                    'redirect' => $recoverUrl,
+                ], 419)->withHeaders([
+                    'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+                    'Pragma' => 'no-cache',
+                ]);
+            }
+
+            return redirect()->to($recoverUrl)->withHeaders([
+                'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+                'Pragma' => 'no-cache',
+            ]);
+        });
     })->create();

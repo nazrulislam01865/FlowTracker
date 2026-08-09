@@ -246,13 +246,13 @@ class Index extends Component
     public function markInquiryDeadFromList(int $inquiryId, string $reason): void
     {
         $reason = trim($reason);
-        abort_if($reason === '' || mb_strlen($reason) > 255, 422, 'Please provide a Dead reason.');
+        abort_if($reason === '' || mb_strlen($reason) > 255, 422, 'Please provide a closure reason.');
 
         $service = app(InquiryService::class);
         $inquiry = $service->findVisible(auth()->user(), $inquiryId);
         $service->markDead($inquiry, $reason, null, auth()->user());
         $this->metrics = $service->metrics(auth()->user());
-        session()->flash('success', 'Inquiry marked Dead.');
+        session()->flash('success', 'Inquiry closed.');
     }
 
     #[Renderless]
@@ -322,6 +322,7 @@ class Index extends Component
             'ok' => true,
             'assigneeId' => $saved->assignee_id,
             'assigneeName' => $assignee?->name ?: 'Unassigned',
+            'avatarUrl' => $assignee?->profileImageUrl(),
         ];
     }
 
@@ -620,7 +621,7 @@ class Index extends Component
         ]);
         app(InquiryService::class)->markDead($this->selectedInquiry(), $this->deadReason, $this->deadNote, auth()->user());
         $this->metrics = app(InquiryService::class)->metrics(auth()->user());
-        session()->flash('success', 'Inquiry marked Dead.');
+        session()->flash('success', 'Inquiry closed.');
     }
 
     #[On('flowtrack-notification')]
@@ -915,7 +916,7 @@ class Index extends Component
     {
         return match (true) {
             str_contains($status, 'Converted'), str_contains($status, 'Completed') => 'green',
-            str_contains($status, 'Dead') => 'red',
+            str_contains($status, 'Dead'), str_contains($status, 'Closed') => 'red',
             str_contains($status, 'Ready'), str_contains($status, 'On Hold') => 'amber',
             str_contains($status, 'Waiting') => 'purple',
             default => 'blue',

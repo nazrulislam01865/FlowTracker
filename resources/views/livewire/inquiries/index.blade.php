@@ -2,7 +2,7 @@
     $tone = static function (string $status): string {
         return match (true) {
             str_contains($status, 'Converted'), str_contains($status, 'Completed') => 'green',
-            str_contains($status, 'Dead') => 'red',
+            str_contains($status, 'Dead'), str_contains($status, 'Closed') => 'red',
             str_contains($status, 'Ready'), str_contains($status, 'On Hold') => 'amber',
             str_contains($status, 'Waiting') => 'purple',
             default => 'blue',
@@ -34,7 +34,7 @@
             <div class="metrics">
                 <div class="metric"><i>?</i><span><small>Active inquiries</small><strong>{{ $metrics['active'] }}</strong></span></div>
                 <div class="metric"><i>✓</i><span><small>Converted to order</small><strong>{{ $metrics['converted'] }}</strong></span></div>
-                <div class="metric"><i>×</i><span><small>Dead inquiries</small><strong>{{ $metrics['dead'] }}</strong></span></div>
+                <div class="metric"><i>×</i><span><small>Closed inquiries</small><strong>{{ $metrics['dead'] }}</strong></span></div>
                 <div class="metric"><i>⌁</i><span><small>Tasks due today</small><strong>{{ $metrics['dueToday'] }}</strong></span></div>
             </div>
 
@@ -45,7 +45,7 @@
                         <button class="chip {{ $quick === 'all' ? 'active' : '' }}" type="button" wire:click="setQuick('all')">All</button>
                         <button class="chip {{ $quick === 'active' ? 'active' : '' }}" type="button" wire:click="setQuick('active')">Active</button>
                         <button class="chip {{ $quick === 'converted' ? 'active' : '' }}" type="button" wire:click="setQuick('converted')">Converted</button>
-                        <button class="chip {{ $quick === 'dead' ? 'active' : '' }}" type="button" wire:click="setQuick('dead')">Dead</button>
+                        <button class="chip {{ $quick === 'dead' ? 'active' : '' }}" type="button" wire:click="setQuick('dead')">Closed</button>
                     </div>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
@@ -64,30 +64,30 @@
                     <div class="inquiry-list-body">
                         @forelse($inquiryRows as $row)
                             <article class="row" wire:key="inquiry-list-{{ $row['id'] }}">
-                                <div class="cell ft-inquiry-list-identity">
+                                <div class="cell ft-inquiry-list-identity" data-label="Inquiry">
                                     <a class="id" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" wire:navigate>{{ $row['number'] }}</a>
                                     <span class="sub ft-inquiry-created-by" title="Created by {{ $row['createdBy'] }}">Created by {{ $row['createdBy'] }}</span>
                                     <span class="sub ft-inquiry-created-at">{{ $row['createdDate'] }} · {{ $row['createdTime'] }}</span>
                                 </div>
-                                <div class="cell ft-inquiry-list-title-cell">
+                                <div class="cell ft-inquiry-list-title-cell" data-label="Title">
                                     <span class="title ft-inquiry-title-preview" title="{{ $row['title'] }}">{{ $row['titlePreview'] }}</span>
                                 </div>
-                                <div class="cell ft-inquiry-list-client-cell">
+                                <div class="cell ft-inquiry-list-client-cell" data-label="Client / Item">
                                     <span class="title">{{ $row['client'] }}</span>
                                     @if($row['item'])<span class="sub">{{ $row['item'] }}</span>@endif
                                 </div>
-                                <div class="cell ft-inquiry-list-task-cell"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
-                                <div class="cell ft-inquiry-list-progress-cell">
+                                <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
+                                <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
                                     <div class="ft-inquiry-list-progress">
                                         <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $row['progressPercent'] }}" aria-label="{{ $row['progress'] }} of {{ $row['total'] }} tasks completed"><span style="width:{{ $row['progressPercent'] }}%"></span></div>
                                         <b>{{ $row['progress'] }}/{{ $row['total'] }}</b>
                                     </div>
                                 </div>
-                                <div class="cell ft-inquiry-list-assignee-cell"><div class="ownerline"><span class="avatar">{{ $initials($row['assignee']) }}</span><span class="title">{{ $row['assignee'] }}</span></div></div>
-                                <div class="cell ft-inquiry-list-due-cell"><span class="title">{{ $row['due'] }}</span></div>
-                                <div class="cell ft-inquiry-list-started-cell"><span class="title">{{ $row['startedDate'] }}</span><span class="sub">{{ $row['startedTime'] }}</span></div>
-                                <div class="cell ft-inquiry-list-status-cell"><span class="pill {{ $tone($row['status']) }}">{{ $row['status'] }}</span></div>
-                                <div class="cell ft-inquiry-list-view-cell"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View <span aria-hidden="true">→</span></a></div>
+                                <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee"><div class="ownerline"><span class="avatar">{{ $initials($row['assignee']) }}</span><span class="title">{{ $row['assignee'] }}</span></div></div>
+                                <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
+                                <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title">{{ $row['startedDate'] }}</span><span class="sub">{{ $row['startedTime'] }}</span></div>
+                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $tone($row['status']) }}">{{ $row['status'] }}</span></div>
+                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View <span aria-hidden="true">→</span></a></div>
                             </article>
                         @empty
                             <div class="ft-inquiry-list-empty">No matching inquiries.</div>
@@ -113,7 +113,7 @@
         <section class="view">
             <div class="formwrap">
                 <div class="crumb">Inquiries / New Inquiry</div>
-                <div class="formtop"><div><h1>Create Inquiry</h1><p>Capture the client request and create the inquiry taskflow before any order exists.</p></div><div class="codebox"><small>Inquiry code</small><b>Auto-generated on save</b></div></div>
+                <div class="formtop"><div><h1>Create Inquiry</h1><p>Capture the client request and create the inquiry taskflow before any order exists.</p></div></div>
                 <div class="formcard">
                     <section class="section">
                         <div class="sectiontitle"><span>1</span><h2>Client request</h2></div>
@@ -197,23 +197,14 @@
                                 :clearable="false"
                                 wire:key="inquiry-create-workflow-selector"
                             />
-                            @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
+                            @if($createWorkflowId && $createWorkflowTaskCount === 0)
+                                <small class="field-error">This Workflow has no active Task Pack tasks.</small>
+                            @else
+                                @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
+                            @endif
                         </div>
 
-                        <div class="notice inquiry-workflow-source-note"><i>i</i><div><strong>Workflow Setup is the source of truth</strong><span>Select a Workflow configured in Workflow Setup. The Inquiry will create the configured Task Pack tasks automatically; this page only shows the workflow summary.</span></div></div>
-
-                        @if(!$createWorkflowId)
-                            <div class="inquiry-workflow-empty">
-                                <strong>Select a Workflow</strong>
-                                <span>The Inquiry tasks will be created automatically from the Task Packs assigned in Workflow Setup.</span>
-                            </div>
-                        @elseif($createWorkflowTaskCount === 0)
-                            <div class="inquiry-workflow-empty is-warning">
-                                <strong>No Task Pack tasks are configured for this Workflow</strong>
-                                <span>Open Workflow Setup and assign active Task Packs with tasks to its active phases, then select the Workflow again.</span>
-                            </div>
-                            @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
-                        @else
+                        @if($createWorkflowId && $createWorkflowTaskCount > 0)
                             <div class="ft-workflow-summary inquiry-create-workflow-summary">
                                 <span>ⓘ {{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
                                 @if(auth()->user()->canAccess('workflow.manage'))
@@ -235,8 +226,8 @@
             $completedTasks = (int) $inquiry->completed_tasks_count;
             $readyForDecision = !$inquiry->result && $totalTasks > 0 && $completedTasks === $totalTasks;
             $currentTask = $inquiry->currentTask;
-            $detailStatus = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Dead' : $inquiry->status);
-            $resultLabel = $inquiry->result === 'converted' ? ($inquiry->convertedJob?->displayOrderNumber() ?: 'Converted') : ($inquiry->result === 'dead' ? 'Dead — '.$inquiry->dead_reason : 'Not decided');
+            $detailStatus = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Closed' : $inquiry->status);
+            $resultLabel = $inquiry->result === 'converted' ? ($inquiry->convertedJob?->displayOrderNumber() ?: 'Converted') : ($inquiry->result === 'dead' ? 'Closed — '.$inquiry->dead_reason : 'Not decided');
         @endphp
         <section class="view inquiry-detail-view" x-data="{
             deadOpen:false,
@@ -244,7 +235,7 @@
             inquiryStatus:@js($detailStatus),
             statusTone(status){
                 if (String(status).includes('Converted') || String(status).includes('Completed')) return 'green';
-                if (String(status).includes('Dead')) return 'red';
+                if (String(status).includes('Dead') || String(status).includes('Closed')) return 'red';
                 if (String(status).includes('Ready') || String(status).includes('On Hold')) return 'amber';
                 if (String(status).includes('Waiting')) return 'purple';
                 return 'blue';
@@ -518,15 +509,14 @@
                                     </div>
 
                                     <div class="ft-inquiry-assignee-inline ft-inline-edit-shell"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
+                                        x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                         x-on:click.outside="if (editing) cancelEdit()"
                                         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
-                                        x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeInline({{ $task->id }}, draftValue))">
+                                        x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeInline({{ $task->id }}, draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })">
                                         <div class="ft-inquiry-inline-display-row">
                                             <div x-show="!editing" class="ft-inquiry-assignee-display">
-                                                <span class="ft-inline-avatar-slot" x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="28"/></span>
-                                                <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                                                <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="28" /></span>
                                                 <span class="ft-inquiry-assignee-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                                             </div>
                                             @if($canEditThisTask)<button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
@@ -637,11 +627,11 @@
                     </section>
 
                     <section class="decision {{ $readyForDecision ? 'ready-decision' : '' }}">
-                        <div class="decisiontop"><div><h3>Final Inquiry Decision</h3><p>{{ $readyForDecision ? 'All configured Inquiry tasks and required submissions are complete. Record the client outcome now.' : 'Complete every task currently configured in this Inquiry taskflow. Then choose whether the Inquiry becomes an Order or is closed as Dead.' }}</p></div><span class="pill {{ $readyForDecision ? 'amber' : ($inquiry->result === 'converted' ? 'green' : ($inquiry->result === 'dead' ? 'red' : 'amber')) }}">{{ $readyForDecision ? 'Decision Required' : ($inquiry->result ? 'Completed' : 'Locked') }}</span></div>
-                        <div class="decisionactions"><button class="primary" type="button" x-on:click="convertOpen=true" @disabled(!$readyForDecision || !$canCreateOrder)>Convert to Order</button><button class="danger" type="button" x-on:click="deadOpen=true" @disabled(!$readyForDecision)>Mark as Dead</button></div>
-                        <div class="deadreason" x-bind:class="deadOpen ? 'show' : ''"><select wire:model="deadReason"><option>Price too high</option><option>Client cancelled</option><option>Lost to competitor</option><option>MOQ issue</option><option>Delivery issue</option><option>No response</option><option>Other</option></select><input wire:model="deadNote" placeholder="Optional note"><button class="danger" type="button" wire:click="markDead" x-on:click="deadOpen=false">Confirm Dead</button></div>
+                        <div class="decisiontop"><div><h3>Final Inquiry Decision</h3><p>{{ $readyForDecision ? 'All configured Inquiry tasks and required submissions are complete. Record the client outcome now.' : 'Complete every task currently configured in this Inquiry taskflow. Then choose whether the Inquiry becomes an Order or is closed.' }}</p></div><span class="pill {{ $readyForDecision ? 'amber' : ($inquiry->result === 'converted' ? 'green' : ($inquiry->result === 'dead' ? 'red' : 'amber')) }}">{{ $readyForDecision ? 'Decision Required' : ($inquiry->result ? 'Completed' : 'Locked') }}</span></div>
+                        <div class="decisionactions"><button class="primary" type="button" x-on:click="convertOpen=true" @disabled(!$readyForDecision || !$canCreateOrder)>Convert to Order</button><button class="danger" type="button" x-on:click="deadOpen=true" @disabled(!$readyForDecision)>Close Inquiry</button></div>
+                        <div class="deadreason" x-bind:class="deadOpen ? 'show' : ''"><select wire:model="deadReason"><option>Price too high</option><option>Client cancelled</option><option>Lost to competitor</option><option>MOQ issue</option><option>Delivery issue</option><option>No response</option><option>Other</option></select><input wire:model="deadNote" placeholder="Optional note"><button class="danger" type="button" wire:click="markDead" x-on:click="deadOpen=false">Confirm Close</button></div>
                         @if($inquiry->result === 'converted')<div class="successbox show"><strong>Converted successfully</strong><span>Order <b>{{ $inquiry->convertedJob?->displayOrderNumber() }}</b> was created from this inquiry. The Order starts its own workflow and keeps this inquiry as the source reference.</span></div>@endif
-                        @if($inquiry->result === 'dead')<div class="deadbox show"><strong>Inquiry marked Dead</strong><span>Reason: {{ $inquiry->dead_reason }}{{ $inquiry->dead_note ? '. '.$inquiry->dead_note : '' }}</span></div>@endif
+                        @if($inquiry->result === 'dead')<div class="deadbox show"><strong>Inquiry closed</strong><span>Reason: {{ $inquiry->dead_reason }}{{ $inquiry->dead_note ? '. '.$inquiry->dead_note : '' }}</span></div>@endif
                     </section>
                 </div>
             @endif

@@ -248,4 +248,94 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-exact-task-detail aside .ft-detail-card{padding:16px}.ft-exact-task-detail aside .ft-detail-card h2{font-size:14px}
 .ft-management-card .ft-attention-row{grid-template-columns:125px minmax(0,1fr) auto;padding:13px 0;font-size:10px}.ft-management-card .ft-attention-row:first-of-type{border-top:0}.ft-management-card .ft-attention-row button{border:0;background:transparent;padding:0;font-size:9px}
 .ft-red-doc-icon,.ft-red-flag{color:#ef3340;margin-right:7px}.ft-red-dot{width:8px;height:8px;border-radius:50%;background:#ef3340;display:inline-block;margin-right:6px}
-.ft-job-context-link{font-size:13px;margin-bottom:7px}.ft-job-context-card>b{font-size:11px;margin:8px 0 12px}.ft-job-context-card div{grid-template-columns:120px minmax(0,1fr);margin:9px 0;font-size:10px}.ft-job-context-card div span{color:#58708d}.ft-context-progress{grid-template-columns:120px auto!important}
+.ft-job-context-link{font-size:13px;margin-bottom:7px}.ft-job-context-card>b{font-size:11px;margin:8px 0 12px}.ft-job-context-card div{grid-template-columns:120px minmax(0,1fr);margin:9px 0;font-size:10px}.ft-job-context-card div span{color:#58708d}.ft-context-progress{grid-template-columns:120px auto!important}.ft-context-progress .ft-line-progress{grid-column:2;width:100%;height:5px;margin-top:-2px;background:#e9edf3}.ft-context-progress .ft-line-progress span{background:linear-gradient(90deg,#2769f0,#cc12e4)}.ft-open-job{display:block;text-align:center;margin-top:15px;font-size:11px}
+.ft-dependency-card p{font-size:10px;margin:9px 0}.ft-dependency-card p span{color:#687b94}.ft-check-circle{width:17px;height:17px;border-radius:50%;background:#1aa057;color:#fff;display:inline-grid;place-items:center;font-size:9px;margin-right:6px}.ft-task-meta-card{font-size:9px;padding:12px 16px!important}.ft-task-meta-card span{padding:0 7px;color:#98a5b5}
+
+/* Jobs list reference */
+.ft-exact-jobs-list .ft-list-head{margin-bottom:16px}
+.ft-exact-jobs-list .ft-list-head h1{font-size:25px}.ft-exact-jobs-list .ft-list-head p{font-size:13px;margin-top:4px}
+.ft-exact-jobs-list .ft-list-actions .ft-outline-btn,.ft-exact-jobs-list .ft-list-actions .ft-new-job-btn{height:40px;padding:0 16px;font-size:12px}
+.ft-exact-jobs-list .ft-list-view-tabs{gap:12px;margin-bottom:14px}.ft-exact-jobs-list .ft-list-view-chip{height:34px;padding:0 13px;font-size:11px;border-radius:7px}
+.ft-exact-jobs-list .ft-job-table-card{border-radius:12px}
+.ft-exact-jobs-list .ft-job-filter-grid{grid-template-columns:minmax(360px,2.1fr) repeat(6,minmax(118px,1fr)) auto auto;padding:10px;gap:9px}
+.ft-exact-jobs-list .ft-job-filter-grid select,.ft-exact-jobs-list .ft-job-filter-grid input{height:38px;font-size:11px}
+.ft-exact-jobs-list .filter-more{height:38px;white-space:nowrap;font-size:10px}.ft-exact-jobs-list .ft-clear-link{white-space:nowrap;font-size:10px}
+.ft-exact-jobs-list .ft-active-filter-row{padding:0 10px 10px;border-bottom:0}.ft-exact-jobs-list .ft-active-filter-row>span{font-size:10px}
+.ft-exact-jobs-list .ft-job-table{min-width:1460px}.ft-exact-jobs-list .ft-job-table th{padding:10px 11px;font-size:9px}.ft-exact-jobs-list .ft-job-table td{padding:10px 11px;font-size:10px;line-height:1.25}.ft-exact-jobs-list .ft-job-table td>b{font-size:11px}
+.ft-exact-jobs-list .ft-table-job-link{font-size:11px}.ft-exact-jobs-list .ft-table-sub{font-size:9px;margin-top:3px}.ft-exact-jobs-list .ft-table-due{font-size:9px;margin-top:3px}.ft-exact-jobs-list .ft-soft-pill{font-size:9px;padding:4px 7px}.ft-exact-jobs-list .ft-owner-chip{min-width:135px}.ft-exact-jobs-list .ft-owner-chip span{font-size:10px}.ft-exact-jobs-list .ft-table-progress{width:55px;height:5px}.ft-exact-jobs-list .ft-job-table td:nth-child(10){white-space:nowrap}.ft-exact-jobs-list .ft-job-table td:nth-child(10) small{font-size:9px;margin-left:5px}
+.ft-exact-jobs-list .ft-list-pagination{margin-top:12px;border-radius:9px;font-size:10px;padding:10px 12px}.ft-exact-jobs-list .ft-list-pagination>div{display:flex;align-items:center;gap:8px}.ft-exact-jobs-list .ft-page-actions button{height:32px;font-size:10px}
+
+@media(max-width:1300px){
+  .ft-overview-top-grid{grid-template-columns:minmax(0,1fr) 285px}
+  .workflow-layout-exact{grid-template-columns:minmax(0,1fr) 300px}
+  .ft-exact-documents .ft-detail-doc-layout{grid-template-columns:minmax(0,1fr) 280px}
+  .ft-exact-task-detail .ft-task-detail-layout{grid-template-columns:minmax(0,1fr) 330px}
+  .ft-exact-task-detail .ft-task-property-grid{grid-template-columns:repeat(3,1fr)}
+  .ft-exact-task-detail .ft-task-property:nth-child(3n){border-right:0}
+  .ft-exact-jobs-list .ft-job-filter-grid{grid-template-columns:minmax(310px,1.5fr) repeat(3,minmax(120px,1fr));overflow:auto}
+}
+@media(max-width:980px){
+  .ft-overview-top-grid,.workflow-layout-exact,.ft-exact-documents .ft-detail-doc-layout,.ft-exact-task-detail .ft-task-detail-layout{grid-template-columns:1fr}
+  .ft-exact-job-team{display:none}
+  .ft-overview-workflow-line{overflow-x:auto;justify-content:flex-start}.ft-overview-workflow-line button{min-width:78px}
+  .ft-phase-task-columns{display:none}
+  .ft-overview-task-card .ft-phase-task-line{grid-template-columns:38px minmax(180px,1fr)}
+  .ft-overview-task-card .ft-phase-task-line>span:nth-child(n+3){grid-column:2}
+}
+@media(max-width:700px){
+  .ft-exact-task-detail .ft-task-property-grid{grid-template-columns:1fr}
+  .ft-exact-task-detail .ft-task-property{border-right:0;border-bottom:1px solid #dce5f0}
+  .ft-exact-task-header .ft-detail-actions{width:auto}.ft-exact-task-header{flex-direction:row;align-items:flex-start}.ft-exact-task-header h1{font-size:20px}
+  .ft-overview-metrics{grid-template-columns:1fr}
+  .ft-doc-title-row{flex-direction:column}.ft-upload-panel select{width:100%;float:none}.ft-doc-filter-chips{overflow:auto;flex-wrap:nowrap}
+}
+.ft-phase-progress-copy{display:grid;grid-template-columns:auto 250px 35px;align-items:center;gap:10px;font-size:10px;color:#5e718b;margin-top:6px}.ft-phase-progress-copy .ft-line-progress{height:5px}.ft-phase-progress-copy b{color:#435874}.ft-phase-count-pill{border:1px solid #d8e2ee;border-radius:7px;padding:7px 10px;font-size:9px;color:#354d6b;white-space:nowrap}.ft-exact-workflow .ft-readiness-table>div>span:first-child{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:8px;font-weight:800}.ft-exact-workflow .ft-readiness-table>div>span.ok:first-child{background:#19994b}.ft-exact-workflow .ft-readiness-table>div>span.warn:first-child{background:#f0a000}.ft-exact-workflow .ft-history-table td:first-child b{display:inline-block;min-width:10px}
+
+/* ========================================================================== */
+/* 2026-08-04 UX refinement: compact work boards + readable job detail + exact create pages */
+/* ========================================================================== */
+
+/* Compact Board / My Work without changing dynamic behaviour */
+.ft-board-page .ft-board-page-head{margin-bottom:6px}
+.ft-board-page .ft-board-page-head h1{font-size:22px;margin-bottom:3px}
+.ft-board-page .ft-board-page-head p{font-size:12px}
+.ft-board-page .ft-outline-btn,.ft-board-page .ft-new-job-btn{height:34px;padding:0 11px;font-size:11px;border-radius:7px}
+.ft-board-page .ft-board-tabs{margin-bottom:9px}
+.ft-board-page .ft-board-tabs button{padding:9px 10px 8px;font-size:11px}
+.ft-board-page .ft-board-control-card{margin-bottom:8px;border-radius:9px}
+.ft-board-page .ft-board-filter-row{gap:7px;padding:8px 9px}
+.ft-board-page .ft-board-filter-row select,.ft-board-page .ft-board-filter-row input,.ft-board-page .ft-more-filter,.ft-board-page .ft-clear-wide{height:33px;border-radius:7px;padding-left:10px;padding-right:10px;font-size:10.5px}
+.ft-board-page .ft-filter-search svg{left:10px;top:9px;width:14px;height:14px}
+.ft-board-page .ft-filter-search input{padding-left:31px!important}
+.ft-board-page .ft-workflow-filter select{width:185px}.ft-board-page .ft-workflow-filter b{font-size:10px}.ft-board-page .ft-workflow-filter small{font-size:9px}
+.ft-board-page .ft-job-filter-row>select{min-width:88px}
+.ft-board-page .ft-task-filter-row .ft-filter-search{min-width:285px}.ft-board-page .ft-task-filter-row select{min-width:125px}
+.ft-board-page .ft-mywork-filter-row .ft-filter-search{min-width:320px}.ft-board-page .ft-mywork-filter-row select{min-width:145px}.ft-board-page .ft-clear-wide{min-width:92px}
+.ft-board-page .ft-board-quick-row{gap:6px;padding:7px 9px}.ft-board-page .ft-quick-label{font-size:10px}.ft-board-page .ft-quick-chip{padding:6px 9px;border-radius:7px;font-size:10px}.ft-board-page .ft-quick-chip b{height:17px;min-width:17px;font-size:9px}
+.ft-board-page .ft-board-view-controls{gap:7px}.ft-board-page .ft-board-view-controls select,.ft-board-page .ft-square-control{height:31px}.ft-board-page .ft-square-control{width:31px}.ft-board-page .ft-toggle-control{font-size:10px}
+.ft-board-page .ft-board-summary-row{min-height:29px;margin-bottom:5px;font-size:9.5px}.ft-board-page .ft-board-summary-row select{height:31px;min-width:185px;font-size:10px}
+.ft-board-page .ft-job-board-grid{grid-auto-columns:290px;gap:8px}.ft-board-page .ft-task-board-grid,.ft-board-page .ft-mywork-grid{grid-auto-columns:305px;gap:8px}
+.ft-board-page .ft-board-column{min-height:440px;border-radius:9px}.ft-board-page .ft-board-column-head{height:38px;padding:0 10px;font-size:10px}.ft-board-page .ft-task-column .ft-board-column-head>span{font-size:11px}.ft-board-page .ft-board-column-head>b{height:20px;min-width:22px;font-size:9px}.ft-board-page .ft-board-column-list{padding:7px;min-height:400px}
+.ft-board-page .ft-job-card{padding:11px 11px 10px 14px;margin-bottom:7px;border-radius:9px;box-shadow:0 3px 10px rgba(30,54,84,.06)}
+.ft-board-page .ft-health-pill{padding:4px 7px;font-size:9.5px}.ft-board-page .ft-phase-age{font-size:9.5px}.ft-board-page .ft-phase-age svg{width:14px;height:14px}.ft-board-page .ft-card-kebab{width:25px;height:25px}
+.ft-board-page .ft-job-card-title{font-size:16px;margin:10px 0 6px}.ft-board-page .ft-job-reference,.ft-board-page .ft-job-products{font-size:9.5px}.ft-board-page .ft-job-products{margin-top:8px}.ft-board-page .ft-job-products svg{width:16px;height:16px}
+.ft-board-page .ft-job-progress-head{margin-top:10px;font-size:9.5px}.ft-board-page .ft-job-progress-head b{font-size:11px}.ft-board-page .ft-job-progress{height:5px;margin-top:4px}
+.ft-board-page .ft-job-stats{gap:5px;margin-top:9px}.ft-board-page .ft-stat-chip{height:30px;font-size:9px}.ft-board-page .ft-stat-chip svg{width:14px;height:14px}
+.ft-board-page .ft-next-action{margin-top:9px;padding:8px 9px}.ft-board-page .ft-next-action-label{font-size:8.5px}.ft-board-page .ft-next-action>b{font-size:12px}.ft-board-page .ft-next-action-meta{font-size:9.5px;margin-top:6px}.ft-board-page .ft-next-due svg{width:15px;height:15px}
+.ft-board-page .ft-job-team{margin-top:9px}.ft-board-page .ft-job-team-label,.ft-board-page .ft-team-lead{font-size:9px}.ft-board-page .ft-job-footer-grid{margin-top:9px;padding-top:8px}.ft-board-page .ft-job-footer-cell{gap:7px}.ft-board-page .ft-job-footer-cell>svg{width:17px;height:17px}.ft-board-page .ft-job-updated{margin-top:8px;font-size:8.5px}
+.ft-board-page .ft-task-board-card{padding:11px;margin-bottom:7px;border-radius:9px;box-shadow:0 3px 10px rgba(30,54,84,.055)}
+.ft-board-page .ft-priority-pill,.ft-board-page .ft-overdue-pill{padding:4px 7px;font-size:9.5px}.ft-board-page .ft-task-title{margin-top:10px;font-size:16px}.ft-board-page .ft-task-job-ref{margin-top:8px;font-size:10px}.ft-board-page .ft-task-phase-name{margin-top:6px;font-size:10px}
+.ft-board-page .ft-waiting-panel{margin-top:9px;padding:8px 9px;gap:8px}.ft-board-page .ft-waiting-icon{width:30px;height:30px}.ft-board-page .ft-waiting-icon svg{width:17px;height:17px}.ft-board-page .ft-waiting-panel b{font-size:10px}.ft-board-page .ft-waiting-panel small{font-size:9px}
+.ft-board-page .ft-task-assignee-row{margin-top:9px;padding:8px 0}.ft-board-page .ft-task-assignee,.ft-board-page .ft-task-due{font-size:10px}.ft-board-page .ft-task-due svg{width:17px;height:17px}.ft-board-page .ft-task-meta-footer{gap:10px;padding-top:8px;font-size:9px}.ft-board-page .ft-task-meta-footer svg{width:15px;height:15px}
+
+/* Increase readability only inside job details; retain supplied layout and information hierarchy */
+.ft-exact-job-detail .ft-exact-job-header h1{font-size:25px}
+.ft-exact-job-detail .ft-detail-breadcrumb{font-size:12px}.ft-exact-job-detail .ft-exact-job-meta{font-size:12px;gap:10px}.ft-exact-job-detail .ft-soft-pill{font-size:10.5px;padding:5px 8px}
+.ft-exact-job-detail .ft-exact-tabs button{font-size:13px;padding:12px 0}.ft-exact-job-detail .ft-exact-tabs{margin-bottom:13px}
+.ft-exact-job-detail .ft-overview-metric{min-height:82px;padding:14px}.ft-exact-job-detail .ft-overview-metric .ft-metric-icon{width:34px;height:34px;flex-basis:34px}.ft-exact-job-detail .ft-overview-metric small{font-size:11px}.ft-exact-job-detail .ft-overview-metric b{font-size:14px}.ft-exact-job-detail .ft-overview-metric p{font-size:11px}
+.ft-exact-job-detail .ft-overview-card h2,.ft-exact-job-detail .ft-planning-panel h2{font-size:15px}.ft-exact-job-detail .ft-editable-copy{font-size:12px;line-height:1.5}.ft-exact-job-detail .ft-card-section-head{font-size:11px}.ft-exact-job-detail .ft-mini-grid-table th{font-size:10px;padding:7px 8px}.ft-exact-job-detail .ft-mini-grid-table td{font-size:11px;padding:9px 8px}.ft-exact-job-detail .ft-add-product{font-size:12px}
+.ft-exact-job-detail .ft-planning-panel .ft-side-row{font-size:11px;grid-template-columns:100px minmax(0,1fr) 22px;padding:10px 0}.ft-exact-job-detail .ft-overview-workflow-line button{font-size:10px}.ft-exact-job-detail .ft-overview-workflow-line small{font-size:10px}.ft-exact-job-detail .ft-overview-workflow-line span{width:26px;height:26px;font-size:10px}
+.ft-exact-job-detail .ft-task-card-heading h2{font-size:15px}.ft-exact-job-detail .ft-task-card-heading p{font-size:11px}.ft-exact-job-detail .ft-phase-load-note{font-size:10px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-group-head{height:38px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-group-head strong{font-size:11px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-group-head small{font-size:10px}.ft-exact-job-detail .ft-phase-task-columns{font-size:9px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-task-line{font-size:11px;min-height:46px;padding-top:9px;padding-bottom:9px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-task-line b{font-size:11px}.ft-exact-job-detail .ft-overview-task-card .ft-phase-task-line i{font-size:10px}
+.ft-exact-job-detail .ft-job-overview-attachments h2,.ft-exact-job-detail .ft-activity-card.compact .ft-activity-head h2{font-size:15px}.ft-exact-job-detail .ft-job-file-row{font-size:11px}.ft-exact-job-detail .ft-job-file-row div small{font-size:9px}
+.ft-exact-job-detail .ft-workflow-detail-section .ft-section-title-row h2{font-size:22px}.ft-exact-job-detail .ft-workflow-detail-section .ft-section-title-row p{font-size:13px}.ft-exact-job-detail .ft-warning-banner b{font-size:13px}.ft-exact-job-detail .ft-warning-banner p{font-size:11px}.ft-exact-job-detail .ft-warning-banner button{font-size:11px}.ft-exact-job-detail .ft-workflow-step small{font-size:10px}.ft-exact-job-detail .ft-workflow-step em{font-size:9px}.ft-exact-job-detail .ft-current-phase-card h2{font-size:18px}.ft-exact-job-detail .ft-current-phase-card .ft-card-row-head p,.ft-exact-job-detail .ft-phase-progress-row,.ft-exact-job-detail .ft-phase-owner-row{font-size:11px}.ft-exact-job-detail .ft-readiness-table>div{font-size:11px}.ft-exact-job-detail .ft-readiness-table em,.ft-exact-job-detail .ft-readiness-table button{font-size:10px}.ft-exact-job-detail .ft-next-phase-box{font-size:11px}.ft-exact-job-detail .ft-next-phase-box p{font-size:10px}.ft-exact-job-detail .ft-side-panel .ft-side-row{font-size:11px}.ft-exact-job-detail .ft-side-panel h2{font-size:16px}.ft-exact-job-detail .ft-side-panel h3{font-size:13px}.ft-exact-job-detail .ft-side-panel p,.ft-exact-job-detail .ft-side-panel a{font-size:11px}
+.ft-exact-job-detail .ft-documents-detail-section .ft-section-title-row h2{font-size:22px}.ft-exact-job-detail .ft-documents-detail-section .ft-section-title-row p{font-size:12px}.ft-exact-job-detail .ft-doc-filter-chips button{font-size:10.5px}.ft-exact-job-detail .ft-upload-panel,.ft-exact-job-detail .ft-job-documents-table,.ft-exact-job-detail .ft-required-docs-card,.ft-exact-job-detail .ft-doc-health-card{font-size:11px}.ft-exact-job-detail .ft-upload-panel p,.ft-exact-job-detail .ft-upload-panel small{font-size:10px}.ft-exact-job-detail .ft-doc-toolbar input,.ft-exact-job-detail .ft-doc-toolbar select,.ft-exact-job-detail .ft-doc-toolbar button{font-size:10px}.ft-exact-job-detail .ft-doc-table th{font-size:9px}

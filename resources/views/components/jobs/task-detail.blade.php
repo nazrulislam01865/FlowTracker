@@ -79,7 +79,7 @@
                 @if($task->phase?->name)<span class="ft-task-title-phase">· {{ $task->phase->name }}</span>@endif
             </div>
         </div>
-        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-outline-btn ft-square-action" type="button">•••</button><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
+        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
 
@@ -88,16 +88,15 @@
             <section class="ft-task-property-grid ft-friendly-task-properties">
                 <div
                     class="ft-task-property ft-inline-edit-shell"
-                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
+                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     x-on:click.outside="if (editing) cancelEdit()"
                     x-on:ft-inline-remote-cancel.stop="cancelEdit()"
-                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateSelectedTaskField('assignee_id', draftValue))"
+                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateSelectedTaskField('assignee_id', draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
                 >
                     <small>Assignee</small>
                     <div x-show="!editing" class="ft-task-property-display ft-inline-person-live">
-                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="26"/></span>
-                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                        <x-ui.inline-live-avatar :size="26" />
                         <b class="ft-property-value" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</b>
                         @if($canAssignTask)<button type="button" :disabled="status === 'saving'" title="Edit assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
                     </div>

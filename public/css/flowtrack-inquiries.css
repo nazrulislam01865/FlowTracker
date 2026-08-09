@@ -982,3 +982,477 @@
 .ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-reference-copy{display:flex;min-width:0;align-items:center;gap:4px;margin-top:2px}
 .ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-reference-copy .ft-inquiry-reference-value{display:block;min-width:0;margin-top:0!important;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-reference-copy .ft-copy-id-btn{width:22px;height:22px;flex:0 0 22px;font-size:13px}
+
+/* 2026-08-09: Inquiry list responsive cards + Closed terminology presentation. */
+.ft-inquiry-prototype .pagehead .primary{white-space:nowrap}
+
+@media(max-width:900px){
+  .ft-inquiry-prototype .pagehead{align-items:flex-start}
+  .ft-inquiry-prototype .pagehead>div:first-child{min-width:0;flex:1}
+  .ft-inquiry-prototype .pagehead p{max-width:620px}
+  .ft-inquiry-prototype .metrics{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+  .ft-inquiry-prototype .metric{min-width:0;min-height:78px;padding:12px}
+  .ft-inquiry-prototype .metric>span{min-width:0}
+  .ft-inquiry-prototype .metric small{line-height:1.3}
+
+  .ft-inquiry-prototype .inquiry-list-v2{overflow:visible}
+  .ft-inquiry-prototype .inquiry-list-v2 .toolbar{padding:13px}
+  .ft-inquiry-prototype .inquiry-list-v2 .filters{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:7px}
+  .ft-inquiry-prototype .inquiry-list-v2 .chip{width:100%;padding-inline:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-table{overflow:visible}
+  .ft-inquiry-prototype .inquiry-list-v2 .listhead{display:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{display:grid;gap:11px;padding:12px;background:#f7f9fc}
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);grid-template-areas:
+      "identity view"
+      "title title"
+      "client task"
+      "progress progress"
+      "assignee status"
+      "due started";
+    min-width:0;min-height:0;margin:0;padding:14px;gap:13px 18px;border:1px solid #dbe4ef;border-radius:12px;background:#fff;box-shadow:0 1px 2px rgba(25,45,75,.03);
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .row:last-child{border-bottom:1px solid #dbe4ef}
+  .ft-inquiry-prototype .inquiry-list-v2 .row:hover{background:#fff;box-shadow:0 3px 12px rgba(30,65,110,.07)}
+  .ft-inquiry-prototype .inquiry-list-v2 .cell{align-self:start;min-width:0}
+  .ft-inquiry-prototype .inquiry-list-v2 .cell::before{
+    content:attr(data-label);display:block;margin:0 0 5px;color:#7b899e;font-size:8.5px;font-weight:800;letter-spacing:.055em;line-height:1;text-transform:uppercase;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity{grid-area:identity;padding-right:0}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-title-cell{grid-area:title}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-cell{grid-area:client}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell{grid-area:task}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-progress-cell{grid-area:progress;padding-right:0}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-assignee-cell{grid-area:assignee}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell{grid-area:due}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell{grid-area:started}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell{grid-area:status;display:block}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell{grid-area:view;display:flex;align-items:flex-start;justify-content:flex-end}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell::before{display:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .id{font-size:13px}
+  .ft-inquiry-prototype .inquiry-list-v2 .title{overflow:visible;font-size:11.5px;line-height:1.4;text-overflow:clip;white-space:normal;overflow-wrap:anywhere}
+  .ft-inquiry-prototype .inquiry-list-v2 .sub{overflow:visible;font-size:10px;line-height:1.4;text-overflow:clip;white-space:normal;overflow-wrap:anywhere}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-preview{display:block;-webkit-line-clamp:unset}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-progress{grid-template-columns:minmax(0,1fr) auto;max-width:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-progress-track{height:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-assignee-cell .title{white-space:normal}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill{max-width:100%;white-space:normal;text-align:center}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{min-width:68px;height:36px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-empty{min-width:0;padding:36px 14px;border:1px solid #dbe4ef;border-radius:12px;background:#fff}
+  .ft-inquiry-prototype .inquiry-list-v2 .footer{padding:12px 14px}
+  .ft-inquiry-prototype .inquiry-list-v2 .footer>span:last-child{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+  .ft-inquiry-prototype .inquiry-list-v2 .footer>span:last-child .chip{width:auto;min-width:34px}
+}
+
+@media(max-width:640px){
+  .ft-inquiry-prototype .pagehead{gap:12px}
+  .ft-inquiry-prototype .pagehead h1{font-size:24px}
+  .ft-inquiry-prototype .pagehead p{font-size:11.5px;line-height:1.45}
+  .ft-inquiry-prototype .pagehead .actions{flex:0 0 auto}
+  .ft-inquiry-prototype .pagehead .primary{min-height:40px;padding-inline:13px}
+  .ft-inquiry-prototype .metric{min-height:82px;gap:9px}
+  .ft-inquiry-prototype .metric i{width:36px;height:36px;flex:0 0 36px}
+  .ft-inquiry-prototype .metric small{font-size:10px}
+  .ft-inquiry-prototype .metric strong{font-size:20px}
+  .ft-inquiry-prototype .inquiry-list-v2 .search input{height:44px;font-size:11.5px}
+  .ft-inquiry-prototype .inquiry-list-v2 .filters{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .ft-inquiry-prototype .inquiry-list-v2 .chip{height:36px;border-radius:10px}
+  .ft-inquiry-prototype .inquiry-list-v2 .row{gap:12px 14px;padding:13px}
+}
+
+@media(max-width:500px){
+  .ft-inquiry-prototype .pagehead{flex-direction:column}
+  .ft-inquiry-prototype .pagehead .actions{width:100%}
+  .ft-inquiry-prototype .pagehead .primary{width:100%}
+  .ft-inquiry-prototype .metrics{gap:8px}
+  .ft-inquiry-prototype .metric{padding:10px;min-height:78px}
+  .ft-inquiry-prototype .metric i{width:32px;height:32px;flex-basis:32px}
+  .ft-inquiry-prototype .metric small{font-size:9.5px}
+  .ft-inquiry-prototype .metric strong{font-size:18px}
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{padding:9px;gap:9px}
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    grid-template-columns:minmax(0,1fr) auto;grid-template-areas:
+      "identity view"
+      "title title"
+      "client client"
+      "task task"
+      "progress progress"
+      "assignee assignee"
+      "due started"
+      "status status";
+    gap:11px 12px;padding:12px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell{display:flex;align-items:center;justify-content:space-between;gap:10px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell::before{margin-bottom:0}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill{margin-left:auto}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{min-width:62px;padding-inline:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .footer{gap:7px;font-size:9.5px}
+}
+
+/* 2026-08-09 Inquiry Taskflow responsive alignment.
+   Keep every task compact and readable on phones/tablets without changing task logic. */
+@media(max-width:760px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .panelhead{
+    display:grid;grid-template-columns:minmax(0,1fr);align-items:start;gap:10px;padding:12px 14px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .panelhead>div:first-child{min-width:0}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .panelhead h2{font-size:15px;line-height:1.25}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .panelhead p{max-width:520px;margin-top:3px;font-size:11px;line-height:1.4}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-control-row{
+    width:100%;display:flex;align-items:center;gap:7px;flex-wrap:wrap;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-count-pill,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .manage-badge{
+    min-height:30px;display:inline-flex;align-items:center;padding:4px 9px;font-size:10px;line-height:1.15;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-control-row .primary{
+    min-height:36px!important;margin-left:auto;padding:0 12px;font-size:10.5px;font-weight:700;
+  }
+
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:32px minmax(0,1fr) minmax(0,1fr);grid-auto-rows:auto;
+    column-gap:11px;row-gap:10px;align-items:start;min-height:0;padding:14px 14px 14px 12px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-step{
+    grid-column:1;grid-row:1 / span 4;align-self:start;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-step span{
+    width:30px;height:30px;font-size:10px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy{
+    grid-column:2 / 4;grid-row:1;min-width:0;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy strong{
+    font-size:13px;line-height:1.3;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy p{
+    margin-top:2px;font-size:10.5px;line-height:1.35;white-space:normal;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy .reqfile{
+    margin-top:5px;padding:3px 7px;font-size:9px;
+  }
+
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline{
+    grid-column:2;grid-row:2;min-width:0;align-self:center;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date{
+    grid-column:3;grid-row:2;min-width:0;align-self:center;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell{
+    grid-column:2;grid-row:3;min-width:0;align-self:center;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    grid-column:3;grid-row:3;min-width:0;align-self:center;justify-content:flex-start;white-space:normal;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+    grid-column:2 / 4;grid-row:4;width:100%;max-width:none;align-self:center;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-action-button{
+    width:100%;min-height:38px;font-size:10.5px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display{
+    min-height:34px;gap:7px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display .avatar,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display .ft-avatar{
+    width:30px!important;height:30px!important;flex:0 0 30px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-name,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-value{
+    min-height:32px;font-size:10.5px;line-height:1.3;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-display-row{
+    min-height:34px;gap:6px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inline-edit-button{
+    width:26px;height:26px;flex:0 0 26px;font-size:9px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-status,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-status-pill{
+    min-height:32px;padding:4px 9px;font-size:9.5px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    gap:7px;font-size:10px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-attach-button{
+    min-height:34px;padding:0 10px;font-size:9.5px;
+  }
+
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-list{
+    padding:0 14px 10px 55px;background:#fff;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-row{
+    grid-template-columns:42px minmax(0,1fr);gap:8px 10px;align-items:start;padding:10px 0;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-type{
+    grid-column:1;grid-row:1 / span 2;width:38px;height:34px;font-size:8px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy{
+    grid-column:2;grid-row:1;display:block;min-width:0;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy b{
+    display:block;overflow:visible;font-size:10.5px;line-height:1.3;text-overflow:clip;white-space:normal;overflow-wrap:anywhere;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy small{
+    display:block;margin-top:3px;font-size:9px;line-height:1.3;white-space:normal;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-actions{
+    grid-column:2;grid-row:2;display:flex;align-items:center;justify-content:flex-start;gap:10px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-actions a{font-size:10.5px}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-remove{
+    width:30px;height:30px;
+  }
+}
+
+@media(max-width:480px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .panelhead{padding:11px 12px}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-control-row .primary{
+    width:100%;margin-left:0;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:30px minmax(0,1fr);column-gap:10px;row-gap:9px;padding:12px 12px 13px 10px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-step{grid-row:1 / span 6}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+    grid-column:2;width:100%;max-width:none;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy{grid-row:1}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline{grid-row:2}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date{grid-row:3}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell{grid-row:4}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{grid-row:5}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{grid-row:6}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-list{padding-left:50px;padding-right:12px}
+}
+
+/* 2026-08-09 Inquiry Taskflow mobile card refinement.
+   Keep task information visually grouped, compact and touch-friendly on phones. */
+@media (max-width:760px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:34px minmax(0,1.12fr) minmax(132px,.88fr)!important;
+    grid-auto-rows:min-content!important;
+    column-gap:10px!important;
+    row-gap:8px!important;
+    align-items:center!important;
+    min-height:0!important;
+    padding:13px 14px 13px 11px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-step{
+    grid-column:1!important;
+    grid-row:1!important;
+    align-self:start!important;
+    margin:0!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy{
+    grid-column:2 / 4!important;
+    grid-row:1!important;
+    align-self:start!important;
+    margin:0!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline{
+    grid-column:2!important;
+    grid-row:2!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date{
+    grid-column:3!important;
+    grid-row:2!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell{
+    grid-column:2!important;
+    grid-row:3!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    grid-column:3!important;
+    grid-row:3!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+    grid-column:2 / 4!important;
+    grid-row:4!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+    width:100%!important;
+    min-width:0!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    align-self:center!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-display-row{
+    min-height:32px!important;
+    margin:0!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date .ft-inquiry-inline-display-row{
+    justify-content:flex-end!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date .ft-inquiry-inline-value{
+    justify-content:flex-end;
+    text-align:right;
+    white-space:nowrap;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-inquiry-inline-display-row{
+    justify-content:flex-start!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    justify-content:flex-end!important;
+    gap:7px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files>span{
+    white-space:nowrap;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-attach-button{
+    min-height:34px!important;
+    padding:0 11px!important;
+    border-radius:9px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-action-button{
+    min-height:40px!important;
+    border-radius:9px!important;
+    font-size:11px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-list{
+    padding:0 14px 12px 55px!important;
+    background:#fff!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-row{
+    display:grid!important;
+    grid-template-columns:44px minmax(0,1fr) auto!important;
+    grid-template-rows:auto auto!important;
+    gap:6px 10px!important;
+    align-items:center!important;
+    margin-top:0!important;
+    padding:10px!important;
+    border:1px solid #e1e8f2!important;
+    border-radius:10px!important;
+    background:#fbfcfe!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-type{
+    grid-column:1!important;
+    grid-row:1 / 3!important;
+    width:40px!important;
+    height:40px!important;
+    border-radius:9px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy{
+    grid-column:2!important;
+    grid-row:1 / 3!important;
+    min-width:0!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy b{
+    display:-webkit-box!important;
+    overflow:hidden!important;
+    -webkit-box-orient:vertical!important;
+    -webkit-line-clamp:2!important;
+    font-size:10.5px!important;
+    line-height:1.3!important;
+    overflow-wrap:anywhere!important;
+    white-space:normal!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-actions{
+    grid-column:3!important;
+    grid-row:1 / 3!important;
+    display:flex!important;
+    align-items:center!important;
+    justify-content:flex-end!important;
+    gap:7px!important;
+    white-space:nowrap!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-actions a{
+    min-height:34px;
+    display:inline-flex;
+    align-items:center;
+    padding:0 8px;
+    border-radius:8px;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-remove{
+    width:34px!important;
+    height:34px!important;
+    flex:0 0 34px!important;
+    border-radius:8px!important;
+  }
+}
+
+@media (max-width:520px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:32px minmax(0,1fr) minmax(118px,.78fr)!important;
+    column-gap:9px!important;
+    row-gap:7px!important;
+    padding:12px 11px 12px 9px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy strong{
+    font-size:12.5px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy p{
+    font-size:10px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-name,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-value{
+    font-size:10px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    font-size:9.5px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-list{
+    padding-left:50px!important;
+    padding-right:11px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-row{
+    grid-template-columns:40px minmax(0,1fr)!important;
+    grid-template-rows:auto auto!important;
+    gap:7px 9px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-type{
+    grid-column:1!important;
+    grid-row:1!important;
+    width:38px!important;
+    height:38px!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-copy{
+    grid-column:2!important;
+    grid-row:1!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-file-actions{
+    grid-column:2!important;
+    grid-row:2!important;
+    justify-content:flex-start!important;
+  }
+}
+
+@media (max-width:380px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:30px minmax(0,1fr)!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+    grid-column:2!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-copy{grid-row:1!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline{grid-row:2!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date{grid-row:3!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell{grid-row:4!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{grid-row:5!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{grid-row:6!important}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date .ft-inquiry-inline-display-row,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+    justify-content:flex-start!important;
+  }
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date .ft-inquiry-inline-value{text-align:left}
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-document-list{
+    padding-left:48px!important;
+    padding-right:9px!important;
+  }
+}

@@ -32,6 +32,20 @@ Route::get('/branding-assets/{type}/{filename}', BrandingAssetController::class)
     ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp|ico)')
     ->name('branding-assets.show');
 
+Route::get('/session/recover', function (\Illuminate\Http\Request $request) {
+    // Recovery is intentionally a GET: it is the safe landing point after a
+    // CSRF/session mismatch, where the old server-side session is discarded
+    // and the browser receives a fresh session/CSRF cookie pair.
+    $request->session()->invalidate();
+    $request->session()->regenerateToken();
+
+    return redirect()->route('login', ['reason' => 'session-refresh'])
+        ->withHeaders([
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+        ]);
+})->name('session.recover');
+
 Route::middleware('guest')->group(function () {
     Route::get('/login', [AuthController::class, 'create'])->name('login');
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');

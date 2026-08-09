@@ -214,7 +214,7 @@ class InquiryService
             $assignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
-            $status = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Dead' : (string) $inquiry->status);
+            $status = $inquiry->result === 'converted' ? 'Converted' : ($inquiry->result === 'dead' ? 'Closed' : (string) $inquiry->status);
             $progressPercent = $total > 0 ? max(0, min(100, (int) round(($done / $total) * 100))) : 0;
 
             return [
@@ -975,7 +975,7 @@ class InquiryService
             'dead_note' => blank($note) ? null : trim((string) $note),
             'completed_at' => now(),
         ]);
-        $this->activity($inquiry, $actor, 'inquiry.dead', 'Inquiry marked Dead. Reason: '.$reason.'.'.(filled($note) ? ' '.trim((string) $note) : ''));
+        $this->activity($inquiry, $actor, 'inquiry.dead', 'Inquiry closed. Reason: '.$reason.'.'.(filled($note) ? ' '.trim((string) $note) : ''));
         return $inquiry->refresh();
     }
 

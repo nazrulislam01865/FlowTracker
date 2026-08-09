@@ -79,7 +79,6 @@
                     @else
                         <span class="ft-permission-note">Only the assigned Job owner can move this Job to another phase.</span>
                     @endif
-                    <button class="ft-outline-btn ft-square-action" type="button">•••</button>
                 </div>
                 @error('phaseCompletion')<div class="ft-warning-banner slim"><span>!</span><p>{{ $message }}</p></div>@enderror
             </section>
@@ -88,7 +87,14 @@
                 <h2>Phase history</h2><p>Each phase is calculated only from its selected Task Pack tasks and Task Pack document requirements.</p>
                 <table class="ft-history-table"><thead><tr><th>Phase</th><th>Status</th><th>Entered</th><th>Completed</th><th>Time in phase</th><th>Outcome</th></tr></thead><tbody>
                     @foreach($rows as $row)
-                        <tr><td><b>{{ $row->phase->sequence }}</b> &nbsp; {{ $row->phase->short_name }}</td><td><span class="ft-soft-pill {{ $row->status==='Completed'?'green':($row->status==='Current'?'blue':'gray') }}">{{ $row->status }}</span></td><td>{{ \App\Support\UserLocalTime::format($row->entered, 'M j Y') }}</td><td>{{ \App\Support\UserLocalTime::format($row->completed, 'M j Y') }}</td><td>{{ $row->time ? $row->time.' day'.($row->time>1?'s':'') : '—' }}</td><td class="{{ $row->outcome==='Passed'?'green-text':($row->outcome==='Blocked'?'warn-text':'') }}">{{ $row->outcome }}</td></tr>
+                        <tr>
+                            <td data-label="Phase"><b>{{ $row->phase->sequence }}</b> &nbsp; {{ $row->phase->short_name }}</td>
+                            <td data-label="Status"><span class="ft-soft-pill {{ $row->status==='Completed'?'green':($row->status==='Current'?'blue':'gray') }}">{{ $row->status }}</span></td>
+                            <td data-label="Entered">{{ \App\Support\UserLocalTime::format($row->entered, 'M j Y') }}</td>
+                            <td data-label="Completed">{{ \App\Support\UserLocalTime::format($row->completed, 'M j Y') }}</td>
+                            <td data-label="Time in phase">{{ $row->time ? $row->time.' day'.($row->time>1?'s':'') : '—' }}</td>
+                            <td data-label="Outcome" class="{{ $row->outcome==='Passed'?'green-text':($row->outcome==='Blocked'?'warn-text':'') }}">{{ $row->outcome }}</td>
+                        </tr>
                     @endforeach
                 </tbody></table>
             </section>

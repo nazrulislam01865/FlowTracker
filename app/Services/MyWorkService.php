@@ -85,30 +85,36 @@ class MyWorkService
             ];
         }
 
+        // Keep the page hydrate query count low. My Work only needs the
+        // client/phase labels, so fetch them with LEFT JOINs instead of three
+        // separate eager-load queries.
         $jobs = FlowJob::query()
-            ->whereIn('id', $jobIds)
+            ->whereIn('flow_jobs.id', $jobIds)
+            ->leftJoin('clients as my_work_clients', 'my_work_clients.id', '=', 'flow_jobs.client_id')
+            ->leftJoin('workflow_phases as my_work_job_phases', 'my_work_job_phases.id', '=', 'flow_jobs.workflow_phase_id')
             ->select([
-                'id', 'job_number', 'title', 'client_id', 'workflow_phase_id',
-                'health', 'progress', 'status', 'updated_at',
-            ])
-            ->with([
-                'client:id,name',
-                'phase:id,name,short_name,sequence',
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.title', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id',
+                'flow_jobs.health', 'flow_jobs.progress', 'flow_jobs.status', 'flow_jobs.updated_at',
+                'my_work_clients.name as my_work_client_name',
+                'my_work_job_phases.name as my_work_phase_name',
+                'my_work_job_phases.short_name as my_work_phase_short_name',
             ])
             ->get()
             ->keyBy('id');
 
         $tasks = (clone $baseTasks)
             ->whereIn('tasks.flow_job_id', $jobIds)
+            ->leftJoin('workflow_phases as my_work_task_phases', 'my_work_task_phases.id', '=', 'tasks.workflow_phase_id')
+            ->leftJoin('users as my_work_assignees', 'my_work_assignees.id', '=', 'tasks.assignee_id')
             ->select([
                 'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority',
                 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason',
                 'tasks.completed_at', 'tasks.updated_at',
-            ])
-            ->with([
-                'phase:id,name,short_name,sequence',
-                'assignee:id,name,profile_image_path',
+                'my_work_task_phases.name as my_work_phase_name',
+                'my_work_task_phases.short_name as my_work_phase_short_name',
+                'my_work_assignees.name as my_work_assignee_name',
+                'my_work_assignees.profile_image_path as my_work_assignee_profile_image_path',
             ]);
 
         $this->orderTasks($tasks, (string) ($filters['sort'] ?? 'action'), $today);
@@ -128,8 +134,8 @@ class MyWorkService
                 'id' => (int) $job->id,
                 'number' => (string) $job->displayOrderNumber(),
                 'title' => (string) $job->title,
-                'client' => (string) ($job->client?->name ?: 'No client'),
-                'stage' => (string) ($job->phase?->short_name ?: $job->phase?->name ?: 'No phase'),
+                'client' => (string) ($job->getAttribute('my_work_client_name') ?: 'No client'),
+                'stage' => (string) ($job->getAttribute('my_work_phase_short_name') ?: $job->getAttribute('my_work_phase_name') ?: 'No phase'),
                 'health' => (string) ($job->health ?: 'On Track'),
                 'healthTone' => $this->tone((string) ($job->health ?: 'On Track')),
                 'progress' => max(0, min(100, (int) $job->progress)),
@@ -174,11 +180,17 @@ class MyWorkService
                 [$tomorrow, $weekEnd],
             )
             ->selectRaw("SUM(CASE WHEN LOWER(tasks.status) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
+            ->selectRaw(
+                "SUM(CASE WHEN EXISTS (
+                    SELECT 1
+                    FROM flow_notifications
+                    WHERE flow_notifications.flow_task_id = tasks.id
+                      AND flow_notifications.user_id = ?
+                      AND flow_notifications.type = 'mention'
+                ) THEN 1 ELSE 0 END) AS mentions_count",
+                [$user->id],
+            )
             ->first();
-
-        $mentions = (clone $base)
-            ->whereExists($this->mentionExistsSubquery($user))
-            ->count();
 
         return [
             'attention' => (int) ($row?->attention_count ?? 0),
@@ -186,7 +198,7 @@ class MyWorkService
             'today' => (int) ($row?->today_count ?? 0),
             'upcoming' => (int) ($row?->upcoming_count ?? 0),
             'waiting' => (int) ($row?->waiting_count ?? 0),
-            'mentions' => (int) $mentions,
+            'mentions' => (int) ($row?->mentions_count ?? 0),
         ];
     }
 
@@ -373,11 +385,11 @@ class MyWorkService
             'id' => (int) $task->id,
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
-            'phase' => (string) ($task->phase?->short_name ?: $task->phase?->name ?: 'No phase'),
-            'assignee' => (string) ($task->assignee?->name ?: 'Unassigned'),
-            'assigneeId' => $task->assignee?->id ? (int) $task->assignee->id : null,
-            'assigneeAvatar' => ($task->assignee?->id && $task->assignee?->profile_image_path)
-                ? route('profile-images.show', ['user' => $task->assignee->id, 'filename' => basename($task->assignee->profile_image_path)], false)
+            'phase' => (string) ($task->getAttribute('my_work_phase_short_name') ?: $task->getAttribute('my_work_phase_name') ?: 'No phase'),
+            'assignee' => (string) ($task->getAttribute('my_work_assignee_name') ?: 'Unassigned'),
+            'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : null,
+            'assigneeAvatar' => ($task->assignee_id && $task->getAttribute('my_work_assignee_profile_image_path'))
+                ? route('profile-images.show', ['user' => $task->assignee_id, 'filename' => basename((string) $task->getAttribute('my_work_assignee_profile_image_path'))], false)
                 : null,
             'due' => $dueLabel,
             'dueValue' => $dueDate ?: '',

@@ -136,6 +136,59 @@ body{background:#f3f6fb;color:#172033}
     #my-work-app .page-button{flex:1}
     #my-work-app .order-title{white-space:normal}
 }
+
+/* 2026-08-09: Mobile/tablet task-row alignment. Keep each task readable without
+   squeezing status, due date, flag and action into mismatched columns. */
+@media(max-width:820px){
+    #my-work-app .load-state{flex-wrap:wrap;row-gap:3px;padding-block:5px}
+    #my-work-app .loading-copy{margin-left:auto}
+    #my-work-app .order-head{padding:9px 10px}
+    #my-work-app .order-identity{min-width:0}
+    #my-work-app .order-id{display:block;overflow-wrap:anywhere}
+    #my-work-app .order-client{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    #my-work-app .task-row{
+        grid-template-columns:minmax(0,1fr) minmax(145px,180px) 60px;
+        grid-template-areas:
+            "task status action"
+            "phase due action"
+            "updated flag action";
+        column-gap:12px;
+        row-gap:7px;
+        min-height:112px;
+        padding:11px 12px;
+        align-items:center;
+    }
+    #my-work-app .task-main{grid-area:task;align-self:start;min-width:0}
+    #my-work-app .task-link{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;overflow-wrap:anywhere}
+    #my-work-app .phase{grid-area:phase;justify-self:start;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip}
+    #my-work-app .updated{grid-area:updated;justify-self:start}
+    #my-work-app .status-select{grid-area:status;width:100%;min-width:0;height:36px;font-size:10px}
+    #my-work-app .due{grid-area:due;justify-self:start;white-space:nowrap}
+    #my-work-app .task-row>.flag{grid-area:flag;justify-self:start;max-width:100%;white-space:normal;line-height:1.2;text-align:left}
+    #my-work-app .row-action{grid-area:action;width:58px;height:36px;align-self:center;justify-self:end;font-size:10px}
+}
+@media(max-width:600px){
+    #my-work-app .load-state{align-items:flex-start;flex-direction:column}
+    #my-work-app .loading-copy{margin-left:0}
+    #my-work-app .task-row{
+        grid-template-columns:minmax(0,1fr) 58px;
+        grid-template-areas:
+            "task action"
+            "phase action"
+            "status action"
+            "due action"
+            "flag action"
+            "updated action";
+        min-height:0;
+        row-gap:7px;
+        padding:12px 10px;
+    }
+    #my-work-app .status-select{width:min(100%,220px);justify-self:start}
+    #my-work-app .row-action{align-self:start}
+    #my-work-app .order-head{grid-template-columns:20px minmax(0,1fr) auto;column-gap:8px}
+    #my-work-app .task-count{white-space:nowrap}
+}
+
 @media(prefers-reduced-motion:reduce){#my-work-app *,#my-work-app *::before,#my-work-app *::after{animation:none!important;transition:none!important}}
 
 /* 2026-08-08: Slightly larger All Tasks typography for readability without changing the layout. */
@@ -165,6 +218,60 @@ body{background:#f3f6fb;color:#172033}
 #my-work-app .empty{font-size:11px}
 #my-work-app .empty strong{font-size:13px}
 #my-work-app .footer,#my-work-app .page-button{font-size:10px}
+
+
+/* 2026-08-09: All Tasks responsive alignment refinement.
+   On tablet widths each task uses two compact information rows; on phones the
+   status control uses the full content column so labels are not clipped. */
+@media(max-width:820px){
+    #my-work-app .task-row{
+        grid-template-columns:minmax(0,1.25fr) minmax(100px,.55fr) minmax(150px,.72fr) 60px;
+        grid-template-areas:
+            "task phase status action"
+            "updated due flag action";
+        column-gap:12px;
+        row-gap:8px;
+        min-height:88px;
+        padding:11px 12px;
+        align-items:center;
+    }
+    #my-work-app .task-main{grid-area:task;align-self:center;min-width:0}
+    #my-work-app .task-link{white-space:normal;overflow:visible;text-overflow:clip;line-height:1.25;overflow-wrap:anywhere}
+    #my-work-app .phase{grid-area:phase;justify-self:start;min-width:0;max-width:100%;white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+    #my-work-app .updated{grid-area:updated;justify-self:start;align-self:center;white-space:nowrap}
+    #my-work-app .status-select{grid-area:status;width:100%;min-width:0;max-width:none;height:36px;padding-right:28px;font-size:10px}
+    #my-work-app .due{grid-area:due;justify-self:start;align-self:center;white-space:normal;line-height:1.25}
+    #my-work-app .task-row>.flag{grid-area:flag;justify-self:start;align-self:center;max-width:100%;white-space:normal;line-height:1.2;text-align:left}
+    #my-work-app .row-action{grid-area:action;width:58px;height:36px;align-self:center;justify-self:end;font-size:10px}
+}
+@media(max-width:600px){
+    #my-work-app .task-row{
+        grid-template-columns:minmax(0,1fr) 58px;
+        grid-template-areas:
+            "task action"
+            "phase action"
+            "status action"
+            "due action"
+            "flag action"
+            "updated action";
+        min-height:0;
+        column-gap:12px;
+        row-gap:8px;
+        padding:12px 10px;
+        align-items:start;
+    }
+    #my-work-app .task-main{align-self:start}
+    #my-work-app .status-select{width:100%;max-width:none;justify-self:stretch}
+    #my-work-app .row-action{align-self:start}
+    #my-work-app .phase,#my-work-app .due,#my-work-app .updated,#my-work-app .task-row>.flag{align-self:start}
+}
+@media(max-width:430px){
+    #my-work-app .task-row{column-gap:9px;padding-inline:9px}
+    #my-work-app .row-action{width:54px}
+    #my-work-app .status-select{height:38px}
+    #my-work-app .footer{gap:8px}
+    #my-work-app .pages{gap:6px}
+}
 </style>
 
     <div class="page-head">

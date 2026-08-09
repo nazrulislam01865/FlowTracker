@@ -63,7 +63,7 @@
                         $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
                     @endphp
                     <tr wire:key="job-item-{{ $item->id ?? $loop->index }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, draftProductReady: @js(filled($item->product_name)) }" @class(['ft-inline-product-draft-row' => $isDraftItem])>
-                        <td>
+                        <td data-label="Category">
                             @if($item->id)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
@@ -95,7 +95,7 @@
                                 {{ $item->category_name }}
                             @endif
                         </td>
-                        <td>
+                        <td data-label="Product">
                             @if($item->id)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
@@ -129,7 +129,7 @@
                                 {{ $item->product_name }}
                             @endif
                         </td>
-                        <td class="ft-product-quantity-cell">
+                        <td class="ft-product-quantity-cell" data-label="Quantity">
                             @if($item->id)
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
@@ -151,7 +151,7 @@
                                 {{ number_format((int)$item->quantity) }}
                             @endif
                         </td>
-                        <td class="ft-product-delete-cell">
+                        <td class="ft-product-delete-cell" data-label="Action">
                             @if($item->id && $canEditJob)
                                 <button
                                     type="button"
@@ -214,14 +214,13 @@
             </div>
             <div
                 class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Order owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned') })"
+                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Order owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned'), avatarUrl: @js($job->owner?->profileImageUrl() ?? '') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
                 <span>Order owner</span>
                 <b class="ft-planning-value">
                     <span x-show="!editing" class="ft-inline-person-live ft-planning-person-value">
-                        <span x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$job->owner" :name="$job->owner?->name ?? 'Unassigned'" :size="24"/></span>
-                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                        <x-ui.inline-live-avatar :size="24" />
                         <span x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
                     </span>
                     @if($canAssignJob)
@@ -290,15 +289,14 @@
                                 <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
                                 <span
                                     class="ft-task-inline-editor ft-inline-edit-shell"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned') })"
+                                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                     x-on:click.outside="if (editing) cancelEdit()"
                                     x-on:ft-inline-remote-cancel.stop="cancelEdit()"
-                                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue))"
+                                    x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
                                 >
                                     <span x-show="!editing" class="ft-task-inline-display ft-inline-person-live">
-                                        <span class="ft-inline-avatar-slot" x-show="String(value) === String(serverValue)"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="24"/></span>
-                                        <span x-cloak x-show="String(value) !== String(serverValue)" class="ft-inline-generated-avatar" x-text="initials(display)"></span>
+                                        <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="24" /></span>
                                         <span class="ft-inline-person-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                                     </span>
                                     @if($canAssignTask)

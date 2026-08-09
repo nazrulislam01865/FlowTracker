@@ -1,578 +1,4 @@
-.ft-archive-restore{border:1px solid #a8c4fa;background:#edf4ff;color:#1265ef}.ft-archive-view:hover{background:#f5f8fb}.ft-archive-restore:hover{background:#dfebff}@media(max-width:1080px){.ft-client-filter-card.is-archived{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-client-filter-card.is-archived .ft-client-filter-search{grid-column:1/-1}}@media(max-width:700px){.ft-archived-actions{justify-content:flex-start;flex-wrap:wrap}}
-.ft-clients-layout-full .ft-client-table tbody tr:focus-visible{
-    outline:3px solid rgba(18,101,239,.16);
-    outline-offset:-3px;
-    background:#eef5ff;
-}
-html:has(.ft-client-preview-backdrop),
-body:has(.ft-client-preview-backdrop){
-    overflow:hidden;
-}
-.ft-client-preview-backdrop{
-    animation:ft-client-preview-fade .16s ease-out;
-}
-.ft-client-preview-modal{
-    animation:ft-client-preview-rise .2s ease-out;
-}
-@keyframes ft-client-preview-fade{
-    from{opacity:0}
-    to{opacity:1}
-}
-@keyframes ft-client-preview-rise{
-    from{opacity:0;transform:translateY(12px) scale(.985)}
-    to{opacity:1;transform:translateY(0) scale(1)}
-}
-@media(prefers-reduced-motion:reduce){
-    .ft-client-preview-backdrop,
-    .ft-client-preview-modal{animation:none}
-}
 
-/* Dynamic dashboard/report metric layouts and sidebar session action. */
-.metrics.ft-auto-metrics{grid-template-columns:repeat(auto-fit,minmax(170px,1fr))}
-.ft-report-performance{grid-column:1/-1}
-.ft-report-kpis{grid-template-columns:repeat(3,minmax(0,1fr))}
-.sidebar-footer{display:grid;gap:12px}
-.ft-sidebar-logout-form{margin:0}
-.ft-sidebar-logout{width:100%;display:flex;align-items:center;justify-content:center;gap:9px;border:1px solid #29425f;border-radius:9px;background:#13253b;color:#d9e6f5;padding:9px 12px;font:inherit;font-size:11px;font-weight:700;cursor:pointer;transition:.18s}
-.ft-sidebar-logout:hover,.ft-sidebar-logout:focus-visible{background:#1b3554;border-color:#3b5d83;color:#fff;outline:none}
-.ft-sidebar-logout svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
-@media(max-width:900px){.ft-report-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}}
-@media(max-width:620px){.metrics.ft-auto-metrics{grid-template-columns:1fr 1fr}.ft-report-kpis{grid-template-columns:1fr 1fr}}
-
-/* Progressive Livewire island layout. */
-.ft-island-shell{min-width:0;height:100%}.ft-island-shell>div{height:100%}.ft-island-shell .section-card{height:100%}
-
-/* Dashboard staged rendering: reserve final card space while one grouped
-   secondary Livewire request loads the below-the-fold datasets. */
-.ft-dashboard-skeleton{min-height:220px;overflow:hidden}.ft-dashboard-skeleton-label{color:var(--muted);font-size:11px}.ft-dashboard-skeleton-lines{display:flex;flex-direction:column;gap:12px;padding-top:2px}.ft-dashboard-skeleton-lines span{display:block;width:var(--ft-skeleton-width,100%);height:30px;border-radius:8px;background:linear-gradient(90deg,#edf2f7 20%,#f8fafc 50%,#edf2f7 80%);background-size:220% 100%;animation:ft-dashboard-skeleton-pulse 1.4s ease-in-out infinite}@keyframes ft-dashboard-skeleton-pulse{0%{background-position:100% 0}100%{background-position:-100% 0}}@media(prefers-reduced-motion:reduce){.ft-dashboard-skeleton-lines span{animation:none}}
-
-/* Task Pack and Master Data staged rendering. */
-.ft-progressive-table-placeholder{display:flex;flex-direction:column;gap:1px;min-height:330px;background:#e6edf5}.ft-progressive-table-placeholder>div{display:grid;grid-template-columns:repeat(var(--ft-placeholder-columns,5),minmax(70px,1fr));gap:18px;align-items:center;min-height:52px;padding:10px 14px;background:#fff}.ft-progressive-table-placeholder span,.ft-progressive-card-list span,.ft-taskpack-options-placeholder span{display:block;height:13px;border-radius:5px;background:linear-gradient(90deg,#edf2f7 20%,#f8fafc 50%,#edf2f7 80%);background-size:220% 100%;animation:ft-dashboard-skeleton-pulse 1.4s ease-in-out infinite}.ft-progressive-table-placeholder span:nth-child(2n){width:72%}.ft-progressive-card-list{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:14px;min-height:300px}.ft-progressive-card-list>section{display:flex;flex-direction:column;gap:13px;min-height:145px;padding:18px;border:1px solid #e3eaf2;border-radius:12px;background:#fff}.ft-progressive-card-list span:nth-child(2){width:82%}.ft-progressive-card-list span:nth-child(3){width:58%}.ft-taskpack-options-placeholder{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px;grid-column:1/-1}.ft-taskpack-options-placeholder>div{display:flex;flex-direction:column;gap:9px}.ft-taskpack-options-placeholder span:first-child{width:42%;height:11px}.ft-taskpack-options-placeholder span:last-child{height:42px}@media(max-width:700px){.ft-progressive-table-placeholder{overflow:hidden}.ft-progressive-table-placeholder>div{grid-template-columns:repeat(3,minmax(90px,1fr));min-width:460px}.ft-taskpack-options-placeholder{grid-template-columns:1fr}}@media(prefers-reduced-motion:reduce){.ft-progressive-table-placeholder span,.ft-progressive-card-list span,.ft-taskpack-options-placeholder span{animation:none}}
-
-/* Progressive form and board rendering. Heavy option/card datasets are loaded
-   only when their section is needed while these blocks preserve final space. */
-.ft-progressive-section-placeholder{min-height:190px}.ft-progressive-skeleton{display:flex;flex-direction:column;gap:12px;margin:12px 0}.ft-progressive-skeleton span{display:block;width:var(--ft-skeleton-width,100%);height:42px;border-radius:9px;background:linear-gradient(90deg,#edf2f7 20%,#f8fafc 50%,#edf2f7 80%);background-size:220% 100%;animation:ft-dashboard-skeleton-pulse 1.4s ease-in-out infinite}.ft-create-actions button:disabled{cursor:not-allowed;opacity:.55}.ft-progressive-board-placeholder{display:grid;grid-template-columns:repeat(var(--ft-placeholder-columns,3),minmax(190px,1fr));gap:12px;min-height:430px;overflow:hidden;padding:4px}.ft-progressive-board-placeholder>section{min-width:0;border:1px solid #e3eaf2;border-radius:12px;background:#f8fafc;padding:12px}.ft-progressive-placeholder-title{width:62%;height:18px;border-radius:6px;background:#e6edf5;margin-bottom:14px}.ft-progressive-placeholder-card{display:flex;flex-direction:column;gap:9px;min-height:104px;margin-bottom:10px;padding:13px;border:1px solid #e3eaf2;border-radius:10px;background:#fff}.ft-progressive-placeholder-card span{display:block;height:13px;border-radius:5px;background:linear-gradient(90deg,#edf2f7 20%,#f8fafc 50%,#edf2f7 80%);background-size:220% 100%;animation:ft-dashboard-skeleton-pulse 1.4s ease-in-out infinite}.ft-progressive-placeholder-card span:nth-child(2){width:78%}.ft-progressive-placeholder-card span:nth-child(3){width:55%}@media(max-width:1000px){.ft-progressive-board-placeholder{grid-template-columns:repeat(3,minmax(180px,1fr))}}@media(max-width:700px){.ft-progressive-board-placeholder{grid-template-columns:1fr;min-height:320px}.ft-progressive-board-placeholder>section:nth-child(n+3){display:none}}@media(prefers-reduced-motion:reduce){.ft-progressive-skeleton span,.ft-progressive-placeholder-card span{animation:none}}
-
-/* User mentions */
-.ft-mention-host{position:relative}.ft-mention-menu{position:fixed;z-index:1000;max-height:280px;overflow:auto;border:1px solid #d8e2ee;border-radius:10px;background:#fff;box-shadow:0 18px 44px rgba(15,35,65,.18);padding:6px}.ft-mention-menu[hidden]{display:none}.ft-mention-option{width:100%;display:flex;align-items:center;gap:10px;border:0;border-radius:8px;background:transparent;padding:8px 10px;text-align:left;cursor:pointer}.ft-mention-option:hover,.ft-mention-option.active{background:#edf4ff}.ft-mention-avatar{width:30px;height:30px;flex:0 0 30px;border-radius:50%;display:grid;place-items:center;background:#dbeafe;color:#1557bf;font-size:11px;font-weight:850}.ft-mention-copy{display:flex;min-width:0;flex-direction:column}.ft-mention-copy strong{overflow:hidden;color:#10233f;text-overflow:ellipsis;white-space:nowrap}.ft-mention-copy small{overflow:hidden;color:#61738b;text-overflow:ellipsis;white-space:nowrap}.ft-user-mention{display:inline;border-radius:5px;background:#eaf2ff;color:#0f5ed7;font-weight:750;padding:1px 4px}.ft-mention-input{width:100%}
-
-/* Local file drag-and-drop for every FlowTrack document and attachment upload. */
-[data-file-dropzone]{position:relative;transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease}
-[data-file-dropzone].is-dragging{border-color:#2563eb!important;background:#eff6ff!important;box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-[data-file-dropzone].is-uploading{border-color:#6b8fc8!important;background:#f6f9fd!important}
-[data-file-dropzone].has-upload-error{border-color:#dc2626!important;background:#fff7f7!important}
-.ft-file-upload-progress{margin-top:7px;font-size:10px;color:#536985}
-.ft-upload-ready-list{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
-.ft-upload-ready-list span{max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;border:1px solid #dce6f2;border-radius:6px;background:#f4f8fc;padding:5px 8px;font-size:10px;color:#334b68}
-.avatar{overflow:hidden}.avatar>img{width:100%;height:100%;display:block;object-fit:cover;border-radius:inherit}.ft-profile-identity{display:flex;align-items:center;gap:18px;margin-bottom:22px;padding-bottom:20px;border-bottom:1px solid var(--line)}.ft-profile-avatar-wrap{flex:0 0 auto}.ft-profile-avatar-preview{display:block}.ft-profile-identity-copy{min-width:0}.ft-profile-identity-copy h3{margin:0 0 4px}.ft-profile-photo-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:12px}.ft-profile-upload-button{display:inline-flex;align-items:center;cursor:pointer}.ft-profile-upload-button input{display:none}.ft-profile-photo-help{font-size:11px;color:var(--muted);margin-top:7px}@media(max-width:620px){.ft-profile-identity{align-items:flex-start}.ft-profile-photo-actions{align-items:stretch}.ft-profile-photo-actions .primary,.ft-profile-photo-actions .secondary,.ft-profile-photo-actions .ghost{flex:1;text-align:center}}
-
-/* --------------------------------------------------------------------------
-   User profile
-   -------------------------------------------------------------------------- */
-.ft-profile-page{width:100%;max-width:1420px;margin:0 auto;padding-bottom:18px}
-.ft-profile-flash{margin-bottom:16px}
-.ft-profile-layout{display:grid;grid-template-columns:minmax(0,1.38fr) minmax(340px,.62fr);gap:18px;align-items:start}
-.ft-profile-main-card{overflow:hidden;padding:0}
-.ft-profile-hero{display:flex;align-items:center;gap:22px;padding:28px;background:linear-gradient(135deg,#f8fbff 0%,#fff 58%,#f4f8ff 100%);border-bottom:1px solid var(--line)}
-.ft-profile-avatar-wrap{flex:0 0 auto}
-.ft-profile-avatar{width:96px!important;height:96px!important;box-shadow:0 0 0 5px #fff,0 8px 24px rgba(31,71,128,.13)}
-.ft-profile-avatar-preview{display:block}
-.ft-profile-identity-copy{min-width:0;flex:1}
-.ft-profile-eyebrow{margin-bottom:4px;color:#718096;font-size:11px;font-weight:750;letter-spacing:.07em;text-transform:uppercase}
-.ft-profile-identity-copy h2{margin:0;color:#12213a;font-size:22px;line-height:1.25}
-.ft-profile-meta-line{display:flex;align-items:center;flex-wrap:wrap;gap:0;margin-top:6px;color:var(--muted);font-size:12px}
-.ft-profile-meta-line span{display:inline-flex;align-items:center}
-.ft-profile-meta-line span+span:before{content:"";width:3px;height:3px;margin:0 8px;border-radius:50%;background:#a4b0c1}
-.ft-profile-photo-actions{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:15px}
-.ft-profile-upload-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-height:36px;border:1px solid #cbd8eb;border-radius:8px;background:#fff;color:#2457a7;padding:8px 11px;font-size:12px;font-weight:700;cursor:pointer;transition:.15s}
-.ft-profile-upload-button:hover{border-color:#9fb9e7;background:#f7faff;color:#164ca4}
-.ft-profile-upload-button input{display:none!important}
-.ft-profile-upload-button svg,.ft-profile-save-button svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.9}
-.ft-profile-photo-save{min-height:36px;padding:8px 12px;font-size:12px}
-.ft-profile-photo-remove{min-height:36px;border:0;background:transparent;color:#78879b;padding:7px 8px;font-size:12px;font-weight:650}
-.ft-profile-photo-remove:hover{color:var(--red);text-decoration:underline;text-underline-offset:3px}
-.ft-profile-photo-help{margin-top:7px;color:var(--muted);font-size:11px}
-.ft-profile-inline-error{margin-top:7px}
-.ft-profile-section{padding:25px 28px;border-bottom:1px solid var(--line)}
-.ft-profile-section-heading,.ft-profile-side-heading{display:flex;align-items:flex-start;gap:11px;margin-bottom:20px}
-.ft-profile-section-icon{width:34px;height:34px;flex:0 0 34px;display:grid;place-items:center;border-radius:9px;background:var(--blue2);color:var(--blue)}
-.ft-profile-section-icon svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:1.8}
-.ft-profile-section-heading h3,.ft-profile-side-heading h3{margin:0 0 3px;color:#15233a;font-size:15px}
-.ft-profile-section-heading p,.ft-profile-side-heading p{margin:0;color:var(--muted);font-size:11px;line-height:1.45}
-.ft-profile-form-grid{display:grid;grid-template-columns:1fr 1fr;gap:0 14px}
-.ft-profile-form-grid .field{margin-bottom:16px}
-.ft-profile-form-grid .field label,.ft-profile-side-card .field label{color:#33435a;font-size:12px}
-.ft-profile-form-grid .field input,.ft-profile-form-grid .field select,.ft-profile-side-card .field input{min-height:43px;border-color:#d9e2ed;background:#fff}
-.ft-profile-language-field{max-width:340px}
-.ft-profile-company-section{background:#fbfcfe}
-.ft-profile-company-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
-.ft-profile-company-item{min-width:0;padding:13px 14px;border:1px solid #e2e8f0;border-radius:10px;background:#fff}
-.ft-profile-company-item span,.ft-profile-company-item strong{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-profile-company-item span{margin-bottom:4px;color:#7a889b;font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.045em}
-.ft-profile-company-item strong{color:#243650;font-size:12px;font-weight:700}
-.ft-profile-main-footer{display:flex;align-items:center;justify-content:space-between;gap:16px;padding:18px 28px 20px;background:#fff}
-.ft-profile-save-note{color:#7a899c;font-size:11px;line-height:1.4}
-.ft-profile-save-button{display:inline-flex;align-items:center;justify-content:center;gap:7px;min-width:132px;min-height:39px;box-shadow:0 5px 12px rgba(37,99,235,.16)}
-.ft-profile-side-column{display:flex;min-width:0;flex-direction:column;gap:14px}
-.ft-profile-side-card{padding:20px}
-.ft-profile-side-card .field{margin-bottom:14px}
-.ft-profile-side-heading{margin-bottom:18px}
-.ft-profile-password-button{min-height:38px;padding:9px 13px}
-.ft-profile-notifications-card{padding-bottom:8px}
-.ft-profile-notification-list{margin:0 -4px}
-.ft-profile-notification-row{position:relative;display:grid;grid-template-columns:20px minmax(0,1fr);gap:10px;align-items:center;padding:11px 5px;border-top:1px solid #e7ecf2;cursor:pointer}
-.ft-profile-notification-row:first-child{border-top:0}
-.ft-profile-notification-row input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
-.ft-profile-notification-check{width:18px;height:18px;display:grid;place-items:center;border:1.5px solid #bdc9d8;border-radius:5px;background:#fff;transition:.15s}
-.ft-profile-notification-row input:checked+.ft-profile-notification-check{border-color:var(--blue);background:var(--blue)}
-.ft-profile-notification-row input:checked+.ft-profile-notification-check:after{content:"";width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:translateY(-1px) rotate(-45deg)}
-.ft-profile-notification-row:focus-within .ft-profile-notification-check{box-shadow:0 0 0 3px rgba(37,99,235,.12)}
-.ft-profile-notification-copy{display:flex;min-width:0;flex-direction:column;gap:2px}
-.ft-profile-notification-copy strong{color:#263750;font-size:12px;font-weight:650}
-.ft-profile-notification-copy small{color:#7a899c;font-size:10px;line-height:1.35}
-.ft-profile-signout-card{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:16px 18px;background:#fff}
-.ft-profile-signout-card>div{display:flex;min-width:0;flex-direction:column;gap:3px}
-.ft-profile-signout-card strong{color:#27384f;font-size:12px}
-.ft-profile-signout-card span{color:#7a899c;font-size:10px}
-.ft-profile-signout-card form{margin:0;flex:0 0 auto}
-.ft-profile-signout-button{white-space:nowrap;padding:8px 11px;font-size:11px}
-.ft-profile-main-card button:disabled,.ft-profile-side-card button:disabled{cursor:not-allowed;opacity:.65}
-
-@media(max-width:1180px){
-    .ft-profile-layout{grid-template-columns:minmax(0,1fr) 350px}
-    .ft-profile-company-grid{grid-template-columns:1fr 1fr}
-    .ft-profile-company-item:last-child{grid-column:1/-1}
-}
-@media(max-width:980px){
-    .ft-profile-layout{grid-template-columns:1fr}
-    .ft-profile-side-column{display:grid;grid-template-columns:1fr 1fr;align-items:start}
-    .ft-profile-signout-card{grid-column:1/-1}
-}
-@media(max-width:700px){
-    .ft-profile-hero{align-items:flex-start;padding:22px}
-    .ft-profile-avatar{width:78px!important;height:78px!important}
-    .ft-profile-section{padding:22px}
-    .ft-profile-main-footer{padding:17px 22px}
-    .ft-profile-form-grid{grid-template-columns:1fr}
-    .ft-profile-language-field{max-width:none}
-    .ft-profile-company-grid{grid-template-columns:1fr}
-    .ft-profile-company-item:last-child{grid-column:auto}
-    .ft-profile-side-column{display:flex}
-}
-@media(max-width:520px){
-    .ft-profile-hero{flex-direction:column;gap:17px}
-    .ft-profile-avatar{width:82px!important;height:82px!important}
-    .ft-profile-photo-actions{align-items:stretch}
-    .ft-profile-upload-button,.ft-profile-photo-save{flex:1}
-    .ft-profile-photo-remove{flex:0 0 100%;text-align:left;padding-left:0}
-    .ft-profile-section,.ft-profile-side-card{padding:18px}
-    .ft-profile-section-heading,.ft-profile-side-heading{margin-bottom:17px}
-    .ft-profile-main-footer{align-items:stretch;flex-direction:column;padding:16px 18px 18px}
-    .ft-profile-save-button{width:100%}
-    .ft-profile-signout-card{align-items:flex-start;flex-direction:column}
-    .ft-profile-signout-button{width:100%}
-    .ft-profile-signout-card form{width:100%}
-}
-
-/* --------------------------------------------------------------------------
-   Workspace branding + profile editing usability
-   -------------------------------------------------------------------------- */
-.ft-system-brand{text-decoration:none;min-height:40px;display:flex;align-items:center;overflow:hidden}
-.ft-system-brand:hover{color:#fff}
-.ft-system-logo{display:block;max-width:168px;max-height:38px;width:auto;height:auto;object-fit:contain;object-position:left center}
-
-.ft-branding-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:16px;align-items:start}
-.ft-branding-card{padding:22px;min-width:0}
-.ft-branding-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin-bottom:18px}
-.ft-branding-card-head h3{margin:3px 0 5px;font-size:18px;color:#17243a}
-.ft-branding-card-head p{margin:0;color:#687a91;font-size:11px;line-height:1.55;max-width:520px}
-.ft-branding-kicker{display:block;color:#6b7e96;font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.09em}
-.ft-branding-access-badge{flex:0 0 auto;border:1px solid #cddcf1;border-radius:999px;background:#f2f7ff;color:#315f9f;padding:5px 8px;font-size:9px;font-weight:750}
-.ft-branding-preview{display:flex;align-items:center;justify-content:center;min-height:150px;margin-bottom:16px;border:1px dashed #cbd8e8;border-radius:12px;background:linear-gradient(145deg,#f8fbff,#f2f6fb);overflow:hidden}
-.ft-branding-logo-preview img{display:block;max-width:78%;max-height:88px;width:auto;height:auto;object-fit:contain}
-.ft-branding-fallback{display:flex;align-items:center;gap:12px;color:#18283f;font-size:18px}
-.ft-branding-fallback span{width:48px;height:48px;border-radius:13px;background:#fff;color:#2563eb;display:grid;place-items:center;font-weight:850;box-shadow:0 4px 14px rgba(31,59,95,.08)}
-.ft-branding-favicon-preview{justify-content:flex-start;gap:14px;padding:20px 24px}
-.ft-branding-favicon-preview img,.ft-branding-favicon-fallback{width:56px;height:56px;flex:0 0 56px;border-radius:12px;object-fit:contain;background:#fff;border:1px solid #dce5f0;padding:7px}
-.ft-branding-favicon-fallback{display:grid;place-items:center;color:#2563eb;font-weight:850;font-size:17px}
-.ft-branding-favicon-preview>div:not(.ft-branding-favicon-fallback){display:flex;flex-direction:column;gap:4px;min-width:0}
-.ft-branding-favicon-preview b{font-size:12px;color:#263750}
-.ft-branding-favicon-preview span{font-size:10px;color:#73849a}
-.ft-branding-upload-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.ft-branding-file-button{display:inline-flex;align-items:center;justify-content:center;min-height:38px;padding:9px 13px;border:1px solid #cbd8eb;border-radius:8px;background:#fff;color:#2457a7;font-size:11px;font-weight:750;cursor:pointer}
-.ft-branding-file-button:hover{background:#f7faff;border-color:#9eb9e5}
-.ft-branding-file-button input{display:none!important}
-.ft-branding-upload-row .primary,.ft-branding-upload-row .danger-btn{min-height:38px;padding:9px 13px;font-size:11px}
-.ft-branding-help{margin-top:13px;padding:10px 12px;border-radius:8px;background:#f7f9fc;color:#6b7d93;font-size:10px;line-height:1.5}
-.ft-branding-note{margin-top:14px}
-.ft-branding-note code{font-size:10px}
-
-.ft-profile-main-column{min-width:0}
-.ft-profile-edit-layout{align-items:start}
-.ft-profile-edit-hero{min-height:188px}
-.ft-profile-edit-section{border-bottom:0}
-.ft-profile-field-help{display:block;margin-top:-2px;color:#7b899b;font-size:10px;line-height:1.4}
-.ft-profile-save-copy{display:flex;min-width:0;flex-direction:column;gap:3px}
-.ft-profile-save-copy strong{color:#2a3b52;font-size:11px}
-.ft-profile-save-copy span{color:#7a899c;font-size:10px;line-height:1.4}
-.ft-profile-company-card{padding-bottom:16px}
-.ft-profile-company-heading{margin-bottom:14px}
-.ft-profile-company-grid-side{grid-template-columns:1fr;gap:8px}
-.ft-profile-company-grid-side .ft-profile-company-item{padding:11px 12px}
-.ft-profile-admin-link,.ft-profile-notification-link{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:13px;padding-top:12px;border-top:1px solid #e5ebf2;color:#1265ef;text-decoration:none;font-size:10.5px;font-weight:750}
-.ft-profile-admin-link:hover,.ft-profile-notification-link:hover{text-decoration:underline;text-underline-offset:3px}
-.ft-profile-notification-summary .ft-profile-notification-row{cursor:default}
-.ft-profile-notification-row.is-summary{grid-template-columns:20px minmax(0,1fr)}
-.ft-profile-notification-check.is-on{border-color:var(--blue);background:var(--blue)}
-.ft-profile-notification-check.is-on:after{content:"";width:8px;height:4px;border-left:2px solid #fff;border-bottom:2px solid #fff;transform:translateY(-1px) rotate(-45deg)}
-
-@media(max-width:1100px){.ft-branding-grid{grid-template-columns:1fr}.ft-system-logo{max-width:154px}}
-@media(max-width:700px){.ft-branding-card{padding:17px}.ft-branding-card-head{flex-direction:column;gap:9px}.ft-branding-preview{min-height:125px}.ft-branding-upload-row{align-items:stretch;flex-direction:column}.ft-branding-file-button,.ft-branding-upload-row .primary,.ft-branding-upload-row .danger-btn{width:100%}.ft-profile-save-copy{display:none}}
-
-/* Job overview description inline editor: use the full available card width. */
-.ft-overview-card .ft-editable-description{display:block;width:100%;min-width:0}
-.ft-overview-card .ft-editable-description .ft-inline-description-editor{width:100%;max-width:none;min-width:0}
-.ft-overview-card .ft-editable-description .ft-inline-description-editor textarea{display:block;width:100%;max-width:none;min-height:110px;box-sizing:border-box}
-
-
-/* Shared list-filter final sizing (2026-08-07). */
-.ft-list-filter-grid { grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)) !important; align-items: end; }
-.ft-jl-control-search { grid-column: auto !important; }
-.ft-remote-filter-menu { left: 0 !important; right: auto !important; width: 100% !important; min-width: 100% !important; max-width: 100% !important; }
-.ft-remote-filter-option > span:first-child { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.ft-list-filter-actions { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.ft-list-filter-actions .ft-board-group-controls { margin-left: 0; }
-@media (max-width: 720px) { .ft-list-filter-grid { grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)) !important; } }
-@media (max-width: 480px) { .ft-list-filter-grid { grid-template-columns: 1fr !important; } .ft-remote-filter-menu { width: 100% !important; min-width: 100% !important; max-width: 100% !important; } }
-
-/* Remote-filter overflow hardening: trigger-width menu, vertical scroll only. */
-.ft-remote-filter-menu{
-  left:0!important;
-  right:auto!important;
-  width:100%!important;
-  min-width:0!important;
-  max-width:100%!important;
-  box-sizing:border-box;
-  display:flex;
-  flex-direction:column;
-  max-height:min(230px,40vh);
-  overflow:hidden;
-}
-.ft-remote-filter-search{flex:0 0 auto;width:100%;min-width:0;max-width:100%;box-sizing:border-box}
-.ft-remote-filter-list{flex:1 1 auto;min-width:0;min-height:0;max-width:100%;max-height:none;overflow-y:auto;overflow-x:hidden;scrollbar-gutter:stable}
-.ft-remote-filter-option{width:100%;min-width:0;max-width:100%;box-sizing:border-box;overflow:hidden}
-.ft-remote-filter-option>span:first-child{flex:1 1 0%;min-width:0;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-remote-filter-option>small{flex:0 1 42%;min-width:0;max-width:42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-remote-filter-message{flex:0 0 auto;min-width:0;max-width:100%;overflow-wrap:anywhere}
-
-
-/* Shared list-filter action placement: do not let legacy board rules absolutely position
-   expand/collapse buttons over the page-header action. */
-.ft-list-active-row .ft-list-filter-actions .ft-board-group-controls{position:static!important;display:inline-flex!important;align-items:center!important;gap:7px!important;width:auto!important;margin:0!important;grid-column:auto!important;flex:0 0 auto!important}
-.ft-list-active-row .ft-list-filter-actions .ft-board-group-controls .ft-filter-collapse{position:static!important;inset:auto!important;top:auto!important;right:auto!important;bottom:auto!important;left:auto!important;margin:0!important;transform:none!important}
-
-/* 2026-08-07: Job Overview searchable assignee popover must not be clipped by
-   the phase/task table's rounded overflow container. */
-.ft-exact-job-detail .ft-overview-task-card,
-.ft-exact-job-detail .ft-overview-task-card .ft-phase-task-table{
-    overflow:visible!important;
-}
-.ft-exact-job-detail .ft-overview-task-card .ft-task-inline-assignee-picker,
-.ft-exact-job-detail .ft-overview-task-card .ft-inline-remote-user{
-    position:relative;
-    z-index:1240;
-}
-.ft-exact-job-detail .ft-overview-task-card .ft-inline-remote-user-menu{
-    z-index:1300!important;
-}
-
-/* Job Details catalog inline editing uses the shared searchable remote menu.
-   Keep the closed/editing controls at the exact table typography and dimensions
-   already used by the native inline fields; only the option-loading technique changes. */
-.ft-inline-catalog-editor{position:relative;overflow:visible;width:100%}
-.ft-inline-catalog-picker{position:relative;width:100%;min-width:0;overflow:visible}
-.ft-inline-remote-catalog{position:relative;width:100%;min-width:0;font:inherit;overflow:visible}
-.ft-inline-remote-catalog-trigger{box-sizing:border-box;display:flex!important;align-items:center;justify-content:space-between;gap:6px;min-width:135px;max-width:100%;height:32px;text-align:left;cursor:pointer;font:inherit;font-weight:600}
-.ft-inline-remote-catalog-trigger>span:first-child{flex:1 1 auto;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ft-inline-remote-catalog-trigger .ft-filter-chevron{flex:0 0 auto}
-.ft-inline-remote-catalog.is-disabled .ft-inline-remote-catalog-trigger{cursor:not-allowed;color:#708096}
-.ft-inline-remote-catalog-menu{z-index:1350!important}
-.ft-inline-product-table,.ft-inline-product-table tbody,.ft-inline-product-table tr,.ft-inline-product-table td{overflow:visible}
-.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-search,
-.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-option{font-size:11px}
-.ft-inline-product-table .ft-inline-remote-catalog .ft-remote-filter-message{font-size:10px}
-.ft-inline-product-draft-row .ft-inline-cell-input{border-color:#a9c4f7;background:#fff}
-.ft-inline-product-quantity-wrap{display:flex;align-items:center;justify-content:flex-end;gap:7px;min-width:0;width:100%}
-.ft-inline-product-quantity-wrap>.ft-inline-field-editor{flex:0 1 110px;min-width:0;margin-left:auto}
-.ft-inline-product-delete{flex:0 0 26px;width:26px;height:26px;border:1px solid transparent;border-radius:6px;background:transparent;color:#7c8ca3;font:inherit;font-size:16px;line-height:1;display:inline-flex;align-items:center;justify-content:center;cursor:pointer}
-.ft-inline-product-delete:hover,.ft-inline-product-delete:focus-visible{border-color:#f2b8b8;background:#fff6f6;color:#b42318;outline:0}
-.ft-inline-product-delete:disabled{opacity:.45;cursor:not-allowed}
-.ft-add-product-inline:disabled{opacity:.55;cursor:wait}
-.ft-inline-product-table th:last-child,.ft-inline-product-table td:last-child{text-align:right}
-.ft-inline-product-table .ft-inline-cell-input.quantity{text-align:right}
-
-
-
-
-/* 2026-08-07 Job Overview cleanup: compact phase controls, task actions and read-only saved products. */
-.ft-overview-task-card{overflow:visible}
-.ft-phase-toolbar-icons{gap:7px!important;flex-wrap:nowrap!important}
-.ft-phase-toolbar-icon{
-    width:32px;height:32px;min-width:32px;padding:0;
-    display:inline-grid;place-items:center;border:1px solid #d7e1ee;border-radius:6px;
-    background:#fff;color:#17304e;cursor:pointer;
-}
-.ft-phase-toolbar-icon:hover{border-color:#9bb8eb;background:#f6f9fe;color:#0f63f3}
-.ft-phase-toolbar-icon svg{width:16px;height:16px;fill:none;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
-.ft-overview-task-card .ft-phase-group-head{grid-template-columns:20px minmax(220px,1fr) auto 80px}
-.ft-inline-task-link{font-size:inherit;font-weight:400;color:inherit;line-height:inherit}
-.ft-task-action-wrap{position:relative;display:flex;justify-content:center;align-items:center;min-width:0}
-.ft-task-action-menu{
-    position:absolute;right:0;top:30px;width:126px;padding:5px;z-index:120;
-    border:1px solid #dce5ef;border-radius:9px;background:#fff;
-    box-shadow:0 14px 32px rgba(15,35,65,.16)
-}
-.ft-task-action-menu button{width:100%;border:0;background:#fff;border-radius:6px;text-align:left;padding:8px 9px;font-size:10px;color:#1a2c45;font-weight:650}
-.ft-task-action-menu button:hover{background:#f3f7fc}
-.ft-task-action-menu button.danger{color:#c7352c}
-.ft-task-action-menu button.danger:hover{background:#fff1ef}
-.ft-readonly-product-value{display:inline-flex;align-items:center;justify-content:flex-end;min-height:30px;margin-left:auto;color:#10233e;font:inherit;text-align:right}
-.ft-job-overview-dropzone{margin-top:8px}
-.ft-job-overview-dropzone .ft-task-upload-drop{min-height:58px}
-
-@media(max-width:760px){
-    .ft-phase-toolbar-icons{display:flex!important;width:auto!important}
-    .ft-overview-task-card .ft-phase-group-head{grid-template-columns:20px minmax(120px,1fr) auto 55px!important}
-}
-@media(max-width:520px){
-    .ft-overview-task-card .ft-phase-group-head{grid-template-columns:20px minmax(100px,1fr)!important}
-    .ft-overview-task-card .ft-phase-group-head small,.ft-overview-task-card .ft-phase-group-head em{display:none}
-}
-
-/* 2026-08-07 Job Overview product row alignment correction. */
-.ft-inline-product-table .ft-product-delete-column,
-.ft-inline-product-table .ft-product-delete-cell{
-    width:42px;
-    min-width:42px;
-    text-align:right;
-    padding-left:4px;
-    padding-right:8px;
-}
-.ft-inline-product-table .ft-product-quantity-cell{
-    text-align:left;
-}
-.ft-inline-product-table .ft-product-quantity-cell .ft-readonly-product-value{
-    justify-content:flex-start;
-    margin-left:0;
-    text-align:left;
-}
-.ft-inline-product-table .ft-inline-product-quantity-editor{
-    width:110px;
-    max-width:110px;
-    margin-left:0;
-}
-.ft-inline-product-table .ft-product-quantity-cell .ft-inline-cell-input.quantity{
-    text-align:left;
-}
-.ft-inline-product-table .ft-product-delete-cell .ft-inline-product-delete{
-    margin-left:auto;
-}
-
-/* Task detail reference refinements: compact identity, completion time, flags and workspace-local timestamps. */
-.ft-task-title-line{display:flex;align-items:baseline;gap:9px;min-width:0;flex-wrap:wrap}
-.ft-task-title-line .ft-editable-task-title{margin:0}
-.ft-task-title-phase{color:#60728b;font-size:12px;font-weight:700;white-space:nowrap}
-.ft-friendly-task-properties{grid-template-columns:repeat(7,minmax(0,1fr))}
-.ft-task-completed-property .ft-property-value{font-size:11px;line-height:1.25}
-.ft-task-completed-property .ft-completed-date-time{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
-.ft-task-completed-property .ft-completed-time{display:block;color:#60728b;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}
-.ft-task-flag-row{grid-template-columns:135px minmax(0,1fr)!important;align-items:center}
-.ft-task-flag-select{width:100%;min-width:0;height:34px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;padding:0 30px 0 9px;color:#172b47;font:inherit;font-weight:750;outline:0}
-.ft-task-flag-select:focus{border-color:#78a0f2;box-shadow:0 0 0 2px rgba(36,99,235,.08)}
-.ft-task-flag-select.is-flagged{color:#b42318;background:#fff8f7}
-.ft-task-flag-help{display:block;margin-top:7px;color:#6b7d94;font-size:10px;line-height:1.4}
-.ft-job-context-card .ft-open-job{display:flex;justify-content:flex-start;padding-left:0;margin-left:0;text-align:left}
-.ft-workspace-settings-card{max-width:900px}
-.ft-workspace-setting-row{display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,360px) auto;align-items:center;gap:14px;padding:16px 0}
-.ft-workspace-setting-row>div b,.ft-workspace-setting-row>div span{display:block}
-.ft-workspace-setting-row>div span{margin-top:4px;color:#65778f;font-size:11px;line-height:1.45}
-.ft-workspace-setting-row select{height:40px;border:1px solid #d7e1ed;border-radius:8px;background:#fff;padding:0 10px;color:#172b47}
-@media(max-width:1300px){.ft-friendly-task-properties{grid-template-columns:repeat(3,minmax(0,1fr))}.ft-friendly-task-properties .ft-task-property:nth-child(3n){border-right:0}}
-@media(max-width:800px){.ft-friendly-task-properties{grid-template-columns:1fr}.ft-friendly-task-properties .ft-task-property{border-right:0}.ft-workspace-setting-row{grid-template-columns:1fr}.ft-task-title-phase{white-space:normal}}
-
-
-/* 2026-08-07 Task Details inline-edit UX: match the compact Job Details phase-assignee pattern.
-   Editors replace the displayed value inside the property cell instead of opening a nested card/popover. */
-.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:20}
-.ft-exact-task-detail .ft-friendly-task-properties .ft-task-property{overflow:visible!important;z-index:auto}
-.ft-exact-task-detail .ft-friendly-task-properties .ft-task-property:focus-within{z-index:80}
-.ft-exact-task-detail .ft-task-property-inline-editor{
-    display:flex;
-    align-items:center;
-    width:100%;
-    min-width:0;
-    min-height:34px;
-    gap:6px;
-    position:relative;
-    overflow:visible;
-}
-.ft-exact-task-detail .ft-task-property-inline-input{
-    width:100%;
-    min-width:0;
-    max-width:190px;
-    height:31px;
-    box-sizing:border-box;
-    border:1px solid #9fbff5;
-    border-radius:7px;
-    background:#fff;
-    color:#0b1d36;
-    padding:0 8px;
-    outline:0;
-    font:inherit;
-    font-size:10px;
-    font-weight:600;
-    box-shadow:none;
-}
-.ft-exact-task-detail .ft-task-property-inline-input:focus{
-    border-color:#4f8cf7;
-    box-shadow:0 0 0 2px rgba(23,103,232,.08);
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user{width:100%;max-width:190px;position:relative;z-index:90}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-trigger{
-    width:100%;
-    min-width:0;
-    max-width:190px;
-    height:31px;
-    border:1px solid #9fbff5;
-    border-radius:7px;
-    background:#fff;
-    color:#0b1d36;
-    padding:0 8px;
-    font:inherit;
-    font-size:10px;
-    font-weight:600;
-    box-shadow:none;
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-menu{
-    z-index:1500!important;
-    width:300px!important;
-    min-width:260px!important;
-    max-width:min(300px,calc(100vw - 24px))!important;
-    padding:8px!important;
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-search{
-    display:block!important;
-    width:100%!important;
-    min-width:0!important;
-    height:40px!important;
-    min-height:40px!important;
-    margin:0 0 7px!important;
-    font-size:11px!important;
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-list{
-    display:grid!important;
-    grid-template-columns:minmax(0,1fr)!important;
-    gap:2px!important;
-    width:100%!important;
-    min-width:0!important;
-    max-height:220px!important;
-    overflow-y:auto!important;
-    overflow-x:hidden!important;
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-option{
-    display:flex!important;
-    align-items:center!important;
-    justify-content:space-between!important;
-    gap:10px!important;
-    width:100%!important;
-    min-width:0!important;
-    padding:8px 9px!important;
-    font-size:11px!important;
-    text-align:left!important;
-}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-option>span:first-child{flex:1 1 auto!important;min-width:0!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-option>small{display:block!important;flex:0 1 42%!important;min-width:0!important;max-width:42%!important;overflow:hidden!important;text-overflow:ellipsis!important;white-space:nowrap!important;text-align:right!important;font-size:9px!important}
-.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-message{display:block!important;width:100%!important;padding:8px 9px 3px!important;font-size:9px!important;line-height:1.35!important}
-.ft-exact-task-detail .ft-task-property .ft-inline-save-state{position:absolute;right:5px;bottom:3px;margin:0;z-index:5}
-.ft-exact-task-detail .ft-task-property .ft-inline-save-state:empty{display:none}
-@media(max-width:800px){
-    .ft-exact-task-detail .ft-task-property-inline-input,
-    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user,
-    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-trigger{max-width:none}
-    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-menu{width:min(300px,calc(100vw - 24px))!important;min-width:0!important}
-}
-
-/* 2026-08-08 Task Details: keep Completed On as a normal property card in the desktop property row. */
-.ft-exact-task-detail .ft-friendly-task-properties{
-    grid-template-columns:repeat(7,minmax(0,1fr));
-}
-@media(max-width:1300px){
-    .ft-exact-task-detail .ft-friendly-task-properties{
-        grid-template-columns:repeat(3,minmax(0,1fr));
-    }
-}
-@media(max-width:800px){
-    .ft-exact-task-detail .ft-friendly-task-properties{
-        grid-template-columns:1fr;
-    }
-}
-
-/* Automatic per-user local time: settings summary and two-line completion timestamp. */
-.ft-auto-timezone-row{grid-template-columns:minmax(240px,1fr) minmax(260px,360px)}
-.ft-auto-timezone-row .ft-access-info{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:0}
-.ft-auto-timezone-row .ft-access-info span{margin:0}
-@media(max-width:800px){.ft-auto-timezone-row{grid-template-columns:1fr}}
-
-/* 2026-08-08 shared list-filter typography alignment. The standalone
-   flowtrack-list-filters.css is loaded last in the app layout; keep these
-   source styles in sync for the generated Vite bundle as well. */
-.ft-list-filter-shell .ft-jl-control>label{margin-bottom:6px;font-size:13px;line-height:1.3;font-weight:500;letter-spacing:0}
-.ft-list-filter-shell .ft-remote-filter-button{min-height:42px;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.35;font-weight:400}
-.ft-list-filter-shell .ft-filter-chevron{font-size:13px;font-weight:400}
-.ft-list-filter-shell .ft-remote-filter-menu{width:min(320px,calc(100vw - 24px))!important;min-width:min(260px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important;padding:8px!important;border-radius:12px;box-shadow:0 14px 32px rgba(28,45,66,.14)}
-.ft-list-filter-shell .ft-remote-filter-search{min-height:42px;margin:0 0 8px;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.35;font-weight:400}
-.ft-list-filter-shell .ft-remote-filter-list{gap:2px;max-height:245px}
-.ft-list-filter-shell .ft-remote-filter-option{min-height:40px;padding:9px 11px;border-radius:9px;font-size:14px;line-height:1.35;font-weight:400}
-.ft-list-filter-shell .ft-remote-filter-option[aria-selected="true"]{font-weight:400}
-.ft-list-filter-shell .ft-remote-filter-option>small{font-size:12px;line-height:1.3;font-weight:400;text-align:right}
-.ft-list-filter-shell .ft-remote-filter-message{padding:8px 10px 4px;font-size:12px;line-height:1.4;font-weight:400}
-@media(max-width:520px){.ft-list-filter-shell .ft-remote-filter-menu{width:100%!important;min-width:100%!important;max-width:100%!important}}
-
-/* 2026-08-08 My Work list: exact production mapping of the supplied prototype.
-   Measurements, spacing, weights, responsive breakpoints and list proportions mirror the prototype. */
-.ft-mywork-v2-page{width:100%;min-width:0;color:#172033}
-.ft-mywork-v2-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
-.ft-mywork-v2-head h1{margin:0;color:#172033;font-size:23px;line-height:normal;font-weight:700;letter-spacing:-.025em}
-.ft-mywork-v2-head p{margin:4px 0 0;color:#60708b;font-size:10px;line-height:normal;font-weight:400}
-.ft-mywork-v2-all-tasks{display:grid;width:auto;height:28px;min-height:28px;place-items:center;padding:0 10px;border:1px solid #cbd8e8;border-radius:7px;background:#fff;color:#155ce9;font-size:7.5px;line-height:1;font-weight:750;text-decoration:none;white-space:nowrap}
-.ft-mywork-v2-all-tasks:hover{background:#fff}
-.ft-mywork-v2-tabs{display:flex;gap:4px;margin-top:12px;border-bottom:1px solid #dbe3ed}
-.ft-mywork-v2-tab{position:relative;display:inline-flex;min-height:36px;align-items:center;padding:0 11px;color:#69778e;font-size:9px;line-height:normal;font-weight:750}
-.ft-mywork-v2-tab.active{color:#155ce9}
-.ft-mywork-v2-tab.active::after{content:"";position:absolute;right:9px;bottom:-1px;left:9px;height:2px;background:#2463eb}
-.ft-mywork-v2-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-top:12px}
-.ft-mywork-v2-metric{display:flex;min-width:0;min-height:66px;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;border:1px solid #dbe3ed;border-radius:10px;background:#fff;color:#172033;text-align:left;box-shadow:none}
-.ft-mywork-v2-metric:hover,.ft-mywork-v2-metric.active{border-color:#91afea;background:#fbfdff}
-.ft-mywork-v2-metric span{min-width:0}
-.ft-mywork-v2-metric small{display:block;overflow:hidden;color:#718097;font-size:8px;line-height:normal;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
-.ft-mywork-v2-metric strong{display:block;margin-top:3px;color:#172033;font-size:18px;line-height:1;font-weight:700}
-.ft-mywork-v2-metric i{display:grid;width:27px;height:27px;flex:0 0 27px;place-items:center;border-radius:8px;background:#edf3ff;color:#2463eb;font-size:10px;font-style:normal}
-.ft-mywork-v2-metric.red i{background:#fff0f0;color:#c43f3f}.ft-mywork-v2-metric.amber i{background:#fff6e5;color:#9a6208}
-.ft-mywork-v2-toolbar{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px;border:1px solid #dbe3ed;border-radius:11px;background:#fff;box-shadow:none}
-.ft-mywork-v2-search-wrap{position:relative;min-width:240px;flex:1;margin:0}
-.ft-mywork-v2-search-icon{position:absolute;left:11px;top:50%;width:13px;height:13px;fill:none;stroke:#718198;stroke-width:1.8;transform:translateY(-50%);pointer-events:none}
-.ft-mywork-v2-search{width:100%;height:38px;padding:0 62px 0 34px;border:1px solid #ccd8e8;border-radius:9px;background:#fff;color:#172033;outline:0;font-size:9px;line-height:normal;font-weight:400}
-.ft-mywork-v2-search::placeholder{color:#7a8798}
-.ft-mywork-v2-search:focus{border-color:#78a0f2;box-shadow:0 0 0 3px rgba(36,99,235,.08)}
-.ft-mywork-v2-clear{position:absolute;right:7px;top:50%;padding:4px 6px;border:0;background:transparent;color:#65748a;font-size:7.5px;line-height:normal;font-weight:400;transform:translateY(-50%)}
-.ft-mywork-v2-quick-filters{display:flex;gap:5px;min-width:0}
-.ft-mywork-v2-chip{min-height:33px;padding:0 9px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:8px;line-height:normal;font-weight:720;white-space:nowrap}
-.ft-mywork-v2-chip:hover{background:#fff}.ft-mywork-v2-chip.active{border-color:#91afea;background:#edf3ff;color:#245fcf}
-.ft-mywork-v2-sort{height:35px;min-width:150px;padding:0 28px 0 9px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#37445a;font-size:8px;line-height:normal;font-weight:400;outline:0}
-.ft-mywork-v2-sort:focus{border-color:#78a0f2;box-shadow:none}
-.ft-mywork-v2-load-state{display:flex;min-height:28px;align-items:center;justify-content:space-between;gap:8px;padding:0 3px;color:#758298;font-size:7.5px;line-height:normal;font-weight:400}
-.ft-mywork-v2-loading-copy{display:flex;align-items:center;gap:6px;white-space:nowrap}.ft-mywork-v2-loading-active{display:inline-flex;align-items:center;gap:6px}.ft-mywork-v2-spinner{display:inline-block;width:12px;height:12px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:ftMyWorkSpin .6s linear infinite}
-.ft-mywork-v2-list-shell{overflow:hidden;border:1px solid #d8e1ec;border-radius:11px;background:#fff;box-shadow:none}
 .ft-mywork-v2-task-head,.ft-mywork-v2-task-row{display:grid;grid-template-columns:minmax(230px,1.75fr) minmax(115px,.75fr) 92px 124px minmax(95px,.65fr) minmax(92px,.62fr) 48px;align-items:center;gap:8px}
 .ft-mywork-v2-task-head{min-height:32px;padding:0 11px;border-bottom:1px solid #dce3ec;background:#f8fafc;color:#69778e;font-size:7px;line-height:normal;font-weight:780;letter-spacing:.04em;text-transform:uppercase}
 .ft-mywork-v2-results{transition:opacity .15s ease}.ft-mywork-v2-results.is-refreshing{opacity:.68}
@@ -1009,6 +435,1513 @@ a.ft-new-job-btn:active {
 .ft-mention-copy{gap:1px;line-height:1.15}
 .ft-mention-copy strong{font-size:10px;font-weight:700;line-height:1.15}
 .ft-mention-copy small{font-size:8px;font-weight:500;line-height:1.15}
+
+/* ========================================================================== */
+/* 2026-08-09 responsive Orders + Order overview correction                    */
+/* ========================================================================== */
+
+/* Keep the order detail shell shrinkable at every viewport size. */
+.ft-exact-job-detail,
+.ft-exact-job-detail .ft-job-heading-copy,
+.ft-exact-job-detail .ft-exact-overview,
+.ft-exact-job-detail .ft-overview-top-grid,
+.ft-exact-job-detail .ft-detail-card,
+.ft-exact-job-detail .ft-mini-grid-table,
+.ft-exact-job-detail .ft-inline-field-editor,
+.ft-exact-job-detail .ft-planning-value{
+    min-width:0;
+    max-width:100%;
+}
+.ft-exact-job-detail .ft-editable-job-title,
+.ft-exact-job-detail .ft-editable-job-title>span{
+    min-width:0;
+    overflow-wrap:anywhere;
+    word-break:break-word;
+}
+.ft-exact-job-detail .ft-exact-job-meta{display:flex;align-items:center;flex-wrap:wrap}
+.ft-exact-job-detail .ft-inline-product-table{table-layout:fixed}
+.ft-exact-job-detail .ft-inline-product-table th:nth-child(1){width:24%}
+.ft-exact-job-detail .ft-inline-product-table th:nth-child(2){width:auto}
+.ft-exact-job-detail .ft-inline-product-table th:nth-child(3){width:96px}
+.ft-exact-job-detail .ft-inline-product-table th:nth-child(4){width:42px}
+.ft-exact-job-detail .ft-inline-product-table .ft-inline-field-value{
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ft-exact-job-detail .ft-planning-panel{min-height:0}
+.ft-exact-job-detail .ft-planning-panel .ft-side-row>span:first-child{min-width:0;color:#60728a}
+.ft-exact-job-detail .ft-planning-panel .ft-side-row>b{min-width:0;overflow-wrap:anywhere}
+
+@media(max-width:980px){
+    .ft-exact-job-detail .ft-overview-top-grid{gap:10px}
+    .ft-exact-job-detail .ft-overview-card,
+    .ft-exact-job-detail .ft-planning-panel{min-height:0}
+}
+
+@media(max-width:760px){
+    .ft-exact-job-detail .ft-exact-job-header{
+        gap:7px;
+        margin-bottom:9px;
+        align-items:flex-start;
+    }
+    .ft-exact-job-detail .ft-detail-breadcrumb{font-size:11px;margin-bottom:7px;line-height:1.3}
+    .ft-exact-job-detail .ft-exact-job-header h1{
+        width:100%;
+        margin-bottom:9px;
+        font-size:22px;
+        line-height:1.12;
+        letter-spacing:-.025em;
+    }
+    .ft-exact-job-detail .ft-editable-job-title input{width:100%;max-width:100%}
+    .ft-exact-job-detail .ft-exact-job-meta{gap:6px;font-size:11px;line-height:1.2}
+    .ft-exact-job-detail .ft-soft-pill{font-size:10px;padding:5px 8px}
+    .ft-exact-job-detail .ft-exact-tabs{
+        gap:22px;
+        margin-bottom:11px;
+        overflow-x:auto;
+        scrollbar-width:none;
+    }
+    .ft-exact-job-detail .ft-exact-tabs::-webkit-scrollbar{display:none}
+    .ft-exact-job-detail .ft-exact-tabs button{flex:0 0 auto;font-size:12px;padding:10px 0}
+
+    .ft-exact-job-detail .ft-overview-metrics{gap:8px;margin-bottom:9px}
+    .ft-exact-job-detail .ft-overview-metric{
+        min-height:0;
+        padding:11px 12px;
+        gap:10px;
+        align-items:flex-start;
+    }
+    .ft-exact-job-detail .ft-overview-metric .ft-metric-icon{width:34px;height:34px;flex-basis:34px;font-size:13px}
+    .ft-exact-job-detail .ft-overview-metric>div{min-width:0;flex:1}
+    .ft-exact-job-detail .ft-overview-metric small{font-size:10.5px}
+    .ft-exact-job-detail .ft-overview-metric b{font-size:13px;line-height:1.3;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-overview-metric p{font-size:10.5px;line-height:1.35}
+    .ft-exact-job-detail .ft-overview-metric .ft-line-progress{width:min(210px,100%)}
+
+    .ft-exact-job-detail .ft-overview-top-grid{display:grid;grid-template-columns:1fr;gap:9px;margin-bottom:9px}
+    .ft-exact-job-detail .ft-overview-card,
+    .ft-exact-job-detail .ft-planning-panel{padding:12px;border-radius:10px}
+    .ft-exact-job-detail .ft-overview-card h2,
+    .ft-exact-job-detail .ft-planning-panel h2{font-size:15px;margin-bottom:9px}
+    .ft-exact-job-detail .ft-editable-copy{margin:8px 0 10px;padding:9px;font-size:11px;line-height:1.45}
+    .ft-exact-job-detail .ft-card-section-head{align-items:flex-start;gap:6px;flex-wrap:wrap;font-size:10.5px}
+
+    /* Products become compact mobile records instead of a clipped desktop table. */
+    .ft-exact-job-detail .ft-inline-product-table,
+    .ft-exact-job-detail .ft-inline-product-table tbody{
+        display:block;
+        width:100%;
+    }
+    .ft-exact-job-detail .ft-inline-product-table{table-layout:auto}
+    .ft-exact-job-detail .ft-inline-product-table thead{display:none}
+    .ft-exact-job-detail .ft-inline-product-table tbody{display:grid;gap:8px}
+    .ft-exact-job-detail .ft-inline-product-table tr{
+        position:relative;
+        display:grid;
+        grid-template-columns:1fr;
+        gap:0;
+        width:100%;
+        padding:9px 38px 9px 10px;
+        border:1px solid #e0e7f0;
+        border-radius:9px;
+        background:#fbfdff;
+    }
+    .ft-exact-job-detail .ft-inline-product-table td{
+        display:grid;
+        grid-template-columns:82px minmax(0,1fr);
+        align-items:center;
+        gap:8px;
+        width:100%!important;
+        min-width:0!important;
+        padding:5px 0!important;
+        border:0!important;
+        text-align:left!important;
+        font-size:11px;
+    }
+    .ft-exact-job-detail .ft-inline-product-table td::before{
+        content:attr(data-label);
+        min-width:0;
+        color:#6a7c93;
+        font-size:8.5px;
+        font-weight:800;
+        letter-spacing:.035em;
+        text-transform:uppercase;
+    }
+    .ft-exact-job-detail .ft-inline-product-table .ft-inline-field-editor,
+    .ft-exact-job-detail .ft-inline-product-table .ft-inline-product-quantity-wrap{
+        width:100%;
+        min-width:0;
+        justify-content:flex-start;
+    }
+    .ft-exact-job-detail .ft-inline-product-table .ft-inline-cell-input,
+    .ft-exact-job-detail .ft-inline-product-table .ft-inline-remote-catalog-trigger{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+    }
+    .ft-exact-job-detail .ft-inline-product-table .ft-readonly-product-value{margin-left:0;justify-content:flex-start;text-align:left}
+    .ft-exact-job-detail .ft-inline-product-table .ft-product-delete-cell{
+        position:absolute;
+        top:7px;
+        right:7px;
+        display:block;
+        width:28px!important;
+        min-width:28px!important;
+        padding:0!important;
+    }
+    .ft-exact-job-detail .ft-inline-product-table .ft-product-delete-cell::before{display:none}
+    .ft-exact-job-detail .ft-product-actions{padding-top:9px}
+
+    /* Always keep planning labels and their values on screen together. */
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row,
+    .ft-exact-job-detail .ft-inline-planning-row{
+        grid-template-columns:118px minmax(0,1fr)!important;
+        gap:10px!important;
+        min-height:0!important;
+        padding:10px 0!important;
+        font-size:11px!important;
+        align-items:center;
+    }
+    .ft-exact-job-detail .ft-planning-value{
+        width:100%;
+        justify-content:flex-start;
+        text-align:left;
+    }
+    .ft-exact-job-detail .ft-planning-value>span:not(.ft-planning-person){white-space:normal;overflow:visible;text-overflow:clip}
+    .ft-exact-job-detail .ft-planning-person-value{min-width:0;max-width:100%}
+    .ft-exact-job-detail .ft-inline-planning-row select,
+    .ft-exact-job-detail .ft-inline-planning-row input{height:34px}
+
+    .ft-exact-job-detail .ft-overview-workflow-line{
+        gap:0;
+        padding:10px 7px;
+        margin-bottom:9px;
+        overflow-x:auto;
+        overscroll-behavior-x:contain;
+        scrollbar-width:none;
+    }
+    .ft-exact-job-detail .ft-overview-workflow-line::-webkit-scrollbar{display:none}
+    .ft-exact-job-detail .ft-overview-workflow-line button{min-width:72px;flex:1 0 72px}
+    .ft-exact-job-detail .ft-overview-workflow-line small{font-size:9.5px;max-width:76px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+    .ft-exact-job-detail .ft-overview-task-card{border-radius:10px;margin-bottom:9px}
+    .ft-exact-job-detail .ft-task-card-heading{padding:11px 11px 8px}
+    .ft-exact-job-detail .ft-task-card-heading h2{font-size:15px}
+    .ft-exact-job-detail .ft-task-card-heading p{font-size:10.5px}
+    .ft-exact-job-detail .ft-phase-load-note{padding:6px 10px;gap:10px;flex-wrap:wrap;font-size:9.5px;line-height:1.25}
+    .ft-exact-job-detail .ft-editable-task-line{
+        grid-template-columns:32px minmax(0,1fr) 32px!important;
+        gap:7px!important;
+        min-height:0!important;
+        padding:10px!important;
+        align-items:center;
+    }
+    .ft-exact-job-detail .ft-editable-task-line>span:first-child{grid-column:1;grid-row:1;align-self:start;padding-top:3px}
+    .ft-exact-job-detail .ft-editable-task-line>.ft-inline-task-link{grid-column:2;grid-row:1;min-width:0;line-height:1.35;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-editable-task-line>.ft-task-action-wrap{grid-column:3;grid-row:1;align-self:start}
+    .ft-exact-job-detail .ft-editable-task-line>.ft-task-inline-editor:nth-child(3){grid-column:2/4;grid-row:2}
+    .ft-exact-job-detail .ft-editable-task-line>.ft-task-inline-editor:nth-child(4){grid-column:2/4;grid-row:3}
+    .ft-exact-job-detail .ft-editable-task-line>.ft-task-inline-status-shell{grid-column:2/4;grid-row:4;min-width:0}
+    .ft-exact-job-detail .ft-inline-task-status{width:100%;max-width:280px;min-width:0}
+    .ft-exact-job-detail .ft-task-inline-input{width:100%;max-width:280px}
+
+    .ft-exact-job-detail .ft-job-overview-attachments{padding:11px;border-radius:10px}
+    .ft-exact-job-detail .ft-job-file-row{grid-template-columns:30px minmax(0,1fr) auto;gap:7px}
+    .ft-exact-job-detail .ft-job-file-row>button{grid-column:2/4;justify-self:start}
+}
+
+@media(max-width:520px){
+    .ft-exact-job-detail .ft-exact-job-header h1{font-size:21px}
+    .ft-exact-job-detail .ft-overview-metric{padding:10px}
+    .ft-exact-job-detail .ft-overview-card,
+    .ft-exact-job-detail .ft-planning-panel{padding:11px}
+    .ft-exact-job-detail .ft-inline-product-table tr{padding-left:9px;padding-right:36px}
+    .ft-exact-job-detail .ft-inline-product-table td{grid-template-columns:76px minmax(0,1fr);gap:7px}
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row,
+    .ft-exact-job-detail .ft-inline-planning-row{
+        grid-template-columns:108px minmax(0,1fr)!important;
+        gap:8px!important;
+        padding:9px 0!important;
+    }
+    .ft-exact-job-detail .ft-overview-workflow-line button{min-width:66px;flex-basis:66px}
+    .ft-exact-job-detail .ft-overview-workflow-line small{font-size:9px;max-width:68px}
+    .ft-exact-job-detail .ft-phase-toggle{grid-template-columns:20px minmax(0,1fr) 24px!important;gap:7px!important}
+    .ft-exact-job-detail .ft-phase-toggle>b{grid-column:1}
+    .ft-exact-job-detail .ft-phase-toggle>strong{grid-column:2}
+    .ft-exact-job-detail .ft-phase-toggle>i{grid-column:3}
+    .ft-exact-job-detail .ft-phase-toggle>small,
+    .ft-exact-job-detail .ft-phase-toggle>em{display:none!important}
+}
+
+/* ========================================================================== */
+/* 2026-08-09 responsive Order details (Overview / Workflow / Documents)      */
+/* ========================================================================== */
+.ft-exact-job-detail,
+.ft-exact-job-detail .ft-workflow-detail-section,
+.ft-exact-job-detail .ft-documents-detail-section,
+.ft-exact-job-detail .ft-job-overview-section{
+    width:100%;
+    min-width:0;
+    max-width:100%;
+}
+.ft-exact-job-detail .ft-workflow-main-full,
+.ft-exact-job-detail .ft-detail-doc-full,
+.ft-exact-job-detail .ft-detail-doc-full>main,
+.ft-exact-job-detail .ft-job-documents-table,
+.ft-exact-job-detail .ft-doc-table-wrap{
+    min-width:0;
+    max-width:100%;
+}
+.ft-exact-job-detail .ft-warning-banner,
+.ft-exact-job-detail .ft-success-banner{
+    display:flex;
+    align-items:center;
+    gap:10px;
+}
+.ft-exact-job-detail .ft-warning-banner>div,
+.ft-exact-job-detail .ft-success-banner>div{min-width:0;flex:1}
+.ft-exact-job-detail .ft-warning-banner p,
+.ft-exact-job-detail .ft-success-banner p{overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-phase-name{font-weight:800}
+.ft-exact-job-detail .ft-job-document-row td:first-child a{overflow-wrap:anywhere;word-break:break-word}
+.ft-exact-job-detail .ft-doc-task-caption{display:block;margin-top:3px;color:#6b7d94}
+
+@media(max-width:900px){
+    /* Shared detail header: never let title, metadata or tabs widen the page. */
+    .ft-exact-job-detail .ft-exact-job-header{width:100%;min-width:0}
+    .ft-exact-job-detail .ft-job-heading-copy{width:100%;min-width:0}
+    .ft-exact-job-detail .ft-detail-breadcrumb{max-width:100%;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-exact-job-meta{width:100%;gap:7px}
+    .ft-exact-job-detail .ft-exact-tabs{width:100%;max-width:100%;padding-right:2px}
+
+    /* Workflow warning/success banner becomes a readable two-column mobile block. */
+    .ft-exact-job-detail .ft-warning-banner,
+    .ft-exact-job-detail .ft-success-banner{
+        display:grid;
+        grid-template-columns:30px minmax(0,1fr);
+        align-items:start;
+        gap:8px 10px;
+        padding:11px 12px;
+        min-height:0;
+    }
+    .ft-exact-job-detail .ft-warning-banner>span,
+    .ft-exact-job-detail .ft-success-banner>span{grid-column:1;grid-row:1}
+    .ft-exact-job-detail .ft-warning-banner>div,
+    .ft-exact-job-detail .ft-success-banner>div{grid-column:2;grid-row:1;min-width:0}
+    .ft-exact-job-detail .ft-warning-banner button,
+    .ft-exact-job-detail .ft-success-banner button{
+        grid-column:2;
+        justify-self:start;
+        max-width:100%;
+        padding:4px 0;
+        border:0;
+        background:transparent;
+        color:#0f63f3;
+        text-align:left;
+        line-height:1.25;
+        white-space:normal;
+    }
+
+    /* Workflow stepper scrolls intentionally instead of squeezing phase names. */
+    .ft-exact-job-detail .ft-workflow-stepper-card{
+        width:100%;
+        max-width:100%;
+        overflow-x:auto;
+        overflow-y:hidden;
+        overscroll-behavior-x:contain;
+        scrollbar-width:none;
+    }
+    .ft-exact-job-detail .ft-workflow-stepper-card::-webkit-scrollbar{display:none}
+    .ft-exact-job-detail .ft-workflow-stepper{
+        width:max-content;
+        min-width:100%;
+        justify-content:flex-start;
+    }
+    .ft-exact-job-detail .ft-workflow-step{
+        flex:0 0 88px;
+        min-width:88px;
+    }
+    .ft-exact-job-detail .ft-workflow-step small{
+        max-width:84px;
+        margin-inline:auto;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+    }
+
+    /* Current phase heading and progress no longer push the phase badge off-screen. */
+    .ft-exact-job-detail .ft-current-phase-card .ft-card-row-head{
+        flex-direction:column;
+        align-items:stretch;
+        gap:8px;
+    }
+    .ft-exact-job-detail .ft-current-phase-card .ft-card-row-head>div{min-width:0}
+    .ft-exact-job-detail .ft-current-phase-card h2{overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-phase-count-pill{align-self:flex-start;max-width:100%}
+    .ft-exact-job-detail .ft-phase-progress-copy{
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto;
+        gap:6px 10px;
+        width:100%;
+        max-width:100%;
+        margin-top:7px;
+    }
+    .ft-exact-job-detail .ft-phase-progress-copy>span:first-child{grid-column:1/-1}
+    .ft-exact-job-detail .ft-phase-progress-copy .ft-line-progress{grid-column:1;min-width:0;width:100%;margin:0}
+    .ft-exact-job-detail .ft-phase-progress-copy>b{grid-column:2;align-self:center}
+
+    /* Readiness rows become compact cards with predictable wrapping. */
+    .ft-exact-job-detail .ft-readiness-table{
+        display:grid;
+        gap:8px;
+        border:0;
+        overflow:visible;
+    }
+    .ft-exact-job-detail .ft-readiness-table>div{
+        display:grid;
+        grid-template-columns:22px 24px minmax(0,1fr);
+        gap:7px 8px;
+        align-items:center;
+        padding:10px;
+        border:1px solid #e1e8f0;
+        border-radius:9px;
+        background:#fff;
+    }
+    .ft-exact-job-detail .ft-readiness-table>div>span:first-child{grid-column:1;grid-row:1}
+    .ft-exact-job-detail .ft-readiness-table>div>b{grid-column:2;grid-row:1}
+    .ft-exact-job-detail .ft-readiness-table>div>span:nth-of-type(2){grid-column:3;grid-row:1;min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-readiness-table>div>strong{grid-column:2/4;grid-row:2;min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-readiness-table>div>em{grid-column:2/4;grid-row:3;width:100%;max-width:100%;text-align:center}
+    .ft-exact-job-detail .ft-readiness-table>div>button{grid-column:2/4;grid-row:4;justify-self:end;text-align:right;padding:4px 0}
+
+    /* Next phase action block stacks all controls instead of clipping them. */
+    .ft-exact-job-detail .ft-next-phase-box{
+        display:grid;
+        grid-template-columns:32px minmax(0,1fr);
+        gap:9px 10px;
+        align-items:start;
+        padding:11px;
+    }
+    .ft-exact-job-detail .ft-next-phase-box>span{grid-column:1;grid-row:1}
+    .ft-exact-job-detail .ft-next-phase-box>div{grid-column:2;grid-row:1;min-width:0}
+    .ft-exact-job-detail .ft-next-phase-box>div b,
+    .ft-exact-job-detail .ft-next-phase-box>div p{overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-next-phase-box>button,
+    .ft-exact-job-detail .ft-next-phase-box>.ft-permission-note{
+        grid-column:1/-1;
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        justify-self:stretch;
+        white-space:normal;
+        text-align:center;
+    }
+    .ft-exact-job-detail .ft-next-phase-box>.ft-square-action{width:100%!important;min-width:0!important}
+
+    /* Documents top controls. */
+    .ft-exact-job-detail .ft-doc-title-row{align-items:flex-start;gap:8px}
+    .ft-exact-job-detail .ft-doc-title-row h2{font-size:20px}
+    .ft-exact-job-detail .ft-doc-filter-chips{
+        display:grid;
+        grid-template-columns:repeat(3,minmax(0,1fr));
+        gap:7px;
+        overflow:visible;
+    }
+    .ft-exact-job-detail .ft-doc-filter-chips button{
+        width:100%;
+        min-width:0;
+        min-height:38px;
+        border-radius:10px;
+        padding:6px 8px;
+        white-space:normal;
+        line-height:1.2;
+        text-align:center;
+    }
+    .ft-exact-job-detail .ft-upload-panel{padding:12px}
+    .ft-exact-job-detail .ft-document-purpose-field .ft-document-purpose-select{
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+    }
+    .ft-exact-job-detail .ft-task-upload-zone{
+        grid-template-columns:1fr;
+        gap:0;
+        overflow:visible;
+    }
+    .ft-exact-job-detail .ft-task-upload-drop{
+        width:100%;
+        min-width:0;
+        border-radius:8px 8px 0 0;
+    }
+    .ft-exact-job-detail .ft-task-choose-document{
+        width:calc(100% - 20px);
+        min-width:0;
+        max-width:100%;
+        margin:8px 10px 10px;
+        align-self:stretch;
+    }
+    .ft-exact-job-detail .ft-existing-document-picker .ft-card-row-head{
+        flex-direction:column;
+        align-items:stretch;
+    }
+    .ft-exact-job-detail .ft-existing-document-picker select,
+    .ft-exact-job-detail .ft-existing-document-picker .ft-new-job-btn,
+    .ft-exact-job-detail .ft-existing-document-picker .ft-outline-btn{width:100%;max-width:100%}
+
+    /* Overview: keep cards and task controls inside the viewport. */
+    .ft-exact-job-detail .ft-overview-metrics{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-overview-card,
+    .ft-exact-job-detail .ft-planning-panel,
+    .ft-exact-job-detail .ft-overview-task-card,
+    .ft-exact-job-detail .ft-job-overview-attachments{width:100%;min-width:0;max-width:100%}
+    .ft-exact-job-detail .ft-card-section-head{min-width:0}
+    .ft-exact-job-detail .ft-card-section-head>*{min-width:0}
+    .ft-exact-job-detail .ft-card-section-head span{text-align:right;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row>b{min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-phase-task-table{width:100%;max-width:100%;min-width:0}
+    .ft-exact-job-detail .ft-task-inline-assignee-picker,
+    .ft-exact-job-detail .ft-inline-catalog-picker{max-width:100%}
+    .ft-exact-job-detail .ft-job-file-row>div{min-width:0}
+    .ft-exact-job-detail .ft-job-file-row b,
+    .ft-exact-job-detail .ft-job-file-row small{overflow-wrap:anywhere}
+}
+
+@media(max-width:760px){
+    /* Workflow history converts to cards with labels. */
+    .ft-exact-job-detail .ft-history-card{overflow:hidden}
+    .ft-exact-job-detail .ft-history-table,
+    .ft-exact-job-detail .ft-history-table tbody{display:block;width:100%}
+    .ft-exact-job-detail .ft-history-table thead{display:none}
+    .ft-exact-job-detail .ft-history-table tbody{display:grid;gap:8px}
+    .ft-exact-job-detail .ft-history-table tr{
+        display:grid;
+        grid-template-columns:repeat(2,minmax(0,1fr));
+        border:1px solid #e0e7f0;
+        border-radius:9px;
+        overflow:hidden;
+        background:#fff;
+    }
+    .ft-exact-job-detail .ft-history-table td{
+        display:flex;
+        flex-direction:column;
+        gap:4px;
+        min-width:0;
+        padding:9px!important;
+        border:0!important;
+        border-bottom:1px solid #edf1f5!important;
+        overflow-wrap:anywhere;
+    }
+    .ft-exact-job-detail .ft-history-table td::before{
+        content:attr(data-label);
+        color:#74849a;
+        font-size:8px;
+        font-weight:800;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+    }
+    .ft-exact-job-detail .ft-history-table td:nth-last-child(-n+2){border-bottom:0!important}
+
+    /* Documents table: phase headers, requirements and documents are true mobile cards. */
+    .ft-exact-job-detail .ft-job-documents-table{padding:11px}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-table-wrap{overflow:visible!important;padding:0!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-table{display:block!important;width:100%!important;min-width:0!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-table thead{display:none!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-table tbody{display:grid!important;gap:9px!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-table tr{width:100%;min-width:0}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row{
+        display:block!important;
+        border:1px solid #dce5f0!important;
+        border-radius:9px!important;
+        overflow:hidden!important;
+        background:#f8fbff!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td{
+        display:grid!important;
+        grid-template-columns:18px 24px minmax(0,1fr) auto;
+        gap:4px 7px;
+        align-items:center;
+        width:100%!important;
+        padding:9px!important;
+        border:0!important;
+        background:#f8fbff!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td::before{display:none!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td>span{grid-column:1;grid-row:1}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td>b{grid-column:2;grid-row:1;margin:0!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-name{grid-column:3;grid-row:1;min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td>em{grid-column:4;grid-row:1;float:none!important;justify-self:end}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-phase-row td>small{
+        grid-column:3/5;
+        grid-row:2;
+        margin:0!important;
+        white-space:normal;
+        overflow-wrap:anywhere;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row{
+        display:block!important;
+        border:1px solid #ead9b9!important;
+        border-radius:9px!important;
+        overflow:hidden!important;
+        background:#fff!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row>td{
+        display:block!important;
+        width:100%!important;
+        padding:0!important;
+        border:0!important;
+        background:#fff!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row>td::before{display:none!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row td>div:first-child{
+        display:flex!important;
+        justify-content:space-between;
+        gap:8px;
+        padding:9px 10px!important;
+        background:#edf4fb!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row td>div:first-child>*{min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-job-documents-table .ft-inline-requirement{
+        display:grid!important;
+        grid-template-columns:20px minmax(0,1fr);
+        gap:7px 9px;
+        width:100%;
+        padding:10px;
+        border:0;
+        border-top:1px solid #f1dfbc;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-inline-requirement>span:first-child{grid-column:1;grid-row:1}
+    .ft-exact-job-detail .ft-job-documents-table .ft-inline-requirement>div{grid-column:2;grid-row:1;min-width:0}
+    .ft-exact-job-detail .ft-job-documents-table .ft-inline-requirement>.ft-soft-pill{grid-column:2;grid-row:2;justify-self:start}
+    .ft-exact-job-detail .ft-job-documents-table .ft-inline-requirement>.ft-outline-btn{
+        grid-column:2;
+        grid-row:3;
+        width:100%;
+        max-width:180px;
+        justify-self:start;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row{
+        display:grid!important;
+        grid-template-columns:repeat(2,minmax(0,1fr))!important;
+        border:1px solid #dfe6ef!important;
+        border-radius:9px!important;
+        overflow:hidden!important;
+        background:#fff!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td{
+        display:flex!important;
+        flex-direction:column;
+        align-items:flex-start;
+        gap:4px;
+        min-width:0;
+        width:100%!important;
+        padding:9px!important;
+        border:0!important;
+        border-bottom:1px solid #edf1f5!important;
+        background:#fff!important;
+        overflow-wrap:anywhere;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td::before{
+        display:block!important;
+        content:attr(data-label)!important;
+        color:#74849a;
+        font-size:8px;
+        font-weight:800;
+        letter-spacing:.04em;
+        text-transform:uppercase;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Document"],
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Actions"]{grid-column:1/-1}
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Actions"]{
+        flex-direction:row;
+        align-items:center;
+        justify-content:flex-end;
+        border-bottom:0!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Actions"]::before{margin-right:auto}
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-empty-mobile-row{
+        display:block!important;
+        border:1px dashed #dce5ef!important;
+        border-radius:9px!important;
+        overflow:hidden!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-empty-mobile-row td{
+        display:block!important;
+        width:100%!important;
+        padding:12px!important;
+        border:0!important;
+    }
+    .ft-exact-job-detail .ft-job-documents-table .ft-doc-empty-mobile-row td::before{display:none!important}
+
+    /* Overview cards: readable one-column details at phone/tablet widths. */
+    .ft-exact-job-detail .ft-card-section-head{flex-direction:column;align-items:flex-start}
+    .ft-exact-job-detail .ft-card-section-head span{text-align:left}
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row,
+    .ft-exact-job-detail .ft-inline-planning-row{
+        grid-template-columns:110px minmax(0,1fr)!important;
+    }
+    .ft-exact-job-detail .ft-task-card-heading{align-items:flex-start;gap:8px}
+    .ft-exact-job-detail .ft-phase-toolbar-icons{flex:0 0 auto}
+    .ft-exact-job-detail .ft-job-overview-dropzone{grid-template-columns:1fr!important}
+    .ft-exact-job-detail .ft-job-overview-dropzone .ft-task-choose-document{margin:8px 10px 10px!important}
+}
+
+@media(max-width:520px){
+    .ft-exact-job-detail .ft-detail-breadcrumb{font-size:10px}
+    .ft-exact-job-detail .ft-exact-tabs{gap:18px}
+    .ft-exact-job-detail .ft-exact-tabs button{font-size:11px}
+    .ft-exact-job-detail .ft-doc-filter-chips{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .ft-exact-job-detail .ft-doc-filter-chips button:last-child{grid-column:1/-1}
+    .ft-exact-job-detail .ft-task-upload-drop{grid-template-columns:28px minmax(0,1fr);gap:8px;padding:10px}
+    .ft-exact-job-detail .ft-task-upload-drop>div{min-width:0;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-task-upload-drop small{white-space:normal;overflow-wrap:anywhere}
+    .ft-exact-job-detail .ft-history-table tr{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-history-table td:nth-last-child(-n+2){border-bottom:1px solid #edf1f5!important}
+    .ft-exact-job-detail .ft-history-table td:last-child{border-bottom:0!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row{grid-template-columns:1fr!important}
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Document"],
+    .ft-exact-job-detail .ft-job-documents-table .ft-job-document-row td[data-label="Actions"]{grid-column:auto}
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row,
+    .ft-exact-job-detail .ft-inline-planning-row{
+        grid-template-columns:1fr!important;
+        gap:5px!important;
+        align-items:start!important;
+    }
+    .ft-exact-job-detail .ft-planning-panel .ft-side-row>span:first-child{font-size:9px;font-weight:800;text-transform:uppercase;letter-spacing:.03em}
+    .ft-exact-job-detail .ft-planning-value{min-height:28px}
+    .ft-exact-job-detail .ft-next-phase-box>button{min-height:36px;height:auto;padding:7px 10px}
+    .ft-exact-job-detail .ft-readiness-table>div>button{justify-self:stretch;width:100%;text-align:center;border:1px solid #d8e2ee;border-radius:7px}
+    .ft-exact-job-detail .ft-job-file-row{
+        grid-template-columns:30px minmax(0,1fr)!important;
+        gap:7px!important;
+    }
+    .ft-exact-job-detail .ft-job-file-row>a,
+    .ft-exact-job-detail .ft-job-file-row>button{grid-column:2;justify-self:start}
+}
+
+/* Final narrow-screen safeguards for detail navigation and document requirement cards. */
+.ft-exact-job-detail .ft-exact-tabs button:focus:not(:focus-visible){outline:none}
+.ft-exact-job-detail .ft-exact-tabs button:focus-visible{outline:2px solid #2463eb;outline-offset:3px;border-radius:4px}
+
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-next-phase-box>.ft-permission-note{grid-row:auto!important}
+    .ft-exact-job-detail .ft-upload-ready-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{max-width:100%}
+}
+
+@media(max-width:520px){
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row td>div:first-child{
+        display:grid!important;
+        grid-template-columns:1fr;
+        gap:4px;
+    }
+    .ft-exact-job-detail .ft-upload-ready-row{align-items:stretch;flex-direction:column}
+    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{width:100%}
+}
+
+/* Order details documents: clearer hierarchy, compact phase groups, and mobile-first actions. */
+.ft-exact-job-detail .ft-doc-ux-title{
+    margin-bottom:12px;
+    align-items:center;
+}
+.ft-exact-job-detail .ft-doc-ux-title h2{font-size:24px}
+.ft-exact-job-detail .ft-doc-ux-title p{font-size:11px;max-width:620px}
+.ft-exact-job-detail .ft-doc-completion-copy{
+    flex:0 0 auto;
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    padding:7px 10px;
+    border:1px solid #dce5f0;
+    border-radius:9px;
+    background:#fff;
+    color:#60738c;
+}
+.ft-exact-job-detail .ft-doc-completion-copy strong{font-size:14px;color:#0c203c}
+.ft-exact-job-detail .ft-doc-completion-copy span{font-size:9px;font-weight:700}
+
+.ft-exact-job-detail .ft-doc-summary-strip{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:8px;
+    margin-bottom:8px;
+}
+.ft-exact-job-detail .ft-doc-summary-item{
+    min-width:0;
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:9px 11px;
+    border:1px solid #dce5f0;
+    border-radius:10px;
+    background:#fff;
+}
+.ft-exact-job-detail .ft-doc-summary-item.needs-action{border-color:#f1d39b;background:#fffbf2}
+.ft-exact-job-detail .ft-doc-summary-item>div{min-width:0}
+.ft-exact-job-detail .ft-doc-summary-item small{
+    display:block;
+    color:#667a93;
+    font-size:8.5px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+.ft-exact-job-detail .ft-doc-summary-item b{display:block;margin-top:2px;font-size:17px;color:#0b1d36}
+.ft-exact-job-detail .ft-doc-summary-icon{
+    width:30px;
+    height:30px;
+    flex:0 0 30px;
+    display:grid;
+    place-items:center;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:900;
+}
+.ft-exact-job-detail .ft-doc-summary-icon.blue{background:#edf4ff;color:#1767ef}
+.ft-exact-job-detail .ft-doc-summary-icon.neutral{background:#f0f4f8;color:#50647e}
+.ft-exact-job-detail .ft-doc-summary-icon.amber{background:#fff2d7;color:#b86a00}
+.ft-exact-job-detail .ft-doc-summary-icon.green{background:#e9f8ef;color:#13813d}
+
+.ft-exact-job-detail .ft-doc-required-progress{
+    margin:0 0 12px;
+    padding:8px 10px;
+    border:1px solid #dce5f0;
+    border-radius:9px;
+    background:#fbfdff;
+}
+.ft-exact-job-detail .ft-doc-required-progress>div{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:9px;color:#62758d}
+.ft-exact-job-detail .ft-doc-required-progress b{color:#15375f}
+.ft-exact-job-detail .ft-doc-progress-track{display:block;height:6px;border-radius:999px;background:#e7edf4;overflow:hidden}
+.ft-exact-job-detail .ft-doc-progress-track i{display:block;height:100%;border-radius:inherit;background:#2168ef}
+
+.ft-exact-job-detail .ft-doc-upload-card{
+    padding:14px;
+    margin-bottom:12px;
+    border-color:#d6e2f0;
+    box-shadow:none;
+}
+.ft-exact-job-detail .ft-doc-upload-heading{display:flex;align-items:flex-start;gap:10px}
+.ft-exact-job-detail .ft-doc-upload-heading-icon{
+    width:32px;
+    height:32px;
+    flex:0 0 32px;
+    display:grid;
+    place-items:center;
+    border-radius:9px;
+    background:#eaf2ff;
+    color:#0f63f3;
+    font-size:18px;
+    font-weight:800;
+}
+.ft-exact-job-detail .ft-doc-upload-heading>div{min-width:0}
+.ft-exact-job-detail .ft-doc-upload-heading b{font-size:13px;color:#0b1d36}
+.ft-exact-job-detail .ft-doc-upload-heading p{margin:3px 0 0;font-size:10px;line-height:1.4;color:#62758d}
+.ft-exact-job-detail .ft-doc-upload-steps{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+    margin-top:12px;
+}
+.ft-exact-job-detail .ft-doc-upload-step{
+    display:grid;
+    grid-template-columns:26px minmax(0,1fr);
+    gap:8px;
+    align-items:center;
+    padding:8px 9px;
+    border:1px solid #e0e7ef;
+    border-radius:9px;
+    background:#fafcff;
+}
+.ft-exact-job-detail .ft-doc-upload-step>span{
+    width:24px;
+    height:24px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#1f67ee;
+    color:#fff;
+    font-size:9px;
+    font-weight:800;
+}
+.ft-exact-job-detail .ft-doc-upload-step b{display:block;font-size:9.5px;color:#16304f}
+.ft-exact-job-detail .ft-doc-upload-step small{display:block;margin-top:1px;font-size:8px;color:#70829a;line-height:1.3}
+.ft-exact-job-detail .ft-doc-purpose-ux{margin-top:12px}
+.ft-exact-job-detail .ft-doc-purpose-ux>label{font-size:10px!important;margin-bottom:6px!important}
+.ft-exact-job-detail .ft-doc-purpose-ux .ft-document-purpose-select{
+    height:40px!important;
+    border-radius:8px!important;
+    font-size:10px!important;
+    font-weight:650;
+}
+.ft-exact-job-detail .ft-doc-purpose-ux .ft-document-match-note{font-size:8.5px!important;margin-top:5px!important}
+
+.ft-exact-job-detail .ft-doc-upload-actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 170px;
+    gap:8px;
+    margin-top:10px;
+    padding:0;
+    background:transparent;
+    border:0;
+}
+.ft-exact-job-detail .ft-doc-primary-drop{
+    min-height:72px;
+    border:1px dashed #9ab3d1!important;
+    border-radius:10px!important;
+    background:#f8fbff!important;
+    padding:10px 12px!important;
+}
+.ft-exact-job-detail .ft-doc-primary-drop>div{min-width:0}
+.ft-exact-job-detail .ft-doc-primary-drop>div>b{display:block;font-size:10.5px;color:#142a46}
+.ft-exact-job-detail .ft-doc-primary-drop>div>span{display:block;margin-top:2px;font-size:9px;color:#506984}
+.ft-exact-job-detail .ft-doc-primary-drop>div>span strong{color:#0f63f3}
+.ft-exact-job-detail .ft-doc-primary-drop small{display:block;margin-top:3px;font-size:8px;color:#71849c}
+.ft-exact-job-detail .ft-doc-existing-action{
+    width:100%!important;
+    height:auto!important;
+    min-height:72px!important;
+    margin:0!important;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    border-radius:10px;
+    color:#155ee9;
+}
+.ft-exact-job-detail .ft-doc-existing-action>span:first-child{font-size:17px}
+.ft-exact-job-detail .ft-doc-existing-action>span:last-child{font-size:9.5px}
+.ft-exact-job-detail .ft-doc-upload-ready{
+    margin-top:9px;
+    padding:8px 9px;
+    border:1px solid #cfe1ff;
+    border-radius:9px;
+    background:#f5f9ff;
+}
+.ft-exact-job-detail .ft-doc-existing-picker{
+    margin-top:10px;
+    padding:11px;
+    border:1px solid #dbe4ef;
+    border-radius:9px;
+    background:#fbfdff;
+}
+.ft-exact-job-detail .ft-doc-existing-picker .ft-card-row-head b{font-size:10.5px}
+.ft-exact-job-detail .ft-doc-existing-picker .ft-card-row-head p{font-size:8.5px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:9px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions select{min-width:0;width:100%;height:38px;border:1px solid #cedaea;border-radius:8px;padding:0 10px;background:#fff;color:#162844;font-size:9px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions .ft-new-job-btn{height:38px}
+
+.ft-exact-job-detail .ft-doc-library-card{padding:14px;box-shadow:none}
+.ft-exact-job-detail .ft-doc-library-heading{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:10px;
+}
+.ft-exact-job-detail .ft-doc-library-heading h3{margin:0;font-size:15px}
+.ft-exact-job-detail .ft-doc-library-heading p{margin:3px 0 0;font-size:9px;color:#667a93;line-height:1.4}
+.ft-exact-job-detail .ft-doc-phase-list{display:grid;gap:8px}
+.ft-exact-job-detail .ft-doc-phase-group{
+    border:1px solid #dce5f0;
+    border-radius:10px;
+    background:#fff;
+    overflow:hidden;
+}
+.ft-exact-job-detail .ft-doc-phase-group[open]{border-color:#cfdceb;box-shadow:0 3px 10px rgba(31,55,87,.035)}
+.ft-exact-job-detail .ft-doc-phase-summary{
+    list-style:none;
+    display:grid;
+    grid-template-columns:18px 28px minmax(0,1fr) auto;
+    gap:8px;
+    align-items:center;
+    padding:9px 10px;
+    background:#f8fbff;
+    cursor:pointer;
+    user-select:none;
+}
+.ft-exact-job-detail .ft-doc-phase-summary::-webkit-details-marker{display:none}
+.ft-exact-job-detail .ft-doc-phase-summary::marker{display:none;content:""}
+.ft-exact-job-detail .ft-doc-phase-chevron{font-size:16px;color:#536b86;transition:transform .15s ease}
+.ft-exact-job-detail .ft-doc-phase-group[open] .ft-doc-phase-chevron{transform:rotate(90deg)}
+.ft-exact-job-detail .ft-doc-phase-number{
+    width:27px;
+    height:27px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#2168ef;
+    color:#fff;
+    font-size:9px;
+}
+.ft-exact-job-detail .ft-doc-unlinked-group .ft-doc-phase-number{background:#eef2f6;color:#52667e}
+.ft-exact-job-detail .ft-doc-phase-copy{min-width:0}
+.ft-exact-job-detail .ft-doc-phase-copy strong{display:block;min-width:0;font-size:11px;color:#10233e;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-phase-copy small{display:block;margin-top:2px;font-size:8.5px;color:#667a93;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-phase-body{display:grid;gap:8px;padding:9px;border-top:1px solid #e4ebf3;background:#fff}
+
+.ft-exact-job-detail .ft-doc-requirement-card{
+    border:1px solid #dce5ef;
+    border-radius:9px;
+    background:#fff;
+    overflow:hidden;
+}
+.ft-exact-job-detail .ft-doc-requirement-card.needs-action{border-color:#f0d49f;background:#fffdf8}
+.ft-exact-job-detail .ft-doc-requirement-main{
+    display:grid;
+    grid-template-columns:24px minmax(0,1fr) auto;
+    gap:9px;
+    align-items:center;
+    padding:10px;
+}
+.ft-exact-job-detail .ft-doc-requirement-state{
+    width:22px;
+    height:22px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#1d9a4c;
+    color:#fff;
+    font-size:10px;
+    font-weight:900;
+}
+.ft-exact-job-detail .ft-doc-requirement-card.needs-action .ft-doc-requirement-state{background:#f2a000}
+.ft-exact-job-detail .ft-doc-requirement-copy{min-width:0}
+.ft-exact-job-detail .ft-doc-requirement-title-line{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.ft-exact-job-detail .ft-doc-requirement-title-line>b{min-width:0;font-size:10.5px;color:#112641;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-requirement-copy>small{display:block;margin-top:2px;font-size:8.5px;color:#667a93;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-requirement-copy>p{margin:3px 0 0;font-size:8.5px;color:#7a8798}
+.ft-exact-job-detail .ft-doc-requirement-upload{height:31px!important;padding:0 10px!important;font-size:9px!important;white-space:nowrap}
+
+.ft-exact-job-detail .ft-doc-linked-files{display:grid;border-top:1px solid #e8edf3;background:#fbfdff}
+.ft-exact-job-detail .ft-doc-linked-file{
+    display:grid;
+    grid-template-columns:28px minmax(0,1fr) auto auto;
+    gap:8px;
+    align-items:center;
+    padding:8px 10px;
+    border-bottom:1px solid #edf1f5;
+}
+.ft-exact-job-detail .ft-doc-linked-file:last-child{border-bottom:0}
+.ft-exact-job-detail .ft-doc-linked-file-copy{min-width:0}
+.ft-exact-job-detail .ft-doc-linked-file-copy>a{display:block;color:#145fe6;font-size:9.5px;font-weight:750;text-decoration:none;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-linked-file-copy>small{display:block;margin-top:2px;color:#728197;font-size:7.8px;line-height:1.35;overflow-wrap:anywhere}
+.ft-exact-job-detail .ft-doc-linked-actions{display:flex;align-items:center;gap:7px}
+.ft-exact-job-detail .ft-doc-linked-actions .ft-link-blue{font-size:9px}
+.ft-exact-job-detail .ft-doc-linked-actions .ft-doc-delete-button{width:24px;height:24px;border:0;border-radius:6px;background:#fff0ef;color:#c63d37;font-size:15px;line-height:1}
+.ft-exact-job-detail .ft-doc-attachments-block{display:grid;gap:0;border:1px solid #e3e9f0;border-radius:9px;overflow:hidden}
+.ft-exact-job-detail .ft-doc-subsection-label{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:7px 9px;background:#f7f9fc}
+.ft-exact-job-detail .ft-doc-subsection-label span{font-size:9px;font-weight:800;color:#334a67}
+.ft-exact-job-detail .ft-doc-subsection-label small{font-size:7.5px;color:#77869a;text-align:right}
+.ft-exact-job-detail .ft-doc-empty-phase{padding:12px;border:1px dashed #d9e2ec;border-radius:8px;background:#fbfcfe;color:#718197;font-size:9px;text-align:center}
+
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-doc-ux-title{align-items:flex-start}
+    .ft-exact-job-detail .ft-doc-summary-strip{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .ft-exact-job-detail .ft-doc-summary-item{min-height:54px}
+    .ft-exact-job-detail .ft-doc-upload-card,.ft-exact-job-detail .ft-doc-library-card{padding:12px}
+    .ft-exact-job-detail .ft-doc-upload-actions{grid-template-columns:minmax(0,1fr) 150px;gap:8px}
+    .ft-exact-job-detail .ft-task-upload-zone.ft-doc-upload-actions{display:grid;overflow:visible}
+    .ft-exact-job-detail .ft-doc-primary-drop{border-radius:10px!important}
+    .ft-exact-job-detail .ft-doc-existing-action{margin:0!important;width:100%!important;min-height:72px!important}
+    .ft-exact-job-detail .ft-doc-library-heading{align-items:center}
+    .ft-exact-job-detail .ft-doc-phase-summary{grid-template-columns:18px 28px minmax(0,1fr) auto}
+}
+
+@media(max-width:640px){
+    .ft-exact-job-detail .ft-doc-ux-title{display:grid;grid-template-columns:1fr;gap:8px}
+    .ft-exact-job-detail .ft-doc-completion-copy{justify-self:start}
+    .ft-exact-job-detail .ft-doc-upload-steps{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-doc-upload-actions{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-doc-existing-action{min-height:44px!important;flex-direction:row}
+    .ft-exact-job-detail .ft-doc-existing-action>span:first-child{font-size:14px}
+    .ft-exact-job-detail .ft-doc-existing-picker-actions{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-doc-existing-picker-actions .ft-new-job-btn{width:100%}
+    .ft-exact-job-detail .ft-doc-library-heading{align-items:flex-start;flex-direction:column}
+    .ft-exact-job-detail .ft-doc-phase-summary{
+        grid-template-columns:16px 26px minmax(0,1fr);
+        gap:7px;
+    }
+    .ft-exact-job-detail .ft-doc-phase-summary>.ft-soft-pill{grid-column:3;justify-self:start;margin-top:2px}
+    .ft-exact-job-detail .ft-doc-requirement-main{
+        grid-template-columns:22px minmax(0,1fr);
+        align-items:start;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-upload{grid-column:2;width:100%;max-width:180px;justify-self:start}
+    .ft-exact-job-detail .ft-doc-linked-file{
+        grid-template-columns:26px minmax(0,1fr) auto;
+        gap:7px;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-soft-pill{grid-column:2;justify-self:start}
+    .ft-exact-job-detail .ft-doc-linked-actions{grid-column:3;grid-row:1/3;align-self:center}
+    .ft-exact-job-detail .ft-doc-subsection-label{align-items:flex-start;flex-direction:column;gap:2px}
+    .ft-exact-job-detail .ft-doc-subsection-label small{text-align:left}
+}
+
+@media(max-width:420px){
+    .ft-exact-job-detail .ft-doc-summary-strip{gap:6px}
+    .ft-exact-job-detail .ft-doc-summary-item{padding:8px;gap:7px}
+    .ft-exact-job-detail .ft-doc-summary-icon{width:27px;height:27px;flex-basis:27px}
+    .ft-exact-job-detail .ft-doc-summary-item small{font-size:7.5px}
+    .ft-exact-job-detail .ft-doc-summary-item b{font-size:15px}
+    .ft-exact-job-detail .ft-doc-upload-card,.ft-exact-job-detail .ft-doc-library-card{padding:10px}
+    .ft-exact-job-detail .ft-doc-upload-heading{gap:8px}
+    .ft-exact-job-detail .ft-doc-upload-heading-icon{width:29px;height:29px;flex-basis:29px}
+    .ft-exact-job-detail .ft-doc-phase-body{padding:7px}
+    .ft-exact-job-detail .ft-doc-phase-summary{padding:8px}
+    .ft-exact-job-detail .ft-doc-linked-file{
+        grid-template-columns:24px minmax(0,1fr);
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-soft-pill{grid-column:2}
+    .ft-exact-job-detail .ft-doc-linked-actions{grid-column:2;grid-row:auto;justify-self:start}
+}
+
+/* ==========================================================================\n   Order detail mobile centering refinements — 2026-08-09\n   Keep short workflow steppers visually centered and center the document\n   requirement action block without changing desktop layouts.\n   ========================================================================== */
+@media(max-width:640px){
+    /* Workflow: when only a few phases fit on screen, center the whole phase run.\n       The parent still scrolls horizontally for longer workflows. */
+    .ft-exact-job-detail .ft-workflow-stepper{
+        justify-content:center!important;
+        margin-inline:auto;
+    }
+
+    /* Documents: center the requirement content group inside the card while\n       preserving the icon + copy relationship and keeping the action easy to tap. */
+    .ft-exact-job-detail .ft-doc-requirement-main{
+        grid-template-columns:24px minmax(0,360px)!important;
+        justify-content:center;
+        align-items:start;
+        column-gap:10px;
+        padding:14px 12px;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-state{
+        grid-column:1;
+        grid-row:1;
+        justify-self:center;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-copy{
+        grid-column:2;
+        grid-row:1;
+        width:100%;
+        max-width:360px;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-upload{
+        grid-column:2!important;
+        grid-row:2;
+        width:100%!important;
+        max-width:360px!important;
+        justify-self:center!important;
+        margin-top:4px;
+    }
+}
+
+@media(max-width:420px){
+    .ft-exact-job-detail .ft-doc-requirement-main{
+        grid-template-columns:22px minmax(0,1fr)!important;
+        padding:12px 10px;
+        column-gap:9px;
+    }
+}
+
+/* ==========================================================================
+   Responsive alignment refinements — 2026-08-09
+   Documents: center the mobile device-upload content as one balanced group.
+   Task details: place management attention and order context before Description
+   on phone layouts while preserving the desktop sidebar.
+   ========================================================================== */
+.ft-exact-task-header .ft-detail-actions{margin-left:auto}
+
+@media(max-width:700px){
+    /* Keep the upload prompt centered as a single icon + copy group. */
+    .ft-exact-job-detail .ft-doc-primary-drop{
+        grid-template-columns:28px minmax(0,auto)!important;
+        justify-content:center;
+        align-content:center;
+        align-items:center;
+        column-gap:10px!important;
+        width:100%;
+        text-align:left;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>.ft-paperclip{
+        justify-self:center;
+        align-self:center;
+        margin:0;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>div{
+        width:min(100%,460px);
+        max-width:460px;
+        justify-self:start;
+    }
+
+    /* Flatten only the task-detail content wrappers on phones so the sidebar
+       cards can participate in the same visual order as the main cards. */
+    .ft-exact-task-detail .ft-task-detail-layout{
+        display:grid;
+        grid-template-columns:minmax(0,1fr)!important;
+        gap:0;
+    }
+    .ft-exact-task-detail .ft-task-detail-layout>main,
+    .ft-exact-task-detail .ft-task-detail-layout>aside{display:contents}
+    .ft-exact-task-detail .ft-friendly-task-properties{order:1}
+    .ft-exact-task-detail .ft-management-card{order:2}
+    .ft-exact-task-detail .ft-job-context-card{order:3}
+    .ft-exact-task-detail .ft-description-card{order:4}
+    .ft-exact-task-detail .ft-checklist-card{order:5}
+    .ft-exact-task-detail .ft-attachment-card{order:6}
+    .ft-exact-task-detail .ft-task-activity-card{order:7}
+}
+
+@media(max-width:420px){
+    .ft-exact-job-detail .ft-doc-primary-drop{
+        grid-template-columns:24px minmax(0,auto)!important;
+        justify-content:center;
+        padding:12px!important;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>div{max-width:300px}
+}
+
+/* ========================================================================== 
+   Order details > Documents alignment polish - 2026-08-09
+   Keeps upload prompts visually centered and gives phase/requirement/file rows
+   a consistent alignment on phone and tablet widths.
+   ========================================================================== */
+@media(max-width:700px){
+    /* Upload from device: use one centered vertical block instead of an icon
+       floating to the left of a differently sized text column. */
+    .ft-exact-job-detail .ft-doc-primary-drop{
+        display:flex!important;
+        flex-direction:column;
+        align-items:center;
+        justify-content:center;
+        gap:5px!important;
+        min-height:96px;
+        padding:14px 16px!important;
+        text-align:center;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>.ft-paperclip{
+        width:24px;
+        min-width:24px;
+        margin:0!important;
+        display:grid;
+        place-items:center;
+        justify-self:auto!important;
+        align-self:center!important;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>div{
+        width:100%!important;
+        max-width:520px!important;
+        min-width:0;
+        justify-self:auto!important;
+        text-align:center;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>div>b,
+    .ft-exact-job-detail .ft-doc-primary-drop>div>span,
+    .ft-exact-job-detail .ft-doc-primary-drop>div>small{
+        text-align:center;
+    }
+
+    /* Library heading/status share one clean left edge. */
+    .ft-exact-job-detail .ft-doc-library-heading{
+        gap:8px;
+        margin-bottom:10px;
+    }
+    .ft-exact-job-detail .ft-doc-library-heading>.ft-soft-pill{
+        align-self:flex-start;
+    }
+
+    /* Keep phase status on the phase row instead of dropping into an
+       unrelated-looking second line. */
+    .ft-exact-job-detail .ft-doc-phase-summary{
+        grid-template-columns:18px 32px minmax(0,1fr) auto!important;
+        column-gap:8px!important;
+        row-gap:4px!important;
+        align-items:center;
+        padding:10px 11px;
+    }
+    .ft-exact-job-detail .ft-doc-phase-summary>.ft-soft-pill{
+        grid-column:4!important;
+        grid-row:1!important;
+        justify-self:end!important;
+        align-self:center;
+        margin-top:0!important;
+    }
+    .ft-exact-job-detail .ft-doc-phase-number{
+        width:32px;
+        height:32px;
+    }
+    .ft-exact-job-detail .ft-doc-phase-copy strong{
+        line-height:1.2;
+    }
+
+    /* Requirement rows: icon and copy align to one baseline, with consistent
+       internal spacing. */
+    .ft-exact-job-detail .ft-doc-requirement-main{
+        grid-template-columns:34px minmax(0,1fr)!important;
+        justify-content:stretch!important;
+        column-gap:10px!important;
+        row-gap:8px;
+        padding:12px!important;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-state{
+        width:32px;
+        height:32px;
+        grid-column:1;
+        grid-row:1;
+        align-self:start;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-copy{
+        grid-column:2;
+        grid-row:1;
+        width:100%;
+        max-width:none!important;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-title-line{
+        gap:6px;
+        align-items:center;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-upload{
+        grid-column:2!important;
+        grid-row:2!important;
+        width:min(100%,220px)!important;
+        max-width:220px!important;
+        justify-self:start!important;
+        margin-top:0!important;
+    }
+
+    /* Linked file row: filename/meta on the first line, status and actions on
+       one aligned second line. */
+    .ft-exact-job-detail .ft-doc-linked-file{
+        grid-template-columns:34px minmax(0,1fr) auto!important;
+        column-gap:10px!important;
+        row-gap:7px!important;
+        align-items:start;
+        padding:10px 12px;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-file-icon{
+        width:30px;
+        height:30px;
+        display:grid;
+        place-items:center;
+        border-radius:8px;
+        background:#fff0f3;
+        border:1px solid #ffd8e1;
+        line-height:1;
+        justify-self:center;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-file-icon.sheet{
+        background:#eef9f1;
+        border-color:#d6efdd;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file-copy{
+        grid-column:2 / 4;
+        grid-row:1;
+        align-self:center;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-soft-pill{
+        grid-column:2!important;
+        grid-row:2!important;
+        justify-self:start!important;
+        align-self:center;
+        margin:0;
+    }
+    .ft-exact-job-detail .ft-doc-linked-actions{
+        grid-column:3!important;
+        grid-row:2!important;
+        justify-self:end!important;
+        align-self:center!important;
+        gap:8px;
+    }
+    .ft-exact-job-detail .ft-doc-linked-actions .ft-doc-delete-button{
+        width:30px;
+        height:30px;
+    }
+}
+
+@media(max-width:420px){
+    .ft-exact-job-detail .ft-doc-primary-drop{
+        min-height:100px;
+        padding:13px 12px!important;
+    }
+    .ft-exact-job-detail .ft-doc-primary-drop>div{
+        max-width:100%!important;
+    }
+    .ft-exact-job-detail .ft-doc-phase-summary{
+        grid-template-columns:16px 30px minmax(0,1fr) auto!important;
+        column-gap:7px!important;
+        padding:9px 8px;
+    }
+    .ft-exact-job-detail .ft-doc-phase-number{
+        width:30px;
+        height:30px;
+    }
+    .ft-exact-job-detail .ft-doc-phase-summary>.ft-soft-pill{
+        padding:4px 7px;
+        font-size:9px;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-main{
+        grid-template-columns:32px minmax(0,1fr)!important;
+        padding:11px 10px!important;
+        column-gap:9px!important;
+    }
+    .ft-exact-job-detail .ft-doc-requirement-state{
+        width:30px;
+        height:30px;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file{
+        grid-template-columns:32px minmax(0,1fr) auto!important;
+        padding:9px 10px;
+        column-gap:9px!important;
+    }
+    .ft-exact-job-detail .ft-doc-linked-file>.ft-file-icon{
+        width:28px;
+        height:28px;
+    }
+}
+
+
+/* ========================================================================== */
+/* 2026-08-09 final mobile alignment: overview documents + task header UX     */
+/* ========================================================================== */
+
+/* Order details > Overview > Attachments: keep the library action aligned
+   with the upload area rather than floating with legacy grid margins. */
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-job-overview-dropzone{
+        display:grid!important;
+        grid-template-columns:minmax(0,1fr)!important;
+        gap:10px!important;
+        width:100%;
+        max-width:100%;
+        padding:12px!important;
+        overflow:visible!important;
+    }
+    .ft-exact-job-detail .ft-job-overview-dropzone .ft-task-upload-drop{
+        width:min(100%,620px)!important;
+        max-width:620px;
+        min-width:0;
+        margin:0 auto!important;
+        padding:6px 4px!important;
+        justify-self:center;
+    }
+    .ft-exact-job-detail .ft-job-overview-dropzone .ft-task-choose-document{
+        width:min(100%,620px)!important;
+        max-width:620px!important;
+        min-width:0!important;
+        min-height:42px;
+        height:auto;
+        margin:0 auto!important;
+        justify-self:center!important;
+        align-self:center!important;
+        text-align:center;
+    }
+}
+
+@media(max-width:520px){
+    .ft-exact-job-detail .ft-job-overview-dropzone{
+        padding:11px!important;
+        gap:9px!important;
+    }
+    .ft-exact-job-detail .ft-job-overview-dropzone .ft-task-upload-drop{
+        grid-template-columns:28px minmax(0,1fr)!important;
+        gap:9px!important;
+        padding:5px 2px!important;
+    }
+    .ft-exact-job-detail .ft-job-overview-dropzone .ft-task-choose-document{
+        width:100%!important;
+        max-width:100%!important;
+        min-height:44px;
+        margin:0!important;
+    }
+}
+
+/* Task details: on phones give the title the full content width while keeping
+   the close control as the right-most action.  This removes the tiny inline
+   title input created when the completion action shared the same row. */
+@media(max-width:700px){
+    .ft-exact-task-detail .ft-exact-task-header{
+        display:flex!important;
+        flex-direction:column!important;
+        align-items:stretch!important;
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        gap:12px!important;
+    }
+    .ft-exact-task-detail .ft-exact-task-header .ft-task-heading-copy{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+    }
+    .ft-exact-task-detail .ft-task-title-line{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        align-items:center;
+    }
+    .ft-exact-task-detail .ft-editable-task-title{
+        width:100%;
+        max-width:100%;
+        min-width:0;
+        flex:1 1 100%;
+    }
+    .ft-exact-task-detail .ft-editable-task-title>span[x-show],
+    .ft-exact-task-detail .ft-editable-task-title>span:first-child{
+        min-width:0;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+    .ft-exact-task-detail .ft-editable-task-title input{
+        width:100%!important;
+        max-width:100%!important;
+        min-width:0!important;
+        height:48px!important;
+        padding:0 13px!important;
+        border-radius:9px!important;
+        font-size:20px!important;
+        line-height:1.2!important;
+        box-sizing:border-box;
+    }
+    .ft-exact-task-detail .ft-exact-task-header .ft-detail-actions{
+        display:flex!important;
+        flex-direction:row!important;
+        align-items:center!important;
+        justify-content:flex-end!important;
+        flex-wrap:nowrap!important;
+        width:100%!important;
+        max-width:100%;
+        margin-left:0!important;
+        gap:10px!important;
+    }
+    .ft-exact-task-detail .ft-exact-task-header .ft-mark-complete{
+        flex:0 1 auto;
+        min-width:0;
+        max-width:calc(100% - 50px);
+        margin-left:auto;
+        white-space:nowrap;
+    }
+    .ft-exact-task-detail .ft-exact-task-header .ft-close-page{
+        flex:0 0 40px;
+        width:40px!important;
+        height:40px!important;
+        margin-left:0!important;
+        padding:0!important;
+        display:grid;
+        place-items:center;
+        justify-self:end;
+        font-size:29px;
+        line-height:1;
+    }
+}
+
+@media(max-width:420px){
+    .ft-exact-task-detail .ft-editable-task-title input{
+        height:46px!important;
+        font-size:18px!important;
+    }
+    .ft-exact-task-detail .ft-exact-task-header .ft-mark-complete{
+        height:40px;
+        padding:0 13px;
+        font-size:11px;
+    }
+}
 
 .ft-board-load-more {
     display: flex;

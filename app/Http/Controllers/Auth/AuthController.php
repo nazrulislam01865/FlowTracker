@@ -4,15 +4,22 @@ namespace App\Http\Controllers\Auth;
 use App\Http\Controllers\Controller;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use Illuminate\Http\Response;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Str;
-use Illuminate\View\View;
 
 class AuthController extends Controller
 {
-    public function create(): View { return view('auth.login'); }
+    public function create(): Response
+    {
+        return response()->view('auth.login')->withHeaders([
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+            'Pragma' => 'no-cache',
+            'Expires' => '0',
+        ]);
+    }
 
     public function store(Request $request): RedirectResponse
     {

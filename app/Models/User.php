@@ -56,4 +56,16 @@ class User extends Authenticatable
     {
         return app(\App\Services\AccessControlService::class)->scope($this, $module);
     }
+
+    public function profileImageUrl(): ?string
+    {
+        if (! $this->id || ! $this->profile_image_path) {
+            return null;
+        }
+
+        return route('profile-images.show', [
+            'user' => $this->id,
+            'filename' => basename($this->profile_image_path),
+        ], false);
+    }
 }

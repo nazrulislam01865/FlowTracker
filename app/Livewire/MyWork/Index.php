@@ -29,7 +29,15 @@ class Index extends Component
     #[Url(as: 'sort', history: true)]
     public string $sort = 'action';
 
-    public array $metrics = [];
+    public array $metrics = [
+        'attention' => null,
+        'overdue' => null,
+        'today' => null,
+        'upcoming' => null,
+        'waiting' => null,
+        'mentions' => null,
+    ];
+    public bool $metricsLoaded = false;
     public array $statusOptions = [];
     public int $perPage = MyWorkService::JOBS_PER_PAGE;
     public bool $administratorView = false;
@@ -45,7 +53,8 @@ class Index extends Component
         $user = auth()->user();
         $service = app(MyWorkService::class);
         $this->administratorView = app(\App\Services\AccessControlService::class)->isAdministrator($user);
-        $this->metrics = $service->metrics($user);
+        // Keep the first page response focused on the task list. The summary
+        // metrics are loaded immediately after first paint via wire:init.
         $this->statusOptions = $service->statusOptions();
     }
 
@@ -71,6 +80,22 @@ class Index extends Component
     {
         $this->search = '';
         $this->resetPage('workPage');
+    }
+
+    #[Renderless]
+    public function loadMetrics(): void
+    {
+        $this->metrics = app(MyWorkService::class)->metrics(auth()->user());
+        $this->metricsLoaded = true;
+        $this->dispatch(
+            'my-work-metrics',
+            attention: $this->metrics['attention'] ?? 0,
+            overdue: $this->metrics['overdue'] ?? 0,
+            today: $this->metrics['today'] ?? 0,
+            upcoming: $this->metrics['upcoming'] ?? 0,
+            waiting: $this->metrics['waiting'] ?? 0,
+            mentions: $this->metrics['mentions'] ?? 0,
+        );
     }
 
     #[Renderless]
@@ -104,8 +129,9 @@ class Index extends Component
             $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
             $result['status'] = (string) $updatedTask->status;
             $result['completed'] = BoardLaneResolver::isCompleted($updatedTask->status);
-            $this->metrics = app(MyWorkService::class)->metrics(auth()->user());
-            $result['metrics'] = $this->metrics;
+            // Do not make the status save wait for the dashboard aggregates.
+            // Refresh those in a second lightweight Livewire request instead.
+            $this->dispatch('my-work-refresh-metrics');
         }
 
         return $result;
@@ -116,7 +142,7 @@ class Index extends Component
     {
         $date = trim((string) $date);
 
-        return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
+        $result = $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
             $actor = auth()->user();
             if ($date !== '') {
                 validator(['date' => $date], ['date' => ['date']])->validate();
@@ -125,6 +151,12 @@ class Index extends Component
             $task = app(MyWorkService::class)->findPersonalVisibleTask($actor, $taskId);
             app(TaskService::class)->updateDueDate($task, $date ?: null, $actor);
         });
+
+        if ($result['ok'] ?? false) {
+            $this->dispatch('my-work-refresh-metrics');
+        }
+
+        return $result;
     }
 
     #[On('flowtrack-notification')]

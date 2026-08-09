@@ -26,10 +26,10 @@
 
 <div class="ft-dashboard-secondary-sections">
     <div class="ft-grid ft-grid-balanced">
-        <section class="ft-panel">
+        <section class="ft-panel ft-dashboard-assignee-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-table-wrap">
-                <table class="ft-table responsive">
+                <table class="ft-table responsive ft-dashboard-assignee-table">
                     <colgroup><col style="width:29%"><col style="width:16%"><col style="width:18%"><col style="width:19%"><col style="width:18%"></colgroup>
                     <thead><tr><th>Assignee</th><th>Ongoing</th><th>Done</th><th>On time</th><th>Workload</th></tr></thead>
                     <tbody>
@@ -54,7 +54,7 @@
             </div>
         </section>
 
-        <section class="ft-panel">
+        <section class="ft-panel ft-dashboard-attention-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current jobs</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>View all tasks</a></div>
             <div class="ft-risk-list">
                 @forelse($attentionTasks as $task)
@@ -74,10 +74,10 @@
     </div>
 
     <div class="ft-grid ft-grid-balanced">
-        <section class="ft-panel">
+        <section class="ft-panel ft-dashboard-jobs-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing jobs</h2><div class="ft-panel-note">Current stage, health and exception flags</div></div><a class="ft-link" href="{{ route('jobs.index') }}" wire:navigate>View jobs</a></div>
             <div class="ft-table-wrap">
-                <table class="ft-table responsive">
+                <table class="ft-table responsive ft-dashboard-jobs-table">
                     <colgroup><col style="width:31%"><col style="width:18%"><col style="width:23%"><col style="width:18%"><col style="width:10%"></colgroup>
                     <thead><tr><th>Job</th><th>Client</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
                     <tbody>
@@ -100,10 +100,10 @@
             </div>
         </section>
 
-        <section class="ft-panel">
+        <section class="ft-panel ft-dashboard-tasks-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>Open all tasks</a></div>
             <div class="ft-table-wrap">
-                <table class="ft-table responsive">
+                <table class="ft-table responsive ft-dashboard-tasks-table">
                     <colgroup><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
                     <thead><tr><th>Task</th><th>Job</th><th>Assignee</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
                     <tbody>
@@ -144,10 +144,10 @@
             </div>
         </section>
 
-        <section class="ft-panel">
+        <section class="ft-panel ft-dashboard-clients-panel">
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Client portfolio</h2><div class="ft-panel-note">Active work, inquiry volume and delivery health</div></div><a class="ft-link" href="{{ route('clients.index') }}" wire:navigate>All clients</a></div>
             <div class="ft-table-wrap">
-                <table class="ft-table responsive">
+                <table class="ft-table responsive ft-dashboard-clients-table">
                     <colgroup><col style="width:28%"><col style="width:15%"><col style="width:18%"><col style="width:19%"><col style="width:20%"></colgroup>
                     <thead><tr><th>Client</th><th>Jobs</th><th>Inquiries</th><th>At risk</th><th>On time</th></tr></thead>
                     <tbody>

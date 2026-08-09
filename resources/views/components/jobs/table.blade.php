@@ -33,6 +33,86 @@
             @media(max-width:820px){.ft-orders-prototype .ft-page-head{align-items:flex-start}.ft-orders-prototype .ft-page-head p{max-width:420px}.ft-orders-prototype .ft-search-bar{align-items:stretch;flex-wrap:wrap}.ft-orders-prototype .ft-search{width:100%}.ft-orders-prototype .ft-search-state{width:100%;margin-left:0}}
             @media(max-width:680px){.ft-orders-prototype .ft-page-head{align-items:flex-start}.ft-orders-prototype .ft-page-head h1{font-size:20px}.ft-orders-prototype .ft-page-head p{font-size:10px}.ft-orders-prototype .ft-button{min-height:34px;padding-inline:11px}.ft-orders-prototype .ft-job-row{grid-template-columns:minmax(0,1fr) minmax(105px,.7fr) 38px;grid-template-areas:"identity identity view" "created inquiry inquiry" "brief brief brief" "stage health health" "flag flag flag" "owner progress progress";padding:11px;row-gap:9px;min-height:228px}.ft-orders-prototype .ft-view{justify-self:end}.ft-orders-prototype .ft-progress-cell{max-width:145px}.ft-orders-prototype .ft-list-footer{align-items:flex-start;flex-direction:column}.ft-orders-prototype .ft-page-buttons{width:100%}.ft-orders-prototype .ft-page-button{flex:1}}
             @media(max-width:390px){.ft-orders-prototype .ft-page-head p{display:none}.ft-orders-prototype .ft-search input{padding-right:54px}}
+            /* 2026-08-09 mobile order-list correction: compact cards with predictable columns. */
+            @media(max-width:820px){
+                .ft-orders-prototype .ft-page-head{margin-bottom:13px}
+                .ft-orders-prototype .ft-page-head h1{font-size:22px}
+                .ft-orders-prototype .ft-page-head p{font-size:11px;line-height:1.35}
+                .ft-orders-prototype .ft-list-shell{border-radius:12px}
+                .ft-orders-prototype .ft-search-bar{gap:8px;padding:11px}
+                .ft-orders-prototype .ft-search input{height:42px;font-size:11.5px}
+                .ft-orders-prototype .ft-search-state{gap:6px;font-size:9.5px;line-height:1.3;white-space:normal}
+            }
+            @media(max-width:680px){
+                .ft-orders-prototype .ft-page-head{align-items:flex-start;gap:10px}
+                .ft-orders-prototype .ft-page-head h1{font-size:21px}
+                .ft-orders-prototype .ft-page-head p{display:block;max-width:245px;font-size:10.5px}
+                .ft-orders-prototype .ft-actions{padding-top:1px}
+                .ft-orders-prototype .ft-dashboard-action-match{min-height:36px!important;padding:0 12px!important;font-size:10px!important}
+                .ft-orders-prototype .ft-job-row{
+                    position:relative;
+                    grid-template-columns:repeat(3,minmax(0,1fr));
+                    grid-template-areas:
+                        "identity identity identity"
+                        "created created inquiry"
+                        "brief brief brief"
+                        "stage health flag"
+                        "owner owner owner"
+                        "progress progress progress";
+                    gap:10px 9px;
+                    min-height:0;
+                    padding:12px;
+                    padding-right:12px;
+                }
+                .ft-orders-prototype .ft-job-row .ft-cell::before{margin-bottom:4px;font-size:7.8px;line-height:1.15}
+                .ft-orders-prototype .ft-identity{padding-right:54px}
+                .ft-orders-prototype .ft-id{font-size:12.5px;line-height:1.2}
+                .ft-orders-prototype .ft-sub{font-size:10px;line-height:1.3}
+                .ft-orders-prototype .ft-created-name,.ft-orders-prototype .ft-client,.ft-orders-prototype .ft-owner-name{font-size:11px;line-height:1.3}
+                .ft-orders-prototype .ft-created-on,.ft-orders-prototype .ft-product,.ft-orders-prototype .ft-product-detail,.ft-orders-prototype .ft-due,.ft-orders-prototype .ft-progress,.ft-orders-prototype .ft-standard-empty{font-size:9.8px;line-height:1.35}
+                .ft-orders-prototype .ft-product-detail{white-space:normal;display:-webkit-box;-webkit-box-orient:vertical;-webkit-line-clamp:2;line-clamp:2}
+                .ft-orders-prototype .ft-pill{max-width:100%;padding:4px 7px;font-size:9px}
+                .ft-orders-prototype .ft-stage-cell,.ft-orders-prototype .ft-health-cell,.ft-orders-prototype .ft-flag-cell{align-self:start}
+                .ft-orders-prototype .ft-owner{gap:8px}
+                .ft-orders-prototype .ft-order-avatar{width:30px;height:30px;flex-basis:30px;font-size:9.5px}
+                .ft-orders-prototype .ft-progress-cell{justify-self:stretch;width:100%;max-width:none;gap:8px}
+                .ft-orders-prototype .ft-progress-track{width:auto;max-width:none;flex:1;height:6px}
+                .ft-orders-prototype .ft-view{position:absolute;top:11px;right:11px;width:40px;height:32px;font-size:9.5px}
+                .ft-orders-prototype .ft-list-footer{gap:10px;padding:10px 11px}
+                .ft-orders-prototype .ft-result-count{font-size:9.5px}
+                .ft-orders-prototype .ft-page-buttons{gap:5px}
+                .ft-orders-prototype .ft-page-button{min-width:0;min-height:34px;font-size:9.5px}
+                .ft-orders-prototype .ft-page-number{width:34px;min-width:34px;height:34px;font-size:9.5px}
+            }
+            @media(max-width:600px){
+                .ft-orders-prototype .ft-list-footer{flex-direction:column;align-items:stretch;justify-content:flex-start;gap:9px}
+                .ft-orders-prototype .ft-result-count{width:100%;line-height:1.35}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons{display:grid;grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);width:100%;gap:7px}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons>.ft-page-button{width:100%;min-width:0;padding:0 8px}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons>span.ft-page-buttons{min-width:0;max-width:100%;justify-content:center;overflow-x:auto;overscroll-behavior-inline:contain;scrollbar-width:none}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons>span.ft-page-buttons::-webkit-scrollbar{display:none}
+            }
+            @media(max-width:430px){
+                .ft-orders-prototype .ft-page-head{gap:8px}
+                .ft-orders-prototype .ft-page-head h1{font-size:20px}
+                .ft-orders-prototype .ft-page-head p{max-width:210px;font-size:10px}
+                .ft-orders-prototype .ft-dashboard-action-match{min-height:34px!important;padding:0 10px!important;font-size:9.5px!important}
+                .ft-orders-prototype .ft-search input{height:40px;padding-left:34px;padding-right:50px;font-size:11px}
+                .ft-orders-prototype .ft-search-icon{left:11px}
+                .ft-orders-prototype .ft-search-state{font-size:9px}
+                .ft-orders-prototype .ft-job-row{gap:9px 7px;padding:11px}
+                .ft-orders-prototype .ft-job-row .ft-cell::before{font-size:7.4px}
+                .ft-orders-prototype .ft-id{font-size:12px}
+                .ft-orders-prototype .ft-created-name,.ft-orders-prototype .ft-client,.ft-orders-prototype .ft-owner-name{font-size:10.5px}
+                .ft-orders-prototype .ft-sub,.ft-orders-prototype .ft-created-on,.ft-orders-prototype .ft-product,.ft-orders-prototype .ft-product-detail,.ft-orders-prototype .ft-due,.ft-orders-prototype .ft-progress,.ft-orders-prototype .ft-standard-empty{font-size:9.3px}
+                .ft-orders-prototype .ft-pill{font-size:8.5px;padding:4px 6px}
+                .ft-orders-prototype .ft-view{top:10px;right:10px;width:38px;height:31px}
+                .ft-orders-prototype .ft-list-footer{align-items:stretch}
+                .ft-orders-prototype .ft-result-count{text-align:left}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons{grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);gap:5px}
+                .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons>.ft-page-button{min-height:36px;font-size:9px}
+                .ft-orders-prototype .ft-page-number{width:32px;min-width:32px;height:36px}
+            }
             @media(prefers-reduced-motion:reduce){.ft-orders-prototype *,.ft-orders-prototype *::before,.ft-orders-prototype *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
         </style>
     @endonce

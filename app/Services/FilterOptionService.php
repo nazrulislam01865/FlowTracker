@@ -145,11 +145,12 @@ class FilterOptionService
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->orderBy('name')
             ->limit($limit)
-            ->get(['id', 'department_id', 'name'])
+            ->get(['id', 'department_id', 'name', 'profile_image_path'])
             ->map(fn (User $row) => [
                 'id' => (int) $row->id,
                 'label' => (string) $row->name,
                 'meta' => (string) ($row->department?->name ?: ''),
+                'avatarUrl' => $row->profileImageUrl(),
             ]);
     }
 
@@ -158,12 +159,13 @@ class FilterOptionService
         if (!is_numeric($id)) return null;
         $row = $this->visibleUsers($user, $context)
             ->with('department:id,name')
-            ->find((int) $id, ['id', 'department_id', 'name']);
+            ->find((int) $id, ['id', 'department_id', 'name', 'profile_image_path']);
 
         return $row ? [
             'id' => (int) $row->id,
             'label' => (string) $row->name,
             'meta' => (string) ($row->department?->name ?: ''),
+            'avatarUrl' => $row->profileImageUrl(),
         ] : null;
     }
 

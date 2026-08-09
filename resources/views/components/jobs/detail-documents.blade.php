@@ -7,6 +7,8 @@
 @php
     $required = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $receivedRequired = $required->where('complete', true)->count();
+    $missingRequired = $required->where('complete', false)->count();
+    $requiredProgress = $required->count() ? (int) round(($receivedRequired / $required->count()) * 100) : 100;
     $unlinkedDocs = $job->documents->whereNull('task_id')->values();
     $canUploadDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','create');
     $canLinkDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','link');
@@ -20,67 +22,114 @@
 
     <div class="ft-detail-doc-full">
         <main>
-            <div class="ft-section-title-row ft-doc-title-row">
-                <div><h2>Documents</h2><p>{{ $job->documents->count() }} files · {{ $receivedRequired }} of {{ $required->count() }} required received</p></div>
-            </div>
-            <div class="ft-doc-filter-chips">
-                <button class="active" type="button">All files <b>{{ $job->documents->count() }}</b></button>
-                <button type="button">Required <b>{{ $required->count() }}</b></button>
-                <button class="amber" type="button">Needs action <b>{{ $required->where('complete',false)->count() }}</b></button>
-                <button class="green" type="button">Received <b>{{ $receivedRequired }}</b></button>
-                <button type="button">Recently updated <b>{{ $job->documents->filter(fn($doc)=>$doc->updated_at?->gte(now()->subDays(7)))->count() }}</b></button>
+            <div class="ft-section-title-row ft-doc-title-row ft-doc-ux-title">
+                <div>
+                    <h2>Documents</h2>
+                    <p>Keep required files, task attachments and existing client documents together.</p>
+                </div>
+                <div class="ft-doc-completion-copy">
+                    <strong>{{ $receivedRequired }}/{{ $required->count() }}</strong>
+                    <span>required received</span>
+                </div>
             </div>
 
-            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel">
-                <b>Add documents</b>
-                <p>Select the Task Pack document requirement first. The uploaded or chosen file is linked to that exact task automatically.</p>
+            <div class="ft-doc-summary-strip" aria-label="Document summary">
+                <div class="ft-doc-summary-item">
+                    <span class="ft-doc-summary-icon blue">▣</span>
+                    <div><small>Total files</small><b>{{ $job->documents->count() }}</b></div>
+                </div>
+                <div class="ft-doc-summary-item">
+                    <span class="ft-doc-summary-icon neutral">✓</span>
+                    <div><small>Required</small><b>{{ $required->count() }}</b></div>
+                </div>
+                <div class="ft-doc-summary-item {{ $missingRequired ? 'needs-action' : '' }}">
+                    <span class="ft-doc-summary-icon amber">!</span>
+                    <div><small>Needs action</small><b>{{ $missingRequired }}</b></div>
+                </div>
+                <div class="ft-doc-summary-item">
+                    <span class="ft-doc-summary-icon green">✓</span>
+                    <div><small>Received</small><b>{{ $receivedRequired }}</b></div>
+                </div>
+            </div>
+
+            <div class="ft-doc-required-progress" aria-label="Required document progress">
+                <div><span>Required document progress</span><b>{{ $requiredProgress }}%</b></div>
+                <span class="ft-doc-progress-track"><i style="width: {{ $requiredProgress }}%"></i></span>
+            </div>
+
+            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel ft-doc-upload-card">
+                <div class="ft-doc-upload-heading">
+                    <span class="ft-doc-upload-heading-icon">＋</span>
+                    <div>
+                        <b>Add a required document</b>
+                        <p>Choose where the document belongs, then upload a new file or link one that already exists.</p>
+                    </div>
+                </div>
 
                 @if($required->isNotEmpty())
-                    <div class="ft-document-purpose-field">
-                        <label for="jobDocumentRequirement-{{ $job->id }}">Document type</label>
+                    <div class="ft-doc-upload-steps">
+                        <div class="ft-doc-upload-step">
+                            <span>1</span>
+                            <div><b>Choose requirement</b><small>Select the Task Pack requirement this file satisfies.</small></div>
+                        </div>
+                        <div class="ft-doc-upload-step">
+                            <span>2</span>
+                            <div><b>Add the file</b><small>Upload from your device or choose an existing document.</small></div>
+                        </div>
+                    </div>
+
+                    <div class="ft-document-purpose-field ft-doc-purpose-ux">
+                        <label for="jobDocumentRequirement-{{ $job->id }}">Required document</label>
                         <select id="jobDocumentRequirement-{{ $job->id }}" wire:model.live="jobDocumentTaskId" class="ft-document-purpose-select">
-                            <option value="">Select a Task Pack document requirement</option>
+                            <option value="">Select requirement, phase and task</option>
                             @foreach($required as $item)
                                 <option value="{{ $item->task->id }}">{{ $item->name }} · {{ $item->phase->name }} · {{ $item->task->title }}</option>
                             @endforeach
                         </select>
-                        <small class="ft-document-match-note">Choose the required document first. FlowTrack links the uploaded or selected file to the matching phase and task automatically.</small>
+                        <small class="ft-document-match-note">FlowTrack links the file to the selected phase and task automatically.</small>
                     </div>
 
-                    <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone">
+                    <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone ft-doc-upload-actions">
                         @if($canUploadDocument)
-                            <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
+                            <label class="ft-task-upload-drop ft-livewire-upload-zone ft-doc-primary-drop" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
                                 <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                                 <span class="ft-paperclip">⌕</span>
-                                <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                                <div><b>Upload from device</b><span>Drop files here or <strong>browse</strong></span><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                             </label>
                         @else
-                            <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Document upload<small>You have read-only access to Job documents.</small></div></div>
+                            <div class="ft-task-upload-drop ft-task-upload-readonly ft-doc-primary-drop"><span class="ft-paperclip">⌕</span><div><b>Document upload</b><span>Read-only access</span><small>You do not have permission to upload Job documents.</small></div></div>
                         @endif
                         @if($canLinkDocument)
-                            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleDocumentPicker">Choose from Documents</button>
+                            <button class="ft-outline-btn ft-task-choose-document ft-doc-existing-action" type="button" wire:click="toggleDocumentPicker">
+                                <span>▤</span><span>Choose existing</span>
+                            </button>
                         @endif
                     </div>
                     @unless($canManageDocuments)<p class="muted small">You have read-only access to Job documents.</p>@endunless
 
                     @if($canUploadDocument && count($jobDocumentUploads ?? []))
-                        <div class="ft-upload-ready-row">
-                            <span>{{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready</span>
+                        <div class="ft-upload-ready-row ft-doc-upload-ready">
+                            <span><b>{{ count($jobDocumentUploads ?? []) }}</b> file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready to link</span>
                             <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
                         </div>
                     @endif
 
                     @if($canLinkDocument && ($showDocumentPicker ?? false))
-                        <div class="ft-existing-document-picker">
-                            <div class="ft-card-row-head"><div><b>Choose from Documents</b><p>Select an existing client document and link it to the selected Task Pack requirement.</p></div><button type="button" class="ft-outline-btn" wire:click="toggleDocumentPicker">Close</button></div>
+                        <div class="ft-existing-document-picker ft-doc-existing-picker">
+                            <div class="ft-card-row-head">
+                                <div><b>Choose an existing document</b><p>Link a stored client document to the requirement selected above.</p></div>
+                                <button type="button" class="ft-outline-btn" wire:click="toggleDocumentPicker">Close</button>
+                            </div>
                             @if($availableDocuments->isNotEmpty())
-                                <select wire:model="existingDocumentId">
-                                    <option value="">Select a stored document</option>
-                                    @foreach($availableDocuments as $doc)
-                                        <option value="{{ $doc->id }}">{{ $doc->name }} · {{ $doc->job?->displayOrderNumber() ?? 'Document archive' }}</option>
-                                    @endforeach
-                                </select>
-                                <button class="ft-new-job-btn" type="button" wire:click="attachExistingDocument">Link selected document</button>
+                                <div class="ft-doc-existing-picker-actions">
+                                    <select wire:model="existingDocumentId">
+                                        <option value="">Select a stored document</option>
+                                        @foreach($availableDocuments as $doc)
+                                            <option value="{{ $doc->id }}">{{ $doc->name }} · {{ $doc->job?->displayOrderNumber() ?? 'Document archive' }}</option>
+                                        @endforeach
+                                    </select>
+                                    <button class="ft-new-job-btn" type="button" wire:click="attachExistingDocument">Link document</button>
+                                </div>
                                 @error('existingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
                             @else
                                 <p class="muted small">No stored documents are available for this client yet.</p>
@@ -92,74 +141,148 @@
                 @endif
             </section>
 
-            <section class="ft-detail-card ft-job-documents-table">
-                <h3>Job documents</h3>
-                <p>Grouped by workflow phase and related Task Pack task</p>
-                <div class="ft-doc-table-wrap">
-                    <table class="ft-doc-table">
-                        <thead><tr><th>Document / requirement</th><th>Type</th><th>Version</th><th>Owner</th><th>Status</th><th>Updated</th><th>Actions</th></tr></thead>
-                        <tbody>
-                        @foreach($job->workflow->phases as $phase)
-                            @php
-                                $phaseRequirements = $required->filter(fn($item)=>(int)$item->phase->id===(int)$phase->id)->values();
-                                $phaseTaskIds = $job->tasks->where('workflow_phase_id',$phase->id)->pluck('id');
-                                $phaseDocuments = $job->documents->whereIn('task_id',$phaseTaskIds)->values();
-                                $requiredDocumentIds = $phaseRequirements->flatMap(function($requirement) use ($job) {
-                                    return $job->documents
-                                        ->where('task_id', $requirement->task->id)
-                                        ->filter(fn($document) => strcasecmp(trim((string)$document->category), trim((string)$requirement->name)) === 0)
-                                        ->pluck('id');
-                                })->map(fn($id)=>(int)$id)->unique();
-                                $phaseAttachments = $phaseDocuments->reject(fn($doc)=>$requiredDocumentIds->contains((int)$doc->id))->values();
-                            @endphp
-                            <tr class="ft-doc-phase-row"><td colspan="7"><span>⌄</span><b>{{ $phase->sequence }}</b> {{ $phase->name }} <small>{{ $phaseDocuments->count() }} documents · {{ $phaseRequirements->count() }} requirement{{ $phaseRequirements->count()===1?'':'s' }}</small><em>{{ $phaseDocuments->count() }}</em></td></tr>
+            <section class="ft-detail-card ft-job-documents-table ft-doc-library-card">
+                <div class="ft-doc-library-heading">
+                    <div>
+                        <h3>Job documents</h3>
+                        <p>Organized by workflow phase so you can see what is missing without scanning a table.</p>
+                    </div>
+                    <span class="ft-soft-pill {{ $missingRequired ? 'amber' : 'green' }}">{{ $missingRequired ? $missingRequired.' required missing' : 'All required received' }}</span>
+                </div>
 
-                            @forelse($phaseRequirements as $requirement)
-                                @php
-                                    $docs = $job->documents->where('task_id',$requirement->task->id)->filter(fn($document)=>strcasecmp(trim((string)$document->category),trim((string)$requirement->name))===0)->values();
-                                @endphp
-                                <tr class="ft-required-inline-row"><td colspan="7">
-                                    <div><strong>{{ $requirement->task->title }}</strong><span>{{ $docs->count() ? $docs->count().' received' : 'Required document missing' }}</span></div>
-                                    <div class="ft-inline-requirement">
-                                        <span class="{{ $requirement->complete ? 'ok' : 'warn' }}">{{ $requirement->complete ? '✓' : '!' }}</span>
-                                        <div><b>{{ $requirement->name }}</b><small>{{ $phase->name }} · Task: {{ $requirement->task->title }}</small></div>
-                                        <span class="ft-soft-pill {{ $requirement->complete ? 'green' : 'amber' }}">{{ $requirement->complete ? 'Received' : 'Needs action' }}</span>
-                                        @if(!$requirement->complete && $canUploadDocument)
-                                            <button class="ft-outline-btn" type="button" x-on:click="await $wire.set('jobDocumentTaskId', {{ $requirement->task->id }}); document.getElementById('jobDocumentUpload-{{ $job->id }}').click()">Upload</button>
+                <div class="ft-doc-phase-list">
+                    @foreach($job->workflow->phases as $phase)
+                        @php
+                            $phaseRequirements = $required->filter(fn($item)=>(int)$item->phase->id===(int)$phase->id)->values();
+                            $phaseTaskIds = $job->tasks->where('workflow_phase_id',$phase->id)->pluck('id');
+                            $phaseDocuments = $job->documents->whereIn('task_id',$phaseTaskIds)->values();
+                            $phaseRequiredReceived = $phaseRequirements->where('complete', true)->count();
+                            $phaseMissing = $phaseRequirements->where('complete', false)->count();
+                            $requiredDocumentIds = $phaseRequirements->flatMap(function($requirement) use ($job) {
+                                return $job->documents
+                                    ->where('task_id', $requirement->task->id)
+                                    ->filter(fn($document) => strcasecmp(trim((string)$document->category), trim((string)$requirement->name)) === 0)
+                                    ->pluck('id');
+                            })->map(fn($id)=>(int)$id)->unique();
+                            $phaseAttachments = $phaseDocuments->reject(fn($doc)=>$requiredDocumentIds->contains((int)$doc->id))->values();
+                            $openPhase = (int)($job->workflow_phase_id ?? 0) === (int)$phase->id || ((int)($job->workflow_phase_id ?? 0) === 0 && (int)$phase->sequence === 1);
+                        @endphp
+
+                        <details class="ft-doc-phase-group" @if($openPhase) open @endif>
+                            <summary class="ft-doc-phase-summary">
+                                <span class="ft-doc-phase-chevron">›</span>
+                                <b class="ft-doc-phase-number">{{ $phase->sequence }}</b>
+                                <span class="ft-doc-phase-copy">
+                                    <strong>{{ $phase->name }}</strong>
+                                    <small>{{ $phaseRequiredReceived }} of {{ $phaseRequirements->count() }} required received · {{ $phaseDocuments->count() }} file{{ $phaseDocuments->count()===1?'':'s' }}</small>
+                                </span>
+                                @if($phaseMissing)
+                                    <span class="ft-soft-pill amber">{{ $phaseMissing }} needs action</span>
+                                @elseif($phaseRequirements->isNotEmpty())
+                                    <span class="ft-soft-pill green">Complete</span>
+                                @else
+                                    <span class="ft-soft-pill gray">No requirements</span>
+                                @endif
+                            </summary>
+
+                            <div class="ft-doc-phase-body">
+                                @forelse($phaseRequirements as $requirement)
+                                    @php
+                                        $docs = $job->documents->where('task_id',$requirement->task->id)->filter(fn($document)=>strcasecmp(trim((string)$document->category),trim((string)$requirement->name))===0)->values();
+                                    @endphp
+                                    <article class="ft-doc-requirement-card {{ $requirement->complete ? 'is-complete' : 'needs-action' }}">
+                                        <div class="ft-doc-requirement-main">
+                                            <span class="ft-doc-requirement-state">{{ $requirement->complete ? '✓' : '!' }}</span>
+                                            <div class="ft-doc-requirement-copy">
+                                                <div class="ft-doc-requirement-title-line">
+                                                    <b>{{ $requirement->name }}</b>
+                                                    <span class="ft-soft-pill {{ $requirement->complete ? 'green' : 'amber' }}">{{ $requirement->complete ? 'Received' : 'Required' }}</span>
+                                                </div>
+                                                <small>Task: {{ $requirement->task->title }}</small>
+                                                @if($docs->isEmpty())
+                                                    <p>No file has been received for this requirement yet.</p>
+                                                @else
+                                                    <p>{{ $docs->count() }} file{{ $docs->count()===1?'':'s' }} linked to this requirement.</p>
+                                                @endif
+                                            </div>
+                                            @if(!$requirement->complete && $canUploadDocument)
+                                                <button class="ft-outline-btn ft-doc-requirement-upload" type="button" x-on:click="await $wire.set('jobDocumentTaskId', {{ $requirement->task->id }}); document.getElementById('jobDocumentUpload-{{ $job->id }}').click()">Upload file</button>
+                                            @endif
+                                        </div>
+
+                                        @if($docs->isNotEmpty())
+                                            <div class="ft-doc-linked-files">
+                                                @foreach($docs as $doc)
+                                                    @php $extension = strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
+                                                    <div class="ft-doc-linked-file">
+                                                        <span class="ft-file-icon {{ str_contains(strtolower($doc->mime_type ?? ''),'pdf') ? 'pdf' : 'sheet' }}">▣</span>
+                                                        <div class="ft-doc-linked-file-copy">
+                                                            <a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a>
+                                                            <small>{{ $extension }} · v{{ $doc->version }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::isToday($doc->updated_at) ? 'Today '.\App\Support\UserLocalTime::format($doc->updated_at, 'g:i A') : \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</small>
+                                                        </div>
+                                                        <span class="ft-soft-pill green">Linked</span>
+                                                        <div class="ft-doc-linked-actions">
+                                                            <a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>
+                                                            @if(auth()->user()->canModule('documents','delete'))
+                                                                <button class="ft-doc-delete-button" type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?" aria-label="Delete {{ $doc->name }}">×</button>
+                                                            @endif
+                                                        </div>
+                                                    </div>
+                                                @endforeach
+                                            </div>
                                         @endif
+                                    </article>
+                                @empty
+                                    <div class="ft-doc-empty-phase">No Task Pack document requirements in this phase.</div>
+                                @endforelse
+
+                                @if($phaseAttachments->isNotEmpty())
+                                    <div class="ft-doc-attachments-block">
+                                        <div class="ft-doc-subsection-label"><span>Attachments</span><small>Files linked to tasks but not counted as required documents</small></div>
+                                        @foreach($phaseAttachments as $doc)
+                                            @php $extension = strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
+                                            <div class="ft-doc-linked-file is-attachment">
+                                                <span class="ft-file-icon">▣</span>
+                                                <div class="ft-doc-linked-file-copy">
+                                                    <a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a>
+                                                    <small>{{ $extension }} · v{{ $doc->version }} · Task: {{ $doc->task?->title }} · {{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</small>
+                                                </div>
+                                                <span class="ft-soft-pill gray">Attachment</span>
+                                                <div class="ft-doc-linked-actions"><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></div>
+                                            </div>
+                                        @endforeach
                                     </div>
-                                </td></tr>
-                                @foreach($docs as $doc)
-                                    <tr>
-                                        <td><span class="ft-file-icon {{ str_contains(strtolower($doc->mime_type ?? ''),'pdf') ? 'pdf' : 'sheet' }}">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a><small class="ft-doc-task-caption">{{ $requirement->task->title }}</small></td>
-                                        <td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td>
-                                        <td><span class="ft-soft-pill green">Linked</span></td><td>{{ \App\Support\UserLocalTime::isToday($doc->updated_at) ? 'Today '.\App\Support\UserLocalTime::format($doc->updated_at, 'g:i A') : \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td>
-                                        <td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','delete'))<button class="ft-doc-delete-button" type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</td>
-                                    </tr>
+                                @endif
+                            </div>
+                        </details>
+                    @endforeach
+
+                    @if($unlinkedDocs->isNotEmpty())
+                        <details class="ft-doc-phase-group ft-doc-unlinked-group">
+                            <summary class="ft-doc-phase-summary">
+                                <span class="ft-doc-phase-chevron">›</span>
+                                <b class="ft-doc-phase-number">—</b>
+                                <span class="ft-doc-phase-copy"><strong>Existing Job attachments</strong><small>Files not linked to a Task Pack requirement</small></span>
+                                <span class="ft-soft-pill gray">{{ $unlinkedDocs->count() }} file{{ $unlinkedDocs->count()===1?'':'s' }}</span>
+                            </summary>
+                            <div class="ft-doc-phase-body">
+                                @foreach($unlinkedDocs as $doc)
+                                    @php $extension = strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
+                                    <div class="ft-doc-linked-file is-attachment">
+                                        <span class="ft-file-icon">▣</span>
+                                        <div class="ft-doc-linked-file-copy">
+                                            <a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a>
+                                            <small>{{ $extension }} · v{{ $doc->version }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</small>
+                                        </div>
+                                        <span class="ft-soft-pill gray">Attachment</span>
+                                        <div class="ft-doc-linked-actions"><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></div>
+                                    </div>
                                 @endforeach
-                            @empty
-                                <tr><td colspan="7" class="ft-doc-empty-row">No document requirement in this phase's Task Pack.</td></tr>
-                            @endforelse
-
-                            @foreach($phaseAttachments as $doc)
-                                <tr>
-                                    <td><span class="ft-file-icon">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a><small class="ft-doc-task-caption">Task attachment · {{ $doc->task?->title }}</small></td>
-                                    <td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td>
-                                </tr>
-                            @endforeach
-                        @endforeach
-
-                        @if($unlinkedDocs->isNotEmpty())
-                            <tr class="ft-doc-phase-row"><td colspan="7"><span>⌄</span><b>—</b> Existing Job attachments <small>Not counted as Task Pack requirements</small><em>{{ $unlinkedDocs->count() }}</em></td></tr>
-                            @foreach($unlinkedDocs as $doc)
-                                <tr><td><span class="ft-file-icon">▣</span><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">{{ $doc->name }}</a></td><td>{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</td><td>v{{ $doc->version }}</td><td>{{ $doc->uploader?->name ?? 'FlowTrack' }}</td><td><span class="ft-soft-pill gray">Attachment</span></td><td>{{ \App\Support\UserLocalTime::format($doc->updated_at, 'M j, Y') }}</td><td><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a></td></tr>
-                            @endforeach
-                        @endif
-                        </tbody>
-                    </table>
+                            </div>
+                        </details>
+                    @endif
                 </div>
             </section>
         </main>
-
     </div>
 </div>
