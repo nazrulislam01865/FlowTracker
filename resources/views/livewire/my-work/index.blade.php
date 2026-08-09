@@ -1,9 +1,7 @@
 <div
     id="my-work-app"
     x-data="{ metrics: @js($metrics) }"
-    wire:init="loadMetrics"
     x-on:my-work-metrics.window="metrics = $event.detail"
-    x-on:my-work-refresh-metrics.window="$wire.loadMetrics()"
 >
 
 
@@ -62,7 +60,7 @@
             </span>
         </div>
 
-        <div class="work-progress" wire:loading.delay.short wire:target="search,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
 
         <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage">
             <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>

@@ -53,8 +53,11 @@ class Index extends Component
         $user = auth()->user();
         $service = app(MyWorkService::class);
         $this->administratorView = app(\App\Services\AccessControlService::class)->isAdministrator($user);
-        // Keep the first page response focused on the task list. The summary
-        // metrics are loaded immediately after first paint via wire:init.
+        // Load the summary from the optimized My Work aggregate during the same
+        // request. This avoids starting a second Livewire request with wire:init,
+        // which could occupy a PHP worker long after the page was already visible.
+        $this->metrics = $service->metrics($user);
+        $this->metricsLoaded = true;
         $this->statusOptions = $service->statusOptions();
     }
 
@@ -85,17 +88,7 @@ class Index extends Component
     #[Renderless]
     public function loadMetrics(): void
     {
-        $this->metrics = app(MyWorkService::class)->metrics(auth()->user());
-        $this->metricsLoaded = true;
-        $this->dispatch(
-            'my-work-metrics',
-            attention: $this->metrics['attention'] ?? 0,
-            overdue: $this->metrics['overdue'] ?? 0,
-            today: $this->metrics['today'] ?? 0,
-            upcoming: $this->metrics['upcoming'] ?? 0,
-            waiting: $this->metrics['waiting'] ?? 0,
-            mentions: $this->metrics['mentions'] ?? 0,
-        );
+        $this->refreshMetricsSnapshot();
     }
 
     #[Renderless]
@@ -129,9 +122,9 @@ class Index extends Component
             $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
             $result['status'] = (string) $updatedTask->status;
             $result['completed'] = BoardLaneResolver::isCompleted($updatedTask->status);
-            // Do not make the status save wait for the dashboard aggregates.
-            // Refresh those in a second lightweight Livewire request instead.
-            $this->dispatch('my-work-refresh-metrics');
+            // Keep the counters accurate without launching a second background
+            // Livewire request. The optimized aggregate is fast and bounded.
+            $this->refreshMetricsSnapshot(true);
         }
 
         return $result;
@@ -153,7 +146,7 @@ class Index extends Component
         });
 
         if ($result['ok'] ?? false) {
-            $this->dispatch('my-work-refresh-metrics');
+            $this->refreshMetricsSnapshot(true);
         }
 
         return $result;
@@ -162,9 +155,15 @@ class Index extends Component
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
+        $this->refreshMetricsSnapshot(true);
+        $this->statusOptions = app(MyWorkService::class)->statusOptions();
+    }
+
+    private function refreshMetricsSnapshot(bool $fresh = false): void
+    {
         $service = app(MyWorkService::class);
-        $this->metrics = $service->metrics(auth()->user());
-        $this->statusOptions = $service->statusOptions();
+        $this->metrics = $service->metrics(auth()->user(), $fresh);
+        $this->metricsLoaded = true;
         $this->dispatch(
             'my-work-metrics',
             attention: $this->metrics['attention'] ?? 0,

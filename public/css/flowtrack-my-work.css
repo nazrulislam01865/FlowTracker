@@ -347,7 +347,7 @@ body:has(#my-work-app) .lang-btn{font-size:13px}
 }
 
 /* 2026-08-09 performance UX: compact progress feedback while Livewire refreshes the list. */
-#my-work-app .work-progress{display:flex;min-height:28px;align-items:center;gap:7px;margin:2px 2px 7px;color:#62738c;font-size:10px;font-weight:650}
+#my-work-app .work-progress{display:none;min-height:28px;align-items:center;gap:7px;margin:2px 2px 7px;color:#62738c;font-size:10px;font-weight:650}
 #my-work-app .work-progress span{width:12px;height:12px;flex:0 0 12px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:spin .6s linear infinite}
 #my-work-app .list-shell{transition:opacity .12s ease}
 #my-work-app .list-shell.is-refreshing{opacity:.7;pointer-events:none}

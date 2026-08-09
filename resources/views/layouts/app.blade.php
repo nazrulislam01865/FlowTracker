@@ -44,7 +44,7 @@
     <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260809-11">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260809-1">
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260809-2">
     @livewireStyles
 </head>
 <body>

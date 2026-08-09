@@ -84,3 +84,7 @@ Mobile/tablet alignment was refined for the Dashboard secondary sections and the
 ## 2026-08-09 session stability update
 
 The project now normalizes session-cookie transport settings per request, prevents caching of dynamic CSRF-bearing HTML, gracefully recovers from stale CSRF sessions, and preloads the scoped Inquiry stylesheet in the authenticated shell to remove the first-navigation design flash. See `SESSION_419_AND_INQUIRY_FLASH_FIX.md`.
+
+## 2026-08-09 My Task loading regression fix
+
+The My Task page no longer starts a second automatic Livewire metrics request after first paint, and its "Updating tasks..." indicator is now hidden unless a real list request is in progress. See `MY_WORK_INFINITE_LOADING_FIX.md` for the root cause and deployment notes.

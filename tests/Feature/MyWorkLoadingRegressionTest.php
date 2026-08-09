@@ -1,0 +1,37 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+
+class MyWorkLoadingRegressionTest extends TestCase
+{
+    public function test_my_work_does_not_start_a_second_metrics_request_after_first_paint(): void
+    {
+        $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
+        $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
+
+        $this->assertStringNotContainsString('wire:init="loadMetrics"', $view);
+        $this->assertStringNotContainsString('my-work-refresh-metrics', $view);
+        $this->assertStringContainsString('$this->metrics = $service->metrics($user);', $component);
+    }
+
+    public function test_updating_indicator_is_only_flex_while_livewire_is_really_loading(): void
+    {
+        $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
+        $css = file_get_contents(public_path('css/flowtrack-my-work.css'));
+
+        $this->assertStringContainsString('wire:loading.delay.long.flex', $view);
+        $this->assertStringNotContainsString('#my-work-app .work-progress{display:flex;', $css);
+    }
+
+    public function test_my_work_metrics_use_direct_index_friendly_aggregate(): void
+    {
+        $service = file_get_contents(app_path('Services/MyWorkService.php'));
+
+        $this->assertStringContainsString("DB::table('tasks')", $service);
+        $this->assertStringContainsString("->join('flow_jobs as my_work_metric_jobs'", $service);
+        $this->assertStringContainsString("->join('clients as my_work_metric_clients'", $service);
+        $this->assertStringContainsString("->leftJoinSub(\$mentions, 'my_work_metric_mentions'", $service);
+    }
+}

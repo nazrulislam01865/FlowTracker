@@ -157,16 +157,55 @@ class MyWorkService
      * stable while the user explores the list. One aggregate query covers the
      * four date/action summaries; mentions uses the indexed notification link.
      */
-    public function metrics(User $user): array
+    public function metrics(User $user, bool $fresh = false): array
     {
+        // This method used to build the aggregate from the full Eloquent
+        // visibility query (nested whereHas clauses) in a second wire:init
+        // request. On a small PHP-FPM pool that request could stay busy long
+        // enough to make the rest of FlowTrack feel blocked. My Work has a
+        // simpler, documented scope, so calculate the counters directly from
+        // indexed task/job/client columns instead.
+        $access = app(AccessControlService::class);
+        $administrator = $access->isAdministrator($user);
+
+        if (!$administrator) {
+            $scope = $access->scope($user, 'tasks');
+            if (!$access->can($user, 'tasks', 'view') || $scope === 'none' || ($scope === 'department' && !$user->department_id)) {
+                return $this->emptyMetrics();
+            }
+        }
+
         $today = app(WorkspaceSettingsService::class)->localToday();
         $todayDate = $today->toDateString();
-        $tomorrow = $today->addDay()->toDateString();
-        $weekEnd = $today->addDays(7)->toDateString();
-        $base = $this->personalTaskQuery($user, []);
+        $tomorrow = $today->copy()->addDay()->toDateString();
+        $weekEnd = $today->copy()->addDays(7)->toDateString();
 
-        $row = (clone $base)
-            ->reorder()
+        $mentions = DB::table('flow_notifications')
+            ->select('flow_task_id')
+            ->where('user_id', $user->id)
+            ->where('type', 'mention')
+            ->whereNotNull('flow_task_id')
+            ->groupBy('flow_task_id');
+
+        $query = DB::table('tasks')
+            ->join('flow_jobs as my_work_metric_jobs', 'my_work_metric_jobs.id', '=', 'tasks.flow_job_id')
+            ->join('clients as my_work_metric_clients', 'my_work_metric_clients.id', '=', 'my_work_metric_jobs.client_id')
+            ->leftJoinSub($mentions, 'my_work_metric_mentions', fn ($join) => $join->on('my_work_metric_mentions.flow_task_id', '=', 'tasks.id'))
+            ->whereNull('tasks.deleted_at')
+            ->whereNull('tasks.completed_at')
+            ->whereNull('my_work_metric_jobs.deleted_at')
+            ->whereNull('my_work_metric_jobs.completed_at')
+            ->whereNotIn('my_work_metric_jobs.status', JobService::INACTIVE_STATUSES)
+            ->where('my_work_metric_clients.is_active', true);
+
+        // Normal-user My Work is intentionally assignee-strict regardless of
+        // the broader task module scope. Administrators see all visible open
+        // tasks in active Jobs. This matches personalTaskQuery().
+        if (!$administrator) {
+            $query->where('tasks.assignee_id', $user->id);
+        }
+
+        $row = $query
             ->selectRaw(
                 "SUM(CASE WHEN LOWER(tasks.status) NOT LIKE 'waiting%'
                     AND (tasks.needs_attention = 1 OR tasks.due_date <= ? OR LOWER(tasks.priority) IN ('critical','high'))
@@ -180,16 +219,7 @@ class MyWorkService
                 [$tomorrow, $weekEnd],
             )
             ->selectRaw("SUM(CASE WHEN LOWER(tasks.status) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
-            ->selectRaw(
-                "SUM(CASE WHEN EXISTS (
-                    SELECT 1
-                    FROM flow_notifications
-                    WHERE flow_notifications.flow_task_id = tasks.id
-                      AND flow_notifications.user_id = ?
-                      AND flow_notifications.type = 'mention'
-                ) THEN 1 ELSE 0 END) AS mentions_count",
-                [$user->id],
-            )
+            ->selectRaw('SUM(CASE WHEN my_work_metric_mentions.flow_task_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
             ->first();
 
         return [
@@ -199,6 +229,18 @@ class MyWorkService
             'upcoming' => (int) ($row?->upcoming_count ?? 0),
             'waiting' => (int) ($row?->waiting_count ?? 0),
             'mentions' => (int) ($row?->mentions_count ?? 0),
+        ];
+    }
+
+    private function emptyMetrics(): array
+    {
+        return [
+            'attention' => 0,
+            'overdue' => 0,
+            'today' => 0,
+            'upcoming' => 0,
+            'waiting' => 0,
+            'mentions' => 0,
         ];
     }
 
