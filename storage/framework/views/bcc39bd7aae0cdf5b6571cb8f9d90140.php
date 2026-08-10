@@ -155,12 +155,9 @@
 
     <?php elseif($mode === 'create'): ?>
         <?php
-            $createNow = app(\App\Services\WorkspaceSettingsService::class)->localNow();
             $selectedWorkflow = collect($workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createWorkflowId);
             $selectedWorkflowName = (string) ($selectedWorkflow['label'] ?? $selectedWorkflowLabel ?: 'Select workflow');
             $workflowOptionCount = count($workflowFilterOptions);
-            $selectedOwner = collect($userOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createOwnerId);
-            $selectedOwnerName = (string) ($selectedOwner['name'] ?? auth()->user()->name);
         ?>
         <section class="view ft-inquiry-create-v3" x-on:keydown.meta.enter.window="$wire.createInquiry()" x-on:keydown.ctrl.enter.window="$wire.createInquiry()">
             <div class="formwrap ft-inquiry-create-shell">
@@ -198,12 +195,19 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             </div>
 
                             <div class="ft-inquiry-create-field">
-                                <label>Received</label>
+                                <label for="inquiry-received-date">Received *</label>
                                 <div class="ft-inquiry-received-control">
-                                    <span>Today, <?php echo e($createNow->format('g:i A')); ?></span>
-                                    <button type="button" title="Received time is set automatically" aria-label="Received time is set automatically">✎</button>
+                                    <input id="inquiry-received-date" type="date" wire:model="createReceivedDate" aria-describedby="inquiry-received-help">
                                 </div>
-                                <small class="ft-inquiry-field-help">Set automatically</small>
+                                <small id="inquiry-received-help" class="ft-inquiry-field-help">Defaults to today. Change it when the inquiry was received on another date.</small>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['createReceivedDate'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><small class="field-error"><?php echo e($message); ?></small><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
                         </div>
 
@@ -270,13 +274,30 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <input wire:model="referenceNumber" placeholder="Email or client reference (optional)">
                             </label>
 
-                            <label class="ft-inquiry-create-field">
-                                <span>Assigned to</span>
-                                <select wire:model="createOwnerId">
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $userOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $userOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                        <option value="<?php echo e($userOption['id']); ?>"><?php echo e((int) $userOption['id'] === (int) auth()->id() ? 'Me · ' : ''); ?><?php echo e($userOption['name']); ?></option>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                                </select>
+                            <div class="ft-inquiry-create-field">
+                                <label>Assigned to *</label>
+                                <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-create-remote-select inquiry-create-remote ft-inquiry-owner-selector','label' => 'Assigned to','property' => 'createOwnerId','type' => 'users','context' => 'create-inquiry','action' => 'setCreateSelector','value' => $createOwnerId,'placeholder' => 'Search or select assignee...','selectedLabel' => $selectedOwnerLabel ?: null,'initialOptions' => $ownerFilterOptions,'clearable' => false,'wire:key' => 'inquiry-create-owner-selector-'.e($createOwnerId ?: 'none').'-'.e(substr(md5($selectedOwnerLabel ?: 'none'), 0, 8)).'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.remote-filter'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'ft-create-remote-select inquiry-create-remote ft-inquiry-owner-selector','label' => 'Assigned to','property' => 'createOwnerId','type' => 'users','context' => 'create-inquiry','action' => 'setCreateSelector','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createOwnerId),'placeholder' => 'Search or select assignee...','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedOwnerLabel ?: null),'initial-options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($ownerFilterOptions),'clearable' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(false),'wire:key' => 'inquiry-create-owner-selector-'.e($createOwnerId ?: 'none').'-'.e(substr(md5($selectedOwnerLabel ?: 'none'), 0, 8)).'']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['createOwnerId'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -285,7 +306,7 @@ $message = $__bag->first($__errorArgs[0]); ?><small class="field-error"><?php ec
 if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                            </label>
+                            </div>
                         </div>
 
                         <label class="ft-inquiry-create-field ft-inquiry-create-field-full">

@@ -216,15 +216,30 @@ class MasterDataService
     {
         $this->assertManage();
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
+
+        // Inquiry Status is intentionally force-removable from the Master Data UI.
+        // Inquiries store their status label as text, not as a foreign key, and
+        // MasterRecord itself uses SoftDeletes. That means current, historical,
+        // or soft-deleted Inquiries must never block removing a status option.
+        // Delete the mirrored legacy value too so syncLegacy() cannot restore it.
+        if ($record->type === 'inquiry_status') {
+            if (Schema::hasTable('master_values')) {
+                MasterValue::where('group_key', self::LEGACY_GROUPS['inquiry_status'])
+                    ->where('code', $record->code)
+                    ->delete();
+            }
+
+            $record->delete();
+            $this->forgetActiveCache('inquiry_status');
+            return;
+        }
+
         if ($record->children()->exists()) throw ValidationException::withMessages(['record' => 'Remove or reassign child records before deleting this record.']);
         if (DB::table('task_pack_items')->where('default_department_id', $id)->orWhere('priority_id', $id)->orWhere('document_category_id', $id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This record is used by a Task Pack and cannot be deleted. Deactivate it instead.']);
         }
         if (Schema::hasColumn('workflow_phases', 'document_category_id') && DB::table('workflow_phases')->where('document_category_id', $id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This record is used by a Workflow phase and cannot be deleted. Deactivate it instead.']);
-        }
-        if ($record->type === 'inquiry_status' && Schema::hasTable('inquiries') && DB::table('inquiries')->where('workspace_id', $record->workspace_id)->where('status', $record->name)->exists()) {
-            throw ValidationException::withMessages(['record' => 'This Inquiry Status is already used by an Inquiry and cannot be deleted. Deactivate it instead.']);
         }
         if ($record->type === 'task_flag' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_flag_id') && DB::table('tasks')->where('task_flag_id', $record->id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This Task Flag is already assigned to one or more tasks and cannot be deleted. Deactivate it instead.']);

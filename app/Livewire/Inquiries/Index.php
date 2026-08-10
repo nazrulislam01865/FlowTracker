@@ -41,6 +41,7 @@ class Index extends Component
     public string $subject = '';
     public string $requirementNotes = '';
     public string $requestSource = 'Email';
+    public string $createReceivedDate = '';
     public ?int $createOwnerId = null;
 
     // Quick client creation from Create Inquiry.
@@ -65,6 +66,8 @@ class Index extends Component
     public array $userOptions = [];
     public array $clientFilterOptions = [];
     public string $selectedClientLabel = '';
+    public array $ownerFilterOptions = [];
+    public string $selectedOwnerLabel = '';
     public array $taskPackOptions = [];
     public array $workflowFilterOptions = [];
 
@@ -162,8 +165,10 @@ class Index extends Component
         $this->selectedInquiryId = null;
         $this->selectedTaskId = null;
         $this->createOwnerId ??= (int) auth()->id();
+        if ($this->createReceivedDate === '') {
+            $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        }
         $this->loadCreateOptions();
-        $this->loadUserOptions();
     }
 
     public function cancelCreate(): void
@@ -324,6 +329,20 @@ class Index extends Component
                 ->find($id, ['id', 'contact_name']);
             $this->clientContact = (string) ($client?->contact_name ?: '');
             $this->refreshCreateWorkflowOptions();
+            return;
+        }
+
+        if ($property === 'createOwnerId') {
+            abort_unless($raw !== '' && ctype_digit($raw), 422, 'Please choose a valid assignee.');
+            $id = (int) $raw;
+            $selected = $options->options($user, 'users', 'create-inquiry', '', $id, 20)
+                ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
+            abort_unless($selected, 422, 'That assignee is no longer available.');
+
+            $this->createOwnerId = $id;
+            $name = (string) ($selected['label'] ?? '');
+            $this->selectedOwnerLabel = $id === (int) $user->id ? 'Me · '.$name : $name;
+            $this->resetValidation('createOwnerId');
             return;
         }
 
@@ -495,11 +514,9 @@ class Index extends Component
         $assigneeId = $assigneeId === '' || $assigneeId === null ? null : (int) $assigneeId;
         $assignee = $assigneeId ? User::query()->where('is_active', true)->findOrFail($assigneeId) : null;
 
-        $saved = app(InquiryService::class)->updateTask($task, [
-            'assignee_id' => $assigneeId,
-            'due_date' => $task->due_date?->toDateString(),
-            'status' => $task->status,
-        ], auth()->user());
+        // Assignee is intentionally editable even after the task is completed.
+        // Use the dedicated field updater so completed_at/status are preserved.
+        $saved = app(InquiryService::class)->updateTaskAssignee($task, $assigneeId, auth()->user());
 
         return [
             'ok' => true,
@@ -1010,6 +1027,7 @@ class Index extends Component
             'subject' => ['required', 'string', 'max:255'],
             'requirementNotes' => ['nullable', 'string', 'max:60000'],
             'requestSource' => ['required', Rule::in(['Email', 'Phone', 'Other'])],
+            'createReceivedDate' => ['required', 'date_format:Y-m-d'],
             'createOwnerId' => ['required', 'exists:users,id'],
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
@@ -1017,6 +1035,17 @@ class Index extends Component
 
         // A user may only create against a Client they can actually see.
         app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->findOrFail((int) $data['clientId']);
+
+        // Assigned-to uses the same remote option source as the UI. Re-check it
+        // on save so a stale/inactive user cannot be submitted by changing the
+        // Livewire payload manually.
+        $ownerAvailable = app(\App\Services\FilterOptionService::class)
+            ->options(auth()->user(), 'users', 'create-inquiry', '', (int) $data['createOwnerId'], 20)
+            ->contains(fn ($item) => (int) ($item['id'] ?? 0) === (int) $data['createOwnerId']);
+        if (! $ownerAvailable) {
+            $this->addError('createOwnerId', 'That assignee is no longer available.');
+            return;
+        }
 
         $workflowAvailable = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
@@ -1033,7 +1062,7 @@ class Index extends Component
         $service = app(InquiryService::class);
         $canonicalRows = $service->workflowRows(
             (int) $data['createWorkflowId'],
-            app(WorkspaceSettingsService::class)->localToday()->toDateString(),
+            $data['createReceivedDate'],
         );
         if ($canonicalRows === []) {
             $this->addError('createWorkflowId', 'The selected Workflow has no active Task Pack tasks. Add Task Packs in Workflow Setup first.');
@@ -1048,7 +1077,7 @@ class Index extends Component
             'client_id' => $data['clientId'],
             'reference_number' => $data['referenceNumber'],
             'client_contact' => $data['clientContact'],
-            'received_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
+            'received_date' => $data['createReceivedDate'],
             'request_source' => $data['requestSource'],
             'subject' => $data['subject'],
             'requirement_notes' => $data['requirementNotes'],
@@ -1083,6 +1112,14 @@ class Index extends Component
         // options are hydrated; searching is handled by the same remote
         // endpoint used by Create Order.
         $this->clientFilterOptions = $options->options($user, 'clients', 'create-inquiry', '', $this->clientId, 6)->all();
+
+        $this->ownerFilterOptions = $options->options($user, 'users', 'create-inquiry', '', $this->createOwnerId, 6)->all();
+        $selectedOwner = collect($this->ownerFilterOptions)
+            ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $this->createOwnerId);
+        if ($selectedOwner) {
+            $name = (string) ($selectedOwner['label'] ?? '');
+            $this->selectedOwnerLabel = (int) $this->createOwnerId === (int) $user->id ? 'Me · '.$name : $name;
+        }
 
         $this->refreshCreateWorkflowOptions();
     }
@@ -1212,7 +1249,10 @@ class Index extends Component
         $this->subject = '';
         $this->requirementNotes = '';
         $this->requestSource = 'Email';
+        $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         $this->createOwnerId = (int) auth()->id();
+        $this->selectedOwnerLabel = 'Me · '.(string) auth()->user()->name;
+        $this->ownerFilterOptions = [];
         $this->showCreateClientModal = false;
         $this->showCreateContactModal = false;
         $this->newContactName = '';

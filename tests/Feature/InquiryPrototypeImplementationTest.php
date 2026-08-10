@@ -185,4 +185,22 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("'z-index:2450!important'", $filterJs);
     }
 
+
+    public function test_completed_inquiry_tasks_keep_assignee_and_due_date_inline_editing(): void
+    {
+        $taskflow = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
+        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+
+        $this->assertStringContainsString('$canEditTaskFields = $canChangeStatusThisTask;', $taskflow);
+        $this->assertStringContainsString('@if($canEditTaskFields)<button x-show="!editing"', $taskflow);
+        $this->assertStringContainsString('Edit task assignee', $taskflow);
+        $this->assertStringContainsString('Edit task due date', $taskflow);
+        $this->assertStringContainsString('updateTaskAssignee($task, $assigneeId, auth()->user())', $component);
+        $this->assertStringContainsString('public function updateTaskAssignee(InquiryTask $task, ?int $assigneeId, User $actor): InquiryTask', $service);
+        $this->assertStringContainsString('Due date remains editable after task completion.', $service);
+        $this->assertStringContainsString('Updating it must not', $service);
+    }
+
+
 }

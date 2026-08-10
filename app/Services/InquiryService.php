@@ -782,9 +782,35 @@ class InquiryService
     {
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
-        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot be edited.');
+
+        // Due date remains editable after task completion. Updating it must not
+        // reopen the task or alter completed_at/status.
         $task->update(['due_date' => $date ?: null]);
+        $task->inquiry->touch();
+        $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
         $this->activity($task->inquiry, $actor, 'inquiry.task_due_changed', $task->title.' due date changed'.($date ? ' to '.$date : '').'.', ['inquiry_task_id' => $task->id]);
+        return $task->refresh();
+    }
+
+    public function updateTaskAssignee(InquiryTask $task, ?int $assigneeId, User $actor): InquiryTask
+    {
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot be edited.');
+
+        $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        $task->update(['assignee_id' => $assigneeId ?: null]);
+        $task->refresh();
+        $task->loadMissing('inquiry', 'assignee');
+        $task->inquiry->touch();
+
+        if ((int) ($task->assignee_id ?? 0) !== (int) ($oldAssigneeId ?? 0)) {
+            $this->forgetMyTaskShell($oldAssigneeId);
+            $this->notifyTaskAssigned($task, $actor);
+            $this->activity($task->inquiry, $actor, 'inquiry.task_assignee_changed', $task->title.' assignee changed to '.($task->assignee?->name ?: 'Unassigned').'.', ['inquiry_task_id' => $task->id]);
+        }
+
         return $task->refresh();
     }
 

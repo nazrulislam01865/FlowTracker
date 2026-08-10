@@ -39,7 +39,7 @@
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-15">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-16">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>

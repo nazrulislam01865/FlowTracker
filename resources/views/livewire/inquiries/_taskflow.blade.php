@@ -9,6 +9,9 @@
                 $state = $task->completed_at ? 'done' : (strcasecmp(trim((string) $task->status), 'In Progress') === 0 ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
                 $canChangeStatusThisTask = !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
+                // Assignee and due date stay editable even after completion.
+                // Attachments/action controls keep their completed-task lock.
+                $canEditTaskFields = $canChangeStatusThisTask;
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
                 $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
@@ -32,9 +35,9 @@
                             <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="28" /></span>
                             <span class="ft-inquiry-assignee-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
                         </div>
-                        @if($canEditThisTask)<button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
+                        @if($canEditTaskFields)<button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
                     </div>
-                    @if($canEditThisTask)
+                    @if($canEditTaskFields)
                         <div x-cloak x-show="editing" class="ft-inquiry-assignee-picker">
                             <x-ui.inline-remote-user :value="$task->assignee_id ?? ''" :selected-label="$task->assignee?->name ?? 'Unassigned'" trigger-class="ft-task-inline-input" variant="compact" :menu-width="260" />
                         </div>
@@ -47,9 +50,9 @@
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
                     <div class="ft-inquiry-inline-display-row" x-show="!editing">
                         <span class="ft-inquiry-inline-value" x-text="display">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
-                        @if($canEditThisTask)<button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryDue.showPicker ? $refs.inquiryDue.showPicker() : $refs.inquiryDue.focus())">✎</button>@endif
+                        @if($canEditTaskFields)<button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryDue.showPicker ? $refs.inquiryDue.showPicker() : $refs.inquiryDue.focus())">✎</button>@endif
                     </div>
-                    @if($canEditThisTask)
+                    @if($canEditTaskFields)
                         <input x-ref="inquiryDue" x-cloak x-show="editing" x-model="draftValue" class="ft-inquiry-inline-input" type="date"
                             x-on:keydown.escape.prevent="cancelEdit()"
                             x-on:blur="if (editing) cancelEdit()"

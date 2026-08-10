@@ -154,12 +154,9 @@
 
     @elseif($mode === 'create')
         @php
-            $createNow = app(\App\Services\WorkspaceSettingsService::class)->localNow();
             $selectedWorkflow = collect($workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createWorkflowId);
             $selectedWorkflowName = (string) ($selectedWorkflow['label'] ?? $selectedWorkflowLabel ?: 'Select workflow');
             $workflowOptionCount = count($workflowFilterOptions);
-            $selectedOwner = collect($userOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createOwnerId);
-            $selectedOwnerName = (string) ($selectedOwner['name'] ?? auth()->user()->name);
         @endphp
         <section class="view ft-inquiry-create-v3" x-on:keydown.meta.enter.window="$wire.createInquiry()" x-on:keydown.ctrl.enter.window="$wire.createInquiry()">
             <div class="formwrap ft-inquiry-create-shell">
@@ -189,12 +186,12 @@
                             </div>
 
                             <div class="ft-inquiry-create-field">
-                                <label>Received</label>
+                                <label for="inquiry-received-date">Received *</label>
                                 <div class="ft-inquiry-received-control">
-                                    <span>Today, {{ $createNow->format('g:i A') }}</span>
-                                    <button type="button" title="Received time is set automatically" aria-label="Received time is set automatically">✎</button>
+                                    <input id="inquiry-received-date" type="date" wire:model="createReceivedDate" aria-describedby="inquiry-received-help">
                                 </div>
-                                <small class="ft-inquiry-field-help">Set automatically</small>
+                                <small id="inquiry-received-help" class="ft-inquiry-field-help">Defaults to today. Change it when the inquiry was received on another date.</small>
+                                @error('createReceivedDate')<small class="field-error">{{ $message }}</small>@enderror
                             </div>
                         </div>
 
@@ -246,15 +243,24 @@
                                 <input wire:model="referenceNumber" placeholder="Email or client reference (optional)">
                             </label>
 
-                            <label class="ft-inquiry-create-field">
-                                <span>Assigned to</span>
-                                <select wire:model="createOwnerId">
-                                    @foreach($userOptions as $userOption)
-                                        <option value="{{ $userOption['id'] }}">{{ (int) $userOption['id'] === (int) auth()->id() ? 'Me · ' : '' }}{{ $userOption['name'] }}</option>
-                                    @endforeach
-                                </select>
+                            <div class="ft-inquiry-create-field">
+                                <label>Assigned to *</label>
+                                <x-ui.remote-filter
+                                    class="ft-create-remote-select inquiry-create-remote ft-inquiry-owner-selector"
+                                    label="Assigned to"
+                                    property="createOwnerId"
+                                    type="users"
+                                    context="create-inquiry"
+                                    action="setCreateSelector"
+                                    :value="$createOwnerId"
+                                    placeholder="Search or select assignee..."
+                                    :selected-label="$selectedOwnerLabel ?: null"
+                                    :initial-options="$ownerFilterOptions"
+                                    :clearable="false"
+                                    wire:key="inquiry-create-owner-selector-{{ $createOwnerId ?: 'none' }}-{{ substr(md5($selectedOwnerLabel ?: 'none'), 0, 8) }}"
+                                />
                                 @error('createOwnerId')<small class="field-error">{{ $message }}</small>@enderror
-                            </label>
+                            </div>
                         </div>
 
                         <label class="ft-inquiry-create-field ft-inquiry-create-field-full">

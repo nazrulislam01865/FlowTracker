@@ -42,7 +42,7 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-15">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-16">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
