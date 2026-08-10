@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v8-all-context-mentions';
+    private const CACHE_VERSION = 'v9-dashboard-inquiries';
 
     private ?int $clientLifecycleVersion = null;
 
@@ -25,6 +25,7 @@ class DashboardService
         'mentions',
         'mention-count',
         'health',
+        'inquiries',
         'assignees',
         'attention-tasks',
         'ongoing-jobs',
@@ -38,6 +39,7 @@ class DashboardService
         return [
             'metrics' => $this->summary($user),
             'operationalHealth' => $this->operationalHealth($user),
+            'recentInquiries' => $this->recentInquiries($user),
         ];
     }
 
@@ -118,13 +120,37 @@ class DashboardService
                 'needsAttention' => (int) ($jobRow?->attention_jobs ?? 0),
                 'overdueTasks' => (int) ($taskRow?->overdue_tasks ?? 0),
                 'activeClients' => (int) $activeClients,
-                // The current application has no Inquiry entity/table. Keep the
-                // prototype metric present without inventing records.
-                'openInquiries' => 0,
+                'openInquiries' => app(InquiryService::class)->visibleQuery($user)
+                    ->whereNull('result')
+                    ->where('status', '!=', 'Draft')
+                    ->count(),
                 'taggedComments' => $this->unreadMentionCount($user),
                 'shipping' => (int) ($jobRow?->shipping_jobs ?? 0),
             ];
         });
+    }
+
+
+    public function recentInquiries(User $user): Collection
+    {
+        return app(InquiryService::class)->visibleQuery($user)
+            ->whereNull('inquiries.result')
+            ->where('inquiries.status', '!=', 'Draft')
+            ->select([
+                'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id',
+                'inquiries.owner_id', 'inquiries.subject', 'inquiries.status',
+                'inquiries.updated_at',
+            ])
+            ->with([
+                'client:id,name',
+                'owner:id,name,profile_image_path',
+                'currentTask:id,inquiry_id,assignee_id,title,status,due_date,completed_at',
+                'currentTask.assignee:id,name,profile_image_path',
+            ])
+            ->latest('inquiries.updated_at')
+            ->latest('inquiries.id')
+            ->limit(5)
+            ->get();
     }
 
     public function mentions(User $user, string $filter = 'all', int $limit = 12): Collection

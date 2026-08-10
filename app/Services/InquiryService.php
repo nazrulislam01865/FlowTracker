@@ -1075,6 +1075,7 @@ class InquiryService
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'create'), 403, 'You need Order create access to convert this Inquiry.');
         abort_if($inquiry->result, 422, 'This Inquiry already has a final result.');
+        abort_if($inquiry->converted_job_id || $inquiry->sourceOrder()->exists(), 422, 'This Inquiry is already linked to an Order. Unlink it before creating another Order from it.');
         abort_if($inquiry->tasks()->whereNull('completed_at')->exists(), 422, 'Complete every Inquiry taskflow task first.');
 
         $template = WorkflowTemplate::query()

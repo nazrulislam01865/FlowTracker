@@ -9,6 +9,7 @@ use App\Models\FlowJobMember;
 use App\Models\FlowJobPhaseHistory;
 use App\Models\FlowTaskChecklistItem;
 use App\Models\FlowTaskComment;
+use App\Models\Inquiry;
 use App\Models\MasterRecord;
 use App\Models\TaskPackItem;
 use App\Models\Task;
@@ -135,7 +136,7 @@ class JobService
      * each row. Completed Orders remain visible; cancelled/inactive records do
      * not appear in the operational Orders list.
      */
-    public function paginateOrders(User $user, string $search = '', int $perPage = 25): LengthAwarePaginator
+    public function paginateOrders(User $user, string $search = '', int $perPage = 25, ?int $clientId = null): LengthAwarePaginator
     {
         $search = trim($search);
         $searchLength = mb_strlen($search);
@@ -153,7 +154,8 @@ class JobService
             ->values();
 
         $query = $this->visibleQuery($user)
-            ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES);
+            ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES)
+            ->when($clientId, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId));
 
         foreach ($tokens as $token) {
             $token = (string) $token;
@@ -207,6 +209,10 @@ class JobService
                     'activities.created_at',
                 ]),
                 'createdActivity.user:id,name,profile_image_path',
+                'flaggedTasks' => fn ($taskQuery) => app(AccessControlService::class)
+                    ->applyTaskScope($taskQuery, $user)
+                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.needs_attention', 'tasks.task_flag_id', 'tasks.attention_reason'])
+                    ->with('attentionFlag:id,name,status,sort_order'),
             ])
             ->paginate(max(1, min($perPage, 50)));
     }
@@ -257,6 +263,147 @@ class JobService
     }
 
     /**
+     * Search compact Inquiry candidates for the Order > Inquiry tab.
+     * Results stay permission-scoped and bounded so the detail page never
+     * hydrates the full Inquiry dataset.
+     */
+    public function inquiryLinkResults(User $user, FlowJob $job, string $search, int $limit = 8): Collection
+    {
+        $term = trim($search);
+        if (mb_strlen($term) < 2) return collect();
+        if (!app(AccessControlService::class)->can($user, 'inquiries', 'view')) return collect();
+
+        $tokens = collect(preg_split('/\s+/', $term) ?: [])
+            ->filter()
+            ->take(5)
+            ->values();
+
+        $query = app(InquiryService::class)->visibleQuery($user)
+            ->select([
+                'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id', 'inquiries.owner_id',
+                'inquiries.subject', 'inquiries.reference_number', 'inquiries.status', 'inquiries.result',
+                'inquiries.converted_job_id', 'inquiries.updated_at',
+            ])
+            ->with([
+                'client:id,name',
+                'owner:id,name,profile_image_path',
+                'sourceOrder:id,source_inquiry_id,job_number,order_number',
+                'convertedJob:id,job_number,order_number',
+                'items' => fn ($items) => $items
+                    ->select(['id', 'inquiry_id', 'item_name', 'category'])
+                    ->orderBy('sort_order')
+                    ->limit(3),
+            ]);
+
+        foreach ($tokens as $token) {
+            $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], (string) $token).'%';
+            $query->where(function (Builder $match) use ($like): void {
+                $match->where('inquiries.inquiry_number', 'like', $like)
+                    ->orWhere('inquiries.reference_number', 'like', $like)
+                    ->orWhere('inquiries.subject', 'like', $like)
+                    ->orWhere('inquiries.requirement_notes', 'like', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
+                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('name', 'like', $like))
+                    ->orWhereHas('items', fn (Builder $item) => $item
+                        ->where('item_name', 'like', $like)
+                        ->orWhere('category', 'like', $like)
+                        ->orWhere('notes', 'like', $like));
+            });
+        }
+
+        return $query
+            ->reorder()
+            ->orderByRaw('case when inquiries.inquiry_number = ? then 0 else 1 end', [$term])
+            ->orderByRaw('case when inquiries.client_id = ? then 0 else 1 end', [(int) $job->client_id])
+            ->orderByDesc('inquiries.updated_at')
+            ->orderByDesc('inquiries.id')
+            ->limit(max(1, min(8, $limit)))
+            ->get();
+    }
+
+    /**
+     * Link one source Inquiry to an Order. The relationship is traceability
+     * only: no Inquiry files are copied and no Inquiry lifecycle status is
+     * changed by this action.
+     */
+    public function linkSourceInquiry(FlowJob $job, int $inquiryId, User $actor): FlowJob
+    {
+        $this->assertEditable($job, $actor);
+        abort_unless(app(AccessControlService::class)->can($actor, 'inquiries', 'view'), 403);
+
+        return DB::transaction(function () use ($job, $inquiryId, $actor): FlowJob {
+            $lockedJob = $this->visibleQuery($actor)
+                ->lockForUpdate()
+                ->findOrFail($job->id);
+
+            $inquiry = app(InquiryService::class)->visibleQuery($actor)
+                ->lockForUpdate()
+                ->findOrFail($inquiryId);
+
+            abort_if($lockedJob->source_inquiry_id, 409, 'This Order is already linked to an Inquiry.');
+            abort_if((string) $inquiry->result === 'dead', 422, 'A closed Inquiry cannot be linked to an Order.');
+
+            $otherOrderExists = FlowJob::query()
+                ->where('source_inquiry_id', $inquiry->id)
+                ->where('id', '!=', $lockedJob->id)
+                ->exists();
+            abort_if($otherOrderExists, 409, 'This Inquiry is already linked to another Order.');
+
+            if ($inquiry->converted_job_id && (int) $inquiry->converted_job_id !== (int) $lockedJob->id) {
+                abort(409, 'This Inquiry is already linked to another Order.');
+            }
+
+            $lockedJob->update(['source_inquiry_id' => $inquiry->id]);
+
+            // Keep the existing reverse reference synchronized without changing
+            // the Inquiry status/result. This also preserves current Inquiry
+            // detail navigation to its linked Order.
+            if (!$inquiry->converted_job_id) {
+                $inquiry->update(['converted_job_id' => $lockedJob->id]);
+            }
+
+            $lockedJob->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.inquiry_linked',
+                'description' => $inquiry->inquiry_number.' linked as source Inquiry.',
+            ]);
+
+            return $lockedJob->refresh();
+        }, 3);
+    }
+
+    /** Remove only the Inquiry/Order traceability relationship. */
+    public function unlinkSourceInquiry(FlowJob $job, User $actor): FlowJob
+    {
+        $this->assertEditable($job, $actor);
+
+        return DB::transaction(function () use ($job, $actor): FlowJob {
+            $lockedJob = $this->visibleQuery($actor)
+                ->lockForUpdate()
+                ->findOrFail($job->id);
+
+            $inquiryId = (int) ($lockedJob->source_inquiry_id ?? 0);
+            abort_unless($inquiryId > 0, 409, 'This Order does not have a linked Inquiry.');
+
+            $inquiry = Inquiry::query()->lockForUpdate()->find($inquiryId);
+            $number = (string) ($inquiry?->inquiry_number ?: 'Inquiry #'.$inquiryId);
+
+            $lockedJob->update(['source_inquiry_id' => null]);
+            if ($inquiry && (int) $inquiry->converted_job_id === (int) $lockedJob->id) {
+                $inquiry->update(['converted_job_id' => null]);
+            }
+
+            $lockedJob->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.inquiry_unlinked',
+                'description' => $number.' unlinked from this Order.',
+            ]);
+
+            return $lockedJob->refresh();
+        }, 3);
+    }
+
+    /**
      * Hydrate only the relations required by the active Order detail tab.
      * Keeping these relation sets explicit prevents an Order open from
      * loading comments, histories, documents and workflow setup data that the
@@ -264,7 +411,7 @@ class JobService
      */
     public function loadVisibleDetailTab(FlowJob $job, User $user, string $tab): FlowJob
     {
-        abort_unless(in_array($tab, ['overview', 'workflow', 'documents'], true), 422);
+        abort_unless(in_array($tab, ['overview', 'workflow', 'documents', 'inquiry'], true), 422);
 
         if ($tab === 'overview') {
             $job->load([
@@ -308,6 +455,15 @@ class JobService
                 // Task Pack requirement completion; uploader/file metadata is
                 // reserved for the Documents tab.
                 'documents:id,flow_job_id,task_id,category',
+            ]);
+
+            return $job;
+        }
+
+        if ($tab === 'inquiry') {
+            $job->load([
+                'sourceInquiry.client:id,name',
+                'sourceInquiry.owner:id,name,profile_image_path',
             ]);
 
             return $job;
@@ -628,6 +784,12 @@ class JobService
                     'completed_at' => null,
                 ]);
                 app(InquiryService::class)->syncAutomaticStatus($sourceInquiry, $actor);
+            }
+
+            // Release the one-to-one source link before soft deletion so the
+            // Inquiry can be linked/converted again without a unique-index conflict.
+            if ($job->source_inquiry_id) {
+                $job->update(['source_inquiry_id' => null]);
             }
 
             $job->delete();

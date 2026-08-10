@@ -16,6 +16,7 @@ use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
+use Livewire\Attributes\Url;
 use Livewire\Component;
 use Livewire\WithPagination;
 use Throwable;
@@ -33,6 +34,7 @@ class Index extends Component
     public string $search = '';
     public string $job = '';
     public string $client = '';
+    #[Url(except: '')]
     public string $assignee = '';
     public string $status = '';
     public string $due = '';
@@ -47,6 +49,7 @@ class Index extends Component
     public int $taskPackPerPage = BoardTaskPackService::JOBS_PER_PAGE;
     public array $expandedJobs = [];
     public bool $taskGroupsExpanded = true;
+    public bool $hideCompleted = true;
 
     public function setMode(string $mode): void
     {
@@ -95,7 +98,7 @@ class Index extends Component
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort', 'taskSort', 'taskQuick'], true)) {
+        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort', 'taskSort', 'taskQuick', 'hideCompleted'], true)) {
             $this->cardsReady = true;
             $this->cardLimit = 60;
             if ($this->mode === 'tasks') {
@@ -284,8 +287,10 @@ class Index extends Component
     {
         return [
             'search' => $this->search,
+            'assignee' => $this->assignee,
             'quick' => $this->taskQuick,
             'sort' => $this->taskSort,
+            'hide_completed' => $this->hideCompleted,
         ];
     }
 

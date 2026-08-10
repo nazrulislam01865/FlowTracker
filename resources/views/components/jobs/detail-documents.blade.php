@@ -15,10 +15,7 @@
     $canManageDocuments = $canUploadDocument || $canLinkDocument;
 @endphp
 <div class="ft-documents-detail-section ft-exact-documents">
-    @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
-    @error('jobDocumentTaskId')<div class="validation-error">{{ $message }}</div>@enderror
-    @error('jobDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
-    @error('jobDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
+    <?php if (session('success')): ?><div class="flash">{{ session('success') }}</div><?php endif; ?>
 
     <div class="ft-detail-doc-full">
         <main>
@@ -66,7 +63,7 @@
                     </div>
                 </div>
 
-                @if($required->isNotEmpty())
+                <?php if ($required->isNotEmpty()): ?>
                     <div class="ft-doc-upload-steps">
                         <div class="ft-doc-upload-step">
                             <span>1</span>
@@ -87,40 +84,62 @@
                             @endforeach
                         </select>
                         <small class="ft-document-match-note">FlowTrack links the file to the selected phase and task automatically.</small>
+                        <?php if ($errors->has('jobDocumentTaskId')): ?><div class="validation-error ft-field-validation" role="alert">{{ $errors->first('jobDocumentTaskId') }}</div><?php endif; ?>
                     </div>
 
                     <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone ft-doc-upload-actions">
-                        @if($canUploadDocument)
-                            <label class="ft-task-upload-drop ft-livewire-upload-zone ft-doc-primary-drop" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
+                        <?php if ($canUploadDocument): ?>
+                            <label class="ft-task-upload-drop ft-livewire-upload-zone ft-doc-primary-drop {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
                                 <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                                 <span class="ft-paperclip">⌕</span>
                                 <div><b>Upload from device</b><span>Drop files here or <strong>browse</strong></span><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                             </label>
-                        @else
+                        <?php else: ?>
                             <div class="ft-task-upload-drop ft-task-upload-readonly ft-doc-primary-drop"><span class="ft-paperclip">⌕</span><div><b>Document upload</b><span>Read-only access</span><small>You do not have permission to upload Job documents.</small></div></div>
-                        @endif
-                        @if($canLinkDocument)
+                        <?php endif; ?>
+                        <?php if ($canLinkDocument): ?>
                             <button class="ft-outline-btn ft-task-choose-document ft-doc-existing-action" type="button" wire:click="toggleDocumentPicker">
                                 <span>▤</span><span>Choose existing</span>
                             </button>
-                        @endif
+                        <?php endif; ?>
                     </div>
-                    @unless($canManageDocuments)<p class="muted small">You have read-only access to Job documents.</p>@endunless
+                    <?php if (! $canManageDocuments): ?><p class="muted small">You have read-only access to Job documents.</p><?php endif; ?>
 
-                    @if($canUploadDocument && count($jobDocumentUploads ?? []))
+                    <?php if ($canUploadDocument): ?>
+                        <?php if ($errors->has('jobDocumentUploads')): ?>
+                            <div class="ft-upload-field-error validation-error" role="alert">
+                                <span>{{ $errors->first('jobDocumentUploads') }}</span>
+                                <button type="button" wire:click="clearJobDocumentUploads">Remove failed file</button>
+                            </div>
+                        <?php endif; ?>
+                    <?php endif; ?>
+
+                    <?php if ($canUploadDocument && count($jobDocumentUploads ?? [])): ?>
+                        <div class="ft-pending-upload-list" aria-label="Files selected for upload">
+                            @foreach($jobDocumentUploads as $uploadIndex => $upload)
+                                <?php $uploadName = method_exists($upload, 'getClientOriginalName') ? $upload->getClientOriginalName() : ('File '.($uploadIndex + 1)); ?>
+                                <div class="ft-pending-upload-item {{ $errors->has('jobDocumentUploads.'.$uploadIndex) ? 'has-error' : '' }}" wire:key="job-doc-pending-{{ $job->id }}-{{ $uploadIndex }}-{{ md5($uploadName) }}">
+                                    <div class="ft-pending-upload-copy">
+                                        <b>{{ $uploadName }}</b>
+                                        <?php if ($errors->has('jobDocumentUploads.'.$uploadIndex)): ?><small class="validation-error" role="alert">{{ $errors->first('jobDocumentUploads.'.$uploadIndex) }}</small><?php endif; ?>
+                                    </div>
+                                    <button type="button" class="ft-pending-upload-remove" wire:click="removeJobDocumentUpload({{ $uploadIndex }})" aria-label="Remove {{ $uploadName }}">Remove</button>
+                                </div>
+                            @endforeach
+                        </div>
                         <div class="ft-upload-ready-row ft-doc-upload-ready">
                             <span><b>{{ count($jobDocumentUploads ?? []) }}</b> file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready to link</span>
                             <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
                         </div>
-                    @endif
+                    <?php endif; ?>
 
-                    @if($canLinkDocument && ($showDocumentPicker ?? false))
+                    <?php if ($canLinkDocument && ($showDocumentPicker ?? false)): ?>
                         <div class="ft-existing-document-picker ft-doc-existing-picker">
                             <div class="ft-card-row-head">
                                 <div><b>Choose an existing document</b><p>Link a stored client document to the requirement selected above.</p></div>
                                 <button type="button" class="ft-outline-btn" wire:click="toggleDocumentPicker">Close</button>
                             </div>
-                            @if($availableDocuments->isNotEmpty())
+                            <?php if ($availableDocuments->isNotEmpty()): ?>
                                 <div class="ft-doc-existing-picker-actions">
                                     <select wire:model="existingDocumentId">
                                         <option value="">Select a stored document</option>
@@ -130,15 +149,15 @@
                                     </select>
                                     <button class="ft-new-job-btn" type="button" wire:click="attachExistingDocument">Link document</button>
                                 </div>
-                                @error('existingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
-                            @else
+                                <?php if ($errors->has('existingDocumentId')): ?><div class="validation-error">{{ $errors->first('existingDocumentId') }}</div><?php endif; ?>
+                            <?php else: ?>
                                 <p class="muted small">No stored documents are available for this client yet.</p>
-                            @endif
+                            <?php endif; ?>
                         </div>
-                    @endif
-                @else
+                    <?php endif; ?>
+                <?php else: ?>
                     <div class="ft-empty-taskpack-docs">No document requirement exists in the Task Packs selected by this Job. Upload requirements are never created outside the Task Packs.</div>
-                @endif
+                <?php endif; ?>
             </section>
 
             <section class="ft-detail-card ft-job-documents-table ft-doc-library-card">
@@ -168,7 +187,7 @@
                             $openPhase = (int)($job->workflow_phase_id ?? 0) === (int)$phase->id || ((int)($job->workflow_phase_id ?? 0) === 0 && (int)$phase->sequence === 1);
                         @endphp
 
-                        <details class="ft-doc-phase-group" @if($openPhase) open @endif>
+                        <details class="ft-doc-phase-group" <?php if ($openPhase): ?>open<?php endif; ?>>
                             <summary class="ft-doc-phase-summary">
                                 <span class="ft-doc-phase-chevron">›</span>
                                 <b class="ft-doc-phase-number">{{ $phase->sequence }}</b>
@@ -176,13 +195,13 @@
                                     <strong>{{ $phase->name }}</strong>
                                     <small>{{ $phaseRequiredReceived }} of {{ $phaseRequirements->count() }} required received · {{ $phaseDocuments->count() }} file{{ $phaseDocuments->count()===1?'':'s' }}</small>
                                 </span>
-                                @if($phaseMissing)
+                                <?php if ($phaseMissing): ?>
                                     <span class="ft-soft-pill amber">{{ $phaseMissing }} needs action</span>
-                                @elseif($phaseRequirements->isNotEmpty())
+                                <?php elseif ($phaseRequirements->isNotEmpty()): ?>
                                     <span class="ft-soft-pill green">Complete</span>
-                                @else
+                                <?php else: ?>
                                     <span class="ft-soft-pill gray">No requirements</span>
-                                @endif
+                                <?php endif; ?>
                             </summary>
 
                             <div class="ft-doc-phase-body">
@@ -199,18 +218,18 @@
                                                     <span class="ft-soft-pill {{ $requirement->complete ? 'green' : 'amber' }}">{{ $requirement->complete ? 'Received' : 'Required' }}</span>
                                                 </div>
                                                 <small>Task: {{ $requirement->task->title }}</small>
-                                                @if($docs->isEmpty())
+                                                <?php if ($docs->isEmpty()): ?>
                                                     <p>No file has been received for this requirement yet.</p>
-                                                @else
+                                                <?php else: ?>
                                                     <p>{{ $docs->count() }} file{{ $docs->count()===1?'':'s' }} linked to this requirement.</p>
-                                                @endif
+                                                <?php endif; ?>
                                             </div>
-                                            @if(!$requirement->complete && $canUploadDocument)
+                                            <?php if (! $requirement->complete && $canUploadDocument): ?>
                                                 <button class="ft-outline-btn ft-doc-requirement-upload" type="button" x-on:click="await $wire.set('jobDocumentTaskId', {{ $requirement->task->id }}); document.getElementById('jobDocumentUpload-{{ $job->id }}').click()">Upload file</button>
-                                            @endif
+                                            <?php endif; ?>
                                         </div>
 
-                                        @if($docs->isNotEmpty())
+                                        <?php if ($docs->isNotEmpty()): ?>
                                             <div class="ft-doc-linked-files">
                                                 @foreach($docs as $doc)
                                                     @php $extension = strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
@@ -223,20 +242,20 @@
                                                         <span class="ft-soft-pill green">Linked</span>
                                                         <div class="ft-doc-linked-actions">
                                                             <a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>
-                                                            @if(auth()->user()->canModule('documents','delete'))
+                                                            <?php if (auth()->user()->canModule('documents','delete')): ?>
                                                                 <button class="ft-doc-delete-button" type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?" aria-label="Delete {{ $doc->name }}">×</button>
-                                                            @endif
+                                                            <?php endif; ?>
                                                         </div>
                                                     </div>
                                                 @endforeach
                                             </div>
-                                        @endif
+                                        <?php endif; ?>
                                     </article>
                                 @empty
                                     <div class="ft-doc-empty-phase">No Task Pack document requirements in this phase.</div>
                                 @endforelse
 
-                                @if($phaseAttachments->isNotEmpty())
+                                <?php if ($phaseAttachments->isNotEmpty()): ?>
                                     <div class="ft-doc-attachments-block">
                                         <div class="ft-doc-subsection-label"><span>Attachments</span><small>Files linked to tasks but not counted as required documents</small></div>
                                         @foreach($phaseAttachments as $doc)
@@ -252,12 +271,12 @@
                                             </div>
                                         @endforeach
                                     </div>
-                                @endif
+                                <?php endif; ?>
                             </div>
                         </details>
                     @endforeach
 
-                    @if($unlinkedDocs->isNotEmpty())
+                    <?php if ($unlinkedDocs->isNotEmpty()): ?>
                         <details class="ft-doc-phase-group ft-doc-unlinked-group">
                             <summary class="ft-doc-phase-summary">
                                 <span class="ft-doc-phase-chevron">›</span>
@@ -280,7 +299,7 @@
                                 @endforeach
                             </div>
                         </details>
-                    @endif
+                    <?php endif; ?>
                 </div>
             </section>
         </main>

@@ -377,7 +377,7 @@
         @if($requiredDocuments->isNotEmpty())
             <div class="ft-upload-zone compact ft-task-upload-zone ft-job-overview-dropzone">
                 @if($canUploadDocument)
-                    <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="jobOverviewDocumentUpload-{{ $job->id }}">
+                    <label class="ft-task-upload-drop ft-livewire-upload-zone {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone for="jobOverviewDocumentUpload-{{ $job->id }}">
                         <input id="jobOverviewDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                         <span class="ft-paperclip">⌕</span>
                         <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
@@ -387,14 +387,32 @@
                 @endif
                 <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="setDetailTab('documents')">Choose from Documents</button>
             </div>
+            @if($canUploadDocument)
+                @error('jobDocumentUploads')
+                    <div class="ft-upload-field-error validation-error" role="alert">
+                        <span>{{ $message }}</span>
+                        <button type="button" wire:click="clearJobDocumentUploads">Remove failed file</button>
+                    </div>
+                @enderror
+            @endif
             @if($canUploadDocument && count($jobDocumentUploads ?? []))
+                <div class="ft-pending-upload-list" aria-label="Files selected for upload">
+                    @foreach($jobDocumentUploads as $uploadIndex => $upload)
+                        @php($uploadName = method_exists($upload, 'getClientOriginalName') ? $upload->getClientOriginalName() : ('File '.($uploadIndex + 1)))
+                        <div class="ft-pending-upload-item {{ $errors->has('jobDocumentUploads.'.$uploadIndex) ? 'has-error' : '' }}" wire:key="job-overview-doc-pending-{{ $job->id }}-{{ $uploadIndex }}-{{ md5($uploadName) }}">
+                            <div class="ft-pending-upload-copy">
+                                <b>{{ $uploadName }}</b>
+                                @error('jobDocumentUploads.'.$uploadIndex)<small class="validation-error" role="alert">{{ $message }}</small>@enderror
+                            </div>
+                            <button type="button" class="ft-pending-upload-remove" wire:click="removeJobDocumentUpload({{ $uploadIndex }})">Remove</button>
+                        </div>
+                    @endforeach
+                </div>
                 <div class="ft-upload-ready-row">
                     <span>{{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready</span>
                     <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
                 </div>
             @endif
-            @error('jobDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
-            @error('jobDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
         @else
             <div class="ft-empty-taskpack-docs">No Task Pack document requirement is configured for this Job. Open Documents to review the document setup.</div>
         @endif

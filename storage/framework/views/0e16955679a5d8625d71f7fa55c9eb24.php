@@ -1,6 +1,6 @@
 <div
     id="my-work-app"
-    x-data="{ metrics: @js($taskPackMetrics), groupsExpanded: true }"
+    x-data="{ metrics: <?php echo \Illuminate\Support\Js::from($taskPackMetrics)->toHtml() ?>, groupsExpanded: true }"
     x-on:board-task-metrics.window="metrics = $event.detail"
 >
 <style>
@@ -288,33 +288,33 @@ body{background:#f3f6fb;color:#172033}
     <div class="page-head">
         <div>
             <h1>All Tasks</h1>
-            <p>{{ $taskPackAdministratorView
+            <p><?php echo e($taskPackAdministratorView
                 ? 'All active Job tasks, grouped by Order and ranked by what needs action first.'
-                : 'Tasks from Jobs associated with your assigned work, grouped by Order and ranked by what needs action first.' }}</p>
+                : 'Tasks from Jobs associated with your assigned work, grouped by Order and ranked by what needs action first.'); ?></p>
         </div>
     </div>
 
     <section class="work-view" aria-busy="false">
         <div class="metrics" aria-label="All Tasks work summary">
-            <button type="button" class="metric amber {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention">{{ $taskPackMetrics['attention'] ?? 0 }}</strong></span><i>⚑</i></button>
-            <button type="button" class="metric red {{ $taskQuick === 'overdue' ? 'active' : '' }}" wire:click="setTaskQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue">{{ $taskPackMetrics['overdue'] ?? 0 }}</strong></span><i>!</i></button>
-            <button type="button" class="metric amber {{ $taskQuick === 'today' ? 'active' : '' }}" wire:click="setTaskQuick('today')"><span><small>Due today</small><strong x-text="metrics.today">{{ $taskPackMetrics['today'] ?? 0 }}</strong></span><i>◷</i></button>
-            <button type="button" class="metric {{ $taskQuick === 'upcoming' ? 'active' : '' }}" wire:click="setTaskQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming">{{ $taskPackMetrics['upcoming'] ?? 0 }}</strong></span><i>→</i></button>
-            <button type="button" class="metric {{ $taskQuick === 'waiting' ? 'active' : '' }}" wire:click="setTaskQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting">{{ $taskPackMetrics['waiting'] ?? 0 }}</strong></span><i>⌛</i></button>
+            <button type="button" class="metric amber <?php echo e($taskQuick === 'attention' ? 'active' : ''); ?>" wire:click="setTaskQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention"><?php echo e($taskPackMetrics['attention'] ?? 0); ?></strong></span><i>⚑</i></button>
+            <button type="button" class="metric red <?php echo e($taskQuick === 'overdue' ? 'active' : ''); ?>" wire:click="setTaskQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue"><?php echo e($taskPackMetrics['overdue'] ?? 0); ?></strong></span><i>!</i></button>
+            <button type="button" class="metric amber <?php echo e($taskQuick === 'today' ? 'active' : ''); ?>" wire:click="setTaskQuick('today')"><span><small>Due today</small><strong x-text="metrics.today"><?php echo e($taskPackMetrics['today'] ?? 0); ?></strong></span><i>◷</i></button>
+            <button type="button" class="metric <?php echo e($taskQuick === 'upcoming' ? 'active' : ''); ?>" wire:click="setTaskQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming"><?php echo e($taskPackMetrics['upcoming'] ?? 0); ?></strong></span><i>→</i></button>
+            <button type="button" class="metric <?php echo e($taskQuick === 'waiting' ? 'active' : ''); ?>" wire:click="setTaskQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting"><?php echo e($taskPackMetrics['waiting'] ?? 0); ?></strong></span><i>⌛</i></button>
         </div>
 
         <div class="toolbar">
             <label class="search-wrap">
                 <span class="search-icon">⌕</span>
                 <input class="search" type="search" wire:model.live.debounce.400ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search All Tasks">
-                @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($search !== ''): ?><button class="clear" type="button" wire:click="clearTaskSearch">Clear</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </label>
             <div class="quick-filters">
-                <button type="button" class="chip {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')">Needs action</button>
-                <button type="button" class="chip {{ $taskQuick === 'all' ? 'active' : '' }}" wire:click="setTaskQuick('all')">All tasks</button>
-                <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('mentions')">Mentions (<span x-text="metrics.mentions">{{ $taskPackMetrics['mentions'] ?? 0 }}</span>)</button>
+                <button type="button" class="chip <?php echo e($taskQuick === 'attention' ? 'active' : ''); ?>" wire:click="setTaskQuick('attention')">Needs action</button>
+                <button type="button" class="chip <?php echo e($taskQuick === 'all' ? 'active' : ''); ?>" wire:click="setTaskQuick('all')">All tasks</button>
+                <button type="button" class="chip <?php echo e($taskQuick === 'mentions' ? 'active' : ''); ?>" wire:click="setTaskQuick('mentions')">Mentions (<span x-text="metrics.mentions"><?php echo e($taskPackMetrics['mentions'] ?? 0); ?></span>)</button>
             </div>
-            <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
+            <label class="completed-toggle <?php echo e($hideCompleted ? 'active' : ''); ?>">
                 <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
                 <span class="completed-check" aria-hidden="true">✓</span>
                 <span>Hide completed</span>
@@ -328,13 +328,13 @@ body{background:#f3f6fb;color:#172033}
 
         <div class="load-state">
             <span>
-                @if($taskPackPaginator && $taskPackPaginator->total())
-                    Showing {{ $taskPackGroups->count() }} of {{ $taskPackPaginator->total() }} matching Orders · {{ $taskPackTaskCount }} visible tasks
-                @elseif($taskPackAdministratorView)
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskPackPaginator && $taskPackPaginator->total()): ?>
+                    Showing <?php echo e($taskPackGroups->count()); ?> of <?php echo e($taskPackPaginator->total()); ?> matching Orders · <?php echo e($taskPackTaskCount); ?> visible tasks
+                <?php elseif($taskPackAdministratorView): ?>
                     Showing all active Job Task Packs
-                @else
+                <?php else: ?>
                     Showing associated Job Task Packs only
-                @endif
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </span>
             <span class="load-actions">
                 <span class="loading-copy">
@@ -356,30 +356,30 @@ body{background:#f3f6fb;color:#172033}
             <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
             <div>
-                @forelse($taskPackGroups as $group)
-                    <article class="order-group" wire:key="board-task-order-{{ $group['id'] }}" x-data="{ open: true }" x-effect="open = groupsExpanded">
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $taskPackGroups; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $group): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                    <article class="order-group" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'board-task-order-'.e($group['id']).''; ?>wire:key="board-task-order-<?php echo e($group['id']); ?>" x-data="{ open: true }" x-effect="open = groupsExpanded">
                         <header class="order-head">
-                            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
+                            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse <?php echo e($group['number']); ?>"><span x-text="open ? '⌄' : '›'">⌄</span></button>
                             <span class="order-identity">
-                                @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
-                                <span class="order-title">{{ $group['title'] }}</span>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group['route']): ?><a class="order-id" href="<?php echo e($group['route']); ?>" wire:navigate><?php echo e($group['number']); ?></a><?php else: ?><span class="order-id"><?php echo e($group['number']); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                <span class="order-title"><?php echo e($group['title']); ?></span>
                             </span>
-                            <span class="order-client">{{ $group['client'] }}</span>
-                            <span class="order-stage">{{ $group['stage'] }}</span>
-                            <span class="health {{ $group['healthTone'] }}">{{ $group['health'] }}</span>
-                            <span class="order-progress"><i class="progress-track"><i style="width:{{ $group['progress'] }}%"></i></i>{{ $group['progress'] }}%</span>
-                            <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
+                            <span class="order-client"><?php echo e($group['client']); ?></span>
+                            <span class="order-stage"><?php echo e($group['stage']); ?></span>
+                            <span class="health <?php echo e($group['healthTone']); ?>"><?php echo e($group['health']); ?></span>
+                            <span class="order-progress"><i class="progress-track"><i style="width:<?php echo e($group['progress']); ?>%"></i></i><?php echo e($group['progress']); ?>%</span>
+                            <span class="task-count"><?php echo e($group['taskCount']); ?> <?php echo e($group['taskCount'] === 1 ? 'task' : 'tasks'); ?></span>
                         </header>
 
                         <div class="task-rows" x-show="open">
-                            @foreach($group['tasks'] as $task)
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $group['tasks']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                 <div
                                     class="task-row"
-                                    wire:key="board-task-{{ $task['id'] }}"
+                                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'board-task-'.e($task['id']).''; ?>wire:key="board-task-<?php echo e($task['id']); ?>"
                                     x-data="{
                                         saving:false,
-                                        version:@js($task['version']),
-                                        currentStatus:@js($task['status']),
+                                        version:<?php echo \Illuminate\Support\Js::from($task['version'])->toHtml() ?>,
+                                        currentStatus:<?php echo \Illuminate\Support\Js::from($task['status'])->toHtml() ?>,
                                         async saveStatus(event){
                                             const select=event.currentTarget;
                                             const previous=this.currentStatus;
@@ -388,16 +388,11 @@ body{background:#f3f6fb;color:#172033}
                                             this.saving=true;
                                             select.disabled=true;
                                             try{
-                                                const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
+                                                const result=await $wire.updateTaskStatus(<?php echo e($task['id']); ?>,next,this.version);
                                                 if(!result?.ok){select.value=previous;return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
                                                 if(result.metrics)window.dispatchEvent(new CustomEvent('board-task-metrics',{detail:result.metrics}));
-                                                // Status saves are normally renderless for speed. When a task is
-                                                // completed while Hide completed is active, refresh the grouped
-                                                // list once so the completed row disappears immediately and the
-                                                // Order disappears too when it no longer has any visible tasks.
-                                                if(result.completed && @js($hideCompleted))await $wire.$refresh();
                                             }catch(error){select.value=previous;}
                                             finally{this.saving=false;select.disabled=false;}
                                         }
@@ -405,55 +400,77 @@ body{background:#f3f6fb;color:#172033}
                                     x-bind:class="{ 'saving': saving }"
                                 >
                                     <div class="task-main">
-                                        @if($task['route'])<a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>@else<span class="task-link">{{ $task['title'] }}</span>@endif
-                                        <span class="task-ref">{{ $task['number'] }}</span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task['route']): ?><a class="task-link" href="<?php echo e($task['route']); ?>" wire:navigate><?php echo e($task['title']); ?></a><?php else: ?><span class="task-link"><?php echo e($task['title']); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        <span class="task-ref"><?php echo e($task['number']); ?></span>
                                     </div>
-                                    <span class="phase">{{ $task['phase'] }}</span>
-                                    <span class="assignee" title="{{ $task['assignee'] }}">
-                                        <x-ui.avatar :name="$task['assignee']" :src="$task['assigneeImage']" :size="22" />
-                                        <span class="assignee-name">{{ $task['assignee'] }}</span>
+                                    <span class="phase"><?php echo e($task['phase']); ?></span>
+                                    <span class="assignee" title="<?php echo e($task['assignee']); ?>">
+                                        <?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['name' => $task['assignee'],'src' => $task['assigneeImage'],'size' => 22]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['assignee']),'src' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['assigneeImage']),'size' => 22]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $attributes = $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+                                        <span class="assignee-name"><?php echo e($task['assignee']); ?></span>
                                     </span>
-                                    <time class="due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
-                                    <select class="status-select" @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>@endif
-                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                    <time class="due <?php echo e($task['dueTone']); ?>"><?php echo e($task['due']); ?></time>
+                                    <select class="status-select" <?php if($task['canEdit']): ?> x-on:change="saveStatus($event)" <?php else: ?> disabled <?php endif; ?> aria-label="Status for <?php echo e($task['title']); ?>">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!in_array($task['status'], $taskPackStatusOptions, true)): ?><option value="<?php echo e($task['status']); ?>" selected><?php echo e($task['status']); ?></option><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $taskPackStatusOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $statusOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($statusOption); ?>" <?php if($statusOption === $task['status']): echo 'selected'; endif; ?>><?php echo e($statusOption); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                                     </select>
-                                    <span class="flag {{ $task['flagTone'] }}">{{ $task['flag'] }}</span>
-                                    <span class="updated">{{ $task['updated'] }}</span>
-                                    @if($task['route'])<a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>@else<span class="row-action" aria-disabled="true">—</span>@endif
+                                    <span class="flag <?php echo e($task['flagTone']); ?>"><?php echo e($task['flag']); ?></span>
+                                    <span class="updated"><?php echo e($task['updated']); ?></span>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task['route']): ?><a class="row-action" href="<?php echo e($task['route']); ?>" wire:navigate>Open</a><?php else: ?><span class="row-action" aria-disabled="true">—</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </div>
-                            @endforeach
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </div>
                     </article>
-                @empty
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
-                @endforelse
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
 
             <footer class="footer">
                 <span>
-                    @if($taskPackPaginator && $taskPackPaginator->total())
-                        Orders {{ $taskPackPaginator->firstItem() }}–{{ $taskPackPaginator->lastItem() }} of {{ $taskPackPaginator->total() }} · {{ $taskPackTaskCount }} tasks on this page
-                    @elseif($taskPackAdministratorView)
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskPackPaginator && $taskPackPaginator->total()): ?>
+                        Orders <?php echo e($taskPackPaginator->firstItem()); ?>–<?php echo e($taskPackPaginator->lastItem()); ?> of <?php echo e($taskPackPaginator->total()); ?> · <?php echo e($taskPackTaskCount); ?> tasks on this page
+                    <?php elseif($taskPackAdministratorView): ?>
                         All active Job tasks
-                    @else
+                    <?php else: ?>
                         Associated Job tasks
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </span>
-                @php
+                <?php
                     $currentPage = $taskPackPaginator?->currentPage() ?? 1;
                     $lastPage = max(1, $taskPackPaginator?->lastPage() ?? 1);
                     $pageStart = max(1, $currentPage - 2);
                     $pageEnd = min($lastPage, $currentPage + 2);
-                @endphp
+                ?>
                 <nav class="pages" aria-label="Pagination">
-                    <button type="button" class="page-button" wire:click="previousPage('taskPackPage')" @disabled(!$taskPackPaginator || $taskPackPaginator->onFirstPage())>Previous</button>
-                    @for($pageNumber = $pageStart; $pageNumber <= $pageEnd; $pageNumber++)
-                        <button type="button" class="page-button {{ $pageNumber === $currentPage ? 'active' : '' }}" wire:click="gotoPage({{ $pageNumber }}, 'taskPackPage')" @if($pageNumber === $currentPage) aria-current="page" @endif>{{ $pageNumber }}</button>
-                    @endfor
-                    <button type="button" class="page-button" wire:click="nextPage('taskPackPage')" @disabled(!$taskPackPaginator || !$taskPackPaginator->hasMorePages())>Next</button>
+                    <button type="button" class="page-button" wire:click="previousPage('taskPackPage')" <?php if(!$taskPackPaginator || $taskPackPaginator->onFirstPage()): echo 'disabled'; endif; ?>>Previous</button>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php for($pageNumber = $pageStart; $pageNumber <= $pageEnd; $pageNumber++): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <button type="button" class="page-button <?php echo e($pageNumber === $currentPage ? 'active' : ''); ?>" wire:click="gotoPage(<?php echo e($pageNumber); ?>, 'taskPackPage')" <?php if($pageNumber === $currentPage): ?> aria-current="page" <?php endif; ?>><?php echo e($pageNumber); ?></button>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endfor; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                    <button type="button" class="page-button" wire:click="nextPage('taskPackPage')" <?php if(!$taskPackPaginator || !$taskPackPaginator->hasMorePages()): echo 'disabled'; endif; ?>>Next</button>
                 </nav>
             </footer>
         </section>
     </section>
 </div>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/board/index.blade.php ENDPATH**/ ?>

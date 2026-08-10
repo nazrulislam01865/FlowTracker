@@ -3,35 +3,34 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>Sign in — {{ $branding['name'] ?? 'FlowTrack' }}</title>
-    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
+    <title>STEP PROMO</title>
+    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp') }}">
     @vite(['resources/css/login.css'])
 </head>
 <body>
 <div class="login screen">
-    <section class="login-visual">
-        <div>
-            <div class="brand ft-login-brand ft-login-brand-dark">
-                @if($branding['logo_url'] ?? null)
-                    <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
-                @else
-                    <div class="brand-mark">FT</div>
-                    <span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
-                @endif
-            </div>
+    <section class="login-visual" aria-label="Step Promo">
+        <div class="login-visual-content">
+            <img
+                class="step-promo-logo"
+                src="{{ asset('images/step-promo/step-promo-logo.webp') }}"
+                alt="STEP PROMO — Your Promo Partner"
+            >
 
-            <h1>One Order. Every phase. Clear ownership.</h1>
-            <p>A practical workspace for promotional-product sales, artwork, samples, manufacturing, shipping, invoicing and collection.</p>
+            <div class="login-message">
+                <h1>Your promo journey,<br>perfectly in step.</h1>
+                <p>Manage every quote, proof, sample, production<br class="desktop-break"> milestone and delivery from one clear workspace.</p>
 
-            <div class="flow-preview">
-                <div>01 · Request &amp; quotation</div>
-                <div>02 · Artwork &amp; sample</div>
-                <div>03 · Production &amp; quality</div>
-                <div>04 · Shipment &amp; payment</div>
+                <div class="flow-preview" aria-label="Promotional workflow stages">
+                    <div>01 · Quote</div>
+                    <div>02 · Artwork</div>
+                    <div>03 · Production</div>
+                    <div>04 · Delivery</div>
+                </div>
             </div>
         </div>
 
-        <div class="small" style="color:#a9bdd2">Secure operations workspace</div>
+        <div class="login-visual-footer">Built for smoother promotional workflows</div>
     </section>
 
     <section class="login-form-wrap">
@@ -52,17 +51,13 @@
                 </div>
             @endif
 
-            <div class="brand ft-login-brand ft-login-brand-form" style="margin-bottom:30px">
-                @if($branding['logo_url'] ?? null)
-                    <img src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
-                @else
-                    <div class="brand-mark" style="background:var(--blue);color:#fff">FT</div>
-                    <span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
-                @endif
+            <div class="login-form-brand">
+                <img src="{{ asset('images/step-promo/step-promo-icon.webp') }}" alt="" aria-hidden="true">
+                <span>STEP PROMO</span>
             </div>
 
             <h2>Welcome back</h2>
-            <p>Sign in to manage Orders, assignments and client delivery.</p>
+            <p class="login-form-intro">Sign in to manage Orders, assignments and client delivery.</p>
 
             <div class="field">
                 <label for="email">Email</label>
@@ -82,45 +77,56 @@
 
             <div class="field">
                 <label for="password">Password</label>
-                <div style="position: relative; display: flex; align-items: center;">
+                <div class="password-field">
                     <input
                         id="password"
                         name="password"
                         type="password"
                         autocomplete="current-password"
                         required
-                        style="padding-right: 40px; width: 100%; box-sizing: border-box;"
                     >
-                    <button type="button" id="togglePassword" style="position: absolute; right: 12px; background: none; border: none; cursor: pointer; color: #94a3b8; padding: 0; display: flex;" tabindex="-1" title="Toggle password visibility">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>
+                    <button
+                        type="button"
+                        id="togglePassword"
+                        class="password-toggle"
+                        tabindex="-1"
+                        title="Toggle password visibility"
+                        aria-label="Show password"
+                    >
+                        <svg class="eye-open" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8z"></path>
+                            <circle cx="12" cy="12" r="3"></circle>
+                        </svg>
+                        <svg class="eye-closed" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                            <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path>
+                            <line x1="1" y1="1" x2="23" y2="23"></line>
+                        </svg>
                     </button>
                 </div>
+                @error('password')
+                    <div class="validation-error" role="alert">{{ $message }}</div>
+                @enderror
             </div>
 
-            <label class="check-row" style="border:0;margin-bottom:12px">
-                <input type="checkbox" name="remember" value="1">
+            <label class="check-row">
+                <input type="checkbox" name="remember" value="1" @checked(old('remember'))>
                 <span>Remember me</span>
             </label>
 
             <button class="primary" type="submit">Sign in</button>
-
         </form>
     </section>
 </div>
 
 <script>
-    document.getElementById('togglePassword').addEventListener('click', function () {
-        const passwordInput = document.getElementById('password');
-        const type = passwordInput.getAttribute('type') === 'password' ? 'text' : 'password';
-        passwordInput.setAttribute('type', type);
+    const togglePassword = document.getElementById('togglePassword');
+    const passwordInput = document.getElementById('password');
 
-        if (type === 'text') {
-            this.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"></path><line x1="1" y1="1" x2="23" y2="23"></line></svg>';
-            this.style.color = '#3b82f6';
-        } else {
-            this.innerHTML = '<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"></path><circle cx="12" cy="12" r="3"></circle></svg>';
-            this.style.color = '#94a3b8';
-        }
+    togglePassword?.addEventListener('click', function () {
+        const showPassword = passwordInput.type === 'password';
+        passwordInput.type = showPassword ? 'text' : 'password';
+        this.classList.toggle('is-visible', showPassword);
+        this.setAttribute('aria-label', showPassword ? 'Hide password' : 'Show password');
     });
 </script>
 </body>

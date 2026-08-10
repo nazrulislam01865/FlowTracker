@@ -2,6 +2,25 @@
     $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
     $canCreateOrder = auth()->user()->canAccess('jobs.create');
     $canCreateClient = auth()->user()->canModule('clients', 'create');
+    $inquiryFlag = static function ($inquiry) use ($today): array {
+        $task = $inquiry->currentTask;
+        $status = strtolower((string) ($task?->status ?: $inquiry->status));
+        $due = $task?->due_date;
+
+        if ($due && $due->lt($today)) return ['Overdue', 'red'];
+        if ($due && $due->isSameDay($today)) return ['Due today', 'amber'];
+        if (str_contains($status, 'waiting for client')) return ['Client wait', 'amber'];
+        if (str_contains($status, 'waiting for supplier')) return ['Supplier wait', 'amber'];
+        if (str_contains($status, 'hold')) return ['On hold', 'amber'];
+        return ['On track', 'green'];
+    };
+    $inquiryStatusTone = static function (?string $status): string {
+        $value = strtolower((string) $status);
+        if (str_contains($value, 'wait') || str_contains($value, 'hold')) return 'amber';
+        if (str_contains($value, 'progress')) return 'blue';
+        if (str_contains($value, 'ready')) return 'green';
+        return '';
+    };
 ?>
 
 <div class="ft-dashboard-prototype">
@@ -30,7 +49,7 @@
         <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value"><?php echo e($metrics['needsAttention']); ?></strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
         <a class="ft-kpi" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value"><?php echo e($metrics['overdueTasks']); ?></strong><span class="ft-kpi-foot">Require immediate update</span></a>
         <a class="ft-kpi" href="<?php echo e(route('clients.index')); ?>" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value"><?php echo e($metrics['activeClients']); ?></strong><span class="ft-kpi-foot">Current active client records</span></a>
-        <div class="ft-kpi" aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value"><?php echo e($metrics['openInquiries']); ?></strong><span class="ft-kpi-foot">Inquiry module not configured</span></div>
+        <a class="ft-kpi" href="<?php echo e(route('inquiries.index')); ?>" wire:navigate aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value"><?php echo e($metrics['openInquiries']); ?></strong><span class="ft-kpi-foot">Current open inquiry records</span></a>
         <a class="ft-kpi" href="<?php echo e(route('notifications')); ?>" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value"><?php echo e($metrics['taggedComments']); ?></strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
     </section>
 
@@ -38,14 +57,57 @@
         <section class="ft-panel" id="inquiries">
             <div class="ft-panel-head">
                 <div><h2 class="ft-panel-title">Open enquiries</h2><div class="ft-panel-note">Pre-job opportunities, ownership, quotation progress and follow-up flags</div></div>
-                <span class="ft-link" aria-disabled="true">View all enquiries</span>
+                <a class="ft-link" href="<?php echo e(route('inquiries.index')); ?>" wire:navigate>View all enquiries</a>
             </div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive">
                     <colgroup><col style="width:17%"><col style="width:25%"><col style="width:20%"><col style="width:18%"><col style="width:12%"><col style="width:8%"></colgroup>
                     <thead><tr><th>Inquiry ID</th><th>Client</th><th>Assignee Name</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
                     <tbody>
-                        <tr class="ft-table-empty-row"><td colspan="6">No inquiry records are available in this FlowTrack build.</td></tr>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $recentInquiries; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $inquiry): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <?php
+                                $assignee = $inquiry->currentTask?->assignee ?: $inquiry->owner;
+                                [$flagLabel, $flagTone] = $inquiryFlag($inquiry);
+                                $displayStatus = $inquiry->status;
+                            ?>
+                            <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'dashboard-inquiry-'.e($inquiry->id).''; ?>wire:key="dashboard-inquiry-<?php echo e($inquiry->id); ?>">
+                                <td data-label="Inquiry ID"><a class="ft-text-link" href="<?php echo e(route('inquiries.index', ['open' => $inquiry->id])); ?>" wire:navigate><?php echo e($inquiry->inquiry_number); ?></a><span class="ft-ref ft-cell-clip"><?php echo e($inquiry->subject); ?></span></td>
+                                <td data-label="Client"><span class="ft-cell-clip"><?php echo e($inquiry->client?->name ?? 'No client'); ?></span></td>
+                                <td data-label="Assignee Name">
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($assignee): ?>
+                                        <span class="ft-person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['user' => $assignee,'name' => $assignee->name,'size' => 22]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['user' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($assignee),'name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($assignee->name),'size' => 22]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $attributes = $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?><span class="ft-cell-clip"><?php echo e($assignee->name); ?></span></span>
+                                    <?php else: ?>
+                                        <span class="ft-cell-clip">Unassigned</span>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </td>
+                                <td data-label="Status"><span class="ft-pill <?php echo e($inquiryStatusTone($displayStatus)); ?>"><?php echo e($displayStatus ?: 'Ready'); ?></span></td>
+                                <td data-label="Flag"><span class="ft-flag <?php echo e($flagTone); ?>"><?php echo e($flagLabel); ?></span></td>
+                                <td data-label="View"><a class="ft-view" href="<?php echo e(route('inquiries.index', ['open' => $inquiry->id])); ?>" wire:navigate>View</a></td>
+                            </tr>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            <tr class="ft-table-empty-row"><td colspan="6">No open inquiries.</td></tr>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </tbody>
                 </table>
             </div>

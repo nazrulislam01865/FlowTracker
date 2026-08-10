@@ -13,8 +13,8 @@
         <meta name="flowtrack-display-timezone" content="{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}">
         <meta name="flowtrack-rich-text-upload-url" content="{{ route('rich-text-images.store') }}">
     @endauth
-    <title>{{ $title ?? 'FlowTrack' }} — {{ $branding['name'] ?? config('app.name','FlowTrack') }}</title>
-    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('favicon.ico') }}">
+    <title>{{ ($title ?? null) ? $title.' — ' : '' }}STEP PROMO</title>
+    <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp') }}">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260808-5"></script>
@@ -45,7 +45,7 @@
     <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-10">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260809-2">
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     @livewireStyles
 </head>
 <body>

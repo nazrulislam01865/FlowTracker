@@ -62,7 +62,7 @@
 <?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?><span class="ft-cell-clip"><?php echo e($person->name); ?></span></span></td>
-                                <td data-label="Ongoing"><a class="ft-text-link" href="<?php echo e(route('all-tasks')); ?>" wire:navigate><?php echo e($person->ongoing_count); ?> ↗</a></td>
+                                <td data-label="Ongoing"><a class="ft-text-link" href="<?php echo e(route('all-tasks', ['assignee' => $person->id])); ?>" wire:navigate><?php echo e($person->ongoing_count); ?> ↗</a></td>
                                 <td data-label="Done"><?php echo e($person->done_count); ?></td>
                                 <td data-label="On time"><?php echo e($onTime); ?>%</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:<?php echo e($workloadPct); ?>%"></span></i><?php echo e($workloadLabel); ?></span></td>

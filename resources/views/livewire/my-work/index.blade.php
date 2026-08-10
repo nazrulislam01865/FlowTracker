@@ -1,6 +1,6 @@
 <div
     id="my-work-app"
-    x-data="{ metrics: @js($metrics) }"
+    x-data="{ metrics: @js($metrics), groupsExpanded: true }"
     x-on:my-work-metrics.window="metrics = $event.detail"
 >
 
@@ -37,6 +37,11 @@
                 <button type="button" class="chip {{ $quick === 'all' ? 'active' : '' }}" wire:click="setQuick('all')">All my tasks</button>
                 <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('mentions')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
             </div>
+            <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
+                <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
+                <span class="completed-check" aria-hidden="true">✓</span>
+                <span>Hide completed</span>
+            </label>
             <select class="sort" wire:model.live="sort" aria-label="Sort work">
                 <option value="action">Sort: Action priority</option>
                 <option value="due">Sort: Due soon</option>
@@ -54,20 +59,30 @@
                     Showing personal work only
                 @endif
             </span>
-            <span class="loading-copy">
-                <span wire:loading.remove wire:target="search,quick,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
-                <span wire:loading.delay.long wire:target="search,quick,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+            <span class="load-actions">
+                <span class="loading-copy">
+                    <span wire:loading.remove wire:target="search,quick,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
+                    <span wire:loading.delay.long wire:target="search,quick,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+                </span>
+                <span class="group-controls" aria-label="Order group controls">
+                    <button type="button" class="group-control" x-on:click="groupsExpanded = true" title="Expand all Orders" aria-label="Expand all Orders">
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 6 5 5 5-5M5 11l5 5 5-5"/></svg>
+                    </button>
+                    <button type="button" class="group-control" x-on:click="groupsExpanded = false" title="Collapse all Orders" aria-label="Collapse all Orders">
+                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5 14 5-5 5 5M5 9l5-5 5 5"/></svg>
+                    </button>
+                </span>
             </span>
         </div>
 
-        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
 
-        <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,sort,setQuick,clearSearch,gotoPage,previousPage,nextPage">
+        <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage">
             <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
             <div>
                 @foreach($workGroups as $group)
-                    <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: true }">
+                    <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: true }" x-effect="open = groupsExpanded">
                         <header class="order-head">
                             <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
                             <span class="order-identity">
@@ -102,6 +117,10 @@
                                                 if(!result?.ok){select.value=previous;return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
+                                                // Keep the renderless status update, but re-query once when
+                                                // completion changes list membership. This removes the task now,
+                                                // and removes its Order group too if it was the final visible task.
+                                                if(result.completed && @js($hideCompleted))await $wire.$refresh();
                                             }catch(error){select.value=previous;}
                                             finally{this.saving=false;select.disabled=false;}
                                         }

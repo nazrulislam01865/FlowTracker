@@ -130,7 +130,7 @@ class ClientService
 
     public function detail(User $user, int $clientId): array
     {
-        $client = $this->visibleQuery($user)->with('accountManager')->findOrFail($clientId);
+        $client = $this->visibleQuery($user)->with(['accountManager','shippingAddresses'])->findOrFail($clientId);
         $jobs = app(JobService::class)->visibleQuery($user)
             ->where('client_id', $client->id)
             ->with(['phase','owner'])

@@ -39,6 +39,11 @@ class Task extends Model
         return $this->belongsTo(User::class, 'assignee_id');
     }
 
+    public function attentionFlag(): BelongsTo
+    {
+        return $this->belongsTo(MasterRecord::class, 'task_flag_id');
+    }
+
     public function template(): BelongsTo
     {
         return $this->belongsTo(TaskPackTask::class, 'task_pack_task_id');

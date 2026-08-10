@@ -22,13 +22,18 @@ class BoardTaskPackService
      * user can understand the surrounding workflow without exposing unrelated
      * Jobs.
      */
-    public function visibleJobQuery(User $user): Builder
+    public function visibleJobQuery(User $user, bool $includeCompleted = false): Builder
     {
         $access = app(AccessControlService::class);
         $query = FlowJob::query()
             ->whereHas('client', fn (Builder $client) => $client->where('is_active', true))
-            ->whereNull('flow_jobs.completed_at')
             ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES);
+
+        if (!$includeCompleted) {
+            $query
+                ->whereNull('flow_jobs.completed_at')
+                ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'");
+        }
 
         if (!$access->can($user, 'tasks', 'view')) {
             return $query->whereRaw('1 = 0');
@@ -62,13 +67,16 @@ class BoardTaskPackService
     ): array {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         $baseTasks = $this->filteredTaskQuery($user, $filters);
+        $quick = (string) ($filters['quick'] ?? 'all');
+        $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
+        $openOnly = $hideCompleted || $quick !== 'all';
 
         $grouped = (clone $baseTasks)
             ->reorder()
             ->select('tasks.flow_job_id')
             ->selectRaw(
                 "MIN(CASE
-                    WHEN tasks.completed_at IS NOT NULL OR LOWER(tasks.status) = 'completed' THEN 6
+                    WHEN tasks.completed_at IS NOT NULL OR LOWER(TRIM(tasks.status)) = 'completed' THEN 6
                     WHEN tasks.needs_attention = 1 THEN 0
                     WHEN tasks.due_date < ? THEN 1
                     WHEN tasks.due_date = ? THEN 2
@@ -78,7 +86,7 @@ class BoardTaskPackService
                 END) AS action_rank",
                 [$today, $today],
             )
-            ->selectRaw("MIN(CASE WHEN tasks.completed_at IS NULL AND LOWER(tasks.status) != 'completed' THEN tasks.due_date END) AS min_due")
+            ->selectRaw("MIN(CASE WHEN tasks.completed_at IS NULL AND LOWER(TRIM(tasks.status)) != 'completed' THEN tasks.due_date END) AS min_due")
             ->selectRaw('MAX(tasks.updated_at) AS last_task_update')
             ->groupBy('tasks.flow_job_id');
 
@@ -142,20 +150,36 @@ class BoardTaskPackService
         // so only the exact tasks whose own comments contain a valid @mention
         // are loaded. A mention on one task must never reveal sibling task rows
         // merely because they belong to the same Order.
-        $mentionsOnly = (string) ($filters['quick'] ?? 'all') === 'mentions';
-        $tasks = $mentionsOnly
+        $mentionsOnly = $quick === 'mentions';
+        // An explicit assignee filter is also task-level. This is important for
+        // dashboard drill-downs: clicking an assignee's workload must show only
+        // that person's tasks, not every sibling task from the same Orders.
+        $taskLevelFilter = $mentionsOnly || filled($filters['assignee'] ?? null);
+        $tasks = $taskLevelFilter
             ? (clone $baseTasks)->whereIn('tasks.flow_job_id', $jobIds)
             : Task::query()->whereIn('tasks.flow_job_id', $jobIds);
+
+        // Group-level filters intentionally load the surrounding Task Pack for
+        // each matching Order. Hide completed is different: it is a display
+        // constraint and must also be applied to the hydrated sibling rows.
+        // Without this second constraint, a Job qualified through one open task
+        // but its completed sibling tasks were added back immediately afterward.
+        if (!$taskLevelFilter && $openOnly) {
+            $tasks
+                ->whereNull('tasks.completed_at')
+                ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
+        }
 
         $tasks->select([
                 'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.progress',
-                'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason',
+                'tasks.due_date', 'tasks.needs_attention', 'tasks.task_flag_id', 'tasks.attention_reason',
                 'tasks.completed_at', 'tasks.updated_at',
             ])
             ->with([
                 'phase:id,name,short_name,sequence',
                 'assignee:id,name,department_id,profile_image_path',
+                'attentionFlag:id,name,status,sort_order',
             ]);
 
         $this->orderTasks($tasks, (string) ($filters['sort'] ?? 'action'), $today);
@@ -235,23 +259,24 @@ class BoardTaskPackService
         $base = Task::query()
             ->whereIn('tasks.flow_job_id', $visibleJobIds)
             ->whereNull('tasks.completed_at')
-            ->whereRaw("LOWER(tasks.status) != 'completed'");
+            ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
 
         $row = (clone $base)
             ->reorder()
             ->selectRaw(
-                "SUM(CASE WHEN LOWER(tasks.status) NOT LIKE 'waiting%'
-                    AND (tasks.needs_attention = 1 OR tasks.due_date <= ? OR LOWER(tasks.priority) IN ('critical','high'))
+                "SUM(CASE WHEN tasks.needs_attention = 1
+                    OR (LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'
+                        AND (tasks.due_date <= ? OR LOWER(tasks.priority) IN ('critical','high')))
                     THEN 1 ELSE 0 END) AS attention_count",
                 [$weekEnd],
             )
             ->selectRaw('SUM(CASE WHEN tasks.due_date < ? THEN 1 ELSE 0 END) AS overdue_count', [$todayDate])
             ->selectRaw('SUM(CASE WHEN tasks.due_date = ? THEN 1 ELSE 0 END) AS today_count', [$todayDate])
             ->selectRaw(
-                "SUM(CASE WHEN tasks.due_date BETWEEN ? AND ? AND LOWER(tasks.status) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) AS upcoming_count",
+                "SUM(CASE WHEN tasks.due_date BETWEEN ? AND ? AND LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) AS upcoming_count",
                 [$tomorrow, $weekEnd],
             )
-            ->selectRaw("SUM(CASE WHEN LOWER(tasks.status) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
+            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tasks.status)) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
             ->first();
 
         $mentions = (clone $base)
@@ -283,7 +308,11 @@ class BoardTaskPackService
 
     private function filteredTaskQuery(User $user, array $filters): Builder
     {
-        $visibleJobIds = $this->visibleJobQuery($user)
+        $quick = (string) ($filters['quick'] ?? 'all');
+        $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
+        $openOnly = $hideCompleted || $quick !== 'all';
+
+        $visibleJobIds = $this->visibleJobQuery($user, includeCompleted: !$openOnly)
             ->reorder()
             ->select('flow_jobs.id');
 
@@ -300,6 +329,7 @@ class BoardTaskPackService
                 $inner->where('tasks.task_number', 'like', $looksLikeReference ? $prefix : $like)
                     ->orWhere('tasks.title', 'like', $like)
                     ->orWhere('tasks.attention_reason', 'like', $like)
+                    ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->where('name', 'like', $like))
                     ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
                     ->orWhereHas('job', fn (Builder $job) => $job
                         ->where('job_number', 'like', $looksLikeReference ? $prefix : $like)
@@ -326,7 +356,13 @@ class BoardTaskPackService
                 };
             });
 
-        $this->applyQuickFilter($query, $user, (string) ($filters['quick'] ?? 'all'));
+        $this->applyQuickFilter($query, $user, $quick);
+
+        if ($openOnly) {
+            $query
+                ->whereNull('tasks.completed_at')
+                ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
+        }
 
         return $query;
     }
@@ -341,22 +377,23 @@ class BoardTaskPackService
         if ($quick !== 'all') {
             $query
                 ->whereNull('tasks.completed_at')
-                ->whereRaw("LOWER(tasks.status) != 'completed'");
+                ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
         }
 
         match ($quick) {
-            'attention' => $query
-                ->whereRaw("LOWER(tasks.status) NOT LIKE 'waiting%'")
-                ->where(fn (Builder $q) => $q
-                    ->where('tasks.needs_attention', true)
-                    ->orWhere('tasks.due_date', '<=', $weekEnd)
-                    ->orWhereRaw("LOWER(tasks.priority) IN ('critical','high')")),
+            'attention' => $query->where(fn (Builder $q) => $q
+                ->where('tasks.needs_attention', true)
+                ->orWhere(fn (Builder $derived) => $derived
+                    ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'")
+                    ->where(fn (Builder $condition) => $condition
+                        ->where('tasks.due_date', '<=', $weekEnd)
+                        ->orWhereRaw("LOWER(tasks.priority) IN ('critical','high')")))),
             'overdue' => $query->where('tasks.due_date', '<', $todayDate),
             'today' => $query->where('tasks.due_date', $todayDate),
             'upcoming' => $query
                 ->whereBetween('tasks.due_date', [$tomorrow, $weekEnd])
-                ->whereRaw("LOWER(tasks.status) NOT LIKE 'waiting%'"),
-            'waiting' => $query->whereRaw("LOWER(tasks.status) LIKE 'waiting%'"),
+                ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'"),
+            'waiting' => $query->whereRaw("LOWER(TRIM(tasks.status)) LIKE 'waiting%'"),
             'mentions' => $query->whereExists($this->commentMentionExistsSubquery()),
             default => null,
         };
@@ -377,30 +414,32 @@ class BoardTaskPackService
             ->where('board_task_mention_activity.subject_type', Task::class)
             ->where('board_task_mention_activity.event', 'task.comment')
             ->whereNotNull('board_task_mention_activity.meta')
-            ->where('board_task_mention_activity.meta', 'like', '%"mention_user_ids":[%')
-            ->where('board_task_mention_activity.meta', 'not like', '%"mention_user_ids":[]%');
+            // MySQL normalizes JSON whitespace, so string matching the serialized
+            // object is unreliable. Inspect the parsed mention_user_ids array
+            // directly so All Tasks and My Work agree in local and cloud builds.
+            ->whereJsonLength('board_task_mention_activity.meta->mention_user_ids', '>', 0);
     }
 
     private function orderTasks(Builder $query, string $sort, string $today): void
     {
         match ($sort) {
             'due' => $query
-                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(tasks.status) = 'completed' THEN 1 ELSE 0 END")
+                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(TRIM(tasks.status)) = 'completed' THEN 1 ELSE 0 END")
                 ->orderByRaw('tasks.due_date is null')
                 ->orderBy('tasks.due_date')
                 ->orderBy('tasks.id'),
             'job' => $query
-                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(tasks.status) = 'completed' THEN 1 ELSE 0 END")
+                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(TRIM(tasks.status)) = 'completed' THEN 1 ELSE 0 END")
                 ->orderBy('tasks.workflow_phase_id')
                 ->orderBy('tasks.id'),
             'updated' => $query
-                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(tasks.status) = 'completed' THEN 1 ELSE 0 END")
+                ->orderByRaw("CASE WHEN tasks.completed_at IS NOT NULL OR LOWER(TRIM(tasks.status)) = 'completed' THEN 1 ELSE 0 END")
                 ->orderByDesc('tasks.updated_at')
                 ->orderBy('tasks.id'),
             default => $query
                 ->orderByRaw(
                     "CASE
-                        WHEN tasks.completed_at IS NOT NULL OR LOWER(tasks.status) = 'completed' THEN 6
+                        WHEN tasks.completed_at IS NOT NULL OR LOWER(TRIM(tasks.status)) = 'completed' THEN 6
                         WHEN tasks.needs_attention = 1 THEN 0
                         WHEN tasks.due_date < ? THEN 1
                         WHEN tasks.due_date = ? THEN 2
@@ -446,7 +485,7 @@ class BoardTaskPackService
 
         $flag = 'No flag';
         if (!$completed && $task->needs_attention) {
-            $flag = trim((string) $task->attention_reason) ?: 'Management attention';
+            $flag = app(TaskFlagService::class)->labelForTask($task) ?: 'Management attention';
         } elseif (!$completed && $dueTone === 'overdue') {
             $flag = 'Overdue';
         } elseif (!$completed && $dueTone === 'today') {
@@ -462,7 +501,12 @@ class BoardTaskPackService
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
             'assignee' => (string) ($task->assignee?->name ?: 'Unassigned'),
-            'assigneeImage' => $task->assignee?->profile_image_path,
+            'assigneeImage' => ($task->assignee?->id && $task->assignee?->profile_image_path)
+                ? route('profile-images.show', [
+                    'user' => $task->assignee->id,
+                    'filename' => basename((string) $task->assignee->profile_image_path),
+                ], false)
+                : null,
             'isMine' => (int) ($task->assignee_id ?: 0) === (int) $user->id,
             'phase' => (string) ($task->phase?->short_name ?: $task->phase?->name ?: 'No phase'),
             'due' => $dueLabel,

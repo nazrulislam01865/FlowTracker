@@ -26,7 +26,9 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringNotContainsString('ft-task-board-redesign', $board);
         $this->assertStringNotContainsString('ft-task-board-filter-grid', $board);
         $this->assertStringNotContainsString('x-board.task-pack-list', $board);
-        $this->assertStringNotContainsString('<span>Assignee</span>', $board);
+        $this->assertStringContainsString('<span>Assignee</span>', $board);
+        $this->assertStringContainsString('class="assignee"', $board);
+        $this->assertStringContainsString('assigneeImage', $board);
         $this->assertStringNotContainsString('ft-task-board-pagination', $board);
         $this->assertStringNotContainsString('x-board.task-job-matrix', $board);
     }
@@ -40,6 +42,8 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringContainsString("whereNull('board_assigned_tasks.deleted_at')", $service);
         $this->assertStringContainsString('if ($access->isAdministrator($user))', $service);
         $this->assertStringContainsString('Task::query()', $service);
+        $this->assertStringContainsString("'assignee:id,name,department_id,profile_image_path'", $service);
+        $this->assertStringContainsString("'assignee' => (string) (\$task->assignee?->name ?: 'Unassigned')", $service);
         $this->assertStringContainsString("->whereIn('tasks.flow_job_id', $visibleJobIds)", $service);
     }
 

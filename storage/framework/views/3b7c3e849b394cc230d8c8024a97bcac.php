@@ -13,8 +13,8 @@
         <meta name="flowtrack-display-timezone" content="<?php echo e(app(\App\Services\WorkspaceSettingsService::class)->displayTimezone()); ?>">
         <meta name="flowtrack-rich-text-upload-url" content="<?php echo e(route('rich-text-images.store')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <title><?php echo e($title ?? 'FlowTrack'); ?> — <?php echo e($branding['name'] ?? config('app.name','FlowTrack')); ?></title>
-    <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('favicon.ico')); ?>">
+    <title><?php echo e(($title ?? null) ? $title.' — ' : ''); ?>STEP PROMO</title>
+    <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp')); ?>">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260808-5"></script>
@@ -41,7 +41,7 @@
     
     <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-10">
     
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260809-2">
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

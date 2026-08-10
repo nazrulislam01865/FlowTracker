@@ -557,11 +557,13 @@ const selectedFileSummary = (files) => {
     return `${list.length} files selected`;
 };
 
-const mergeDroppedFiles = (input, droppedFiles) => {
+const mergeDroppedFiles = (input, droppedFiles, replaceExisting = false) => {
     const transfer = new DataTransfer();
     const seen = new Set();
     const candidates = input.multiple
-        ? [...Array.from(input.files || []), ...Array.from(droppedFiles || [])]
+        ? (replaceExisting
+            ? Array.from(droppedFiles || [])
+            : [...Array.from(input.files || []), ...Array.from(droppedFiles || [])])
         : Array.from(droppedFiles || []).slice(0, 1);
 
     candidates.forEach((file) => {
@@ -615,7 +617,10 @@ const bootFileDropzones = () => {
         const files = event.dataTransfer?.files;
         if (!input || !files?.length || input.disabled) return;
 
-        mergeDroppedFiles(input, files);
+        // A failed temporary upload must never be carried into the next attempt.
+        // When the zone is in an error state, the next dropped selection replaces it.
+        mergeDroppedFiles(input, files, zone.classList.contains('has-upload-error'));
+        zone.classList.remove('has-upload-error');
         updateDropzoneStatus(zone, selectedFileSummary(input.files));
     });
 
@@ -624,6 +629,8 @@ const bootFileDropzones = () => {
         if (!(input instanceof HTMLInputElement) || input.type !== 'file') return;
         const zone = input.closest('[data-file-dropzone]');
         if (!zone) return;
+        // Choosing a new file is a fresh attempt, so clear the previous visual error.
+        zone.classList.remove('has-upload-error');
         updateDropzoneStatus(zone, selectedFileSummary(input.files));
     });
 

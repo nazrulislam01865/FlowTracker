@@ -33,6 +33,7 @@ class Inquiry extends Model
     public function sourceTaskPack(): BelongsTo { return $this->belongsTo(TaskPack::class, 'source_task_pack_id'); }
     public function sourceWorkflow(): BelongsTo { return $this->belongsTo(WorkflowTemplate::class, 'source_workflow_template_id'); }
     public function convertedJob(): BelongsTo { return $this->belongsTo(FlowJob::class, 'converted_job_id'); }
+    public function sourceOrder(): HasOne { return $this->hasOne(FlowJob::class, 'source_inquiry_id'); }
     public function items(): HasMany { return $this->hasMany(InquiryItem::class)->orderBy('sort_order'); }
     public function tasks(): HasMany { return $this->hasMany(InquiryTask::class)->orderBy('sequence'); }
     public function currentTask(): HasOne { return $this->hasOne(InquiryTask::class)->whereNull('completed_at')->orderBy('sequence'); }

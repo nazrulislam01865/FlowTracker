@@ -1,5 +1,33 @@
-@props(['jobs', 'searchFilter' => '', 'clearAction' => 'clearSearch'])
-@php
+<?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
+
+$__newAttributes = [];
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['jobs', 'searchFilter' => '', 'clearAction' => 'clearSearch']));
+
+foreach ($attributes->all() as $__key => $__value) {
+    if (in_array($__key, $__propNames)) {
+        $$__key = $$__key ?? $__value;
+    } else {
+        $__newAttributes[$__key] = $__value;
+    }
+}
+
+$attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
+
+unset($__propNames);
+unset($__newAttributes);
+
+foreach (array_filter((['jobs', 'searchFilter' => '', 'clearAction' => 'clearSearch']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+    $$__key = $$__key ?? $__value;
+}
+
+$__defined_vars = get_defined_vars();
+
+foreach ($attributes->all() as $__key => $__value) {
+    if (array_key_exists($__key, $__defined_vars)) unset($$__key);
+}
+
+unset($__defined_vars, $__key, $__value); ?>
+<?php
     $tone = static function (?string $value): string {
         $value = (string) $value;
         if (preg_match('/delayed|issue|overdue|blocked|attention/i', $value)) return 'red';
@@ -13,10 +41,10 @@
     $pageNumbers = collect(range(1, max(1, $lastPage)))
         ->filter(fn ($page) => $lastPage <= 7 || $page === 1 || $page === $lastPage || abs($page - $currentPage) <= 1)
         ->values();
-@endphp
+?>
 
 <div id="ft-orders-page" class="ft-orders-prototype">
-    @once
+    <?php if (! $__env->hasRenderedOnce('39b6e8be-9c6b-48fa-ba25-7d7c2631c4ad')): $__env->markAsRenderedOnce('39b6e8be-9c6b-48fa-ba25-7d7c2631c4ad'); ?>
         <style>
             .ft-orders-prototype{color-scheme:light;--navy:#0d1b2b;--navy-active:#22466f;--blue:#2463eb;--blue-soft:#edf3ff;--canvas:#f3f6fb;--surface:#fff;--line:#dbe3ed;--text:#172033;--muted:#62728a;--green:#147e5b;--green-soft:#edf9f4;--amber:#a56708;--amber-soft:#fff6e5;--red:#c43f3f;--red-soft:#fff0f0;--purple:#6f54cf;--purple-soft:#f1edff;width:100%;min-width:0;color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
             .ft-orders-prototype button,.ft-orders-prototype input,.ft-orders-prototype a{font:inherit}.ft-orders-prototype button,.ft-orders-prototype a{-webkit-tap-highlight-color:transparent}.ft-orders-prototype button{cursor:pointer}.ft-orders-prototype a{color:inherit}
@@ -115,16 +143,16 @@
             }
             @media(prefers-reduced-motion:reduce){.ft-orders-prototype *,.ft-orders-prototype *::before,.ft-orders-prototype *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
         </style>
-    @endonce
+    <?php endif; ?>
 
-    @if(session('success'))<div class="ft-list-flash" role="status">{{ session('success') }}</div>@endif
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success')): ?><div class="ft-list-flash" role="status"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <div class="ft-page-head">
         <div><h1>Orders</h1><p>Fast access to every active and completed order</p></div>
         <div class="ft-actions">
-            @if(auth()->user()->canAccess('jobs.create'))
-                <a class="ft-new-job-btn ft-dashboard-action-match" href="{{ route('jobs.index', ['create' => 1]) }}" wire:navigate><span class="ft-dashboard-action-match-icon">+</span>New Order</a>
-            @endif
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('jobs.create')): ?>
+                <a class="ft-new-job-btn ft-dashboard-action-match" href="<?php echo e(route('jobs.index', ['create' => 1])); ?>" wire:navigate><span class="ft-dashboard-action-match-icon">+</span>New Order</a>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
     </div>
 
@@ -139,18 +167,18 @@
                     aria-label="Search orders"
                     wire:model.live.debounce.700ms="search"
                 >
-                <button @class(['ft-search-clear','show'=>filled($searchFilter)]) wire:click="{{ $clearAction }}" type="button">Clear</button>
+                <button class="<?php echo \Illuminate\Support\Arr::toCssClasses(['ft-search-clear','show'=>filled($searchFilter)]); ?>" wire:click="<?php echo e($clearAction); ?>" type="button">Clear</button>
             </label>
             <div class="ft-search-state">
                 <i class="ft-spinner" wire:loading wire:target="search,gotoPage,previousPage,nextPage" aria-hidden="true"></i>
                 <span wire:loading.remove wire:target="search,gotoPage,previousPage,nextPage">
-                    @if(filled($searchFilter) && mb_strlen(trim((string) $searchFilter)) < 3)
-                        Type at least 3 characters to search · showing all {{ number_format($jobs->total()) }} orders
-                    @elseif(filled($searchFilter))
-                        {{ number_format($jobs->total()) }} {{ \Illuminate\Support\Str::plural('order', $jobs->total()) }} found for “{{ $searchFilter }}”
-                    @else
-                        Type to search all {{ number_format($jobs->total()) }} orders · results update after 700 ms
-                    @endif
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(filled($searchFilter) && mb_strlen(trim((string) $searchFilter)) < 3): ?>
+                        Type at least 3 characters to search · showing all <?php echo e(number_format($jobs->total())); ?> orders
+                    <?php elseif(filled($searchFilter)): ?>
+                        <?php echo e(number_format($jobs->total())); ?> <?php echo e(\Illuminate\Support\Str::plural('order', $jobs->total())); ?> found for “<?php echo e($searchFilter); ?>”
+                    <?php else: ?>
+                        Type to search all <?php echo e(number_format($jobs->total())); ?> orders · results update after 700 ms
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </span>
                 <span wire:loading wire:target="search,gotoPage,previousPage,nextPage">Searching orders…</span>
                 <i class="ft-live-dot" aria-hidden="true"></i>
@@ -162,8 +190,8 @@
         </div>
 
         <div class="ft-job-list">
-            @forelse($jobs as $job)
-                @php
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $jobs; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $job): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                <?php
                     $creator = $job->createdActivity?->user ?? $job->owner;
                     $creatorName = $creator?->name ?? 'System';
                     $ownerName = $job->owner?->name ?? 'Unassigned';
@@ -183,52 +211,52 @@
                         ? (app(\App\Services\TaskFlagService::class)->labelForOrder($job) ?: 'Management attention')
                         : (in_array($job->priority, ['Urgent','High'], true) ? $job->priority : null);
                     $deliveryOverdue = $job->delivery_date && !$job->completed_at && \App\Support\UserLocalTime::isDatePast($job->delivery_date);
-                @endphp
-                <article class="ft-job-row" wire:key="order-row-{{ $job->id }}">
-                    <div class="ft-cell ft-created-cell" data-label="Created by / on"><span class="ft-created-name">{{ $creatorName }}</span><time class="ft-created-on">{{ $job->created_at?->format('M j, Y') ?? '—' }}</time></div>
-                    <div class="ft-cell ft-identity" data-label="Order"><a class="ft-id" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a><span class="ft-sub">{{ $job->order_number ?: 'REF-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</span></div>
+                ?>
+                <article class="ft-job-row" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-row-'.e($job->id).''; ?>wire:key="order-row-<?php echo e($job->id); ?>">
+                    <div class="ft-cell ft-created-cell" data-label="Created by / on"><span class="ft-created-name"><?php echo e($creatorName); ?></span><time class="ft-created-on"><?php echo e($job->created_at?->format('M j, Y') ?? '—'); ?></time></div>
+                    <div class="ft-cell ft-identity" data-label="Order"><a class="ft-id" href="<?php echo e(route('jobs.index',['open'=>$job->id])); ?>" wire:navigate><?php echo e($job->displayOrderNumber()); ?></a><span class="ft-sub"><?php echo e($job->order_number ?: 'REF-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT)); ?></span></div>
                     <div class="ft-cell ft-inquiry-cell" data-label="Inquiry">
-                        @if($job->sourceInquiry)
-                            @if(auth()->user()->canAccess('inquiries.view'))
-                                <a class="ft-id" href="{{ route('inquiries.index', ['open' => $job->sourceInquiry->id]) }}" wire:navigate>{{ $job->sourceInquiry->inquiry_number }}</a>
-                            @else
-                                <span class="ft-client">{{ $job->sourceInquiry->inquiry_number }}</span>
-                            @endif
-                            <span class="ft-sub">{{ $job->sourceInquiry->reference_number ?: 'Source inquiry' }}</span>
-                        @else
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($job->sourceInquiry): ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('inquiries.view')): ?>
+                                <a class="ft-id" href="<?php echo e(route('inquiries.index', ['open' => $job->sourceInquiry->id])); ?>" wire:navigate><?php echo e($job->sourceInquiry->inquiry_number); ?></a>
+                            <?php else: ?>
+                                <span class="ft-client"><?php echo e($job->sourceInquiry->inquiry_number); ?></span>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <span class="ft-sub"><?php echo e($job->sourceInquiry->reference_number ?: 'Source inquiry'); ?></span>
+                        <?php else: ?>
                             <span class="ft-standard-empty">Not linked</span>
-                        @endif
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                     <div class="ft-cell ft-brief" data-label="Client / products">
-                        <span class="ft-client">{{ $job->client?->name ?? '—' }}</span>
-                        @if($productRows->count() === 1)
-                            <span class="ft-product">{{ $productNames->first() ?: 'Product' }}</span>
-                            <span class="ft-product-detail">{{ number_format($totalUnits) }} {{ \Illuminate\Support\Str::plural('pc', $totalUnits) }}</span>
-                        @else
-                            <span class="ft-product">{{ $productRows->count() }} ordered products · {{ number_format($totalUnits) }} pcs</span>
-                            <span class="ft-product-detail" title="{{ $productNames->implode(' · ') }}">{{ $productNames->implode(' · ') }}</span>
-                        @endif
+                        <span class="ft-client"><?php echo e($job->client?->name ?? '—'); ?></span>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productRows->count() === 1): ?>
+                            <span class="ft-product"><?php echo e($productNames->first() ?: 'Product'); ?></span>
+                            <span class="ft-product-detail"><?php echo e(number_format($totalUnits)); ?> <?php echo e(\Illuminate\Support\Str::plural('pc', $totalUnits)); ?></span>
+                        <?php else: ?>
+                            <span class="ft-product"><?php echo e($productRows->count()); ?> ordered products · <?php echo e(number_format($totalUnits)); ?> pcs</span>
+                            <span class="ft-product-detail" title="<?php echo e($productNames->implode(' · ')); ?>"><?php echo e($productNames->implode(' · ')); ?></span>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
-                    <div class="ft-cell ft-stage-cell" data-label="Order stage"><span class="ft-pill {{ $tone($stage) }}">{{ $stage }}</span></div>
-                    <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill {{ $tone($health) }}">{{ $health }}</span></div>
-                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $tone($flag) }}">{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
+                    <div class="ft-cell ft-stage-cell" data-label="Order stage"><span class="ft-pill <?php echo e($tone($stage)); ?>"><?php echo e($stage); ?></span></div>
+                    <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill <?php echo e($tone($health)); ?>"><?php echo e($health); ?></span></div>
+                    <div class="ft-cell ft-flag-cell" data-label="Flag"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($flag): ?><span class="ft-pill <?php echo e($tone($flag)); ?>"><?php echo e($flag); ?></span><?php else: ?><span class="ft-standard-empty">No flag</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div>
                     <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">
                         <div class="ft-owner">
-                            <span class="ft-order-avatar">@if($ownerImage)<img src="{{ $ownerImage }}" alt="" loading="lazy" decoding="async">@else{{ $ownerInitials ?: 'FT' }}@endif</span>
-                            <span class="ft-owner-copy"><span class="ft-owner-name">{{ $ownerName }}</span><time class="ft-due {{ $deliveryOverdue ? 'overdue' : '' }}">{{ $job->delivery_date ? 'Due '.$job->delivery_date->format('M j') : 'No delivery date' }}</time></span>
+                            <span class="ft-order-avatar"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($ownerImage): ?><img src="<?php echo e($ownerImage); ?>" alt="" loading="lazy" decoding="async"><?php else: ?><?php echo e($ownerInitials ?: 'FT'); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
+                            <span class="ft-owner-copy"><span class="ft-owner-name"><?php echo e($ownerName); ?></span><time class="ft-due <?php echo e($deliveryOverdue ? 'overdue' : ''); ?>"><?php echo e($job->delivery_date ? 'Due '.$job->delivery_date->format('M j') : 'No delivery date'); ?></time></span>
                         </div>
                     </div>
-                    <div class="ft-cell ft-progress ft-progress-cell" data-label="Progress"><span class="ft-progress-track"><span class="ft-progress-fill" style="width:{{ max(0,min(100,(int)$job->progress)) }}%"></span></span><span>{{ (int)$job->progress }}%</span></div>
-                    <a class="ft-view" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate aria-label="View {{ $job->displayOrderNumber() }}">View</a>
-                    @if(auth()->user()->canModule('jobs', 'delete'))
+                    <div class="ft-cell ft-progress ft-progress-cell" data-label="Progress"><span class="ft-progress-track"><span class="ft-progress-fill" style="width:<?php echo e(max(0,min(100,(int)$job->progress))); ?>%"></span></span><span><?php echo e((int)$job->progress); ?>%</span></div>
+                    <a class="ft-view" href="<?php echo e(route('jobs.index',['open'=>$job->id])); ?>" wire:navigate aria-label="View <?php echo e($job->displayOrderNumber()); ?>">View</a>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('jobs', 'delete')): ?>
                         <div class="ft-row-actions" data-label="Actions" x-data="{ open: false }">
                             <button
                                 class="ft-row-action-trigger"
                                 type="button"
                                 :aria-expanded="open ? 'true' : 'false'"
                                 aria-haspopup="menu"
-                                aria-controls="order-actions-{{ $job->id }}"
-                                aria-label="Actions for {{ $job->displayOrderNumber() }}"
+                                aria-controls="order-actions-<?php echo e($job->id); ?>"
+                                aria-label="Actions for <?php echo e($job->displayOrderNumber()); ?>"
                                 x-on:click.stop="
                                     const menu = $refs.menu;
                                     if (menu.matches(':popover-open')) { menu.hidePopover(); return; }
@@ -246,45 +274,46 @@
                                 "
                             >⋮</button>
                             <div
-                                id="order-actions-{{ $job->id }}"
+                                id="order-actions-<?php echo e($job->id); ?>"
                                 class="ft-row-action-menu"
                                 x-ref="menu"
                                 popover="auto"
                                 role="menu"
                                 x-on:toggle="open = $event.newState === 'open'"
                             >
-                                <button type="button" role="menuitem" wire:click="deleteOrder({{ $job->id }})" wire:confirm="Delete {{ $job->displayOrderNumber() }}? This removes the order from active lists.">
+                                <button type="button" role="menuitem" wire:click="deleteOrder(<?php echo e($job->id); ?>)" wire:confirm="Delete <?php echo e($job->displayOrderNumber()); ?>? This removes the order from active lists.">
                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>
                                     <span>Delete order</span>
                                 </button>
                             </div>
                         </div>
-                    @else
+                    <?php else: ?>
                         <span aria-hidden="true"></span>
-                    @endif
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </article>
-            @empty
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 <div class="ft-empty"><strong>No matching orders</strong>Try another order, inquiry, client, product, creator or owner.</div>
-            @endforelse
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
 
         <div class="ft-load-skeleton" wire:loading.delay.grid wire:target="search,gotoPage,previousPage,nextPage" aria-hidden="true"><span class="ft-skeleton-line"></span><span class="ft-skeleton-line"></span></div>
 
         <div class="ft-list-footer">
-            <span class="ft-result-count">@if($jobs->total()) Showing {{ $jobs->firstItem() }}–{{ $jobs->lastItem() }} of {{ number_format($jobs->total()) }} orders @else No orders found @endif</span>
+            <span class="ft-result-count"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($jobs->total()): ?> Showing <?php echo e($jobs->firstItem()); ?>–<?php echo e($jobs->lastItem()); ?> of <?php echo e(number_format($jobs->total())); ?> orders <?php else: ?> No orders found <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
             <nav class="ft-page-buttons" aria-label="Orders pagination">
-                <button class="ft-page-button" type="button" wire:click="previousPage" @disabled($jobs->onFirstPage())>Previous</button>
+                <button class="ft-page-button" type="button" wire:click="previousPage" <?php if($jobs->onFirstPage()): echo 'disabled'; endif; ?>>Previous</button>
                 <span class="ft-page-buttons">
-                    @php $previousRenderedPage = null; @endphp
-                    @foreach($pageNumbers as $pageNumber)
-                        @if($previousRenderedPage !== null && $pageNumber - $previousRenderedPage > 1)<span class="ft-page-ellipsis">…</span>@endif
-                        <button type="button" class="ft-page-number {{ $pageNumber === $currentPage ? 'active' : '' }}" wire:click="gotoPage({{ $pageNumber }})" @if($pageNumber === $currentPage) aria-current="page" @endif>{{ $pageNumber }}</button>
-                        @php $previousRenderedPage = $pageNumber; @endphp
-                    @endforeach
+                    <?php $previousRenderedPage = null; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $pageNumbers; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $pageNumber): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($previousRenderedPage !== null && $pageNumber - $previousRenderedPage > 1): ?><span class="ft-page-ellipsis">…</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <button type="button" class="ft-page-number <?php echo e($pageNumber === $currentPage ? 'active' : ''); ?>" wire:click="gotoPage(<?php echo e($pageNumber); ?>)" <?php if($pageNumber === $currentPage): ?> aria-current="page" <?php endif; ?>><?php echo e($pageNumber); ?></button>
+                        <?php $previousRenderedPage = $pageNumber; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 </span>
-                <button class="ft-page-button" type="button" wire:click="nextPage" @disabled(!$jobs->hasMorePages())>Next</button>
+                <button class="ft-page-button" type="button" wire:click="nextPage" <?php if(!$jobs->hasMorePages()): echo 'disabled'; endif; ?>>Next</button>
             </nav>
         </div>
     </section>
 
 </div>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/jobs/table.blade.php ENDPATH**/ ?>

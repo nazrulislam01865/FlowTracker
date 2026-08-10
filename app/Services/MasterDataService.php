@@ -186,6 +186,16 @@ class MasterDataService
                 'status' => ($data['status'] ?? 'active') === 'active' ? 'active' : 'inactive',
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
             ])->save();
+
+            // Tasks keep a foreign key to Task Flags. Mirror the current Master
+            // Data name into attention_reason as a compatibility/search field so
+            // every existing list immediately follows Task Flag renames.
+            if ($record->type === 'task_flag' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_flag_id')) {
+                DB::table('tasks')
+                    ->where('task_flag_id', $record->id)
+                    ->update(['attention_reason' => $record->name]);
+            }
+
             $this->mirrorLegacy($record);
             $this->forgetActiveCache($record->type);
             return $record;
@@ -215,6 +225,9 @@ class MasterDataService
         }
         if ($record->type === 'inquiry_status' && Schema::hasTable('inquiries') && DB::table('inquiries')->where('workspace_id', $record->workspace_id)->where('status', $record->name)->exists()) {
             throw ValidationException::withMessages(['record' => 'This Inquiry Status is already used by an Inquiry and cannot be deleted. Deactivate it instead.']);
+        }
+        if ($record->type === 'task_flag' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_flag_id') && DB::table('tasks')->where('task_flag_id', $record->id)->exists()) {
+            throw ValidationException::withMessages(['record' => 'This Task Flag is already assigned to one or more tasks and cannot be deleted. Deactivate it instead.']);
         }
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         if (Schema::hasTable('master_values')) MasterValue::where('group_key', $legacyGroup)->where('code', $record->code)->delete();

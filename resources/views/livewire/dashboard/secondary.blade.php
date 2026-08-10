@@ -41,7 +41,7 @@
                             @endphp
                             <tr wire:key="dashboard-assignee-{{ $person->id }}">
                                 <td data-label="Assignee"><span class="ft-person"><x-ui.avatar :user="$person" :name="$person->name" :size="22" /><span class="ft-cell-clip">{{ $person->name }}</span></span></td>
-                                <td data-label="Ongoing"><a class="ft-text-link" href="{{ route('all-tasks') }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
+                                <td data-label="Ongoing"><a class="ft-text-link" href="{{ route('all-tasks', ['assignee' => $person->id]) }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
                                 <td data-label="Done">{{ $person->done_count }}</td>
                                 <td data-label="On time">{{ $onTime }}%</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:{{ $workloadPct }}%"></span></i>{{ $workloadLabel }}</span></td>

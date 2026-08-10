@@ -150,8 +150,45 @@ class TaskService
         $this->assertEditable($task, $actor);
         $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
         $assigneeId = array_key_exists('assignee_id', $data) ? ($data['assignee_id'] ?: null) : $task->assignee_id;
-        $reason = trim((string) ($data['attention_reason'] ?? $task->attention_reason ?? ''));
+        $reasonWasProvided = array_key_exists('attention_reason', $data);
+        $originalReason = trim((string) ($task->attention_reason ?? ''));
+        $reason = trim((string) ($data['attention_reason'] ?? $originalReason));
         $status = (string) ($data['status'] ?? $task->status);
+        $needsAttention = (bool) ($data['needs_attention'] ?? $task->needs_attention);
+        $taskFlagId = $task->task_flag_id;
+
+        // Task attention is backed by Master Data. Keep the foreign key as the
+        // source of truth so a Task Flag rename is reflected everywhere instead
+        // of leaving stale free-text labels on My Work / Orders / All Tasks.
+        if ($needsAttention) {
+            $flagService = app(TaskFlagService::class);
+            $assignedFlag = $taskFlagId ? $task->attentionFlag()->first() : null;
+            $callerChangedFlag = $reasonWasProvided
+                && $reason !== ''
+                && strcasecmp($reason, $originalReason) !== 0
+                && (!$assignedFlag || strcasecmp($reason, trim((string) $assignedFlag->name)) !== 0);
+
+            if ($assignedFlag && !$callerChangedFlag) {
+                // A stale Livewire form can still contain the pre-rename text.
+                // Do not let that overwrite the Master Data relationship.
+                $reason = trim((string) $assignedFlag->name);
+                $taskFlagId = $assignedFlag->id;
+            } else {
+                $resolvedFlag = $reason !== '' ? $flagService->requireActive($reason) : $flagService->defaultActive();
+                if ($resolvedFlag) {
+                    $taskFlagId = $resolvedFlag->id;
+                    $reason = trim((string) $resolvedFlag->name);
+                } elseif ($reason === '') {
+                    // Compatibility fallback for an installation where Task
+                    // Flags have not been seeded yet.
+                    $taskFlagId = null;
+                    $reason = 'Management attention';
+                }
+            }
+        } else {
+            $taskFlagId = null;
+            $reason = '';
+        }
 
         if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
 
@@ -159,7 +196,8 @@ class TaskService
             'status' => $status,
             'assignee_id' => $assigneeId,
             'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : (int) ($data['progress'] ?? $task->progress)),
-            'needs_attention' => (bool) ($data['needs_attention'] ?? $task->needs_attention),
+            'needs_attention' => $needsAttention,
+            'task_flag_id' => $taskFlagId,
             'attention_reason' => $reason !== '' ? $reason : null,
             'completed_at' => BoardLaneResolver::isCompleted($status) ? ($task->completed_at ?: now()) : null,
         ]);
@@ -258,15 +296,25 @@ class TaskService
         $this->assertEditable($task, $actor);
 
         $flag = trim((string) $flag);
-        $newFlag = $flag !== '' ? $flag : null;
-        $oldFlag = $task->needs_attention
-            ? (trim((string) $task->attention_reason) ?: 'Management attention')
-            : null;
+        $flagService = app(TaskFlagService::class);
+        $task->loadMissing('attentionFlag:id,name,status,sort_order');
+        $oldFlag = $flagService->labelForTask($task);
+
+        // If the task already carries a legacy/inactive value, selecting that
+        // same value is a no-op. Any new assignment must come from active
+        // Master Data so list pages cannot drift away from the configured flags.
+        if ($flag !== '' && $task->task_flag_id && $oldFlag !== null && strcasecmp($oldFlag, $flag) === 0) {
+            return $task->refresh();
+        }
+
+        $masterFlag = $flag !== '' ? $flagService->requireActive($flag) : null;
+        $newFlag = $masterFlag?->name;
 
         if ($oldFlag === $newFlag) return $task->refresh();
 
         $task->update([
-            'needs_attention' => $newFlag !== null,
+            'needs_attention' => $masterFlag !== null,
+            'task_flag_id' => $masterFlag?->id,
             'attention_reason' => $newFlag,
         ]);
 

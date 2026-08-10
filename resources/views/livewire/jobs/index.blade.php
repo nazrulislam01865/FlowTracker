@@ -56,6 +56,13 @@
             :focus-comment="$focusComment"
             :job-document-uploads="$jobDocumentUploads"
             :show-document-picker="$showDocumentPicker"
+            :inquiry-results="$inquiryResults"
+            :inquiry-search="$inquirySearch"
+            :selected-link-inquiry="$selectedLinkInquiry"
+            :show-inquiry-link-confirm="$showInquiryLinkConfirm"
+            :show-inquiry-unlink-confirm="$showInquiryUnlinkConfirm"
+            :can-manage-inquiry-link="$canManageInquiryLink"
+            :linked-inquiry-can-open="$linkedInquiryCanOpen"
             wire:key="job-detail-{{ $selectedJob->id }}"
         />
     @else

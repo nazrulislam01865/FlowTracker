@@ -16,10 +16,17 @@
     'focusComment'=>null,
     'jobDocumentUploads'=>[],
     'showDocumentPicker'=>false,
+    'inquiryResults'=>collect(),
+    'inquirySearch'=>'',
+    'selectedLinkInquiry'=>null,
+    'showInquiryLinkConfirm'=>false,
+    'showInquiryUnlinkConfirm'=>false,
+    'canManageInquiryLink'=>false,
+    'linkedInquiryCanOpen'=>false,
 ])
 @php
     $team = \App\Support\JobDetailPresenter::team($job);
-    $tabs = ['overview'=>'Overview','workflow'=>'Workflow','documents'=>'Documents'];
+    $tabs = ['overview'=>'Overview','workflow'=>'Workflow','documents'=>'Documents','inquiry'=>'Inquiry'];
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
     <div class="ft-detail-toolbar ft-exact-job-header">
@@ -62,7 +69,9 @@
     <nav class="ft-detail-tabs ft-exact-tabs">
         @foreach($tabs as $key=>$label)
             <button class="{{ $detailTab===$key ? 'active' : '' }}" wire:click="setDetailTab('{{ $key }}')">
-                {{ $label }} @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
+                {{ $label }}
+                @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
+                @if($key==='inquiry')<span>{{ $job->source_inquiry_id ? 1 : 0 }}</span>@endif
             </button>
         @endforeach
     </nav>
@@ -91,6 +100,17 @@
             :available-documents="$availableDocuments"
             :job-document-uploads="$jobDocumentUploads"
             :show-document-picker="$showDocumentPicker"
+        />
+    @elseif($detailTab==='inquiry')
+        <x-jobs.detail-inquiry
+            :job="$job"
+            :results="$inquiryResults"
+            :search="$inquirySearch"
+            :selected-inquiry="$selectedLinkInquiry"
+            :show-link-confirm="$showInquiryLinkConfirm"
+            :show-unlink-confirm="$showInquiryUnlinkConfirm"
+            :can-manage="$canManageInquiryLink"
+            :linked-inquiry-can-open="$linkedInquiryCanOpen"
         />
     @endif
 </div>

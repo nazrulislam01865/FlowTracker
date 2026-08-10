@@ -40,6 +40,7 @@ class Index extends Component
     public function mount(): void
     {
         $this->job = request()->integer('job') ? (string) request()->integer('job') : '';
+        $this->client = request()->integer('client') ? (string) request()->integer('client') : '';
         $this->uploadJobId = request()->integer('job') ?: null;
     }
 

@@ -1,83 +1,328 @@
-@props(['detail','users','editing'=>false])
+@props([
+    'detail',
+    'users',
+    'editing' => false,
+    'tab' => 'overview',
+    'orders' => null,
+    'documents' => null,
+    'activities' => null,
+    'orderStatusOptions' => null,
+    'orderOwnerOptions' => null,
+    'documentCount' => 0,
+    'orderMetrics' => [],
+    'clientCode' => '',
+    'clientCountries' => [],
+    'clientCountryFlags' => [],
+    'clientStatesByCountry' => [],
+    'clientLanguages' => [],
+    'clientCurrencies' => [],
+    'paymentTermOptions' => [],
+    'accountManagerId' => null,
+    'preferredCurrency' => '',
+    'clientCountry' => '',
+    'billingCountry' => '',
+    'billingSameAsOffice' => true,
+    'salesTaxStatus' => 'taxable',
+    'editShippingAddresses' => [],
+])
 @php
     $client = $detail['client'];
     $jobs = $detail['jobs'];
-    $active = $detail['active'];
-    $health = $detail['health'];
-    $initials = collect(preg_split('/\s+/', trim($client->name)))->filter()->take(2)->map(fn($part)=>strtoupper(substr($part,0,1)))->implode('') ?: 'CL';
+    $initials = collect(preg_split('/\s+/', trim((string) $client->name)))
+        ->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('') ?: 'CL';
     $access = app(\App\Services\AccessControlService::class);
-    $canEdit = $access->isAdministrator(auth()->user()) || $access->canEditAll(auth()->user(),'clients') || ($access->canEditOwn(auth()->user(),'clients') && (int)$client->account_manager_id === (int)auth()->id());
-    $canDelete = auth()->user()->canModule('clients','delete');
+    $canEdit = $access->isAdministrator(auth()->user())
+        || $access->canEditAll(auth()->user(), 'clients')
+        || ($access->canEditOwn(auth()->user(), 'clients') && (int) $client->account_manager_id === (int) auth()->id());
+    $canDelete = auth()->user()->canModule('clients', 'delete');
+    $canCreateOrder = auth()->user()->canModule('jobs', 'create');
+
+    $location = collect([$client->office_city, $client->office_state])->filter()->implode(', ');
+    if ($location === '') $location = $client->country ?: '—';
+    $clientSince = $client->created_at?->format('M Y') ?: '—';
+    $currencyCode = $client->preferred_currency ?: 'USD';
+    $currencyNames = ['USD'=>'US Dollar','CNY'=>'Chinese Yuan','BDT'=>'Bangladeshi Taka','EUR'=>'Euro','GBP'=>'British Pound','CAD'=>'Canadian Dollar','AUD'=>'Australian Dollar','AED'=>'UAE Dirham'];
+    $currencyText = $currencyCode.(isset($currencyNames[$currencyCode]) ? ' · '.$currencyNames[$currencyCode] : '');
+    $primaryInitials = collect(preg_split('/\s+/', trim((string) ($client->contact_name ?: 'Primary Contact'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'PC';
+    $managerInitials = collect(preg_split('/\s+/', trim((string) ($client->accountManager?->name ?: 'Unassigned'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'AM';
+
+    $formatAddress = function (?string $line1, ?string $suite, ?string $city, ?string $state, ?string $zip, ?string $country): array {
+        $first = collect([$line1, $suite])->filter(fn ($v) => filled($v))->implode(', ');
+        $second = collect([$city, $state, $zip])->filter(fn ($v) => filled($v))->implode(', ');
+        return array_values(array_filter([$first, $second, $country], fn ($v) => filled($v)));
+    };
+
+    $officeLines = $formatAddress($client->office_address_line1 ?: $client->office_address, $client->office_suite, $client->office_city, $client->office_state, $client->office_zip, $client->country);
+    $billingLines = $formatAddress($client->billing_address_line1, $client->billing_suite, $client->billing_city, $client->billing_state, $client->billing_zip, $client->billing_country ?: $client->country);
+    $shippingAddresses = $client->shippingAddresses ?? collect();
+    $addressCount = 1 + ($client->billing_same_as_office ? 0 : ($billingLines ? 1 : 0)) + $shippingAddresses->count();
+
+    $statusLabel = function ($job) {
+        if ($job->completed_at) return 'Completed';
+        $status = trim((string) $job->status);
+        if ($status === '' || in_array(mb_strtolower($status), ['new','active','open','in progress'], true)) {
+            return $job->phase?->name ?: ($status ?: 'Not started');
+        }
+        return $status;
+    };
+    $statusClass = function (string $status): string {
+        $s = mb_strtolower($status);
+        if (str_contains($s, 'complete')) return 'is-green';
+        if (str_contains($s, 'await') || str_contains($s, 'approval') || str_contains($s, 'attention')) return 'is-amber';
+        if (str_contains($s, 'hold') || str_contains($s, 'block') || str_contains($s, 'cancel')) return 'is-red';
+        if (str_contains($s, 'quote') || str_contains($s, 'sample')) return 'is-purple';
+        if (str_contains($s, 'not started') || str_contains($s, 'new')) return 'is-gray';
+        return 'is-blue';
+    };
 @endphp
-<div class="ft-client-view-page">
-    @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
-    <div class="ft-client-view-top">
-        <div><small>Client Details</small><h1>{{ $client->name }}</h1><small>{{ $client->country ?: '—' }}</small></div>
-        <button class="ft-client-view-back" type="button" wire:click="backToClients">← Back to Clients</button>
+
+<div class="ft-client-prototype-page" data-client-detail-tab="{{ $tab }}">
+    @if(session('success'))<div class="flash success">{{ session('success') }}</div>@endif
+
+    <div class="ft-client-proto-breadcrumb">
+        <button type="button" wire:click="backToClients">Clients</button>
+        <span>/</span>
+        <b>{{ $client->code ?: 'CL-'.str_pad((string) $client->id, 3, '0', STR_PAD_LEFT) }}</b>
     </div>
 
-    <section class="ft-client-view-card">
-        <div class="ft-client-view-hero">
-            <span class="ft-client-detail-logo">{{ $initials }}</span>
-            <div><small>Client</small><h2>{{ $client->name }}</h2><small>{{ $client->country ?: '—' }}</small></div>
-        </div>
-
-        <div class="ft-client-view-summary">
-            <div><small>Primary Contact</small><b>{{ $client->contact_name ?: 'Not set' }}</b></div>
-            <div><small>Account Manager</small><b>{{ $client->accountManager?->name ?? 'Unassigned' }}</b></div>
-            <div><small>Outstanding</small><b>${{ number_format($client->outstanding_balance,0) }}</b></div>
-        </div>
-
-        <div class="ft-client-view-section">
-            <div class="ft-client-view-section-head">
-                <h3>Contact Information</h3>
-                <div class="ft-client-view-actions">
-                    @if($canDelete)<button type="button" class="ft-client-delete-btn" wire:click="deleteClient({{ $client->id }})" wire:confirm="Delete this client? Clients with Order history will be archived so existing records remain intact.">Delete Client</button>@endif
-                    @if($canEdit && !$editing)<button type="button" class="ft-client-edit-btn" wire:click="editClient({{ $client->id }})">Edit Client</button>@endif
+    <header class="ft-client-proto-header">
+        <div class="ft-client-proto-identity">
+            <div class="ft-client-proto-logo">{{ $initials }}</div>
+            <div class="ft-client-proto-title-block">
+                <div class="ft-client-proto-title-line">
+                    <h1>{{ $client->name }}</h1>
+                    <span class="ft-client-status-pill {{ $client->is_active ? 'is-active' : 'is-archived' }}">{{ $client->is_active ? 'Active' : 'Archived' }}</span>
+                </div>
+                <div class="ft-client-proto-subline">
+                    <span>{{ $client->legal_business_name ?: $client->name }}</span><i></i>
+                    <span>{{ $location }}</span><i></i>
+                    <span>Client since {{ $clientSince }}</span>
                 </div>
             </div>
-
-            @if($editing)
-                <div class="ft-client-edit-form">
-                    <label><span>Client name *</span><input wire:model="clientName">@error('clientName')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label><span>Country</span><input wire:model="clientCountry"></label>
-                    <label><span>Office address</span><input wire:model="officeAddress"></label>
-                    <label><span>Primary contact</span><input wire:model="contactName"></label>
-                    <label><span>Email</span><input type="email" wire:model="email">@error('email')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label><span>Phone</span><input wire:model="phone"></label>
-                    <label><span>Account manager</span><select wire:model="accountManagerId"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select></label>
-                    <label><span>Preferred language</span><select wire:model="preferredLanguage"><option>English</option><option>Chinese</option><option>Spanish</option><option>French</option><option>German</option><option>Arabic</option><option>Bengali</option></select></label>
-                    <label><span>Outstanding balance</span><input type="number" min="0" step="0.01" wire:model="outstandingBalance"></label>
-                    <label class="span-2"><span>Notes</span><textarea wire:model="notes"></textarea></label>
-                    <div class="ft-client-edit-form-actions"><button type="button" class="ft-outline-btn" wire:click="cancelEditClient">Cancel</button><button type="button" class="ft-new-job-btn" wire:click="updateClient">Save Client</button></div>
+        </div>
+        <div class="ft-client-proto-actions">
+            @if($canEdit)
+                <button class="ft-client-proto-secondary" type="button" wire:click="editClient({{ $client->id }})">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg>
+                    Edit client
+                </button>
+            @endif
+            @if($canCreateOrder)
+                <a class="ft-client-proto-primary" href="{{ route('jobs.index', ['create'=>1,'client'=>$client->id]) }}" wire:navigate>
+                    <span>+</span> Create order
+                </a>
+            @endif
+            <details class="ft-client-proto-more">
+                <summary aria-label="More client actions">⋮</summary>
+                <div>
+                    @if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})">Edit client</button>@endif
+                    @if($canDelete)<button class="danger" type="button" wire:click="deleteClient({{ $client->id }})" wire:confirm="Archive this client? Existing order history will remain available.">Archive client</button>@endif
                 </div>
-            @else
-                <div class="ft-client-contact-box">
-                    <b>{{ $client->contact_name ?: 'No primary contact recorded' }}</b>
-                    <div>{{ $client->email ?: 'No email recorded' }}</div>
-                    <div>{{ $client->phone ?: 'No phone recorded' }}</div>
-                    <div>Office address: {{ $client->office_address ?: 'Not set' }}</div>
-                    <div>Preferred language: {{ $client->preferred_language ?: 'English' }}</div>
-                    @if($client->notes)<div style="margin-top:8px;color:#60738d">{{ $client->notes }}</div>@endif
+            </details>
+        </div>
+    </header>
+
+    <nav class="ft-client-proto-tabs" aria-label="Client detail sections">
+        <button type="button" wire:click="setClientDetailTab('overview')" class="{{ $tab === 'overview' ? 'active' : '' }}">Overview</button>
+        <button type="button" wire:click="setClientDetailTab('orders')" class="{{ $tab === 'orders' ? 'active' : '' }}">Orders <span>{{ $jobs->count() }}</span></button>
+        <button type="button" wire:click="setClientDetailTab('documents')" class="{{ $tab === 'documents' ? 'active' : '' }}">Documents <span>{{ $documentCount }}</span></button>
+        <button type="button" wire:click="setClientDetailTab('activity')" class="{{ $tab === 'activity' ? 'active' : '' }}">Activity</button>
+    </nav>
+
+    @if($editing)
+        <x-clients.create
+            mode="edit"
+            :users="$users"
+            :client-code="$clientCode"
+            :client-countries="$clientCountries"
+            :client-country-flags="$clientCountryFlags"
+            :client-states-by-country="$clientStatesByCountry"
+            :client-languages="$clientLanguages"
+            :client-currencies="$clientCurrencies"
+            :payment-term-options="$paymentTermOptions"
+            :account-manager-id="$accountManagerId"
+            :preferred-currency="$preferredCurrency"
+            :client-country="$clientCountry"
+            :billing-country="$billingCountry"
+            :billing-same-as-office="$billingSameAsOffice"
+            :sales-tax-status="$salesTaxStatus"
+            :shipping-addresses="$editShippingAddresses"
+        />
+    @elseif($tab === 'overview')
+        <div class="ft-client-summary-grid">
+            <article class="ft-client-summary-card">
+                <span class="ft-client-summary-icon is-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="7" r="4"/><path d="M4 21v-2a8 8 0 0 1 16 0v2"/></svg></span>
+                <div><small>Primary contact</small><b>{{ $client->contact_name ?: 'Not set' }}</b><span>{{ $client->email ?: 'No email recorded' }}</span></div>
+            </article>
+            <article class="ft-client-summary-card">
+                <span class="ft-client-summary-icon is-purple">{{ $managerInitials }}</span>
+                <div><small>Account manager</small><b>{{ $client->accountManager?->name ?? 'Unassigned' }}</b></div>
+            </article>
+            <article class="ft-client-summary-card">
+                <span class="ft-client-summary-icon is-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></svg></span>
+                <div><small>Office location</small><b>{{ $location }}</b><span>{{ $client->country ?: '—' }}</span></div>
+            </article>
+            <article class="ft-client-summary-card">
+                <span class="ft-client-summary-icon is-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg></span>
+                <div><small>Client since</small><b>{{ $clientSince }}</b><span class="ft-client-active-dot"><i></i>{{ $client->is_active ? 'Active' : 'Archived' }}</span></div>
+            </article>
+        </div>
+
+        <div class="ft-client-overview-main-grid">
+            <section class="ft-client-proto-card ft-client-info-card">
+                <div class="ft-client-card-head"><h2>Client information</h2>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg> Edit details</button>@endif</div>
+                <dl class="ft-client-info-list">
+                    <div><dt>Client code</dt><dd>{{ $client->code ?: 'CL-'.str_pad((string)$client->id,3,'0',STR_PAD_LEFT) }}</dd></div>
+                    <div><dt>Legal business name</dt><dd>{{ $client->legal_business_name ?: '—' }}</dd></div>
+                    <div><dt>Website</dt><dd>@if($client->website)<a href="{{ str_starts_with($client->website, 'http') ? $client->website : 'https://'.$client->website }}" target="_blank" rel="noopener">{{ $client->website }}</a>@else—@endif</dd></div>
+                    <div><dt>Preferred language</dt><dd>{{ $client->preferred_language ?: 'English' }}</dd></div>
+                    <div><dt>Preferred currency</dt><dd>{{ $currencyText }}</dd></div>
+                    <div><dt>Country</dt><dd>{{ $client->country ?: '—' }}</dd></div>
+                    <div><dt>Created by</dt><dd>—</dd></div>
+                    <div><dt>Last updated</dt><dd>{{ $client->updated_at?->format('M j, Y · g:i A') ?: '—' }}</dd></div>
+                </dl>
+            </section>
+
+            <section class="ft-client-proto-card ft-client-contacts-card">
+                <div class="ft-client-card-head"><h2>Contacts</h2>@if($canEdit)<button class="outlined" type="button" wire:click="editClient({{ $client->id }})">＋ Add contact</button>@endif</div>
+                <div class="ft-client-contact-row">
+                    <div class="ft-client-contact-label">Primary contact <span>Primary</span></div>
+                    <div class="ft-client-contact-content"><span class="ft-client-contact-avatar is-blue">{{ $primaryInitials }}</span><div><b>{{ $client->contact_name ?: 'Not set' }}</b><span>{{ $client->contact_job_title ?: '—' }}</span><span>{{ $client->email ?: 'No email recorded' }}</span><span>{{ $client->phone ?: 'No phone recorded' }}</span></div>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit primary contact">✎</button>@endif</div>
+                </div>
+                <div class="ft-client-contact-row">
+                    <div class="ft-client-contact-label">Billing contact</div>
+                    <div class="ft-client-contact-content"><span class="ft-client-contact-avatar is-purple">BC</span><div><b>Not set</b><span>No billing contact recorded</span><span>—</span><span>—</span></div>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit billing contact">✎</button>@endif</div>
+                </div>
+            </section>
+        </div>
+
+        <section class="ft-client-proto-card ft-client-addresses-card">
+            <div class="ft-client-card-head ft-client-address-card-head">
+                <div><h2>Addresses</h2><p>Office, billing and delivery locations.</p></div>
+                <div><span>{{ $addressCount }} {{ \Illuminate\Support\Str::plural('address', $addressCount) }}</span>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})">Manage addresses</button>@endif</div>
+            </div>
+            <div class="ft-client-address-grid">
+                <article class="ft-client-address-item">
+                    <span class="ft-client-address-icon is-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2v4M15 2v4M8 10h8M8 14h8"/></svg></span>
+                    <div><small>{{ $client->billing_same_as_office ? 'Office & billing' : 'Office' }}</small><b>{{ $client->office_city ? $client->office_city.' Office' : 'Office address' }}</b>@forelse($officeLines as $line)<span>{{ $line }}</span>@empty<span>Address not set</span>@endforelse<div class="ft-client-address-tags"><em>Office</em>@if($client->billing_same_as_office)<em class="purple">Billing</em>@endif</div></div>
+                    <span class="ft-client-address-more">⋮</span>
+                </article>
+                @if(!$client->billing_same_as_office && $billingLines)
+                    <article class="ft-client-address-item">
+                        <span class="ft-client-address-icon is-purple"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="5" y="4" width="14" height="17" rx="2"/><path d="M9 2v4M15 2v4M8 10h8M8 14h8"/></svg></span>
+                        <div><small>Billing</small><b>Billing address</b>@foreach($billingLines as $line)<span>{{ $line }}</span>@endforeach<div class="ft-client-address-tags"><em class="purple">Billing</em></div></div>
+                        <span class="ft-client-address-more">⋮</span>
+                    </article>
+                @endif
+                @foreach($shippingAddresses as $address)
+                    @php $shippingLines = $formatAddress($address->address_line1, $address->suite, $address->city, $address->state, $address->zip, $address->country); @endphp
+                    <article class="ft-client-address-item">
+                        <span class="ft-client-address-icon {{ $address->is_default ? 'is-green' : 'is-purple' }}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">@if($address->is_default)<path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="18" cy="18" r="2"/>@else<path d="M20 10c0 5-8 11-8 11S4 15 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/>@endif</svg></span>
+                        <div><small>{{ $address->is_default ? 'Default shipping' : 'Shipping' }}</small><b>{{ $address->label }}</b>@foreach($shippingLines as $line)<span>{{ $line }}</span>@endforeach<div class="ft-client-address-tags"><em class="{{ $address->is_default ? 'green' : 'purple' }}">{{ $address->is_default ? 'Default shipping' : 'Shipping' }}</em></div></div>
+                        <span class="ft-client-address-more">⋮</span>
+                    </article>
+                @endforeach
+            </div>
+        </section>
+
+        <div class="ft-client-overview-bottom-grid">
+            <section class="ft-client-proto-card ft-client-commercial-card">
+                <div class="ft-client-card-head"><h2>Commercial settings</h2>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit commercial settings">✎</button>@endif</div>
+                <div class="ft-client-commercial-grid">
+                    <dl><div><dt>Payment terms</dt><dd>{{ $client->payment_terms ?: '—' }}</dd></div><div><dt>Sales tax status</dt><dd>{{ $client->sales_tax_status === 'tax_exempt' ? 'Tax exempt' : 'Taxable' }}</dd></div><div><dt>EIN / Tax ID</dt><dd>{{ $client->ein_tax_id ?: '—' }}</dd></div></dl>
+                    <dl><div><dt>PO required</dt><dd>{{ $client->po_required ? 'Yes' : 'No' }}</dd></div><div><dt>Credit status</dt><dd class="ft-credit-good"><i></i>{{ (float)$client->outstanding_balance > 0 ? 'Balance outstanding' : 'In good standing' }}</dd></div><div><dt>Currency</dt><dd>{{ $currencyCode }}</dd></div></dl>
+                </div>
+                <p class="ft-client-commercial-note"><span>i</span> Outstanding balance is calculated from transactions and shown in reporting.</p>
+            </section>
+            <section class="ft-client-proto-card ft-client-notes-card">
+                <div class="ft-client-card-head"><h2>Internal notes</h2>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit notes">✎</button>@endif</div>
+                <p>{{ $client->notes ?: 'No internal notes have been added for this client.' }}</p>
+                <small>Last edited {{ $client->updated_at?->format('M j, Y') ?: '—' }}</small>
+                <div class="ft-client-info-banner"><span>i</span> Orders, documents and activity are available in their respective tabs.</div>
+            </section>
+        </div>
+    @elseif($tab === 'orders')
+        <div class="ft-client-order-metrics">
+            <article><span class="is-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span><div><small>Open orders</small><b>{{ number_format($orderMetrics['open'] ?? 0) }}</b><em>Across active phases</em></div></article>
+            <article><span class="is-amber"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 2h12M6 22h12M7 2c0 5 2 6 5 10-3 4-5 5-5 10M17 2c0 5-2 6-5 10 3 4 5 5 5 10"/></svg></span><div><small>Awaiting action</small><b>{{ number_format($orderMetrics['attention'] ?? 0) }}</b><em>Needs your response</em></div></article>
+            <article><span class="is-green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="9"/><path d="m8 12 2.5 2.5L16 9"/></svg></span><div><small>Completed orders</small><b>{{ number_format($orderMetrics['completed'] ?? 0) }}</b><em>All time</em></div></article>
+            <article><span class="is-purple">$</span><div><small>Total order value</small><b>${{ number_format($orderMetrics['value'] ?? 0, 0) }}</b><em>All time · {{ $currencyCode }}</em></div></article>
+        </div>
+
+        <section class="ft-client-proto-card ft-client-orders-card">
+            <div class="ft-client-orders-head">
+                <div><h2>Client orders</h2><p>All orders for {{ $client->name }}.</p></div>
+                <div><a href="{{ route('jobs.index', ['client'=>$client->id]) }}" wire:navigate><span>↗</span> Open in Orders</a><small>Opens the Orders workspace with<br>{{ $client->name }} filter applied.</small></div>
+            </div>
+            <div class="ft-client-order-filters">
+                <label class="ft-client-order-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search order number or description..." wire:model.live.debounce.300ms="clientOrderSearch"></label>
+                <select wire:model.live="clientOrderStatus"><option value="">All statuses</option>@foreach($orderStatusOptions ?? [] as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select>
+                <select wire:model.live="clientOrderOwner"><option value="">All owners</option>@foreach($orderOwnerOptions ?? [] as $owner)<option value="{{ $owner->id }}">{{ $owner->name }}</option>@endforeach</select>
+                <select wire:model.live="clientOrderRange"><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m">Last 12 months</option><option value="all">All time</option></select>
+                <button type="button" wire:click="clearClientOrderFilters">Clear filters</button>
+            </div>
+            <div class="ft-client-order-filter-meta"><span>Client: {{ $client->name }} <b>×</b></span><em>{{ number_format($orders?->total() ?? 0) }} matching orders</em></div>
+            <div class="ft-client-orders-table-wrap">
+                <table class="ft-client-orders-table">
+                    <thead><tr><th><span class="ft-fake-checkbox"></span></th><th>ORDER</th><th>CREATED</th><th>DESCRIPTION</th><th>STATUS</th><th>OWNER</th><th>DUE DATE</th><th>VALUE</th><th>UPDATED</th><th>ACTION</th></tr></thead>
+                    <tbody>
+                    @forelse($orders ?? [] as $job)
+                        @php
+                            $label = $statusLabel($job);
+                            $ownerName = $job->owner?->name ?: 'Unassigned';
+                            $overdue = $job->delivery_date && !$job->completed_at && $job->delivery_date->isPast();
+                        @endphp
+                        <tr>
+                            <td><span class="ft-fake-checkbox"></span></td>
+                            <td><a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a></td>
+                            <td>{{ $job->created_at?->format('M j, Y') }}</td>
+                            <td>{{ \Illuminate\Support\Str::limit($job->title ?: $job->product ?: '—', 42) }}</td>
+                            <td><span class="ft-client-order-status {{ $statusClass($label) }}">{{ $label }}</span></td>
+                            <td><div class="ft-client-order-owner"><x-ui.avatar :user="$job->owner" :name="$ownerName" :size="23" /><span>{{ $ownerName }}</span></div></td>
+                            <td class="{{ $overdue ? 'is-overdue' : '' }}">{{ $job->delivery_date?->format('M j, Y') ?? '—' }}@if($overdue)<span>△</span>@endif</td>
+                            <td>{{ $job->commercial_value > 0 ? '$'.number_format((float)$job->commercial_value, 0) : '—' }}</td>
+                            <td>{{ $job->updated_at?->diffForHumans(['short'=>true]) ?? '—' }}</td>
+                            <td><a class="ft-client-order-view" href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>View</a></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="10" class="ft-client-table-empty">No matching orders found for this client.</td></tr>
+                    @endforelse
+                    </tbody>
+                </table>
+            </div>
+            @if($orders)
+                <div class="ft-client-orders-pagination">
+                    <div>Showing {{ $orders->firstItem() ?? 0 }}–{{ $orders->lastItem() ?? 0 }} of {{ $orders->total() }} orders <select wire:model.live="clientOrderPerPage"><option value="8">8 per page</option><option value="16">16 per page</option><option value="24">24 per page</option></select></div>
+                    <div class="ft-client-page-buttons">
+                        <button type="button" wire:click="previousPage('clientOrdersPage')" @disabled($orders->onFirstPage())>Previous</button>
+                        @php
+                            $pageStart = max(1, min($orders->currentPage() - 1, max(1, $orders->lastPage() - 2)));
+                            $pageEnd = min($orders->lastPage(), $pageStart + 2);
+                        @endphp
+                        @for($page = $pageStart; $page <= $pageEnd; $page++)<button type="button" wire:click="gotoPage({{ $page }}, 'clientOrdersPage')" class="{{ $orders->currentPage() === $page ? 'active' : '' }}">{{ $page }}</button>@endfor
+                        <button type="button" wire:click="nextPage('clientOrdersPage')" @disabled(!$orders->hasMorePages())>Next</button>
+                    </div>
                 </div>
             @endif
-
-            <div class="ft-client-jobs-head">
-                <h3>Active Orders</h3>
-                @if(auth()->user()->canModule('jobs','create'))<a class="ft-new-job-btn" href="{{ route('jobs.index',['create'=>1,'client'=>$client->id]) }}" wire:navigate>＋ New Order</a>@endif
+        </section>
+        <div class="ft-client-info-banner ft-client-order-info"><span>i</span> Order totals and statuses update automatically as tasks progress.</div>
+    @elseif($tab === 'documents')
+        <section class="ft-client-proto-card ft-client-generic-tab-card">
+            <div class="ft-client-card-head"><div><h2>Client documents</h2><p>Documents linked to {{ $client->name }}.</p></div><a href="{{ route('documents.index', ['client'=>$client->id]) }}" wire:navigate>Open Documents</a></div>
+            <div class="ft-client-generic-list">
+                @forelse($documents ?? [] as $document)
+                    <div><span class="ft-client-doc-icon">▤</span><div><b>{{ $document->name }}</b><small>{{ $document->category ?: 'Document' }} · {{ $document->document_number }}</small></div><span>{{ $document->updated_at?->format('M j, Y') }}</span></div>
+                @empty<div class="ft-client-generic-empty">No documents are linked to this client yet.</div>@endforelse
             </div>
-            <div class="ft-client-jobs-list">
-                @forelse($active as $job)
-                    <div class="ft-client-job-row">
-                        <a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
-                        <div><b>{{ $job->title }}</b><small>{{ $job->phase?->name ?? '—' }}</small></div>
-                        <div><b>{{ $job->progress }}%</b><div class="ft-mini-progress"><span style="width:{{ $job->progress }}%"></span></div></div>
-                        <div><small>{{ $job->delivery_date?->format('M j, Y') ?? 'No delivery date' }}</small></div>
-                    </div>
-                @empty
-                    <div class="ft-client-empty" style="padding:34px;text-align:center">No Orders have been created for this client.</div>
-                @endforelse
+        </section>
+    @elseif($tab === 'activity')
+        <section class="ft-client-proto-card ft-client-generic-tab-card">
+            <div class="ft-client-card-head"><div><h2>Client activity</h2><p>Recent activity from this client’s orders.</p></div></div>
+            <div class="ft-client-activity-list">
+                @forelse($activities ?? [] as $activity)
+                    <div><x-ui.avatar :user="$activity->user" :name="$activity->user?->name ?: 'System'" :size="30" /><div><b>{{ $activity->user?->name ?: 'System' }}</b><p>{{ $activity->description }}</p><small>{{ $activity->created_at?->diffForHumans() }}</small></div></div>
+                @empty<div class="ft-client-generic-empty">No activity is available for this client yet.</div>@endforelse
             </div>
-        </div>
-    </section>
+        </section>
+    @endif
 </div>

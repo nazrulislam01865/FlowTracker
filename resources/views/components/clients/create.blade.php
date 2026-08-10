@@ -14,29 +14,33 @@
     'billingSameAsOffice' => true,
     'salesTaxStatus' => 'taxable',
     'shippingAddresses' => [],
+    'mode' => 'create',
 ])
 @php
+    $isEdit = $mode === 'edit';
     $selectedManager = $users->firstWhere('id', (int) $accountManagerId);
     $managerInitials = $selectedManager ? \App\Support\BoardPresenter::initials($selectedManager->name) : 'U';
     $officeStates = $clientStatesByCountry[$clientCountry] ?? [];
     $billingStates = $clientStatesByCountry[$billingCountry] ?? [];
 @endphp
-<div class="ft-create-client-page ft-client-create-prototype">
+<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype' : 'ft-create-client-page ft-client-create-prototype' }}">
     <div class="ft-client-create-shell">
-        <div class="ft-client-create-top">
-            <div>
-                <div class="ft-create-breadcrumb">Add Client</div>
-                <h1>Add Client</h1>
-                <p>Client Information is saved as a full page, not a drawer.</p>
+        @unless($isEdit)
+            <div class="ft-client-create-top">
+                <div>
+                    <div class="ft-create-breadcrumb">Add Client</div>
+                    <h1>Add Client</h1>
+                    <p>Client Information is saved as a full page, not a drawer.</p>
+                </div>
+                <button type="button" class="ft-back-clients" wire:click="closeCreate">← Back to Clients</button>
             </div>
-            <button type="button" class="ft-back-clients" wire:click="closeCreate">← Back to Clients</button>
-        </div>
+        @endunless
 
         <section class="ft-client-prototype-card">
             <header class="ft-client-prototype-head">
                 <div>
-                    <h2>Create New Client</h2>
-                    <p>Add the client's business, contact and delivery information.</p>
+                    <h2>{{ $isEdit ? 'Edit Client' : 'Create New Client' }}</h2>
+                    <p>{{ $isEdit ? 'Update the client business, contact, address and commercial information.' : "Add the client's business, contact and delivery information." }}</p>
                 </div>
                 <div class="ft-client-required-note"><span>*</span> Required <b>•</b> Optional fields are labeled</div>
             </header>
@@ -113,11 +117,11 @@
                 </div>
                 @if(!$billingSameAsOffice)
                     <div class="ft-client-grid ft-billing-grid">
-                        <label class="ft-proto-field ft-address-line"><b>Billing address line 1</b><input wire:model="billingAddressLine1" placeholder="Billing street address"></label>
+                        <label class="ft-proto-field ft-address-line"><b>Billing address line 1</b><input wire:model="billingAddressLine1" placeholder="Billing street address">@error('billingAddressLine1')<small class="validation-error">{{ $message }}</small>@enderror</label>
                         <label class="ft-proto-field"><b>Suite / unit <span>(Optional)</span></b><input wire:model="billingSuite"></label>
-                        <label class="ft-proto-field"><b>City</b><input wire:model="billingCity"></label>
+                        <label class="ft-proto-field"><b>City</b><input wire:model="billingCity">@error('billingCity')<small class="validation-error">{{ $message }}</small>@enderror</label>
                         <label class="ft-proto-field"><b>State</b><select wire:model="billingState" @disabled(empty($billingStates))><option value="">{{ empty($billingStates) ? 'No states configured' : 'Select state' }}</option>@foreach($billingStates as $state)<option value="{{ $state }}">{{ $state }}</option>@endforeach</select>@error('billingState')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label class="ft-proto-field"><b>ZIP code</b><input wire:model="billingZip"></label>
+                        <label class="ft-proto-field"><b>ZIP code</b><input wire:model="billingZip">@error('billingZip')<small class="validation-error">{{ $message }}</small>@enderror</label>
                         <label class="ft-proto-field ft-country-field"><b>Country</b><select wire:model.live="billingCountry"><option value="">Select country</option>@foreach($clientCountries as $country)<option value="{{ $country }}">{{ $country }}</option>@endforeach</select>@error('billingCountry')<small class="validation-error">{{ $message }}</small>@enderror</label>
                     </div>
                 @endif
@@ -147,10 +151,10 @@
                                     <label class="ft-proto-field"><b>Recipient <span>(Optional)</span></b><input wire:model="shippingAddresses.{{ $index }}.recipient" placeholder="Receiving Department"></label>
                                     <label class="ft-proto-field ft-address-line"><b>Address line 1 <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.address_line1" placeholder="450 10th Avenue">@error("shippingAddresses.$index.address_line1")<small class="validation-error">{{ $message }}</small>@enderror</label>
                                     <label class="ft-proto-field"><b>Suite / unit <span>(Optional)</span></b><input wire:model="shippingAddresses.{{ $index }}.suite" placeholder="Dock 4"></label>
-                                    <label class="ft-proto-field"><b>City <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.city" placeholder="New York"></label>
+                                    <label class="ft-proto-field"><b>City <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.city" placeholder="New York">@error("shippingAddresses.$index.city")<small class="validation-error">{{ $message }}</small>@enderror</label>
                                     @php($shippingStates = $clientStatesByCountry[$address['country'] ?? ''] ?? [])
                                     <label class="ft-proto-field"><b>State <em>*</em></b><select wire:model="shippingAddresses.{{ $index }}.state" @disabled(empty($shippingStates))><option value="">{{ empty($shippingStates) ? 'No states configured' : 'Select state' }}</option>@foreach($shippingStates as $state)<option value="{{ $state }}">{{ $state }}</option>@endforeach</select>@error("shippingAddresses.$index.state")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    <label class="ft-proto-field"><b>ZIP code <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.zip" placeholder="10001"></label>
+                                    <label class="ft-proto-field"><b>ZIP code <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.zip" placeholder="10001">@error("shippingAddresses.$index.zip")<small class="validation-error">{{ $message }}</small>@enderror</label>
                                     <label class="ft-proto-field ft-country-field"><b>Country <em>*</em></b><div class="ft-country-select"><span>{{ $clientCountryFlags[$address['country'] ?? ''] ?? '🌐' }}</span><select wire:model.live="shippingAddresses.{{ $index }}.country"><option value="">Select country</option>@foreach($clientCountries as $country)<option value="{{ $country }}">{{ $country }}</option>@endforeach</select></div>@error("shippingAddresses.$index.country")<small class="validation-error">{{ $message }}</small>@enderror</label>
                                 </div>
                                 <label class="ft-default-shipping-check"><input type="checkbox" @checked($address['is_default'] ?? false) wire:click="setDefaultShippingAddress({{ $index }})"> <span>Set as default shipping address</span></label>
@@ -183,11 +187,22 @@
             </section>
 
             <footer class="ft-client-prototype-footer">
-                <span>Required fields are marked with&nbsp; <em>*</em></span>
+                <span>
+                    @if($errors->any())
+                        <em class="validation-error">Please correct the highlighted fields before saving.</em>
+                    @else
+                        Required fields are marked with&nbsp; <em>*</em>
+                    @endif
+                </span>
                 <div>
-                    <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
-                    <button type="button" class="ft-client-save-draft" wire:click="saveClientDraft" wire:loading.attr="disabled" wire:target="saveClientDraft,createClient">Save as draft</button>
-                    <button type="button" class="ft-create-primary" wire:click="createClient" wire:loading.attr="disabled" wire:target="saveClientDraft,createClient">Create client</button>
+                    @if($isEdit)
+                        <button type="button" class="ft-create-cancel" wire:click="cancelEditClient">Cancel</button>
+                        <button type="button" class="ft-create-primary" wire:click="updateClient" wire:loading.attr="disabled" wire:target="updateClient">Save Client</button>
+                    @else
+                        <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>
+                        <button type="button" class="ft-client-save-draft" wire:click="saveClientDraft" wire:loading.attr="disabled" wire:target="saveClientDraft,createClient">Save as draft</button>
+                        <button type="button" class="ft-create-primary" wire:click="createClient" wire:loading.attr="disabled" wire:target="saveClientDraft,createClient">Create client</button>
+                    @endif
                 </div>
             </footer>
         </section>

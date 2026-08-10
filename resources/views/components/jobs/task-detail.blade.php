@@ -32,7 +32,7 @@
     $effectiveDescription = $task->description ?: $task->setupTemplate?->description;
     $effectiveStartDate = $task->start_date ?: \App\Support\UserLocalTime::localize($task->created_at);
     $completedOn = $task->completed_at?->copy()->timezone($displayTimezone);
-    $currentTaskFlag = $task->needs_attention ? (trim((string) $task->attention_reason) ?: 'Management attention') : '';
+    $currentTaskFlag = $task->needs_attention ? (app(\App\Services\TaskFlagService::class)->labelForTask($task) ?: 'Management attention') : '';
     $taskFlagNames = $taskFlags->pluck('name')->map(fn($name)=>trim((string)$name))->filter()->values();
     $commentEvents = $task->comments->map(fn($comment)=>(object)[
         'id'=>(int)$comment->id,'kind'=>'comment','event'=>'task.comment','user'=>$comment->user,'body'=>$comment->body,'created_at'=>$comment->created_at,

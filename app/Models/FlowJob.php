@@ -33,6 +33,7 @@ class FlowJob extends Model
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
     public function coordinator(): BelongsTo { return $this->belongsTo(User::class, 'coordinator_id'); }
     public function tasks(): HasMany { return $this->hasMany(Task::class); }
+    public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->where('needs_attention', true)->whereNull('completed_at')->orderBy('id'); }
     public function documents(): HasMany { return $this->hasMany(Document::class); }
     public function items(): HasMany { return $this->hasMany(FlowJobItem::class, 'flow_job_id')->orderBy('sort_order'); }
     public function members(): HasMany { return $this->hasMany(FlowJobMember::class, 'flow_job_id'); }

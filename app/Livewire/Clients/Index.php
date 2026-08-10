@@ -6,10 +6,13 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\Client;
 use App\Models\ClientShippingAddress;
+use App\Models\Activity;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\User;
 use App\Services\ClientService;
+use App\Services\DocumentService;
+use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\SetupContext;
 use Illuminate\Support\Facades\DB;
@@ -36,6 +39,12 @@ class Index extends Component
     public bool $showDetail = false;
     public bool $showEdit = false;
     public ?int $actionMenuClientId = null;
+    public string $clientDetailTab = 'overview';
+    public string $clientOrderSearch = '';
+    public string $clientOrderStatus = '';
+    public string $clientOrderOwner = '';
+    public string $clientOrderRange = '12m';
+    public int $clientOrderPerPage = 8;
 
     public string $clientCode = '';
     public string $clientName = '';
@@ -82,6 +91,26 @@ class Index extends Component
     public function updatedJobHealth(): void { $this->resetPage(); }
     public function updatedOutstanding(): void { $this->resetPage(); }
     public function updatedPerPage(): void { $this->resetPage(); }
+    public function updatedClientOrderSearch(): void { $this->resetPage('clientOrdersPage'); }
+    public function updatedClientOrderStatus(): void { $this->resetPage('clientOrdersPage'); }
+    public function updatedClientOrderOwner(): void { $this->resetPage('clientOrdersPage'); }
+    public function updatedClientOrderRange(): void { $this->resetPage('clientOrdersPage'); }
+    public function updatedClientOrderPerPage(): void { $this->resetPage('clientOrdersPage'); }
+
+    public function setClientDetailTab(string $tab): void
+    {
+        abort_unless(in_array($tab, ['overview','orders','documents','activity'], true), 422);
+        $this->clientDetailTab = $tab;
+    }
+
+    public function clearClientOrderFilters(): void
+    {
+        $this->clientOrderSearch = '';
+        $this->clientOrderStatus = '';
+        $this->clientOrderOwner = '';
+        $this->clientOrderRange = '12m';
+        $this->resetPage('clientOrdersPage');
+    }
 
     public function updatedClientCountry(string $country): void
     {
@@ -164,10 +193,8 @@ class Index extends Component
         $this->persistNewClient(true);
     }
 
-    private function persistNewClient(bool $draft): void
+    private function clientProfileRules(bool $draft, bool $requireShipping, bool $strictMasterData = true): array
     {
-        abort_unless(auth()->user()->canModule('clients','create'), 403);
-
         $workspaceId = app(MasterDataService::class)->workspaceId();
         $countryExists = fn () => Rule::exists('master_records', 'name')->where(fn ($query) => $query
             ->where('workspace_id', $workspaceId)
@@ -210,12 +237,20 @@ class Index extends Component
                 ->exists();
         };
 
+        $countryRule = fn () => $strictMasterData ? [$countryExists()] : [];
+        $currencyRule = $strictMasterData ? [$currencyExists] : [];
+        $stateRule = fn (string $country) => $strictMasterData ? [$stateExistsForCountry($country)] : [];
+
         $rules = [
             'clientName' => ['required','string','max:255'],
             'legalBusinessName' => ['nullable','string','max:255'],
             'website' => ['nullable','string','max:255'],
-            'clientCountry' => ['required','string','max:120',$countryExists()],
-            'preferredCurrency' => ['required','string','max:40',$currencyExists],
+            // Creation is strict against Master Data. Editing intentionally allows
+            // legacy values that may pre-date the current Country/Currency master
+            // records; otherwise a perfectly valid existing client can never be
+            // saved after the profile form was expanded.
+            'clientCountry' => array_merge(['required','string','max:120'], $countryRule()),
+            'preferredCurrency' => array_merge(['required','string','max:40'], $currencyRule),
             'contactName' => [$draft ? 'nullable' : 'required','string','max:255'],
             'contactJobTitle' => ['nullable','string','max:255'],
             'email' => [$draft ? 'nullable' : 'required','email','max:255'],
@@ -225,20 +260,29 @@ class Index extends Component
             'officeAddressLine1' => [$draft ? 'nullable' : 'required','string','max:255'],
             'officeSuite' => ['nullable','string','max:120'],
             'officeCity' => [$draft ? 'nullable' : 'required','string','max:120'],
-            'officeState' => [(!$draft && $hasStatesForCountry($this->clientCountry)) ? 'required' : 'nullable','string','max:120',$stateExistsForCountry($this->clientCountry)],
+            'officeState' => array_merge(
+                [(!$draft && $hasStatesForCountry($this->clientCountry)) ? 'required' : 'nullable','string','max:120'],
+                $stateRule($this->clientCountry)
+            ),
             'officeZip' => [$draft ? 'nullable' : 'required','string','max:30'],
             'billingAddressLine1' => ['nullable','string','max:255'],
             'billingSuite' => ['nullable','string','max:120'],
             'billingCity' => ['nullable','string','max:120'],
-            'billingState' => ['nullable','string','max:120',$stateExistsForCountry($this->billingCountry)],
+            // Hidden billing fields must not block saving when "same as office"
+            // is enabled. They may contain old values from an earlier profile.
+            'billingState' => $this->billingSameAsOffice
+                ? ['nullable','string','max:120']
+                : array_merge(['nullable','string','max:120'], $stateRule($this->billingCountry)),
             'billingZip' => ['nullable','string','max:30'],
-            'billingCountry' => ['nullable','string','max:120',$countryExists()],
+            'billingCountry' => $this->billingSameAsOffice
+                ? ['nullable','string','max:120']
+                : array_merge(['nullable','string','max:120'], $countryRule()),
             'einTaxId' => ['nullable','string','max:80'],
             'salesTaxStatus' => ['required','in:taxable,tax_exempt'],
             'paymentTerms' => ['nullable','string','max:60'],
             'poRequired' => ['boolean'],
             'notes' => ['nullable','string','max:5000'],
-            'shippingAddresses' => $draft ? ['array','max:20'] : ['required','array','min:1','max:20'],
+            'shippingAddresses' => $requireShipping ? ['required','array','min:1','max:20'] : ['array','max:20'],
             'shippingAddresses.*.label' => ['nullable','string','max:255'],
             'shippingAddresses.*.recipient' => ['nullable','string','max:255'],
             'shippingAddresses.*.address_line1' => ['nullable','string','max:255'],
@@ -246,29 +290,46 @@ class Index extends Component
             'shippingAddresses.*.city' => ['nullable','string','max:120'],
             'shippingAddresses.*.state' => ['nullable','string','max:120'],
             'shippingAddresses.*.zip' => ['nullable','string','max:30'],
-            'shippingAddresses.*.country' => ['nullable','string','max:120',$countryExists()],
+            'shippingAddresses.*.country' => array_merge(['nullable','string','max:120'], $countryRule()),
             'shippingAddresses.*.is_default' => ['boolean'],
         ];
 
         if (!$draft) {
             foreach ($this->shippingAddresses as $index => $address) {
+                $hasContent = collect(['label','recipient','address_line1','suite','city','state','zip'])
+                    ->contains(fn (string $field) => trim((string) ($address[$field] ?? '')) !== '');
+                if (!$requireShipping && !$hasContent) continue;
+
                 foreach (['label','address_line1','city','zip'] as $field) {
                     $rules["shippingAddresses.{$index}.{$field}"] = ['required','string','max:255'];
                 }
                 $shippingCountry = (string) ($address['country'] ?? '');
-                $rules["shippingAddresses.{$index}.country"] = ['required','string','max:120',$countryExists()];
-                $rules["shippingAddresses.{$index}.state"] = [$hasStatesForCountry($shippingCountry) ? 'required' : 'nullable','string','max:120',$stateExistsForCountry($shippingCountry)];
+                $rules["shippingAddresses.{$index}.country"] = array_merge(['required','string','max:120'], $countryRule());
+                $rules["shippingAddresses.{$index}.state"] = array_merge(
+                    [$hasStatesForCountry($shippingCountry) ? 'required' : 'nullable','string','max:120'],
+                    $stateRule($shippingCountry)
+                );
             }
             if (!$this->billingSameAsOffice) {
                 foreach (['billingAddressLine1','billingCity','billingZip'] as $field) {
                     $rules[$field] = ['required','string','max:255'];
                 }
-                $rules['billingCountry'] = ['required','string','max:120',$countryExists()];
-                $rules['billingState'] = [$hasStatesForCountry($this->billingCountry) ? 'required' : 'nullable','string','max:120',$stateExistsForCountry($this->billingCountry)];
+                $rules['billingCountry'] = array_merge(['required','string','max:120'], $countryRule());
+                $rules['billingState'] = array_merge(
+                    [$hasStatesForCountry($this->billingCountry) ? 'required' : 'nullable','string','max:120'],
+                    $stateRule($this->billingCountry)
+                );
             }
         }
 
-        $data = $this->validate($rules);
+        return $rules;
+    }
+
+    private function persistNewClient(bool $draft): void
+    {
+        abort_unless(auth()->user()->canModule('clients','create'), 403);
+
+        $data = $this->validate($this->clientProfileRules($draft, !$draft));
 
         if ($data['accountManagerId'] && (int) $data['accountManagerId'] !== (int) auth()->id()) {
             abort_unless(auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'), 403);
@@ -423,12 +484,10 @@ class Index extends Component
 
     public function openClient(int $id): void
     {
-        app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
-        $this->selectedClientId = $id;
-        $this->showClientPreview = true;
-        $this->showDetail = false;
-        $this->showEdit = false;
-        $this->actionMenuClientId = null;
+        // Client rows now open the full client view directly. Keep this method
+        // as a compatibility alias so stale Livewire payloads cannot reopen the
+        // retired preview modal after a deployment.
+        $this->viewClient($id);
     }
 
     public function closeClientPreview(): void
@@ -451,6 +510,8 @@ class Index extends Component
         $this->showClientPreview = false;
         $this->showDetail = true;
         $this->showEdit = false;
+        $this->clientDetailTab = 'overview';
+        $this->clearClientOrderFilters();
         $this->actionMenuClientId = null;
     }
 
@@ -460,6 +521,7 @@ class Index extends Component
         $this->showEdit = false;
         $this->showClientPreview = false;
         $this->selectedClientId = null;
+        $this->clientDetailTab = 'overview';
         $this->actionMenuClientId = null;
         $this->resetValidation();
     }
@@ -474,23 +536,66 @@ class Index extends Component
 
     public function editClient(int $id): void
     {
-        $client = app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($id);
+        $client = app(ClientService::class)->visibleQuery(auth()->user())->with('shippingAddresses')->findOrFail($id);
         abort_unless($this->canEditClient($client), 403);
         $this->selectedClientId = $id;
         $this->showClientPreview = false;
         $this->showDetail = true;
         $this->showEdit = true;
+        $this->clientDetailTab = 'overview';
         $this->actionMenuClientId = null;
-        $this->clientName = $client->name;
-        $this->clientCountry = $client->country ?? '';
+
+        $hasStructuredOffice = collect([$client->office_address_line1, $client->office_suite, $client->office_city, $client->office_state, $client->office_zip])
+            ->contains(fn ($value) => filled($value));
+
+        $this->clientCode = $client->code ?: 'CL-'.str_pad((string) $client->id, 3, '0', STR_PAD_LEFT);
+        $this->clientName = $client->name ?? '';
+        $this->legalBusinessName = $client->legal_business_name ?? '';
+        $this->website = $client->website ?? '';
+        $this->clientCountry = $client->country ?: $this->defaultClientCountry();
+        $this->preferredCurrency = $client->preferred_currency ?: $this->defaultClientCurrency();
         $this->officeAddress = $client->office_address ?? '';
+        $this->officeAddressLine1 = $client->office_address_line1 ?: ($hasStructuredOffice ? '' : ($client->office_address ?? ''));
+        $this->officeSuite = $client->office_suite ?? '';
+        $this->officeCity = $client->office_city ?? '';
+        $this->officeState = $client->office_state ?? '';
+        $this->officeZip = $client->office_zip ?? '';
+        $this->billingSameAsOffice = (bool) $client->billing_same_as_office;
+        $this->billingAddressLine1 = $client->billing_address_line1 ?? '';
+        $this->billingSuite = $client->billing_suite ?? '';
+        $this->billingCity = $client->billing_city ?? '';
+        $this->billingState = $client->billing_state ?? '';
+        $this->billingZip = $client->billing_zip ?? '';
+        $this->billingCountry = $client->billing_country ?: $this->clientCountry;
         $this->contactName = $client->contact_name ?? '';
+        $this->contactJobTitle = $client->contact_job_title ?? '';
         $this->email = $client->email ?? '';
         $this->phone = $client->phone ?? '';
         $this->accountManagerId = $client->account_manager_id;
         $this->preferredLanguage = $client->preferred_language ?: 'English';
         $this->outstandingBalance = (string) ($client->outstanding_balance ?? 0);
+        $this->einTaxId = $client->ein_tax_id ?? '';
+        $this->salesTaxStatus = in_array($client->sales_tax_status, ['taxable','tax_exempt'], true) ? $client->sales_tax_status : 'taxable';
+        $this->paymentTerms = $client->payment_terms ?? '';
+        $this->poRequired = (bool) $client->po_required;
         $this->notes = $client->notes ?? '';
+        $this->shippingAddresses = $client->shippingAddresses->values()->map(function (ClientShippingAddress $address, int $index) {
+            return [
+                'label' => $address->label ?? '',
+                'recipient' => $address->recipient ?? '',
+                'address_line1' => $address->address_line1 ?? '',
+                'suite' => $address->suite ?? '',
+                'city' => $address->city ?? '',
+                'state' => $address->state ?? '',
+                'zip' => $address->zip ?? '',
+                'country' => $address->country ?: $this->clientCountry,
+                'is_default' => (bool) $address->is_default,
+                'expanded' => $index === 0,
+            ];
+        })->all();
+        if (!$this->shippingAddresses) $this->shippingAddresses = [$this->blankShippingAddress(true)];
+
+        $this->resetValidation();
     }
 
     public function cancelEditClient(): void
@@ -505,34 +610,95 @@ class Index extends Component
         $client = app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedClientId);
         abort_unless($this->canEditClient($client), 403);
 
-        $data = $this->validate([
-            'clientName' => ['required','string','max:255'],
-            'clientCountry' => ['nullable','string','max:120'],
-            'officeAddress' => ['nullable','string','max:500'],
-            'contactName' => ['nullable','string','max:255'],
-            'email' => ['nullable','email','max:255'],
-            'phone' => ['nullable','string','max:60'],
-            'accountManagerId' => ['nullable','exists:users,id'],
-            'preferredLanguage' => ['required','string','max:50'],
-            'outstandingBalance' => ['required','numeric','min:0'],
-            'notes' => ['nullable','string','max:5000'],
-        ]);
+        // Edit mode is deliberately tolerant of legacy Country/Currency/State
+        // values already stored on older clients. The dropdowns still provide
+        // current Master Data options, but stale historical values no longer make
+        // the Save Client action appear to do nothing because validation failed.
+        $data = $this->validate($this->clientProfileRules(false, false, false));
 
         if ($data['accountManagerId'] && (int) $data['accountManagerId'] !== (int) $client->account_manager_id) {
             abort_unless(auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'), 403);
         }
 
-        $client->update([
-            'name' => $data['clientName'], 'country' => $data['clientCountry'] ?: null, 'office_address' => $data['officeAddress'] ?: null,
-            'contact_name' => $data['contactName'] ?: null, 'email' => $data['email'] ?: null,
-            'phone' => $data['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'],
-            'preferred_language' => $data['preferredLanguage'], 'outstanding_balance' => $data['outstandingBalance'],
-            'notes' => $data['notes'] ?: null, 'is_draft' => false,
-        ]);
+        DB::transaction(function () use ($client, $data) {
+            $officeAddress = $this->formatAddress(
+                $data['officeAddressLine1'] ?? '', $data['officeSuite'] ?? '', $data['officeCity'] ?? '',
+                $data['officeState'] ?? '', $data['officeZip'] ?? '', $data['clientCountry'] ?? ''
+            );
+            $billing = $this->billingSameAsOffice ? [
+                'line1' => $data['officeAddressLine1'] ?? '', 'suite' => $data['officeSuite'] ?? '', 'city' => $data['officeCity'] ?? '',
+                'state' => $data['officeState'] ?? '', 'zip' => $data['officeZip'] ?? '', 'country' => $data['clientCountry'] ?? '',
+            ] : [
+                'line1' => $data['billingAddressLine1'] ?? '', 'suite' => $data['billingSuite'] ?? '', 'city' => $data['billingCity'] ?? '',
+                'state' => $data['billingState'] ?? '', 'zip' => $data['billingZip'] ?? '', 'country' => $data['billingCountry'] ?? '',
+            ];
+
+            $client->update([
+                'name' => $data['clientName'],
+                'legal_business_name' => $data['legalBusinessName'] ?: null,
+                'website' => $data['website'] ?: null,
+                'country' => $data['clientCountry'] ?: null,
+                'preferred_currency' => strtoupper($data['preferredCurrency']),
+                'office_address' => $officeAddress ?: null,
+                'office_address_line1' => $data['officeAddressLine1'] ?: null,
+                'office_suite' => $data['officeSuite'] ?: null,
+                'office_city' => $data['officeCity'] ?: null,
+                'office_state' => $data['officeState'] ?: null,
+                'office_zip' => $data['officeZip'] ?: null,
+                'billing_same_as_office' => $this->billingSameAsOffice,
+                'billing_address_line1' => $billing['line1'] ?: null,
+                'billing_suite' => $billing['suite'] ?: null,
+                'billing_city' => $billing['city'] ?: null,
+                'billing_state' => $billing['state'] ?: null,
+                'billing_zip' => $billing['zip'] ?: null,
+                'billing_country' => $billing['country'] ?: null,
+                'contact_name' => $data['contactName'] ?: null,
+                'contact_job_title' => $data['contactJobTitle'] ?: null,
+                'email' => $data['email'] ?: null,
+                'phone' => $data['phone'] ?: null,
+                'account_manager_id' => $data['accountManagerId'],
+                'preferred_language' => $data['preferredLanguage'] ?: 'English',
+                'ein_tax_id' => $data['einTaxId'] ?: null,
+                'sales_tax_status' => $data['salesTaxStatus'],
+                'payment_terms' => $data['paymentTerms'] ?: null,
+                'po_required' => (bool) $data['poRequired'],
+                'notes' => $data['notes'] ?: null,
+                'is_draft' => false,
+            ]);
+
+            $addresses = collect($data['shippingAddresses'] ?? [])
+                ->filter(fn ($address) => trim((string) ($address['label'] ?? '')) !== '' || trim((string) ($address['address_line1'] ?? '')) !== '')
+                ->values();
+            $defaultIndex = $addresses->search(fn ($address) => (bool) ($address['is_default'] ?? false));
+            if ($defaultIndex === false && $addresses->isNotEmpty()) $defaultIndex = 0;
+
+            $client->shippingAddresses()->delete();
+            foreach ($addresses as $index => $address) {
+                ClientShippingAddress::create([
+                    'client_id' => $client->id,
+                    'label' => trim((string) ($address['label'] ?? '')) ?: 'Shipping address '.($index + 1),
+                    'recipient' => trim((string) ($address['recipient'] ?? '')) ?: null,
+                    'address_line1' => trim((string) ($address['address_line1'] ?? '')),
+                    'suite' => trim((string) ($address['suite'] ?? '')) ?: null,
+                    'city' => trim((string) ($address['city'] ?? '')),
+                    'state' => trim((string) ($address['state'] ?? '')),
+                    'zip' => trim((string) ($address['zip'] ?? '')),
+                    'country' => trim((string) ($address['country'] ?? '')) ?: $this->defaultClientCountry(),
+                    'is_default' => $index === $defaultIndex,
+                    'sort_order' => $index,
+                ]);
+            }
+        });
 
         $this->showEdit = false;
         session()->flash('success', 'Client updated successfully.');
-        app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client updated', $client->name.' was updated.', 'update', null, null, auth()->user());
+        try {
+            app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client updated', $client->name.' was updated.', 'update', null, null, auth()->user());
+        } catch (\Throwable $exception) {
+            // A notification/Pusher failure must never roll back or visually
+            // block a client profile update that was already saved successfully.
+            report($exception);
+        }
     }
 
     public function deleteClient(int $id): void
@@ -635,12 +801,117 @@ class Index extends Component
 
     private function detailPageData(User $user): array
     {
-        return [
-            'detail' => app(ClientService::class)->detail($user, (int) $this->selectedClientId),
+        $detail = app(ClientService::class)->detail($user, (int) $this->selectedClientId);
+        $client = $detail['client'];
+        $jobService = app(JobService::class);
+        $jobQuery = $jobService->visibleQuery($user)->where('flow_jobs.client_id', $client->id);
+
+        $jobMetrics = (clone $jobQuery)
+            ->reorder()
+            ->selectRaw("sum(case when completed_at is null and status not in ('Inactive','Cancelled') then 1 else 0 end) as open_count")
+            ->selectRaw("sum(case when completed_at is null and status not in ('Inactive','Cancelled') and (needs_attention = 1 or health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_count")
+            ->selectRaw('sum(case when completed_at is not null then 1 else 0 end) as completed_count')
+            ->selectRaw('coalesce(sum(commercial_value), 0) as total_value')
+            ->first();
+
+        $documentQuery = app(DocumentService::class)->query($user, ['client' => $client->id]);
+
+        $clientOrders = null;
+        $clientDocuments = null;
+        $clientActivities = null;
+        $clientOrderStatusOptions = collect();
+        $clientOrderOwnerOptions = collect();
+
+        if ($this->clientDetailTab === 'orders') {
+            $clientOrderStatusOptions = (clone $jobQuery)
+                ->reorder()
+                ->whereNotNull('status')
+                ->where('status', '<>', '')
+                ->distinct()
+                ->orderBy('status')
+                ->pluck('status');
+
+            $ownerIds = (clone $jobQuery)
+                ->reorder()
+                ->whereNotNull('owner_id')
+                ->distinct()
+                ->pluck('owner_id');
+            $clientOrderOwnerOptions = $ownerIds->isEmpty()
+                ? collect()
+                : User::query()->whereIn('id', $ownerIds)->orderBy('name')->get(['id','name','profile_image_path']);
+
+            $orders = (clone $jobQuery)
+                ->with(['phase:id,name,short_name','owner:id,name,profile_image_path'])
+                ->when(trim($this->clientOrderSearch) !== '', function ($query) {
+                    $search = trim($this->clientOrderSearch);
+                    $legacy = preg_replace('/^ORDER-/i', 'JOB-', $search) ?: $search;
+                    $query->where(function ($match) use ($search, $legacy) {
+                        $match->where('job_number', 'like', "%{$search}%")
+                            ->orWhere('job_number', 'like', "%{$legacy}%")
+                            ->orWhere('order_number', 'like', "%{$search}%")
+                            ->orWhere('title', 'like', "%{$search}%")
+                            ->orWhere('product', 'like', "%{$search}%");
+                    });
+                })
+                ->when($this->clientOrderStatus !== '', fn ($query) => $query->where('status', $this->clientOrderStatus))
+                ->when($this->clientOrderOwner !== '', fn ($query) => $query->where('owner_id', (int) $this->clientOrderOwner))
+                ->when($this->clientOrderRange === '3m', fn ($query) => $query->where('created_at', '>=', now()->subMonths(3)))
+                ->when($this->clientOrderRange === '6m', fn ($query) => $query->where('created_at', '>=', now()->subMonths(6)))
+                ->when($this->clientOrderRange === '12m', fn ($query) => $query->where('created_at', '>=', now()->subMonths(12)))
+                ->reorder()
+                ->latest('created_at')
+                ->latest('id');
+
+            $clientOrders = $orders->paginate(
+                max(1, min($this->clientOrderPerPage, 50)),
+                ['flow_jobs.*'],
+                'clientOrdersPage'
+            );
+        } elseif ($this->clientDetailTab === 'documents') {
+            $clientDocuments = (clone $documentQuery)
+                ->latest('documents.updated_at')
+                ->paginate(12, ['documents.*'], 'clientDocumentsPage');
+        } elseif ($this->clientDetailTab === 'activity') {
+            $visibleJobIds = (clone $jobQuery)->reorder()->pluck('flow_jobs.id');
+            $activityQuery = Activity::query()
+                ->with('user:id,name,profile_image_path')
+                ->where('subject_type', FlowJob::class)
+                ->when(
+                    $visibleJobIds->isNotEmpty(),
+                    fn ($query) => $query->whereIn('subject_id', $visibleJobIds),
+                    fn ($query) => $query->whereRaw('1 = 0')
+                )
+                ->latest('created_at');
+            $clientActivities = $activityQuery->paginate(20, ['*'], 'clientActivityPage');
+        }
+
+        $pageData = [
+            'detail' => $detail,
             'users' => $this->showEdit && ($user->canModule('clients','assign') || $user->canModule('clients','edit_all'))
                 ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
                 : collect([$user]),
+            'clientDetailTab' => $this->clientDetailTab,
+            'clientOrders' => $clientOrders,
+            'clientDocuments' => $clientDocuments,
+            'clientActivities' => $clientActivities,
+            'clientOrderStatusOptions' => $clientOrderStatusOptions,
+            'clientOrderOwnerOptions' => $clientOrderOwnerOptions,
+            'clientDocumentCount' => (clone $documentQuery)->count(),
+            'clientOrderMetrics' => [
+                'open' => (int) ($jobMetrics?->open_count ?? 0),
+                'attention' => (int) ($jobMetrics?->attention_count ?? 0),
+                'completed' => (int) ($jobMetrics?->completed_count ?? 0),
+                'value' => (float) ($jobMetrics?->total_value ?? 0),
+            ],
         ];
+
+        if ($this->showEdit) {
+            $formData = $this->createPageData($user);
+            unset($formData['detail']);
+            $pageData = array_merge($pageData, $formData);
+        }
+
+        return $pageData;
     }
 
     private function clientsListData(User $user): array

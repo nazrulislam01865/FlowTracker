@@ -41,6 +41,7 @@ class Index extends Component
     public array $statusOptions = [];
     public int $perPage = MyWorkService::JOBS_PER_PAGE;
     public bool $administratorView = false;
+    public bool $hideCompleted = true;
 
     private const QUICK_FILTERS = ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
     private const SORTS = ['action', 'due', 'job'];
@@ -69,6 +70,11 @@ class Index extends Component
     public function updatedSort(string $value): void
     {
         if (!in_array($value, self::SORTS, true)) $this->sort = 'action';
+        $this->resetPage('workPage');
+    }
+
+    public function updatedHideCompleted(): void
+    {
         $this->resetPage('workPage');
     }
 
@@ -182,6 +188,7 @@ class Index extends Component
             'search' => $this->search,
             'quick' => $this->quick,
             'sort' => $this->sort,
+            'hide_completed' => $this->hideCompleted,
         ], $this->perPage, 'workPage');
 
         return view('livewire.my-work.index', [

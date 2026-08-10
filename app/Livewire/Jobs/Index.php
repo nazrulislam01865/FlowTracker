@@ -19,6 +19,7 @@ use App\Services\AccessControlService;
 use App\Services\ClientService;
 use App\Services\DocumentService;
 use App\Services\JobService;
+use App\Services\InquiryService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
@@ -62,6 +63,10 @@ class Index extends Component
     public ?string $focusComment = null;
     public bool $taskEditMode = false;
     public string $detailTab = 'overview';
+    public string $inquirySearch = '';
+    public ?int $selectedLinkInquiryId = null;
+    public bool $showInquiryLinkConfirm = false;
+    public bool $showInquiryUnlinkConfirm = false;
     public array $expandedPhaseIds = [];
     public string $jobTaskSearch = '';
     public bool $showCreate = false;
@@ -117,6 +122,12 @@ class Index extends Component
             $this->selectedTaskId = null;
             $this->initializeCreateForm(request()->integer('client') ?: null);
             return;
+        }
+
+        $requestedClientFilter = request()->integer('client');
+        if ($requestedClientFilter) {
+            app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($requestedClientFilter);
+            $this->client = (string) $requestedClientFilter;
         }
 
         if ($this->selectedTaskId) {
@@ -369,6 +380,10 @@ class Index extends Component
         $this->focusComment = null;
         $this->taskEditMode = false;
         $this->detailTab = 'overview';
+        $this->inquirySearch = '';
+        $this->selectedLinkInquiryId = null;
+        $this->showInquiryLinkConfirm = false;
+        $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->jobDocumentTaskId = null;
@@ -387,6 +402,10 @@ class Index extends Component
         $this->focusComment = null;
         $this->taskEditMode = false;
         $this->expandedPhaseIds = [];
+        $this->inquirySearch = '';
+        $this->selectedLinkInquiryId = null;
+        $this->showInquiryLinkConfirm = false;
+        $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->jobDocumentTaskId = null;
@@ -398,10 +417,116 @@ class Index extends Component
 
     public function setDetailTab(string $tab): void
     {
-        abort_unless(in_array($tab, ['overview','workflow','documents'], true), 422);
+        abort_unless(in_array($tab, ['overview','workflow','documents','inquiry'], true), 422);
         $this->detailTab = $tab;
+        $this->resetValidation('inquiryLink');
         if ($tab === 'documents' && $this->selectedJobId) {
             $this->setDefaultDocumentTask();
+        }
+    }
+
+    public function updatedInquirySearch(): void
+    {
+        $this->selectedLinkInquiryId = null;
+        $this->showInquiryLinkConfirm = false;
+        $this->resetValidation('inquiryLink');
+    }
+
+    public function clearInquirySearch(): void
+    {
+        $this->inquirySearch = '';
+        $this->selectedLinkInquiryId = null;
+        $this->showInquiryLinkConfirm = false;
+        $this->resetValidation('inquiryLink');
+    }
+
+    public function selectInquiryForLink(int $inquiryId): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'inquiry', 422);
+
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canEditVisibleJob($user, $job), 403);
+
+        $inquiry = app(InquiryService::class)->visibleQuery($user)
+            ->with(['sourceOrder:id,source_inquiry_id', 'convertedJob:id'])
+            ->findOrFail($inquiryId);
+
+        $alreadyLinked = $inquiry->sourceOrder !== null
+            || ($inquiry->converted_job_id && (int) $inquiry->converted_job_id !== (int) $job->id);
+        abort_if($alreadyLinked, 409, 'This Inquiry is already linked to another Order.');
+        abort_if((string) $inquiry->result === 'dead', 422, 'A closed Inquiry cannot be linked.');
+
+        $this->selectedLinkInquiryId = $inquiry->id;
+        $this->showInquiryLinkConfirm = false;
+        $this->resetValidation('inquiryLink');
+    }
+
+    public function openInquiryLinkConfirm(): void
+    {
+        abort_unless($this->selectedJobId && $this->selectedLinkInquiryId, 422);
+        $this->showInquiryLinkConfirm = true;
+        $this->resetValidation('inquiryLink');
+    }
+
+    public function closeInquiryLinkConfirm(): void
+    {
+        $this->showInquiryLinkConfirm = false;
+    }
+
+    public function confirmInquiryLink(): void
+    {
+        abort_unless($this->selectedJobId && $this->selectedLinkInquiryId, 422);
+
+        try {
+            $user = auth()->user();
+            $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+            app(JobService::class)->linkSourceInquiry($job, $this->selectedLinkInquiryId, $user);
+
+            $this->showInquiryLinkConfirm = false;
+            $this->selectedLinkInquiryId = null;
+            $this->inquirySearch = '';
+            $this->resetValidation('inquiryLink');
+            session()->flash('success', 'Inquiry linked successfully.');
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->showInquiryLinkConfirm = false;
+            $message = trim($exception->getMessage());
+            $this->addError('inquiryLink', $message !== '' ? $message : 'The Inquiry could not be linked. Please try again.');
+        }
+    }
+
+    public function openInquiryUnlinkConfirm(): void
+    {
+        abort_unless($this->selectedJobId, 422);
+        $this->showInquiryUnlinkConfirm = true;
+        $this->resetValidation('inquiryLink');
+    }
+
+    public function closeInquiryUnlinkConfirm(): void
+    {
+        $this->showInquiryUnlinkConfirm = false;
+    }
+
+    public function confirmInquiryUnlink(): void
+    {
+        abort_unless($this->selectedJobId, 422);
+
+        try {
+            $user = auth()->user();
+            $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+            app(JobService::class)->unlinkSourceInquiry($job, $user);
+
+            $this->showInquiryUnlinkConfirm = false;
+            $this->selectedLinkInquiryId = null;
+            $this->inquirySearch = '';
+            $this->resetValidation('inquiryLink');
+            session()->flash('success', 'Inquiry unlinked and activity recorded.');
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->showInquiryUnlinkConfirm = false;
+            $message = trim($exception->getMessage());
+            $this->addError('inquiryLink', $message !== '' ? $message : 'The Inquiry could not be unlinked. Please try again.');
         }
     }
 
@@ -708,6 +833,21 @@ class Index extends Component
         }
     }
 
+    public function removeJobDocumentUpload(int $index): void
+    {
+        if (! array_key_exists($index, $this->jobDocumentUploads)) return;
+
+        unset($this->jobDocumentUploads[$index]);
+        $this->jobDocumentUploads = array_values($this->jobDocumentUploads);
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
+    }
+
+    public function clearJobDocumentUploads(): void
+    {
+        $this->jobDocumentUploads = [];
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
+    }
+
     public function uploadJobDocuments(): void
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
@@ -720,7 +860,10 @@ class Index extends Component
 
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
-        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Order.');
+        if (! $task || ! ($task->document_category_id || $task->setupTemplate?->document_category_id)) {
+            $this->addError('jobDocumentTaskId', 'Select a Task Pack document requirement for this Order.');
+            return;
+        }
 
         foreach ($this->jobDocumentUploads as $upload) {
             app(\App\Services\DocumentService::class)->store($upload, [
@@ -756,9 +899,15 @@ class Index extends Component
 
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
-        abort_unless($task && ($task->document_category_id || $task->setupTemplate?->document_category_id), 422, 'Select a Task Pack document requirement for this Order.');
+        if (! $task || ! ($task->document_category_id || $task->setupTemplate?->document_category_id)) {
+            $this->addError('jobDocumentTaskId', 'Select a Task Pack document requirement for this Order.');
+            return;
+        }
         $source = Document::findOrFail((int) $this->existingDocumentId);
-        abort_unless((int) $source->client_id === (int) $job->client_id, 403, 'The selected document does not belong to this client.');
+        if ((int) $source->client_id !== (int) $job->client_id) {
+            $this->addError('existingDocumentId', 'The selected document does not belong to this client.');
+            return;
+        }
         app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user());
         $this->existingDocumentId = null;
         $this->showDocumentPicker = false;
@@ -1100,8 +1249,10 @@ class Index extends Component
     {
         abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         if (!$this->selectedTaskId) return;
-        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
-        $flag = $task->needs_attention ? null : (trim((string) $task->attention_reason) ?: 'Management attention');
+        $task = app(TaskService::class)->visibleQuery(auth()->user())->with('attentionFlag:id,name,status,sort_order')->findOrFail($this->selectedTaskId);
+        $flag = $task->needs_attention
+            ? null
+            : (app(\App\Services\TaskFlagService::class)->defaultActive()?->name ?: 'Management attention');
         $updated = app(TaskService::class)->setAttentionFlag($task, $flag, auth()->user());
         $this->taskAttention = (bool) $updated->needs_attention;
         $this->taskAttentionReason = (string) $updated->attention_reason;
@@ -1387,7 +1538,7 @@ class Index extends Component
                 ->applyTaskScope($query, $user)
                 ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.title'])
                 ->orderBy('tasks.id'),
-            'assignee', 'phase', 'documentCategory', 'setupTemplate.documentCategory',
+            'assignee', 'phase', 'attentionFlag:id,name,status,sort_order', 'documentCategory', 'setupTemplate.documentCategory',
             'checklistItems', 'comments.user', 'documents', 'activities.user',
         ])->findOrFail($this->selectedTaskId);
 
@@ -1437,6 +1588,30 @@ class Index extends Component
                 ->get()
             : collect();
 
+        $inquiryResults = collect();
+        $selectedLinkInquiry = null;
+        $linkedInquiryCanOpen = false;
+        $canViewInquiries = app(AccessControlService::class)->can($user, 'inquiries', 'view');
+        $canManageInquiryLink = $this->detailTab === 'inquiry'
+            && $canViewInquiries
+            && app(AccessControlService::class)->canEditVisibleJob($user, $selected);
+
+        if ($this->detailTab === 'inquiry') {
+            if ($selected->sourceInquiry && $canViewInquiries) {
+                $linkedInquiryCanOpen = app(InquiryService::class)->visibleQuery($user)
+                    ->whereKey($selected->sourceInquiry->id)
+                    ->exists();
+            }
+
+            if (!$selected->source_inquiry_id && $canManageInquiryLink && mb_strlen(trim($this->inquirySearch)) >= 2) {
+                $inquiryResults = $jobService->inquiryLinkResults($user, $selected, $this->inquirySearch, 8);
+                if ($this->selectedLinkInquiryId) {
+                    $selectedLinkInquiry = $inquiryResults->firstWhere('id', $this->selectedLinkInquiryId);
+                    if (!$selectedLinkInquiry) $this->selectedLinkInquiryId = null;
+                }
+            }
+        }
+
         return [
             'selectedJob' => $selected,
             'selectedTask' => null,
@@ -1452,6 +1627,10 @@ class Index extends Component
             'mentionUsers' => $this->detailTab === 'overview'
                 ? app(\App\Services\MentionService::class)->optionsForJob($selected, $user)
                 : collect(),
+            'inquiryResults' => $inquiryResults,
+            'selectedLinkInquiry' => $selectedLinkInquiry,
+            'canManageInquiryLink' => $canManageInquiryLink,
+            'linkedInquiryCanOpen' => $linkedInquiryCanOpen,
         ];
     }
 
@@ -1461,7 +1640,12 @@ class Index extends Component
         // It does not hydrate filter catalogs, task collections, members or
         // inline-edit option lists that are not visible in the supplied
         // performance prototype.
-        $jobs = app(JobService::class)->paginateOrders($user, $this->search, $this->perPage);
+        $jobs = app(JobService::class)->paginateOrders(
+            $user,
+            $this->search,
+            $this->perPage,
+            $this->client !== '' ? (int) $this->client : null,
+        );
 
         return [
             'selectedJob' => null,

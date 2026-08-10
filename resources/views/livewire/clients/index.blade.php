@@ -18,7 +18,33 @@
         :shipping-addresses="$shippingAddresses"
     />
 @elseif($showDetail && $detail)
-    <x-clients.detail :detail="$detail" :users="$users" :editing="$showEdit" />
+    <x-clients.detail
+        :detail="$detail"
+        :users="$users"
+        :editing="$showEdit"
+        :tab="$clientDetailTab"
+        :orders="$clientOrders"
+        :documents="$clientDocuments"
+        :activities="$clientActivities"
+        :order-status-options="$clientOrderStatusOptions"
+        :order-owner-options="$clientOrderOwnerOptions"
+        :document-count="$clientDocumentCount"
+        :order-metrics="$clientOrderMetrics"
+        :client-code="$clientCode"
+        :client-countries="$clientCountries ?? []"
+        :client-country-flags="$clientCountryFlags ?? []"
+        :client-states-by-country="$clientStatesByCountry ?? []"
+        :client-languages="$clientLanguages ?? []"
+        :client-currencies="$clientCurrencies ?? []"
+        :payment-term-options="$paymentTermOptions ?? []"
+        :account-manager-id="$accountManagerId"
+        :preferred-currency="$preferredCurrency"
+        :client-country="$clientCountry"
+        :billing-country="$billingCountry"
+        :billing-same-as-office="$billingSameAsOffice"
+        :sales-tax-status="$salesTaxStatus"
+        :edit-shipping-addresses="$shippingAddresses"
+    />
 @else
 @php
     $selected = $detail['client'] ?? null;
@@ -127,11 +153,11 @@
                             <tr
                                 wire:key="client-row-{{ $clientRow->id }}"
                                 class="{{ $showClientPreview && (int)$selectedClientId === (int)$clientRow->id ? 'selected' : '' }}"
-                                wire:click="openClient({{ $clientRow->id }})"
-                                wire:keydown.enter="openClient({{ $clientRow->id }})"
-                                wire:keydown.space.prevent="openClient({{ $clientRow->id }})"
+                                wire:click="viewClient({{ $clientRow->id }})"
+                                wire:keydown.enter="viewClient({{ $clientRow->id }})"
+                                wire:keydown.space.prevent="viewClient({{ $clientRow->id }})"
                                 tabindex="0"
-                                aria-label="Preview client {{ $clientRow->name }}"
+                                aria-label="Open client {{ $clientRow->name }}"
                             >
                                 <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
                                 <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
@@ -201,62 +227,7 @@
 
     </div>
 
-    @if($showClientPreview && $selected)
-        <div
-            class="ft-client-preview-backdrop"
-            wire:key="client-preview-{{ $selected->id }}"
-            wire:click.self="closeClientPreview"
-            x-data
-            x-on:keydown.escape.window="$wire.closeClientPreview()"
-            x-init="$nextTick(() => $refs.dialog.focus())"
-        >
-        <aside
-            class="ft-client-detail-card ft-client-preview-modal"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="client-preview-title-{{ $selected->id }}"
-            tabindex="-1"
-            x-ref="dialog"
-        >
-            @php
-                $detailHealthClass = $selectedHealth === 'On Track' ? 'green' : ($selectedHealth === 'At Risk' ? 'amber' : 'red');
-                $selectedInitials = collect(preg_split('/\s+/', trim($selected->name)))->filter()->take(2)->map(fn($part) => strtoupper(substr($part,0,1)))->implode('');
-            @endphp
-            <button class="ft-client-preview-close" type="button" wire:click="closeClientPreview" aria-label="Close client preview">×</button>
-            <div class="ft-client-detail-head">
-                <span class="ft-client-detail-logo">{{ $selectedInitials ?: 'CL' }}</span>
-                <div><h2 id="client-preview-title-{{ $selected->id }}">{{ $selected->name }}</h2><p>{{ $selected->country ?: '—' }} <span class="ft-client-health {{ $detailHealthClass }}">{{ $selectedHealth }}</span></p></div>
-                <button class="ft-open-client" type="button" wire:click="viewClient({{ $selected->id }})">Open client</button>
-            </div>
-            <div class="ft-client-detail-contact">
-                <div><small>Account manager</small>@if($selected->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$selected->accountManager" :name="$selected->accountManager->name" :size="28" /><b>{{ $selected->accountManager->name }}</b></div>@else<b>Unassigned</b>@endif</div>
-                <div><small>Contact</small><a href="mailto:{{ $selected->email }}">{{ $selected->email ?: ($selected->contact_name ?: 'No contact recorded') }}</a>@if($selected->phone)<span>{{ $selected->phone }}</span>@endif</div>
-            </div>
-            <div class="ft-client-detail-stats">
-                <div><b>{{ $activeJobs->count() }}</b><small>Active Jobs</small></div><div><b>{{ $detail['openTasks'] }}</b><small>Open Tasks</small></div><div><b class="ft-text-red">{{ $detail['overdue'] }}</b><small>Overdue</small></div><div><b>${{ number_format($selected->outstanding_balance,0) }}</b><small>Outstanding</small></div>
-            </div>
 
-            <div class="ft-client-detail-section">
-                <div class="ft-client-detail-section-head"><h3>Active Orders</h3><a href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>View all orders</a></div>
-                <table class="ft-client-mini-table"><thead><tr><th>Job ID</th><th>Job name</th><th>Phase</th><th>Progress</th><th>Next delivery</th><th>Health</th></tr></thead><tbody>
-                @forelse($activeJobs->take(3) as $job)
-                    <tr><td><a href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a></td><td>{{ $job->title }}</td><td>{{ $job->phase?->name ?? '—' }}</td><td><b>{{ $job->progress }}%</b><div class="ft-mini-progress"><span style="width:{{ $job->progress }}%"></span></div></td><td>{{ $job->delivery_date?->format('M j') ?? '—' }}</td><td><span class="ft-health-dot {{ in_array($job->health,['Needs Attention','Blocked','Delayed'])?'red':($job->health==='At Risk'?'amber':'green') }}"></span></td></tr>
-                @empty<tr><td colspan="6" class="ft-client-empty">No active Jobs.</td></tr>@endforelse
-                </tbody></table>
-            </div>
-
-            <div class="ft-client-detail-section ft-client-attention-section">
-                <div class="ft-client-detail-section-head"><h3>Tasks needing attention</h3><a href="{{ route('my-work') }}" wire:navigate>View all tasks</a></div>
-                <table class="ft-client-mini-table"><thead><tr><th>Task</th><th>Due</th><th>Status</th><th>Assignee</th></tr></thead><tbody>
-                @forelse($attentionTasks->take(3) as $task)
-                    <tr><td><a href="{{ route('jobs.index',['open'=>$task->flow_job_id,'task'=>$task->id]) }}" wire:navigate>{{ $task->title }}</a></td><td class="{{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date))?'ft-text-red':'' }}">{{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date)) ? 'Overdue '.$task->due_date->diffInDays(app(\App\Services\WorkspaceSettingsService::class)->localToday()).'d' : ($task->due_date?->format('M j') ?? '—') }}</td><td><span class="ft-client-health {{ $task->needs_attention||$task->status==='Blocked'?'red':'amber' }}">{{ $task->needs_attention?'Needs Attention':$task->status }}</span></td><td>@if($task->assignee)<div class="ft-client-person"><x-ui.avatar :user="$task->assignee" :name="$task->assignee->name" :size="25" /><span>{{ $task->assignee->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td></tr>
-                @empty<tr><td colspan="4" class="ft-client-empty">No tasks need attention.</td></tr>@endforelse
-                </tbody></table>
-            </div>
-            <a class="ft-view-client-work" href="{{ route('jobs.index',['search'=>$selected->name]) }}" wire:navigate>View all client work&nbsp; →</a>
-        </aside>
-        </div>
-    @endif
 </div>
 @endif
 </div>
