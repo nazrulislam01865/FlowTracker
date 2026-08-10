@@ -134,7 +134,7 @@
             <div class="ft-activity-list">
                 @forelse($recentActivity as $notification)
                     <div class="ft-activity" wire:key="dashboard-activity-{{ $notification->id }}">
-                        <span class="ft-activity-icon">{{ $notification->type === 'mention' ? '@' : '✓' }}</span>
+                        <span class="ft-activity-icon">{{ in_array($notification->type, ['mention', 'mention_admin'], true) ? '@' : '✓' }}</span>
                         <span><strong>{{ $notification->title }}</strong><span class="ft-activity-copy">{{ app(\App\Services\RichTextService::class)->plainText($notification->message) }}</span></span>
                         <time class="ft-activity-time">{{ $notification->created_at?->diffForHumans(short: true) }}</time>
                     </div>

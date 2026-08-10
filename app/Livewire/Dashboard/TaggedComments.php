@@ -50,6 +50,7 @@ class TaggedComments extends Component
         return view('livewire.dashboard.tagged-comments', [
             'mentions' => $mentions,
             'unreadMentionCount' => $service->unreadMentionCount(auth()->user()),
+            'administratorView' => app(\App\Services\AccessControlService::class)->isAdministrator(auth()->user()),
         ]);
     }
 }

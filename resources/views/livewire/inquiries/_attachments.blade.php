@@ -1,24 +1,23 @@
 <section class="ft-detail-card ft-attachment-card">
     <h2>Attachments <span>{{ $inquiry->documents_count }}</span></h2>
     <div class="ft-upload-zone compact ft-task-upload-zone">
-        @if($canEditInquiry)
-            <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="inquiryOverviewUpload-{{ $inquiry->id }}">
+        @if($canEditInquiry && !$showInquiryDocumentPicker)
+            <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadInquiryFiles" for="inquiryOverviewUpload-{{ $inquiry->id }}">
                 <input id="inquiryOverviewUpload-{{ $inquiry->id }}" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
                 <span class="ft-paperclip">⌕</span>
                 <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
             </label>
-        @else
+        @elseif(!$canEditInquiry)
             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Inquiry attachments.</small></div></div>
         @endif
         @if(auth()->user()->canModule('documents','link'))
-            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker">Choose from Documents</button>
+            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker">{{ $showInquiryDocumentPicker && $canEditInquiry ? 'Upload new' : 'Choose from Documents' }}</button>
         @endif
     </div>
 
-    @if(count($inquiryUploads ?? []))
-        <div class="ft-upload-ready-row">
-            <span>{{ count($inquiryUploads ?? []) }} file{{ count($inquiryUploads ?? []) === 1 ? '' : 's' }} ready</span>
-            <button class="ft-new-job-btn" type="button" wire:click="uploadInquiryFiles">Upload &amp; link</button>
+    @if(!$showInquiryDocumentPicker && count($inquiryUploads ?? []))
+        <div class="ft-upload-ready-row ft-auto-upload-state" aria-live="polite">
+            <span>Uploading and linking {{ count($inquiryUploads ?? []) }} file{{ count($inquiryUploads ?? []) === 1 ? '' : 's' }} automatically…</span>
         </div>
     @endif
     @error('inquiryUploads')<div class="validation-error">{{ $message }}</div>@enderror

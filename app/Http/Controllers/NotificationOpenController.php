@@ -21,6 +21,9 @@ class NotificationOpenController extends Controller
     {
         $user = auth()->user();
         abort_unless((int) $notification->user_id === (int) $user->id, 403);
+        if ((string) $notification->type === 'mention_admin') {
+            abort_unless(app(AccessControlService::class)->isAdministrator($user), 403);
+        }
 
         if ($notification->read_at === null) {
             $notification->forceFill(['read_at' => now()])->save();
@@ -37,7 +40,7 @@ class NotificationOpenController extends Controller
                 $params = ['open' => (int) $inquiry->id];
                 if ($notification->inquiry_task_id) {
                     $params['task'] = (int) $notification->inquiry_task_id;
-                } elseif (in_array((string) $notification->type, ['mention', 'comment'], true)) {
+                } elseif (in_array((string) $notification->type, ['mention', 'mention_admin', 'comment'], true)) {
                     $params['tab'] = 'activity';
                 }
                 return redirect()->route('inquiries.index', $params);
@@ -96,7 +99,7 @@ class NotificationOpenController extends Controller
 
     private function taskCommentId(FlowNotification $notification, int $taskId): ?int
     {
-        if (!in_array((string) $notification->type, ['mention', 'comment'], true)) return null;
+        if (!in_array((string) $notification->type, ['mention', 'mention_admin', 'comment'], true)) return null;
 
         $query = FlowTaskComment::query()
             ->where('flow_task_id', $taskId)
@@ -112,7 +115,7 @@ class NotificationOpenController extends Controller
 
     private function jobCommentActivityId(FlowNotification $notification, int $jobId): ?int
     {
-        if (!in_array((string) $notification->type, ['mention', 'comment'], true)) return null;
+        if (!in_array((string) $notification->type, ['mention', 'mention_admin', 'comment'], true)) return null;
 
         $query = Activity::query()
             ->where('subject_type', FlowJob::class)

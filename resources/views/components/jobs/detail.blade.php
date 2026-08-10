@@ -15,7 +15,11 @@
     'activityPage'=>1,
     'focusComment'=>null,
     'jobDocumentUploads'=>[],
+    'jobRequiredDocumentUpload'=>null,
+    'jobDocumentTaskId'=>null,
     'showDocumentPicker'=>false,
+    'lastJobDocumentUploadId'=>null,
+    'lastJobDocumentTaskId'=>null,
     'inquiryResults'=>collect(),
     'inquirySearch'=>'',
     'selectedLinkInquiry'=>null,
@@ -99,7 +103,11 @@
             :job="$job"
             :available-documents="$availableDocuments"
             :job-document-uploads="$jobDocumentUploads"
+            :job-required-document-upload="$jobRequiredDocumentUpload"
+            :job-document-task-id="$jobDocumentTaskId"
             :show-document-picker="$showDocumentPicker"
+            :last-job-document-upload-id="$lastJobDocumentUploadId"
+            :last-job-document-task-id="$lastJobDocumentTaskId"
         />
     @elseif($detailTab==='inquiry')
         <x-jobs.detail-inquiry

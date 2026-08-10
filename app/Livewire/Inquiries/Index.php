@@ -688,11 +688,36 @@ class Index extends Component
         $this->resetPage('inquiryActivityPage');
     }
 
+    public function updatedInquiryUploads(): void
+    {
+        if (count($this->inquiryUploads) === 0) {
+            return;
+        }
+
+        // New upload and stored-document linking are mutually exclusive. Do not
+        // persist from this lifecycle hook: the browser calls uploadInquiryFiles()
+        // after Livewire reports that the temporary upload has actually finished.
+        $this->showInquiryDocumentPicker = false;
+        $this->inquiryExistingDocumentId = null;
+        $this->resetValidation(['inquiryExistingDocumentId']);
+    }
+
     public function toggleInquiryDocumentPicker(): void
     {
         abort_unless(auth()->user()->canModule('documents', 'link'), 403);
-        $this->showInquiryDocumentPicker = ! $this->showInquiryDocumentPicker;
-        if (! $this->showInquiryDocumentPicker) $this->inquiryExistingDocumentId = null;
+
+        $opening = ! $this->showInquiryDocumentPicker;
+        if ($opening) {
+            // Existing-document mode replaces Upload new, so clear any pending
+            // temporary files instead of showing both link actions together.
+            $this->inquiryUploads = [];
+            $this->resetValidation(['inquiryUploads', 'inquiryUploads.*']);
+        } else {
+            $this->inquiryExistingDocumentId = null;
+            $this->resetValidation(['inquiryExistingDocumentId']);
+        }
+
+        $this->showInquiryDocumentPicker = $opening;
     }
 
     public function attachExistingInquiryDocument(): void
@@ -704,17 +729,50 @@ class Index extends Component
             ->applyDocumentScope(Document::query()->whereKey((int) $this->inquiryExistingDocumentId), auth()->user())
             ->firstOrFail();
         app(InquiryService::class)->linkExistingDocument($inquiry, $source, auth()->user());
+        $this->inquiryUploads = [];
         $this->inquiryExistingDocumentId = null;
         $this->showInquiryDocumentPicker = false;
+        $this->resetValidation(['inquiryUploads', 'inquiryUploads.*', 'inquiryExistingDocumentId']);
         session()->flash('success', 'Stored document linked to this Inquiry.');
     }
 
-    public function uploadInquiryFiles(): void
+    public function uploadInquiryFiles(): array
     {
-        $this->validate(['inquiryUploads.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai']]);
+        $this->resetValidation(['inquiryUploads', 'inquiryUploads.*']);
+        $validator = validator(['inquiryUploads' => $this->inquiryUploads], [
+            'inquiryUploads' => ['required','array','min:1'],
+            'inquiryUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+        ], [
+            'inquiryUploads.required' => 'Choose at least one file to upload.',
+            'inquiryUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
+            'inquiryUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT, CSV or AI.',
+        ]);
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                foreach ($messages as $message) $this->addError($key, $message);
+            }
+            return ['ok' => false, 'message' => $validator->errors()->first()];
+        }
+
         $inquiry = $this->selectedInquiry();
-        foreach ($this->inquiryUploads as $upload) app(InquiryService::class)->upload($inquiry, $upload, auth()->user());
+        try {
+            foreach ($this->inquiryUploads as $upload) {
+                app(InquiryService::class)->upload($inquiry, $upload, auth()->user());
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $message = 'FlowTrack could not store this Inquiry attachment. Please try again.';
+            $this->addError('inquiryUploads', $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
         $this->inquiryUploads = [];
+        $this->inquiryExistingDocumentId = null;
+        $this->showInquiryDocumentPicker = false;
+        $this->resetValidation(['inquiryUploads', 'inquiryUploads.*']);
+        session()->flash('success', 'Attachment uploaded and linked to this Inquiry.');
+        return ['ok' => true];
     }
 
     public function deleteInquiryDocument(int $documentId): void

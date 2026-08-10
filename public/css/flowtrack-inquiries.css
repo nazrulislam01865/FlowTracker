@@ -2007,3 +2007,10 @@
   width:24px;
   margin-left:0;
 }
+
+/* Inquiry ID copy affordance: match Order/Task copy behavior in list and detail header. */
+.ft-inquiry-prototype .ft-inquiry-list-code-wrap{display:inline-flex!important;align-items:center;gap:3px;max-width:100%}
+.ft-inquiry-prototype .ft-inquiry-list-code-wrap .id{min-width:0}
+.ft-inquiry-prototype .ft-inquiry-list-code-wrap .ft-copy-id-btn{flex:0 0 22px;width:22px;height:22px;font-size:13px}
+.ft-inquiry-prototype .ft-inquiry-detail-code-wrap{display:inline-flex!important;align-items:center;gap:3px}
+.ft-inquiry-prototype .ft-inquiry-detail-code-wrap .ft-copy-id-btn{flex:0 0 22px;width:22px;height:22px;font-size:13px}

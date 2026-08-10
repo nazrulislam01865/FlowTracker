@@ -122,10 +122,7 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/unread-count', function () {
         $user = auth()->user();
         $service = app(\App\Services\NotificationService::class);
-        $latest = \App\Models\FlowNotification::query()
-            ->where('user_id', $user->id)
-            ->latest('id')
-            ->first();
+        $latest = $service->latest($user);
 
         return response()->json([
             'count' => $service->unreadCount($user),

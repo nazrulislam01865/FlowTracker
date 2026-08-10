@@ -467,4 +467,4 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-phase-modal-body{padding:18px 20px 15px;display:grid;gap:14px}.ft-phase-two-col{display:grid;grid-template-columns:1fr 1fr;gap:14px}
 .ft-phase-modal-body .ft-admin-field label{font-size:12px}.ft-phase-modal-body .ft-admin-field input,.ft-phase-modal-body .ft-admin-field select{min-height:45px;border-radius:9px;font-size:13px;padding:0 13px}
 .ft-phase-checks{border-top:0;display:flex;flex-direction:column}.ft-phase-checks label{min-height:42px;border-bottom:1px solid #dfe5ed;display:flex;align-items:center;gap:10px;font-size:13px}.ft-phase-checks input{width:16px;height:16px;accent-color:#1766ea}
-.ft-phase-modal-footer{border-top:1px solid #dfe5ed;padding:13px 20px;display:flex;justify-content:flex-end;gap:9px}
+.ft-phase-modal-footer{border-top:1px solid #dfe5ed;padding:13px 20px;display:flex;justify-content:flex-end;gap:9px}.ft-phase-modal-footer .ft-admin-primary,.ft-phase-modal-footer .ft-admin-cancel{height:42px;font-size:12px;min-width:104px}

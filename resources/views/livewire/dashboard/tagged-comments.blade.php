@@ -1,6 +1,6 @@
 <section class="ft-panel" id="tagged">
     <div class="ft-panel-head">
-        <div><h2 class="ft-panel-title">Tagged comments <span id="unread-count">{{ $unreadMentionCount }} unread</span></h2><div class="ft-panel-note">Mentions from comments and descriptions across orders, tasks and inquiries</div></div>
+        <div><h2 class="ft-panel-title">Tagged comments <span id="unread-count">{{ $unreadMentionCount }} unread</span></h2><div class="ft-panel-note">{{ $administratorView ? 'All mentions across orders, tasks and inquiries' : 'Your mentions from comments and descriptions across orders, tasks and inquiries' }}</div></div>
         <button class="ft-link" type="button" wire:click="markAllRead" @disabled($unreadMentionCount === 0)>Mark all read</button>
     </div>
     <div class="ft-mention-tabs">

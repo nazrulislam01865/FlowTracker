@@ -74,6 +74,8 @@ class AdminService
         $user = User::create(array_merge($data, $userDefaults));
         $this->syncMembership($user, ['job_title' => $position]);
         $this->audit($user, 'access.user_created', 'User created and assigned to role '.$user->role?->name, $actor);
+        $user->load('role');
+        app(NotificationService::class)->backfillAdministratorMentions($user);
         return $user;
     }
 
@@ -81,6 +83,7 @@ class AdminService
     public function updateUser(User $user, array $data, User $actor): User
     {
         $this->assertAdministrator($actor);
+        $wasAdministrator = app(AccessControlService::class)->isAdministrator($user);
         $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
         $position = $this->normalizePosition($data['position'] ?? null);
 
@@ -112,7 +115,13 @@ class AdminService
         }
 
         $this->audit($user, 'access.user_updated', 'Updated user '.$user->name.($passwordChanged ? ' and changed password' : ''), $actor);
-        return $user->refresh();
+        $fresh = $user->refresh()->load('role');
+        app(DashboardService::class)->forget($fresh);
+        app(ShellDataService::class)->forget((int) $fresh->id);
+        if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
+            app(NotificationService::class)->backfillAdministratorMentions($fresh);
+        }
+        return $fresh;
     }
 
     public function positionFor(User $user): ?string
@@ -230,12 +239,19 @@ class AdminService
     public function assignRole(User $user, Role $role, User $actor): void
     {
         $this->assertAdministrator($actor);
+        $wasAdministrator = app(AccessControlService::class)->isAdministrator($user);
         $this->assertRoleWorkspace($role);
         abort_if($user->isSuperAdmin() && $role->slug !== 'super-admin', 422, 'A Super Admin cannot be downgraded here.');
         $old = $user->role?->name ?: 'No role';
         $user->update(['role_id' => $role->id]);
         $this->syncMembership($user);
         $this->audit($user, 'access.role_assigned', 'Role changed from '.$old.' to '.$role->name, $actor, ['old' => $old, 'new' => $role->name]);
+        $fresh = $user->refresh()->load('role');
+        app(DashboardService::class)->forget($fresh);
+        app(ShellDataService::class)->forget((int) $fresh->id);
+        if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
+            app(NotificationService::class)->backfillAdministratorMentions($fresh);
+        }
     }
 
     public function toggleUserActive(User $user, User $actor): void

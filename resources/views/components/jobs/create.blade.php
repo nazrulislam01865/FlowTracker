@@ -41,7 +41,7 @@
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
                 <label class="ft-create-field"><b>Reference number</b><input wire:model="referenceNumber" placeholder="e.g. REF-00028 or customer PO number">@error('referenceNumber')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field"><b>Order title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <label class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" data-rich-text wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea></label>
+                <div class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" data-rich-text wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea>@error('description')<small class="validation-error">{{ $message }}</small>@enderror</div>
             </div>
         </section>
 
@@ -143,13 +143,16 @@
                         context="create-job"
                         action="setCreateSelector"
                         :value="$workflowId"
-                        placeholder="Select workflow"
+                        :placeholder="$clientId ? 'Select order workflow' : 'Select a client first'"
                         :selected-label="$selectedWorkflow?->name"
                         :initial-options="$workflowFilterOptions"
                         :params="['client_id' => $clientId]"
+                        :disabled="blank($clientId)"
                         :clearable="false"
                         wire:key="create-workflow-selector-{{ $clientId ?: 'none' }}-{{ $workflowSelectorVersion }}"
                     />
+                    <small>Only active Order workflows configured for the selected client are shown.</small>
+                    @error('workflowId')<small class="validation-error">{{ $message }}</small>@enderror
                 </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span>@if(auth()->user()->canAccess('workflow.manage'))<a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>@else<span>Preview workflow ↗</span>@endif</div>

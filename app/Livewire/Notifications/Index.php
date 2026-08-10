@@ -4,7 +4,6 @@ namespace App\Livewire\Notifications;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
-use App\Models\FlowNotification;
 use App\Services\NotificationService;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -23,9 +22,13 @@ class Index extends Component
 
     public function markRead(int $id): void
     {
-        FlowNotification::where('user_id', auth()->id())->whereKey($id)->update(['read_at' => now()]);
-        app(\App\Services\ShellDataService::class)->forget((int) auth()->id());
-        $this->dispatch('flowtrack-unread-count', count: app(NotificationService::class)->unreadCount(auth()->user()));
+        $user = auth()->user();
+        $service = app(NotificationService::class);
+        $notification = $service->visibleQuery($user)->whereKey($id)->firstOrFail();
+        $notification->forceFill(['read_at' => now()])->save();
+        app(\App\Services\DashboardService::class)->forgetMentions($user);
+        app(\App\Services\ShellDataService::class)->forget((int) $user->id);
+        $this->dispatch('flowtrack-unread-count', count: $service->unreadCount($user));
     }
 
     #[On('flowtrack-notification')]

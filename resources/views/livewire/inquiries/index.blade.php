@@ -66,7 +66,10 @@
                         @forelse($inquiryRows as $row)
                             <article class="row" wire:key="inquiry-list-{{ $row['id'] }}">
                                 <div class="cell ft-inquiry-list-identity" data-label="Inquiry">
-                                    <a class="id" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" wire:navigate>{{ $row['number'] }}</a>
+                                    <span class="ft-copyable-id-wrap ft-inquiry-list-code-wrap">
+                                        <a class="id" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" wire:navigate>{{ $row['number'] }}</a>
+                                        <button type="button" class="ft-copy-id-btn" title="Copy Inquiry ID" aria-label="Copy {{ $row['number'] }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($row['number'])); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                                    </span>
                                     <span class="sub ft-inquiry-created-by" title="Created by {{ $row['createdBy'] }}">Created by {{ $row['createdBy'] }}</span>
                                     <span class="sub ft-inquiry-created-at">{{ $row['createdDate'] }} · {{ $row['createdTime'] }}</span>
                                 </div>
@@ -501,7 +504,11 @@
                 <div class="ft-task-heading-copy">
                     <div class="ft-detail-breadcrumb ft-id-breadcrumb">
                         <a href="{{ route('inquiries.index') }}" wire:navigate>Inquiries</a>
-                        <span>/</span><span>{{ $inquiry->inquiry_number }}</span>
+                        <span>/</span>
+                        <span class="ft-copyable-id-wrap ft-inquiry-detail-code-wrap">
+                            <span>{{ $inquiry->inquiry_number }}</span>
+                            <button type="button" class="ft-copy-id-btn" title="Copy Inquiry ID" aria-label="Copy {{ $inquiry->inquiry_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($inquiry->inquiry_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                        </span>
                     </div>
                     <div class="ft-task-title-line">
                         <h1

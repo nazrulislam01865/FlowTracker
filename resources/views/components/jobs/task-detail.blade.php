@@ -207,19 +207,19 @@
             <section class="ft-detail-card ft-attachment-card">
                 <h2>Attachments <span>{{ $task->documents->count() }}</span></h2>
                 <div class="ft-upload-zone compact ft-task-upload-zone">
-                    @if($canUploadDocument)
-                        <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone for="taskDocumentUpload-{{ $task->id }}">
+                    @if($canUploadDocument && !$showTaskDocumentPicker)
+                        <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadSelectedTaskDocuments" for="taskDocumentUpload-{{ $task->id }}">
                             <input id="taskDocumentUpload-{{ $task->id }}" type="file" wire:model="taskDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                             <span class="ft-paperclip">⌕</span>
                             <div>Drop files here or <strong>browse</strong><small data-drop-status>{{ $taskDocumentName ? 'Required document: '.$taskDocumentName.' · ' : '' }}PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
                         </label>
-                    @else
+                    @elseif(!$canUploadDocument)
                         <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to task attachments.</small></div></div>
                     @endif
-                    @if($canLinkDocument)<button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleTaskDocumentPicker">Choose from Documents</button>@endif
+                    @if($canLinkDocument)<button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleTaskDocumentPicker">{{ $showTaskDocumentPicker && $canUploadDocument ? 'Upload new' : 'Choose from Documents' }}</button>@endif
                 </div>
-                @if(count($taskDocumentUploads ?? []))
-                    <div class="ft-upload-ready-row"><span>{{ count($taskDocumentUploads ?? []) }} file{{ count($taskDocumentUploads ?? [])===1?'':'s' }} ready</span><button class="ft-new-job-btn" type="button" wire:click="uploadSelectedTaskDocuments">Upload &amp; link</button></div>
+                @if(!$showTaskDocumentPicker && count($taskDocumentUploads ?? []))
+                    <div class="ft-upload-ready-row ft-auto-upload-state" aria-live="polite"><span>Uploading and linking {{ count($taskDocumentUploads ?? []) }} file{{ count($taskDocumentUploads ?? [])===1?'':'s' }} automatically…</span></div>
                 @endif
                 @error('taskDocumentUploads')<div class="validation-error">{{ $message }}</div>@enderror
                 @error('taskDocumentUploads.*')<div class="validation-error">{{ $message }}</div>@enderror

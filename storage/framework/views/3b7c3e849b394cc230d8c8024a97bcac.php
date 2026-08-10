@@ -37,9 +37,11 @@
     ]); ?>
     <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-4">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
+    <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
+    <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-16">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-17">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
@@ -60,6 +62,7 @@
 </div>
 <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::scripts(); ?>
 
+<script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script>
     (() => {
         const bindFlowtrackSessionRecovery = () => {

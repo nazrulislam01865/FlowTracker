@@ -16,7 +16,7 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v9-dashboard-inquiries';
+    private const CACHE_VERSION = 'v10-role-aware-tagged-comments';
 
     private ?int $clientLifecycleVersion = null;
 
@@ -187,6 +187,7 @@ class DashboardService
                 'inquiry:id,inquiry_number,subject',
                 'inquiryTask:id,inquiry_id,title',
             ])
+            ->latest('created_at')
             ->latest('id')
             ->limit(max(1, min(50, $limit)))
             ->get();
@@ -223,9 +224,16 @@ class DashboardService
      */
     private function dashboardMentionQuery(User $user): Builder
     {
-        return FlowNotification::query()
-            ->where('flow_notifications.user_id', $user->id)
-            ->where('flow_notifications.type', 'mention')
+        $query = FlowNotification::query()
+            ->where('flow_notifications.user_id', $user->id);
+
+        if (app(AccessControlService::class)->isAdministrator($user)) {
+            $query->whereIn('flow_notifications.type', ['mention', 'mention_admin']);
+        } else {
+            $query->where('flow_notifications.type', 'mention');
+        }
+
+        return $query
             ->where(function (Builder $mentions): void {
                 $mentions
                     ->where(function (Builder $taskMention): void {
@@ -404,9 +412,9 @@ class DashboardService
 
     public function recentActivity(User $user): Collection
     {
-        return FlowNotification::query()
+        return app(NotificationService::class)->visibleQuery($user)
             ->select(['id', 'user_id', 'flow_job_id', 'flow_task_id', 'type', 'title', 'message', 'created_at'])
-            ->where('user_id', $user->id)
+            ->latest('created_at')
             ->latest('id')
             ->limit(4)
             ->get();

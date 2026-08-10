@@ -1,4 +1,4 @@
-.ft-phase-modal-footer .ft-admin-primary,.ft-phase-modal-footer .ft-admin-cancel{height:42px;font-size:12px;min-width:104px}
+
 
 @media(max-width:1100px){
   .ft-taskpack-grid{grid-template-columns:1fr}.ft-workflow-admin-layout{grid-template-columns:210px minmax(0,1fr)}
@@ -1555,4 +1555,35 @@
 @media (max-width:700px){
     .ft-user-access-table{min-width:820px!important}
     .ft-user-row-actions{white-space:normal}
+}
+
+/* 2026-08-05: remove accidental mobile header whitespace on My Work / Board / Jobs.
+   The tablet rule uses a 260px flex-basis for the title block while the header is
+   horizontal. Once the header becomes a column that basis turns into vertical
+   height, creating the large empty area seen on phones. */
+@media (max-width: 760px){
+    .ft-board-page .ft-board-page-head,
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-page-head>div:first-child,
+    .ft-jobs-list-page .ft-list-head>div:first-child,
+    .ft-exact-jobs-list .ft-list-head>div:first-child{
+        flex:0 0 auto!important;
+        flex-basis:auto!important;
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-head-actions,
+    .ft-jobs-list-page .ft-list-actions,
+    .ft-exact-jobs-list .ft-list-actions{
+        flex:0 0 auto!important;
+        min-height:0!important;
+        height:auto!important;
+    }
+    .ft-board-page .ft-board-page-head{margin-bottom:10px!important}
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{margin-bottom:10px!important}
 }

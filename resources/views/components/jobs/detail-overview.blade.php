@@ -377,7 +377,7 @@
         @if($requiredDocuments->isNotEmpty())
             <div class="ft-upload-zone compact ft-task-upload-zone ft-job-overview-dropzone">
                 @if($canUploadDocument)
-                    <label class="ft-task-upload-drop ft-livewire-upload-zone {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone for="jobOverviewDocumentUpload-{{ $job->id }}">
+                    <label class="ft-task-upload-drop ft-livewire-upload-zone {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone data-auto-upload-method="uploadJobOverviewDocuments" for="jobOverviewDocumentUpload-{{ $job->id }}">
                         <input id="jobOverviewDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
                         <span class="ft-paperclip">⌕</span>
                         <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
@@ -385,7 +385,7 @@
                 @else
                     <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Job attachments.</small></div></div>
                 @endif
-                <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="setDetailTab('documents')">Choose from Documents</button>
+                <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="openJobExistingDocumentPickerFromOverview">Choose from Documents</button>
             </div>
             @if($canUploadDocument)
                 @error('jobDocumentUploads')
@@ -408,9 +408,8 @@
                         </div>
                     @endforeach
                 </div>
-                <div class="ft-upload-ready-row">
-                    <span>{{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready</span>
-                    <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
+                <div class="ft-upload-ready-row ft-auto-upload-state" aria-live="polite">
+                    <span>Uploading and linking {{ count($jobDocumentUploads ?? []) }} file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} automatically…</span>
                 </div>
             @endif
         @else

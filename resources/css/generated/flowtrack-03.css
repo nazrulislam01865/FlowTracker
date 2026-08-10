@@ -1,36 +1,5 @@
 
 
-/* 2026-08-05: remove accidental mobile header whitespace on My Work / Board / Jobs.
-   The tablet rule uses a 260px flex-basis for the title block while the header is
-   horizontal. Once the header becomes a column that basis turns into vertical
-   height, creating the large empty area seen on phones. */
-@media (max-width: 760px){
-    .ft-board-page .ft-board-page-head,
-    .ft-jobs-list-page .ft-list-head,
-    .ft-exact-jobs-list .ft-list-head{
-        min-height:0!important;
-        height:auto!important;
-    }
-    .ft-board-page .ft-board-page-head>div:first-child,
-    .ft-jobs-list-page .ft-list-head>div:first-child,
-    .ft-exact-jobs-list .ft-list-head>div:first-child{
-        flex:0 0 auto!important;
-        flex-basis:auto!important;
-        min-height:0!important;
-        height:auto!important;
-    }
-    .ft-board-page .ft-board-head-actions,
-    .ft-jobs-list-page .ft-list-actions,
-    .ft-exact-jobs-list .ft-list-actions{
-        flex:0 0 auto!important;
-        min-height:0!important;
-        height:auto!important;
-    }
-    .ft-board-page .ft-board-page-head{margin-bottom:10px!important}
-    .ft-jobs-list-page .ft-list-head,
-    .ft-exact-jobs-list .ft-list-head{margin-bottom:10px!important}
-}
-
 @media (max-width: 480px){
     .ft-board-page .ft-board-page-head,
     .ft-jobs-list-page .ft-list-head,
@@ -1864,3 +1833,27 @@ a.ft-new-job-btn:active {
 /* Final narrow-screen safeguards for detail navigation and document requirement cards. */
 .ft-exact-job-detail .ft-exact-tabs button:focus:not(:focus-visible){outline:none}
 .ft-exact-job-detail .ft-exact-tabs button:focus-visible{outline:2px solid #2463eb;outline-offset:3px;border-radius:4px}
+
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-next-phase-box>.ft-permission-note{grid-row:auto!important}
+    .ft-exact-job-detail .ft-upload-ready-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{max-width:100%}
+}
+
+@media(max-width:520px){
+    .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row td>div:first-child{
+        display:grid!important;
+        grid-template-columns:1fr;
+        gap:4px;
+    }
+    .ft-exact-job-detail .ft-upload-ready-row{align-items:stretch;flex-direction:column}
+    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{width:100%}
+}
+
+/* Order details documents: clearer hierarchy, compact phase groups, and mobile-first actions. */
+.ft-exact-job-detail .ft-doc-ux-title{
+    margin-bottom:12px;
+    align-items:center;
+}
+.ft-exact-job-detail .ft-doc-ux-title h2{font-size:24px}
+.ft-exact-job-detail .ft-doc-ux-title p{font-size:11px;max-width:620px}

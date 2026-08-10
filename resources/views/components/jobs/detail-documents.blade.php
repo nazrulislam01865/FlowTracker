@@ -2,7 +2,11 @@
     'job',
     'availableDocuments'=>collect(),
     'jobDocumentUploads'=>[],
+    'jobRequiredDocumentUpload'=>null,
+    'jobDocumentTaskId'=>null,
     'showDocumentPicker'=>false,
+    'lastJobDocumentUploadId'=>null,
+    'lastJobDocumentTaskId'=>null,
 ])
 @php
     $required = \App\Support\JobDetailPresenter::requiredDocuments($job);
@@ -12,7 +16,21 @@
     $unlinkedDocs = $job->documents->whereNull('task_id')->values();
     $canUploadDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','create');
     $canLinkDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','link');
+    $canDeleteDocument = app(\App\Services\AccessControlService::class)->can(auth()->user(),'documents','delete');
     $canManageDocuments = $canUploadDocument || $canLinkDocument;
+    $lastUploadedDocument = $lastJobDocumentUploadId
+        && (int) $lastJobDocumentTaskId === (int) $jobDocumentTaskId
+        ? $job->documents->firstWhere('id', (int) $lastJobDocumentUploadId)
+        : null;
+    $pendingUploadName = $jobRequiredDocumentUpload && method_exists($jobRequiredDocumentUpload, 'getClientOriginalName')
+        ? $jobRequiredDocumentUpload->getClientOriginalName()
+        : '';
+    $pendingUploadSize = $jobRequiredDocumentUpload && method_exists($jobRequiredDocumentUpload, 'getSize')
+        ? (int) $jobRequiredDocumentUpload->getSize()
+        : 0;
+    $uploadError = $errors->first('jobRequiredDocumentUpload')
+        ?: ($pendingUploadName ? $errors->first('jobDocumentTaskId') : '');
+    $uploadInitialState = $uploadError ? 'error' : ($lastUploadedDocument ? 'success' : 'idle');
 @endphp
 <div class="ft-documents-detail-section ft-exact-documents">
     <?php if (session('success')): ?><div class="flash">{{ session('success') }}</div><?php endif; ?>
@@ -54,106 +72,263 @@
                 <span class="ft-doc-progress-track"><i style="width: {{ $requiredProgress }}%"></i></span>
             </div>
 
-            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel ft-doc-upload-card">
-                <div class="ft-doc-upload-heading">
-                    <span class="ft-doc-upload-heading-icon">＋</span>
+            <section id="job-document-upload-panel" class="ft-detail-card ft-upload-panel ft-doc-upload-card ft-prototype-document-uploader">
+                <div class="ft-proto-doc-heading">
+                    <span class="ft-proto-doc-heading-icon" aria-hidden="true">＋</span>
                     <div>
-                        <b>Add a required document</b>
-                        <p>Choose where the document belongs, then upload a new file or link one that already exists.</p>
+                        <h3>Add a required document</h3>
+                        <p>Choose the document type, then upload a new file or select one that already exists.</p>
                     </div>
                 </div>
 
                 <?php if ($required->isNotEmpty()): ?>
-                    <div class="ft-doc-upload-steps">
-                        <div class="ft-doc-upload-step">
-                            <span>1</span>
-                            <div><b>Choose requirement</b><small>Select the Task Pack requirement this file satisfies.</small></div>
-                        </div>
-                        <div class="ft-doc-upload-step">
-                            <span>2</span>
-                            <div><b>Add the file</b><small>Upload from your device or choose an existing document.</small></div>
-                        </div>
-                    </div>
-
-                    <div class="ft-document-purpose-field ft-doc-purpose-ux">
-                        <label for="jobDocumentRequirement-{{ $job->id }}">Required document</label>
-                        <select id="jobDocumentRequirement-{{ $job->id }}" wire:model.live="jobDocumentTaskId" class="ft-document-purpose-select">
-                            <option value="">Select requirement, phase and task</option>
+                    <div class="ft-proto-doc-field">
+                        <label for="jobDocumentRequirement-{{ $job->id }}">Document type</label>
+                        <select id="jobDocumentRequirement-{{ $job->id }}" wire:model.live="jobDocumentTaskId" class="ft-proto-doc-select">
+                            <option value="">Select document type</option>
                             @foreach($required as $item)
                                 <option value="{{ $item->task->id }}">{{ $item->name }} · {{ $item->phase->name }} · {{ $item->task->title }}</option>
                             @endforeach
                         </select>
-                        <small class="ft-document-match-note">FlowTrack links the file to the selected phase and task automatically.</small>
+                        <p>FlowTrack links the file to the selected phase and task automatically.</p>
                         <?php if ($errors->has('jobDocumentTaskId')): ?><div class="validation-error ft-field-validation" role="alert">{{ $errors->first('jobDocumentTaskId') }}</div><?php endif; ?>
                     </div>
 
-                    <div class="ft-upload-zone compact ft-task-upload-zone ft-job-document-attachment-zone ft-doc-upload-actions">
+                    <div class="ft-proto-doc-add-label">Add document</div>
+                    <div class="ft-proto-doc-mode" role="tablist" aria-label="Document source">
                         <?php if ($canUploadDocument): ?>
-                            <label class="ft-task-upload-drop ft-livewire-upload-zone ft-doc-primary-drop {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone for="jobDocumentUpload-{{ $job->id }}">
-                                <input id="jobDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
-                                <span class="ft-paperclip">⌕</span>
-                                <div><b>Upload from device</b><span>Drop files here or <strong>browse</strong></span><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
-                            </label>
-                        <?php else: ?>
-                            <div class="ft-task-upload-drop ft-task-upload-readonly ft-doc-primary-drop"><span class="ft-paperclip">⌕</span><div><b>Document upload</b><span>Read-only access</span><small>You do not have permission to upload Job documents.</small></div></div>
+                            <button type="button" role="tab" aria-selected="{{ ! $showDocumentPicker ? 'true' : 'false' }}" class="{{ ! $showDocumentPicker ? 'is-active' : '' }}" wire:click="setDocumentUploadMode('upload')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V4m0 0L7.5 8.5M12 4l4.5 4.5M5 14v4a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2v-4"/></svg>
+                                <span>Upload new</span>
+                            </button>
                         <?php endif; ?>
                         <?php if ($canLinkDocument): ?>
-                            <button class="ft-outline-btn ft-task-choose-document ft-doc-existing-action" type="button" wire:click="toggleDocumentPicker">
-                                <span>▤</span><span>Choose existing</span>
+                            <button type="button" role="tab" aria-selected="{{ ($showDocumentPicker || ! $canUploadDocument) ? 'true' : 'false' }}" class="{{ ($showDocumentPicker || ! $canUploadDocument) ? 'is-active' : '' }}" wire:click="setDocumentUploadMode('existing')">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l5 5v13H7zM14 3v6h5"/></svg>
+                                <span>Choose existing</span>
                             </button>
                         <?php endif; ?>
                     </div>
-                    <?php if (! $canManageDocuments): ?><p class="muted small">You have read-only access to Job documents.</p><?php endif; ?>
 
-                    <?php if ($canUploadDocument): ?>
-                        <?php if ($errors->has('jobDocumentUploads')): ?>
-                            <div class="ft-upload-field-error validation-error" role="alert">
-                                <span>{{ $errors->first('jobDocumentUploads') }}</span>
-                                <button type="button" wire:click="clearJobDocumentUploads">Remove failed file</button>
+                    <?php if ($canUploadDocument && ! $showDocumentPicker): ?>
+                        <div
+                            class="ft-proto-upload-shell"
+                            wire:key="job-required-upload-{{ $job->id }}-{{ $uploadInitialState }}-{{ (int) ($lastUploadedDocument?->id ?? 0) }}-{{ md5((string) $uploadError) }}"
+                            data-file-dropzone
+                            x-data="{
+                                state: @js($uploadInitialState),
+                                progress: 0,
+                                fileName: @js($lastUploadedDocument?->name ?: $pendingUploadName),
+                                fileSize: @js($lastUploadedDocument?->size ?: $pendingUploadSize),
+                                errorText: @js($uploadError ?: 'The connection was interrupted. Your document was not added.'),
+                                selectedFile: null,
+                                uploadToken: 0,
+                                prettySize(bytes) {
+                                    const value = Number(bytes || 0);
+                                    if (!value) return '';
+                                    if (value < 1024 * 1024) return `${Math.max(1, Math.round(value / 1024))} KB`;
+                                    return `${(value / (1024 * 1024)).toFixed(1)} MB`;
+                                },
+                                validateFile(file) {
+                                    const extension = String(file?.name || '').split('.').pop().toLowerCase();
+                                    const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png', 'zip'];
+                                    if (!allowed.includes(extension)) {
+                                        this.errorText = 'Use a PDF, DOCX, XLSX, JPG, PNG or ZIP file.';
+                                        return false;
+                                    }
+                                    if (Number(file?.size || 0) > 20 * 1024 * 1024) {
+                                        this.errorText = 'The file is too large. The maximum size is 20 MB.';
+                                        return false;
+                                    }
+                                    return true;
+                                },
+                                captureFile(event) {
+                                    const file = event.target.files?.[0];
+                                    if (!file) return;
+                                    this.startUpload(file);
+                                },
+                                startUpload(file) {
+                                    this.selectedFile = file;
+                                    this.fileName = file.name;
+                                    this.fileSize = file.size;
+                                    this.progress = 0;
+                                    if (!this.validateFile(file)) {
+                                        this.state = 'error';
+                                        return;
+                                    }
+
+                                    const token = ++this.uploadToken;
+                                    this.errorText = 'The connection was interrupted. Your document was not added.';
+                                    this.state = 'uploading';
+                                    this.progress = 1;
+
+                                    $wire.upload(
+                                        'jobRequiredDocumentUpload',
+                                        file,
+                                        async () => {
+                                            if (token !== this.uploadToken) return;
+                                            this.progress = 100;
+                                            try {
+                                                const result = await $wire.persistJobRequiredDocumentUpload();
+                                                if (token !== this.uploadToken) return;
+                                                if (result && result.ok === false) {
+                                                    this.errorText = result.message || 'The document could not be saved. Please try again.';
+                                                    this.state = 'error';
+                                                    return;
+                                                }
+                                                this.state = 'success';
+                                            } catch (error) {
+                                                if (token !== this.uploadToken) return;
+                                                this.errorText = 'The document could not be saved. Please try again.';
+                                                this.state = 'error';
+                                            }
+                                        },
+                                        () => {
+                                            if (token !== this.uploadToken) return;
+                                            this.errorText = 'The connection was interrupted. Your document was not added.';
+                                            this.state = 'error';
+                                        },
+                                        (event) => {
+                                            if (token !== this.uploadToken) return;
+                                            this.state = 'uploading';
+                                            this.progress = Math.max(1, Math.min(99, Number(event?.detail?.progress || 0)));
+                                        },
+                                        () => {
+                                            if (token !== this.uploadToken) return;
+                                            this.progress = 0;
+                                            this.state = 'idle';
+                                        }
+                                    );
+                                },
+                                retry() {
+                                    const file = this.selectedFile || this.$refs.input?.files?.[0];
+                                    if (!file) {
+                                        this.$refs.input?.click();
+                                        return;
+                                    }
+                                    this.startUpload(file);
+                                },
+                                cancel() {
+                                    ++this.uploadToken;
+                                    $wire.cancelUpload('jobRequiredDocumentUpload');
+                                    this.clearSelection(false);
+                                },
+                                clearSelection(resetServer = true) {
+                                    if (this.$refs.input) this.$refs.input.value = '';
+                                    this.selectedFile = null;
+                                    this.fileName = '';
+                                    this.fileSize = 0;
+                                    this.progress = 0;
+                                    this.state = 'idle';
+                                    if (resetServer) $wire.clearJobRequiredDocumentUpload();
+                                }
+                            }"
+                        >
+                            <input
+                                x-ref="input"
+                                class="ft-proto-file-input"
+                                id="jobDocumentUpload-{{ $job->id }}"
+                                type="file"
+                                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.zip"
+                                x-on:change="captureFile($event)"
+                            >
+
+                            <div class="ft-proto-upload-state ft-proto-upload-idle" x-show="state === 'idle'" x-cloak>
+                                <button type="button" class="ft-proto-idle-target" x-on:click="$refs.input.click()">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 16V5m0 0L8 9m4-4 4 4M6 14a4 4 0 0 0 1 7h10a4 4 0 0 0 1-7 6 6 0 0 0-11.4-1.8"/></svg>
+                                    <span>Drop the file here or <strong>browse</strong> to choose a file.</span>
+                                </button>
                             </div>
-                        <?php endif; ?>
-                    <?php endif; ?>
 
-                    <?php if ($canUploadDocument && count($jobDocumentUploads ?? [])): ?>
-                        <div class="ft-pending-upload-list" aria-label="Files selected for upload">
-                            @foreach($jobDocumentUploads as $uploadIndex => $upload)
-                                <?php $uploadName = method_exists($upload, 'getClientOriginalName') ? $upload->getClientOriginalName() : ('File '.($uploadIndex + 1)); ?>
-                                <div class="ft-pending-upload-item {{ $errors->has('jobDocumentUploads.'.$uploadIndex) ? 'has-error' : '' }}" wire:key="job-doc-pending-{{ $job->id }}-{{ $uploadIndex }}-{{ md5($uploadName) }}">
-                                    <div class="ft-pending-upload-copy">
-                                        <b>{{ $uploadName }}</b>
-                                        <?php if ($errors->has('jobDocumentUploads.'.$uploadIndex)): ?><small class="validation-error" role="alert">{{ $errors->first('jobDocumentUploads.'.$uploadIndex) }}</small><?php endif; ?>
+                            <div class="ft-proto-upload-state ft-proto-uploading" x-show="state === 'uploading'" x-cloak>
+                                <div class="ft-proto-file-summary">
+                                    <span class="ft-proto-file-icon" x-text="(fileName.split('.').pop() || 'FILE').slice(0,4).toUpperCase()">FILE</span>
+                                    <div class="ft-proto-file-copy">
+                                        <strong x-text="fileName || 'Preparing file…'"></strong>
+                                        <span><span x-text="prettySize(fileSize)"></span><template x-if="fileSize"><span> · </span></template><span x-text="progress >= 100 ? 'Saving & linking…' : 'Uploading…'"></span></span>
+                                        <div class="ft-proto-progress-row">
+                                            <span class="ft-proto-progress"><i :style="`width:${progress}%`"></i></span>
+                                            <b x-text="`${Math.round(progress)}%`"></b>
+                                        </div>
+                                        <p x-text="progress >= 100 ? 'Upload received. FlowTrack is saving and linking the document…' : 'Keep this window open until the upload finishes.'"></p>
                                     </div>
-                                    <button type="button" class="ft-pending-upload-remove" wire:click="removeJobDocumentUpload({{ $uploadIndex }})" aria-label="Remove {{ $uploadName }}">Remove</button>
                                 </div>
-                            @endforeach
-                        </div>
-                        <div class="ft-upload-ready-row ft-doc-upload-ready">
-                            <span><b>{{ count($jobDocumentUploads ?? []) }}</b> file{{ count($jobDocumentUploads ?? [])===1?'':'s' }} ready to link</span>
-                            <button class="ft-new-job-btn" type="button" wire:click="uploadJobDocuments">Upload &amp; link</button>
-                        </div>
-                    <?php endif; ?>
+                                <button type="button" class="ft-proto-outline-action" x-on:click="cancel()">Cancel</button>
+                                <div class="ft-proto-drop-again">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V9m0 0-3 3m3-3 3 3M6 17a4 4 0 0 1 1-7 6 6 0 0 1 11.4 1.8A4 4 0 0 1 18 20H7"/></svg>
+                                    <span>Drop another file here or <button type="button" x-on:click="$refs.input.click()">browse</button> after this upload finishes.</span>
+                                </div>
+                            </div>
 
-                    <?php if ($canLinkDocument && ($showDocumentPicker ?? false)): ?>
-                        <div class="ft-existing-document-picker ft-doc-existing-picker">
-                            <div class="ft-card-row-head">
-                                <div><b>Choose an existing document</b><p>Link a stored client document to the requirement selected above.</p></div>
-                                <button type="button" class="ft-outline-btn" wire:click="toggleDocumentPicker">Close</button>
+                            <div class="ft-proto-upload-state ft-proto-upload-error" x-show="state === 'error'" x-cloak>
+                                <div class="ft-proto-file-summary">
+                                    <span class="ft-proto-file-icon" x-text="(fileName.split('.').pop() || 'FILE').slice(0,4).toUpperCase()">FILE</span>
+                                    <div class="ft-proto-file-copy">
+                                        <strong x-text="fileName || 'Selected document'"></strong>
+                                        <span><span x-text="prettySize(fileSize)"></span><template x-if="fileSize"><span> · </span></template>Upload failed</span>
+                                        <div class="ft-proto-error-title"><span>!</span><b>We couldn’t upload this file</b></div>
+                                        <p x-text="errorText"></p>
+                                        <p>If this keeps happening, check your connection and try again.</p>
+                                    </div>
+                                </div>
+                                <div class="ft-proto-error-actions">
+                                    <button type="button" class="ft-proto-primary-action" x-on:click="retry()">Retry upload</button>
+                                    <button type="button" class="ft-proto-outline-action" x-on:click="$refs.input.click()">Choose another file</button>
+                                    <button type="button" class="ft-proto-link-action" x-on:click="clearSelection()">Remove</button>
+                                </div>
+                                <div class="ft-proto-drop-again">
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V9m0 0-3 3m3-3 3 3M6 17a4 4 0 0 1 1-7 6 6 0 0 1 11.4 1.8A4 4 0 0 1 18 20H7"/></svg>
+                                    <span>Drop the file here again or <button type="button" x-on:click="$refs.input.click()">browse</button> to choose another file.</span>
+                                </div>
+                            </div>
+
+                            <?php if ($lastUploadedDocument): ?>
+                                <div class="ft-proto-upload-state ft-proto-upload-success" x-show="state === 'success'" x-cloak>
+                                    <div class="ft-proto-file-summary">
+                                        <span class="ft-proto-file-icon">{{ strtoupper(pathinfo($lastUploadedDocument->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                                        <div class="ft-proto-file-copy">
+                                            <strong>{{ $lastUploadedDocument->name }}</strong>
+                                            <span>{{ number_format(((int) $lastUploadedDocument->size) / 1048576, 1) }} MB · Uploaded just now</span>
+                                            <div class="ft-proto-success-title"><span>✓</span><b>Upload complete</b></div>
+                                            <p>Linked to the selected document type.</p>
+                                        </div>
+                                    </div>
+                                    <div class="ft-proto-success-actions">
+                                        <a class="ft-proto-outline-action" href="{{ route('documents.open', $lastUploadedDocument) }}" target="_blank" rel="noopener">View document</a>
+                                        <?php if ($canDeleteDocument): ?><button type="button" class="ft-proto-link-action" wire:click="removeLastJobDocumentUpload">Remove</button><?php endif; ?>
+                                    </div>
+                                    <div class="ft-proto-drop-again">
+                                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 17V9m0 0-3 3m3-3 3 3M6 17a4 4 0 0 1 1-7 6 6 0 0 1 11.4 1.8A4 4 0 0 1 18 20H7"/></svg>
+                                        <span>Drop another file here or <button type="button" x-on:click="$refs.input.click()">browse</button> to replace this document.</span>
+                                    </div>
+                                </div>
+                            <?php endif; ?>
+                        </div>
+
+                        <div class="ft-proto-upload-formats">PDF, DOCX, XLSX, JPG, PNG or ZIP <span>·</span> Max 20 MB</div>
+                    <?php elseif ($canLinkDocument && ($showDocumentPicker || ! $canUploadDocument)): ?>
+                        <div class="ft-proto-existing-panel">
+                            <div class="ft-proto-existing-copy">
+                                <span class="ft-proto-existing-icon" aria-hidden="true">▤</span>
+                                <div><b>Choose an existing document</b><p>Select a stored document for this client and FlowTrack will link it to the document type above.</p></div>
                             </div>
                             <?php if ($availableDocuments->isNotEmpty()): ?>
-                                <div class="ft-doc-existing-picker-actions">
+                                <div class="ft-proto-existing-controls">
                                     <select wire:model="existingDocumentId">
                                         <option value="">Select a stored document</option>
                                         @foreach($availableDocuments as $doc)
                                             <option value="{{ $doc->id }}">{{ $doc->name }} · {{ $doc->job?->displayOrderNumber() ?? 'Document archive' }}</option>
                                         @endforeach
                                     </select>
-                                    <button class="ft-new-job-btn" type="button" wire:click="attachExistingDocument">Link document</button>
+                                    <button class="ft-proto-primary-action" type="button" wire:click="attachExistingDocument">Link document</button>
                                 </div>
-                                <?php if ($errors->has('existingDocumentId')): ?><div class="validation-error">{{ $errors->first('existingDocumentId') }}</div><?php endif; ?>
+                                <?php if ($errors->has('existingDocumentId')): ?><div class="validation-error ft-field-validation">{{ $errors->first('existingDocumentId') }}</div><?php endif; ?>
                             <?php else: ?>
-                                <p class="muted small">No stored documents are available for this client yet.</p>
+                                <div class="ft-proto-existing-empty">No stored documents are available for this client yet.</div>
                             <?php endif; ?>
                         </div>
+                    <?php else: ?>
+                        <p class="muted small">You have read-only access to Job documents.</p>
                     <?php endif; ?>
                 <?php else: ?>
                     <div class="ft-empty-taskpack-docs">No document requirement exists in the Task Packs selected by this Job. Upload requirements are never created outside the Task Packs.</div>

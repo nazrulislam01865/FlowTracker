@@ -9,36 +9,57 @@ use App\Models\Inquiry;
 use App\Models\InquiryTask;
 use App\Models\Task;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 
 class NotificationService
 {
+    public function visibleQuery(User $user): Builder
+    {
+        $query = FlowNotification::query()->where('user_id', $user->id);
+
+        // Administrator copies are only visible while the account is actually an
+        // Admin/Super Admin. This keeps the rule correct even if a user's role is
+        // changed later: normal users always see only mentions addressed to them.
+        if (! app(AccessControlService::class)->isAdministrator($user)) {
+            $query->where('type', '!=', 'mention_admin');
+        }
+
+        return $query;
+    }
+
     public function list(User $user)
     {
-        return FlowNotification::with(['job','task','inquiry','inquiryTask'])
-            ->where('user_id', $user->id)
+        return $this->visibleQuery($user)
+            ->with(['job','task','inquiry','inquiryTask'])
             ->latest()
             ->get();
     }
 
     public function paginate(User $user, int $perPage = 30)
     {
-        return FlowNotification::with(['job','task','inquiry','inquiryTask'])
-            ->where('user_id', $user->id)
+        return $this->visibleQuery($user)
+            ->with(['job','task','inquiry','inquiryTask'])
             ->latest()
             ->paginate($perPage, ['*'], 'notificationsPage');
     }
 
+    public function latest(User $user): ?FlowNotification
+    {
+        return $this->visibleQuery($user)->latest('created_at')->latest('id')->first();
+    }
+
     public function unreadCount(User $user): int
     {
-        return FlowNotification::where('user_id', $user->id)->whereNull('read_at')->count();
+        return $this->visibleQuery($user)->whereNull('read_at')->count();
     }
 
     public function markAllRead(User $user): void
     {
-        FlowNotification::where('user_id', $user->id)->whereNull('read_at')->update(['read_at' => now()]);
+        $this->visibleQuery($user)->whereNull('read_at')->update(['read_at' => now()]);
+        app(DashboardService::class)->forgetMentions($user);
         app(ShellDataService::class)->forget($user->id);
     }
 
@@ -124,6 +145,70 @@ class NotificationService
         $this->fanOutAfterCommit($ids->all(), $title, $message, $type, $job?->id, $task->id, $actor?->id);
     }
 
+    public function backfillAdministratorMentions(User $administrator): void
+    {
+        if (! $administrator->is_active || ! app(AccessControlService::class)->isAdministrator($administrator)) {
+            return;
+        }
+
+        $seen = [];
+        $now = now();
+
+        FlowNotification::query()
+            ->where('type', 'mention')
+            ->where(function (Builder $query): void {
+                $query->whereNotNull('flow_job_id')
+                    ->orWhereNotNull('flow_task_id')
+                    ->orWhereNotNull('inquiry_id')
+                    ->orWhereNotNull('inquiry_task_id');
+            })
+            ->chunkById(500, function (Collection $notifications) use ($administrator, &$seen, $now): void {
+                foreach ($notifications as $source) {
+                    $signature = hash('sha256', implode('|', [
+                        (string) ($source->flow_job_id ?? ''),
+                        (string) ($source->flow_task_id ?? ''),
+                        (string) ($source->inquiry_id ?? ''),
+                        (string) ($source->inquiry_task_id ?? ''),
+                        (string) $source->title,
+                        (string) $source->message,
+                        (string) $source->created_at,
+                    ]));
+
+                    if (isset($seen[$signature])) continue;
+                    $seen[$signature] = true;
+
+                    $alreadyHasEvent = FlowNotification::query()
+                        ->where('user_id', $administrator->id)
+                        ->whereIn('type', ['mention', 'mention_admin'])
+                        ->where('flow_job_id', $source->flow_job_id)
+                        ->where('flow_task_id', $source->flow_task_id)
+                        ->where('inquiry_id', $source->inquiry_id)
+                        ->where('inquiry_task_id', $source->inquiry_task_id)
+                        ->where('message', $source->message)
+                        ->where('created_at', $source->created_at)
+                        ->exists();
+
+                    if ($alreadyHasEvent) continue;
+
+                    FlowNotification::query()->create([
+                        'user_id' => $administrator->id,
+                        'flow_job_id' => $source->flow_job_id,
+                        'flow_task_id' => $source->flow_task_id,
+                        'inquiry_id' => $source->inquiry_id,
+                        'inquiry_task_id' => $source->inquiry_task_id,
+                        'type' => 'mention_admin',
+                        'title' => $this->administratorMentionTitle((string) $source->title),
+                        'message' => $source->message,
+                        'read_at' => $now,
+                        'created_at' => $source->created_at,
+                        'updated_at' => $now,
+                    ]);
+                }
+            });
+
+        $this->forgetRecipientCaches($administrator);
+    }
+
     public function notifyMentionedUsers(
         array $recipientIds,
         string $title,
@@ -132,29 +217,44 @@ class NotificationService
         ?Task $task = null,
         ?User $actor = null,
     ): void {
-        $ids = collect($recipientIds)
+        $directIds = collect($recipientIds)
             ->map(fn ($id) => (int) $id)
             ->filter()
             ->unique()
-            ->values()
-            ->all();
+            ->values();
 
-        if ($ids === []) return;
+        if ($directIds->isEmpty()) return;
 
+        // Every tagged comment is also copied to Admin/Super Admin so their
+        // dashboard is a workspace-wide mention feed. Directly tagged admins
+        // receive only the normal copy, never a duplicate administrator copy.
+        $ids = $directIds->merge($this->administratorIds())->unique()->values();
+        $directLookup = array_fill_keys($directIds->all(), true);
         $jobId = $job?->id;
         $taskId = $task?->id;
         $actorId = $actor?->id;
 
-        $this->runAfterCommit(function () use ($ids, $title, $message, $jobId, $taskId, $actorId): void {
+        $this->runAfterCommit(function () use ($ids, $directLookup, $title, $message, $jobId, $taskId, $actorId): void {
             $job = $jobId ? FlowJob::withTrashed()->find($jobId) : null;
             $task = $taskId ? Task::withTrashed()->find($taskId) : null;
             $actor = $actorId ? User::find($actorId) : null;
 
             User::query()
-                ->whereIn('id', $ids)
+                ->whereIn('id', $ids->all())
                 ->where('is_active', true)
                 ->get()
-                ->each(fn (User $recipient) => $this->createMentionNotification($recipient, $title, $message, $job, $task, $actor));
+                ->each(function (User $recipient) use ($directLookup, $title, $message, $job, $task, $actor): void {
+                    $direct = isset($directLookup[(int) $recipient->id]);
+                    $this->createMentionNotification(
+                        $recipient,
+                        $direct ? $title : $this->administratorMentionTitle($title),
+                        $message,
+                        $job,
+                        $task,
+                        $actor,
+                        $direct ? 'mention' : 'mention_admin',
+                    );
+                });
         });
     }
 
@@ -166,19 +266,20 @@ class NotificationService
         ?InquiryTask $inquiryTask = null,
         ?User $actor = null,
     ): void {
-        $ids = collect($recipientIds)
+        $directIds = collect($recipientIds)
             ->map(fn ($id) => (int) $id)
             ->filter()
             ->unique()
-            ->values()
-            ->all();
+            ->values();
 
-        if ($ids === []) return;
+        if ($directIds->isEmpty()) return;
 
+        $ids = $directIds->merge($this->administratorIds())->unique()->values();
+        $directLookup = array_fill_keys($directIds->all(), true);
         $inquiryId = (int) $inquiry->id;
         $inquiryTaskId = $inquiryTask?->id ? (int) $inquiryTask->id : null;
 
-        $this->runAfterCommit(function () use ($ids, $title, $message, $inquiryId, $inquiryTaskId): void {
+        $this->runAfterCommit(function () use ($ids, $directLookup, $title, $message, $inquiryId, $inquiryTaskId): void {
             $inquiry = Inquiry::withTrashed()->find($inquiryId);
             if (!$inquiry || $inquiry->trashed()) return;
 
@@ -186,24 +287,25 @@ class NotificationService
             if ($inquiryTask?->trashed()) $inquiryTask = null;
 
             User::query()
-                ->whereIn('id', $ids)
+                ->whereIn('id', $ids->all())
                 ->where('is_active', true)
                 ->get()
-                ->each(function (User $recipient) use ($title, $message, $inquiry, $inquiryTask): void {
+                ->each(function (User $recipient) use ($directLookup, $title, $message, $inquiry, $inquiryTask): void {
                     $visible = app(InquiryService::class)
                         ->visibleQuery($recipient)
                         ->whereKey($inquiry->id)
                         ->exists();
                     if (!$visible) return;
 
+                    $direct = isset($directLookup[(int) $recipient->id]);
                     $notification = FlowNotification::create([
                         'user_id' => $recipient->id,
                         'flow_job_id' => null,
                         'flow_task_id' => null,
                         'inquiry_id' => $inquiry->id,
                         'inquiry_task_id' => $inquiryTask?->id,
-                        'type' => 'mention',
-                        'title' => $title,
+                        'type' => $direct ? 'mention' : 'mention_admin',
+                        'title' => $direct ? $title : $this->administratorMentionTitle($title),
                         'message' => $message,
                     ]);
 
@@ -262,6 +364,7 @@ class NotificationService
         ?FlowJob $job,
         ?Task $task,
         ?User $actor,
+        string $type = 'mention',
     ): ?FlowNotification {
         if (!$recipient->is_active) return null;
 
@@ -286,7 +389,7 @@ class NotificationService
             'user_id' => $recipient->id,
             'flow_job_id' => $notificationJob?->id,
             'flow_task_id' => $notificationTask?->id,
-            'type' => 'mention',
+            'type' => $type,
             'title' => $title,
             'message' => $message,
         ]);
@@ -405,6 +508,12 @@ class NotificationService
         }
 
         $safeCallback();
+    }
+
+    private function administratorMentionTitle(string $title): string
+    {
+        $converted = str_replace(' mentioned you in ', ' mentioned a user in ', $title);
+        return $converted !== $title ? $converted : 'Tagged comment: '.$title;
     }
 
     private function administratorIds(): Collection

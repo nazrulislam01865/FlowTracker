@@ -156,7 +156,7 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertStringNotContainsString("whereColumn('flow_task_comments.body', 'flow_notifications.message')", $dashboardService);
         $this->assertStringNotContainsString("whereColumn('activities.description', 'flow_notifications.message')", $dashboardService);
         $this->assertStringContainsString('secondaryData(auth()->user())', $secondaryComponent);
-        $this->assertStringContainsString("CACHE_VERSION = 'v8-all-context-mentions'", $dashboardService);
+        $this->assertStringContainsString("CACHE_VERSION = 'v10-role-aware-tagged-comments'", $dashboardService);
         $this->assertStringContainsString('dashboard_cache_seconds', $dashboardService);
         $this->assertStringContainsString('isSafeCacheValue', $dashboardService);
         $this->assertStringContainsString('private ?int $clientLifecycleVersion = null;', $dashboardService);

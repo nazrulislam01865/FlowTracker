@@ -20,6 +20,10 @@ class Index extends Component
 
     public function render()
     {
-        return view('livewire.dashboard.index', app(DashboardService::class)->primaryData(auth()->user()));
+        $user = auth()->user();
+        $data = app(DashboardService::class)->primaryData($user);
+        $data['administratorView'] = app(\App\Services\AccessControlService::class)->isAdministrator($user);
+
+        return view('livewire.dashboard.index', $data);
     }
 }

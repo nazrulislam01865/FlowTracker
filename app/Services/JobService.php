@@ -559,6 +559,7 @@ class JobService
             $workflowIsAvailable = WorkflowTemplate::query()
                 ->where('workspace_id', app(SetupContext::class)->workspaceId())
                 ->where('is_active', true)
+                ->where('applies_to', 'orders')
                 ->availableForOrderCreation($clientId)
                 ->whereKey((int) $data['workflow_id'])
                 ->exists();

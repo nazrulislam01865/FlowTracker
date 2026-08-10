@@ -340,13 +340,13 @@ class FilterOptionService
             ->where('is_active', true)
             ->when(
                 $context === 'create-job',
-                fn ($query) => $query->availableForOrderCreation($clientId),
+                fn ($query) => $query->where('applies_to', 'orders')->availableForOrderCreation($clientId),
                 fn ($query) => $query->when($appliesTo, fn ($scope) => $scope->availableFor($appliesTo, $clientId)),
             )
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
             ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
-            ->orderByRaw("CASE WHEN applies_to = 'inquiries' THEN 0 ELSE 1 END")
+            ->when($context !== 'create-job', fn ($query) => $query->orderByRaw("CASE WHEN applies_to = 'inquiries' THEN 0 ELSE 1 END"))
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->limit($limit)
@@ -372,7 +372,7 @@ class FilterOptionService
             ->where('is_active', true)
             ->when(
                 $context === 'create-job',
-                fn ($query) => $query->availableForOrderCreation($clientId),
+                fn ($query) => $query->where('applies_to', 'orders')->availableForOrderCreation($clientId),
                 fn ($query) => $query->when($appliesTo, fn ($scope) => $scope->availableFor($appliesTo, $clientId)),
             )
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])

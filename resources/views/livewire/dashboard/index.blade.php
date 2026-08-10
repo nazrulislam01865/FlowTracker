@@ -53,7 +53,7 @@
         <a class="ft-kpi" href="{{ route('all-tasks') }}" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value">{{ $metrics['overdueTasks'] }}</strong><span class="ft-kpi-foot">Require immediate update</span></a>
         <a class="ft-kpi" href="{{ route('clients.index') }}" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value">{{ $metrics['activeClients'] }}</strong><span class="ft-kpi-foot">Current active client records</span></a>
         <a class="ft-kpi" href="{{ route('inquiries.index') }}" wire:navigate aria-label="Open Enquiries"><span class="ft-kpi-label">Open Enquiries <i class="ft-kpi-icon">?</i></span><strong class="ft-kpi-value">{{ $metrics['openInquiries'] }}</strong><span class="ft-kpi-foot">Current open inquiry records</span></a>
-        <a class="ft-kpi" href="{{ route('notifications') }}" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value">{{ $metrics['taggedComments'] }}</strong><span class="ft-kpi-foot">Unread mentions for you</span></a>
+        <a class="ft-kpi" href="{{ route('notifications') }}" wire:navigate><span class="ft-kpi-label">Tagged Comments <i class="ft-kpi-icon">@</i></span><strong class="ft-kpi-value">{{ $metrics['taggedComments'] }}</strong><span class="ft-kpi-foot">{{ $administratorView ? 'Unread tagged comments across FlowTrack' : 'Unread mentions for you' }}</span></a>
     </section>
 
     <div class="ft-grid">

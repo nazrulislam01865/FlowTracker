@@ -87,9 +87,12 @@ class Index extends Component
     public array $jobItems = [];
     public array $jobAttachments = [];
     public array $jobDocumentUploads = [];
+    public $jobRequiredDocumentUpload = null;
     public ?int $jobDocumentTaskId = null;
     public ?int $existingDocumentId = null;
     public bool $showDocumentPicker = false;
+    public ?int $lastJobDocumentUploadId = null;
+    public ?int $lastJobDocumentTaskId = null;
 
     public string $taskStatus = 'Ready';
     public ?int $taskAssigneeId = null;
@@ -384,9 +387,12 @@ class Index extends Component
         $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
+        $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
         $this->existingDocumentId = null;
         $this->showDocumentPicker = false;
+        $this->lastJobDocumentUploadId = null;
+        $this->lastJobDocumentTaskId = null;
         $this->jobComment = '';
         $this->jobActivityTab = 'all';
         $this->jobActivityPage = 1;
@@ -406,9 +412,12 @@ class Index extends Component
         $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
+        $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
         $this->existingDocumentId = null;
         $this->showDocumentPicker = false;
+        $this->lastJobDocumentUploadId = null;
+        $this->lastJobDocumentTaskId = null;
 
         $this->redirectRoute('jobs.index', navigate: true);
     }
@@ -589,6 +598,7 @@ class Index extends Component
         $workflowAvailable = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
+            ->where('applies_to', 'orders')
             ->availableForOrderCreation((int) $data['clientId'])
             ->whereKey((int) $data['workflowId'])
             ->exists();
@@ -822,15 +832,200 @@ class Index extends Component
         });
     }
 
+    public function updatedJobRequiredDocumentUpload(): void
+    {
+        // Livewire's JavaScript upload API sets this property after the temporary
+        // upload finishes. Permanent storage is deliberately handled by the
+        // explicit persistJobRequiredDocumentUpload() action below so reaching
+        // 100% can never be confused with a completed document save.
+        $this->resetValidation(['jobRequiredDocumentUpload']);
+    }
+
+    public function persistJobRequiredDocumentUpload(): array
+    {
+        $this->resetValidation(['jobRequiredDocumentUpload', 'jobDocumentTaskId']);
+
+        // A late Livewire upload callback must never save a new file after the
+        // user has switched to "Choose existing" while that upload was in flight.
+        if ($this->showDocumentPicker) {
+            $this->jobRequiredDocumentUpload = null;
+            return ['ok' => false, 'message' => 'Upload new is no longer the active document source.'];
+        }
+
+        if (!$this->jobRequiredDocumentUpload) {
+            $message = 'The temporary upload was not received. Please choose the file again.';
+            $this->addError('jobRequiredDocumentUpload', $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
+        if (!$this->selectedJobId) {
+            $message = 'Open an Order before uploading a document.';
+            $this->addError('jobRequiredDocumentUpload', $message);
+            $this->jobRequiredDocumentUpload = null;
+            return ['ok' => false, 'message' => $message];
+        }
+
+        try {
+            $this->validate([
+                'jobDocumentTaskId' => ['required','integer','exists:tasks,id'],
+                'jobRequiredDocumentUpload' => ['required','file','max:20480','mimes:pdf,docx,xlsx,jpg,jpeg,png,zip'],
+            ], [
+                'jobDocumentTaskId.required' => 'Choose a document type before uploading a file.',
+                'jobRequiredDocumentUpload.max' => 'The file is too large. The maximum size is 20 MB.',
+                'jobRequiredDocumentUpload.mimes' => 'Use a PDF, DOCX, XLSX, JPG, PNG or ZIP file.',
+            ]);
+
+            $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+            $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
+            if (!$task || !($task->document_category_id || $task->setupTemplate?->document_category_id)) {
+                $message = 'Choose a Task Pack document requirement for this Order.';
+                $this->addError('jobDocumentTaskId', $message);
+                $this->jobRequiredDocumentUpload = null;
+                return ['ok' => false, 'message' => $message];
+            }
+
+            // The prototype is intentionally a one-document interaction. When a
+            // user uploads again while the success state is still showing for the
+            // same requirement, the new upload replaces that just-uploaded link.
+            // Store the replacement first so a failed upload can never destroy the
+            // document that is already attached.
+            $replace = null;
+            if ($this->lastJobDocumentUploadId && (int) $this->lastJobDocumentTaskId === (int) $task->id) {
+                $replace = Document::where('flow_job_id', $job->id)
+                    ->where('task_id', $task->id)
+                    ->find($this->lastJobDocumentUploadId);
+            }
+
+            $document = app(DocumentService::class)->store($this->jobRequiredDocumentUpload, [
+                'flow_job_id' => $job->id,
+                'client_id' => $job->client_id,
+                'task_id' => $task->id,
+                'require_task_pack_requirement' => true,
+            ], auth()->user());
+
+            if ($replace && (int) $replace->id !== (int) $document->id) {
+                app(DocumentService::class)->delete($replace, auth()->user());
+            }
+
+            $this->lastJobDocumentUploadId = (int) $document->id;
+            $this->lastJobDocumentTaskId = (int) $task->id;
+            $this->jobRequiredDocumentUpload = null;
+            $this->resetValidation(['jobRequiredDocumentUpload', 'jobDocumentTaskId']);
+
+            return [
+                'ok' => true,
+                'documentId' => (int) $document->id,
+                'name' => (string) $document->name,
+            ];
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $message = collect($exception->validator->errors()->all())->first()
+                ?: 'The selected document could not be validated.';
+            $this->jobRequiredDocumentUpload = null;
+            $this->addError('jobRequiredDocumentUpload', $message);
+            return ['ok' => false, 'message' => $message];
+        } catch (Throwable $exception) {
+            report($exception);
+            $message = 'The document could not be saved. Please try again.';
+            $this->jobRequiredDocumentUpload = null;
+            $this->addError('jobRequiredDocumentUpload', $message);
+            return ['ok' => false, 'message' => $message];
+        }
+    }
+
+    public function clearJobRequiredDocumentUpload(): void
+    {
+        $this->jobRequiredDocumentUpload = null;
+        $this->resetValidation(['jobRequiredDocumentUpload']);
+    }
+
+    public function removeLastJobDocumentUpload(): void
+    {
+        abort_unless(auth()->user()->canModule('documents','delete'), 403);
+        abort_unless($this->selectedJobId && $this->lastJobDocumentUploadId, 422);
+
+        $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
+        $document = Document::where('flow_job_id', $job->id)->findOrFail($this->lastJobDocumentUploadId);
+        app(DocumentService::class)->delete($document, auth()->user());
+
+        $this->lastJobDocumentUploadId = null;
+        $this->lastJobDocumentTaskId = null;
+        $this->jobRequiredDocumentUpload = null;
+        $this->resetValidation(['jobRequiredDocumentUpload']);
+    }
+
+    public function setDocumentUploadMode(string $mode): void
+    {
+        abort_unless(in_array($mode, ['upload', 'existing'], true), 422);
+
+        if ($mode === 'existing') {
+            // Document source modes are mutually exclusive. Any pending new-file
+            // selection must be discarded before the existing-document picker is
+            // opened, otherwise both actions can remain active at the same time.
+            $this->jobDocumentUploads = [];
+            $this->jobRequiredDocumentUpload = null;
+            $this->showDocumentPicker = true;
+        } else {
+            $this->existingDocumentId = null;
+            $this->showDocumentPicker = false;
+        }
+
+        $this->resetValidation([
+            'existingDocumentId',
+            'jobRequiredDocumentUpload',
+            'jobDocumentUploads',
+            'jobDocumentUploads.*',
+        ]);
+    }
+
+    public function openJobExistingDocumentPickerFromOverview(): void
+    {
+        abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+        abort_unless($this->selectedJobId, 422);
+
+        // Moving from Overview to "Choose from Documents" is a source switch,
+        // not an additional action. Remove any pending upload first.
+        $this->jobDocumentUploads = [];
+        $this->jobRequiredDocumentUpload = null;
+        $this->existingDocumentId = null;
+        $this->showDocumentPicker = true;
+        $this->detailTab = 'documents';
+        $this->setDefaultDocumentTask();
+        $this->resetValidation([
+            'existingDocumentId',
+            'jobRequiredDocumentUpload',
+            'jobDocumentUploads',
+            'jobDocumentUploads.*',
+        ]);
+    }
+
     public function updatedJobDocumentUploads(): void
     {
-        // Files remain in Livewire temporary storage until the user confirms
-        // “Upload & link”. On Overview there is no separate requirement selector,
-        // so use the same default/missing Task Pack requirement chosen by Documents.
-        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
-        if ($this->selectedJobId && count($this->jobDocumentUploads) > 0 && !$this->jobDocumentTaskId) {
+        // Temporary upload completion and permanent document persistence are two
+        // separate steps in Livewire. Keep this hook limited to source-state
+        // cleanup. The browser calls uploadJobOverviewDocuments() only after the
+        // livewire-upload-finish event, which avoids racing the temporary upload.
+        if (count($this->jobDocumentUploads) === 0) {
+            return;
+        }
+
+        $this->showDocumentPicker = false;
+        $this->existingDocumentId = null;
+        $this->resetValidation(['existingDocumentId']);
+    }
+
+    public function uploadJobOverviewDocuments(): array
+    {
+        if ($this->selectedJobId && !$this->jobDocumentTaskId) {
             $this->setDefaultDocumentTask();
         }
+
+        if (!$this->jobDocumentTaskId) {
+            $message = 'No required document task is available for this Order.';
+            $this->addError('jobDocumentUploads', $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
+        return $this->uploadJobDocuments();
     }
 
     public function removeJobDocumentUpload(int $index): void
@@ -848,44 +1043,66 @@ class Index extends Component
         $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*']);
     }
 
-    public function uploadJobDocuments(): void
+    public function uploadJobDocuments(): array
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
         abort_unless($this->selectedJobId, 422);
-        $this->validate([
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*', 'jobDocumentTaskId']);
+
+        $validator = validator([
+            'jobDocumentTaskId' => $this->jobDocumentTaskId,
+            'jobDocumentUploads' => $this->jobDocumentUploads,
+        ], [
             'jobDocumentTaskId' => ['required','integer','exists:tasks,id'],
             'jobDocumentUploads' => ['required','array','min:1'],
             'jobDocumentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+        ], [
+            'jobDocumentUploads.required' => 'Choose at least one file to upload.',
+            'jobDocumentUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
+            'jobDocumentUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
         ]);
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                foreach ($messages as $message) $this->addError($key, $message);
+            }
+            return ['ok' => false, 'message' => $validator->errors()->first()];
+        }
 
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $task = $job->tasks->firstWhere('id', (int) $this->jobDocumentTaskId);
         if (! $task || ! ($task->document_category_id || $task->setupTemplate?->document_category_id)) {
-            $this->addError('jobDocumentTaskId', 'Select a Task Pack document requirement for this Order.');
-            return;
+            $message = 'Select a Task Pack document requirement for this Order.';
+            $this->addError('jobDocumentTaskId', $message);
+            return ['ok' => false, 'message' => $message];
         }
 
-        foreach ($this->jobDocumentUploads as $upload) {
-            app(\App\Services\DocumentService::class)->store($upload, [
-                'flow_job_id' => $job->id,
-                'client_id' => $job->client_id,
-                'task_id' => $task->id,
-                'require_task_pack_requirement' => true,
-            ], auth()->user());
+        try {
+            foreach ($this->jobDocumentUploads as $upload) {
+                app(\App\Services\DocumentService::class)->store($upload, [
+                    'flow_job_id' => $job->id,
+                    'client_id' => $job->client_id,
+                    'task_id' => $task->id,
+                    'require_task_pack_requirement' => true,
+                ], auth()->user());
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $message = 'FlowTrack could not store this document. Please try again.';
+            $this->addError('jobDocumentUploads', $message);
+            return ['ok' => false, 'message' => $message];
         }
 
         $this->jobDocumentUploads = [];
         $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*', 'jobDocumentTaskId']);
 
-        // Re-read the Job immediately so the linked file and requirement count
-        // are visible in the same Livewire response. Then move the selector to
-        // the next missing Task Pack document, if there is one.
         $fresh = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $missing = \App\Support\JobDetailPresenter::requiredDocuments($fresh)
             ->first(fn ($requirement) => !$requirement->complete);
         $this->jobDocumentTaskId = $missing?->task?->id ?: $task->id;
 
         session()->flash('success', 'Document uploaded and linked to '.$task->title.'.');
+        return ['ok' => true];
     }
 
     public function attachExistingDocument(): void
@@ -908,9 +1125,14 @@ class Index extends Component
             $this->addError('existingDocumentId', 'The selected document does not belong to this client.');
             return;
         }
-        app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user());
+        $linked = app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user());
+        $this->lastJobDocumentUploadId = (int) $linked->id;
+        $this->lastJobDocumentTaskId = (int) $task->id;
+        $this->jobDocumentUploads = [];
+        $this->jobRequiredDocumentUpload = null;
         $this->existingDocumentId = null;
         $this->showDocumentPicker = false;
+        $this->resetValidation(['jobDocumentUploads', 'jobDocumentUploads.*', 'jobRequiredDocumentUpload', 'existingDocumentId']);
         session()->flash('success', 'Existing document linked to the selected Task Pack task.');
     }
 
@@ -921,6 +1143,10 @@ class Index extends Component
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $document = Document::where('flow_job_id', $job->id)->findOrFail($documentId);
         app(\App\Services\DocumentService::class)->delete($document, auth()->user());
+        if ((int) $this->lastJobDocumentUploadId === (int) $documentId) {
+            $this->lastJobDocumentUploadId = null;
+            $this->lastJobDocumentTaskId = null;
+        }
     }
 
     public function toggleDocumentPicker(): void
@@ -1182,20 +1408,65 @@ class Index extends Component
         $this->jobActivityPage = 1;
     }
 
-    public function uploadSelectedTaskDocuments(): void
+    public function updatedTaskDocumentUploads(): void
+    {
+        if (count($this->taskDocumentUploads) === 0) {
+            return;
+        }
+
+        // Selecting a new file switches the source back to Upload new. Permanent
+        // storage is triggered by the browser after livewire-upload-finish so the
+        // temporary upload cannot race the save/link request.
+        $this->showTaskDocumentPicker = false;
+        $this->taskExistingDocumentId = null;
+        $this->resetValidation(['taskExistingDocumentId']);
+    }
+
+    public function uploadSelectedTaskDocuments(): array
     {
         abort_unless(auth()->user()->canModule('documents','create'), 403);
         abort_unless($this->selectedTaskId, 422);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->with(['job','documentCategory','setupTemplate.documentCategory'])->findOrFail($this->selectedTaskId);
-        $this->validate([
+        $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*']);
+
+        $validator = validator(['taskDocumentUploads' => $this->taskDocumentUploads], [
             'taskDocumentUploads' => ['required','array','min:1'],
             'taskDocumentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+        ], [
+            'taskDocumentUploads.required' => 'Choose at least one file to upload.',
+            'taskDocumentUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
+            'taskDocumentUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
         ]);
-        foreach ($this->taskDocumentUploads as $upload) {
-            app(\App\Services\DocumentService::class)->store($upload, ['flow_job_id'=>$task->flow_job_id,'client_id'=>$task->job?->client_id,'task_id'=>$task->id,'category'=>'Task attachment'], auth()->user());
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->messages() as $key => $messages) {
+                foreach ($messages as $message) $this->addError($key, $message);
+            }
+            return ['ok' => false, 'message' => $validator->errors()->first()];
         }
+
+        try {
+            foreach ($this->taskDocumentUploads as $upload) {
+                app(\App\Services\DocumentService::class)->store($upload, [
+                    'flow_job_id'=>$task->flow_job_id,
+                    'client_id'=>$task->job?->client_id,
+                    'task_id'=>$task->id,
+                    'category'=>'Task attachment'
+                ], auth()->user());
+            }
+        } catch (\Throwable $e) {
+            report($e);
+            $message = 'FlowTrack could not store this attachment. Please try again.';
+            $this->addError('taskDocumentUploads', $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
         $this->taskDocumentUploads = [];
+        $this->taskExistingDocumentId = null;
+        $this->showTaskDocumentPicker = false;
+        $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*']);
         session()->flash('success', 'Attachment uploaded and linked to this Task Pack task.');
+        return ['ok' => true];
     }
 
     public function attachExistingToSelectedTask(): void
@@ -1207,8 +1478,10 @@ class Index extends Component
         $source = Document::findOrFail((int)$this->taskExistingDocumentId);
         abort_unless((int) $source->client_id === (int) $task->job?->client_id, 403, 'The selected document does not belong to this client.');
         app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user(), true);
+        $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->showTaskDocumentPicker = false;
+        $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*', 'taskExistingDocumentId']);
         session()->flash('success', 'Stored document linked to this task.');
     }
 
@@ -1223,7 +1496,20 @@ class Index extends Component
 
     public function toggleTaskDocumentPicker(): void
     {
-        $this->showTaskDocumentPicker = !$this->showTaskDocumentPicker;
+        abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+
+        $opening = ! $this->showTaskDocumentPicker;
+        if ($opening) {
+            // Existing-document mode replaces Upload new; do not leave selected
+            // temporary files and an Upload & link action active underneath it.
+            $this->taskDocumentUploads = [];
+            $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*']);
+        } else {
+            $this->taskExistingDocumentId = null;
+            $this->resetValidation(['taskExistingDocumentId']);
+        }
+
+        $this->showTaskDocumentPicker = $opening;
     }
 
     public function setTaskFlag(string $flag): void
@@ -1364,16 +1650,12 @@ class Index extends Component
         $preferred = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
+            ->where('applies_to', 'orders')
             ->availableForOrderCreation($clientId)
-            // Client-specific Inquiry workflows intentionally win because an
-            // Inquiry-led client should carry that setup into Create Order.
-            // Then prefer a client-specific Order workflow, then the normal
-            // default/all-client Order workflow.
-            ->orderByRaw("CASE
-                WHEN client_availability = 'specific' AND applies_to = 'inquiries' THEN 0
-                WHEN client_availability = 'specific' AND applies_to = 'orders' THEN 1
-                ELSE 2
-            END")
+            // Create Order must never inherit an Inquiry workflow. Prefer a
+            // client-specific Order workflow, then the normal all-client Order
+            // workflow. Defaults win inside each availability tier.
+            ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->value('id');
@@ -1386,6 +1668,7 @@ class Index extends Component
         return WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
+            ->where('applies_to', 'orders')
             ->availableForOrderCreation($clientId)
             ->whereKey($workflowId)
             ->exists();
@@ -1559,6 +1842,8 @@ class Index extends Component
                 ->with('phases.taskPack.templates')
                 ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
                 ->where('is_active', true)
+                ->where('applies_to', 'orders')
+                ->availableForOrderCreation($this->clientId)
                 ->whereKey($this->workflowId)
                 ->get()
             : collect();
