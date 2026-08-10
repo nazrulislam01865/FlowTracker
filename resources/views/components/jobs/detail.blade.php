@@ -56,7 +56,7 @@
                 @endif
             </h1>
             <div class="ft-exact-job-meta">
-                <span>{{ $job->client?->name }}</span>
+                <span class="ft-client-inline-identity"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-client-inline-name">{{ $job->client?->name }}</span></span>
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
                 <span class="ft-soft-pill red">{{ $job->priority }}</span>
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>

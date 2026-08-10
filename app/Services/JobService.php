@@ -110,7 +110,7 @@ class JobService
                 'flow_jobs.needs_attention', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -196,7 +196,7 @@ class JobService
                 'flow_jobs.completed_at', 'flow_jobs.created_at',
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'sourceInquiry:id,inquiry_number,reference_number',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
@@ -252,7 +252,7 @@ class JobService
     {
         return $this->visibleQuery($user)
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -285,7 +285,7 @@ class JobService
                 'inquiries.converted_job_id', 'inquiries.updated_at',
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'owner:id,name,profile_image_path',
                 'sourceOrder:id,source_inquiry_id,job_number,order_number',
                 'convertedJob:id,job_number,order_number',
@@ -462,7 +462,7 @@ class JobService
 
         if ($tab === 'inquiry') {
             $job->load([
-                'sourceInquiry.client:id,name',
+                'sourceInquiry.client:id,name,logo_path',
                 'sourceInquiry.owner:id,name,profile_image_path',
             ]);
 

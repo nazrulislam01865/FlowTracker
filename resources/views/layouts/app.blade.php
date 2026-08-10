@@ -39,6 +39,7 @@
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
+    <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4">@endif
     {{-- Inquiry CSS is deliberately loaded for the authenticated shell, not only
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;

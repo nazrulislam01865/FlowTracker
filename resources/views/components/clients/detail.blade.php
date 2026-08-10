@@ -24,6 +24,9 @@
     'billingSameAsOffice' => true,
     'salesTaxStatus' => 'taxable',
     'editShippingAddresses' => [],
+    'clientLogoUpload' => null,
+    'existingClientLogoUrl' => '',
+    'removeClientLogo' => false,
 ])
 @php
     $client = $detail['client'];
@@ -87,7 +90,7 @@
 
     <header class="ft-client-proto-header">
         <div class="ft-client-proto-identity">
-            <div class="ft-client-proto-logo">{{ $initials }}</div>
+            <x-ui.client-logo :client="$client" :name="$client->name" :size="60" shape="circle" class="ft-client-proto-logo" />
             <div class="ft-client-proto-title-block">
                 <div class="ft-client-proto-title-line">
                     <h1>{{ $client->name }}</h1>
@@ -134,6 +137,7 @@
             mode="edit"
             :users="$users"
             :client-code="$clientCode"
+            :client-name="$client->name ?? ''"
             :client-countries="$clientCountries"
             :client-country-flags="$clientCountryFlags"
             :client-states-by-country="$clientStatesByCountry"
@@ -147,6 +151,9 @@
             :billing-same-as-office="$billingSameAsOffice"
             :sales-tax-status="$salesTaxStatus"
             :shipping-addresses="$editShippingAddresses"
+            :client-logo-upload="$clientLogoUpload"
+            :existing-client-logo-url="$existingClientLogoUrl"
+            :remove-client-logo="$removeClientLogo"
         />
     @elseif($tab === 'overview')
         <div class="ft-client-summary-grid">

@@ -1,6 +1,7 @@
 @props([
     'users',
     'clientCode',
+    'clientName' => '',
     'clientCountries' => [],
     'clientCountryFlags' => [],
     'clientStatesByCountry' => [],
@@ -15,6 +16,9 @@
     'salesTaxStatus' => 'taxable',
     'shippingAddresses' => [],
     'mode' => 'create',
+    'clientLogoUpload' => null,
+    'existingClientLogoUrl' => '',
+    'removeClientLogo' => false,
 ])
 @php
     $isEdit = $mode === 'edit';
@@ -22,6 +26,11 @@
     $managerInitials = $selectedManager ? \App\Support\BoardPresenter::initials($selectedManager->name) : 'U';
     $officeStates = $clientStatesByCountry[$clientCountry] ?? [];
     $billingStates = $clientStatesByCountry[$billingCountry] ?? [];
+    $clientLogoPreview = null;
+    if ($clientLogoUpload && in_array(strtolower((string) $clientLogoUpload->getClientOriginalExtension()), ['jpg','jpeg','png','webp'], true)) {
+        try { $clientLogoPreview = $clientLogoUpload->temporaryUrl(); } catch (\Throwable $e) { $clientLogoPreview = null; }
+    }
+    if (! $clientLogoPreview && ! $removeClientLogo && $existingClientLogoUrl !== '') $clientLogoPreview = $existingClientLogoUrl;
 @endphp
 <div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype' : 'ft-create-client-page ft-client-create-prototype' }}">
     <div class="ft-client-create-shell">
@@ -48,6 +57,33 @@
             <section class="ft-client-prototype-section">
                 <div class="ft-client-section-title"><span>1</span><div><h3>Client details</h3></div></div>
                 <div class="ft-client-grid ft-client-grid-3">
+                    <div class="ft-client-logo-upload">
+                        <div class="ft-client-logo-preview">
+                            @if($clientLogoPreview)
+                                <img src="{{ $clientLogoPreview }}" alt="Client logo preview">
+                            @else
+                                <x-ui.client-logo :name="$clientName ?: 'Client'" :size="82" />
+                            @endif
+                        </div>
+                        <div class="ft-client-logo-upload-copy">
+                            <b>Client logo <span style="font-weight:500;color:#71829a">(Optional)</span></b>
+                            <p>Upload the company logo once and FlowTrack will reuse it anywhere this client is shown. JPG, PNG or WebP · max 5 MB.</p>
+                            <div class="ft-client-logo-actions">
+                                <label class="ft-client-logo-file">
+                                    <input type="file" wire:model="clientLogoUpload" accept="image/jpeg,image/png,image/webp">
+                                    <span wire:loading.remove wire:target="clientLogoUpload">{{ $clientLogoPreview ? 'Choose new logo' : 'Choose logo' }}</span>
+                                    <span wire:loading wire:target="clientLogoUpload">Preparing…</span>
+                                </label>
+                                @if($isEdit && $existingClientLogoUrl !== '' && ! $removeClientLogo && ! $clientLogoUpload)
+                                    <button type="button" class="ft-client-logo-remove" wire:click="markClientLogoForRemoval">Remove logo</button>
+                                @elseif($removeClientLogo)
+                                    <button type="button" class="ft-client-logo-undo" wire:click="restoreClientLogo">Undo remove</button>
+                                @endif
+                            </div>
+                            @if($removeClientLogo)<small class="ft-client-logo-removal-note">The existing logo will be removed when you save the client.</small>@endif
+                            @error('clientLogoUpload')<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
+                    </div>
                     <label class="ft-proto-field">
                         <b>Client code</b>
                         <div class="ft-client-code-lock"><span>{{ $clientCode }}</span><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 10V7a5 5 0 0110 0v3m-9 0h8a2 2 0 012 2v7H6v-7a2 2 0 012-2z" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></div>

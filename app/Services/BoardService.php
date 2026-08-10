@@ -44,7 +44,7 @@ class BoardService
                     ->limit(1),
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'phase:id,workflow_id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -87,7 +87,7 @@ class BoardService
             ])
             ->with([
                 'job:id,job_number,title,client_id,coordinator_id,status,completed_at',
-                'job.client:id,name',
+                'job.client:id,name,logo_path',
                 'phase:id,name,short_name,sequence',
                 'assignee:id,name,profile_image_path',
             ])

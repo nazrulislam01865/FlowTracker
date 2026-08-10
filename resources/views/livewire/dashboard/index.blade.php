@@ -75,7 +75,7 @@
                             @endphp
                             <tr wire:key="dashboard-inquiry-{{ $inquiry->id }}">
                                 <td data-label="Inquiry ID"><a class="ft-text-link" href="{{ route('inquiries.index', ['open' => $inquiry->id]) }}" wire:navigate>{{ $inquiry->inquiry_number }}</a><span class="ft-ref ft-cell-clip">{{ $inquiry->subject }}</span></td>
-                                <td data-label="Client"><span class="ft-cell-clip">{{ $inquiry->client?->name ?? 'No client' }}</span></td>
+                                <td data-label="Client"><span class="ft-client-name-with-logo"><x-ui.client-logo :client="$inquiry->client" :name="$inquiry->client?->name ?: 'Client'" :size="22" /><span class="ft-cell-clip">{{ $inquiry->client?->name ?? 'No client' }}</span></span></td>
                                 <td data-label="Assignee Name">
                                     @if($assignee)
                                         <span class="ft-person"><x-ui.avatar :user="$assignee" :name="$assignee->name" :size="22" /><span class="ft-cell-clip">{{ $assignee->name }}</span></span>

@@ -3,6 +3,7 @@
     <x-clients.create
         :users="$users"
         :client-code="$clientCode"
+        :client-name="$clientName"
         :client-countries="$clientCountries"
         :client-country-flags="$clientCountryFlags"
         :client-states-by-country="$clientStatesByCountry"
@@ -16,6 +17,9 @@
         :billing-same-as-office="$billingSameAsOffice"
         :sales-tax-status="$salesTaxStatus"
         :shipping-addresses="$shippingAddresses"
+        :client-logo-upload="$clientLogoUpload"
+        :existing-client-logo-url="$existingClientLogoUrl"
+        :remove-client-logo="$removeClientLogo"
     />
 @elseif($showDetail && $detail)
     <x-clients.detail
@@ -44,6 +48,9 @@
         :billing-same-as-office="$billingSameAsOffice"
         :sales-tax-status="$salesTaxStatus"
         :edit-shipping-addresses="$shippingAddresses"
+        :client-logo-upload="$clientLogoUpload"
+        :existing-client-logo-url="$existingClientLogoUrl"
+        :remove-client-logo="$removeClientLogo"
     />
 @else
 @php
@@ -123,7 +130,7 @@
                         @forelse($clients as $clientRow)
                             <tr wire:key="archived-client-row-{{ $clientRow->id }}">
                                 <td data-label="Archived client">
-                                    <div class="ft-client-identity"><span class="ft-client-logo is-archived">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }} · {{ $clientRow->country ?: 'No country' }}</small></span></div>
+                                    <div class="ft-client-identity"><x-ui.client-logo :client="$clientRow" :name="$clientRow->name" :size="34" :archived="true" /><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }} · {{ $clientRow->country ?: 'No country' }}</small></span></div>
                                 </td>
                                 <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Job history"><b>{{ $clientRow->total_jobs_count }}</b> {{ \Illuminate\Support\Str::plural('Job', $clientRow->total_jobs_count) }} preserved</td>
@@ -159,7 +166,7 @@
                                 tabindex="0"
                                 aria-label="Open client {{ $clientRow->name }}"
                             >
-                                <td data-label="Client"><div class="ft-client-identity"><span class="ft-client-logo">{{ \App\Support\BoardPresenter::initials($clientRow->name) }}</span><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
+                                <td data-label="Client"><div class="ft-client-identity"><x-ui.client-logo :client="$clientRow" :name="$clientRow->name" :size="34" /><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->country ?: '—' }}</small></span></div></td>
                                 <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
                                 <td data-label="Jobs"><b>{{ $clientRow->active_jobs_count }} / {{ $clientRow->total_jobs_count }}</b> active<div class="ft-mini-progress"><span style="width:{{ $clientRow->total_jobs_count ? min(100,round(($clientRow->active_jobs_count/$clientRow->total_jobs_count)*100)) : 0 }}%"></span></div></td>
                                 <td data-label="Tasks">

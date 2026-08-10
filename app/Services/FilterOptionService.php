@@ -115,7 +115,7 @@ class FilterOptionService
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
                 ->where('job_number', 'like', $search.'%')
                 ->orWhere('title', 'like', '%'.$search.'%')))
-            ->with('client:id,name')
+            ->with('client:id,name,logo_path')
             ->orderByDesc('updated_at')
             ->limit($limit)
             ->get(['id', 'job_number', 'title', 'client_id', 'updated_at'])
@@ -134,7 +134,7 @@ class FilterOptionService
             'board-task-pack' => app(BoardTaskPackService::class)->visibleJobQuery($user),
             default => app(JobService::class)->activeQuery($user),
         };
-        $job = $query->with('client:id,name')->find((int) $id, ['id','job_number','title','client_id']);
+        $job = $query->with('client:id,name,logo_path')->find((int) $id, ['id','job_number','title','client_id']);
         return $job ? ['id'=>(int)$job->id, 'label'=>trim($job->displayOrderNumber().' — '.$job->title), 'meta'=>(string)($job->client?->name ?: '')] : null;
     }
 

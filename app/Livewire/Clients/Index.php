@@ -18,11 +18,13 @@ use App\Services\SetupContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
     use UsesPagePlaceholder;
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -48,6 +50,9 @@ class Index extends Component
 
     public string $clientCode = '';
     public string $clientName = '';
+    public $clientLogoUpload = null;
+    public string $existingClientLogoUrl = '';
+    public bool $removeClientLogo = false;
     public string $legalBusinessName = '';
     public string $website = '';
     public string $clientCountry = 'United States';
@@ -243,6 +248,7 @@ class Index extends Component
 
         $rules = [
             'clientName' => ['required','string','max:255'],
+            'clientLogoUpload' => ['nullable','image','mimes:jpg,jpeg,png,webp','max:5120'],
             'legalBusinessName' => ['nullable','string','max:255'],
             'website' => ['nullable','string','max:255'],
             // Creation is strict against Master Data. Editing intentionally allows
@@ -380,6 +386,13 @@ class Index extends Component
             return $client;
         });
 
+        if ($this->clientLogoUpload) {
+            $client = app(\App\Services\ClientLogoService::class)->replace($client, $this->clientLogoUpload);
+        }
+
+        $this->clientLogoUpload = null;
+        $this->existingClientLogoUrl = $client->logoUrl() ?: '';
+        $this->removeClientLogo = false;
         $this->showCreate = false;
         $this->selectedClientId = $client->id;
         $this->showClientPreview = true;
@@ -447,7 +460,7 @@ class Index extends Component
     {
         $defaultCountry = $this->defaultClientCountry();
         $defaultCurrency = $this->defaultClientCurrency();
-        $this->clientCode = $this->nextClientCode(); $this->clientName = ''; $this->legalBusinessName = ''; $this->website = '';
+        $this->clientCode = $this->nextClientCode(); $this->clientName = ''; $this->clientLogoUpload = null; $this->existingClientLogoUrl = ''; $this->removeClientLogo = false; $this->legalBusinessName = ''; $this->website = '';
         $this->clientCountry = $defaultCountry; $this->preferredCurrency = $defaultCurrency; $this->officeAddress = ''; $this->officeAddressLine1 = '';
         $this->officeSuite = ''; $this->officeCity = ''; $this->officeState = ''; $this->officeZip = ''; $this->billingSameAsOffice = true;
         $this->billingAddressLine1 = ''; $this->billingSuite = ''; $this->billingCity = ''; $this->billingState = ''; $this->billingZip = '';
@@ -550,6 +563,9 @@ class Index extends Component
 
         $this->clientCode = $client->code ?: 'CL-'.str_pad((string) $client->id, 3, '0', STR_PAD_LEFT);
         $this->clientName = $client->name ?? '';
+        $this->clientLogoUpload = null;
+        $this->existingClientLogoUrl = $client->logoUrl() ?: '';
+        $this->removeClientLogo = false;
         $this->legalBusinessName = $client->legal_business_name ?? '';
         $this->website = $client->website ?? '';
         $this->clientCountry = $client->country ?: $this->defaultClientCountry();
@@ -601,7 +617,29 @@ class Index extends Component
     public function cancelEditClient(): void
     {
         $this->showEdit = false;
+        $this->clientLogoUpload = null;
+        $this->removeClientLogo = false;
         $this->resetValidation();
+    }
+
+    public function markClientLogoForRemoval(): void
+    {
+        $this->clientLogoUpload = null;
+        $this->removeClientLogo = true;
+        $this->resetValidation('clientLogoUpload');
+    }
+
+    public function restoreClientLogo(): void
+    {
+        $this->removeClientLogo = false;
+    }
+
+    public function updatedClientLogoUpload(): void
+    {
+        $this->removeClientLogo = false;
+        $this->validateOnly('clientLogoUpload', [
+            'clientLogoUpload' => ['nullable','image','mimes:jpg,jpeg,png,webp','max:5120'],
+        ]);
     }
 
     public function updateClient(): void
@@ -690,6 +728,17 @@ class Index extends Component
             }
         });
 
+        if ($this->clientLogoUpload) {
+            $client = app(\App\Services\ClientLogoService::class)->replace($client, $this->clientLogoUpload);
+        } elseif ($this->removeClientLogo && $client->logo_path) {
+            $client = app(\App\Services\ClientLogoService::class)->remove($client);
+        } else {
+            $client->refresh();
+        }
+
+        $this->clientLogoUpload = null;
+        $this->removeClientLogo = false;
+        $this->existingClientLogoUrl = $client->logoUrl() ?: '';
         $this->showEdit = false;
         session()->flash('success', 'Client updated successfully.');
         try {

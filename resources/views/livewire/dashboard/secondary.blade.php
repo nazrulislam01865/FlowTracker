@@ -87,7 +87,7 @@
                             @endphp
                             <tr wire:key="dashboard-job-{{ $job->id }}">
                                 <td data-label="Job"><a class="ft-text-link ft-cell-clip" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->title }}</a><span class="ft-ref">{{ $job->displayOrderNumber() }}</span></td>
-                                <td data-label="Client"><span class="ft-cell-clip">{{ $job->client?->name ?? '—' }}</span></td>
+                                <td data-label="Client"><span class="ft-client-name-with-logo"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-cell-clip">{{ $job->client?->name ?? '—' }}</span></span></td>
                                 <td data-label="Status"><span class="ft-pill {{ $statusTone($job->phase?->short_name) }}">{{ $job->phase?->short_name ?? 'Unassigned' }}</span></td>
                                 <td data-label="Flag"><span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>View</a></td>
@@ -159,7 +159,7 @@
                                 $riskTone = $client->at_risk_jobs_count > 1 ? 'red' : ($client->at_risk_jobs_count === 1 ? 'amber' : 'green');
                             @endphp
                             <tr wire:key="dashboard-client-{{ $client->id }}">
-                                <td data-label="Client"><a class="ft-text-link ft-cell-clip" href="{{ route('clients.index') }}" wire:navigate>{{ $client->name }}</a></td>
+                                <td data-label="Client"><a class="ft-text-link ft-dashboard-client-logo-link" href="{{ route('clients.index') }}" wire:navigate><x-ui.client-logo :client="$client" :name="$client->name" :size="24" /><span>{{ $client->name }}</span></a></td>
                                 <td data-label="Jobs"><a class="ft-text-link" href="{{ route('jobs.index', ['client' => $client->id]) }}" wire:navigate>{{ $client->active_jobs_count }} ↗</a></td>
                                 <td data-label="Inquiries">0</td>
                                 <td data-label="At risk"><span class="ft-flag {{ $riskTone }}">{{ $client->at_risk_jobs_count }}</span></td>

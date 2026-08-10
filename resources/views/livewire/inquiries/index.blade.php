@@ -77,7 +77,7 @@
                                     <span class="title ft-inquiry-title-preview" title="{{ $row['title'] }}">{{ $row['titlePreview'] }}</span>
                                 </div>
                                 <div class="cell ft-inquiry-list-client-cell" data-label="Client / Item">
-                                    <span class="title">{{ $row['client'] }}</span>
+                                    <span class="ft-client-name-with-logo"><x-ui.client-logo :name="$row['client']" :src="$row['clientLogoUrl'] ?? null" :size="24" /><span class="title">{{ $row['client'] }}</span></span>
                                     @if($row['item'])<span class="sub">{{ $row['item'] }}</span>@endif
                                 </div>
                                 <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
@@ -528,7 +528,7 @@
                         </h1>
                     </div>
                     <div class="ft-inquiry-header-meta" aria-label="Inquiry information">
-                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Client <strong>{{ $inquiry->client?->name ?: '—' }}</strong></span></span>
+                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span class="ft-client-inline-identity"><x-ui.client-logo :client="$inquiry->client" :name="$inquiry->client?->name ?: 'Client'" :size="20" /><span>Client <strong>{{ $inquiry->client?->name ?: '—' }}</strong></span></span></span>
                         <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
                         <span class="ft-inquiry-header-meta-item ft-inquiry-header-reference">
                             <span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7l4 4V20.5H7z"></path><path d="M14 3.5v4h4"></path></svg></span>

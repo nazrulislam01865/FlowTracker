@@ -1880,7 +1880,7 @@ class Index extends Component
     {
         $master = app(MasterDataService::class);
         $task = app(TaskService::class)->visibleQuery($user)->with([
-            'job.client:id,name',
+            'job.client:id,name,logo_path',
             'job.tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.title'])

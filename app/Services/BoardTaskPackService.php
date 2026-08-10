@@ -138,7 +138,7 @@ class BoardTaskPackService
                 'health', 'progress', 'status', 'updated_at',
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'phase:id,name,short_name,sequence',
             ])
             ->get()

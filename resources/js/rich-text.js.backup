@@ -216,19 +216,7 @@ const createButton = (label, title, command) => {
 };
 
 const bootOne = (source) => {
-    const existingShell = source.__flowtrackRichTextShell;
-    const existingToolbar = source.__flowtrackRichTextToolbar;
-    const existingEditor = source.__flowtrackRichTextEditor;
-
-    const existingBindingIsHealthy = source.__flowtrackRichTextBound
-        && existingShell?.isConnected
-        && existingToolbar?.isConnected
-        && existingEditor?.isConnected
-        && existingShell.contains(existingToolbar)
-        && existingShell.contains(existingEditor);
-
-    if (existingBindingIsHealthy) return;
-
+    if (source.__flowtrackRichTextBound && source.__flowtrackRichTextShell?.isConnected) return;
     source.__flowtrackRichTextCleanup?.();
 
     const shell = document.createElement('div');
@@ -285,8 +273,6 @@ const bootOne = (source) => {
 
     source.__flowtrackRichTextBound = true;
     source.__flowtrackRichTextShell = shell;
-    source.__flowtrackRichTextToolbar = toolbar;
-    source.__flowtrackRichTextEditor = editor;
     const previousDisplay = source.style.display;
     source.style.display = 'none';
 
@@ -691,9 +677,7 @@ const bootOne = (source) => {
     };
     const onViewport = () => positionMentionMenu();
 
-    // Delegate formatting from the stable editor shell. This survives
-    // Livewire morphs that may replace toolbar descendants.
-    shell.addEventListener('mousedown', onToolbar);
+    toolbar.addEventListener('mousedown', onToolbar);
     editor.addEventListener('input', onInput);
     editor.addEventListener('paste', onPaste);
     editor.addEventListener('drop', onDrop);
@@ -712,7 +696,7 @@ const bootOne = (source) => {
 
     source.__flowtrackRichTextCleanup = () => {
         closeMentions();
-        shell.removeEventListener('mousedown', onToolbar);
+        toolbar.removeEventListener('mousedown', onToolbar);
         editor.removeEventListener('input', onInput);
         editor.removeEventListener('paste', onPaste);
         editor.removeEventListener('drop', onDrop);
@@ -728,8 +712,6 @@ const bootOne = (source) => {
         source.focus = nativeFocus;
         delete source.__flowtrackRichTextBound;
         delete source.__flowtrackRichTextShell;
-        delete source.__flowtrackRichTextToolbar;
-        delete source.__flowtrackRichTextEditor;
         delete source.__flowtrackRichTextCleanup;
         delete source.__flowtrackRichTextSyncFromSource;
         delete source.__flowtrackRichTextSetValue;

@@ -172,7 +172,7 @@ class Index extends Component
 
         $optionService = app(\App\Services\FilterOptionService::class);
         $jobs = $this->showUpload
-            ? app(JobService::class)->visibleQuery($user)->with('client:id,name')->orderByDesc('id')->limit(250)->get(['id','job_number','title','client_id'])
+            ? app(JobService::class)->visibleQuery($user)->with('client:id,name,logo_path')->orderByDesc('id')->limit(250)->get(['id','job_number','title','client_id'])
             : collect();
         $uploadTasks = $this->showUpload && $this->uploadJobId
             ? app(\App\Services\TaskService::class)->visibleQuery($user)->where('flow_job_id',$this->uploadJobId)->with('phase')->orderBy('id')->get()

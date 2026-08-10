@@ -994,7 +994,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $with = [
-            'client:id,name',
+            'client:id,name,logo_path',
             'creator:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
             'sourceWorkflow:id,name',

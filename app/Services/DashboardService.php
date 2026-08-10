@@ -71,7 +71,7 @@ class DashboardService
     {
         return app(JobService::class)->activeQuery($user)
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention'])
-            ->with(['client:id,name', 'phase:id,short_name'])
+            ->with(['client:id,name,logo_path', 'phase:id,short_name'])
             ->where(fn ($query) => $query->where('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']))
             ->latest('flow_jobs.id')
             ->limit(6)
@@ -142,7 +142,7 @@ class DashboardService
                 'inquiries.updated_at',
             ])
             ->with([
-                'client:id,name',
+                'client:id,name,logo_path',
                 'owner:id,name,profile_image_path',
                 'currentTask:id,inquiry_id,assignee_id,title,status,due_date,completed_at',
                 'currentTask.assignee:id,name,profile_image_path',
@@ -182,7 +182,7 @@ class DashboardService
             ])
             ->with([
                 'job:id,job_number,title,client_id',
-                'job.client:id,name',
+                'job.client:id,name,logo_path',
                 'task:id,task_number,title,flow_job_id',
                 'inquiry:id,inquiry_number,subject',
                 'inquiryTask:id,inquiry_id,title',
@@ -375,7 +375,7 @@ class DashboardService
             ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason'])
             ->with([
                 'job:id,job_number,title,client_id',
-                'job.client:id,name',
+                'job.client:id,name,logo_path',
                 'assignee:id,name,profile_image_path',
             ])
             ->where(function ($query) use ($today) {
@@ -393,7 +393,7 @@ class DashboardService
     {
         return app(JobService::class)->activeQuery($user)
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.progress', 'flow_jobs.updated_at'])
-            ->with(['client:id,name', 'phase:id,name,short_name'])
+            ->with(['client:id,name,logo_path', 'phase:id,name,short_name'])
             ->orderByDesc('flow_jobs.updated_at')
             ->limit(4)
             ->get();
@@ -427,7 +427,7 @@ class DashboardService
 
         return app(ClientService::class)->visibleQuery($user)
             ->where('clients.is_active', true)
-            ->select(['clients.id', 'clients.name'])
+            ->select(['clients.id', 'clients.name', 'clients.logo_path'])
             ->withCount([
                 'jobs as active_jobs_count' => fn ($jobs) => $access->applyJobScope(
                     $jobs->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),

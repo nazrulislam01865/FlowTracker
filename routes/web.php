@@ -6,6 +6,7 @@ use App\Http\Controllers\BoardController;
 use App\Http\Controllers\BulkOrderImportController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ClientsController;
+use App\Http\Controllers\ClientLogoController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentsController;
 use App\Http\Controllers\FilterOptionController;
@@ -140,6 +141,10 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('user')
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('profile-images.show');
+    Route::get('/client-logos/{client}/{filename}', ClientLogoController::class)
+        ->whereNumber('client')
+        ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
+        ->name('client-logos.show');
     Route::post('/rich-text-images', [RichTextImageController::class, 'store'])
         ->name('rich-text-images.store');
     Route::get('/rich-text-images/{filename}/download', [RichTextImageController::class, 'download'])

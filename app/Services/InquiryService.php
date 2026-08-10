@@ -179,7 +179,7 @@ class InquiryService
             ->selectSub($currentTaskDue, 'current_task_due_date')
             ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
-            ->with(['client:id,name', 'creator:id,name', 'convertedJob:id,job_number,order_number'])
+            ->with(['client:id,name,logo_path', 'creator:id,name', 'convertedJob:id,job_number,order_number'])
             ->withCount([
                 'tasks',
                 'tasks as completed_tasks_count' => fn (Builder $task) => $task->whereNotNull('completed_at'),
@@ -243,6 +243,7 @@ class InquiryService
                 'title' => (string) $inquiry->subject,
                 'titlePreview' => Str::words((string) $inquiry->subject, 12, '...'),
                 'client' => (string) ($inquiry->client?->name ?: 'No client'),
+                'clientLogoUrl' => $inquiry->client?->logoUrl(),
                 'item' => blank($inquiry->first_item_name) ? null : (string) $inquiry->first_item_name,
                 'currentTask' => (string) ($inquiry->current_task_title ?: ($done === $total && $total > 0 ? 'Completed' : 'No active task')),
                 'taskCaption' => $done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.$currentPosition.' of '.$total,
@@ -1320,7 +1321,7 @@ class InquiryService
             ->with([
                 'assignee:id,name,profile_image_path',
                 'inquiry:id,inquiry_number,client_id,subject,status,priority,updated_at',
-                'inquiry.client:id,name',
+                'inquiry.client:id,name,logo_path',
             ])
             ->limit(max(1, min(6, $limit)))
             ->get(['id', 'inquiry_id', 'assignee_id', 'title', 'status', 'due_date', 'sequence', 'updated_at']);

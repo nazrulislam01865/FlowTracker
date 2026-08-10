@@ -201,7 +201,7 @@
                         @endif
                     </div>
                     <div class="ft-cell ft-brief" data-label="Client / products">
-                        <span class="ft-client">{{ $job->client?->name ?? '—' }}</span>
+                        <span class="ft-job-client-logo-line"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-client">{{ $job->client?->name ?? '—' }}</span></span>
                         @if($productRows->count() === 1)
                             <span class="ft-product">{{ $productNames->first() ?: 'Product' }}</span>
                             <span class="ft-product-detail">{{ number_format($totalUnits) }} {{ \Illuminate\Support\Str::plural('pc', $totalUnits) }}</span>
