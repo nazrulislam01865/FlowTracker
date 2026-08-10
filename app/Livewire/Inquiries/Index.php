@@ -460,7 +460,6 @@ class Index extends Component
         return ['ok' => true, 'status' => $saved->status, 'tone' => $this->tone($saved->status)];
     }
 
-    #[Renderless]
     public function updateTaskStatusInline(int $taskId, string $status): array
     {
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId);
@@ -468,9 +467,12 @@ class Index extends Component
         $updatedInquiry = $saved->inquiry()->first(['id', 'status', 'started_at']);
         $inquiryStatus = (string) $updatedInquiry->status;
         $localizedStart = \App\Support\UserLocalTime::localize($updatedInquiry->started_at);
+        $this->metrics = app(InquiryService::class)->metrics(auth()->user());
+
         return [
             'ok' => true,
             'status' => $saved->status,
+            'completed' => $saved->completed_at !== null,
             'inquiryStatus' => $inquiryStatus,
             'inquiryTone' => $this->tone($inquiryStatus),
             'inquiryStartValue' => $localizedStart?->format('Y-m-d\\TH:i') ?? '',
@@ -971,7 +973,9 @@ class Index extends Component
         // task documents/comments into a modal on every task deep-link/render.
         $task = null;
         $canEditInquiry = $service->canEditVisible($user, $inquiry);
-        $activeTask = $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at) ?: $inquiry->currentTask;
+        // Keep overview editing aligned with the same current-task rule used by
+        // the Inquiry list: furthest started open task, otherwise first queued.
+        $activeTask = $inquiry->currentTask ?: $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at);
         $canEditActiveTask = $activeTask
             ? ($canEditInquiry || ((int) $activeTask->assignee_id === (int) $user->id && $user->canModule('inquiries', 'view')))
             : false;
@@ -1097,13 +1101,23 @@ class Index extends Component
             : null;
 
         if (!$selected) {
-            $preferred = $options->options($user, 'workflows', 'create-inquiry', 'Inquiry', null, 20, $constraints);
-            $selected = $preferred
-                ->sortBy(fn (array $item) => strcasecmp(trim((string) ($item['label'] ?? '')), 'Inquiry Workflow') === 0 ? 0 : 1)
-                ->first()
-                ?? $available->first();
+            // Workflow preference must come from setup configuration, not from
+            // a hard-coded Workflow name. This keeps client-specific defaults
+            // working after a Workflow is renamed (for example NEP).
+            $preferredId = WorkflowTemplate::query()
+                ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+                ->where('is_active', true)
+                ->availableFor('inquiries', $this->clientId)
+                ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->value('id');
 
-            $this->createWorkflowId = $selected ? (int) ($selected['id'] ?? 0) : null;
+            $this->createWorkflowId = $preferredId ? (int) $preferredId : null;
+            $selected = $this->createWorkflowId
+                ? $options->options($user, 'workflows', 'create-inquiry', '', $this->createWorkflowId, 20, $constraints)
+                    ->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $this->createWorkflowId)
+                : null;
         }
 
         $this->workflowFilterOptions = $options

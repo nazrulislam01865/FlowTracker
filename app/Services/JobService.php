@@ -96,7 +96,7 @@ class JobService
         $query = $this->filteredQuery($user, $filters)->reorder();
         match ($filters['sort'] ?? 'updated_desc') {
             'due_asc' => $query->orderByRaw('delivery_date is null, delivery_date asc')->orderByDesc('id'),
-            'priority_desc' => $query->orderByRaw("case priority when 'Urgent' then 4 when 'High' then 3 when 'Medium' then 2 when 'Normal' then 2 when 'Low' then 1 else 0 end desc")->orderByDesc('updated_at'),
+            'priority_desc' => $query->orderByRaw("case priority when 'Critical' then 5 when 'Urgent' then 4 when 'High' then 3 when 'Medium' then 2 when 'Normal' then 2 when 'Low' then 1 else 0 end desc")->orderByDesc('updated_at'),
             default => $query->orderByDesc('updated_at')->orderByDesc('id'),
         };
 
@@ -555,10 +555,11 @@ class JobService
         }
 
         return DB::transaction(function () use ($data, $actor) {
+            $clientId = filled($data['client_id'] ?? null) ? (int) $data['client_id'] : null;
             $workflowIsAvailable = WorkflowTemplate::query()
                 ->where('workspace_id', app(SetupContext::class)->workspaceId())
                 ->where('is_active', true)
-                ->availableFor('orders', (int) $data['client_id'])
+                ->availableForOrderCreation($clientId)
                 ->whereKey((int) $data['workflow_id'])
                 ->exists();
             abort_unless($workflowIsAvailable, 422, 'Selected Workflow is not available for this client.');
@@ -575,7 +576,8 @@ class JobService
             $draft = (bool) ($data['draft'] ?? false);
             $job = FlowJob::create([
                 'job_number' => 'ORDER-'.app(WorkspaceSettingsService::class)->localNow()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
-                'client_id' => $data['client_id'],
+                'order_number' => blank($data['order_number'] ?? null) ? null : trim((string) $data['order_number']),
+                'client_id' => $clientId,
                 'workflow_id' => $workflow->id,
                 'source_workflow_id' => $workflow->id,
                 'workflow_phase_id' => $phase->id,
@@ -588,6 +590,13 @@ class JobService
                 'category' => $data['category'] ?? null,
                 'quantity' => $data['quantity'] ?? 0,
                 'delivery_date' => $data['delivery_date'] ?? null,
+                'received_date' => $data['received_date'] ?? null,
+                'supplier_id' => $data['supplier_id'] ?? null,
+                'warehouse' => blank($data['warehouse'] ?? null) ? null : trim((string) $data['warehouse']),
+                'supplier_instruction' => blank($data['supplier_instruction'] ?? null) ? null : trim((string) $data['supplier_instruction']),
+                'source_row_id' => blank($data['source_row_id'] ?? null) ? null : trim((string) $data['source_row_id']),
+                'import_profile' => blank($data['import_profile'] ?? null) ? null : trim((string) $data['import_profile']),
+                'bulk_import_id' => blank($data['bulk_import_id'] ?? null) ? null : trim((string) $data['bulk_import_id']),
                 'priority' => $data['priority'] ?? 'Medium',
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'status' => $draft ? 'Draft' : 'New',
@@ -599,7 +608,7 @@ class JobService
             ]);
 
             $items = collect($data['items'] ?? [])->filter(fn ($item) => filled($item['product'] ?? null))->values();
-            if ($items->isEmpty()) {
+            if ($items->isEmpty() && filled($job->product)) {
                 $items = collect([['product' => $job->product, 'category' => $job->category, 'quantity' => $job->quantity]]);
             }
             foreach ($items as $sort => $item) {

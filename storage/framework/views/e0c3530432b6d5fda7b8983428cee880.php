@@ -31,6 +31,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $isActive = request()->routeIs($route);
     if ($route === 'task-pack.setup') $isActive = $isActive || request()->routeIs('task-pack.*');
     if ($route === 'workflow.setup') $isActive = $isActive || request()->routeIs('workflow.*');
+    if ($route === 'jobs.index') $isActive = $isActive || request()->routeIs('orders.bulk-import*');
 ?>
 <a href="<?php echo e(route($route)); ?>" wire:navigate class="nav-btn <?php echo e($isActive ? 'active' : ''); ?>">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php switch($icon):

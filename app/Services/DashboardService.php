@@ -346,9 +346,7 @@ class DashboardService
         return $query
             ->select(['users.id', 'users.name', 'users.profile_image_path'])
             ->withCount([
-                'assignedTasks as ongoing_count' => fn ($tasks) => $tasks
-                    ->whereNull('completed_at')
-                    ->whereHas('job', fn ($job) => $job->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)),
+                'assignedTasks as ongoing_count' => fn ($tasks) => $this->constrainOngoingTasks($tasks),
                 'assignedTasks as done_count' => fn ($tasks) => $tasks->whereNotNull('completed_at'),
                 'assignedTasks as done_on_time_count' => fn ($tasks) => $tasks
                     ->whereNotNull('completed_at')
@@ -445,14 +443,29 @@ class DashboardService
             ->get();
     }
 
-    private function activeTaskQuery(User $user)
+    private function activeTaskQuery(User $user): Builder
     {
-        return app(TaskService::class)->visibleQuery($user)
+        return $this->constrainOngoingTasks(
+            app(TaskService::class)->visibleQuery($user)
+        );
+    }
+
+    /**
+     * Keep every dashboard "ongoing task" count/list aligned with the task board.
+     * A task is ongoing only while both the task and its Order are operational.
+     * We deliberately check both completed_at and the normalized status because
+     * older/imported rows can have status=Completed without a completion timestamp.
+     */
+    private function constrainOngoingTasks(Builder $tasks): Builder
+    {
+        return $tasks
             ->whereNull('tasks.completed_at')
-            ->whereHas('job', fn ($job) => $job
+            ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'")
+            ->whereHas('job', fn (Builder $job) => $job
                 ->whereNull('flow_jobs.completed_at')
+                ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'")
                 ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
-                ->whereHas('client', fn ($client) => $client->where('clients.is_active', true)));
+                ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true)));
     }
 
     private function remember(User $user, string $section, Closure $resolver): mixed

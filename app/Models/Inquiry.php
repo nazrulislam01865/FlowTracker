@@ -36,7 +36,14 @@ class Inquiry extends Model
     public function sourceOrder(): HasOne { return $this->hasOne(FlowJob::class, 'source_inquiry_id'); }
     public function items(): HasMany { return $this->hasMany(InquiryItem::class)->orderBy('sort_order'); }
     public function tasks(): HasMany { return $this->hasMany(InquiryTask::class)->orderBy('sequence'); }
-    public function currentTask(): HasOne { return $this->hasOne(InquiryTask::class)->whereNull('completed_at')->orderBy('sequence'); }
+    public function currentTask(): HasOne
+    {
+        return $this->hasOne(InquiryTask::class)
+            ->whereNull('completed_at')
+            ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC')
+            ->orderBy('inquiry_tasks.sequence');
+    }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
 }

@@ -28,8 +28,8 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('Add &amp; select client', $view);
         $this->assertStringContainsString('wire:click="createClientAndSelect"', $view);
         $this->assertStringContainsString("wire:click=\"setCreateSelector('createWorkflowId'", $view);
-        $this->assertStringContainsString("->options(\$user, 'workflows', 'create-inquiry', 'Inquiry', null, 20)", $component);
-        $this->assertStringContainsString("'Inquiry Workflow'", $component);
+        $this->assertStringContainsString("->availableFor('inquiries', \$this->clientId)", $component);
+        $this->assertStringContainsString("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END", $component);
         $this->assertStringContainsString("'request_source' => \$data['requestSource']", $component);
         $this->assertStringContainsString("'owner_id' => (int) \$data['createOwnerId']", $component);
         $this->assertStringContainsString('public function createClientAndSelect(): void', $component);
@@ -89,6 +89,10 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString("'inquiryStatusOptions' =>", $component);
         $this->assertStringContainsString("@include('livewire.inquiries._taskflow')", $view);
         $this->assertStringContainsString("\$canCompleteThisTask", $taskflow);
+        $this->assertStringContainsString("\$canChangeStatusThisTask", $taskflow);
+        $this->assertStringContainsString('class="ft-inline-task-status', $taskflow);
+        $this->assertStringContainsString('InquiryService::TASK_STATUSES', $taskflow);
+        $this->assertStringNotContainsString('ft-inquiry-status-pill done', $taskflow);
         $this->assertStringContainsString("strcasecmp(trim((string) $task->status), 'In Progress')", $taskflow);
         $this->assertStringNotContainsString("Complete the previous taskflow task first.", $service);
         $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php')));
@@ -97,7 +101,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("timestamp('started_at')", $migration);
         $this->assertStringContainsString("'status' => 'Waiting'", $service);
         $this->assertStringContainsString("'started_at' => null", $service);
-        $this->assertStringContainsString("Task must be In Progress before completion.", $service);
+        $this->assertStringContainsString("public const TASK_STATUSES = ['Waiting', 'In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold', 'Completed'];", $service);
         $this->assertStringContainsString("if (\$this->detailTab === 'overview')", $component);
         $this->assertStringContainsString('.ft-inquiry-task-document-modal', $css);
         $this->assertStringContainsString('openTaskDocumentModal(', $taskflow);
@@ -153,4 +157,32 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('formatDateTime($event.target.value)', $view);
         $this->assertStringContainsString('flowtrack-inquiry-started', $view);
     }
+
+    public function test_inquiry_list_tracks_parallel_taskflow_and_last_assignee_picker_is_not_clipped(): void
+    {
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+        $model = file_get_contents(app_path('Models/Inquiry.php'));
+        $taskflow = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
+        $inlineUser = file_get_contents(resource_path('views/components/ui/inline-remote-user.blade.php'));
+        $filterJs = file_get_contents(public_path('js/flowtrack-list-filters.js'));
+
+        $this->assertStringContainsString("currentTaskSubquery('sequence')", $service);
+        $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN 0 ELSE 1 END", $service);
+        $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC", $service);
+        $this->assertStringContainsString("'tasks as progressed_tasks_count'", $service);
+        $this->assertStringContainsString("'progress' => \$progress", $service);
+        $this->assertStringContainsString("'taskCaption' => \$done === \$total", $service);
+        $this->assertStringContainsString("\$task->inquiry->touch();", $service);
+        $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC", $model);
+        $this->assertStringContainsString('class="panel ft-inquiry-taskflow-panel"', $taskflow);
+        $this->assertStringContainsString('.ft-inquiry-taskflow-panel{', $css);
+        $this->assertStringContainsString('overflow:visible;', $css);
+        $this->assertStringContainsString('.ft-inquiry-taskflow-panel .ft-inline-remote-user-menu{', $css);
+        $this->assertStringContainsString('fixedMenu: true', $inlineUser);
+        $this->assertStringContainsString('if (component.fixedMenu)', $filterJs);
+        $this->assertStringContainsString("'position:fixed!important'", $filterJs);
+        $this->assertStringContainsString("'z-index:2450!important'", $filterJs);
+    }
+
 }

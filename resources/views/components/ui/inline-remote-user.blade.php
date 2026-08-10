@@ -26,6 +26,7 @@
         params: {},
         disabled: false,
         menuWidth: @js((int) $menuWidth),
+        fixedMenu: true,
     })"
     x-on:ft-inline-remote-open.stop="sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? @js($placeholder))); openMenu()"
     x-on:keydown.escape.window="if (open) { close(); $dispatch('ft-inline-remote-cancel') }"

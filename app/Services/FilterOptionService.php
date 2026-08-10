@@ -332,16 +332,21 @@ class FilterOptionService
         $workspaceId = app(SetupContext::class)->workspaceId();
         $appliesTo = match ($context) {
             'create-inquiry' => 'inquiries',
-            'create-job' => 'orders',
             default => null,
         };
 
         return WorkflowTemplate::query()
             ->where('workspace_id', $workspaceId)
             ->where('is_active', true)
-            ->when($appliesTo, fn ($query) => $query->availableFor($appliesTo, $clientId))
+            ->when(
+                $context === 'create-job',
+                fn ($query) => $query->availableForOrderCreation($clientId),
+                fn ($query) => $query->when($appliesTo, fn ($scope) => $scope->availableFor($appliesTo, $clientId)),
+            )
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
+            ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
+            ->orderByRaw("CASE WHEN applies_to = 'inquiries' THEN 0 ELSE 1 END")
             ->orderByDesc('is_default')
             ->orderBy('name')
             ->limit($limit)
@@ -359,14 +364,17 @@ class FilterOptionService
         $this->authorizeWorkflowOptions($user, $context);
         $appliesTo = match ($context) {
             'create-inquiry' => 'inquiries',
-            'create-job' => 'orders',
             default => null,
         };
 
         $row = WorkflowTemplate::query()
             ->where('workspace_id', app(SetupContext::class)->workspaceId())
             ->where('is_active', true)
-            ->when($appliesTo, fn ($query) => $query->availableFor($appliesTo, $clientId))
+            ->when(
+                $context === 'create-job',
+                fn ($query) => $query->availableForOrderCreation($clientId),
+                fn ($query) => $query->when($appliesTo, fn ($scope) => $scope->availableFor($appliesTo, $clientId)),
+            )
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
             ->find((int) $id, ['id', 'name']);
 

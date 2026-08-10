@@ -19,6 +19,7 @@ class FlowJob extends Model
     {
         return [
             'delivery_date' => 'date',
+            'received_date' => 'date',
             'needs_attention' => 'boolean',
             'completed_at' => 'datetime',
             'commercial_value' => 'decimal:2',
@@ -26,6 +27,7 @@ class FlowJob extends Model
     }
 
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }
+    public function supplier(): BelongsTo { return $this->belongsTo(MasterRecord::class, 'supplier_id'); }
     public function sourceInquiry(): BelongsTo { return $this->belongsTo(Inquiry::class, 'source_inquiry_id'); }
     public function workflow(): BelongsTo { return $this->belongsTo(Workflow::class); }
     public function phase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'workflow_phase_id'); }

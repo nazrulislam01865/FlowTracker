@@ -117,6 +117,10 @@
                                                 if(!result?.ok){select.value=previous;return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
+                                                // Keep the renderless status update, but re-query once when
+                                                // completion changes list membership. This removes the task now,
+                                                // and removes its Order group too if it was the final visible task.
+                                                if(result.completed && <?php echo \Illuminate\Support\Js::from($hideCompleted)->toHtml() ?>)await $wire.$refresh();
                                             }catch(error){select.value=previous;}
                                             finally{this.saving=false;select.disabled=false;}
                                         }

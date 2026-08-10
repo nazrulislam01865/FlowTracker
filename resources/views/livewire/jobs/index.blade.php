@@ -18,6 +18,7 @@
             :catalog-ready="$createCatalogReady"
             :assignment-ready="$createAssignmentReady"
             :workflow-ready="$createWorkflowReady"
+            :workflow-selector-version="$createWorkflowSelectorVersion"
             wire:key="job-create"
         />
     @elseif($selectedTask)

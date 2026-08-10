@@ -27,7 +27,23 @@ class ListFilterExperienceTest extends TestCase
         $this->assertStringContainsString("menu.style.setProperty('max-height', 'none', 'important')", $runtime);
         $this->assertStringContainsString('const measuredHeight = menu.scrollHeight;', $runtime);
         $this->assertStringContainsString('const naturalHeight = measureNaturalMenuHeight(menu, heightCap);', $runtime);
-        $this->assertStringContainsString('/js/flowtrack-list-filters.js?v=20260808-4', $layout);
+        $this->assertStringContainsString('/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3', $layout);
+    }
+
+    public function test_remote_selector_never_pairs_a_new_value_with_the_previous_options_label(): void
+    {
+        $runtime = file_get_contents(public_path('js/flowtrack-list-filters.js'));
+        $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertStringContainsString('knownLabels: initialLabels', $runtime);
+        $this->assertStringContainsString('const knownLabel = this.knownLabels.get(next);', $runtime);
+        $this->assertStringContainsString('syncSelection(selection, params = {}, serverItems = [])', $runtime);
+        $this->assertStringContainsString('if (this.pendingAt)', $runtime);
+        $this->assertStringContainsString('if ((Date.now() - this.pendingAt) < 15000) return;', $runtime);
+        $this->assertStringNotContainsString('currentLabel || suppliedLabel', $runtime);
+        $this->assertStringContainsString('const resolved = item?.label || knownLabel || suppliedLabel || next;', $runtime);
+        $this->assertStringContainsString('this.knownLabels.set(next, nextLabel);', $runtime);
+        $this->assertStringContainsString('/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3', $layout);
     }
 
     public function test_list_pages_share_the_same_filter_components(): void

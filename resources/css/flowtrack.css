@@ -2592,7 +2592,11 @@ body:has(.ft-client-preview-backdrop){
 
 /* 2026-08-07 Task Details inline-edit UX: match the compact Job Details phase-assignee pattern.
    Editors replace the displayed value inside the property cell instead of opening a nested card/popover. */
-.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:20}
+/* Keep task/inquiry property rows below the sticky shell header while scrolling.
+   The property grid still owns a local stacking context for inline editors, but
+   it must never tie the shell topbar z-index (20), otherwise later DOM content
+   can paint over the header. */
+.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:5}
 .ft-exact-task-detail .ft-friendly-task-properties .ft-task-property{overflow:visible!important;z-index:auto}
 .ft-exact-task-detail .ft-friendly-task-properties .ft-task-property:focus-within{z-index:80}
 .ft-exact-task-detail .ft-task-property-inline-editor{

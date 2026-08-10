@@ -2,6 +2,7 @@
     $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
     $canCreateOrder = auth()->user()->canAccess('jobs.create');
     $canCreateClient = auth()->user()->canModule('clients', 'create');
+    $canCreateInquiry = auth()->user()->canModule('inquiries', 'create');
     $inquiryFlag = static function ($inquiry) use ($today): array {
         $task = $inquiry->currentTask;
         $status = strtolower((string) ($task?->status ?: $inquiry->status));
@@ -33,7 +34,9 @@
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateOrder): ?>
                 <a class="ft-action primary" href="<?php echo e(route('jobs.index', ['create' => 1])); ?>" wire:navigate><span class="ft-action-icon">+</span>Create Order</a>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-            <span class="ft-action" aria-disabled="true" title="Inquiry management is not available in this FlowTrack build"><span class="ft-action-icon">+</span>Create Inquiry</span>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateInquiry): ?>
+                <a class="ft-action" href="<?php echo e(route('inquiries.index', ['create' => 1])); ?>" wire:navigate><span class="ft-action-icon">+</span>Create Inquiry</a>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateClient): ?>
                 <a class="ft-action" href="<?php echo e(route('clients.index', ['create' => 1])); ?>" wire:navigate><span class="ft-action-icon">+</span>Add Client</a>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>

@@ -2,6 +2,7 @@
     $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
     $canCreateOrder = auth()->user()->canAccess('jobs.create');
     $canCreateClient = auth()->user()->canModule('clients', 'create');
+    $canCreateInquiry = auth()->user()->canModule('inquiries', 'create');
     $inquiryFlag = static function ($inquiry) use ($today): array {
         $task = $inquiry->currentTask;
         $status = strtolower((string) ($task?->status ?: $inquiry->status));
@@ -33,7 +34,9 @@
             @if($canCreateOrder)
                 <a class="ft-action primary" href="{{ route('jobs.index', ['create' => 1]) }}" wire:navigate><span class="ft-action-icon">+</span>Create Order</a>
             @endif
-            <span class="ft-action" aria-disabled="true" title="Inquiry management is not available in this FlowTrack build"><span class="ft-action-icon">+</span>Create Inquiry</span>
+            @if($canCreateInquiry)
+                <a class="ft-action" href="{{ route('inquiries.index', ['create' => 1]) }}" wire:navigate><span class="ft-action-icon">+</span>Create Inquiry</a>
+            @endif
             @if($canCreateClient)
                 <a class="ft-action" href="{{ route('clients.index', ['create' => 1]) }}" wire:navigate><span class="ft-action-icon">+</span>Add Client</a>
             @endif

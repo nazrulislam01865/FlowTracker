@@ -64,6 +64,7 @@ unset($__defined_vars, $__key, $__value); ?>
         params: {},
         disabled: false,
         menuWidth: <?php echo \Illuminate\Support\Js::from((int) $menuWidth)->toHtml() ?>,
+        fixedMenu: true,
     })"
     x-on:ft-inline-remote-open.stop="sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? <?php echo \Illuminate\Support\Js::from($placeholder)->toHtml() ?>)); openMenu()"
     x-on:keydown.escape.window="if (open) { close(); $dispatch('ft-inline-remote-cancel') }"

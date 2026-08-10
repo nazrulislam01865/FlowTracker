@@ -1,5 +1,11 @@
 
 
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-next-phase-box>.ft-permission-note{grid-row:auto!important}
+    .ft-exact-job-detail .ft-upload-ready-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{max-width:100%}
+}
+
 @media(max-width:520px){
     .ft-exact-job-detail .ft-job-documents-table .ft-required-inline-row td>div:first-child{
         display:grid!important;

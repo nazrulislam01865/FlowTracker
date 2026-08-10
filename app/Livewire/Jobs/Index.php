@@ -12,7 +12,6 @@ use App\Models\FlowJobItem;
 use App\Models\FlowTaskComment;
 use App\Models\Task;
 use App\Models\User;
-use App\Models\Workflow;
 use App\Models\WorkflowTemplate;
 use App\Models\WorkflowPhase;
 use App\Services\AccessControlService;
@@ -73,8 +72,10 @@ class Index extends Component
     public bool $createCatalogReady = false;
     public bool $createAssignmentReady = false;
     public bool $createWorkflowReady = false;
+    public int $createWorkflowSelectorVersion = 0;
 
     public string $jobTitle = '';
+    public string $referenceNumber = '';
     public string $priority = 'Medium';
     public ?int $clientId = null;
     public ?int $workflowId = null;
@@ -178,18 +179,13 @@ class Index extends Component
             $this->{$property} = $id;
             $this->resetValidation($property);
 
-            if ($property === 'clientId' && $this->workflowId) {
-                $stillAvailable = WorkflowTemplate::query()
-                    ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
-                    ->where('is_active', true)
-                    ->availableFor('orders', $id)
-                    ->whereKey($this->workflowId)
-                    ->exists();
-
-                if (!$stillAvailable) {
-                    $this->workflowId = null;
-                    $this->workflowPhaseId = null;
-                }
+            if ($property === 'clientId') {
+                // A Client change is a new Workflow context. Always discard the
+                // previous Client's Workflow (including a manual override) and
+                // resolve the default again from Workflow Setup. Do this even
+                // before the progressively-loaded Workflow section is visible
+                // so there is never a stale Client/Workflow pair in state.
+                $this->applyClientWorkflowDefault($id);
             }
 
             if ($property === 'workflowId') {
@@ -356,14 +352,16 @@ class Index extends Component
             $this->createAssignmentReady = true;
             $this->ownerId ??= auth()->id();
             $this->coordinatorId ??= auth()->id();
-            $this->workflowId ??= WorkflowTemplate::query()
-                ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
-                ->where('is_active', true)
-                ->availableFor('orders', $this->clientId)
-                ->orderByDesc('is_default')
-                ->orderBy('name')
-                ->value('id');
-            $this->setDefaultStartPhase();
+
+            // The Client may have changed while this lazy section was still a
+            // placeholder. Never hydrate the Workflow selector with an old or
+            // no-longer-available Workflow from the previous Client.
+            if (!$this->workflowId || !$this->createOrderWorkflowAvailableForClient($this->workflowId, $this->clientId)) {
+                $this->applyClientWorkflowDefault($this->clientId);
+            } else {
+                $this->setDefaultStartPhase();
+            }
+
             $this->createWorkflowReady = true;
             return;
         }
@@ -568,6 +566,7 @@ class Index extends Component
 
         $data = $this->validate([
             'jobTitle' => ['required','string','max:255'],
+            'referenceNumber' => ['nullable','string','max:255'],
             'priority' => ['required','string','max:30'],
             'clientId' => ['required','exists:clients,id'],
             'workflowId' => ['required','exists:workflows,id'],
@@ -590,7 +589,7 @@ class Index extends Component
         $workflowAvailable = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
-            ->availableFor('orders', (int) $data['clientId'])
+            ->availableForOrderCreation((int) $data['clientId'])
             ->whereKey((int) $data['workflowId'])
             ->exists();
 
@@ -601,6 +600,7 @@ class Index extends Component
 
         $first = collect($data['jobItems'])->first();
         $job = app(JobService::class)->create([
+            'order_number' => $data['referenceNumber'],
             'title' => $data['jobTitle'],
             'product' => $first['product'],
             'category' => $first['category'],
@@ -1359,6 +1359,58 @@ class Index extends Component
         $this->focusComment = null;
     }
 
+    private function preferredCreateOrderWorkflowId(?int $clientId): ?int
+    {
+        $preferred = WorkflowTemplate::query()
+            ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+            ->where('is_active', true)
+            ->availableForOrderCreation($clientId)
+            // Client-specific Inquiry workflows intentionally win because an
+            // Inquiry-led client should carry that setup into Create Order.
+            // Then prefer a client-specific Order workflow, then the normal
+            // default/all-client Order workflow.
+            ->orderByRaw("CASE
+                WHEN client_availability = 'specific' AND applies_to = 'inquiries' THEN 0
+                WHEN client_availability = 'specific' AND applies_to = 'orders' THEN 1
+                ELSE 2
+            END")
+            ->orderByDesc('is_default')
+            ->orderBy('name')
+            ->value('id');
+
+        return $preferred ? (int) $preferred : null;
+    }
+
+    private function createOrderWorkflowAvailableForClient(int $workflowId, ?int $clientId): bool
+    {
+        return WorkflowTemplate::query()
+            ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+            ->where('is_active', true)
+            ->availableForOrderCreation($clientId)
+            ->whereKey($workflowId)
+            ->exists();
+    }
+
+    private function applyClientWorkflowDefault(?int $clientId): void
+    {
+        // Clear first so both Livewire and Alpine cannot temporarily retain the
+        // previous Client's selection while the new default is being resolved.
+        $this->workflowId = null;
+        $this->workflowPhaseId = null;
+
+        if ($clientId) {
+            $this->workflowId = $this->preferredCreateOrderWorkflowId($clientId);
+            $this->setDefaultStartPhase();
+        }
+
+        // Force the remote Workflow selector to get a fresh Alpine instance.
+        // Its request params include client_id, so reusing the old instance can
+        // otherwise leave the dropdown searching with the previous Client.
+        $this->createWorkflowSelectorVersion++;
+        $this->resetValidation('workflowId');
+        $this->resetValidation('workflowPhaseId');
+    }
+
     private function setDefaultStartPhase(): void
     {
         if (!$this->workflowId) {
@@ -1366,7 +1418,11 @@ class Index extends Component
             return;
         }
 
-        $this->workflowPhaseId = WorkflowPhase::where('workflow_id', $this->workflowId)
+        $this->workflowPhaseId = WorkflowPhase::query()
+            ->where(function ($query): void {
+                $query->where('workflow_template_id', $this->workflowId)
+                    ->orWhere('workflow_id', $this->workflowId);
+            })
             ->where('is_active', true)
             ->where('allow_job_start', true)
             ->orderBy('sequence')
@@ -1385,6 +1441,7 @@ class Index extends Component
         $this->clientId = $requestedClientId && (clone $clientQuery)->whereKey($requestedClientId)->exists()
             ? $requestedClientId
             : $clientQuery->value('id');
+        $this->applyClientWorkflowDefault($this->clientId);
         $this->jobItems = [['category' => '', 'product' => '', 'quantity' => 1000]];
     }
 
@@ -1393,6 +1450,7 @@ class Index extends Component
         $this->resetValidation();
         $this->reset([
             'jobTitle',
+            'referenceNumber',
             'priority',
             'clientId',
             'workflowId',
@@ -1406,6 +1464,7 @@ class Index extends Component
             'createCatalogReady',
             'createAssignmentReady',
             'createWorkflowReady',
+            'createWorkflowSelectorVersion',
         ]);
     }
 
@@ -1492,10 +1551,13 @@ class Index extends Component
                 ->get(['id', 'name', 'contact_name'])
             : collect();
 
+        // Render Create Order from workflow_templates (the setup source of
+        // truth), not the legacy workflows mirror. This makes Workflow name
+        // edits and client assignments appear immediately, including NEP.
         $workflows = $this->createWorkflowReady && $this->workflowId
-            ? Workflow::query()
+            ? WorkflowTemplate::query()
                 ->with('phases.taskPack.templates')
-                ->where('is_snapshot', false)
+                ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
                 ->where('is_active', true)
                 ->whereKey($this->workflowId)
                 ->get()

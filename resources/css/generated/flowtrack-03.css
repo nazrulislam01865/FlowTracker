@@ -566,7 +566,11 @@ body:has(.ft-client-preview-backdrop){
 
 /* 2026-08-07 Task Details inline-edit UX: match the compact Job Details phase-assignee pattern.
    Editors replace the displayed value inside the property cell instead of opening a nested card/popover. */
-.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:20}
+/* Keep task/inquiry property rows below the sticky shell header while scrolling.
+   The property grid still owns a local stacking context for inline editors, but
+   it must never tie the shell topbar z-index (20), otherwise later DOM content
+   can paint over the header. */
+.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:5}
 .ft-exact-task-detail .ft-friendly-task-properties .ft-task-property{overflow:visible!important;z-index:auto}
 .ft-exact-task-detail .ft-friendly-task-properties .ft-task-property:focus-within{z-index:80}
 .ft-exact-task-detail .ft-task-property-inline-editor{
@@ -1860,9 +1864,3 @@ a.ft-new-job-btn:active {
 /* Final narrow-screen safeguards for detail navigation and document requirement cards. */
 .ft-exact-job-detail .ft-exact-tabs button:focus:not(:focus-visible){outline:none}
 .ft-exact-job-detail .ft-exact-tabs button:focus-visible{outline:2px solid #2463eb;outline-offset:3px;border-radius:4px}
-
-@media(max-width:900px){
-    .ft-exact-job-detail .ft-next-phase-box>.ft-permission-note{grid-row:auto!important}
-    .ft-exact-job-detail .ft-upload-ready-row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
-    .ft-exact-job-detail .ft-upload-ready-row .ft-new-job-btn{max-width:100%}
-}

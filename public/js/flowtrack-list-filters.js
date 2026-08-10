@@ -5,6 +5,56 @@
         .replace(/[_-]+/g, ' ')
         .replace(/\s+/g, ' ');
 
+    const normalisePastedSearchText = (value) => String(value ?? '')
+        .replace(/[\u200B-\u200D\uFEFF]/g, '')
+        .replace(/\u00A0/g, ' ')
+        .replace(/[\r\n\t]+/g, ' ')
+        .replace(/\s{2,}/g, ' ')
+        .trim();
+
+    const isSearchInput = (target) => {
+        if (!(target instanceof HTMLInputElement)) return false;
+        const placeholder = String(target.getAttribute('placeholder') || '').trim().toLowerCase();
+        return target.type === 'search'
+            || target.getAttribute('role') === 'searchbox'
+            || target.classList.contains('ft-remote-filter-search')
+            || placeholder.startsWith('search');
+    };
+
+    // Search inputs are used throughout FlowTrack by both Livewire and Alpine.
+    // Normal browser paste normally fires an input event, but text copied from
+    // email, Excel, chat apps and PDFs can contain NBSP/zero-width/newline
+    // characters that make a visually identical search fail. Handle paste in
+    // one place, preserve the user's current selection, and emit a real input
+    // event so every search implementation reacts exactly like typed text.
+    document.addEventListener('paste', (event) => {
+        const input = event.target;
+        if (!isSearchInput(input)) return;
+
+        const clipboardText = event.clipboardData?.getData('text/plain');
+        if (typeof clipboardText !== 'string') return;
+
+        const pasted = normalisePastedSearchText(clipboardText);
+        event.preventDefault();
+
+        const start = Number.isInteger(input.selectionStart) ? input.selectionStart : input.value.length;
+        const end = Number.isInteger(input.selectionEnd) ? input.selectionEnd : start;
+        input.setRangeText(pasted, start, end, 'end');
+
+        let inputEvent;
+        try {
+            inputEvent = new InputEvent('input', {
+                bubbles: true,
+                composed: true,
+                inputType: 'insertFromPaste',
+                data: pasted,
+            });
+        } catch (_) {
+            inputEvent = new Event('input', {bubbles: true, composed: true});
+        }
+        input.dispatchEvent(inputEvent);
+    }, true);
+
     const measureNaturalMenuHeight = (menu, heightCap) => {
         // positionDropdown() runs while the menu may already have an inline
         // max-height from an earlier scroll position. Measuring scrollHeight
@@ -54,6 +104,33 @@
         const naturalHeight = measureNaturalMenuHeight(menu, heightCap);
         const openAbove = roomBelow < Math.min(190, naturalHeight) && roomAbove > roomBelow;
         const availableHeight = Math.max(120, Math.min(naturalHeight, openAbove ? roomAbove : roomBelow || naturalHeight));
+
+        if (component.fixedMenu) {
+            // Inline editors can live inside rounded cards/panels that intentionally
+            // use overflow:hidden. A fixed menu is anchored to the viewport rather
+            // than that card, so the final-row assignee picker can never be clipped
+            // by the following Attachments/Activity section.
+            const left = alignRight
+                ? Math.max(edge, Math.min(rect.right - width, viewportWidth - width - edge))
+                : Math.max(edge, Math.min(rect.left, viewportWidth - width - edge));
+            const preferredTop = openAbove
+                ? rect.top - availableHeight - gap
+                : rect.bottom + gap;
+            const top = Math.max(edge, Math.min(preferredTop, viewportHeight - availableHeight - edge));
+
+            component.menuStyle = [
+                'position:fixed!important',
+                `left:${Math.round(left)}px!important`,
+                `top:${Math.round(top)}px!important`,
+                'right:auto!important',
+                'bottom:auto!important',
+                `width:${Math.round(width)}px!important`,
+                `max-width:${Math.round(availableWidth)}px!important`,
+                `max-height:${Math.round(availableHeight)}px!important`,
+                'z-index:2450!important',
+            ].join(';');
+            return;
+        }
 
         component.menuStyle = [
             'position:absolute!important',
@@ -122,22 +199,41 @@
         const initialItems = Array.isArray(config.initialItems) ? config.initialItems : [];
         const initialCache = new Map();
         if (initialItems.length) initialCache.set('', initialItems);
+        const initialLabels = new Map(
+            initialItems.map((item) => [String(item?.id ?? ''), String(item?.label ?? '')])
+        );
 
         return {
             ...positioningMethods,
             searchable: true,
             menuWidth: Number(config.menuWidth || 320),
+            fixedMenu: config.fixedMenu === true,
             open: false,
             query: '',
             loading: false,
             items: initialItems,
+            params: config.params && typeof config.params === 'object' ? {...config.params} : {},
             selectedValue: String(config.value || ''),
             selectedLabel: config.selectedLabel || config.placeholder,
             message: 'Recent options shown instantly. Type 2 characters to search.',
             controller: null,
             cache: initialCache,
+            knownLabels: initialLabels,
             recentLoaded: initialItems.length > 0,
             requestSequence: 0,
+            pendingValue: '',
+            pendingLabel: '',
+            pendingPreviousValue: '',
+            pendingPreviousLabel: '',
+            pendingAt: 0,
+            rememberItems(items = []) {
+                if (!Array.isArray(items)) return;
+                items.forEach((item) => {
+                    const id = String(item?.id ?? '');
+                    const label = String(item?.label ?? '');
+                    if (id && label) this.knownLabels.set(id, label);
+                });
+            },
             toggle() {
                 if (config.disabled) return;
                 this.open ? this.close() : this.openMenu();
@@ -200,7 +296,7 @@
                     if (q) url.searchParams.set('q', q);
                     if (config.context) url.searchParams.set('context', config.context);
                     if (this.selectedValue) url.searchParams.set('selected', this.selectedValue);
-                    Object.entries(config.params || {}).forEach(([name, value]) => {
+                    Object.entries(this.params || {}).forEach(([name, value]) => {
                         if (value !== null && value !== undefined && String(value) !== '') {
                             url.searchParams.set(name, String(value));
                         }
@@ -217,6 +313,7 @@
                     if (sequence !== this.requestSequence) return;
 
                     this.items = Array.isArray(payload.items) ? payload.items : [];
+                    this.rememberItems(this.items);
                     this.cache.set(key, this.items);
                     if (!q) this.recentLoaded = true;
                     this.message = q
@@ -231,31 +328,129 @@
                     if (sequence === this.requestSequence) this.loading = false;
                 }
             },
-            sync(value, label) {
-                const next = String(value || '');
+            syncSelection(selection, params = {}, serverItems = []) {
+                const nextParams = params && typeof params === 'object' ? {...params} : {};
+                const currentParamsKey = JSON.stringify(this.params || {});
+                const nextParamsKey = JSON.stringify(nextParams);
+                const freshItems = Array.isArray(serverItems) ? serverItems : [];
+                this.rememberItems(freshItems);
+
+                // Dependent selectors (Workflow by Client, Product by
+                // Category, etc.) must never keep requests/cache from the
+                // previous parent selection. Livewire can preserve Alpine
+                // state during a morph, so refresh the selector context here
+                // as well as relying on wire:key.
+                if (currentParamsKey !== nextParamsKey) {
+                    this.controller?.abort();
+                    this.requestSequence++;
+                    this.params = nextParams;
+                    this.items = freshItems;
+                    this.cache = new Map();
+                    if (freshItems.length) this.cache.set('', freshItems);
+                    this.recentLoaded = freshItems.length > 0;
+                    this.query = '';
+                    this.message = 'Recent options shown instantly. Type 2 characters to search.';
+                }
+
+                // Value and label arrive as one server-rendered object. This is
+                // important during a Livewire morph: accepting them as separate
+                // reactive arguments allowed a new Client id to be paired with
+                // the previous Client label for one or more renders.
+                const next = String(selection?.value || '');
+                const suppliedLabel = selection?.label && selection.label !== config.placeholder
+                    ? String(selection.label)
+                    : '';
+
+                // A click is optimistic and must stay visible immediately.
+                // Other Livewire requests (progressive Create Order sections,
+                // a previous selector request, etc.) can finish while the Client
+                // change is still in flight. Those responses contain an older
+                // server value. Ignore them until the server confirms the exact
+                // value the user most recently chose. This prevents the selector
+                // from jumping back to the previous Client and then changing a
+                // few moments later.
+                if (this.pendingAt) {
+                    if (next === this.pendingValue) {
+                        const confirmedLabel = freshItems.find((candidate) => String(candidate?.id) === next)?.label
+                            || this.knownLabels.get(next)
+                            || this.pendingLabel
+                            || suppliedLabel
+                            || next;
+                        this.selectedValue = next;
+                        this.selectedLabel = String(confirmedLabel);
+                        this.knownLabels.set(next, String(confirmedLabel));
+                        this.pendingValue = '';
+                        this.pendingLabel = '';
+                        this.pendingPreviousValue = '';
+                        this.pendingPreviousLabel = '';
+                        this.pendingAt = 0;
+                        return;
+                    }
+
+                    if ((Date.now() - this.pendingAt) < 15000) return;
+
+                    // A very old pending selection should not lock the control
+                    // forever if a request was interrupted outside Livewire.
+                    this.pendingValue = '';
+                    this.pendingLabel = '';
+                    this.pendingPreviousValue = '';
+                    this.pendingPreviousLabel = '';
+                    this.pendingAt = 0;
+                }
+
                 if (!next) {
                     this.selectedValue = '';
                     this.selectedLabel = config.placeholder;
                     return;
                 }
 
-                const item = this.items.find((candidate) => String(candidate.id) === next);
-                const resolved = label && label !== config.placeholder
-                    ? label
-                    : item?.label || (this.selectedValue === next && this.selectedLabel !== config.placeholder ? this.selectedLabel : next);
+                const item = freshItems.find((candidate) => String(candidate?.id) === next)
+                    || this.items.find((candidate) => String(candidate?.id) === next);
+                const knownLabel = this.knownLabels.get(next);
+
+                // Never reuse the currently displayed label as a fallback for a
+                // server value. Alpine state may have survived a DOM morph while
+                // the value changed, which is exactly how "anything" could be
+                // selected while "hh" or another previous Client was shown.
+                const resolved = item?.label || knownLabel || suppliedLabel || next;
 
                 this.selectedValue = next;
-                this.selectedLabel = resolved;
+                this.selectedLabel = String(resolved);
+                if (resolved && resolved !== next) this.knownLabels.set(next, String(resolved));
+            },
+            beginPendingSelection(next, label) {
+                if (!this.pendingValue) {
+                    this.pendingPreviousValue = this.selectedValue;
+                    this.pendingPreviousLabel = this.selectedLabel;
+                }
+                this.pendingValue = String(next || '');
+                this.pendingLabel = String(label || config.placeholder);
+                this.pendingAt = Date.now();
+            },
+            selectionFailed() {
+                if (!this.pendingValue && !this.pendingAt) return;
+                this.selectedValue = this.pendingPreviousValue;
+                this.selectedLabel = this.pendingPreviousLabel || config.placeholder;
+                this.pendingValue = '';
+                this.pendingLabel = '';
+                this.pendingPreviousValue = '';
+                this.pendingPreviousLabel = '';
+                this.pendingAt = 0;
             },
             clearSelection() {
+                this.beginPendingSelection('', config.placeholder);
                 this.selectedValue = '';
                 this.selectedLabel = config.placeholder;
                 this.open = false;
                 this.query = '';
             },
             select(item) {
-                this.selectedValue = String(item.id);
-                this.selectedLabel = item.label;
+                const next = String(item.id);
+                const nextLabel = String(item.label || next);
+                this.beginPendingSelection(next, nextLabel);
+                this.knownLabels.set(next, nextLabel);
+                this.selectedValue = next;
+                this.selectedLabel = nextLabel;
                 this.open = false;
                 this.query = '';
             },

@@ -1,7 +1,7 @@
 @props([
     'clients','workflows','categories','priorities','clientId','workflowId','ownerId','jobItems','jobAttachments',
     'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
-    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'mentionUsers'=>collect(),
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'mentionUsers'=>collect(),
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
@@ -34,11 +34,12 @@
                         :selected-label="$selectedClient?->name"
                         :initial-options="$clientFilterOptions"
                         :clearable="false"
-                        wire:key="create-client-selector"
+                        wire:key="create-client-selector-{{ $clientId ?: 'none' }}"
                     />
                     @error('clientId')<small class="validation-error">{{ $message }}</small>@enderror
                 </div>
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
+                <label class="ft-create-field"><b>Reference number</b><input wire:model="referenceNumber" placeholder="e.g. REF-00028 or customer PO number">@error('referenceNumber')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field"><b>Order title *</b><input wire:model="jobTitle" placeholder="e.g. Conference merchandise order">@error('jobTitle')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field ft-mention-host"><b>Request description</b><textarea class="ft-mention-input" data-rich-text wire:model="description" rows="4" autocomplete="off" data-mention-users="{{ $mentionUsers->toJson() }}" placeholder="Type @ to mention a user. Add specifications, target price or customization requirements..."></textarea></label>
             </div>
@@ -147,7 +148,7 @@
                         :initial-options="$workflowFilterOptions"
                         :params="['client_id' => $clientId]"
                         :clearable="false"
-                        wire:key="create-workflow-selector-{{ $clientId ?: 'none' }}"
+                        wire:key="create-workflow-selector-{{ $clientId ?: 'none' }}-{{ $workflowSelectorVersion }}"
                     />
                 </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>

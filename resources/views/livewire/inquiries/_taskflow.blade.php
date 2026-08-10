@@ -1,5 +1,5 @@
-<section class="panel">
-    <header class="panelhead"><div><h2>Inquiry Taskflow</h2><p>Open tasks can be prepared at any time. Any task that is In Progress can be completed.</p></div><div class="task-control-row"><span class="task-count-pill">{{ $totalTasks }} Tasks</span><span class="manage-badge">Taskflow</span>@if($canAddInquiryTask)<button class="primary" type="button" wire:click="openAddTaskForm" style="min-height:34px">＋ Add Task</button>@endif</div></header>
+<section class="panel ft-inquiry-taskflow-panel">
+    <header class="panelhead"><div><h2>Inquiry Taskflow</h2><p>Task status can be changed at any time, including reopening a completed task.</p></div><div class="task-control-row"><span class="task-count-pill">{{ $totalTasks }} Tasks</span><span class="manage-badge">Taskflow</span>@if($canAddInquiryTask)<button class="primary" type="button" wire:click="openAddTaskForm" style="min-height:34px">＋ Add Task</button>@endif</div></header>
     <div class="ft-inquiry-task-grid-head" aria-hidden="true">
         <span>#</span><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Files</span><span>Action</span>
     </div>
@@ -8,7 +8,8 @@
             @php
                 $state = $task->completed_at ? 'done' : (strcasecmp(trim((string) $task->status), 'In Progress') === 0 ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
-                $canEditThisTask = $state !== 'done' && !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
+                $canChangeStatusThisTask = !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
+                $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
                 $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
             @endphp
@@ -57,26 +58,25 @@
                     @endif
                 </div>
                 <div class="task-status-cell">
-                    @if($state === 'done')
-                        <span class="ft-inquiry-status-pill done">Completed</span>
-                    @else
-                        <div class="ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
-                            <div class="ft-inquiry-inline-display-row" x-show="!editing">
-                                <span class="pill ft-inquiry-inline-status" x-bind:class="statusTone(display)" x-text="display">{{ $task->status }}</span>
-                                @if($canEditThisTask)<button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit status" aria-label="Edit task status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryStatus.focus())">✎</button>@endif
-                            </div>
-                            @if($canEditThisTask)
-                                <select x-ref="inquiryStatus" x-cloak x-show="editing" class="ft-inquiry-inline-input" x-model="draftValue"
-                                    x-on:keydown.escape.prevent="cancelEdit()"
-                                    x-on:blur="if (editing) cancelEdit()"
-                                    x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; })">
-                                    @if($state === 'wait')<option value="Waiting">Waiting</option>@endif
-                                    @foreach(\App\Services\InquiryService::WORKING_STATUSES as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
-                                </select>
-                                <x-ui.inline-save-state compact />
-                            @endif
-                        </div>
-                    @endif
+                    <span
+                        class="ft-task-inline-status-shell ft-inline-edit-shell"
+                        x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
+                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                    >
+                        <select
+                            class="ft-inline-task-status {{ \App\Support\JobDetailPresenter::taskStatusClass((string) $task->status) }}"
+                            x-model="draftValue"
+                            x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; })"
+                            :disabled="status === 'saving'"
+                            @disabled(!$canChangeStatusThisTask)
+                            aria-label="Change {{ $task->title }} status"
+                        >
+                            @foreach(\App\Services\InquiryService::TASK_STATUSES as $statusOption)
+                                <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                            @endforeach
+                        </select>
+                        @if($canChangeStatusThisTask)<x-ui.inline-save-state compact />@endif
+                    </span>
                 </div>
                 <div class="ft-inquiry-task-files">
                     @if($canEditThisTask)

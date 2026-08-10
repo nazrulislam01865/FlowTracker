@@ -1800,3 +1800,209 @@
 .ft-inquiry-prototype .ft-inquiry-modal-field>span{display:block;min-height:12px}
 .ft-inquiry-prototype .ft-inquiry-modal-field>.field-error{position:absolute;left:0;right:0;bottom:0;margin:0;max-width:100%;font-size:9px;line-height:12px;white-space:normal}
 @media(max-width:640px){.ft-inquiry-prototype .ft-inquiry-create-field:not(.ft-inquiry-request-details){padding-bottom:17px}.ft-inquiry-prototype .ft-inquiry-create-field>.field-error{font-size:9px}.ft-inquiry-prototype .ft-inquiry-modal-field{padding-bottom:30px}}
+
+/* 2026-08-10: Inquiry task assignee picker must remain usable on the final row.
+   The generic panel clips its children for rounded cards, which cut off the
+   remote-user menu when the last task opened downward. Only the Taskflow panel
+   is allowed to overflow, and it sits above following Overview sections while
+   a picker is open. */
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow.ft-inquiry-overview-taskflow{
+  position:relative;
+  z-index:30;
+  overflow:visible!important;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel{
+  position:relative;
+  z-index:31;
+  overflow:visible!important;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-taskflow-panel .panelhead{
+  border-radius:12px 12px 0 0;
+  background:#fff;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel .ft-inquiry-task-list,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel .ft-inquiry-task-row,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel .ft-inquiry-assignee-inline,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel .ft-inquiry-assignee-picker,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-taskflow-panel .ft-inline-remote-user{
+  overflow:visible!important;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-taskflow-panel .ft-inquiry-assignee-picker{
+  z-index:80;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inquiry-taskflow-panel .ft-inline-remote-user-menu{
+  z-index:1700!important;
+}
+
+/* Final-row Inquiry assignee menu: keep the editor and menu above the next card. */
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline:focus-within{position:relative;z-index:1800}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-picker{position:relative;z-index:1801!important}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inline-remote-user-menu{z-index:1900!important}
+
+/* Inquiry Taskflow status uses the same always-visible inline selector as Order tasks. */
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell{
+  min-width:0;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-task-inline-status-shell{
+  display:block;
+  min-width:0;
+  width:100%;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-inline-task-status{
+  width:100%;
+  min-width:0;
+  height:32px;
+  font-size:9px;
+}
+
+/* 2026-08-10: Inquiry Taskflow desktop row alignment.
+   Keep every inline control on one visual baseline and prevent the status
+   column from expanding disproportionately on wide screens. */
+@media (min-width:1201px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-grid-head,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:34px minmax(280px,1fr) 210px 150px 170px 180px 150px;
+    column-gap:12px;
+  }
+}
+
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+  align-items:center;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+  min-width:0;
+  min-height:34px;
+  align-self:center;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-date,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action{
+  display:flex;
+  align-items:center;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-inline-display-row,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display{
+  min-height:34px;
+  align-items:center;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-task-inline-status-shell{
+  position:relative;
+  display:flex;
+  width:100%;
+  min-width:0;
+  min-height:34px;
+  align-items:center;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-inline-task-status{
+  width:100%;
+  min-width:0;
+  height:34px;
+  padding-top:0;
+  padding-bottom:0;
+  line-height:32px;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-inline-save-state{
+  position:absolute;
+  top:100%;
+  left:0;
+  z-index:8;
+  min-height:0;
+  margin:2px 0 0;
+  padding:2px 5px;
+  border-radius:5px;
+  background:#fff;
+  box-shadow:0 2px 8px rgba(20,42,72,.08);
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .task-status-cell .ft-inline-save-state:not(.is-saving):not(.is-saved):not(.is-error){
+  display:none;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-files{
+  display:flex;
+  flex-wrap:nowrap;
+  align-items:center;
+  gap:8px;
+  white-space:nowrap;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-attach-button,
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-action-button{
+  height:34px;
+  min-height:34px;
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  line-height:1;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-action .ft-inquiry-action-button{
+  width:100%;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-complete-state{
+  display:inline-flex;
+  min-height:34px;
+  align-items:center;
+}
+
+@media (min-width:761px) and (max-width:1200px){
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-grid-head,
+  .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-task-row{
+    grid-template-columns:30px minmax(220px,1fr) 160px 125px 150px 155px 125px;
+    column-gap:8px;
+  }
+}
+
+/* 2026-08-10: Keep Inquiry Taskflow assignee layout stable after completion.
+   Completed tasks do not render the assignee edit button, so the previous
+   max-width reservation for that button caused the person name to collapse.
+   The display row now owns the full Assignee column in every task state; when
+   an edit button exists it simply consumes its fixed width beside the name. */
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline{
+  width:100%;
+  min-width:0;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline>.ft-inquiry-inline-display-row{
+  display:flex;
+  width:100%;
+  min-width:0;
+  flex:1 1 auto;
+  align-items:center;
+  justify-content:flex-start;
+  gap:6px;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline>.ft-inquiry-inline-display-row>.ft-inquiry-assignee-display{
+  display:flex;
+  width:auto;
+  min-width:0;
+  max-width:none;
+  flex:1 1 0;
+  align-items:center;
+  overflow:hidden;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-display .ft-inline-avatar-slot{
+  display:inline-flex;
+  width:28px;
+  height:28px;
+  flex:0 0 28px;
+  align-items:center;
+  justify-content:center;
+  line-height:0;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-name{
+  display:block;
+  width:auto;
+  min-width:0;
+  max-width:100%;
+  flex:1 1 auto;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+  line-height:1.25;
+}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-assignee-inline>.ft-inquiry-inline-display-row>.ft-inline-edit-button{
+  flex:0 0 24px;
+  width:24px;
+  margin-left:0;
+}

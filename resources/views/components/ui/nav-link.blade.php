@@ -3,6 +3,7 @@
     $isActive = request()->routeIs($route);
     if ($route === 'task-pack.setup') $isActive = $isActive || request()->routeIs('task-pack.*');
     if ($route === 'workflow.setup') $isActive = $isActive || request()->routeIs('workflow.*');
+    if ($route === 'jobs.index') $isActive = $isActive || request()->routeIs('orders.bulk-import*');
 @endphp
 <a href="{{ route($route) }}" wire:navigate class="nav-btn {{ $isActive ? 'active' : '' }}">
     @switch($icon)

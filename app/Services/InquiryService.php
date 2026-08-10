@@ -28,6 +28,7 @@ use Illuminate\Validation\ValidationException;
 class InquiryService
 {
     public const WORKING_STATUSES = ['In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold'];
+    public const TASK_STATUSES = ['Waiting', 'In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold', 'Completed'];
     public const FINAL_STATUSES = ['Converted', 'Dead'];
     public const AUTO_READY_STATUS = 'Ready';
     public const AUTO_IN_PROGRESS_STATUS = 'In Progress';
@@ -148,27 +149,15 @@ class InquiryService
                 });
             });
 
-        $currentTask = InquiryTask::query()
-            ->select('title')
-            ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
-            ->whereNull('inquiry_tasks.deleted_at')
-            ->whereNull('inquiry_tasks.completed_at')
-            ->orderBy('sequence')
-            ->limit(1);
-        $currentTaskAssignee = InquiryTask::query()
-            ->select('assignee_id')
-            ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
-            ->whereNull('inquiry_tasks.deleted_at')
-            ->whereNull('inquiry_tasks.completed_at')
-            ->orderBy('sequence')
-            ->limit(1);
-        $currentTaskDue = InquiryTask::query()
-            ->select('due_date')
-            ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
-            ->whereNull('inquiry_tasks.deleted_at')
-            ->whereNull('inquiry_tasks.completed_at')
-            ->orderBy('sequence')
-            ->limit(1);
+        // Inquiry tasks can be worked in parallel. The list must therefore show
+        // the furthest task that has actually started, not simply the first open
+        // task. If nothing has started yet, fall back to the first queued task.
+        // Keep every current-task subquery on the exact same ordering so title,
+        // assignee, due date and position always describe the same task.
+        $currentTask = $this->currentTaskSubquery('title');
+        $currentTaskAssignee = $this->currentTaskSubquery('assignee_id');
+        $currentTaskDue = $this->currentTaskSubquery('due_date');
+        $currentTaskSequence = $this->currentTaskSubquery('sequence');
         $firstItem = InquiryItem::query()
             ->select('item_name')
             ->whereColumn('inquiry_items.inquiry_id', 'inquiries.id')
@@ -188,13 +177,30 @@ class InquiryService
             ->selectSub($currentTask, 'current_task_title')
             ->selectSub($currentTaskAssignee, 'current_task_assignee_id')
             ->selectSub($currentTaskDue, 'current_task_due_date')
+            ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
             ->with(['client:id,name', 'creator:id,name', 'convertedJob:id,job_number,order_number'])
             ->withCount([
                 'tasks',
                 'tasks as completed_tasks_count' => fn (Builder $task) => $task->whereNotNull('completed_at'),
+                'tasks as progressed_tasks_count' => fn (Builder $task) => $task->where(function (Builder $progressed): void {
+                    $progressed->whereNotNull('started_at')->orWhereNotNull('completed_at');
+                }),
             ])
             ->paginate(max(1, min(50, $perPage)), ['*'], $pageName);
+    }
+
+    private function currentTaskSubquery(string $column): Builder
+    {
+        return InquiryTask::query()
+            ->select($column)
+            ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
+            ->whereNull('inquiry_tasks.deleted_at')
+            ->whereNull('inquiry_tasks.completed_at')
+            ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN 0 ELSE 1 END')
+            ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC')
+            ->orderBy('inquiry_tasks.sequence')
+            ->limit(1);
     }
 
     public function listRows(LengthAwarePaginator $paginator, User $user): Collection
@@ -209,6 +215,10 @@ class InquiryService
             $assignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
+            $progressed = min($total, max($done, (int) $inquiry->progressed_tasks_count));
+            $currentPosition = $inquiry->current_task_title
+                ? max(1, min($total, (int) ($inquiry->current_task_sequence ?: max(1, $progressed))))
+                : ($total > 0 ? $total : 0);
             $status = match (true) {
                 $inquiry->result === 'converted' => 'Converted',
                 $inquiry->result === 'dead' => 'Closed',
@@ -217,7 +227,12 @@ class InquiryService
                 $done > 0 || filled($inquiry->started_at) => self::AUTO_IN_PROGRESS_STATUS,
                 default => self::AUTO_READY_STATUS,
             };
-            $progressPercent = $total > 0 ? max(0, min(100, (int) round(($done / $total) * 100))) : 0;
+            // Progress on the Inquiry list represents taskflow advancement, not
+            // only finished tasks. A task begins contributing as soon as it is
+            // taken into a working status (started_at is set). This keeps a
+            // workflow with two active tasks at 2/4 instead of incorrectly 0/4.
+            $progress = $done === $total && $total > 0 ? $total : $progressed;
+            $progressPercent = $total > 0 ? max(0, min(100, (int) round(($progress / $total) * 100))) : 0;
 
             return [
                 'id' => (int) $inquiry->id,
@@ -230,8 +245,8 @@ class InquiryService
                 'client' => (string) ($inquiry->client?->name ?: 'No client'),
                 'item' => blank($inquiry->first_item_name) ? null : (string) $inquiry->first_item_name,
                 'currentTask' => (string) ($inquiry->current_task_title ?: ($done === $total && $total > 0 ? 'Completed' : 'No active task')),
-                'taskCaption' => $done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.min($total, $done + 1).' of '.$total,
-                'progress' => $done,
+                'taskCaption' => $done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.$currentPosition.' of '.$total,
+                'progress' => $progress,
                 'total' => $total,
                 'progressPercent' => $progressPercent,
                 'assignee' => (string) ($assignee?->name ?: 'Unassigned'),
@@ -678,6 +693,10 @@ class InquiryService
         }
 
         $task->update($taskUpdate);
+        // Taskflow changes drive the Inquiry list's Current Task and Progress.
+        // Touch the parent even when its lifecycle status stays In Progress so
+        // list ordering/realtime refreshes observe the taskflow advancement.
+        $task->inquiry->touch();
         if ((int) ($task->assignee_id ?? 0) !== (int) ($oldAssigneeId ?? 0)) {
             $this->forgetMyTaskShell($oldAssigneeId);
             $this->notifyTaskAssigned($task, $actor);
@@ -689,11 +708,74 @@ class InquiryService
 
     public function updateTaskStatus(InquiryTask $task, string $status, User $actor): InquiryTask
     {
-        return $this->updateTask($task, [
-            'assignee_id' => $task->assignee_id,
-            'due_date' => $task->due_date?->toDateString(),
-            'status' => $status,
-        ], $actor);
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change status.');
+
+        $status = trim($status);
+        abort_unless(in_array($status, self::TASK_STATUSES, true), 422, 'Invalid Inquiry task status.');
+
+        return DB::transaction(function () use ($task, $status, $actor): InquiryTask {
+            $task->refresh();
+            $task->loadMissing('inquiry');
+
+            $oldStatus = (string) $task->status;
+            $wasCompleted = $task->completed_at !== null || strcasecmp($oldStatus, self::AUTO_COMPLETED_STATUS) === 0;
+            $willComplete = strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0;
+
+            if ($oldStatus === $status && (($willComplete && $task->completed_at) || (!$willComplete && !$task->completed_at))) {
+                return $task;
+            }
+
+            if ($willComplete && $task->requires_submission && !$task->documents()->exists()) {
+                throw ValidationException::withMessages(['task' => 'Required file must be uploaded before completion.']);
+            }
+
+            $updates = [
+                'status' => $status,
+                'completed_at' => $willComplete ? ($task->completed_at ?: now()) : null,
+            ];
+
+            // Keep the first time the task was actually started. A task completed
+            // directly from Waiting still receives a start timestamp, matching the
+            // order-task ability to move directly to Completed.
+            if (($willComplete || in_array($status, self::WORKING_STATUSES, true)) && !$task->started_at) {
+                $updates['started_at'] = now();
+            }
+
+            $task->update($updates);
+            $task->refresh();
+
+            // The Inquiry start date is established the first time any task enters
+            // In Progress or Completed. Reopening a task never overwrites it.
+            if ((strcasecmp($status, 'In Progress') === 0 || $willComplete) && !$task->inquiry->started_at) {
+                $inquiryStartAt = $task->started_at ?: now();
+                Inquiry::query()
+                    ->whereKey($task->inquiry_id)
+                    ->whereNull('started_at')
+                    ->update(['started_at' => $inquiryStartAt]);
+                $task->inquiry->started_at = $inquiryStartAt;
+            }
+
+            $task->inquiry->touch();
+            $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
+
+            if ($willComplete && !$wasCompleted) {
+                $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', ['inquiry_task_id' => $task->id]);
+            } elseif (!$willComplete && $wasCompleted) {
+                $this->activity($task->inquiry, $actor, 'inquiry.task_reopened', $task->title.' reopened — status changed to '.$status.'.', ['inquiry_task_id' => $task->id]);
+            } else {
+                $this->activity($task->inquiry, $actor, 'inquiry.task_status_changed', $task->title.' status changed from '.$oldStatus.' to '.$status.'.', ['inquiry_task_id' => $task->id]);
+            }
+
+            $remaining = $task->inquiry->tasks()->whereNull('completed_at')->exists();
+            if ($willComplete && !$remaining) {
+                $this->activity($task->inquiry, $actor, 'inquiry.ready_for_decision', 'All Inquiry taskflow tasks are complete. The Inquiry is now Completed and the final decision is available.');
+            }
+
+            $this->syncAutomaticStatus($task->inquiry, $actor);
+            return $task->refresh();
+        });
     }
 
     public function updateTaskDueDate(InquiryTask $task, ?string $date, User $actor): InquiryTask
@@ -708,32 +790,7 @@ class InquiryService
 
     public function completeTask(InquiryTask $task, User $actor): InquiryTask
     {
-        $task->loadMissing('inquiry');
-        abort_unless($this->canEditTask($actor, $task), 403);
-        abort_if($task->completed_at, 422, 'This task is already completed.');
-        abort_unless(strcasecmp(trim((string) $task->status), 'In Progress') === 0, 422, 'Task must be In Progress before completion.');
-        if ($task->requires_submission && !$task->documents()->exists()) {
-            throw ValidationException::withMessages(['task' => 'Required file must be uploaded before completion.']);
-        }
-
-        return DB::transaction(function () use ($task, $actor): InquiryTask {
-            $taskStartedAt = $task->started_at ?: now();
-            $task->update(['status' => 'Completed', 'started_at' => $taskStartedAt, 'completed_at' => now()]);
-            Inquiry::query()
-                ->whereKey($task->inquiry_id)
-                ->whereNull('started_at')
-                ->update(['started_at' => $taskStartedAt]);
-            $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
-            $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', ['inquiry_task_id' => $task->id]);
-
-            $remaining = $task->inquiry->tasks()->whereNull('completed_at')->exists();
-            if (!$remaining) {
-                $this->activity($task->inquiry, $actor, 'inquiry.ready_for_decision', 'All Inquiry taskflow tasks are complete. The Inquiry is now Completed and the final decision is available.');
-            }
-
-            $this->syncAutomaticStatus($task->inquiry, $actor);
-            return $task->refresh();
-        });
+        return $this->updateTaskStatus($task, self::AUTO_COMPLETED_STATUS, $actor);
     }
 
     public function appendTask(Inquiry $inquiry, array $data, User $actor): InquiryTask

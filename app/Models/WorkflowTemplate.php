@@ -46,4 +46,41 @@ class WorkflowTemplate extends Model
                 }
             });
     }
+
+    /**
+     * Workflows that may be chosen while creating an Order.
+     *
+     * Normal Order workflows remain available according to their configured
+     * client availability. A client-specific Inquiry workflow is also exposed
+     * for that exact client so an Inquiry-led client (for example NEP) can
+     * carry its configured workflow into Create Order while still allowing the
+     * user to manually switch back to another Order workflow. Generic Inquiry
+     * workflows are deliberately not exposed to unrelated clients.
+     */
+    public function scopeAvailableForOrderCreation(Builder $query, ?int $clientId = null): Builder
+    {
+        return $query->where(function (Builder $available) use ($clientId): void {
+            $available->where(function (Builder $orders) use ($clientId): void {
+                $orders->where('applies_to', 'orders')
+                    ->where(function (Builder $availability) use ($clientId): void {
+                        $availability->where('client_availability', 'all');
+
+                        if ($clientId) {
+                            $availability->orWhere(function (Builder $specific) use ($clientId): void {
+                                $specific->where('client_availability', 'specific')
+                                    ->whereHas('clients', fn (Builder $clients) => $clients->whereKey($clientId));
+                            });
+                        }
+                    });
+            });
+
+            if ($clientId) {
+                $available->orWhere(function (Builder $inquirySpecific) use ($clientId): void {
+                    $inquirySpecific->where('applies_to', 'inquiries')
+                        ->where('client_availability', 'specific')
+                        ->whereHas('clients', fn (Builder $clients) => $clients->whereKey($clientId));
+                });
+            }
+        });
+    }
 }
