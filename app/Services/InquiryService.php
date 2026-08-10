@@ -169,13 +169,6 @@ class InquiryService
             ->whereNull('inquiry_tasks.completed_at')
             ->orderBy('sequence')
             ->limit(1);
-        $inquiryStartedAt = InquiryTask::query()
-            ->select('started_at')
-            ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
-            ->whereNull('inquiry_tasks.deleted_at')
-            ->whereNotNull('started_at')
-            ->orderBy('started_at')
-            ->limit(1);
         $firstItem = InquiryItem::query()
             ->select('item_name')
             ->whereColumn('inquiry_items.inquiry_id', 'inquiries.id')
@@ -189,13 +182,12 @@ class InquiryService
             ->orderByDesc('inquiries.id')
             ->select([
                 'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id', 'inquiries.owner_id', 'inquiries.created_by',
-                'inquiries.subject', 'inquiries.received_date', 'inquiries.status', 'inquiries.result',
+                'inquiries.subject', 'inquiries.received_date', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
                 'inquiries.converted_job_id', 'inquiries.created_at', 'inquiries.updated_at',
             ])
             ->selectSub($currentTask, 'current_task_title')
             ->selectSub($currentTaskAssignee, 'current_task_assignee_id')
             ->selectSub($currentTaskDue, 'current_task_due_date')
-            ->selectSub($inquiryStartedAt, 'inquiry_started_at')
             ->selectSub($firstItem, 'first_item_name')
             ->with(['client:id,name', 'creator:id,name', 'convertedJob:id,job_number,order_number'])
             ->withCount([
@@ -222,7 +214,7 @@ class InquiryService
                 $inquiry->result === 'dead' => 'Closed',
                 (string) $inquiry->status === 'Draft' => 'Draft',
                 $total > 0 && $done === $total => self::AUTO_COMPLETED_STATUS,
-                $done > 0 || filled($inquiry->inquiry_started_at) => self::AUTO_IN_PROGRESS_STATUS,
+                $done > 0 || filled($inquiry->started_at) => self::AUTO_IN_PROGRESS_STATUS,
                 default => self::AUTO_READY_STATUS,
             };
             $progressPercent = $total > 0 ? max(0, min(100, (int) round(($done / $total) * 100))) : 0;
@@ -245,8 +237,8 @@ class InquiryService
                 'assignee' => (string) ($assignee?->name ?: 'Unassigned'),
                 'assigneeAvatar' => $assignee?->profile_image_path,
                 'due' => $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
-                'startedDate' => UserLocalTime::format($inquiry->inquiry_started_at, 'M j, Y'),
-                'startedTime' => UserLocalTime::format($inquiry->inquiry_started_at, 'g:i A'),
+                'startedDate' => UserLocalTime::format($inquiry->started_at, 'M j, Y'),
+                'startedTime' => UserLocalTime::format($inquiry->started_at, 'g:i A'),
                 'status' => $status,
             ];
         })->values();
@@ -278,6 +270,37 @@ class InquiryService
     public function findVisible(User $user, int $id, array $with = []): Inquiry
     {
         return $this->visibleQuery($user)->with($with)->findOrFail($id);
+    }
+
+    public function delete(Inquiry $inquiry, User $actor): void
+    {
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($actor, 'inquiries', 'delete'), 403);
+        abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 404);
+
+        DB::transaction(function () use ($inquiry, $actor): void {
+            $this->activity(
+                $inquiry,
+                $actor,
+                'inquiry.deleted',
+                $inquiry->inquiry_number.' deleted',
+            );
+
+            // Deleting an Inquiry must not delete an already-created Order.
+            // Detach the active Order link so its list/detail pages do not
+            // retain a reference to a soft-deleted Inquiry.
+            if ($inquiry->converted_job_id) {
+                FlowJob::query()
+                    ->whereKey($inquiry->converted_job_id)
+                    ->where('source_inquiry_id', $inquiry->id)
+                    ->update(['source_inquiry_id' => null]);
+            }
+
+            $inquiry->delete();
+        });
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
     }
 
     public function create(array $data, User $actor, bool $draft = false): Inquiry
@@ -536,6 +559,67 @@ class InquiryService
         return $inquiry->refresh();
     }
 
+    public function updateStartedAt(Inquiry $inquiry, ?string $value, User $actor): Inquiry
+    {
+        abort_unless($this->canEdit($actor, $inquiry), 403);
+        abort_if($inquiry->result, 422, 'A completed Inquiry is locked.');
+
+        $raw = trim((string) $value);
+        $next = null;
+
+        if ($raw === '') {
+            $hasStartedTask = $inquiry->tasks()
+                ->where(fn (Builder $query) => $query->whereNotNull('started_at')->orWhereNotNull('completed_at'))
+                ->exists();
+
+            if ($hasStartedTask) {
+                throw ValidationException::withMessages([
+                    'started_at' => 'The Inquiry start date cannot be cleared after task work has started.',
+                ]);
+            }
+        } else {
+            try {
+                $local = \Illuminate\Support\Carbon::createFromFormat('Y-m-d\TH:i', $raw, UserLocalTime::timezone());
+            } catch (\Throwable) {
+                throw ValidationException::withMessages(['started_at' => 'Enter a valid Inquiry start date and time.']);
+            }
+
+            if (! $local || $local->format('Y-m-d\TH:i') !== $raw) {
+                throw ValidationException::withMessages(['started_at' => 'Enter a valid Inquiry start date and time.']);
+            }
+
+            if ($local->isFuture()) {
+                throw ValidationException::withMessages(['started_at' => 'The Inquiry start date cannot be in the future.']);
+            }
+
+            $next = $local->setTimezone(config('app.timezone', 'UTC'));
+            if ($inquiry->created_at && $next->lt($inquiry->created_at)) {
+                throw ValidationException::withMessages(['started_at' => 'The Inquiry start date cannot be earlier than its created time.']);
+            }
+            if ($inquiry->completed_at && $next->gt($inquiry->completed_at)) {
+                throw ValidationException::withMessages(['started_at' => 'The Inquiry start date must be before its completion time.']);
+            }
+        }
+
+        $old = $inquiry->started_at;
+        $oldKey = $old?->format('Y-m-d H:i');
+        $newKey = $next?->format('Y-m-d H:i');
+        if ($oldKey === $newKey) return $inquiry->refresh();
+
+        $inquiry->update(['started_at' => $next]);
+
+        $oldDisplay = $old ? UserLocalTime::format($old, 'M j, Y g:i A') : 'not set';
+        $newDisplay = $next ? UserLocalTime::format($next, 'M j, Y g:i A') : 'not set';
+        $this->activity(
+            $inquiry,
+            $actor,
+            'inquiry.start_date_changed',
+            'Inquiry start date changed from '.$oldDisplay.' to '.$newDisplay.'.'
+        );
+
+        return $inquiry->refresh();
+    }
+
     public function updateStatus(Inquiry $inquiry, string $status, User $actor): Inquiry
     {
         abort_unless($this->canEdit($actor, $inquiry), 403);
@@ -575,9 +659,24 @@ class InquiryService
             'due_date' => ($data['due_date'] ?? null) ?: null,
             'status' => $nextStatus,
         ];
+        $taskStartAt = null;
         if (in_array($nextStatus, self::WORKING_STATUSES, true) && !$task->started_at) {
-            $taskUpdate['started_at'] = now();
+            $taskStartAt = now();
+            $taskUpdate['started_at'] = $taskStartAt;
         }
+
+        // The Inquiry starts the first time any of its tasks is explicitly taken
+        // In Progress. Use an atomic WHERE NULL update so simultaneous task
+        // changes cannot overwrite the original Inquiry start timestamp.
+        if (strcasecmp($nextStatus, 'In Progress') === 0 && !$task->inquiry->started_at) {
+            $inquiryStartAt = $taskStartAt ?: now();
+            Inquiry::query()
+                ->whereKey($task->inquiry_id)
+                ->whereNull('started_at')
+                ->update(['started_at' => $inquiryStartAt]);
+            $task->inquiry->started_at = $inquiryStartAt;
+        }
+
         $task->update($taskUpdate);
         if ((int) ($task->assignee_id ?? 0) !== (int) ($oldAssigneeId ?? 0)) {
             $this->forgetMyTaskShell($oldAssigneeId);
@@ -618,7 +717,12 @@ class InquiryService
         }
 
         return DB::transaction(function () use ($task, $actor): InquiryTask {
-            $task->update(['status' => 'Completed', 'started_at' => $task->started_at ?: now(), 'completed_at' => now()]);
+            $taskStartedAt = $task->started_at ?: now();
+            $task->update(['status' => 'Completed', 'started_at' => $taskStartedAt, 'completed_at' => now()]);
+            Inquiry::query()
+                ->whereKey($task->inquiry_id)
+                ->whereNull('started_at')
+                ->update(['started_at' => $taskStartedAt]);
             $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
             $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', ['inquiry_task_id' => $task->id]);
 
@@ -976,9 +1080,12 @@ class InquiryService
         $template = WorkflowTemplate::query()
             ->where('workspace_id', $this->workspaceId())
             ->where('is_active', true)
+            ->availableFor('orders', (int) $inquiry->client_id)
             ->orderByDesc('is_default')
             ->orderBy('id')
-            ->firstOrFail();
+            ->first();
+        abort_unless($template, 422, 'No active Order workflow is available for this client.');
+
         $workflow = Workflow::query()->whereKey($template->id)->where('is_snapshot', false)->where('is_active', true)->firstOrFail();
         $phase = $workflow->phases()->where('is_active', true)->where('allow_job_start', true)->orderBy('sequence')->first();
         abort_unless($phase, 422, 'The default Order workflow has no phase that allows a Job start.');

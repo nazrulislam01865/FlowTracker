@@ -133,4 +133,16 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('scheduleRichTextRefresh();', $app);
     }
 
+
+    public function test_enter_posts_compact_comments_and_shift_enter_keeps_a_new_line(): void
+    {
+        $runtime = file_get_contents(resource_path('js/rich-text.js'));
+
+        $this->assertStringContainsString('const shouldSubmitComment = compactComment', $runtime);
+        $this->assertStringContainsString("event.key === 'Enter'", $runtime);
+        $this->assertStringContainsString('!event.shiftKey', $runtime);
+        $this->assertStringContainsString('!event.isComposing', $runtime);
+        $this->assertStringContainsString("source.closest('.ft-comment-composer')", $runtime);
+        $this->assertStringContainsString('Enter to comment · Shift+Enter for a new line', $runtime);
+    }
 }

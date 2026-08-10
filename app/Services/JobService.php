@@ -14,6 +14,7 @@ use App\Models\TaskPackItem;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workflow;
+use App\Models\WorkflowTemplate;
 use App\Models\WorkflowPhase;
 use App\Support\JobDetailPresenter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -398,6 +399,14 @@ class JobService
         }
 
         return DB::transaction(function () use ($data, $actor) {
+            $workflowIsAvailable = WorkflowTemplate::query()
+                ->where('workspace_id', app(SetupContext::class)->workspaceId())
+                ->where('is_active', true)
+                ->availableFor('orders', (int) $data['client_id'])
+                ->whereKey((int) $data['workflow_id'])
+                ->exists();
+            abort_unless($workflowIsAvailable, 422, 'Selected Workflow is not available for this client.');
+
             $workflow = Workflow::query()
                 ->where('is_snapshot', false)
                 ->where('is_active', true)
@@ -599,12 +608,31 @@ class JobService
         // Notify participants before the soft delete so record-scope checks can
         // still resolve the Job for each recipient.
         app(NotificationService::class)->notifyJobParticipants($job->fresh(), 'Order deleted', $job->displayOrderNumber().' · '.$job->title, 'update', $actor);
-        $job->activities()->create([
-            'user_id' => $actor->id,
-            'event' => 'job.deleted',
-            'description' => 'Order deleted',
-        ]);
-        $job->delete();
+
+        DB::transaction(function () use ($job, $actor): void {
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.deleted',
+                'description' => 'Order deleted',
+            ]);
+
+            // If this Order was created from an Inquiry, remove the stale
+            // conversion link and return that Inquiry to its automatic
+            // completed/ready state. This lets an accidentally deleted Order
+            // be created again without leaving a broken converted record.
+            $sourceInquiry = $job->sourceInquiry()->first();
+            if ($sourceInquiry && (int) $sourceInquiry->converted_job_id === (int) $job->id) {
+                $sourceInquiry->update([
+                    'result' => null,
+                    'converted_job_id' => null,
+                    'completed_at' => null,
+                ]);
+                app(InquiryService::class)->syncAutomaticStatus($sourceInquiry, $actor);
+            }
+
+            $job->delete();
+        });
+
         app(DashboardService::class)->forget($actor->id);
         app(ReportService::class)->forget($actor->id);
     }

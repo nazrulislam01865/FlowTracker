@@ -7,6 +7,7 @@ use App\Models\InquiryTask;
 use App\Models\Document;
 use App\Models\Client;
 use App\Models\User;
+use App\Models\WorkflowTemplate;
 use App\Services\AccessControlService;
 use App\Services\InquiryService;
 use App\Services\MentionService;
@@ -141,6 +142,19 @@ class Index extends Component
         $this->resetPage('inquiryPage');
     }
 
+    public function deleteInquiry(int $id): void
+    {
+        $service = app(InquiryService::class);
+        $inquiry = $service->findVisible(auth()->user(), $id);
+        $number = (string) $inquiry->inquiry_number;
+
+        $service->delete($inquiry, auth()->user());
+        $this->metrics = $service->metrics(auth()->user());
+        $this->resetPage('inquiryPage');
+
+        session()->flash('success', $number.' deleted successfully.');
+    }
+
     public function openCreate(): void
     {
         abort_unless(auth()->user()->canModule('inquiries', 'create'), 403);
@@ -210,6 +224,7 @@ class Index extends Component
         $this->clientFilterOptions = app(\App\Services\FilterOptionService::class)
             ->options(auth()->user(), 'clients', 'create-inquiry', '', $client->id, 6)
             ->all();
+        $this->refreshCreateWorkflowOptions();
 
         $this->showCreateClientModal = false;
         $this->resetCreateClientModal();
@@ -308,13 +323,14 @@ class Index extends Component
                 ->where('is_active', true)
                 ->find($id, ['id', 'contact_name']);
             $this->clientContact = (string) ($client?->contact_name ?: '');
+            $this->refreshCreateWorkflowOptions();
             return;
         }
 
         if ($property === 'createWorkflowId') {
             abort_unless($raw !== '' && ctype_digit($raw), 422, 'Please choose a valid Workflow.');
             $id = (int) $raw;
-            $selected = $options->options($user, 'workflows', 'create-inquiry', '', $id, 20)
+            $selected = $options->options($user, 'workflows', 'create-inquiry', '', $id, 20, ['client_id' => $this->clientId])
                 ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
             abort_unless($selected, 422, 'That Workflow is no longer available.');
 
@@ -424,6 +440,19 @@ class Index extends Component
     }
 
     #[Renderless]
+    public function updateInquiryStartInline(?string $value): array
+    {
+        $saved = app(InquiryService::class)->updateStartedAt($this->selectedInquiry(), $value, auth()->user());
+        $localized = \App\Support\UserLocalTime::localize($saved->started_at);
+
+        return [
+            'ok' => true,
+            'value' => $localized?->format('Y-m-d\\TH:i') ?? '',
+            'display' => $localized?->format('M j, Y · g:i A') ?? '—',
+        ];
+    }
+
+    #[Renderless]
     public function updateInquiryStatus(string $status): array
     {
         $inquiry = $this->selectedInquiry();
@@ -436,12 +465,16 @@ class Index extends Component
     {
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId);
         $saved = app(InquiryService::class)->updateTaskStatus($task, $status, auth()->user());
-        $inquiryStatus = (string) $saved->inquiry()->value('status');
+        $updatedInquiry = $saved->inquiry()->first(['id', 'status', 'started_at']);
+        $inquiryStatus = (string) $updatedInquiry->status;
+        $localizedStart = \App\Support\UserLocalTime::localize($updatedInquiry->started_at);
         return [
             'ok' => true,
             'status' => $saved->status,
             'inquiryStatus' => $inquiryStatus,
             'inquiryTone' => $this->tone($inquiryStatus),
+            'inquiryStartValue' => $localizedStart?->format('Y-m-d\\TH:i') ?? '',
+            'inquiryStartDisplay' => $localizedStart?->format('M j, Y · g:i A') ?? '—',
         ];
     }
 
@@ -981,6 +1014,18 @@ class Index extends Component
         // A user may only create against a Client they can actually see.
         app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->findOrFail((int) $data['clientId']);
 
+        $workflowAvailable = WorkflowTemplate::query()
+            ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+            ->where('is_active', true)
+            ->availableFor('inquiries', (int) $data['clientId'])
+            ->whereKey((int) $data['createWorkflowId'])
+            ->exists();
+
+        if (!$workflowAvailable) {
+            $this->addError('createWorkflowId', 'That Workflow is not available for the selected client.');
+            return;
+        }
+
         $service = app(InquiryService::class);
         $canonicalRows = $service->workflowRows(
             (int) $data['createWorkflowId'],
@@ -1035,41 +1080,48 @@ class Index extends Component
         // endpoint used by Create Order.
         $this->clientFilterOptions = $options->options($user, 'clients', 'create-inquiry', '', $this->clientId, 6)->all();
 
-        // New inquiries should start with the dedicated Inquiry Workflow
-        // selected automatically. Keep any explicit/previous selection intact
-        // (for example after validation) and only apply the default when the
-        // create form has no workflow yet.
-        if (! $this->createWorkflowId) {
-            $inquiryWorkflow = $options
-                ->options($user, 'workflows', 'create-inquiry', 'Inquiry', null, 20)
+        $this->refreshCreateWorkflowOptions();
+    }
+
+    private function refreshCreateWorkflowOptions(): void
+    {
+        if (!$this->showCreate) return;
+
+        $user = auth()->user();
+        $options = app(\App\Services\FilterOptionService::class);
+        $constraints = ['client_id' => $this->clientId];
+
+        $available = $options->options($user, 'workflows', 'create-inquiry', '', $this->createWorkflowId, 20, $constraints);
+        $selected = $this->createWorkflowId
+            ? $available->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $this->createWorkflowId)
+            : null;
+
+        if (!$selected) {
+            $preferred = $options->options($user, 'workflows', 'create-inquiry', 'Inquiry', null, 20, $constraints);
+            $selected = $preferred
                 ->sortBy(fn (array $item) => strcasecmp(trim((string) ($item['label'] ?? '')), 'Inquiry Workflow') === 0 ? 0 : 1)
-                ->first();
+                ->first()
+                ?? $available->first();
 
-            if ($inquiryWorkflow) {
-                $this->createWorkflowId = (int) $inquiryWorkflow['id'];
-                $this->selectedWorkflowLabel = (string) ($inquiryWorkflow['label'] ?? 'Inquiry Workflow');
-
-                $summary = app(InquiryService::class)->workflowSummary($this->createWorkflowId);
-                $this->createWorkflowTaskCount = (int) ($summary['tasks'] ?? 0);
-                $this->createWorkflowPhaseCount = (int) ($summary['phases'] ?? 0);
-            }
+            $this->createWorkflowId = $selected ? (int) ($selected['id'] ?? 0) : null;
         }
 
-        $this->workflowFilterOptions = $options->options($user, 'workflows', 'create-inquiry', '', $this->createWorkflowId, 6)->all();
-
-        if ($this->clientId) {
-            $selected = collect($this->clientFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $this->clientId);
-            $this->selectedClientLabel = (string) ($selected['label'] ?? $this->selectedClientLabel);
-            $client = app(\App\Services\ClientService::class)->visibleQuery($user)
-                ->where('is_active', true)
-                ->find($this->clientId, ['id', 'contact_name']);
-            $this->clientContact = (string) ($client?->contact_name ?: '');
-        }
-
+        $this->workflowFilterOptions = $options
+            ->options($user, 'workflows', 'create-inquiry', '', $this->createWorkflowId, 6, $constraints)
+            ->all();
 
         if ($this->createWorkflowId) {
-            $selected = collect($this->workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $this->createWorkflowId);
-            $this->selectedWorkflowLabel = (string) ($selected['label'] ?? $this->selectedWorkflowLabel);
+            $selected = collect($this->workflowFilterOptions)
+                ->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $this->createWorkflowId)
+                ?? $selected;
+            $this->selectedWorkflowLabel = (string) ($selected['label'] ?? '');
+            $summary = app(InquiryService::class)->workflowSummary($this->createWorkflowId);
+            $this->createWorkflowTaskCount = (int) ($summary['tasks'] ?? 0);
+            $this->createWorkflowPhaseCount = (int) ($summary['phases'] ?? 0);
+        } else {
+            $this->selectedWorkflowLabel = '';
+            $this->createWorkflowTaskCount = 0;
+            $this->createWorkflowPhaseCount = 0;
         }
     }
 

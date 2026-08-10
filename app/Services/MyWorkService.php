@@ -180,29 +180,25 @@ class MyWorkService
         $tomorrow = $today->copy()->addDay()->toDateString();
         $weekEnd = $today->copy()->addDays(7)->toDateString();
 
-        $taskMentions = DB::table('flow_notifications')
-            ->select('flow_task_id')
-            ->where('user_id', $user->id)
-            ->where('type', 'mention')
-            ->whereNotNull('flow_task_id')
-            ->groupBy('flow_task_id');
-
-        // An Order-level comment mention belongs in My Work too. In that case
-        // there is no flow_task_id, so expose the user's otherwise-visible tasks
-        // from that Order when the Mentions filter is selected.
-        $jobMentions = DB::table('flow_notifications')
-            ->select('flow_job_id')
-            ->where('user_id', $user->id)
-            ->where('type', 'mention')
-            ->whereNull('flow_task_id')
-            ->whereNotNull('flow_job_id')
-            ->groupBy('flow_job_id');
+        // The Mentions chip means: tasks whose COMMENT contains at least one
+        // valid @mention of any active FlowTrack user. Do not use the current
+        // user's notification rows here: those answer "who mentioned me?", and
+        // can make the list disagree with the task comment itself. TaskService
+        // records the parsed mention_user_ids on the task.comment activity, so
+        // this remains exact, comment-only, user-agnostic and index-friendly.
+        $taskMentions = DB::table('activities')
+            ->selectRaw('subject_id as flow_task_id')
+            ->where('subject_type', Task::class)
+            ->where('event', 'task.comment')
+            ->whereNotNull('meta')
+            ->where('meta', 'like', '%"mention_user_ids":[%')
+            ->where('meta', 'not like', '%"mention_user_ids":[]%')
+            ->groupBy('subject_id');
 
         $query = DB::table('tasks')
             ->join('flow_jobs as my_work_metric_jobs', 'my_work_metric_jobs.id', '=', 'tasks.flow_job_id')
             ->join('clients as my_work_metric_clients', 'my_work_metric_clients.id', '=', 'my_work_metric_jobs.client_id')
             ->leftJoinSub($taskMentions, 'my_work_metric_task_mentions', fn ($join) => $join->on('my_work_metric_task_mentions.flow_task_id', '=', 'tasks.id'))
-            ->leftJoinSub($jobMentions, 'my_work_metric_job_mentions', fn ($join) => $join->on('my_work_metric_job_mentions.flow_job_id', '=', 'tasks.flow_job_id'))
             ->whereNull('tasks.deleted_at')
             ->whereNull('tasks.completed_at')
             ->whereNull('my_work_metric_jobs.deleted_at')
@@ -231,7 +227,7 @@ class MyWorkService
                 [$tomorrow, $weekEnd],
             )
             ->selectRaw("SUM(CASE WHEN LOWER(tasks.status) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
-            ->selectRaw('SUM(CASE WHEN my_work_metric_task_mentions.flow_task_id IS NOT NULL OR my_work_metric_job_mentions.flow_job_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
+            ->selectRaw('SUM(CASE WHEN my_work_metric_task_mentions.flow_task_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
             ->first();
 
         return [
@@ -368,27 +364,26 @@ class MyWorkService
                 ->whereBetween('tasks.due_date', [$tomorrow, $weekEnd])
                 ->whereRaw("LOWER(tasks.status) NOT LIKE 'waiting%'"),
             'waiting' => $query->whereRaw("LOWER(tasks.status) LIKE 'waiting%'"),
-            'mentions' => $query->whereExists($this->mentionExistsSubquery($user)),
+            'mentions' => $query->whereExists($this->commentMentionExistsSubquery()),
             default => null,
         };
     }
 
-    private function mentionExistsSubquery(User $user): \Closure
+    private function commentMentionExistsSubquery(): \Closure
     {
-        return fn ($notification) => $notification
+        // Correlate the task directly to its own task.comment activity. The
+        // activity metadata is written from MentionService::userIdsFromText(),
+        // so a plain email/@ character does not qualify and a mention on one
+        // task can never make sibling tasks from the same Order appear.
+        return fn ($activity) => $activity
             ->selectRaw('1')
-            ->from('flow_notifications')
-            ->where('flow_notifications.user_id', $user->id)
-            ->where('flow_notifications.type', 'mention')
-            ->where(function ($mention) {
-                $mention
-                    ->whereColumn('flow_notifications.flow_task_id', 'tasks.id')
-                    ->orWhere(function ($jobMention) {
-                        $jobMention
-                            ->whereNull('flow_notifications.flow_task_id')
-                            ->whereColumn('flow_notifications.flow_job_id', 'tasks.flow_job_id');
-                    });
-            });
+            ->from('activities as my_work_mention_activity')
+            ->whereColumn('my_work_mention_activity.subject_id', 'tasks.id')
+            ->where('my_work_mention_activity.subject_type', Task::class)
+            ->where('my_work_mention_activity.event', 'task.comment')
+            ->whereNotNull('my_work_mention_activity.meta')
+            ->where('my_work_mention_activity.meta', 'like', '%"mention_user_ids":[%')
+            ->where('my_work_mention_activity.meta', 'not like', '%"mention_user_ids":[]%');
     }
 
     private function orderTasks(Builder $query, string $sort, string $today): void

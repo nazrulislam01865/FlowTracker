@@ -136,14 +136,18 @@ class BoardTaskPackService
             ->get()
             ->keyBy('id');
 
-        // Filters choose which Job groups belong on the page, but once a Job
-        // qualifies we deliberately load its complete Task Pack. This is the
-        // core Board behavior requested here: one assigned task grants read-only
-        // workflow context for the whole associated Job without leaking another
-        // unrelated Job. Task's SoftDeletes scope still excludes deleted rows.
-        $tasks = Task::query()
-            ->whereIn('tasks.flow_job_id', $jobIds)
-            ->select([
+        // Normally filters choose which Job groups belong on the page and the
+        // Board then shows the complete Task Pack for each qualifying Job. The
+        // Mentions chip is intentionally different: it is a task-level filter,
+        // so only the exact tasks whose own comments contain a valid @mention
+        // are loaded. A mention on one task must never reveal sibling task rows
+        // merely because they belong to the same Order.
+        $mentionsOnly = (string) ($filters['quick'] ?? 'all') === 'mentions';
+        $tasks = $mentionsOnly
+            ? (clone $baseTasks)->whereIn('tasks.flow_job_id', $jobIds)
+            : Task::query()->whereIn('tasks.flow_job_id', $jobIds);
+
+        $tasks->select([
                 'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.progress',
                 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason',
@@ -251,7 +255,7 @@ class BoardTaskPackService
             ->first();
 
         $mentions = (clone $base)
-            ->whereExists($this->mentionExistsSubquery($user))
+            ->whereExists($this->commentMentionExistsSubquery())
             ->count();
 
         return [
@@ -353,19 +357,28 @@ class BoardTaskPackService
                 ->whereBetween('tasks.due_date', [$tomorrow, $weekEnd])
                 ->whereRaw("LOWER(tasks.status) NOT LIKE 'waiting%'"),
             'waiting' => $query->whereRaw("LOWER(tasks.status) LIKE 'waiting%'"),
-            'mentions' => $query->whereExists($this->mentionExistsSubquery($user)),
+            'mentions' => $query->whereExists($this->commentMentionExistsSubquery()),
             default => null,
         };
     }
 
-    private function mentionExistsSubquery(User $user): \Closure
+    private function commentMentionExistsSubquery(): \Closure
     {
-        return fn ($notification) => $notification
+        // Mentions on All Tasks are about the task itself, not about whether the
+        // currently signed-in user received a notification. TaskService stores
+        // MentionService's parsed IDs on the exact task.comment activity. This
+        // keeps the filter user-agnostic and prevents an Order-level mention,
+        // description mention, email address, or sibling-task mention from
+        // qualifying the wrong task.
+        return fn ($activity) => $activity
             ->selectRaw('1')
-            ->from('flow_notifications')
-            ->whereColumn('flow_notifications.flow_task_id', 'tasks.id')
-            ->where('flow_notifications.user_id', $user->id)
-            ->where('flow_notifications.type', 'mention');
+            ->from('activities as board_task_mention_activity')
+            ->whereColumn('board_task_mention_activity.subject_id', 'tasks.id')
+            ->where('board_task_mention_activity.subject_type', Task::class)
+            ->where('board_task_mention_activity.event', 'task.comment')
+            ->whereNotNull('board_task_mention_activity.meta')
+            ->where('board_task_mention_activity.meta', 'like', '%"mention_user_ids":[%')
+            ->where('board_task_mention_activity.meta', 'not like', '%"mention_user_ids":[]%');
     }
 
     private function orderTasks(Builder $query, string $sort, string $today): void

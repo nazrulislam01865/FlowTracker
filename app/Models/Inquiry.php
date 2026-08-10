@@ -22,9 +22,7 @@ class Inquiry extends Model
             'required_delivery_date' => 'date',
             'initial_follow_up_date' => 'date',
             'target_price' => 'decimal:4',
-            // Query-only alias used by the Inquiry list. Casting it here keeps
-            // the earliest task start timestamp timezone-safe when formatted.
-            'inquiry_started_at' => 'datetime',
+            'started_at' => 'datetime',
             'completed_at' => 'datetime',
         ];
     }

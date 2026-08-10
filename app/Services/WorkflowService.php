@@ -38,15 +38,32 @@ class WorkflowService
         }
 
         $workflow = DB::transaction(function () use ($data, $id, $workspaceId, $code) {
+            $scopeUpdates = [];
+            if (array_key_exists('applies_to', $data)) {
+                $scopeUpdates['applies_to'] = in_array($data['applies_to'], ['inquiries', 'orders'], true)
+                    ? $data['applies_to']
+                    : 'orders';
+            }
+            if (array_key_exists('client_availability', $data)) {
+                $scopeUpdates['client_availability'] = $data['client_availability'] === 'specific' ? 'specific' : 'all';
+            }
+
             if ($id) {
                 $template = WorkflowTemplate::where('workspace_id', $workspaceId)->findOrFail($id);
-                $template->update([
+                $template->update(array_merge([
                     'code' => $code,
                     'name' => trim($data['name']),
                     'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
                     'is_active' => (bool) ($data['is_active'] ?? true),
                     'version' => max(1, (int) ($data['version'] ?? 1)),
-                ]);
+                ], $scopeUpdates));
+
+                if (array_key_exists('client_ids', $data)) {
+                    $template->clients()->sync(($template->client_availability ?? 'all') === 'specific'
+                        ? array_values(array_unique(array_map('intval', $data['client_ids'] ?? [])))
+                        : []);
+                }
+
                 if (Schema::hasTable('workflows')) {
                     Workflow::updateOrCreate(['id' => $template->id], [
                         'name' => $template->name,
@@ -78,7 +95,7 @@ class WorkflowService
                 $legacyId = $legacy->id;
             }
 
-            return WorkflowTemplate::create([
+            $template = WorkflowTemplate::create(array_merge([
                 'id' => $legacyId,
                 'workspace_id' => $workspaceId,
                 'code' => $code,
@@ -87,7 +104,15 @@ class WorkflowService
                 'is_active' => $isActive,
                 'is_default' => $shouldBeDefault,
                 'version' => max(1, (int) ($data['version'] ?? 1)),
-            ]);
+                'applies_to' => 'orders',
+                'client_availability' => 'all',
+            ], $scopeUpdates));
+
+            if (array_key_exists('client_ids', $data) && $template->client_availability === 'specific') {
+                $template->clients()->sync(array_values(array_unique(array_map('intval', $data['client_ids'] ?? []))));
+            }
+
+            return $template;
         });
 
         $this->invalidateBoardWorkflowCache($workspaceId, (int) $workflow->id);

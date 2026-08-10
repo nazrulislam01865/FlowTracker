@@ -1,6 +1,22 @@
 <div>
 @if($showCreate)
-    <x-clients.create :users="$users" :client-code="$clientCode" />
+    <x-clients.create
+        :users="$users"
+        :client-code="$clientCode"
+        :client-countries="$clientCountries"
+        :client-country-flags="$clientCountryFlags"
+        :client-states-by-country="$clientStatesByCountry"
+        :client-languages="$clientLanguages"
+        :client-currencies="$clientCurrencies"
+        :payment-term-options="$paymentTermOptions"
+        :account-manager-id="$accountManagerId"
+        :preferred-currency="$preferredCurrency"
+        :client-country="$clientCountry"
+        :billing-country="$billingCountry"
+        :billing-same-as-office="$billingSameAsOffice"
+        :sales-tax-status="$salesTaxStatus"
+        :shipping-addresses="$shippingAddresses"
+    />
 @elseif($showDetail && $detail)
     <x-clients.detail :detail="$detail" :users="$users" :editing="$showEdit" />
 @else

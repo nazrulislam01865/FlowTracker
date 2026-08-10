@@ -238,6 +238,25 @@
                     : { month: 'short', day: 'numeric', year: 'numeric' });
             },
 
+            formatDateTime(value) {
+                if (!value) return '—';
+                const match = String(value).match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})$/);
+                if (!match) return String(value);
+                const [, year, month, day, hour, minute] = match;
+                const date = new Date(Number(year), Number(month) - 1, Number(day), Number(hour), Number(minute));
+                if (Number.isNaN(date.getTime())) return String(value);
+                const datePart = date.toLocaleDateString('en-US', {
+                    month: 'short',
+                    day: 'numeric',
+                    year: 'numeric',
+                });
+                const timePart = date.toLocaleTimeString('en-US', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                });
+                return `${datePart} · ${timePart}`;
+            },
+
             numberLabel(value) {
                 const number = Number.parseInt(String(value || '0'), 10);
                 return Number.isFinite(number) ? Math.max(0, number).toLocaleString() : String(value || '');

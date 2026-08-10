@@ -53,7 +53,7 @@ class Index extends Component
             $this->code = $r->code;
             $this->name = $r->name;
             $this->description = (string) $r->description;
-            $this->parentId = $this->group === 'product' ? $r->parent_id : null;
+            $this->parentId = in_array($this->group, ['product', 'state'], true) ? $r->parent_id : null;
             $this->status = $r->status;
             $this->sortOrder = (int) $r->sort_order;
             $this->metadataJson = $r->metadata ? json_encode($r->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
@@ -94,12 +94,19 @@ class Index extends Component
             'code' => ['required','string','max:40'],
             'name' => ['required','string','max:255'],
             'description' => ['nullable','string','max:5000'],
-            'parentId' => $this->group === 'product'
-                ? ['nullable','integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q
+            'parentId' => match ($this->group) {
+                'product' => ['nullable','integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q
                     ->where('workspace_id', $workspaceId)
                     ->where('type', 'product_category')
-                    ->whereNull('deleted_at'))]
-                : ['nullable'],
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at'))],
+                'state' => ['required','integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q
+                    ->where('workspace_id', $workspaceId)
+                    ->where('type', 'country')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at'))],
+                default => ['nullable'],
+            },
             'status' => ['required','in:active,inactive'],
             'sortOrder' => ['required','integer','min:0','max:1000000'],
             'metadataJson' => ['nullable','string'],
@@ -117,7 +124,7 @@ class Index extends Component
             'code' => $data['code'],
             'name' => $data['name'],
             'description' => $data['description'],
-            'parent_id' => $this->group === 'product' ? $data['parentId'] : null,
+            'parent_id' => in_array($this->group, ['product', 'state'], true) ? $data['parentId'] : null,
             'status' => $data['status'],
             'sort_order' => $data['sortOrder'],
             'metadata' => $metadata,
@@ -175,8 +182,8 @@ class Index extends Component
             'rows' => $this->recordsReady
                 ? $service->paginate($this->group, $this->search, 30)
                 : null,
-            'parents' => $this->showModal && $this->group === 'product'
-                ? $service->active('product_category')
+            'parents' => $this->showModal && in_array($this->group, ['product', 'state'], true)
+                ? $service->active($this->group === 'product' ? 'product_category' : 'country')
                 : collect(),
             'groupCounts' => collect(MasterDataService::LABELS)->mapWithKeys(
                 fn ($label, $type) => [$type => (int) ($summaries->get($type)?->total_count ?? 0)]

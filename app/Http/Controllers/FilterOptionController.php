@@ -16,6 +16,7 @@ class FilterOptionController
             'context' => ['nullable','string','max:30'],
             'selected' => ['nullable','string','max:255'],
             'category' => ['nullable','string','max:255'],
+            'client_id' => ['nullable','integer','exists:clients,id'],
         ]);
 
         $context = (string) ($data['context'] ?? '');
@@ -37,7 +38,10 @@ class FilterOptionController
                 $search,
                 $data['selected'] ?? null,
                 $limit,
-                ['category' => (string) ($data['category'] ?? '')],
+                [
+                    'category' => (string) ($data['category'] ?? ''),
+                    'client_id' => (int) ($data['client_id'] ?? 0) ?: null,
+                ],
             )->values(),
         ]);
     }

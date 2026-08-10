@@ -43,13 +43,18 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringContainsString("->whereIn('tasks.flow_job_id', $visibleJobIds)", $service);
     }
 
-    public function test_qualifying_job_loads_the_complete_task_pack_after_filters_choose_the_job(): void
+    public function test_qualifying_job_loads_full_context_except_mentions_which_load_only_exact_matching_tasks(): void
     {
         $service = file_get_contents(app_path('Services/BoardTaskPackService.php'));
 
-        $this->assertStringContainsString('Filters choose which Job groups belong on the page', $service);
-        $this->assertStringContainsString('$tasks = Task::query()', $service);
-        $this->assertStringContainsString("->whereIn('tasks.flow_job_id', $jobIds)", $service);
+        $this->assertStringContainsString('Normally filters choose which Job groups belong on the page', $service);
+        $this->assertStringContainsString('$mentionsOnly = (string) ($filters[\'quick\'] ?? \'all\') === \'mentions\';', $service);
+        $this->assertStringContainsString('? (clone $baseTasks)->whereIn(\'tasks.flow_job_id\', $jobIds)', $service);
+        $this->assertStringContainsString(': Task::query()->whereIn(\'tasks.flow_job_id\', $jobIds);', $service);
+        $this->assertStringContainsString("->whereColumn('board_task_mention_activity.subject_id', 'tasks.id')", $service);
+        $this->assertStringContainsString("->where('board_task_mention_activity.event', 'task.comment')", $service);
+        $this->assertStringContainsString('mention_user_ids', $service);
+        $this->assertStringNotContainsString("->where('flow_notifications.user_id', \$user->id)", $service);
     }
 
     public function test_task_pack_paginates_jobs_before_loading_page_tasks(): void

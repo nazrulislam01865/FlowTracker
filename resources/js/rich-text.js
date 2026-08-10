@@ -85,6 +85,116 @@ const uploadImage = async (file) => {
     return String(payload.url);
 };
 
+const waitForAnimationFrame = () => new Promise((resolve) => {
+    if (typeof window.requestAnimationFrame === 'function') {
+        window.requestAnimationFrame(() => resolve());
+        return;
+    }
+    window.setTimeout(resolve, 16);
+});
+
+const canvasBlob = (canvas, type, quality) => new Promise((resolve) => {
+    canvas.toBlob((blob) => resolve(blob), type, quality);
+});
+
+const fitScreenshotBlob = async (canvas) => {
+    const preferredTypes = [
+        ['image/webp', 0.92],
+        ['image/webp', 0.82],
+        ['image/webp', 0.72],
+        ['image/jpeg', 0.88],
+        ['image/jpeg', 0.78],
+    ];
+
+    let workingCanvas = canvas;
+    let lastBlob = null;
+
+    for (let resizePass = 0; resizePass < 4; resizePass += 1) {
+        for (const [type, quality] of preferredTypes) {
+            const blob = await canvasBlob(workingCanvas, type, quality);
+            if (!blob) continue;
+            lastBlob = blob;
+            if (blob.size <= MAX_IMAGE_BYTES) return blob;
+        }
+
+        if (!lastBlob || workingCanvas.width <= 1280 || workingCanvas.height <= 720) break;
+
+        const targetRatio = Math.min(0.88, Math.sqrt((MAX_IMAGE_BYTES * 0.88) / lastBlob.size));
+        const nextWidth = Math.max(1, Math.round(workingCanvas.width * targetRatio));
+        const nextHeight = Math.max(1, Math.round(workingCanvas.height * targetRatio));
+        const resized = document.createElement('canvas');
+        resized.width = nextWidth;
+        resized.height = nextHeight;
+        const context = resized.getContext('2d', { alpha: false });
+        if (!context) break;
+        context.imageSmoothingEnabled = true;
+        context.imageSmoothingQuality = 'high';
+        context.drawImage(workingCanvas, 0, 0, nextWidth, nextHeight);
+        workingCanvas = resized;
+    }
+
+    if (lastBlob && lastBlob.size <= MAX_IMAGE_BYTES) return lastBlob;
+    throw new Error('The captured screenshot is too large to upload. Try capturing a smaller window or tab.');
+};
+
+const screenshotFileFromStream = async (stream) => {
+    const track = stream?.getVideoTracks?.()[0];
+    if (!track) throw new Error('No screen video was available to capture.');
+
+    const video = document.createElement('video');
+    video.muted = true;
+    video.playsInline = true;
+    video.srcObject = stream;
+
+    await new Promise((resolve, reject) => {
+        const timeout = window.setTimeout(() => reject(new Error('The selected screen did not become ready in time.')), 7000);
+        const ready = () => {
+            window.clearTimeout(timeout);
+            resolve();
+        };
+        video.addEventListener('loadedmetadata', ready, { once: true });
+        video.addEventListener('error', () => {
+            window.clearTimeout(timeout);
+            reject(new Error('The selected screen could not be captured.'));
+        }, { once: true });
+        video.play().catch(() => {});
+    });
+
+    await video.play();
+    // Two frames avoids grabbing a blank/black first frame on Chromium and
+    // gives the browser picker time to disappear from the selected surface.
+    await waitForAnimationFrame();
+    await waitForAnimationFrame();
+
+    const settings = track.getSettings?.() || {};
+    const width = Number(video.videoWidth || settings.width || 0);
+    const height = Number(video.videoHeight || settings.height || 0);
+    if (!width || !height) throw new Error('The selected screen returned an empty image.');
+
+    const canvas = document.createElement('canvas');
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext('2d', { alpha: false });
+    if (!context) throw new Error('This browser could not prepare the screenshot.');
+    context.drawImage(video, 0, 0, width, height);
+
+    const blob = await fitScreenshotBlob(canvas);
+    const extension = blob.type === 'image/jpeg' ? 'jpg' : (blob.type === 'image/png' ? 'png' : 'webp');
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-');
+    return new File([blob], `flowtrack-screenshot-${stamp}.${extension}`, {
+        type: blob.type || 'image/webp',
+        lastModified: Date.now(),
+    });
+};
+
+const stopDisplayStream = (stream) => {
+    stream?.getTracks?.().forEach((track) => {
+        try {
+            track.stop();
+        } catch (_) {}
+    });
+};
+
 const parseMentionUsers = (source) => {
     try {
         const users = JSON.parse(source.dataset.mentionUsers || '[]');
@@ -125,9 +235,14 @@ const bootOne = (source) => {
     underline.classList.add('is-underline');
     const bullets = createButton('• List', 'Bulleted list', 'insertUnorderedList');
     const numbers = createButton('1. List', 'Numbered list', 'insertOrderedList');
+    const screenshotButton = createButton('▣ Capture', 'Take screenshot', 'screenshot');
+    screenshotButton.classList.add('ft-rich-text-screenshot-button');
     const imageButton = createButton('▧ Image', 'Insert image', 'image');
     imageButton.classList.add('ft-rich-text-image-button');
-    toolbar.append(bold, italic, underline, bullets, numbers, imageButton);
+    const mediaTools = document.createElement('div');
+    mediaTools.className = 'ft-rich-text-media-tools';
+    mediaTools.append(screenshotButton, imageButton);
+    toolbar.append(bold, italic, underline, bullets, numbers, mediaTools);
 
     const editor = document.createElement('div');
     editor.className = 'ft-rich-text-editor';
@@ -141,8 +256,8 @@ const bootOne = (source) => {
     footer.className = 'ft-rich-text-footer';
     const hint = document.createElement('span');
     hint.textContent = source.dataset.richTextCompact !== undefined
-        ? 'Paste screenshots with Ctrl/⌘+V · Ctrl/⌘+Enter to comment'
-        : 'Paste screenshots directly with Ctrl/⌘+V';
+        ? 'Enter to comment · Shift+Enter for a new line · Paste or capture screenshots'
+        : 'Paste screenshots with Ctrl/⌘+V or use Capture';
     const status = document.createElement('span');
     status.className = 'ft-rich-text-status';
     status.setAttribute('aria-live', 'polite');
@@ -166,6 +281,7 @@ const bootOne = (source) => {
     let mentionMatches = [];
     let mentionIndex = 0;
     let mentionToken = null;
+    let captureInProgress = false;
     const pendingUploads = new Set();
 
     const setStatus = (message = '', error = false) => {
@@ -390,10 +506,63 @@ const bootOne = (source) => {
         return promise;
     };
 
+    const captureScreenshot = async () => {
+        if (captureInProgress) return;
+        if (!window.isSecureContext) {
+            setStatus('Screen capture requires HTTPS (or localhost).', true);
+            return;
+        }
+
+        const getDisplayMedia = navigator.mediaDevices?.getDisplayMedia?.bind(navigator.mediaDevices);
+        if (!getDisplayMedia) {
+            setStatus('Screen capture is not supported by this browser.', true);
+            return;
+        }
+
+        rememberRange();
+        captureInProgress = true;
+        screenshotButton.disabled = true;
+        shell.classList.add('is-capturing');
+        setStatus('Choose a screen, window, or browser tab…');
+        let stream = null;
+
+        try {
+            // Calling getDisplayMedia directly from the toolbar click keeps the
+            // browser's required user gesture intact and opens its native
+            // screen/window/tab picker. The app only receives the surface the
+            // user explicitly chooses.
+            stream = await getDisplayMedia({ video: true, audio: false });
+            setStatus('Capturing screenshot…');
+            const screenshot = await screenshotFileFromStream(stream);
+            // Stop sharing as soon as the single frame exists. Uploading the
+            // captured file must never keep the user's screen/window shared.
+            stopDisplayStream(stream);
+            stream = null;
+            await queueUploadAndInsert([screenshot]);
+        } catch (error) {
+            const cancelled = ['AbortError', 'NotAllowedError'].includes(error?.name);
+            if (cancelled) {
+                setStatus('Screenshot cancelled');
+                window.setTimeout(() => setStatus(''), 1200);
+            } else {
+                setStatus(error?.message || 'Could not capture the screenshot.', true);
+            }
+        } finally {
+            stopDisplayStream(stream);
+            shell.classList.remove('is-capturing');
+            screenshotButton.disabled = false;
+            captureInProgress = false;
+        }
+    };
+
     const onToolbar = (event) => {
         const button = event.target.closest('.ft-rich-text-tool');
         if (!button) return;
         event.preventDefault();
+        if (button.dataset.command === 'screenshot') {
+            captureScreenshot();
+            return;
+        }
         if (button.dataset.command === 'image') {
             rememberRange();
             fileInput.click();
@@ -478,13 +647,23 @@ const bootOne = (source) => {
             }
         }
 
-        if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+        const compactComment = source.dataset.richTextCompact !== undefined
+            && source.closest('.ft-comment-composer');
+        const shouldSubmitComment = compactComment
+            && event.key === 'Enter'
+            && !event.isComposing
+            && event.keyCode !== 229
+            && !event.shiftKey
+            && !event.altKey;
+        const shouldSubmitShortcut = (event.ctrlKey || event.metaKey) && event.key === 'Enter';
+
+        if (shouldSubmitComment || shouldSubmitShortcut) {
             const submit = source.closest('.ft-comment-composer, .ft-inline-description-editor, .ft-inquiry-description-editor')
                 ?.querySelector('[data-rich-text-submit]');
-            if (submit) {
+            if (submit && !submit.disabled) {
                 event.preventDefault();
                 syncToSource();
-                submit.click();
+                if (String(source.value || '').trim() !== '' || !compactComment) submit.click();
             }
         }
     };
@@ -630,6 +809,7 @@ const createRichTextImageViewer = () => {
                     <button type="button" class="ft-rich-image-viewer-btn" data-rich-image-zoom-out aria-label="Zoom out" title="Zoom out">−</button>
                     <button type="button" class="ft-rich-image-viewer-zoom" data-rich-image-zoom-label aria-label="Current zoom">100%</button>
                     <button type="button" class="ft-rich-image-viewer-btn" data-rich-image-zoom-in aria-label="Zoom in" title="Zoom in">+</button>
+                    <a class="ft-rich-image-viewer-open-window" data-rich-image-open-window href="#" target="_blank" rel="noopener noreferrer" aria-label="Open image in new window" title="Open image in new window">Open in new window <span aria-hidden="true">↗</span></a>
                     <a class="ft-rich-image-viewer-download" data-rich-image-download href="#" download>Download</a>
                     <button type="button" class="ft-rich-image-viewer-close" data-rich-image-close aria-label="Close image preview" title="Close">×</button>
                 </div>
@@ -650,6 +830,7 @@ export const bootRichTextImageViewer = () => {
         let overlay = null;
         let preview = null;
         let download = null;
+        let openWindow = null;
         let title = null;
         let zoomLabel = null;
         let stage = null;
@@ -682,6 +863,7 @@ export const bootRichTextImageViewer = () => {
             overlay = nextOverlay;
             preview = overlay.querySelector('[data-rich-image-preview]');
             download = overlay.querySelector('[data-rich-image-download]');
+            openWindow = overlay.querySelector('[data-rich-image-open-window]');
             title = overlay.querySelector('[data-rich-image-title]');
             zoomLabel = overlay.querySelector('[data-rich-image-zoom-label]');
             stage = overlay.querySelector('[data-rich-image-stage]');
@@ -724,6 +906,7 @@ export const bootRichTextImageViewer = () => {
             preview.alt = image.alt || 'Image preview';
             const filename = filenameFromSrc(src);
             title.textContent = filename;
+            openWindow.href = src;
             download.href = richTextImageDownloadUrl(src);
             download.setAttribute('download', filename);
             setZoom(1);

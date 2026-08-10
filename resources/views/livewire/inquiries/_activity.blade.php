@@ -11,7 +11,7 @@
         <div class="ft-comment-composer ft-friendly-composer ft-rich-comment-composer">
             <x-ui.avatar :user="auth()->user()" :name="auth()->user()->name" :size="32"/>
             <textarea class="ft-mention-input" data-rich-text data-rich-text-compact wire:model="inquiryComment" rows="2" autocomplete="off" data-mention-users='@json($inquiryMentionUsers->values())' placeholder="Write a comment. Type @ to mention someone or paste a screenshot..."></textarea>
-            <button class="ft-new-job-btn" data-rich-text-submit type="button" wire:click="addInquiryComment">Comment</button>
+            <button class="ft-new-job-btn" data-rich-text-submit type="button" wire:click="addInquiryComment" wire:loading.attr="disabled" wire:target="addInquiryComment">Comment</button>
         </div>
     @endif
     <div class="ft-activity-feed">

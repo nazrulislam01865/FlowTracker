@@ -1,51 +1,4 @@
 
-@media(max-width:620px){
-  .ft-create-title h1,.ft-client-create-top h1{font-size:19px}.ft-create-section{padding:11px}.ft-product-row{grid-template-columns:1fr}.ft-qty-field,.ft-product-delete{grid-column:auto}.ft-product-delete{justify-self:stretch;width:auto}.ft-product-row-footer{align-items:flex-start;gap:8px;flex-direction:column}.ft-create-upload{grid-template-columns:30px 1fr}.ft-create-upload>a{grid-column:1/-1;justify-content:center}.ft-create-actions{position:sticky;bottom:52px;background:#fff;padding-bottom:8px}.ft-create-actions button{padding:0 11px}.ft-client-create-top{flex-direction:column}.ft-back-clients{align-self:flex-end}.ft-client-form-actions .ft-create-cancel,.ft-client-form-actions .ft-create-primary{min-width:0;flex:1}
-}
-.ft-exact-job-detail .ft-history-card h2{font-size:16px}.ft-exact-job-detail .ft-history-card>p{font-size:11px}.ft-exact-job-detail .ft-history-table th{font-size:9.5px}.ft-exact-job-detail .ft-history-table td{font-size:10.5px;padding:8px 7px}
-.ft-exact-job-detail .ft-doc-title-row p{font-size:11px}.ft-exact-job-detail .ft-upload-panel>b{font-size:12px}.ft-exact-job-detail .ft-upload-zone div{font-size:11px}.ft-exact-job-detail .ft-upload-zone small{font-size:9px}.ft-exact-job-detail .ft-upload-panel label{font-size:10px}.ft-exact-job-detail .ft-upload-panel select{font-size:10px}.ft-exact-job-detail .ft-job-documents-table h3{font-size:14px}.ft-exact-job-detail .ft-job-documents-table>p{font-size:10px}.ft-exact-job-detail .ft-doc-search input{font-size:10px}.ft-exact-job-detail .ft-doc-groupby{font-size:9.5px}.ft-exact-job-detail .ft-doc-phase-row td{font-size:10px}.ft-exact-job-detail .ft-doc-phase-row small,.ft-exact-job-detail .ft-doc-phase-row em{font-size:9px}.ft-exact-job-detail .ft-required-inline-row td>div:first-child{font-size:9.5px}.ft-exact-job-detail .ft-inline-requirement small{font-size:9px}.ft-exact-job-detail .ft-required-docs-card .ft-card-row-head h3,.ft-exact-job-detail .ft-doc-health-card h3{font-size:13px}.ft-exact-job-detail .ft-required-docs-card .ft-card-row-head span{font-size:9.5px}.ft-exact-job-detail .ft-percent{font-size:9.5px}.ft-exact-job-detail .ft-required-doc-row p,.ft-exact-job-detail .ft-required-doc-row small{font-size:9px}.ft-exact-job-detail .ft-doc-health-card div,.ft-exact-job-detail .ft-doc-health-card a,.ft-exact-job-detail .ft-required-docs-card a{font-size:10px}
-
-/* ========================================================================== */
-/* Screenshot-locked administration redesign: Task Pack + Workflow Setup       */
-/* ========================================================================== */
-.ft-admin-reference{--ar-ink:#0a1930;--ar-muted:#5d708b;--ar-line:#dce4ee;--ar-blue:#1766ea;--ar-soft-blue:#e9f1ff;--ar-page:#f4f7fb;color:var(--ar-ink);font-size:11px}
-.ft-admin-reference h1,.ft-admin-reference h2,.ft-admin-reference h3,.ft-admin-reference p{margin-top:0}
-.ft-admin-page-head{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;margin-bottom:12px}
-.ft-admin-page-head h1{font-size:22px;line-height:1.15;letter-spacing:-.03em;margin:0 0 4px;font-weight:800}
-.ft-admin-page-head p{margin:0;color:var(--ar-muted);font-size:11px;line-height:1.35}
-.ft-admin-head-actions{display:flex;align-items:center;gap:9px}
-.ft-admin-primary,.ft-admin-outline,.ft-admin-back,.ft-admin-outline-small{border-radius:8px;display:inline-flex;align-items:center;justify-content:center;text-decoration:none;font-weight:750;white-space:nowrap}
-.ft-admin-primary{height:38px;padding:0 14px;border:1px solid var(--ar-blue);background:var(--ar-blue);color:#fff}
-.ft-admin-outline{height:38px;padding:0 14px;border:1px solid #d5deea;background:#fff;color:#102039}
-.ft-admin-outline.is-disabled{opacity:.45;pointer-events:none}
-.ft-admin-outline-small{height:30px;padding:0 10px;border:1px solid #d4deea;background:#fff;color:#17263d;font-size:10px;font-weight:600}
-.ft-admin-stats{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:10px;margin-bottom:12px}
-.ft-admin-stats>div{min-height:62px;padding:11px 13px;background:#fff;border:1px solid var(--ar-line);border-radius:11px;box-shadow:0 2px 6px rgba(20,44,78,.025)}
-.ft-admin-stats span{display:block;color:var(--ar-muted);font-size:10px;margin-bottom:3px}
-.ft-admin-stats b{display:block;font-size:20px;line-height:1;font-weight:800}
-.ft-admin-empty-wide{grid-column:1/-1;padding:42px 24px;border:1px solid var(--ar-line);border-radius:11px;background:#fff;text-align:center;color:var(--ar-muted)}
-
-/* Task Pack Setup list */
-.ft-taskpack-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
-.ft-taskpack-card{background:#fff;border:1px solid var(--ar-line);border-radius:11px;padding:13px 14px 12px;min-width:0;box-shadow:0 2px 6px rgba(20,44,78,.02)}
-.ft-taskpack-card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:10px}
-.ft-taskpack-card-head h2{font-size:13px;line-height:1.2;margin:0 0 3px;font-weight:800;letter-spacing:-.01em}
-.ft-taskpack-card-head p{margin:0;color:#64758d;font-size:9.5px}
-.ft-taskpack-description{color:#61748d;font-size:9.5px;margin:10px 0 7px;min-height:12px}
-.ft-taskpack-items{display:flex;flex-direction:column}
-.ft-taskpack-item-row{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;align-items:center;border-bottom:1px solid #e5eaf0;padding:7px 0}
-.ft-taskpack-item-row:last-child{border-bottom:0}
-.ft-taskpack-item-row b{display:block;font-size:10px;font-weight:650;line-height:1.25}
-.ft-taskpack-item-row small{display:block;color:#536a86;font-size:8.8px;margin-top:2px;line-height:1.3;white-space:normal}
-.ft-taskpack-item-row>span{border-radius:14px;padding:5px 8px;font-size:8px;font-weight:800;white-space:nowrap}
-.ft-taskpack-item-row>span.is-required{background:#e8f0ff;color:#105de0}.ft-taskpack-item-row>span.is-optional{background:#eef2f5;color:#53657c}
-.ft-taskpack-empty{padding:15px 0;color:var(--ar-muted);font-size:10px}
-
-/* Dedicated Task Pack / Workflow form */
-.ft-admin-form-top{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;margin:1px 0 12px}
-.ft-admin-breadcrumb{font-size:10px;color:#61748f;margin-bottom:2px}
-.ft-admin-form-top h1{font-size:22px;line-height:1.15;letter-spacing:-.03em;margin:0 0 4px;font-weight:800}
-.ft-admin-form-top p{font-size:11px;color:var(--ar-muted);margin:0}
 .ft-admin-back{height:39px;padding:0 14px;border:1px solid #d4deea;background:#fff;color:#0e1d34;font-size:11px}
 .ft-admin-form-card{background:#fff;border:1px solid #d8e1ec;border-radius:12px;overflow:hidden;box-shadow:0 5px 20px rgba(24,48,80,.025)}
 .ft-admin-form-card-head{padding:16px 17px 14px;border-bottom:1px solid #e0e6ee}
@@ -1208,3 +1161,183 @@
     background:#fbfcfe;
 }
 .ft-activity-pagination>div{display:flex;align-items:center;gap:9px}
+.ft-activity-pagination button{
+    height:30px;
+    padding:0 11px;
+    border:1px solid #d8e2ee;
+    border-radius:7px;
+    background:#fff;
+    color:#18304f;
+    font-weight:700;
+    font-size:10px;
+}
+.ft-activity-pagination button:disabled{opacity:.42;cursor:not-allowed}
+.ft-notification-pagination,.ft-master-pagination{margin:12px 0 0}
+.ft-job-document-attachment-zone{margin-top:12px}
+.ft-taskpack-card-actions{display:flex;align-items:center;gap:7px}
+.ft-admin-danger,.ft-admin-danger-small{
+    border:1px solid #efb5b1;
+    background:#fff7f6;
+    color:#c9322b;
+    border-radius:8px;
+    font-weight:750;
+}
+.ft-admin-danger{height:38px;padding:0 13px}
+.ft-admin-danger-small{height:32px;padding:0 10px;font-size:10px}
+@media(max-width:700px){
+    .ft-activity-pagination{align-items:flex-start;flex-direction:column}
+    .ft-activity-pagination>div{width:100%;justify-content:space-between}
+    .ft-taskpack-card-actions{flex-wrap:wrap;justify-content:flex-end}
+}
+
+
+/* =====================================================================
+   2026-08-04 final responsive hardening
+   - whole-field date picker on Create Job
+   - no horizontal quick-filter strip on Jobs
+   - Clients, Documents, Master Data and Roles & Access adapt to small screens
+   ===================================================================== */
+.ft-clickable-date-field{cursor:pointer}
+.ft-clickable-date-field input[type="date"]{cursor:pointer;width:100%}
+.ft-clickable-date-field input[type="date"]::-webkit-calendar-picker-indicator{cursor:pointer}
+
+/* Jobs quick filters always wrap into the available width instead of scrolling. */
+.ft-exact-jobs-list .ft-list-view-tabs{
+    display:grid!important;
+    grid-template-columns:repeat(5,minmax(0,1fr));
+    gap:10px!important;
+    overflow:visible!important;
+    padding-bottom:0!important;
+}
+.ft-exact-jobs-list .ft-list-view-chip{
+    width:100%;min-width:0;justify-content:center;white-space:normal;text-align:center;
+}
+
+/* Master Data: categories wrap, table becomes cards on narrow devices. */
+@media(max-width:1100px){
+    .master-layout{grid-template-columns:1fr!important}
+    .master-categories{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;overflow:visible!important}
+    .master-categories button{min-width:0!important;margin:0!important}
+    .config-summary{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+}
+@media(max-width:760px){
+    .master-categories{grid-template-columns:repeat(2,minmax(0,1fr))}
+    .master-head{flex-direction:column;align-items:stretch}
+    .master-head input{max-width:none!important;width:100%}
+    .master-table{min-width:0!important;display:block}
+    .master-table thead{display:none}
+    .master-table tbody{display:grid;gap:10px}
+    .master-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid var(--line);border-radius:10px;overflow:hidden;background:#fff}
+    .master-table td{display:flex;flex-direction:column;gap:4px;min-width:0;border:0!important;border-bottom:1px solid var(--line)!important;padding:10px!important}
+    .master-table td:before{content:attr(data-label);font-size:9px;text-transform:uppercase;letter-spacing:.04em;color:var(--muted);font-weight:750}
+    .master-table td:last-child{grid-column:1/-1;border-bottom:0!important}
+    .master-table .row-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));width:100%}
+    .master-table .row-actions button{width:100%;min-width:0}
+    .ft-master-pagination{align-items:flex-start!important;flex-direction:column}.ft-master-pagination .ft-page-actions{width:100%;justify-content:space-between}
+}
+@media(max-width:500px){
+    .config-summary{grid-template-columns:1fr!important}
+    .master-categories{grid-template-columns:1fr}
+    .master-table tr{grid-template-columns:1fr}
+    .master-table td:last-child{grid-column:auto}
+    .master-table .row-actions{grid-template-columns:1fr}
+}
+
+/* Clients: no layout break on tablets/phones; rows become readable cards. */
+@media(max-width:1100px){
+    .ft-clients-layout{grid-template-columns:1fr!important}
+    .ft-client-detail-card{position:static!important;order:0!important;width:100%;min-width:0}
+    .ft-client-filter-card{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-client-filter-search{grid-column:1/-1!important}
+    .ft-clients-page-head{gap:10px;flex-wrap:wrap}
+}
+@media(max-width:760px){
+    .ft-clients-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-client-filter-card{grid-template-columns:1fr!important}
+    .ft-client-filter-search{grid-column:auto!important}
+    .ft-client-quick-row{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px!important}
+    .ft-client-quick-row button{width:100%;min-width:0}
+    .ft-client-table-scroll{overflow:visible!important}
+    .ft-client-table{min-width:0!important;width:100%;display:block}
+    .ft-client-table thead{display:none}
+    .ft-client-table tbody{display:grid;gap:10px;padding:10px}
+    .ft-client-table tbody tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #dce5ef;border-radius:10px;overflow:visible;background:#fff;cursor:default}
+    .ft-client-table td{display:flex;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;border:0!important;border-bottom:1px solid #e5ebf2!important;padding:10px!important}
+    .ft-client-table td:before{content:attr(data-label);font-size:8.5px;text-transform:uppercase;letter-spacing:.04em;color:#73849a;font-weight:800}
+    .ft-client-table td[data-label="Client"],.ft-client-table td[data-label="Actions"]{grid-column:1/-1}
+    .ft-client-table td[data-label="Actions"]{border-bottom:0!important;align-items:flex-end;position:relative}
+    .ft-client-action-menu{right:8px!important;left:auto!important;top:38px!important;z-index:50}
+    .ft-client-pagination{align-items:flex-start!important;flex-direction:column}.ft-client-pagination>div{width:100%;justify-content:space-between;gap:6px;flex-wrap:wrap}
+    .ft-client-detail-head{grid-template-columns:46px minmax(0,1fr)!important}.ft-open-client{grid-column:1/-1!important;width:100%}
+    .ft-client-detail-contact,.ft-client-detail-stats{grid-template-columns:1fr 1fr!important}
+    .ft-client-mini-table{min-width:620px}
+}
+@media(max-width:500px){
+    .ft-clients-metrics,.ft-client-quick-row{grid-template-columns:1fr!important}
+    .ft-client-table tbody tr{grid-template-columns:1fr}
+    .ft-client-table td[data-label="Client"],.ft-client-table td[data-label="Actions"]{grid-column:auto}
+    .ft-client-detail-contact,.ft-client-detail-stats{grid-template-columns:1fr!important}
+    .ft-client-detail-stats div{border-right:0!important;border-bottom:1px solid #dce5ef!important}.ft-client-detail-stats div:last-child{border-bottom:0!important}
+}
+
+/* Documents: filters, metrics, groups and actual rows stay readable on all widths. */
+@media(max-width:1100px){
+    .ft-doc-layout{grid-template-columns:1fr!important}
+    .ft-doc-detail-panel{position:static!important;width:100%;min-width:0}
+    .ft-doc-filterbar{grid-template-columns:repeat(3,minmax(0,1fr))!important}
+    .ft-doc-search{grid-column:1/-1!important}
+}
+@media(max-width:760px){
+    .ft-doc-page-head{flex-direction:column;align-items:stretch}.ft-doc-page-head .primary{width:100%}
+    .ft-doc-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-doc-filterbar{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-doc-search,.ft-doc-clear{grid-column:1/-1!important}
+    .ft-doc-expand-row{align-items:stretch;flex-direction:column;gap:8px}.ft-doc-expand-row>div:last-child{display:grid;grid-template-columns:1fr 1fr}.ft-doc-expand-row button{width:100%}
+    .ft-doc-job-head{grid-template-columns:22px minmax(0,1fr)!important;gap:6px!important}.ft-doc-job-meta{grid-column:2!important;justify-self:start!important;white-space:normal;line-height:1.4}
+    .ft-doc-table-scroll{overflow:visible!important;padding:8px}
+    .ft-doc-table{min-width:0!important;width:100%;display:block}
+    .ft-doc-table thead{display:none}
+    .ft-doc-table tbody{display:grid;gap:9px}
+    .ft-doc-table tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #dfe6ef;border-radius:9px;overflow:hidden;background:#fff}
+    .ft-doc-table td{display:flex!important;flex-direction:column;align-items:flex-start;gap:4px;min-width:0;padding:9px!important;border:0!important;border-bottom:1px solid #edf1f5!important;background:#fff!important}
+    .ft-doc-table td:before{content:attr(data-label);font-size:8px;text-transform:uppercase;letter-spacing:.04em;color:#74849a;font-weight:800}
+    .ft-doc-table td[data-label="Document"],.ft-doc-table td[data-label="Actions"]{grid-column:1/-1}
+    .ft-doc-table td[data-label="Actions"]{border-bottom:0!important}.ft-doc-row-actions{width:100%;justify-content:flex-end}
+    .ft-doc-file b{max-width:100%!important;white-space:normal!important;overflow:visible!important}
+    .ft-doc-pagination{align-items:flex-start!important;flex-direction:column}.ft-doc-pagination>div{width:100%;justify-content:space-between;flex-wrap:wrap}
+    .ft-doc-upload-modal .form-grid{grid-template-columns:1fr!important}
+}
+@media(max-width:480px){
+    .ft-doc-metrics,.ft-doc-filterbar{grid-template-columns:1fr!important}
+    .ft-doc-search,.ft-doc-clear{grid-column:auto!important}
+    .ft-doc-expand-row>div:last-child{grid-template-columns:1fr}
+    .ft-doc-table tr{grid-template-columns:1fr}.ft-doc-table td[data-label="Document"],.ft-doc-table td[data-label="Actions"]{grid-column:auto}
+    .ft-doc-detail-title{align-items:flex-start}.ft-doc-side-list>div{grid-template-columns:1fr!important;gap:3px!important}
+}
+
+/* Roles & Access: tabs wrap into a grid and permission options become cards on mobile. */
+@media(max-width:900px){
+    .ft-access-tabs{display:grid!important;grid-template-columns:repeat(3,minmax(0,1fr));overflow:visible!important;border:1px solid #dbe4ef;border-radius:10px;padding:5px;gap:5px}
+    .ft-access-tabs button{white-space:normal!important;border:0!important;border-radius:7px;padding:10px!important;text-align:center}.ft-access-tabs button.active{background:#eaf1ff;color:#1663eb}
+    .ft-role-grid{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-access-metrics{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-access-grid-2{grid-template-columns:1fr!important}
+    .ft-matrix-toolbar{grid-template-columns:1fr!important}
+}
+@media(max-width:700px){
+    .ft-access-head{flex-direction:column}.ft-access-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}.ft-access-actions button{width:100%}
+    .ft-access-tabs{grid-template-columns:repeat(2,minmax(0,1fr))!important}
+    .ft-role-grid{grid-template-columns:1fr!important}
+    .ft-role-buttons{display:grid;grid-template-columns:1fr 1fr}
+    .ft-role-matrix-wrap{overflow:visible!important;background:transparent!important;border:0!important;box-shadow:none!important}
+    .ft-role-matrix{min-width:0!important;width:100%;display:block}
+    .ft-role-matrix thead{display:none}
+    .ft-role-matrix tbody{display:grid;gap:10px}
+    .ft-role-matrix tr{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));border:1px solid #dfe6ef;border-radius:10px;overflow:hidden;background:#fff}
+    .ft-role-matrix td{display:flex!important;align-items:center;justify-content:space-between;gap:8px;min-width:0;border:0!important;border-bottom:1px solid #edf1f5!important;padding:10px!important;text-align:right!important}
+    .ft-role-matrix td:first-child{grid-column:1/-1;position:static!important;min-width:0!important;background:#f8fafc!important;text-align:left!important;display:block!important}
+    .ft-role-matrix td:not(:first-child):before{content:attr(data-label);font-size:9px;color:#65758c;font-weight:750;text-align:left}
+    .ft-role-matrix td:last-child{grid-column:1/-1;border-bottom:0!important}.ft-scope-select{width:100%;min-width:0!important}
+    .ft-user-access-table{min-width:720px}
+    .ft-audit-row{grid-template-columns:32px minmax(0,1fr)}.ft-audit-row code{grid-column:2;justify-self:start}
+}

@@ -13,6 +13,7 @@ use App\Models\FlowTaskComment;
 use App\Models\Task;
 use App\Models\User;
 use App\Models\Workflow;
+use App\Models\WorkflowTemplate;
 use App\Models\WorkflowPhase;
 use App\Services\AccessControlService;
 use App\Services\ClientService;
@@ -158,12 +159,27 @@ class Index extends Component
                 'workflowId' => 'workflows',
             };
 
-            $valid = $options->options($user, $type, 'create-job', '', $id, 20)
+            $constraints = $property === 'workflowId' ? ['client_id' => $this->clientId] : [];
+            $valid = $options->options($user, $type, 'create-job', '', $id, 20, $constraints)
                 ->contains(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
             abort_unless($valid, 422, 'That option is no longer available.');
 
             $this->{$property} = $id;
             $this->resetValidation($property);
+
+            if ($property === 'clientId' && $this->workflowId) {
+                $stillAvailable = WorkflowTemplate::query()
+                    ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+                    ->where('is_active', true)
+                    ->availableFor('orders', $id)
+                    ->whereKey($this->workflowId)
+                    ->exists();
+
+                if (!$stillAvailable) {
+                    $this->workflowId = null;
+                    $this->workflowPhaseId = null;
+                }
+            }
 
             if ($property === 'workflowId') {
                 $this->setDefaultStartPhase();
@@ -329,7 +345,13 @@ class Index extends Component
             $this->createAssignmentReady = true;
             $this->ownerId ??= auth()->id();
             $this->coordinatorId ??= auth()->id();
-            $this->workflowId ??= Workflow::where('is_snapshot', false)->where('is_active', true)->orderBy('id')->value('id');
+            $this->workflowId ??= WorkflowTemplate::query()
+                ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+                ->where('is_active', true)
+                ->availableFor('orders', $this->clientId)
+                ->orderByDesc('is_default')
+                ->orderBy('name')
+                ->value('id');
             $this->setDefaultStartPhase();
             $this->createWorkflowReady = true;
             return;
@@ -438,6 +460,18 @@ class Index extends Component
 
         if (count($this->jobAttachments) > 0) {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        }
+
+        $workflowAvailable = WorkflowTemplate::query()
+            ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
+            ->where('is_active', true)
+            ->availableFor('orders', (int) $data['clientId'])
+            ->whereKey((int) $data['workflowId'])
+            ->exists();
+
+        if (!$workflowAvailable) {
+            $this->addError('workflowId', 'That Workflow is not available for the selected client.');
+            return;
         }
 
         $first = collect($data['jobItems'])->first();
@@ -1338,7 +1372,7 @@ class Index extends Component
                 ? $options->options($user, 'users', 'create-job', '', $this->ownerId, 6)
                 : collect(),
             'workflowFilterOptions' => $this->createWorkflowReady
-                ? $options->options($user, 'workflows', 'create-job', '', $this->workflowId, 6)
+                ? $options->options($user, 'workflows', 'create-job', '', $this->workflowId, 6, ['client_id' => $this->clientId])
                 : collect(),
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForCreate($user),
         ];

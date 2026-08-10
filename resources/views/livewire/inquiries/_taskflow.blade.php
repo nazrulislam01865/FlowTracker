@@ -69,7 +69,7 @@
                                 <select x-ref="inquiryStatus" x-cloak x-show="editing" class="ft-inquiry-inline-input" x-model="draftValue"
                                     x-on:keydown.escape.prevent="cancelEdit()"
                                     x-on:blur="if (editing) cancelEdit()"
-                                    x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; return result; })">
+                                    x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; })">
                                     @if($state === 'wait')<option value="Waiting">Waiting</option>@endif
                                     @foreach(\App\Services\InquiryService::WORKING_STATUSES as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
                                 </select>

@@ -88,3 +88,15 @@ The project now normalizes session-cookie transport settings per request, preven
 ## 2026-08-09 My Task loading regression fix
 
 The My Task page no longer starts a second automatic Livewire metrics request after first paint, and its "Updating tasks..." indicator is now hidden unless a real list request is in progress. See `MY_WORK_INFINITE_LOADING_FIX.md` for the root cause and deployment notes.
+
+## 2026-08-10 — Direct screenshot capture in rich text
+
+Rich-text fields now include a **Capture** action beside the existing image insert action. On supported desktop browsers, clicking it opens the browser's native screen-sharing picker so the user can choose a screen, application window, or browser tab. FlowTrack captures one frame, immediately stops the display-sharing stream, uploads the screenshot through the existing protected rich-text image endpoint, and inserts it at the current editor cursor position.
+
+Saved rich-text screenshots keep the image preview controls, including **Open in new window**, zoom, download, and close.
+
+Notes:
+- Screen capture requires HTTPS in production (localhost is allowed by browsers for development).
+- The exact screen/window/tab choices are controlled by the browser/operating system.
+- Browsers without `getDisplayMedia()` show a clear unsupported-browser message; normal paste/image upload continues to work.
+- No database migration is required.

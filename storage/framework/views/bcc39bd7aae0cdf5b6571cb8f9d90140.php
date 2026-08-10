@@ -60,6 +60,7 @@
                         <div>Started At</div>
                         <div>Status</div>
                         <div>View</div>
+                        <div aria-label="Actions"></div>
                     </div>
                     <div class="inquiry-list-body">
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $inquiryRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
@@ -88,6 +89,48 @@
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title"><?php echo e($row['startedDate']); ?></span><span class="sub"><?php echo e($row['startedTime']); ?></span></div>
                                 <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill <?php echo e($tone($row['status'])); ?>"><?php echo e($row['status']); ?></span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="<?php echo e(route('inquiries.index', ['open' => $row['id']])); ?>" aria-label="View <?php echo e($row['number']); ?>" wire:navigate>View <span aria-hidden="true">→</span></a></div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('inquiries', 'delete')): ?>
+                                    <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
+                                        <button
+                                            class="ft-inquiry-row-action-trigger"
+                                            type="button"
+                                            :aria-expanded="open ? 'true' : 'false'"
+                                            aria-haspopup="menu"
+                                            aria-controls="inquiry-actions-<?php echo e($row['id']); ?>"
+                                            aria-label="Actions for <?php echo e($row['number']); ?>"
+                                            x-on:click.stop="
+                                                const menu = $refs.menu;
+                                                if (menu.matches(':popover-open')) { menu.hidePopover(); return; }
+                                                const rect = $el.getBoundingClientRect();
+                                                const menuWidth = 166;
+                                                const menuHeight = 46;
+                                                const edge = 10;
+                                                const gap = 6;
+                                                const left = Math.min(window.innerWidth - menuWidth - edge, Math.max(edge, rect.right - menuWidth));
+                                                const openAbove = (window.innerHeight - rect.bottom) < (menuHeight + gap + edge) && rect.top > (menuHeight + gap + edge);
+                                                const top = openAbove ? rect.top - menuHeight - gap : rect.bottom + gap;
+                                                menu.style.left = `${left}px`;
+                                                menu.style.top = `${Math.max(edge, top)}px`;
+                                                menu.showPopover();
+                                            "
+                                        >⋮</button>
+                                        <div
+                                            id="inquiry-actions-<?php echo e($row['id']); ?>"
+                                            class="ft-inquiry-row-action-menu"
+                                            x-ref="menu"
+                                            popover="auto"
+                                            role="menu"
+                                            x-on:toggle="open = $event.newState === 'open'"
+                                        >
+                                            <button type="button" role="menuitem" wire:click="deleteInquiry(<?php echo e($row['id']); ?>)" wire:confirm="Delete <?php echo e($row['number']); ?>? This removes the inquiry from active lists. Any converted order remains available.">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>
+                                                <span>Delete inquiry</span>
+                                            </button>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <div class="cell ft-inquiry-list-actions-cell" aria-hidden="true"></div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </article>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             <div class="ft-inquiry-list-empty">No matching inquiries.</div>
@@ -482,7 +525,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             $currentTask = $inquiry->currentTask;
             $firstStartedTask = $inquiry->tasks->whereNotNull('started_at')->sortBy('started_at')->first();
             $lastCompletedTask = $inquiry->tasks->whereNotNull('completed_at')->sortByDesc('completed_at')->first();
-            $inquiryStartAt = $firstStartedTask?->started_at;
+            $inquiryStartAt = $inquiry->started_at ?: $firstStartedTask?->started_at;
+            $inquiryStartLocal = \App\Support\UserLocalTime::localize($inquiryStartAt);
             $inquiryCompletedAt = $inquiry->completed_at ?: ($readyForDecision ? $lastCompletedTask?->completed_at : null);
             $detailStatus = match (true) {
                 $inquiry->result === 'converted' => 'Converted',
@@ -495,6 +539,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
         ?>
         <section class="view inquiry-detail-view" x-data="{
             inquiryStatus:<?php echo \Illuminate\Support\Js::from($detailStatus)->toHtml() ?>,
+            inquiryStartValue:<?php echo \Illuminate\Support\Js::from($inquiryStartLocal?->format('Y-m-d\TH:i') ?? '')->toHtml() ?>,
+            inquiryStartDisplay:<?php echo \Illuminate\Support\Js::from($inquiryStartLocal?->format('M j, Y · g:i A') ?? '—')->toHtml() ?>,
             statusTone(status){
                 if (String(status).includes('Converted') || String(status).includes('Completed')) return 'green';
                 if (String(status).includes('Dead') || String(status).includes('Closed')) return 'red';
@@ -507,6 +553,11 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 try{
                     const result=await $wire.updateTaskStatusInline(taskId,event.currentTarget.value);
                     if(result?.inquiryStatus)this.inquiryStatus=result.inquiryStatus;
+                    if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){
+                        this.inquiryStartValue=result.inquiryStartValue || '';
+                        this.inquiryStartDisplay=result.inquiryStartDisplay || '—';
+                        window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:this.inquiryStartValue,display:this.inquiryStartDisplay}}));
+                    }
                 }catch(error){
                     this.inquiryStatus=previous;
                     window.location.reload();
@@ -660,9 +711,50 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
 
-                        <div class="ft-task-property">
+                        <div
+                            class="ft-task-property ft-inline-edit-shell"
+                            x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('inquiry-'.$inquiry->id.'-start-at')->toHtml() ?>, label: 'Inquiry start date', value: <?php echo \Illuminate\Support\Js::from($inquiryStartLocal?->format('Y-m-d\TH:i') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($inquiryStartLocal?->format('M j, Y · g:i A') ?? '—')->toHtml() ?> })"
+                            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            x-on:click.outside="if (editing) cancelEdit()"
+                            x-on:flowtrack-inquiry-started.window="const v=String($event.detail?.value ?? ''); const d=String($event.detail?.display ?? '—'); serverValue=v; value=v; savedValue=v; draftValue=v; display=d; savedDisplay=d;"
+                        >
                             <small>Start date</small>
-                            <div class="ft-task-property-display"><span class="ft-calendar-glyph">▣</span><b class="ft-property-value"><?php echo e($inquiryStartAt ? \App\Support\UserLocalTime::format($inquiryStartAt, 'M j, Y') : '—'); ?></b></div>
+                            <div x-show="!editing" class="ft-task-property-display">
+                                <span class="ft-calendar-glyph">▣</span>
+                                <b class="ft-property-value" x-text="display"><?php echo e($inquiryStartLocal?->format('M j, Y · g:i A') ?? '—'); ?></b>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && !$inquiry->result): ?>
+                                    <button type="button" :disabled="status === 'saving'" title="Edit start date and time" aria-label="Edit Inquiry start date and time" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryStartAt?.showPicker ? $refs.inquiryStartAt.showPicker() : $refs.inquiryStartAt?.focus())">✎</button>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && !$inquiry->result): ?>
+                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor">
+                                    <input x-ref="inquiryStartAt" x-model="draftValue" class="ft-task-property-inline-input" type="datetime-local" step="60"
+                                        x-on:keydown.escape.prevent="cancelEdit()"
+                                        x-on:change="commit($event.target.value, formatDateTime($event.target.value), () => $wire.updateInquiryStartInline(draftValue))">
+                                </div>
+                                <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
 
                         <div class="ft-task-property ft-task-completed-property">

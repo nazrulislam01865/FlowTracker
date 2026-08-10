@@ -20,6 +20,8 @@ class MasterDataService
         'production_unit' => 'Production Units',
         'shipment_method' => 'Shipment Methods',
         'currency' => 'Currencies',
+        'country' => 'Countries',
+        'state' => 'States',
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
         'task_status' => 'Task Statuses',
@@ -41,6 +43,8 @@ class MasterDataService
         'production_unit' => 'PUN',
         'shipment_method' => 'SHM',
         'currency' => 'CUR',
+        'country' => 'CTR',
+        'state' => 'STA',
         'document_category' => 'DOC',
         'priority' => 'PRI',
         'task_status' => 'TST',
@@ -56,6 +60,8 @@ class MasterDataService
         'production_unit' => 'production_units',
         'shipment_method' => 'shipment_methods',
         'currency' => 'currencies',
+        'country' => 'countries',
+        'state' => 'states',
         'document_category' => 'document_categories',
         'priority' => 'priorities',
         'task_status' => 'task_statuses',
@@ -69,7 +75,7 @@ class MasterDataService
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
-            ->when($type === 'product', fn ($q) => $q->with('parent'))
+            ->when(in_array($type, ['product', 'state'], true), fn ($q) => $q->with('parent'))
             ->when($search, fn ($q) => $q->where(fn ($x) => $x
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
@@ -142,16 +148,26 @@ class MasterDataService
         if ($duplicate) throw ValidationException::withMessages(['code' => 'This code already exists in the selected master data type.']);
 
         $parentId = null;
-        if ($type === 'product' && filled($data['parent_id'] ?? null)) {
+        $parentType = match ($type) {
+            'product' => 'product_category',
+            'state' => 'country',
+            default => null,
+        };
+        if ($parentType && filled($data['parent_id'] ?? null)) {
             $parentId = MasterRecord::query()
                 ->forWorkspace($workspaceId)
-                ->ofType('product_category')
+                ->ofType($parentType)
                 ->whereKey((int) $data['parent_id'])
                 ->value('id');
 
             if (!$parentId) {
-                throw ValidationException::withMessages(['parentId' => 'Select a valid Product Category.']);
+                $label = $type === 'state' ? 'Country' : 'Product Category';
+                throw ValidationException::withMessages(['parentId' => 'Select a valid '.$label.'.']);
             }
+        }
+
+        if ($type === 'state' && !$parentId) {
+            throw ValidationException::withMessages(['parentId' => 'Select the country this state belongs to.']);
         }
 
         return DB::transaction(function () use ($type, $data, $id, $workspaceId, $code, $parentId) {
@@ -228,10 +244,10 @@ class MasterDataService
             );
         }
 
-        // Product is the only hierarchical master-data type. Preserve legacy
-        // Product -> Product Category links without introducing parents for
-        // departments, statuses, priorities, or any other master data.
-        MasterRecord::query()->forWorkspace($workspaceId)->where('type', '!=', 'product')->whereNotNull('parent_id')->update(['parent_id' => null]);
+        // Products and States are hierarchical master-data types. Preserve
+        // Product -> Product Category and State -> Country links while keeping
+        // all other master-data categories flat.
+        MasterRecord::query()->forWorkspace($workspaceId)->whereNotIn('type', ['product', 'state'])->whereNotNull('parent_id')->update(['parent_id' => null]);
         foreach (MasterValue::query()->where('group_key', self::LEGACY_GROUPS['product'])->whereNotNull('parent_id')->get() as $legacyProduct) {
             $legacyCategory = MasterValue::query()->whereKey($legacyProduct->parent_id)->first();
             if (!$legacyCategory || $legacyCategory->group_key !== self::LEGACY_GROUPS['product_category']) continue;
@@ -249,6 +265,26 @@ class MasterDataService
                     ->where('code', $legacyProduct->code)
                     ->whereNull('parent_id')
                     ->update(['parent_id' => $categoryId]);
+            }
+        }
+
+        foreach (MasterValue::query()->where('group_key', self::LEGACY_GROUPS['state'])->whereNotNull('parent_id')->get() as $legacyState) {
+            $legacyCountry = MasterValue::query()->whereKey($legacyState->parent_id)->first();
+            if (!$legacyCountry || $legacyCountry->group_key !== self::LEGACY_GROUPS['country']) continue;
+
+            $countryId = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('country')
+                ->where('code', $legacyCountry->code)
+                ->value('id');
+
+            if ($countryId) {
+                MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('state')
+                    ->where('code', $legacyState->code)
+                    ->whereNull('parent_id')
+                    ->update(['parent_id' => $countryId]);
             }
         }
 
@@ -279,14 +315,19 @@ class MasterDataService
         if (!Schema::hasTable('master_values')) return;
         $group = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         $legacyParentId = null;
-        if ($record->type === 'product' && $record->parent_id) {
+        $parentType = match ($record->type) {
+            'product' => 'product_category',
+            'state' => 'country',
+            default => null,
+        };
+        if ($parentType && $record->parent_id) {
             $parent = MasterRecord::query()
                 ->forWorkspace($record->workspace_id)
-                ->ofType('product_category')
+                ->ofType($parentType)
                 ->find($record->parent_id);
             if ($parent) {
                 $legacyParentId = MasterValue::query()
-                    ->where('group_key', self::LEGACY_GROUPS['product_category'])
+                    ->where('group_key', self::LEGACY_GROUPS[$parentType])
                     ->where('code', $parent->code)
                     ->value('id');
             }

@@ -33,6 +33,17 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function deleteOrder(int $id): void
+    {
+        $service = app(JobService::class);
+        $job = $service->visibleQuery(auth()->user())->findOrFail($id);
+
+        $service->delete($job, auth()->user());
+        $this->resetPage();
+
+        session()->flash('success', $job->displayOrderNumber().' deleted successfully.');
+    }
+
     public function render()
     {
         return view('livewire.orders.index', [

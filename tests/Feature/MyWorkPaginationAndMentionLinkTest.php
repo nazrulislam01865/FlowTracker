@@ -46,7 +46,7 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString('is-focused-comment', $jobActivity);
     }
 
-    public function test_mentions_include_self_mentions_order_mentions_and_dashboard_realtime_refresh(): void
+    public function test_my_work_mentions_show_only_exact_mentioned_tasks_and_dashboard_realtime_refresh(): void
     {
         $notificationService = file_get_contents(app_path('Services/NotificationService.php'));
         $myWork = file_get_contents(app_path('Services/MyWorkService.php'));
@@ -54,9 +54,12 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $tagged = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
 
         $this->assertStringNotContainsString('->reject(fn ($id) => $actor && $id === (int) $actor->id)', $notificationService);
-        $this->assertStringContainsString("->whereColumn('flow_notifications.flow_task_id', 'tasks.id')", $myWork);
-        $this->assertStringContainsString("->whereColumn('flow_notifications.flow_job_id', 'tasks.flow_job_id')", $myWork);
-        $this->assertStringContainsString("->leftJoinSub(\$jobMentions, 'my_work_metric_job_mentions'", $myWork);
+        $this->assertStringContainsString("->whereColumn('my_work_mention_activity.subject_id', 'tasks.id')", $myWork);
+        $this->assertStringContainsString("->where('my_work_mention_activity.event', 'task.comment')", $myWork);
+        $this->assertStringContainsString("mention_user_ids", $myWork);
+        $this->assertStringNotContainsString("->whereColumn('flow_notifications.flow_job_id', 'tasks.flow_job_id')", $myWork);
+        $this->assertStringNotContainsString("my_work_metric_job_mentions", $myWork);
+        $this->assertStringContainsString("sibling tasks from the same Order", $myWork);
         $this->assertStringContainsString("#[On('flowtrack-notification')]", $dashboard);
         $this->assertStringContainsString("#[On('flowtrack-notification')]", $tagged);
     }

@@ -145,8 +145,9 @@
                         placeholder="Select workflow"
                         :selected-label="$selectedWorkflow?->name"
                         :initial-options="$workflowFilterOptions"
+                        :params="['client_id' => $clientId]"
                         :clearable="false"
-                        wire:key="create-workflow-selector"
+                        wire:key="create-workflow-selector-{{ $clientId ?: 'none' }}"
                     />
                 </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>

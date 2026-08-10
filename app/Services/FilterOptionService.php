@@ -31,7 +31,7 @@ class FilterOptionService
             'users' => $this->users($user, $context, $search, $limit),
             'product-categories' => $this->productCategories($user, $context, $search, $limit),
             'products' => $this->products($user, $context, $search, $limit, (string) ($constraints['category'] ?? '')),
-            'workflows' => $this->workflows($user, $context, $search, $limit),
+            'workflows' => $this->workflows($user, $context, $search, $limit, (int) ($constraints['client_id'] ?? 0) ?: null),
             'priorities' => $this->masterOptions('priority', $search, $limit),
             'task-statuses' => $this->masterOptions('task_status', $search, $limit),
             'document-categories' => $this->masterOptions('document_category', $search, $limit),
@@ -49,7 +49,7 @@ class FilterOptionService
                 'users' => $this->userById($user, $context, $selectedId),
                 'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
                 'products' => $this->productByName($user, $context, (string) $selectedId, (string) ($constraints['category'] ?? '')),
-                'workflows' => $this->workflowById($user, $context, $selectedId),
+                'workflows' => $this->workflowById($user, $context, $selectedId, (int) ($constraints['client_id'] ?? 0) ?: null),
                 'priorities' => $this->masterByName('priority', (string) $selectedId),
                 'task-statuses' => $this->masterByName('task_status', (string) $selectedId),
                 'document-categories' => $this->masterByName('document_category', (string) $selectedId),
@@ -326,14 +326,20 @@ class FilterOptionService
         abort_unless($canCreate || $canEditFromJobDetail || $canCreateInquiry, 403);
     }
 
-    private function workflows(User $user, string $context, string $search, int $limit): Collection
+    private function workflows(User $user, string $context, string $search, int $limit, ?int $clientId = null): Collection
     {
         $this->authorizeWorkflowOptions($user, $context);
         $workspaceId = app(SetupContext::class)->workspaceId();
+        $appliesTo = match ($context) {
+            'create-inquiry' => 'inquiries',
+            'create-job' => 'orders',
+            default => null,
+        };
 
         return WorkflowTemplate::query()
             ->where('workspace_id', $workspaceId)
             ->where('is_active', true)
+            ->when($appliesTo, fn ($query) => $query->availableFor($appliesTo, $clientId))
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
             ->orderByDesc('is_default')
@@ -347,14 +353,20 @@ class FilterOptionService
             ]);
     }
 
-    private function workflowById(User $user, string $context, int|string $id): ?array
+    private function workflowById(User $user, string $context, int|string $id, ?int $clientId = null): ?array
     {
         if (!is_numeric($id)) return null;
         $this->authorizeWorkflowOptions($user, $context);
+        $appliesTo = match ($context) {
+            'create-inquiry' => 'inquiries',
+            'create-job' => 'orders',
+            default => null,
+        };
 
         $row = WorkflowTemplate::query()
             ->where('workspace_id', app(SetupContext::class)->workspaceId())
             ->where('is_active', true)
+            ->when($appliesTo, fn ($query) => $query->availableFor($appliesTo, $clientId))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
             ->find((int) $id, ['id', 'name']);
 

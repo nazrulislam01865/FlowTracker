@@ -133,4 +133,24 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString('updateInquiryTaskStatus', $myWork);
         $this->assertStringNotContainsString('updateInquiryTaskDueDate', $myWork);
     }
+
+    public function test_inquiry_start_timestamp_is_persisted_auto_started_and_inline_editable(): void
+    {
+        $model = file_get_contents(app_path('Models/Inquiry.php'));
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $migration = file_get_contents(database_path('migrations/2026_08_10_130000_add_started_at_to_inquiries.php'));
+
+        $this->assertStringContainsString("'started_at' => 'datetime'", $model);
+        $this->assertStringContainsString("timestamp('started_at')", $migration);
+        $this->assertStringContainsString("strcasecmp(\$nextStatus, 'In Progress') === 0", $service);
+        $this->assertStringContainsString("whereNull('started_at')", $service);
+        $this->assertStringContainsString('public function updateStartedAt(Inquiry $inquiry', $service);
+        $this->assertStringContainsString('public function updateInquiryStartInline', $component);
+        $this->assertStringContainsString('inquiryStartValue', $component);
+        $this->assertStringContainsString('type="datetime-local"', $view);
+        $this->assertStringContainsString('formatDateTime($event.target.value)', $view);
+        $this->assertStringContainsString('flowtrack-inquiry-started', $view);
+    }
 }
