@@ -15,7 +15,7 @@
     @endauth
     <title>{{ ($title ?? null) ? $title.' — ' : '' }}STEP PROMO</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp') }}">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260811-role-matrix-save-ux-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3"></script>
     @auth
@@ -46,7 +46,7 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-01">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-07">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">

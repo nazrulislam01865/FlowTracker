@@ -8,7 +8,7 @@
     $done = \App\Support\JobDetailPresenter::completedCount($currentTasks);
     $accessControl = app(\App\Services\AccessControlService::class);
     $canEditJob = $accessControl->canEditVisibleJob(auth()->user(), $job);
-    $canAssignJob = $accessControl->canAssignVisibleJob(auth()->user());
+    $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
@@ -235,6 +235,8 @@
                                 :value="$job->owner_id ?? ''"
                                 :selected-label="$job->owner?->name ?? 'Unassigned'"
                                 context="job-owner"
+                                parent-type="job"
+                                :parent-id="$job->id"
                                 search-placeholder="Search owner…"
                                 trigger-class="ft-planning-inline-select"
                                 variant="compact"
@@ -316,6 +318,8 @@
                                         <div x-cloak x-show="editing" class="ft-task-inline-assignee-picker">
                                             <x-ui.inline-remote-user
                                                 :value="$task->assignee_id ?? ''"
+                                                parent-type="job"
+                                                :parent-id="$job->id"
                                                 :selected-label="$task->assignee?->name ?? 'Unassigned'"
                                                 trigger-class="ft-task-inline-input"
                                                 variant="compact"

@@ -60,7 +60,7 @@
                             <div class="ft-task-editor-actions">
                                 <button type="button" wire:click="moveTask({{ $index }}, -1)" @disabled($index === 0)>↑</button>
                                 <button type="button" wire:click="moveTask({{ $index }}, 1)" @disabled($index === count($tasks)-1)>↓</button>
-                                <button type="button" wire:click="removeTask({{ $index }})">Remove</button>
+                                @if(empty($task['id']) || $canDeleteTaskPack)<button type="button" wire:click="removeTask({{ $index }})">Remove</button>@endif
                             </div>
                         </div>
 

@@ -30,7 +30,7 @@ class WorkflowService
 
     public function saveWorkflow(array $data, ?int $id = null): WorkflowTemplate
     {
-        $this->assertManage();
+        $this->assertAction($id ? 'edit' : 'create');
         $workspaceId = $this->workspaceId();
         $code = strtoupper(trim($data['code']));
         if (WorkflowTemplate::where('workspace_id', $workspaceId)->where('code', $code)->when($id, fn ($q) => $q->whereKeyNot($id))->exists()) {
@@ -123,7 +123,7 @@ class WorkflowService
 
     public function copyPhases(WorkflowTemplate $source, WorkflowTemplate $target): void
     {
-        $this->assertManage();
+        $this->assertAction('create');
         DB::transaction(function () use ($source, $target) {
             foreach ($source->phases()->orderBy('sequence')->get() as $phase) {
                 $this->savePhase($target, [
@@ -139,14 +139,14 @@ class WorkflowService
                     'entry_condition' => $phase->entry_condition,
                     'exit_condition' => $phase->exit_condition,
                     'sequence' => (int) $phase->sequence,
-                ]);
+                ], null, false);
             }
         });
     }
 
     public function setDefault(int $id): void
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $workspaceId = $this->workspaceId();
         DB::transaction(function () use ($id, $workspaceId) {
             WorkflowTemplate::where('workspace_id', $workspaceId)->update(['is_default' => false]);
@@ -159,7 +159,7 @@ class WorkflowService
 
     public function toggleWorkflow(int $id): void
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $workflow = WorkflowTemplate::where('workspace_id', $this->workspaceId())->findOrFail($id);
         if ($workflow->is_default && $workflow->is_active) {
             throw ValidationException::withMessages(['workflow' => 'The default workflow cannot be deactivated. Set another default first.']);
@@ -176,7 +176,7 @@ class WorkflowService
      */
     public function workflowDeleteImpact(int $id): array
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $workflow = WorkflowTemplate::query()
             ->where('workspace_id', $this->workspaceId())
             ->findOrFail($id);
@@ -270,7 +270,7 @@ class WorkflowService
      */
     public function deleteWorkflow(int $id): array
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $workspaceId = $this->workspaceId();
         $workflow = WorkflowTemplate::where('workspace_id', $workspaceId)->findOrFail($id);
 
@@ -348,9 +348,9 @@ class WorkflowService
         ];
     }
 
-    public function savePhase(WorkflowTemplate $workflow, array $data, ?WorkflowPhase $phase = null): WorkflowPhase
+    public function savePhase(WorkflowTemplate $workflow, array $data, ?WorkflowPhase $phase = null, bool $authorize = true): WorkflowPhase
     {
-        $this->assertManage();
+        if ($authorize) $this->assertAction('edit');
         if (!empty($data['task_pack_id'])) {
             TaskPack::query()
                 ->where('workspace_id', $this->workspaceId())
@@ -397,7 +397,7 @@ class WorkflowService
 
     public function move(WorkflowPhase $phase, int $direction): void
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $workflowId = (int) ($phase->workflow_template_id ?: $phase->workflow_id);
         DB::transaction(function () use ($phase, $direction, $workflowId) {
             $targetSequence = $phase->sequence + $direction;
@@ -414,7 +414,7 @@ class WorkflowService
 
     public function delete(WorkflowPhase $phase): void
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $workflowId = (int) ($phase->workflow_template_id ?: $phase->workflow_id);
         $jobIds = FlowJob::withTrashed()
             ->where(function ($query) use ($phase) {
@@ -527,10 +527,10 @@ class WorkflowService
         }
     }
 
-    private function assertManage(): void
+    private function assertAction(string $action): void
     {
         $user = auth()->user();
-        abort_unless($user && app(AccessControlService::class)->can($user, 'workflow', 'manage'), 403);
+        abort_unless($user && app(AccessControlService::class)->can($user, 'workflow', $action), 403);
     }
 
 }

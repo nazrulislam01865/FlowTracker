@@ -7,6 +7,8 @@
     'variant' => 'compact',
     'menuWidth' => 300,
     'searchPlaceholder' => 'Search assignee…',
+    'parentType' => '',
+    'parentId' => null,
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
@@ -23,7 +25,7 @@
         selectedLabel: @js($resolvedLabel),
         endpoint: @js(route('filter-options.index', ['type' => 'users'])),
         initialItems: [],
-        params: {},
+        params: { parent_type: @js((string) $parentType), parent_id: @js($parentId) },
         disabled: false,
         menuWidth: @js((int) $menuWidth),
         fixedMenu: true,

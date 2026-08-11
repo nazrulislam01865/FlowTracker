@@ -70,6 +70,9 @@ class Form extends Component
     public function removeTask(int $index): void
     {
         if (!array_key_exists($index, $this->tasks)) return;
+        if (!empty($this->tasks[$index]['id'])) {
+            abort_unless(auth()->user()?->canModule('taskpacks', 'delete'), 403);
+        }
         array_splice($this->tasks, $index, 1);
         $this->tasks = array_values($this->tasks);
         if (!$this->tasks) $this->tasks[] = $this->blankTask();

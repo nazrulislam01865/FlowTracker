@@ -10,11 +10,14 @@
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
                 $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
                 $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
-                $canChangeStatusThisTask = !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
-                // Assignee, due date and attachments stay available after completion.
-                // Completion itself is still protected by the required-file rule.
+                $taskAccess = app(\App\Services\AccessControlService::class);
+                $canChangeStatusThisTask = !$inquiry->result && app(\App\Services\InquiryService::class)->canEditTask(auth()->user(), $task);
+                // Editing a task and assigning a task are independent matrix permissions.
                 $canEditTaskFields = $canChangeStatusThisTask;
-                $canAttachThisTask = !$inquiry->result && $canChangeStatusThisTask;
+                $canAssignThisTask = !$inquiry->result && $taskAccess->canAssignInquiryTask(auth()->user(), $task);
+                $canAttachFileThisTask = !$inquiry->result && $canChangeStatusThisTask && ($canCreateDocuments || $canLinkDocuments);
+                $canDeleteTaskDocuments = !$inquiry->result && $canChangeStatusThisTask && $canDeleteDocuments;
+                $canAttachThisTask = $canAttachFileThisTask; // legacy alias used by the modal/resource block.
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
                 $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
@@ -80,20 +83,20 @@
 <?php endif; ?></span>
                             <span class="ft-inquiry-assignee-name" x-text="display"><?php echo e($task->assignee?->name ?? 'Unassigned'); ?></span>
                         </div>
-                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTaskFields): ?><button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAssignThisTask): ?><button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTaskFields): ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAssignThisTask): ?>
                         <div x-cloak x-show="editing" class="ft-inquiry-assignee-picker">
                             <?php if (isset($component)) { $__componentOriginal3c33be8c92a6f6cbf6403b5c3f28e607 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal3c33be8c92a6f6cbf6403b5c3f28e607 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-user','data' => ['value' => $task->assignee_id ?? '','selectedLabel' => $task->assignee?->name ?? 'Unassigned','triggerClass' => 'ft-task-inline-input','variant' => 'compact','menuWidth' => 260]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-user','data' => ['value' => $task->assignee_id ?? '','selectedLabel' => $task->assignee?->name ?? 'Unassigned','parentType' => 'inquiry','parentId' => $inquiry->id,'triggerClass' => 'ft-task-inline-input','variant' => 'compact','menuWidth' => 260]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.inline-remote-user'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->assignee_id ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->assignee?->name ?? 'Unassigned'),'trigger-class' => 'ft-task-inline-input','variant' => 'compact','menu-width' => 260]); ?>
+<?php $component->withAttributes(['value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->assignee_id ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->assignee?->name ?? 'Unassigned'),'parent-type' => 'inquiry','parent-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inquiry->id),'trigger-class' => 'ft-task-inline-input','variant' => 'compact','menu-width' => 260]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -216,28 +219,32 @@
                     </span>
                 </div>
                 <div class="ft-inquiry-task-files">
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAttachThisTask): ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAttachFileThisTask || $canChangeStatusThisTask): ?>
                         <div class="ft-inquiry-task-add-actions" aria-label="Add task resource">
-                            <button
-                                class="ft-inquiry-task-add-icon"
-                                type="button"
-                                wire:click="openTaskDocumentModal(<?php echo e($task->id); ?>)"
-                                title="Add file"
-                                aria-label="Add file to <?php echo e($task->title); ?>"
-                            >
-                                <span class="ft-inquiry-task-add-plus">+</span>
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
-                            </button>
-                            <button
-                                class="ft-inquiry-task-add-icon <?php echo e((int)$taskLinkFormTaskId === (int)$task->id ? 'is-active' : ''); ?>"
-                                type="button"
-                                wire:click="openTaskLinkForm(<?php echo e($task->id); ?>)"
-                                title="Add link"
-                                aria-label="Add external link to <?php echo e($task->title); ?>"
-                            >
-                                <span class="ft-inquiry-task-add-plus">+</span>
-                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                            </button>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAttachFileThisTask): ?>
+                                <button
+                                    class="ft-inquiry-task-add-icon"
+                                    type="button"
+                                    wire:click="openTaskDocumentModal(<?php echo e($task->id); ?>)"
+                                    title="Add file"
+                                    aria-label="Add file to <?php echo e($task->title); ?>"
+                                >
+                                    <span class="ft-inquiry-task-add-plus">+</span>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+                                </button>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canChangeStatusThisTask): ?>
+                                <button
+                                    class="ft-inquiry-task-add-icon <?php echo e((int)$taskLinkFormTaskId === (int)$task->id ? 'is-active' : ''); ?>"
+                                    type="button"
+                                    wire:click="openTaskLinkForm(<?php echo e($task->id); ?>)"
+                                    title="Add link"
+                                    aria-label="Add external link to <?php echo e($task->title); ?>"
+                                >
+                                    <span class="ft-inquiry-task-add-plus">+</span>
+                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                </button>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <span class="ft-inquiry-task-resource-count"><b><?php echo e($task->documents_count); ?></b> file<?php echo e($task->documents_count === 1 ? '' : 's'); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task->links->isNotEmpty()): ?> · <b><?php echo e($task->links->count()); ?></b> link<?php echo e($task->links->count() === 1 ? '' : 's'); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
@@ -255,7 +262,7 @@
 
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((int)$taskLinkFormTaskId === (int)$task->id || $task->documents->isNotEmpty() || $task->links->isNotEmpty()): ?>
                 <div class="ft-inquiry-task-document-list ft-inquiry-task-resource-list" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'inquiry-task-resources-'.e($task->id).''; ?>wire:key="inquiry-task-resources-<?php echo e($task->id); ?>">
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((int)$taskLinkFormTaskId === (int)$task->id && $canAttachThisTask): ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((int)$taskLinkFormTaskId === (int)$task->id && $canChangeStatusThisTask): ?>
                         <form class="ft-inquiry-task-link-form" wire:submit.prevent="saveTaskLink(<?php echo e($task->id); ?>)" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'inquiry-task-link-form-'.e($task->id).''; ?>wire:key="inquiry-task-link-form-<?php echo e($task->id); ?>">
                             <div class="ft-inquiry-task-link-input-wrap">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
@@ -294,8 +301,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             </div>
                             <div class="ft-inquiry-task-file-actions">
                                 <a href="<?php echo e(route('inquiries.documents.open', $taskDocument)); ?>" target="_blank" rel="noopener">Open</a>
-                                <a href="<?php echo e(route('inquiries.documents.download', $taskDocument)); ?>">Download</a>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAttachThisTask): ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canExportDocuments): ?><a href="<?php echo e(route('inquiries.documents.download', $taskDocument)); ?>">Download</a><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDeleteTaskDocuments): ?>
                                     <button
                                         type="button"
                                         class="ft-inquiry-task-file-remove"
@@ -322,7 +329,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             </div>
                             <div class="ft-inquiry-task-link-actions">
                                 <a href="<?php echo e($taskLink->url); ?>" target="_blank" rel="noopener noreferrer" title="Open external link">Open ↗</a>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAttachThisTask): ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canChangeStatusThisTask): ?>
                                     <button
                                         type="button"
                                         class="ft-inquiry-task-file-remove"

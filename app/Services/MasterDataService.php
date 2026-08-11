@@ -189,7 +189,7 @@ class MasterDataService
 
     public function save(string $type, array $data, ?int $id = null): MasterRecord
     {
-        $this->assertManage();
+        $this->assertAction($id ? 'edit' : 'create');
         abort_unless(array_key_exists($type, self::LABELS), 404);
         $workspaceId = $this->workspaceId();
         $code = strtoupper(trim($data['code']));
@@ -256,7 +256,7 @@ class MasterDataService
 
     public function setColor(int $id, string $color): MasterRecord
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         abort_unless(in_array($record->type, self::COLOR_TYPES, true), 404);
 
@@ -274,7 +274,7 @@ class MasterDataService
 
     public function toggle(int $id): MasterRecord
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         $record->update(['status' => $record->status === 'active' ? 'inactive' : 'active']);
         $this->mirrorLegacy($record);
@@ -284,7 +284,7 @@ class MasterDataService
 
     public function delete(int $id): void
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
 
         // Inquiry Status is intentionally force-removable from the Master Data UI.
@@ -461,10 +461,10 @@ class MasterDataService
         unset($this->colorMaps[$type]);
     }
 
-    private function assertManage(): void
+    private function assertAction(string $action): void
     {
         $user = auth()->user();
-        abort_unless($user && app(AccessControlService::class)->can($user, 'masterdata', 'manage'), 403);
+        abort_unless($user && app(AccessControlService::class)->can($user, 'masterdata', $action), 403);
     }
 
 }

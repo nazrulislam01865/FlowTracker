@@ -1,17 +1,17 @@
 <section class="ft-detail-card ft-attachment-card">
     <h2>Attachments <span><?php echo e($inquiry->documents_count); ?></span></h2>
     <div class="ft-upload-zone compact ft-task-upload-zone">
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && !$showInquiryDocumentPicker): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && $canCreateDocuments && !$showInquiryDocumentPicker): ?>
             <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadInquiryFiles" for="inquiryOverviewUpload-<?php echo e($inquiry->id); ?>">
                 <input id="inquiryOverviewUpload-<?php echo e($inquiry->id); ?>" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
                 <span class="ft-paperclip">⌕</span>
                 <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
             </label>
-        <?php elseif(!$canEditInquiry): ?>
+        <?php elseif(!$canEditInquiry || (!$canCreateDocuments && !$canLinkDocuments)): ?>
             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Inquiry attachments.</small></div></div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('documents','link')): ?>
-            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker"><?php echo e($showInquiryDocumentPicker && $canEditInquiry ? 'Upload new' : 'Choose from Documents'); ?></button>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && $canLinkDocuments): ?>
+            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker"><?php echo e($showInquiryDocumentPicker && $canCreateDocuments ? 'Upload new' : 'Choose from Documents'); ?></button>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
 
@@ -68,8 +68,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
                 <div class="ft-inquiry-attachment-actions">
                     <a class="ft-link-blue ft-inquiry-attachment-open" href="<?php echo e(route('inquiries.documents.open', $document)); ?>" target="_blank" rel="noopener">Open</a>
-                    <a class="ft-link-blue ft-inquiry-attachment-download" href="<?php echo e(route('inquiries.documents.download', $document)); ?>">Download</a>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry): ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canExportDocuments): ?><a class="ft-link-blue ft-inquiry-attachment-download" href="<?php echo e(route('inquiries.documents.download', $document)); ?>">Download</a><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && $canDeleteDocuments): ?>
                         <button type="button" class="ft-doc-delete-button" wire:click="deleteInquiryDocument(<?php echo e($document->id); ?>)" wire:confirm="Remove this attachment from the Inquiry?" aria-label="Remove <?php echo e($document->name); ?>">×</button>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>

@@ -52,6 +52,7 @@ class Index extends Component
 
     public function openPack(?int $id = null): void
     {
+        abort_unless(auth()->user()?->canModule('taskpacks', $id ? 'edit' : 'create'), 403);
         $this->showPackModal = true; $this->editPackId = $id; $this->resetValidation();
         if ($id) {
             $p = TaskPack::where('is_snapshot', false)->findOrFail($id);
@@ -163,6 +164,7 @@ class Index extends Component
 
     public function openItem(?int $id = null): void
     {
+        abort_unless(auth()->user()?->canModule('taskpacks', 'edit'), 403);
         abort_unless($this->selectedPackId, 422);
         $this->showItemModal = true; $this->editItemId = $id; $this->resetValidation();
         if ($id) {

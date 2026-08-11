@@ -9,6 +9,14 @@
             default => 'blue',
         };
     };
+    $priorityTone = static function (string $priority): string {
+        return match (strtolower(trim($priority))) {
+            'critical', 'urgent' => 'red',
+            'high' => 'amber',
+            'low' => 'green',
+            default => 'blue',
+        };
+    };
     $initials = static function (?string $name): string {
         $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
         return strtoupper(substr(implode('', array_map(fn ($part) => substr($part, 0, 1), $parts)), 0, 2)) ?: '—';
@@ -59,6 +67,7 @@
                         <div>Assignee</div>
                         <div>Due Date</div>
                         <div>Started At</div>
+                        <div>Priority</div>
                         <div>Status</div>
                         <div>View</div>
                         <div aria-label="Actions"></div>
@@ -92,8 +101,10 @@
                                 <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title">{{ $row['startedDate'] }}</span><span class="sub">{{ $row['startedTime'] }}</span></div>
                                 @php
+                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
                                     $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
                                 @endphp
+                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill {{ $rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryPriorityColor) }}">{{ $row['priority'] }}</span></div>
                                 <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryStatusColor) }}">{{ $row['status'] }}</span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View <span aria-hidden="true">→</span></a></div>
                                 @if(auth()->user()->canModule('inquiries', 'delete'))
@@ -374,7 +385,7 @@
                                     <strong>{{ $selectedWorkflowName }}</strong>
                                     <span>{{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
                                 </span>
-                                @if(auth()->user()->canAccess('workflow.manage'))
+                                @if(auth()->user()->canAccess('workflow.view'))
                                     <a href="{{ route('workflow.setup') }}" wire:navigate x-on:click.stop>Preview workflow ↗</a>
                                 @endif
                                 <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
@@ -584,6 +595,38 @@
 
                         <div
                             class="ft-task-property ft-inline-edit-shell"
+                            x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-'.$inquiry->id.'-assignee'), label: 'Inquiry assignee', value: @js($inquiry->owner_id ?? ''), display: @js($inquiry->owner?->name ?? 'Unassigned'), avatarUrl: @js($inquiry->owner?->profileImageUrl() ?? '') })"
+                            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            x-on:click.outside="if (editing) cancelEdit()"
+                            x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                            x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateInquiryField('owner_id', draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
+                        >
+                            <small>Assignee</small>
+                            <div x-show="!editing" class="ft-task-property-display ft-inline-person-live">
+                                <x-ui.inline-live-avatar :size="26" />
+                                <b class="ft-property-value" x-text="display">{{ $inquiry->owner?->name ?? 'Unassigned' }}</b>
+                                @if($canEditInquiry && $canAssignInquiry && !$inquiry->result)<button type="button" :disabled="status === 'saving'" title="Edit assignee" aria-label="Edit Inquiry assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>@endif
+                            </div>
+                            @if($canEditInquiry && $canAssignInquiry && !$inquiry->result)
+                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor ft-task-property-assignee-editor">
+                                    <x-ui.inline-remote-user
+                                        :value="$inquiry->owner_id ?? ''"
+                                        :selected-label="$inquiry->owner?->name ?? 'Unassigned'"
+                                        context="inquiry-owner"
+                                        parent-type="inquiry"
+                                        :parent-id="$inquiry->id"
+                                        search-placeholder="Search assignee…"
+                                        trigger-class="ft-task-property-inline-input"
+                                        variant="compact"
+                                        :menu-width="300"
+                                    />
+                                </div>
+                                <x-ui.inline-save-state compact />
+                            @endif
+                        </div>
+
+                        <div
+                            class="ft-task-property ft-inline-edit-shell"
                             x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-'.$inquiry->id.'-due-date'), label: 'Inquiry next due date', value: @js($currentTask?->due_date?->format('Y-m-d') ?? ''), display: @js($currentTask?->due_date?->format('M j, Y') ?? '—') })"
                             :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                             x-on:click.outside="if (editing) cancelEdit()"
@@ -655,10 +698,14 @@
                     </section>
 
                     <div id="tab-workflow" class="ft-inquiry-overview-taskflow ft-inquiry-workflow-pane">
-                        @include('livewire.inquiries._taskflow')
+                        @if(auth()->user()->canModule('tasks', 'view'))
+                            @include('livewire.inquiries._taskflow')
+                        @else
+                            <section class="panel"><div class="ft-inquiry-empty-workflow">Task access is not enabled for your role.</div></section>
+                        @endif
                     </div>
 
-                    @include('livewire.inquiries._attachments')
+                    @if(auth()->user()->canModule('documents', 'view'))@include('livewire.inquiries._attachments')@endif
                     @include('livewire.inquiries._activity')
                 </div>
             @endif
@@ -690,7 +737,7 @@
 
                             <div class="ft-inquiry-task-document-source-label">Document source</div>
                             <div class="ft-inquiry-task-document-source-tabs">
-                                <button type="button" class="{{ $taskDocumentSource === 'upload' ? 'active' : '' }}" wire:click="setTaskDocumentSource('upload')">
+                                <button type="button" class="{{ $taskDocumentSource === 'upload' ? 'active' : '' }}" wire:click="setTaskDocumentSource('upload')" @disabled(!$canCreateDocuments)>
                                     <span>↥</span> Upload new
                                 </button>
                                 <button type="button" class="{{ $taskDocumentSource === 'existing' ? 'active' : '' }}" wire:click="setTaskDocumentSource('existing')" @disabled(!$canLinkDocuments)>
@@ -698,7 +745,7 @@
                                 </button>
                             </div>
 
-                            @if($taskDocumentSource === 'upload')
+                            @if($taskDocumentSource === 'upload' && $canCreateDocuments)
                                 <label class="ft-inquiry-task-document-dropzone">
                                     <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
                                     <span class="ft-inquiry-task-document-upload-icon">⇧</span>

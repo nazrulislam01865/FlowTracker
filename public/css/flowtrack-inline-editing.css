@@ -181,3 +181,30 @@
     line-height:1;
     margin:0;
 }
+
+/* Permission Matrix save UX: one calm save indicator per matrix instead of
+   repeating "Saved" text beside every checkbox. */
+.ft-matrix-role-info{display:flex;align-items:center;justify-content:space-between;gap:18px;min-width:0}
+.ft-matrix-role-info>div:first-child{min-width:0}
+.ft-matrix-save-summary{display:flex;align-items:center;justify-content:flex-end;min-width:150px;min-height:28px;flex:0 0 auto}
+.ft-matrix-save-summary>span{display:inline-flex;align-items:center;gap:7px;padding:5px 9px;border-radius:999px;font-size:10px;font-weight:750;white-space:nowrap;transition:opacity .15s ease,transform .15s ease}
+.ft-matrix-save-summary .is-saving{color:#6b7280;background:#f5f7fa;border:1px solid #e2e8f0}
+.ft-matrix-save-summary .is-saved{color:#087443;background:#edf9f3;border:1px solid #caead9}
+.ft-matrix-save-summary .is-error{color:#b42318;background:#fff2f1;border:1px solid #f0cbc7}
+.ft-matrix-save-summary .is-saved>b,.ft-matrix-save-summary .is-error>b{display:grid;place-items:center;width:15px;height:15px;border-radius:50%;font-size:9px;line-height:1}
+.ft-matrix-save-summary .is-saved>b{color:#fff;background:#16965c}
+.ft-matrix-save-summary .is-error>b{color:#fff;background:#cf3d32}
+.ft-matrix-save-spinner,.ft-matrix-cell-spinner{display:inline-block;border-radius:50%;border:2px solid #cfd8e5;border-top-color:#2563eb;animation:ft-matrix-save-spin .65s linear infinite}
+.ft-matrix-save-spinner{width:13px;height:13px}
+.ft-matrix-cell-spinner{width:10px;height:10px;border-width:1.5px}
+@keyframes ft-matrix-save-spin{to{transform:rotate(360deg)}}
+.ft-role-matrix td.ft-inline-edit-shell{position:relative}
+.ft-matrix-cell-feedback{position:absolute;right:7px;top:50%;width:12px;height:12px;display:grid;place-items:center;transform:translateY(-50%);pointer-events:none}
+.ft-matrix-scope-feedback{display:inline-grid;place-items:center;width:12px;height:12px;margin-left:5px;vertical-align:middle}
+.ft-matrix-cell-error{display:grid;place-items:center;width:12px;height:12px;border-radius:50%;color:#fff;background:#cf3d32;font-size:8px;line-height:1}
+.ft-role-matrix td.is-inline-saving{background:#fbfdff}
+.ft-role-matrix td.is-inline-error{background:#fffafa;box-shadow:inset 0 0 0 1px #f4d1ce}
+.ft-role-matrix .ft-perm-check:disabled{cursor:wait;opacity:.72}
+.ft-role-matrix .ft-scope-select:disabled{cursor:wait;opacity:.72}
+@media(max-width:700px){.ft-matrix-role-info{align-items:flex-start;flex-direction:column}.ft-matrix-save-summary{justify-content:flex-start;min-width:0}}
+@media(prefers-reduced-motion:reduce){.ft-matrix-save-spinner,.ft-matrix-cell-spinner{animation:none}}

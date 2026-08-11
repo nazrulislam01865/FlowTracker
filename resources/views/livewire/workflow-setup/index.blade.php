@@ -1,3 +1,8 @@
+@php
+    $canCreateWorkflow = auth()->user()->canModule('workflow', 'create');
+    $canEditWorkflow = auth()->user()->canModule('workflow', 'edit');
+    $canDeleteWorkflow = auth()->user()->canModule('workflow', 'delete');
+@endphp
 <div class="ft-admin-reference ft-workflow-reference">
     @if(!$showWorkflowDeleteModal)
     <div class="ft-admin-page-head">
@@ -6,12 +11,12 @@
             <p>Define phase sequence, allowed starting stages, Task Packs, documents and skip rules</p>
         </div>
         <div class="ft-admin-head-actions">
-            @if($selected)
+            @if($canCreateWorkflow && $selected)
                 <a href="{{ route('workflow.create', ['source' => $selected->id]) }}" wire:navigate class="ft-admin-outline">Duplicate</a>
-            @else
+            @elseif($canCreateWorkflow)
                 <span class="ft-admin-outline is-disabled">Duplicate</span>
             @endif
-            <a href="{{ route('workflow.create') }}" wire:navigate class="ft-admin-primary">＋ New Workflow</a>
+            @if($canCreateWorkflow)<a href="{{ route('workflow.create') }}" wire:navigate class="ft-admin-primary">＋ New Workflow</a>@endif
         </div>
     </div>
 
@@ -47,9 +52,10 @@
                         <p>{{ $selected->description ?: 'No description' }}</p>
                     </div>
                     <div class="ft-workflow-editor-actions">
-                        <a href="{{ route('workflow.edit', $selected->id) }}" wire:navigate class="ft-admin-outline">Edit Details</a>
-                        <button type="button" class="ft-admin-danger" wire:click="requestDeleteWorkflow({{ $selected->id }})" wire:loading.attr="disabled" wire:target="requestDeleteWorkflow">Delete Workflow</button>
-                        <button type="button" class="ft-admin-primary" wire:click="openPhase">＋ Add Phase</button>
+                        @if($canEditWorkflow)<a href="{{ route('workflow.edit', $selected->id) }}" wire:navigate class="ft-admin-outline">Edit Details</a>@endif
+                        @if($canDeleteWorkflow)<button type="button" class="ft-admin-danger" wire:click="requestDeleteWorkflow({{ $selected->id }})" wire:loading.attr="disabled" wire:target="requestDeleteWorkflow">Delete Workflow</button>@endif
+                        @if($canEditWorkflow)<button type="button" class="ft-admin-primary" wire:click="openPhase">＋ Add Phase</button>@endif
+                        @if(!$canEditWorkflow && !$canDeleteWorkflow)<span class="small muted">View only</span>@endif
                     </div>
                 </div>
 
@@ -77,10 +83,14 @@
                             @forelse($selected->phases as $phase)
                                 <tr wire:key="workflow-phase-row-{{ $phase->id }}">
                                     <td>
-                                        <div class="ft-sequence-buttons">
-                                            <button type="button" wire:click="move({{ $phase->id }}, -1)" @disabled($loop->first)>↑</button>
-                                            <button type="button" wire:click="move({{ $phase->id }}, 1)" @disabled($loop->last)>↓</button>
-                                        </div>
+                                        @if($canEditWorkflow)
+                                            <div class="ft-sequence-buttons">
+                                                <button type="button" wire:click="move({{ $phase->id }}, -1)" @disabled($loop->first)>↑</button>
+                                                <button type="button" wire:click="move({{ $phase->id }}, 1)" @disabled($loop->last)>↓</button>
+                                            </div>
+                                        @else
+                                            <span>{{ $phase->sequence }}</span>
+                                        @endif
                                     </td>
                                     <td>
                                         <b>{{ $phase->name }}</b>
@@ -98,8 +108,9 @@
                                     <td class="ft-entry-exit"><div><b>In:</b> {{ $phase->entry_condition ?: '—' }}</div><div><b>Out:</b> {{ $phase->exit_condition ?: '—' }}</div></td>
                                     <td>
                                         <div class="ft-row-action-buttons">
-                                            <button type="button" wire:click="openPhase({{ $phase->id }})">Edit</button>
-                                            <button type="button" wire:click="deletePhase({{ $phase->id }})" wire:confirm="Remove this workflow phase?">Remove</button>
+                                            @if($canEditWorkflow)<button type="button" wire:click="openPhase({{ $phase->id }})">Edit</button>@endif
+                                            @if($canDeleteWorkflow)<button type="button" wire:click="deletePhase({{ $phase->id }})" wire:confirm="Remove this workflow phase?">Remove</button>@endif
+                                            @if(!$canEditWorkflow && !$canDeleteWorkflow)<span class="small muted">View only</span>@endif
                                         </div>
                                     </td>
                                 </tr>

@@ -169,7 +169,7 @@
     
     
     <div class="sidebar-section">Administration</div>
-    <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('notifications.view')): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'notifications','label' => 'Notifications','badge' => $unread,'icon' => 'notifications']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
@@ -190,9 +190,8 @@
 <?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
-<?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('workflow.manage')): ?>
-        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('workflow.view')): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'workflow.setup','label' => 'Workflow Setup','icon' => 'workflow']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
@@ -213,8 +212,8 @@
 <?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
-<?php endif; ?>
-        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('taskpacks.view')): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'task-pack.setup','label' => 'Task Pack Setup','icon' => 'settings']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
@@ -235,9 +234,8 @@
 <?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('master.manage')): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('master.view')): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Master Data','icon' => 'master']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>

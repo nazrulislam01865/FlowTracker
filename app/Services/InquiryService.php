@@ -80,17 +80,20 @@ class InquiryService
 
         return match ($access->scope($user, 'inquiries')) {
             'all_records' => $query,
-            'none' => $query->whereRaw('1 = 0'),
+            'none' => $query->where('created_by', $user->id),
             'own_records' => $query->where(fn (Builder $scope) => $scope
-                ->where('owner_id', $user->id)
-                ->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id))),
-            'department' => $user->department_id
-                ? $query->where(fn (Builder $scope) => $scope
-                    ->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
-                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id)))
-                : $query->whereRaw('1 = 0'),
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)),
+            'department' => $query->where(function (Builder $scope) use ($user): void {
+                $scope->where('created_by', $user->id);
+                if ($user->department_id) {
+                    $scope->orWhereHas('owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
+                        ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
+                }
+            }),
             default => $query->where(fn (Builder $scope) => $scope
-                ->where('owner_id', $user->id)
+                ->where('created_by', $user->id)
+                ->orWhere('owner_id', $user->id)
                 ->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id))),
         };
     }
@@ -98,13 +101,12 @@ class InquiryService
     public function canEdit(User $user, Inquiry $inquiry): bool
     {
         $access = app(AccessControlService::class);
-        if ($access->isAdministrator($user)) return true;
+        if ($access->isAdministrator($user) || $access->isInquiryCreator($user, $inquiry)) return true;
         if (!$access->can($user, 'inquiries', 'edit')) return false;
         if (!$this->visibleQuery($user)->whereKey($inquiry->id)->exists()) return false;
         if ($access->canEditAll($user, 'inquiries')) return true;
 
-        return (int) $inquiry->owner_id === (int) $user->id
-            || $inquiry->tasks()->where('assignee_id', $user->id)->exists();
+        return (int) $inquiry->owner_id === (int) $user->id;
     }
 
     /**
@@ -115,16 +117,10 @@ class InquiryService
     public function canEditVisible(User $user, Inquiry $inquiry): bool
     {
         $access = app(AccessControlService::class);
-        if ($access->isAdministrator($user)) return true;
+        if ($access->isAdministrator($user) || $access->isInquiryCreator($user, $inquiry)) return true;
         if (!$access->can($user, 'inquiries', 'edit')) return false;
         if ($access->canEditAll($user, 'inquiries')) return true;
-        if ((int) $inquiry->owner_id === (int) $user->id) return true;
-
-        if ($inquiry->relationLoaded('tasks')) {
-            return $inquiry->tasks->contains(fn (InquiryTask $task) => (int) $task->assignee_id === (int) $user->id);
-        }
-
-        return $inquiry->tasks()->where('assignee_id', $user->id)->exists();
+        return (int) $inquiry->owner_id === (int) $user->id;
     }
 
     public function paginate(User $user, array $filters, int $perPage = 20, string $pageName = 'inquiryPage'): LengthAwarePaginator
@@ -173,7 +169,7 @@ class InquiryService
             ->orderByDesc('inquiries.id')
             ->select([
                 'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id', 'inquiries.owner_id', 'inquiries.created_by',
-                'inquiries.subject', 'inquiries.received_date', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
+                'inquiries.subject', 'inquiries.received_date', 'inquiries.priority', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
                 'inquiries.converted_job_id', 'inquiries.created_at', 'inquiries.updated_at',
             ])
             ->selectSub($currentTask, 'current_task_title')
@@ -207,13 +203,14 @@ class InquiryService
 
     public function listRows(LengthAwarePaginator $paginator, User $user): Collection
     {
-        $assigneeIds = collect($paginator->items())
-            ->pluck('current_task_assignee_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $canViewTasks = app(AccessControlService::class)->can($user, 'tasks', 'view');
+        $assigneeIds = $canViewTasks ? collect($paginator->items())
+            ->pluck('current_task_assignee_id')->filter()->map(fn ($id) => (int) $id)->unique()->values() : collect();
         $assignees = $assigneeIds->isEmpty()
             ? collect()
             : User::query()->whereIn('id', $assigneeIds)->get(['id', 'name', 'profile_image_path'])->keyBy('id');
 
-        return collect($paginator->items())->map(function (Inquiry $inquiry) use ($assignees): array {
+        return collect($paginator->items())->map(function (Inquiry $inquiry) use ($assignees, $canViewTasks): array {
             $assignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
@@ -247,16 +244,17 @@ class InquiryService
                 'client' => (string) ($inquiry->client?->name ?: 'No client'),
                 'clientLogoUrl' => $inquiry->client?->logoUrl(),
                 'item' => blank($inquiry->first_item_name) ? null : (string) $inquiry->first_item_name,
-                'currentTask' => (string) ($inquiry->current_task_title ?: ($done === $total && $total > 0 ? 'Completed' : 'No active task')),
-                'taskCaption' => $done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.$currentPosition.' of '.$total,
-                'progress' => $progress,
-                'total' => $total,
-                'progressPercent' => $progressPercent,
-                'assignee' => (string) ($assignee?->name ?: 'Unassigned'),
-                'assigneeAvatar' => $assignee?->profile_image_path,
-                'due' => $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
+                'currentTask' => $canViewTasks ? (string) ($inquiry->current_task_title ?: ($done === $total && $total > 0 ? 'Completed' : 'No active task')) : 'Restricted',
+                'taskCaption' => $canViewTasks ? ($done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.$currentPosition.' of '.$total) : 'Task access not granted',
+                'progress' => $canViewTasks ? $progress : 0,
+                'total' => $canViewTasks ? $total : 0,
+                'progressPercent' => $canViewTasks ? $progressPercent : 0,
+                'assignee' => $canViewTasks ? (string) ($assignee?->name ?: 'Unassigned') : '—',
+                'assigneeAvatar' => $canViewTasks ? $assignee?->profile_image_path : null,
+                'due' => $canViewTasks && $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
                 'startedDate' => UserLocalTime::format($inquiry->started_at, 'M j, Y'),
                 'startedTime' => UserLocalTime::format($inquiry->started_at, 'g:i A'),
+                'priority' => (string) ($inquiry->priority ?: 'Medium'),
                 'status' => $status,
             ];
         })->values();
@@ -271,11 +269,14 @@ class InquiryService
             ->first();
 
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
-        $dueToday = InquiryTask::query()
-            ->whereIn('inquiry_id', (clone $base)->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
-            ->whereNull('completed_at')
-            ->whereDate('due_date', $today)
-            ->count();
+        $access = app(AccessControlService::class);
+        $dueToday = $access->can($user, 'tasks', 'view')
+            ? $access->applyInquiryTaskScope(InquiryTask::query(), $user)
+                ->whereIn('inquiry_id', (clone $base)->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
+                ->whereNull('completed_at')
+                ->whereDate('due_date', $today)
+                ->count()
+            : 0;
 
         return [
             'active' => (int) ($summary?->active_count ?? 0),
@@ -323,7 +324,12 @@ class InquiryService
 
     public function create(array $data, User $actor, bool $draft = false): Inquiry
     {
-        abort_unless(app(AccessControlService::class)->can($actor, 'inquiries', 'create'), 403);
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($actor, 'inquiries', 'create'), 403);
+        $requestedOwnerId = (int) (($data['owner_id'] ?? null) ?: $actor->id);
+        if ($requestedOwnerId !== (int) $actor->id) {
+            abort_unless($access->can($actor, 'inquiries', 'assign'), 403);
+        }
 
         return DB::transaction(function () use ($data, $actor, $draft): Inquiry {
             $inquiry = Inquiry::create([
@@ -364,6 +370,7 @@ class InquiryService
                 InquiryTask::create([
                     'inquiry_id' => $inquiry->id,
                     'source_task_pack_item_id' => ($task['source_id'] ?? null) ?: null,
+                    'setup_assignee_id' => ($task['setup_assignee_id'] ?? $task['assignee_id'] ?? null) ?: null,
                     'assignee_id' => ($task['assignee_id'] ?? null) ?: null,
                     'title' => trim((string) $task['name']),
                     'description' => app(RichTextService::class)->normalize($task['description'] ?? null, 10000, 'description'),
@@ -456,6 +463,7 @@ class InquiryService
                     'name' => (string) $item->title,
                     'description' => (string) ($item->description ?: ''),
                     'assignee_id' => $item->default_assignee_id ? (int) $item->default_assignee_id : null,
+                    'setup_assignee_id' => $item->default_assignee_id ? (int) $item->default_assignee_id : null,
                     'assignee_name' => (string) ($item->defaultAssignee?->name ?: ''),
                     'due_date' => $base->copy()->addDays(max(0, (int) $item->due_offset_days))->toDateString(),
                     'requires_submission' => (bool) $item->document_category_id,
@@ -499,6 +507,7 @@ class InquiryService
             'name' => (string) $item->title,
             'description' => (string) ($item->description ?: ''),
             'assignee_id' => (int) ($item->default_assignee_id ?: $fallbackAssigneeId ?: 0) ?: null,
+            'setup_assignee_id' => $item->default_assignee_id ? (int) $item->default_assignee_id : null,
             'assignee_name' => (string) ($item->defaultAssignee?->name ?: $fallbackAssigneeName),
             'due_date' => $base->copy()->addDays(max(0, (int) $item->due_offset_days))->toDateString(),
             'requires_submission' => (bool) $item->document_category_id,
@@ -531,13 +540,18 @@ class InquiryService
             $newDisplay = $subject;
             $update['subject'] = $subject;
         } elseif ($field === 'owner_id') {
-            $ownerId = (int) $value;
-            $owner = User::query()->where('is_active', true)->find($ownerId);
-            if (! $owner) {
+            $rawOwnerId = trim((string) $value);
+            $ownerId = $rawOwnerId === '' ? null : (int) $rawOwnerId;
+            if ((int) ($ownerId ?? 0) !== (int) ($inquiry->owner_id ?? 0)) {
+                $access = app(AccessControlService::class);
+                abort_unless($access->can($actor, 'inquiries', 'assign') || $access->isInquiryCreator($actor, $inquiry), 403);
+            }
+            $owner = $ownerId ? User::query()->where('is_active', true)->find($ownerId) : null;
+            if ($ownerId && ! $owner) {
                 throw ValidationException::withMessages(['owner_id' => 'Select an active user.']);
             }
             $oldDisplay = (string) ($inquiry->owner?->name ?: 'Unassigned');
-            $newDisplay = (string) $owner->name;
+            $newDisplay = (string) ($owner?->name ?: 'Unassigned');
             $update['owner_id'] = $ownerId;
         } elseif ($field === 'priority') {
             $priority = trim((string) $value);
@@ -672,6 +686,10 @@ class InquiryService
             ? (string) $data['status']
             : ($isActive ? 'In Progress' : 'Waiting');
         $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        $nextAssigneeId = ($data['assignee_id'] ?? null) ? (int) $data['assignee_id'] : null;
+        if ((int) ($oldAssigneeId ?? 0) !== (int) ($nextAssigneeId ?? 0)) {
+            abort_unless(app(AccessControlService::class)->canAssignInquiryTask($actor, $task), 403);
+        }
         $taskUpdate = [
             'assignee_id' => ($data['assignee_id'] ?? null) ?: null,
             'due_date' => ($data['due_date'] ?? null) ?: null,
@@ -800,6 +818,7 @@ class InquiryService
     {
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
+        abort_unless(app(AccessControlService::class)->canAssignInquiryTask($actor, $task), 403);
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot be edited.');
 
         $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
@@ -824,8 +843,15 @@ class InquiryService
 
     public function appendTask(Inquiry $inquiry, array $data, User $actor): InquiryTask
     {
-        abort_unless(app(AccessControlService::class)->isAdministrator($actor), 403);
+        $access = app(AccessControlService::class);
+        abort_unless($access->canCreateInquiryTask($actor, $inquiry), 403);
         abort_if($inquiry->result, 422, 'A completed Inquiry cannot receive another task.');
+        $requestedAssigneeId = (int) (($data['assignee_id'] ?? null) ?: 0);
+        if (!$access->can($actor, 'tasks', 'assign') && !$access->isInquiryCreator($actor, $inquiry)) {
+            $data['assignee_id'] = $actor->id;
+        } elseif ($requestedAssigneeId > 0) {
+            abort_unless(User::query()->where('is_active', true)->whereKey($requestedAssigneeId)->exists(), 422, 'Select an active assignee.');
+        }
 
         return DB::transaction(function () use ($inquiry, $data, $actor): InquiryTask {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
@@ -875,12 +901,29 @@ class InquiryService
 
     public function saveWorkflow(Inquiry $inquiry, array $rows, User $actor): void
     {
-        abort_unless($this->canEdit($actor, $inquiry), 403);
+        abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 403);
         abort_if($inquiry->result, 422, 'A completed Inquiry taskflow cannot be changed.');
         if ($rows === []) throw ValidationException::withMessages(['workflow' => 'Inquiry taskflow needs at least one task.']);
 
         DB::transaction(function () use ($inquiry, $rows, $actor): void {
             $existing = $inquiry->tasks()->get()->keyBy('id');
+            $access = app(AccessControlService::class);
+            foreach ($existing->filter(fn (InquiryTask $task) => $task->completed_at === null) as $openTask) {
+                abort_unless($this->canEditTask($actor, $openTask), 403, 'You do not have permission to manage the full Inquiry taskflow.');
+            }
+            $incomingIds = collect($rows)->pluck('id')->filter()->map(fn ($id) => (int) $id);
+            $hasNewTasks = collect($rows)->contains(fn (array $row) => empty($row['id']));
+            if ($hasNewTasks) abort_unless($access->can($actor, 'tasks', 'create'), 403);
+            foreach ($existing->filter(fn (InquiryTask $task) => $task->completed_at === null && !$incomingIds->contains((int) $task->id)) as $removedTask) {
+                abort_unless($access->canDeleteInquiryTask($actor, $removedTask), 403);
+            }
+            foreach ($rows as $row) {
+                $id = (int) ($row['id'] ?? 0);
+                if (!$id || !($task = $existing->get($id)) || $task->completed_at) continue;
+                if ((int) ($task->assignee_id ?? 0) !== (int) (($row['assignee_id'] ?? null) ?: 0)) {
+                    abort_unless($access->canAssignInquiryTask($actor, $task), 403);
+                }
+            }
             $completedIds = $existing->filter(fn (InquiryTask $task) => $task->completed_at !== null)->keys()->map(fn ($id) => (int) $id)->all();
             $rowIds = collect($rows)->pluck('id')->filter()->map(fn ($id) => (int) $id)->all();
             $active = $existing->filter(fn (InquiryTask $task) => $task->completed_at === null && !$task->trashed())->sortBy('sequence')->first();
@@ -916,6 +959,7 @@ class InquiryService
 
                 $payload = [
                     'source_task_pack_item_id' => ($row['source_id'] ?? null) ?: null,
+                    'setup_assignee_id' => $task?->setup_assignee_id ?: (($row['setup_assignee_id'] ?? null) ?: null),
                     'assignee_id' => ($row['assignee_id'] ?? null) ?: null,
                     'title' => trim((string) $row['name']),
                     'description' => app(RichTextService::class)->normalize($row['description'] ?? null, 10000, 'description'),
@@ -950,6 +994,7 @@ class InquiryService
 
     public function upload(Inquiry $inquiry, UploadedFile $file, User $actor, ?InquiryTask $task = null, ?string $note = null): InquiryDocument
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'create'), 403);
         abort_unless($this->canEdit($actor, $inquiry) || ($task && $this->canEditTask($actor, $task)), 403);
         if ($task) {
             abort_unless((int) $task->inquiry_id === (int) $inquiry->id, 422);
@@ -990,6 +1035,7 @@ class InquiryService
     {
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'link'), 403);
+        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $actor)->firstOrFail();
         abort_unless((int) ($source->client_id ?? 0) === (int) $inquiry->client_id, 403, 'The selected document does not belong to this client.');
 
         $document = InquiryDocument::create([
@@ -1016,6 +1062,7 @@ class InquiryService
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
         abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'link'), 403);
+        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $actor)->firstOrFail();
         abort_unless((int) ($source->client_id ?? 0) === (int) $task->inquiry->client_id, 403, 'The selected document does not belong to this client.');
 
         $document = InquiryDocument::create([
@@ -1094,6 +1141,7 @@ class InquiryService
 
     public function removeDocument(Inquiry $inquiry, int $documentId, User $actor): void
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'delete'), 403);
         abort_unless($this->canEdit($actor, $inquiry), 403);
 
         $document = $inquiry->documents()->whereKey($documentId)->firstOrFail();
@@ -1113,6 +1161,7 @@ class InquiryService
     public function removeTaskDocument(InquiryTask $task, int $documentId, User $actor): bool
     {
         $task->loadMissing('inquiry');
+        abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'delete'), 403);
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change documents.');
 
@@ -1224,6 +1273,7 @@ class InquiryService
 
     public function documentsPage(User $user, Inquiry $inquiry, int $perPage = 50): LengthAwarePaginator
     {
+        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'view'), 403);
         abort_unless($this->visibleQuery($user)->whereKey($inquiry->id)->exists(), 403);
         return InquiryDocument::query()
             ->where('inquiry_id', $inquiry->id)
@@ -1249,9 +1299,10 @@ class InquiryService
 
     public function findVisibleTask(User $user, int $taskId, array $with = []): InquiryTask
     {
-        $task = InquiryTask::query()->with($with)->findOrFail($taskId);
-        abort_unless($this->visibleQuery($user)->whereKey($task->inquiry_id)->exists(), 403);
-        return $task;
+        return app(AccessControlService::class)
+            ->applyInquiryTaskScope(InquiryTask::query(), $user)
+            ->with($with)
+            ->findOrFail($taskId);
     }
 
     public function taskDetail(User $user, int $taskId): InquiryTask
@@ -1357,18 +1408,14 @@ class InquiryService
 
     public function canEditTask(User $user, InquiryTask $task): bool
     {
-        $task->loadMissing('inquiry');
-        if (app(AccessControlService::class)->isAdministrator($user)) return true;
-        if ($this->canEdit($user, $task->inquiry)) return true;
-        return (int) $task->assignee_id === (int) $user->id
-            && app(AccessControlService::class)->can($user, 'inquiries', 'view');
+        return app(AccessControlService::class)->canEditInquiryTask($user, $task);
     }
 
 
     public function myTaskGroups(User $user, array $filters, int $limit = 3): Collection
     {
         $access = app(AccessControlService::class);
-        if (!$access->can($user, 'inquiries', 'view')) return collect();
+        if (!$access->can($user, 'inquiries', 'view') || !$access->can($user, 'tasks', 'view')) return collect();
 
         $today = app(WorkspaceSettingsService::class)->localToday();
         $todayDate = $today->toDateString();
@@ -1377,7 +1424,7 @@ class InquiryService
         $quick = (string) ($filters['quick'] ?? 'all');
         $search = trim((string) ($filters['search'] ?? ''));
 
-        $query = InquiryTask::query()
+        $query = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
             ->whereNull('inquiry_tasks.completed_at')
             ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
             ->whereNotExists(function ($earlier): void {
@@ -1389,7 +1436,6 @@ class InquiryService
                     ->whereNull('earlier_inquiry_tasks.deleted_at');
             });
 
-        if (!$access->isAdministrator($user)) $query->where('inquiry_tasks.assignee_id', $user->id);
 
         if ($search !== '' && mb_strlen($search) >= 2) {
             $like = '%'.$search.'%';
@@ -1503,12 +1549,12 @@ class InquiryService
     public function myTaskMetrics(User $user): array
     {
         $access = app(AccessControlService::class);
-        if (!$access->can($user, 'inquiries', 'view')) return ['attention'=>0,'overdue'=>0,'today'=>0,'upcoming'=>0,'waiting'=>0,'mentions'=>0];
+        if (!$access->can($user, 'inquiries', 'view') || !$access->can($user, 'tasks', 'view')) return ['attention'=>0,'overdue'=>0,'today'=>0,'upcoming'=>0,'waiting'=>0,'mentions'=>0];
         $today = app(WorkspaceSettingsService::class)->localToday();
         $todayDate = $today->toDateString();
         $tomorrow = $today->copy()->addDay()->toDateString();
         $weekEnd = $today->copy()->addDays(7)->toDateString();
-        $base = InquiryTask::query()
+        $base = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
             ->whereNull('inquiry_tasks.completed_at')
             ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
             ->whereNotExists(function ($earlier): void {
@@ -1517,7 +1563,6 @@ class InquiryService
                     ->whereColumn('earlier_inquiry_tasks.sequence', '<', 'inquiry_tasks.sequence')
                     ->whereNull('earlier_inquiry_tasks.completed_at')->whereNull('earlier_inquiry_tasks.deleted_at');
             });
-        if (!$access->isAdministrator($user)) $base->where('inquiry_tasks.assignee_id', $user->id);
         $row = (clone $base)->selectRaw("SUM(CASE WHEN LOWER(status) NOT LIKE 'waiting%' AND (due_date <= ? OR EXISTS (SELECT 1 FROM inquiries i WHERE i.id=inquiry_tasks.inquiry_id AND i.priority IN ('High','Urgent','Critical'))) THEN 1 ELSE 0 END) attention_count", [$weekEnd])
             ->selectRaw('SUM(CASE WHEN due_date < ? THEN 1 ELSE 0 END) overdue_count', [$todayDate])
             ->selectRaw('SUM(CASE WHEN due_date = ? THEN 1 ELSE 0 END) today_count', [$todayDate])
@@ -1538,8 +1583,8 @@ class InquiryService
     public function openMyTaskCount(User $user): int
     {
         $access = app(AccessControlService::class);
-        if (!$access->can($user, 'inquiries', 'view')) return 0;
-        $query = InquiryTask::query()
+        if (!$access->can($user, 'inquiries', 'view') || !$access->can($user, 'tasks', 'view')) return 0;
+        $query = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
             ->whereNull('inquiry_tasks.completed_at')
             ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
             ->whereNotExists(function ($earlier): void {
@@ -1548,7 +1593,6 @@ class InquiryService
                     ->whereColumn('earlier_inquiry_tasks.sequence', '<', 'inquiry_tasks.sequence')
                     ->whereNull('earlier_inquiry_tasks.completed_at')->whereNull('earlier_inquiry_tasks.deleted_at');
             });
-        if (!$access->isAdministrator($user)) $query->where('inquiry_tasks.assignee_id', $user->id);
         return $query->count();
     }
 

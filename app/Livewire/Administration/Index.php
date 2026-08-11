@@ -7,10 +7,12 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\Department;
 use App\Models\Role;
+use App\Models\RoleModuleAccess;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\AdminService;
 use App\Services\BrandingService;
+use App\Services\SetupContext;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -66,8 +68,21 @@ class Index extends Component
 
     public function selectRole(int $roleId): void
     {
-        $this->selectedRoleId = Role::findOrFail($roleId)->id;
+        $role = Role::query()
+            ->where('workspace_id', app(SetupContext::class)->workspaceId())
+            ->findOrFail($roleId);
+
+        $this->selectedRoleId = $role->id;
         $this->tab = 'matrix';
+    }
+
+    public function selectMatrixRole(int $roleId): void
+    {
+        $role = Role::query()
+            ->where('workspace_id', app(SetupContext::class)->workspaceId())
+            ->findOrFail($roleId);
+
+        $this->selectedRoleId = $role->id;
     }
 
     public function openUser(?int $id = null): void
@@ -156,7 +171,7 @@ class Index extends Component
             $this->roleName = $role->name;
             $this->roleCode = (string) $role->code;
             $this->roleDescription = (string) $role->description;
-            $this->roleDefaultScope = (string) $role->default_scope;
+            $this->roleDefaultScope = (string) ($role->default_scope === 'selected_clients' ? 'assigned_jobs' : $role->default_scope);
             $this->roleActive = (bool) $role->is_active;
         } else {
             $this->reset(['roleName','roleCode','roleDescription']);
@@ -174,7 +189,7 @@ class Index extends Component
             'roleName' => ['required','string','max:255'],
             'roleCode' => ['nullable','string','max:80'],
             'roleDescription' => ['nullable','string','max:2000'],
-            'roleDefaultScope' => ['required','in:none,own_records,assigned_jobs,selected_clients,department,all_records'],
+            'roleDefaultScope' => ['required','in:none,own_records,assigned_jobs,department,all_records'],
             'roleActive' => ['boolean'],
         ]);
         $role = app(AdminService::class)->saveRole([
@@ -193,17 +208,38 @@ class Index extends Component
     #[Renderless]
     public function setMatrixAction(int $roleId, string $module, string $action, bool $enabled): array
     {
-        return $this->persistInlineEdit('permission', function () use ($roleId, $module, $action, $enabled) {
+        $result = $this->persistInlineEdit('permission', function () use ($roleId, $module, $action, $enabled) {
             app(AdminService::class)->setMatrixAction(Role::findOrFail($roleId), $module, $action, $enabled, auth()->user());
         });
+
+        return $this->withCanonicalMatrixState($result, $roleId, $module);
     }
 
     #[Renderless]
     public function setModuleScope(int $roleId, string $module, string $scope): array
     {
-        return $this->persistInlineEdit('record scope', function () use ($roleId, $module, $scope) {
+        $result = $this->persistInlineEdit('record scope', function () use ($roleId, $module, $scope) {
             app(AdminService::class)->setScope(Role::findOrFail($roleId), $module, $scope, auth()->user());
         });
+
+        return $this->withCanonicalMatrixState($result, $roleId, $module);
+    }
+
+    private function withCanonicalMatrixState(array $result, int $roleId, string $module): array
+    {
+        if (($result['ok'] ?? false) !== true) return $result;
+
+        $row = RoleModuleAccess::query()
+            ->where('role_id', $roleId)
+            ->where('module_code', $module)
+            ->first(['actions', 'record_scope']);
+
+        return array_merge($result, [
+            'roleId' => $roleId,
+            'module' => $module,
+            'actions' => array_values($row?->actions ?: []),
+            'recordScope' => (string) ($row?->record_scope ?: 'none'),
+        ]);
     }
 
     #[Renderless]
@@ -301,11 +337,19 @@ class Index extends Component
 
     private function matrixPageData(AdminService $service): array
     {
-        $roles = $service->roles();
+        // Keep role switching cheap: load the lightweight role selector once,
+        // then fetch permission rows only for the selected role. The previous
+        // implementation loaded every role's users + full matrix on each change.
+        $roles = $service->roleOptions();
         $selectedRole = $roles->firstWhere('id', $this->selectedRoleId) ?: $roles->first();
 
-        if ($selectedRole && !$this->selectedRoleId) {
-            $this->selectedRoleId = $selectedRole->id;
+        if ($selectedRole) {
+            $selectedRole->load(['moduleAccess' => fn ($q) => $q
+                ->select(['id', 'role_id', 'module_code', 'record_scope', 'actions'])]);
+
+            if ((int) $this->selectedRoleId !== (int) $selectedRole->id) {
+                $this->selectedRoleId = $selectedRole->id;
+            }
         }
 
         return [

@@ -661,7 +661,6 @@ class Index extends Component
     {
         $owner = null;
         $result = $this->persistInlineEdit('Order owner', function () use ($jobId, $ownerId, &$owner) {
-            abort_unless(auth()->user()->canModule('jobs','assign'), 403);
             $ownerId = $ownerId === '' ? null : (int) $ownerId;
             $owner = $ownerId ? User::where('is_active', true)->findOrFail($ownerId) : null;
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
@@ -679,7 +678,6 @@ class Index extends Component
     public function updateJobCoordinator(int $jobId, mixed $coordinatorId): array
     {
         return $this->persistInlineEdit('Order coordinator', function () use ($jobId, $coordinatorId) {
-            abort_unless(auth()->user()->canModule('jobs','assign'), 403);
             $coordinatorId = $coordinatorId === '' ? null : (int) $coordinatorId;
             if ($coordinatorId) User::where('is_active', true)->findOrFail($coordinatorId);
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
@@ -691,7 +689,6 @@ class Index extends Component
     public function updateJobDeliveryDate(int $jobId, mixed $date): array
     {
         return $this->persistInlineEdit('delivery date', function () use ($jobId, $date) {
-            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $date = trim((string) $date);
             if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
@@ -703,7 +700,6 @@ class Index extends Component
     public function updateJobPriority(int $jobId, mixed $priority): array
     {
         return $this->persistInlineEdit('priority', function () use ($jobId, $priority) {
-            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $priority = trim((string) $priority);
             abort_if($priority === '', 422, 'Priority is required.');
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
@@ -715,7 +711,6 @@ class Index extends Component
     public function updateJobHealth(int $jobId, mixed $health): array
     {
         return $this->persistInlineEdit('Order health', function () use ($jobId, $health) {
-            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $health = trim((string) $health);
             abort_if($health === '', 422, 'Health is required.');
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
@@ -730,7 +725,6 @@ class Index extends Component
         $updatedJob = null;
 
         $result = $this->persistInlineEdit($label, function () use ($jobId, $field, $value, &$updatedJob) {
-            abort_unless(auth()->user()->canAccess('jobs.update'), 403);
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
             $updatedJob = app(JobService::class)->updateTextField($job, $field, (string) $value, auth()->user());
         });
@@ -759,7 +753,6 @@ class Index extends Component
 
         return $this->persistInlineEdit($label, function () use ($itemId, $field, $value) {
             $user = auth()->user();
-            abort_unless($user->canAccess('jobs.update'), 403);
             abort_unless($this->selectedJobId, 422);
 
             $job = app(JobService::class)->findVisible($user, $this->selectedJobId);
@@ -785,7 +778,6 @@ class Index extends Component
     public function addJobItem(int $jobId): void
     {
         $user = auth()->user();
-        abort_unless($user->canAccess('jobs.update'), 403);
         $job = app(JobService::class)->findVisible($user, $jobId);
 
         // Keep a single unfinished row at a time so repeated clicks cannot
@@ -805,7 +797,6 @@ class Index extends Component
 
     public function removeJobItem(int $itemId): void
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
         abort_unless($this->selectedJobId, 422);
         $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
         $item = FlowJobItem::where('flow_job_id', $job->id)->findOrFail($itemId);
@@ -817,7 +808,6 @@ class Index extends Component
     {
         $assignee = null;
         $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, &$assignee) {
-            abort_unless(auth()->user()->canModule('tasks','assign'), 403);
             abort_unless($this->selectedJobId, 422);
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
             $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
@@ -836,7 +826,6 @@ class Index extends Component
     public function updateTaskDueDateFromJob(int $taskId, mixed $date): array
     {
         return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
-            abort_unless(auth()->user()->canAccess('tasks.update') || auth()->user()->canAccess('jobs.update'), 403);
             abort_unless($this->selectedJobId, 422);
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
             $date = trim((string) $date);
@@ -1171,7 +1160,6 @@ class Index extends Component
     public function updateTaskStatusFromJob(int $taskId, mixed $status): array
     {
         return $this->persistInlineEdit('task status', function () use ($taskId, $status) {
-            abort_unless(auth()->user()->canAccess('tasks.update'), 403);
             abort_unless($this->selectedJobId, 422);
             $status = trim((string) $status);
             abort_if($status === '', 422, 'Task status is required.');
@@ -1183,7 +1171,6 @@ class Index extends Component
 
     public function completePhase(): void
     {
-        abort_unless(auth()->user()->canAccess('jobs.update'), 403);
         if (!$this->selectedJobId) return;
         try {
             $job = app(JobService::class)->completePhase(app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId), auth()->user());
@@ -1308,8 +1295,6 @@ class Index extends Component
 
         $updatedTask = null;
         $result = $this->persistInlineEdit($labels[$field] ?? 'task field', function () use ($field, $value, &$updatedTask) {
-            if ($field === 'assignee_id') abort_unless(auth()->user()->canModule('tasks','assign'), 403);
-            else abort_unless(auth()->user()->canAccess('tasks.update'), 403);
             abort_unless($this->selectedTaskId, 422);
             $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
             if ($field === 'assignee_id' && filled($value)) User::where('is_active', true)->findOrFail((int) $value);
@@ -1345,7 +1330,6 @@ class Index extends Component
 
     public function addTaskChecklistItem(): void
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         abort_unless($this->selectedTaskId, 422);
         $this->validate(['newChecklistItem'=>['required','string','max:255']]);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
@@ -1365,7 +1349,6 @@ class Index extends Component
 
     public function deleteTaskChecklistItem(int $itemId): void
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         abort_unless($this->selectedTaskId, 422);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->with('checklistItems')->findOrFail($this->selectedTaskId);
         $item = $task->checklistItems->firstWhere('id', $itemId);
@@ -1527,7 +1510,6 @@ class Index extends Component
 
     public function setTaskFlag(string $flag): void
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         abort_unless($this->selectedTaskId, 422);
 
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
@@ -1546,7 +1528,6 @@ class Index extends Component
 
     public function toggleTaskAttention(): void
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         if (!$this->selectedTaskId) return;
         $task = app(TaskService::class)->visibleQuery(auth()->user())->with('attentionFlag:id,name,status,sort_order')->findOrFail($this->selectedTaskId);
         $flag = $task->needs_attention
@@ -1559,8 +1540,8 @@ class Index extends Component
 
     public function saveTask(): void
     {
-        abort_unless(auth()->user()->canAccess('tasks.update'), 403);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
         $this->validate([
             'taskStatus' => ['required','string','max:50'],
             'taskAssigneeId' => ['nullable','exists:users,id'],
@@ -2016,7 +1997,10 @@ class Index extends Component
 
     private function userOptions(User $user)
     {
-        $canAssign = $user->canModule('tasks', 'assign') || $user->canModule('jobs', 'assign');
+        $isCreator = $this->selectedJobId
+            ? FlowJob::query()->whereKey($this->selectedJobId)->where('created_by', $user->id)->exists()
+            : false;
+        $canAssign = $isCreator || $user->canModule('tasks', 'assign') || $user->canModule('jobs', 'assign');
 
         return $canAssign
             ? User::where('is_active', true)->orderBy('name')->get(['id', 'name', 'profile_image_path'])

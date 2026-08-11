@@ -14,6 +14,7 @@ class InquiryTask extends Model
     protected function casts(): array { return ['due_date'=>'date','requires_submission'=>'boolean','started_at'=>'datetime','completed_at'=>'datetime']; }
     public function inquiry(): BelongsTo { return $this->belongsTo(Inquiry::class); }
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
+    public function setupAssignee(): BelongsTo { return $this->belongsTo(User::class, 'setup_assignee_id'); }
     public function sourceTaskPackItem(): BelongsTo { return $this->belongsTo(TaskPackItem::class, 'source_task_pack_item_id'); }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
     public function links(): HasMany { return $this->hasMany(InquiryTaskLink::class)->latest('id'); }

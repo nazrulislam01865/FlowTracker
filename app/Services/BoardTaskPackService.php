@@ -14,13 +14,11 @@ class BoardTaskPackService
     public const JOBS_PER_PAGE = 10;
 
     /**
-     * Board Task Pack visibility is intentionally different from My Work.
+     * Board Task Pack visibility follows the Tasks role-matrix scope.
      *
-     * Administrators can inspect every active Job. A normal user can inspect a
-     * Job only when at least one non-deleted task in that Job is assigned to
-     * them. Once a Job is associated, its full task list is visible here so the
-     * user can understand the surrounding workflow without exposing unrelated
-     * Jobs.
+     * A Job group is visible only when it contains at least one task the current
+     * user may view. Task rows are independently re-authorized before hydration,
+     * so qualifying through one task never exposes sibling tasks outside scope.
      */
     public function visibleJobQuery(User $user, bool $includeCompleted = false): Builder
     {
@@ -30,27 +28,16 @@ class BoardTaskPackService
             ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES);
 
         if (!$includeCompleted) {
-            $query
-                ->whereNull('flow_jobs.completed_at')
+            $query->whereNull('flow_jobs.completed_at')
                 ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'");
         }
 
-        if (!$access->can($user, 'tasks', 'view')) {
-            return $query->whereRaw('1 = 0');
-        }
+        if (!$access->can($user, 'tasks', 'view')) return $query->whereRaw('1 = 0');
 
-        if ($access->isAdministrator($user)) {
-            return $query;
-        }
+        $visibleTaskIds = $access->applyTaskScope(Task::query(), $user)
+            ->select('tasks.flow_job_id');
 
-        return $query->whereExists(function ($assigned) use ($user): void {
-            $assigned
-                ->selectRaw('1')
-                ->from('tasks as board_assigned_tasks')
-                ->whereColumn('board_assigned_tasks.flow_job_id', 'flow_jobs.id')
-                ->where('board_assigned_tasks.assignee_id', $user->id)
-                ->whereNull('board_assigned_tasks.deleted_at');
-        });
+        return $query->whereIn('flow_jobs.id', $visibleTaskIds);
     }
 
     /**
@@ -134,7 +121,7 @@ class BoardTaskPackService
         $jobs = FlowJob::query()
             ->whereIn('id', $jobIds)
             ->select([
-                'id', 'job_number', 'title', 'client_id', 'workflow_phase_id',
+                'id', 'job_number', 'title', 'client_id', 'workflow_phase_id', 'created_by',
                 'health', 'progress', 'status', 'updated_at',
             ])
             ->with([
@@ -151,13 +138,15 @@ class BoardTaskPackService
         // are loaded. A mention on one task must never reveal sibling task rows
         // merely because they belong to the same Order.
         $mentionsOnly = $quick === 'mentions';
-        // An explicit assignee filter is also task-level. This is important for
-        // dashboard drill-downs: clicking an assignee's workload must show only
-        // that person's tasks, not every sibling task from the same Orders.
         $taskLevelFilter = $mentionsOnly || filled($filters['assignee'] ?? null);
+        // Never hydrate sibling tasks outside the Tasks matrix scope. Group-level
+        // filters may choose the Order group, but every task row is re-authorized.
         $tasks = $taskLevelFilter
             ? (clone $baseTasks)->whereIn('tasks.flow_job_id', $jobIds)
-            : Task::query()->whereIn('tasks.flow_job_id', $jobIds);
+            : app(AccessControlService::class)->applyTaskScope(
+                Task::query()->whereIn('tasks.flow_job_id', $jobIds),
+                $user,
+            );
 
         // Group-level filters intentionally load the surrounding Task Pack for
         // each matching Order. Hide completed is different: it is a display
@@ -216,6 +205,7 @@ class BoardTaskPackService
                     $displayTimezone,
                     $today,
                     $canOpenJob,
+                    (int) ($job->created_by ?: 0) === (int) $user->id,
                 ))
                 ->values();
 
@@ -252,12 +242,12 @@ class BoardTaskPackService
         $tomorrow = $today->copy()->addDay()->toDateString();
         $weekEnd = $today->copy()->addDays(7)->toDateString();
 
-        $visibleJobIds = $this->visibleJobQuery($user)
-            ->reorder()
-            ->select('flow_jobs.id');
-
-        $base = Task::query()
-            ->whereIn('tasks.flow_job_id', $visibleJobIds)
+        $base = app(AccessControlService::class)->applyTaskScope(Task::query(), $user)
+            ->whereHas('job', fn (Builder $job) => $job
+                ->whereHas('client', fn (Builder $client) => $client->where('is_active', true))
+                ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                ->whereNull('flow_jobs.completed_at')
+                ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'"))
             ->whereNull('tasks.completed_at')
             ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
 
@@ -312,12 +302,15 @@ class BoardTaskPackService
         $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
         $openOnly = $hideCompleted || $quick !== 'all';
 
-        $visibleJobIds = $this->visibleJobQuery($user, includeCompleted: !$openOnly)
-            ->reorder()
-            ->select('flow_jobs.id');
-
-        $query = Task::query()
-            ->whereIn('tasks.flow_job_id', $visibleJobIds);
+        $query = app(AccessControlService::class)->applyTaskScope(Task::query(), $user)
+            ->whereHas('job', function (Builder $job) use ($openOnly): void {
+                $job->whereHas('client', fn (Builder $client) => $client->where('is_active', true))
+                    ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES);
+                if ($openOnly) {
+                    $job->whereNull('flow_jobs.completed_at')
+                        ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'");
+                }
+            });
 
         $search = trim((string) ($filters['search'] ?? ''));
         if ($search !== '') {
@@ -462,6 +455,7 @@ class BoardTaskPackService
         string $displayTimezone,
         string $today,
         bool $canOpenJob,
+        bool $parentCreatedByUser,
     ): array {
         $completed = $task->completed_at !== null || BoardLaneResolver::isCompleted((string) $task->status);
         $dueDate = $task->due_date?->format('Y-m-d');
@@ -521,7 +515,7 @@ class BoardTaskPackService
             'flagColor' => $flagColor,
             'updated' => $updatedAt?->diffForHumans() ?: '—',
             'version' => (string) $task->getRawOriginal('updated_at'),
-            'canEdit' => $this->canEditTaskWithoutQuery($user, $task, $access),
+            'canEdit' => $this->canEditTaskWithoutQuery($user, $task, $access, $parentCreatedByUser),
             'route' => $canOpenJob ? route('jobs.index', ['open' => $task->flow_job_id, 'task' => $task->id]) : null,
         ];
     }
@@ -530,9 +524,9 @@ class BoardTaskPackService
      * Mirror task-edit authorization using already eager-loaded fields so the
      * list does not execute one authorization query per task row.
      */
-    private function canEditTaskWithoutQuery(User $user, Task $task, AccessControlService $access): bool
+    private function canEditTaskWithoutQuery(User $user, Task $task, AccessControlService $access, bool $parentCreatedByUser = false): bool
     {
-        if ($access->isAdministrator($user)) return true;
+        if ($access->isAdministrator($user) || $parentCreatedByUser) return true;
         if (!$access->can($user, 'tasks', 'edit')) return false;
 
         $scope = $access->scope($user, 'tasks');

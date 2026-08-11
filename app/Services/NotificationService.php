@@ -18,7 +18,9 @@ class NotificationService
 {
     public function visibleQuery(User $user): Builder
     {
+        $access = app(AccessControlService::class);
         $query = FlowNotification::query()->where('user_id', $user->id);
+        if (!$access->can($user, 'notifications', 'view')) return $query->whereRaw('1 = 0');
 
         // Administrator copies are only visible while the account is actually an
         // Admin/Super Admin. This keeps the rule correct even if a user's role is
@@ -27,7 +29,7 @@ class NotificationService
             $query->where('type', '!=', 'mention_admin');
         }
 
-        return $this->constrainToLiveRecordContexts($query);
+        return $this->constrainToAuthorizedContexts($this->constrainToLiveRecordContexts($query), $user);
     }
 
     /**
@@ -74,6 +76,55 @@ class NotificationService
                         ->whereNotNull('inquiry_id')
                         ->whereHas('inquiry');
                 });
+        });
+    }
+
+    private function constrainToAuthorizedContexts(Builder $query, User $user): Builder
+    {
+        $access = app(AccessControlService::class);
+
+        return $query->where(function (Builder $allowed) use ($user, $access): void {
+            $allowed->where(function (Builder $generic): void {
+                $generic->whereNull('flow_job_id')
+                    ->whereNull('flow_task_id')
+                    ->whereNull('inquiry_id')
+                    ->whereNull('inquiry_task_id');
+            });
+
+            if ($access->can($user, 'tasks', 'view')) {
+                $allowed->orWhere(function (Builder $task) use ($user, $access): void {
+                    $task->whereNotNull('flow_task_id')
+                        ->whereIn('flow_task_id', $access->applyTaskScope(Task::query(), $user)->select('tasks.id'));
+                });
+            }
+
+            if ($access->can($user, 'tasks', 'view') && $access->can($user, 'inquiries', 'view')) {
+                $allowed->orWhere(function (Builder $task) use ($user, $access): void {
+                    $task->whereNull('flow_task_id')
+                        ->whereNotNull('inquiry_task_id')
+                        ->whereIn('inquiry_task_id', $access->applyInquiryTaskScope(InquiryTask::query(), $user)->select('inquiry_tasks.id'));
+                });
+            }
+
+            if ($access->can($user, 'jobs', 'view')) {
+                $allowed->orWhere(function (Builder $job) use ($user): void {
+                    $job->whereNull('flow_task_id')
+                        ->whereNull('inquiry_task_id')
+                        ->whereNull('inquiry_id')
+                        ->whereNotNull('flow_job_id')
+                        ->whereIn('flow_job_id', app(JobService::class)->visibleQuery($user)->select('flow_jobs.id'));
+                });
+            }
+
+            if ($access->can($user, 'inquiries', 'view')) {
+                $allowed->orWhere(function (Builder $inquiry) use ($user): void {
+                    $inquiry->whereNull('flow_task_id')
+                        ->whereNull('inquiry_task_id')
+                        ->whereNull('flow_job_id')
+                        ->whereNotNull('inquiry_id')
+                        ->whereIn('inquiry_id', app(InquiryService::class)->visibleQuery($user)->select('inquiries.id'));
+                });
+            }
         });
     }
 

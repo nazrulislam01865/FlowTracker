@@ -103,7 +103,7 @@ class JobService
         return $query
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number', 'flow_jobs.client_id',
-                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
+                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id', 'flow_jobs.created_by',
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity', 'flow_jobs.next_action',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
                 'flow_jobs.delivery_date', 'flow_jobs.commercial_value', 'flow_jobs.currency',
@@ -271,6 +271,7 @@ class JobService
     {
         $term = trim($search);
         if (mb_strlen($term) < 2) return collect();
+        if (!app(AccessControlService::class)->can($user, 'jobs', 'link')) return collect();
         if (!app(AccessControlService::class)->can($user, 'inquiries', 'view')) return collect();
 
         $tokens = collect(preg_split('/\s+/', $term) ?: [])
@@ -328,7 +329,8 @@ class JobService
      */
     public function linkSourceInquiry(FlowJob $job, int $inquiryId, User $actor): FlowJob
     {
-        $this->assertEditable($job, $actor);
+        abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'link'), 403);
+        $this->visibleQuery($actor)->whereKey($job->id)->firstOrFail();
         abort_unless(app(AccessControlService::class)->can($actor, 'inquiries', 'view'), 403);
 
         return DB::transaction(function () use ($job, $inquiryId, $actor): FlowJob {
@@ -375,7 +377,8 @@ class JobService
     /** Remove only the Inquiry/Order traceability relationship. */
     public function unlinkSourceInquiry(FlowJob $job, User $actor): FlowJob
     {
-        $this->assertEditable($job, $actor);
+        abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'link'), 403);
+        $this->visibleQuery($actor)->whereKey($job->id)->firstOrFail();
 
         return DB::transaction(function () use ($job, $actor): FlowJob {
             $lockedJob = $this->visibleQuery($actor)
@@ -586,6 +589,7 @@ class JobService
                 'started_from_phase_id' => $phase->id,
                 'owner_id' => $data['owner_id'] ?: $actor->id,
                 'coordinator_id' => $data['coordinator_id'] ?: $actor->id,
+                'created_by' => $actor->id,
                 'title' => $data['title'],
                 'product' => $data['product'],
                 'category' => $data['category'] ?? null,

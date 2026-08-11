@@ -151,6 +151,7 @@ class ClientService
 
     public function archive(User $user, int $clientId): Client
     {
+        abort_unless(app(AccessControlService::class)->can($user, 'clients', 'delete'), 403);
         $client = $this->visibleQuery($user)->findOrFail($clientId);
         if ($client->is_active) {
             $client->update([
@@ -166,6 +167,7 @@ class ClientService
 
     public function restore(User $user, int $clientId): Client
     {
+        abort_unless(app(AccessControlService::class)->can($user, 'clients', 'delete'), 403);
         $client = $this->visibleQuery($user)->findOrFail($clientId);
         if (!$client->is_active) {
             $client->update([
@@ -187,6 +189,7 @@ class ClientService
      */
     public function permanentlyDeleteArchived(User $user, int $clientId): string
     {
+        abort_unless(app(AccessControlService::class)->can($user, 'clients', 'delete'), 403);
         $originalName = '';
         $logoPath = '';
 

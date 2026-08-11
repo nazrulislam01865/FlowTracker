@@ -55,6 +55,7 @@ class Index extends Component
 
     public function openWorkflow(?int $id = null): void
     {
+        abort_unless(auth()->user()?->canModule('workflow', $id ? 'edit' : 'create'), 403);
         $this->showWorkflowModal = true; $this->editWorkflowId = $id; $this->resetValidation();
         if ($id) {
             $w=WorkflowTemplate::findOrFail($id);
@@ -159,6 +160,7 @@ class Index extends Component
 
     public function openPhase(?int $id=null):void
     {
+        abort_unless(auth()->user()?->canModule('workflow', 'edit'), 403);
         abort_unless($this->selectedWorkflowId,422);
         $this->resetValidation(); $this->showPhaseModal=true; $this->editPhaseId=$id;
         if($id){

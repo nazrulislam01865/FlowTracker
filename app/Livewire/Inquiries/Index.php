@@ -166,6 +166,7 @@ class Index extends Component
         abort_unless(auth()->user()->canModule('inquiries', 'create'), 403);
         $this->showCreate = true;
         $this->selectedInquiryId = null;
+        $this->userOptions = [];
         $this->selectedTaskId = null;
         $this->createOwnerId ??= (int) auth()->id();
         if ($this->createReceivedDate === '') {
@@ -377,6 +378,7 @@ class Index extends Component
     {
         app(InquiryService::class)->findVisible(auth()->user(), $id);
         $this->selectedInquiryId = $id;
+        $this->userOptions = [];
         $this->showCreate = false;
         $this->detailTab = 'overview';
         $this->selectedTaskId = null;
@@ -456,6 +458,10 @@ class Index extends Component
 
         if ($field === 'priority') {
             $result['color'] = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $saved->priority);
+        }
+
+        if ($field === 'owner_id') {
+            $result['avatarUrl'] = $saved->owner?->profileImageUrl() ?? '';
         }
 
         if ($field === 'requirement_notes') {
@@ -592,9 +598,13 @@ class Index extends Component
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
         abort_unless(app(InquiryService::class)->canEditTask(auth()->user(), $task), 403);
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
+        $canCreateDocument = auth()->user()->canModule('documents', 'create');
+        $canLinkDocument = auth()->user()->canModule('documents', 'link');
+        abort_unless($canCreateDocument || $canLinkDocument, 403, 'Your role cannot add documents.');
 
         $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
+        $this->taskDocumentSource = $canCreateDocument ? 'upload' : 'existing';
         $this->taskDocumentModalTaskId = $taskId;
         $this->showTaskDocumentModal = true;
     }
@@ -615,8 +625,12 @@ class Index extends Component
             return;
         }
 
+        $canCreateDocument = auth()->user()->canModule('documents', 'create');
+        $canLinkDocument = auth()->user()->canModule('documents', 'link');
+        abort_unless($canCreateDocument || $canLinkDocument, 403, 'A required file is missing and your role cannot add documents.');
         $this->pendingCompletionTaskId = $taskId;
         $this->resetTaskDocumentModal();
+        $this->taskDocumentSource = $canCreateDocument ? 'upload' : 'existing';
         $this->taskDocumentModalTaskId = $taskId;
         $this->showTaskDocumentModal = true;
     }
@@ -636,7 +650,9 @@ class Index extends Component
     public function setTaskDocumentSource(string $source): void
     {
         abort_unless(in_array($source, ['upload', 'existing'], true), 422);
-        if ($source === 'existing') {
+        if ($source === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
         }
 
@@ -664,6 +680,7 @@ class Index extends Component
         $note = $note !== '' ? $note : null;
 
         if ($this->taskDocumentSource === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
             $this->validate([
                 'taskDocumentUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
             ]);
@@ -782,6 +799,7 @@ class Index extends Component
 
     public function uploadInquiryFiles(): array
     {
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
         $this->resetValidation(['inquiryUploads', 'inquiryUploads.*']);
         $validator = validator(['inquiryUploads' => $this->inquiryUploads], [
             'inquiryUploads' => ['required','array','min:1'],
@@ -907,7 +925,7 @@ class Index extends Component
     public function openAddTaskForm(): void
     {
         $inquiry = $this->selectedInquiry();
-        abort_unless(app(AccessControlService::class)->isAdministrator(auth()->user()), 403);
+        abort_unless(app(AccessControlService::class)->canCreateInquiryTask(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'A completed Inquiry cannot receive another task.');
 
         $this->loadUserOptions();
@@ -935,7 +953,7 @@ class Index extends Component
 
     public function addInquiryTask(): void
     {
-        abort_unless(app(AccessControlService::class)->isAdministrator(auth()->user()), 403);
+        abort_unless(app(AccessControlService::class)->canCreateInquiryTask(auth()->user(), $this->selectedInquiry()), 403);
 
         $data = $this->validate([
             'newTaskName' => ['required', 'string', 'max:255'],
@@ -963,7 +981,10 @@ class Index extends Component
     public function openWorkflowManager(): void
     {
         $inquiry = $this->selectedInquiry(['tasks.assignee:id,name']);
-        abort_unless(app(InquiryService::class)->canEdit(auth()->user(), $inquiry), 403);
+        $service = app(InquiryService::class);
+        foreach ($inquiry->tasks->filter(fn (InquiryTask $task) => !$task->completed_at) as $openTask) {
+            abort_unless($service->canEditTask(auth()->user(), $openTask), 403, 'You do not have permission to manage the full Inquiry taskflow.');
+        }
         $activeId = $inquiry->tasks->first(fn (InquiryTask $task) => !$task->completed_at)?->id;
         $this->managerRows = $inquiry->tasks->map(fn (InquiryTask $task) => [
             'id' => (int) $task->id,
@@ -971,6 +992,7 @@ class Index extends Component
             'name' => (string) $task->title,
             'description' => (string) ($task->description ?: ''),
             'assignee_id' => $task->assignee_id ? (int) $task->assignee_id : null,
+            'setup_assignee_id' => $task->setup_assignee_id ? (int) $task->setup_assignee_id : null,
             'due_date' => $task->due_date?->toDateString() ?: '',
             'requires_submission' => (bool) $task->requires_submission,
             'submission_label' => (string) ($task->submission_label ?: ''),
@@ -1098,20 +1120,23 @@ class Index extends Component
     private function detailPageData(User $user): array
     {
         $service = app(InquiryService::class);
+        $canViewTasks = $user->canModule('tasks', 'view')
+            || Inquiry::query()->whereKey($this->selectedInquiryId)->where('created_by', $user->id)->exists();
         $with = [
             'client:id,name,logo_path',
             'creator:id,name,profile_image_path',
+            'owner:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
             'sourceWorkflow:id,name',
             'currentTask:id,inquiry_id,assignee_id,title,due_date,status,started_at,completed_at',
             'currentTask.assignee:id,name,profile_image_path',
         ];
-        if ($this->detailTab === 'overview') {
-            // Overview owns the fully interactive Inquiry Taskflow. Load its task graph once.
-            $with['tasks'] = fn ($query) => $query
+        if ($this->detailTab === 'overview' && $canViewTasks) {
+            // Overview owns the fully interactive Inquiry Taskflow. Load only tasks allowed by the Tasks matrix.
+            $with['tasks'] = fn ($query) => app(AccessControlService::class)->applyInquiryTaskScope($query, $user)
                 ->with([
                     'assignee:id,name,profile_image_path',
-                    'documents:id,inquiry_id,inquiry_task_id,name,note,created_at',
+                    'documents:id,inquiry_id,inquiry_task_id,name,note,mime_type,created_at',
                     'links:id,inquiry_task_id,url,created_at',
                 ])
                 ->withCount(['documents', 'comments'])
@@ -1127,8 +1152,15 @@ class Index extends Component
             ])
             ->findOrFail($this->selectedInquiryId);
 
+        if (!$canViewTasks) {
+            $inquiry->setRelation('tasks', collect());
+            $inquiry->setRelation('currentTask', null);
+            $inquiry->setAttribute('tasks_count', 0);
+            $inquiry->setAttribute('completed_tasks_count', 0);
+        }
+
         // Documents and Activity remain part of Overview, but no longer have separate tabs.
-        $documents = $this->detailTab === 'overview' ? $service->documentsPage($user, $inquiry) : null;
+        $documents = $this->detailTab === 'overview' && $user->canModule('documents', 'view') ? $service->documentsPage($user, $inquiry) : null;
         $activities = $this->detailTab === 'overview' ? $service->activityPage($user, $inquiry, 30, $this->inquiryActivityTab) : null;
         $mentionUsers = $this->detailTab === 'overview' ? app(MentionService::class)->optionsForCreate($user) : collect();
         $availableInquiryDocuments = $this->showInquiryDocumentPicker && $this->detailTab === 'overview'
@@ -1157,9 +1189,7 @@ class Index extends Component
         // Keep overview editing aligned with the same current-task rule used by
         // the Inquiry list: furthest started open task, otherwise first queued.
         $activeTask = $inquiry->currentTask ?: $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at);
-        $canEditActiveTask = $activeTask
-            ? ($canEditInquiry || ((int) $activeTask->assignee_id === (int) $user->id && $user->canModule('inquiries', 'view')))
-            : false;
+        $canEditActiveTask = $activeTask ? $service->canEditTask($user, $activeTask) : false;
 
         return [
             'mode' => 'detail',
@@ -1172,9 +1202,13 @@ class Index extends Component
             'taskDocumentModalTask' => $taskDocumentModalTask,
             'availableTaskDocuments' => $availableTaskDocuments,
             'canLinkDocuments' => $user->canModule('documents', 'link'),
+            'canCreateDocuments' => $user->canModule('documents', 'create'),
+            'canDeleteDocuments' => $user->canModule('documents', 'delete'),
+            'canExportDocuments' => $user->canModule('documents', 'export'),
+            'canAssignInquiry' => $user->canModule('inquiries', 'assign') || app(AccessControlService::class)->isInquiryCreator($user, $inquiry),
             'canEditInquiry' => $canEditInquiry,
             'canEditActiveTask' => $canEditActiveTask,
-            'canAddInquiryTask' => app(AccessControlService::class)->isAdministrator($user) && !$inquiry->result,
+            'canAddInquiryTask' => app(AccessControlService::class)->canCreateInquiryTask($user, $inquiry) && !$inquiry->result,
             'inquiryPriorities' => $this->detailTab === 'overview' ? app(\App\Services\MasterDataService::class)->active('priority') : collect(),
             'canCreateOrder' => $user->canModule('jobs', 'create'),
             'selectedTaskIsActive' => false,
@@ -1353,8 +1387,14 @@ class Index extends Component
     {
         if ($this->userOptions !== []) return;
 
-        $this->userOptions = User::query()
-            ->where('is_active', true)
+        $query = User::query()->where('is_active', true);
+        $actor = auth()->user();
+        $isCreator = $this->selectedInquiryId
+            ? Inquiry::query()->whereKey($this->selectedInquiryId)->where('created_by', $actor->id)->exists()
+            : false;
+        if (! $isCreator && ! $actor->canModule('tasks', 'assign')) $query->whereKey($actor->id);
+
+        $this->userOptions = $query
             ->orderBy('name')
             ->limit(250)
             ->get(['id', 'name'])

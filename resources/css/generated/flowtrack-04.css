@@ -1,22 +1,4 @@
 
-
-.ft-exact-job-detail .ft-doc-library-card{padding:14px;box-shadow:none}
-.ft-exact-job-detail .ft-doc-library-heading{
-    display:flex;
-    align-items:flex-start;
-    justify-content:space-between;
-    gap:12px;
-    margin-bottom:10px;
-}
-.ft-exact-job-detail .ft-doc-library-heading h3{margin:0;font-size:15px}
-.ft-exact-job-detail .ft-doc-library-heading p{margin:3px 0 0;font-size:9px;color:#667a93;line-height:1.4}
-.ft-exact-job-detail .ft-doc-phase-list{display:grid;gap:8px}
-.ft-exact-job-detail .ft-doc-phase-group{
-    border:1px solid #dce5f0;
-    border-radius:10px;
-    background:#fff;
-    overflow:hidden;
-}
 .ft-exact-job-detail .ft-doc-phase-group[open]{border-color:#cfdceb;box-shadow:0 3px 10px rgba(31,55,87,.035)}
 .ft-exact-job-detail .ft-doc-phase-summary{
     list-style:none;
@@ -1134,7 +1116,7 @@ body:has(.ft-client-prototype-page) .content{max-width:none;margin:0;padding:17p
     width:100%;
     max-width:100%;
     min-width:0;
-    max-height:min(440px,55vh);
+    max-height:none;
     box-sizing:border-box;
     margin:0;
     padding:14px 18px 16px;
@@ -1145,11 +1127,10 @@ body:has(.ft-client-prototype-page) .content{max-width:none;margin:0;padding:17p
     font-size:13px;
     line-height:1.55;
     overflow-x:hidden;
-    overflow-y:auto;
-    overscroll-behavior:contain;
+    overflow-y:visible;
+    overscroll-behavior:auto;
     overflow-wrap:anywhere;
     word-break:break-word;
-    scrollbar-gutter:stable;
 }
 .ft-inquiry-description-content>div{min-width:0;max-width:100%}
 .ft-inquiry-description-content p,
@@ -1209,9 +1190,18 @@ body:has(.ft-client-prototype-page) .content{max-width:none;margin:0;padding:17p
     }
     .ft-inquiry-description-card{padding:12px !important}
     .ft-inquiry-description-head{padding:0;margin-bottom:8px}
-    .ft-inquiry-description-content{max-height:50vh;padding:12px 14px;font-size:12px}
+    .ft-inquiry-description-content{max-height:none;padding:12px 14px;font-size:12px}
     .ft-inquiry-description-editor{padding:0}
 }
+
+/* Permission matrix role-switch performance + familiar checkbox layout. */
+.ft-role-matrix-stage{position:relative;min-height:120px}
+.ft-role-matrix-wrap.is-switching-role{opacity:.38;pointer-events:none;transition:opacity .12s ease}
+.ft-matrix-loading{position:absolute;z-index:8;inset:0;display:none;align-items:flex-start;justify-content:center;gap:8px;padding-top:28px;border-radius:12px;background:rgba(248,250,252,.72);color:#53647c;font-size:12px;font-weight:700;backdrop-filter:blur(1px)}
+.ft-matrix-spinner{width:15px;height:15px;border:2px solid #cbd8ea;border-top-color:#2563eb;border-radius:50%;animation:ft-matrix-spin .7s linear infinite}
+@keyframes ft-matrix-spin{to{transform:rotate(360deg)}}
+.ft-matrix-na .ft-perm-check{opacity:.26;cursor:not-allowed;filter:grayscale(1)}
+.ft-matrix-toolbar select:disabled{cursor:wait;opacity:.72}
 
 .ft-board-load-more {
     display: flex;

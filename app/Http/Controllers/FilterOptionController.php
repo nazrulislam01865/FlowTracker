@@ -17,6 +17,8 @@ class FilterOptionController
             'selected' => ['nullable','string','max:255'],
             'category' => ['nullable','string','max:255'],
             'client_id' => ['nullable','integer','exists:clients,id'],
+            'parent_type' => ['nullable','string','in:job,inquiry'],
+            'parent_id' => ['nullable','integer'],
         ]);
 
         $context = (string) ($data['context'] ?? '');
@@ -41,6 +43,8 @@ class FilterOptionController
                 [
                     'category' => (string) ($data['category'] ?? ''),
                     'client_id' => (int) ($data['client_id'] ?? 0) ?: null,
+                    'parent_type' => (string) ($data['parent_type'] ?? ''),
+                    'parent_id' => (int) ($data['parent_id'] ?? 0) ?: null,
                 ],
             )->values(),
         ]);

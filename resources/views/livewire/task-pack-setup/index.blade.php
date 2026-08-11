@@ -1,5 +1,8 @@
 @php
     $masterData = app(\App\Services\MasterDataService::class);
+    $canCreateTaskPack = auth()->user()->canModule('taskpacks', 'create');
+    $canEditTaskPack = auth()->user()->canModule('taskpacks', 'edit');
+    $canDeleteTaskPack = auth()->user()->canModule('taskpacks', 'delete');
 @endphp
 <div wire:init="loadTaskPacks" class="ft-admin-reference ft-taskpack-reference">
     <div class="ft-admin-page-head">
@@ -7,7 +10,7 @@
             <h1>Task Pack Setup</h1>
             <p>Create reusable task sequences that activate when a Job enters a workflow phase</p>
         </div>
-        <a href="{{ route('task-pack.create') }}" wire:navigate class="ft-admin-primary">＋ Add Task Pack</a>
+        @if($canCreateTaskPack)<a href="{{ route('task-pack.create') }}" wire:navigate class="ft-admin-primary">＋ Add Task Pack</a>@endif
     </div>
 
     @if(session('success'))<div class="flash success">{{ session('success') }}</div>@endif
@@ -34,8 +37,9 @@
                         <p>{{ $pack->code }} · {{ $pack->items->count() }} predefined task{{ $pack->items->count() === 1 ? '' : 's' }} · {{ $pack->is_active ? 'Active' : 'Inactive' }}</p>
                     </div>
                     <div class="ft-taskpack-card-actions">
-                        <a class="ft-admin-outline-small" href="{{ route('task-pack.edit', $pack->id) }}" wire:navigate>Edit</a>
-                        <button type="button" class="ft-admin-danger-small" wire:click="requestDeletePack({{ $pack->id }})" wire:loading.attr="disabled" wire:target="requestDeletePack">Delete</button>
+                        @if($canEditTaskPack)<a class="ft-admin-outline-small" href="{{ route('task-pack.edit', $pack->id) }}" wire:navigate>Edit</a>@endif
+                        @if($canDeleteTaskPack)<button type="button" class="ft-admin-danger-small" wire:click="requestDeletePack({{ $pack->id }})" wire:loading.attr="disabled" wire:target="requestDeletePack">Delete</button>@endif
+                        @if(!$canEditTaskPack && !$canDeleteTaskPack)<span class="small muted">View only</span>@endif
                     </div>
                 </div>
                 <p class="ft-taskpack-description">{{ $pack->description ?: 'No description' }}</p>

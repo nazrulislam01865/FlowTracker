@@ -96,11 +96,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
     Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');
     Route::get('/inquiries/documents/{document}/open', function (\App\Models\InquiryDocument $document) {
+        abort_unless(auth()->user()->canModule('documents', 'view'), 403);
         app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
 
         return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('inquiries.documents.open');
     Route::get('/inquiries/documents/{document}/download', function (\App\Models\InquiryDocument $document) {
+        abort_unless(auth()->user()->canModule('documents', 'export'), 403);
         app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
 
         return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
@@ -118,8 +120,8 @@ Route::middleware('auth')->group(function () {
     })->name('documents.download');
     // Reports page is intentionally disabled for now.
     // Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
-    Route::get('/notifications', NotificationsController::class)->name('notifications');
-    Route::get('/notifications/{notification}/open', NotificationOpenController::class)->whereNumber('notification')->name('notifications.open');
+    Route::get('/notifications', NotificationsController::class)->middleware('permission:notifications.view')->name('notifications');
+    Route::get('/notifications/{notification}/open', NotificationOpenController::class)->middleware('permission:notifications.view')->whereNumber('notification')->name('notifications.open');
     Route::get('/notifications/unread-count', function () {
         $user = auth()->user();
         $service = app(\App\Services\NotificationService::class);
@@ -160,14 +162,14 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/{user}/edit', UserEditController::class)->whereNumber('user')->name('users.edit');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 
-    Route::middleware('permission:workflow.manage')->group(function () {
-        Route::get('/workflow-setup', [WorkflowSetupController::class, 'index'])->name('workflow.setup');
-        Route::get('/workflow-setup/create', [WorkflowSetupController::class, 'create'])->name('workflow.create');
-        Route::get('/workflow-setup/{workflow}/edit', [WorkflowSetupController::class, 'edit'])->whereNumber('workflow')->name('workflow.edit');
-        Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->name('task-pack.setup');
-        Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->name('task-pack.create');
-        Route::get('/task-pack-setup/{taskPack}/edit', [TaskPackSetupController::class, 'edit'])->whereNumber('taskPack')->name('task-pack.edit');
-    });
-    Route::get('/master-data', MasterDataController::class)->middleware('permission:master.manage')->name('master-data');
+    // Workflow Setup can be granted read-only access independently from configuration rights.
+    Route::get('/workflow-setup', [WorkflowSetupController::class, 'index'])->middleware('permission:workflow.view')->name('workflow.setup');
+    Route::get('/workflow-setup/create', [WorkflowSetupController::class, 'create'])->middleware('permission:workflow.create')->name('workflow.create');
+    Route::get('/workflow-setup/{workflow}/edit', [WorkflowSetupController::class, 'edit'])->middleware('permission:workflow.update')->whereNumber('workflow')->name('workflow.edit');
+
+    Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->middleware('permission:taskpacks.view')->name('task-pack.setup');
+    Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');
+    Route::get('/task-pack-setup/{taskPack}/edit', [TaskPackSetupController::class, 'edit'])->middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit');
+    Route::get('/master-data', MasterDataController::class)->middleware('permission:master.view')->name('master-data');
     Route::get('/administration', AdministrationController::class)->middleware('super.admin')->name('administration');
 });

@@ -489,3 +489,6 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-board-sticky-header .ft-board-page-head{padding-top:2px}
 .ft-board-page .ft-board-page-head h1{font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-.035em}
 .ft-board-page .ft-board-page-head p{font-size:12px;color:#60728d}
+.ft-board-page .ft-new-job-btn{height:42px;min-width:78px;padding:0 15px;border-radius:9px;font-size:12px}
+
+.ft-reference-tabs{display:flex;align-items:center;gap:26px;border-bottom:1px solid #dbe3ee;margin:10px 0 10px!important}

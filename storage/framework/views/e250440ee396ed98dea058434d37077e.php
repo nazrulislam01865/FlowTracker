@@ -10,6 +10,8 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'variant' => 'compact',
     'menuWidth' => 300,
     'searchPlaceholder' => 'Search assignee…',
+    'parentType' => '',
+    'parentId' => null,
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -34,6 +36,8 @@ foreach (array_filter(([
     'variant' => 'compact',
     'menuWidth' => 300,
     'searchPlaceholder' => 'Search assignee…',
+    'parentType' => '',
+    'parentId' => null,
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -61,7 +65,7 @@ unset($__defined_vars, $__key, $__value); ?>
         selectedLabel: <?php echo \Illuminate\Support\Js::from($resolvedLabel)->toHtml() ?>,
         endpoint: <?php echo \Illuminate\Support\Js::from(route('filter-options.index', ['type' => 'users']))->toHtml() ?>,
         initialItems: [],
-        params: {},
+        params: { parent_type: <?php echo \Illuminate\Support\Js::from((string) $parentType)->toHtml() ?>, parent_id: <?php echo \Illuminate\Support\Js::from($parentId)->toHtml() ?> },
         disabled: false,
         menuWidth: <?php echo \Illuminate\Support\Js::from((int) $menuWidth)->toHtml() ?>,
         fixedMenu: true,

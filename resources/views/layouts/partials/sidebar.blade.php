@@ -22,12 +22,10 @@
     {{-- Reports is intentionally hidden from the sidebar while the page is disabled. --}}
     {{-- @if($user->canAccess('reports.view'))<x-ui.nav-link route="reports" label="Reports" icon="reports" />@endif --}}
     <div class="sidebar-section">Administration</div>
-    <x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />
-    @if($user->canAccess('workflow.manage'))
-        <x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />
-        <x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />
-    @endif
-    @if($user->canAccess('master.manage'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
+    @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
+    @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />@endif
+    @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
+    @if($user->canAccess('master.view'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
     @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
     <div class="sidebar-footer">
         <div class="user-mini"><x-ui.avatar :user="$user" :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div>

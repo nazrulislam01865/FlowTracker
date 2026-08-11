@@ -57,6 +57,7 @@ class DocumentService
         $task = null;
         if (!empty($data['task_id'])) {
             $task = Task::with(['job','documentCategory','setupTemplate.documentCategory'])->findOrFail((int) $data['task_id']);
+            app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
             app(JobService::class)->findVisible($user, (int) $task->flow_job_id);
             if (!empty($data['flow_job_id'])) abort_unless((int) $task->flow_job_id === (int) $data['flow_job_id'], 422, 'The selected document task does not belong to this Job.');
             if (($data['require_task_pack_requirement'] ?? false) === true) abort_unless($this->taskHasRequirement($task), 422, 'This task has no Task Pack document requirement.');
@@ -105,6 +106,7 @@ class DocumentService
     {
         abort_unless(app(AccessControlService::class)->can($user, 'documents', 'link'), 403);
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $user)->firstOrFail();
+        app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
         app(JobService::class)->findVisible($user, (int) $task->flow_job_id);
         $task->loadMissing(['job','documentCategory','setupTemplate.documentCategory']);
         if (!$allowGenericAttachment) abort_unless($this->taskHasRequirement($task), 422, 'The selected task does not define a Task Pack document requirement.');
@@ -126,7 +128,10 @@ class DocumentService
 
     public function delete(Document $document, ?User $actor = null): void
     {
-        if ($actor) abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'delete') || app(AccessControlService::class)->can($actor, 'documents', 'manage'), 403);
+        if ($actor) {
+            abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'delete'), 403);
+            app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $actor)->firstOrFail();
+        }
         $document->loadMissing(['task','job']);
         $name = $document->name; $path = $document->path;
         if ($actor) {

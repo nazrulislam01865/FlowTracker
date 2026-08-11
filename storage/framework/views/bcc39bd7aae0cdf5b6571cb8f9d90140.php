@@ -9,6 +9,14 @@
             default => 'blue',
         };
     };
+    $priorityTone = static function (string $priority): string {
+        return match (strtolower(trim($priority))) {
+            'critical', 'urgent' => 'red',
+            'high' => 'amber',
+            'low' => 'green',
+            default => 'blue',
+        };
+    };
     $initials = static function (?string $name): string {
         $parts = preg_split('/\s+/', trim((string) $name)) ?: [];
         return strtoupper(substr(implode('', array_map(fn ($part) => substr($part, 0, 1), $parts)), 0, 2)) ?: '—';
@@ -59,6 +67,7 @@
                         <div>Assignee</div>
                         <div>Due Date</div>
                         <div>Started At</div>
+                        <div>Priority</div>
                         <div>Status</div>
                         <div>View</div>
                         <div aria-label="Actions"></div>
@@ -113,8 +122,10 @@
                                 <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title"><?php echo e($row['due']); ?></span></div>
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title"><?php echo e($row['startedDate']); ?></span><span class="sub"><?php echo e($row['startedTime']); ?></span></div>
                                 <?php
+                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
                                     $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
                                 ?>
+                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill <?php echo e($rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryPriorityColor)); ?>"><?php echo e($row['priority']); ?></span></div>
                                 <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill <?php echo e($rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryStatusColor)); ?>"><?php echo e($row['status']); ?></span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="<?php echo e(route('inquiries.index', ['open' => $row['id']])); ?>" aria-label="View <?php echo e($row['number']); ?>" wire:navigate>View <span aria-hidden="true">→</span></a></div>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('inquiries', 'delete')): ?>
@@ -448,7 +459,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                     <strong><?php echo e($selectedWorkflowName); ?></strong>
                                     <span><?php echo e($createWorkflowPhaseCount); ?> <?php echo e(\Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount)); ?> · <?php echo e($createWorkflowTaskCount); ?> <?php echo e(\Illuminate\Support\Str::plural('task', $createWorkflowTaskCount)); ?> will be created</span>
                                 </span>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('workflow.manage')): ?>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('workflow.view')): ?>
                                     <a href="<?php echo e(route('workflow.setup')); ?>" wire:navigate x-on:click.stop>Preview workflow ↗</a>
                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
@@ -756,6 +767,91 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                         <div
                             class="ft-task-property ft-inline-edit-shell"
+                            x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('inquiry-'.$inquiry->id.'-assignee')->toHtml() ?>, label: 'Inquiry assignee', value: <?php echo \Illuminate\Support\Js::from($inquiry->owner_id ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($inquiry->owner?->name ?? 'Unassigned')->toHtml() ?>, avatarUrl: <?php echo \Illuminate\Support\Js::from($inquiry->owner?->profileImageUrl() ?? '')->toHtml() ?> })"
+                            :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                            x-on:click.outside="if (editing) cancelEdit()"
+                            x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                            x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateInquiryField('owner_id', draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
+                        >
+                            <small>Assignee</small>
+                            <div x-show="!editing" class="ft-task-property-display ft-inline-person-live">
+                                <?php if (isset($component)) { $__componentOriginale7e0f6ebe9ec45ba5e5c94e141751127 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginale7e0f6ebe9ec45ba5e5c94e141751127 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-live-avatar','data' => ['size' => 26]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-live-avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['size' => 26]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginale7e0f6ebe9ec45ba5e5c94e141751127)): ?>
+<?php $attributes = $__attributesOriginale7e0f6ebe9ec45ba5e5c94e141751127; ?>
+<?php unset($__attributesOriginale7e0f6ebe9ec45ba5e5c94e141751127); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginale7e0f6ebe9ec45ba5e5c94e141751127)): ?>
+<?php $component = $__componentOriginale7e0f6ebe9ec45ba5e5c94e141751127; ?>
+<?php unset($__componentOriginale7e0f6ebe9ec45ba5e5c94e141751127); ?>
+<?php endif; ?>
+                                <b class="ft-property-value" x-text="display"><?php echo e($inquiry->owner?->name ?? 'Unassigned'); ?></b>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && $canAssignInquiry && !$inquiry->result): ?><button type="button" :disabled="status === 'saving'" title="Edit assignee" aria-label="Edit Inquiry assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditInquiry && $canAssignInquiry && !$inquiry->result): ?>
+                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor ft-task-property-assignee-editor">
+                                    <?php if (isset($component)) { $__componentOriginal3c33be8c92a6f6cbf6403b5c3f28e607 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal3c33be8c92a6f6cbf6403b5c3f28e607 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-user','data' => ['value' => $inquiry->owner_id ?? '','selectedLabel' => $inquiry->owner?->name ?? 'Unassigned','context' => 'inquiry-owner','parentType' => 'inquiry','parentId' => $inquiry->id,'searchPlaceholder' => 'Search assignee…','triggerClass' => 'ft-task-property-inline-input','variant' => 'compact','menuWidth' => 300]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-remote-user'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inquiry->owner_id ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inquiry->owner?->name ?? 'Unassigned'),'context' => 'inquiry-owner','parent-type' => 'inquiry','parent-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inquiry->id),'search-placeholder' => 'Search assignee…','trigger-class' => 'ft-task-property-inline-input','variant' => 'compact','menu-width' => 300]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal3c33be8c92a6f6cbf6403b5c3f28e607)): ?>
+<?php $attributes = $__attributesOriginal3c33be8c92a6f6cbf6403b5c3f28e607; ?>
+<?php unset($__attributesOriginal3c33be8c92a6f6cbf6403b5c3f28e607); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal3c33be8c92a6f6cbf6403b5c3f28e607)): ?>
+<?php $component = $__componentOriginal3c33be8c92a6f6cbf6403b5c3f28e607; ?>
+<?php unset($__componentOriginal3c33be8c92a6f6cbf6403b5c3f28e607); ?>
+<?php endif; ?>
+                                </div>
+                                <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <div
+                            class="ft-task-property ft-inline-edit-shell"
                             x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('inquiry-'.$inquiry->id.'-due-date')->toHtml() ?>, label: 'Inquiry next due date', value: <?php echo \Illuminate\Support\Js::from($currentTask?->due_date?->format('Y-m-d') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($currentTask?->due_date?->format('M j, Y') ?? '—')->toHtml() ?> })"
                             :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                             x-on:click.outside="if (editing) cancelEdit()"
@@ -911,10 +1007,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     </section>
 
                     <div id="tab-workflow" class="ft-inquiry-overview-taskflow ft-inquiry-workflow-pane">
-                        <?php echo $__env->make('livewire.inquiries._taskflow', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('tasks', 'view')): ?>
+                            <?php echo $__env->make('livewire.inquiries._taskflow', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                        <?php else: ?>
+                            <section class="panel"><div class="ft-inquiry-empty-workflow">Task access is not enabled for your role.</div></section>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
 
-                    <?php echo $__env->make('livewire.inquiries._attachments', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('documents', 'view')): ?><?php echo $__env->make('livewire.inquiries._attachments', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <?php echo $__env->make('livewire.inquiries._activity', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
                 </div>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -946,7 +1046,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                             <div class="ft-inquiry-task-document-source-label">Document source</div>
                             <div class="ft-inquiry-task-document-source-tabs">
-                                <button type="button" class="<?php echo e($taskDocumentSource === 'upload' ? 'active' : ''); ?>" wire:click="setTaskDocumentSource('upload')">
+                                <button type="button" class="<?php echo e($taskDocumentSource === 'upload' ? 'active' : ''); ?>" wire:click="setTaskDocumentSource('upload')" <?php if(!$canCreateDocuments): echo 'disabled'; endif; ?>>
                                     <span>↥</span> Upload new
                                 </button>
                                 <button type="button" class="<?php echo e($taskDocumentSource === 'existing' ? 'active' : ''); ?>" wire:click="setTaskDocumentSource('existing')" <?php if(!$canLinkDocuments): echo 'disabled'; endif; ?>>
@@ -954,7 +1054,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 </button>
                             </div>
 
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskDocumentSource === 'upload'): ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskDocumentSource === 'upload' && $canCreateDocuments): ?>
                                 <label class="ft-inquiry-task-document-dropzone">
                                     <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
                                     <span class="ft-inquiry-task-document-upload-icon">⇧</span>

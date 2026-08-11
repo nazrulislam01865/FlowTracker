@@ -15,7 +15,7 @@
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <title><?php echo e(($title ?? null) ? $title.' — ' : ''); ?>STEP PROMO</title>
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp')); ?>">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260808-10">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260811-role-matrix-save-ux-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
@@ -43,7 +43,7 @@
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-01">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-07">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">

@@ -38,7 +38,7 @@ class AppServiceProvider extends ServiceProvider
 {
     public function register(): void
     {
-        $this->app->singleton(AccessControlService::class);
+        $this->app->scoped(AccessControlService::class);
         $this->app->scoped(MentionService::class);
         $this->app->scoped(MasterDataService::class);
         $this->app->scoped(BrandingService::class);

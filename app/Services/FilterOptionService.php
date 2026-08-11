@@ -28,7 +28,7 @@ class FilterOptionService
         $items = match ($type) {
             'clients' => $this->clients($user, $context, $search, $limit),
             'jobs' => $this->jobs($user, $context, $search, $limit),
-            'users' => $this->users($user, $context, $search, $limit),
+            'users' => $this->users($user, $context, $search, $limit, $constraints),
             'product-categories' => $this->productCategories($user, $context, $search, $limit),
             'products' => $this->products($user, $context, $search, $limit, (string) ($constraints['category'] ?? '')),
             'workflows' => $this->workflows($user, $context, $search, $limit, (int) ($constraints['client_id'] ?? 0) ?: null),
@@ -46,7 +46,7 @@ class FilterOptionService
             $selected = match ($type) {
                 'clients' => $this->clientById($user, $context, $selectedId),
                 'jobs' => $this->jobById($user, $context, $selectedId),
-                'users' => $this->userById($user, $context, $selectedId),
+                'users' => $this->userById($user, $context, $selectedId, $constraints),
                 'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
                 'products' => $this->productByName($user, $context, (string) $selectedId, (string) ($constraints['category'] ?? '')),
                 'workflows' => $this->workflowById($user, $context, $selectedId, (int) ($constraints['client_id'] ?? 0) ?: null),
@@ -147,9 +147,9 @@ class FilterOptionService
         return $job ? ['id'=>(int)$job->id, 'label'=>trim($job->displayOrderNumber().' — '.$job->title), 'meta'=>(string)($job->client?->name ?: '')] : null;
     }
 
-    private function users(User $user, string $context, string $search, int $limit): Collection
+    private function users(User $user, string $context, string $search, int $limit, array $constraints = []): Collection
     {
-        return $this->visibleUsers($user, $context)
+        return $this->visibleUsers($user, $context, $constraints)
             ->with('department:id,name')
             ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
             ->orderBy('name')
@@ -163,10 +163,10 @@ class FilterOptionService
             ]);
     }
 
-    private function userById(User $user, string $context, int|string $id): ?array
+    private function userById(User $user, string $context, int|string $id, array $constraints = []): ?array
     {
         if (!is_numeric($id)) return null;
-        $row = $this->visibleUsers($user, $context)
+        $row = $this->visibleUsers($user, $context, $constraints)
             ->with('department:id,name')
             ->find((int) $id, ['id', 'department_id', 'name', 'profile_image_path']);
 
@@ -561,8 +561,17 @@ class FilterOptionService
         abort_unless($user->canAccess('jobs.create'), 403);
     }
 
-    private function visibleUsers(User $user, string $context)
+    private function visibleUsers(User $user, string $context, array $constraints = [])
     {
+        $parentType = (string) ($constraints['parent_type'] ?? '');
+        $parentId = (int) ($constraints['parent_id'] ?? 0);
+        $isParentCreator = false;
+        if ($parentId > 0 && $parentType === 'job') {
+            $isParentCreator = FlowJob::query()->whereKey($parentId)->where('created_by', $user->id)->exists();
+        } elseif ($parentId > 0 && $parentType === 'inquiry') {
+            $isParentCreator = \App\Models\Inquiry::query()->whereKey($parentId)->where('created_by', $user->id)->exists();
+        }
+
         if ($context === 'create-job') {
             if ($user->canModule('jobs', 'assign') || $user->canModule('tasks', 'assign')) {
                 return User::query()->where('is_active', true);
@@ -571,32 +580,27 @@ class FilterOptionService
             return User::query()->where('is_active', true)->whereKey($user->id);
         }
 
-        if ($context === 'create-inquiry') {
-            return $user->canModule('inquiries', 'create')
+        if (in_array($context, ['create-inquiry', 'inquiry-owner'], true)) {
+            return ($user->canModule('inquiries', 'assign') || ($context === 'inquiry-owner' && $isParentCreator))
                 ? User::query()->where('is_active', true)
                 : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
         if ($context === 'task-assignee') {
-            return $user->canModule('tasks', 'assign')
+            return ($user->canModule('tasks', 'assign') || $isParentCreator)
                 ? User::query()->where('is_active', true)
                 : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
         if ($context === 'job-owner') {
-            return $user->canModule('jobs', 'assign')
+            return ($user->canModule('jobs', 'assign') || $isParentCreator)
                 ? User::query()->where('is_active', true)
                 : User::query()->where('is_active', true)->whereKey($user->id);
         }
 
         if ($context === 'board-task-pack') {
-            $visibleJobIds = app(BoardTaskPackService::class)
-                ->visibleJobQuery($user)
-                ->reorder()
-                ->select('flow_jobs.id');
-
-            $assigneeIds = Task::query()
-                ->whereIn('flow_job_id', $visibleJobIds)
+            $assigneeIds = app(AccessControlService::class)
+                ->applyTaskScope(Task::query(), $user)
                 ->whereNotNull('assignee_id')
                 ->select('assignee_id')
                 ->distinct();

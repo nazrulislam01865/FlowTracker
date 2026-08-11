@@ -160,7 +160,7 @@
                     @error('workflowId')<small class="validation-error">{{ $message }}</small>@enderror
                 </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span>@if(auth()->user()->canAccess('workflow.manage'))<a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>@else<span>Preview workflow ↗</span>@endif</div>
+                <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span>@if(auth()->user()->canAccess('workflow.view'))<a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>@else<span>Preview workflow ↗</span>@endif</div>
                 <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>
             </div>
         </section>

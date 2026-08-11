@@ -34,6 +34,7 @@ class FlowJob extends Model
     public function startedFromPhase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'started_from_phase_id'); }
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
     public function coordinator(): BelongsTo { return $this->belongsTo(User::class, 'coordinator_id'); }
+    public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function tasks(): HasMany { return $this->hasMany(Task::class); }
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->where('needs_attention', true)->whereNull('completed_at')->orderBy('id'); }
     public function documents(): HasMany { return $this->hasMany(Document::class); }

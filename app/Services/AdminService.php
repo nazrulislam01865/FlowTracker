@@ -46,7 +46,12 @@ class AdminService
 
     public function roles()
     {
-        return Role::with(['moduleAccess','users'])->where('workspace_id', $this->workspaceId())->orderByDesc('is_system')->orderBy('name')->get();
+        return Role::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->withCount('users')
+            ->orderByDesc('is_system')
+            ->orderBy('name')
+            ->get(['id', 'workspace_id', 'name', 'slug', 'code', 'description', 'default_scope', 'is_system', 'is_active']);
     }
 
     public function roleOptions()
@@ -55,7 +60,7 @@ class AdminService
             ->where('workspace_id', $this->workspaceId())
             ->orderByDesc('is_system')
             ->orderBy('name')
-            ->get(['id', 'name', 'slug', 'is_active']);
+            ->get(['id', 'workspace_id', 'name', 'slug', 'code', 'description', 'default_scope', 'is_system', 'is_active']);
     }
 
     public function notificationRules() { return NotificationRule::orderBy('name')->get(); }
@@ -118,6 +123,8 @@ class AdminService
         $fresh = $user->refresh()->load('role');
         app(DashboardService::class)->forget($fresh);
         app(ShellDataService::class)->forget((int) $fresh->id);
+        app(AccessControlService::class)->forgetRole((int) $role->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
         if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
             app(NotificationService::class)->backfillAdministratorMentions($fresh);
         }
@@ -172,7 +179,9 @@ class AdminService
             'slug' => $id ? $role->slug : Str::slug($data['code'] ?: $data['name']),
             'code' => Str::upper(Str::replace('-', '_', trim($data['code'] ?: $data['name']))),
             'description' => trim((string) ($data['description'] ?? '')) ?: null,
-            'default_scope' => $data['default_scope'] ?? 'assigned_jobs',
+            'default_scope' => in_array(($data['default_scope'] ?? 'assigned_jobs'), ['none','own_records','assigned_jobs','department','all_records'], true)
+                ? ($data['default_scope'] ?? 'assigned_jobs')
+                : 'assigned_jobs',
             'is_system' => $role->is_system ?? false,
             'is_active' => (bool) ($data['is_active'] ?? true),
         ])->save();
@@ -184,6 +193,8 @@ class AdminService
             );
         }
         $this->audit($role, $id ? 'access.role_updated' : 'access.role_created', ($id ? 'Updated role ' : 'Created role ').$role->name, $actor);
+        app(AccessControlService::class)->forgetRole((int) $role->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
         return $role->refresh();
     }
 
@@ -192,7 +203,7 @@ class AdminService
         $this->assertAdministrator($actor);
         $this->assertRoleWorkspace($role);
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator permissions are always enabled.');
-        abort_unless(isset(AccessControlService::MODULES[$module]) && in_array($action, AccessControlService::ACTIONS, true), 422);
+        abort_unless(isset(AccessControlService::MODULES[$module]) && AccessControlService::supportsAction($module, $action), 422, 'That permission is not supported by this module.');
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['record_scope' => 'none', 'actions' => []]);
         $this->setMatrixAction($role, $module, $action, !collect($row->actions ?: [])->contains($action), $actor);
     }
@@ -202,14 +213,33 @@ class AdminService
         $this->assertAdministrator($actor);
         $this->assertRoleWorkspace($role);
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator permissions are always enabled.');
-        abort_unless(isset(AccessControlService::MODULES[$module]) && in_array($action, AccessControlService::ACTIONS, true), 422);
+        abort_unless(isset(AccessControlService::MODULES[$module]) && AccessControlService::supportsAction($module, $action), 422, 'That permission is not supported by this module.');
 
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['record_scope' => 'none', 'actions' => []]);
-        $actions = collect($row->actions ?: []);
+        $supported = AccessControlService::supportedActions($module);
+        $actions = collect($row->actions ?: [])->filter(fn ($value) => in_array($value, $supported, true));
+        if ($actions->contains('manage')) $actions = collect($supported);
         $actions = $enabled
             ? $actions->push($action)->unique()->values()
             : $actions->reject(fn ($x) => $x === $action)->values();
-        $storedActions = $actions->all();
+
+        // Manage is a full-control shortcut. Keep the visual matrix and the
+        // effective backend permission identical: enabling Manage checks every
+        // supported action; disabling any granular action removes Manage first
+        // so that the unchecked action is genuinely revoked.
+        if ($action === 'manage') {
+            $actions = $enabled ? collect($supported) : collect();
+        } elseif (!$enabled && $actions->contains('manage')) {
+            $actions = $actions->reject(fn ($value) => $value === 'manage')->values();
+        }
+
+        // Action permissions must never create an unusable role. Any record-level
+        // action implies View; turning View off removes its dependent actions.
+        if (in_array('view', $supported, true)) {
+            if ($enabled && $action !== 'view') $actions->push('view');
+            if (!$enabled && $action === 'view') $actions = collect();
+        }
+        $storedActions = $actions->filter(fn ($value) => in_array($value, $supported, true))->unique()->values()->all();
 
         $recordScope = $row->record_scope;
         if (AccessControlService::isUniversalRecordModule($module)) {
@@ -232,6 +262,8 @@ class AdminService
             $actor,
             compact('module', 'action', 'enabled'),
         );
+        app(AccessControlService::class)->forgetRole((int) $role->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
     }
 
     public function setScope(Role $role, string $module, string $scope, User $actor): void
@@ -239,11 +271,16 @@ class AdminService
         $this->assertAdministrator($actor);
         $this->assertRoleWorkspace($role);
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator scope is always all records.');
-        abort_unless(in_array($scope, ['none','own_records','assigned_jobs','selected_clients','department','all_records'], true), 422);
-        abort_if(AccessControlService::isUniversalRecordModule($module), 422, 'This module uses workspace-wide shared records and is always All records when permission is granted.');
+        abort_unless(isset(AccessControlService::MODULES[$module]) && AccessControlService::supportsScope($module), 422, 'This module does not use record scope.');
+        abort_unless(in_array($scope, ['none','own_records','assigned_jobs','department','all_records'], true), 422, 'Unsupported record scope.');
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['actions' => [], 'record_scope' => 'none']);
-        $row->update(['record_scope' => $scope]);
+        $row->update([
+            'record_scope' => $scope,
+            'actions' => $scope === 'none' ? [] : ($row->actions ?: []),
+        ]);
         $this->audit($role, 'access.scope_changed', 'Changed '.$module.' scope for '.$role->name.' to '.str_replace('_', ' ', $scope), $actor, compact('module','scope'));
+        app(AccessControlService::class)->forgetRole((int) $role->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
     }
 
     public function assignRole(User $user, Role $role, User $actor): void
@@ -259,6 +296,8 @@ class AdminService
         $fresh = $user->refresh()->load('role');
         app(DashboardService::class)->forget($fresh);
         app(ShellDataService::class)->forget((int) $fresh->id);
+        app(AccessControlService::class)->forgetRole((int) $role->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
         if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
             app(NotificationService::class)->backfillAdministratorMentions($fresh);
         }

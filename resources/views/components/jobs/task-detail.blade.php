@@ -108,6 +108,8 @@
                         <div x-cloak x-show="editing" class="ft-task-property-inline-editor ft-task-property-assignee-editor">
                             <x-ui.inline-remote-user
                                 :value="$task->assignee_id ?? ''"
+                                parent-type="job"
+                                :parent-id="$task->flow_job_id"
                                 :selected-label="$task->assignee?->name ?? 'Unassigned'"
                                 trigger-class="ft-task-property-inline-input"
                                 variant="compact"

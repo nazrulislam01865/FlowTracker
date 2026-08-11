@@ -133,7 +133,8 @@ class DashboardService
 
     public function recentInquiries(User $user): Collection
     {
-        return app(InquiryService::class)->visibleQuery($user)
+        $canViewTasks = app(AccessControlService::class)->can($user, 'tasks', 'view');
+        $rows = app(InquiryService::class)->visibleQuery($user)
             ->whereNull('inquiries.result')
             ->where('inquiries.status', '!=', 'Draft')
             ->select([
@@ -151,6 +152,9 @@ class DashboardService
             ->latest('inquiries.id')
             ->limit(5)
             ->get();
+
+        if (!$canViewTasks) $rows->each(fn ($inquiry) => $inquiry->setRelation('currentTask', null));
+        return $rows;
     }
 
     public function mentions(User $user, string $filter = 'all', int $limit = 12): Collection
@@ -224,79 +228,12 @@ class DashboardService
      */
     private function dashboardMentionQuery(User $user): Builder
     {
-        $query = FlowNotification::query()
-            ->where('flow_notifications.user_id', $user->id);
-
+        $query = app(NotificationService::class)->visibleQuery($user);
         if (app(AccessControlService::class)->isAdministrator($user)) {
-            $query->whereIn('flow_notifications.type', ['mention', 'mention_admin']);
-        } else {
-            $query->where('flow_notifications.type', 'mention');
+            return $query->whereIn('flow_notifications.type', ['mention', 'mention_admin']);
         }
 
-        return $query
-            ->where(function (Builder $mentions): void {
-                $mentions
-                    ->where(function (Builder $taskMention): void {
-                        $taskMention
-                            ->whereNotNull('flow_notifications.flow_task_id')
-                            ->whereExists(function ($tasks): void {
-                                $tasks
-                                    ->selectRaw('1')
-                                    ->from('tasks')
-                                    ->whereColumn('tasks.id', 'flow_notifications.flow_task_id')
-                                    ->whereNull('tasks.deleted_at')
-                                    ->whereExists(function ($jobs): void {
-                                        $jobs
-                                            ->selectRaw('1')
-                                            ->from('flow_jobs')
-                                            ->whereColumn('flow_jobs.id', 'tasks.flow_job_id')
-                                            ->whereNull('flow_jobs.deleted_at');
-                                    });
-                            });
-                    })
-                    ->orWhere(function (Builder $jobMention): void {
-                        $jobMention
-                            ->whereNull('flow_notifications.flow_task_id')
-                            ->whereNotNull('flow_notifications.flow_job_id')
-                            ->whereExists(function ($jobs): void {
-                                $jobs
-                                    ->selectRaw('1')
-                                    ->from('flow_jobs')
-                                    ->whereColumn('flow_jobs.id', 'flow_notifications.flow_job_id')
-                                    ->whereNull('flow_jobs.deleted_at');
-                            });
-                    })
-                    ->orWhere(function (Builder $inquiryTaskMention): void {
-                        $inquiryTaskMention
-                            ->whereNotNull('flow_notifications.inquiry_task_id')
-                            ->whereExists(function ($tasks): void {
-                                $tasks
-                                    ->selectRaw('1')
-                                    ->from('inquiry_tasks')
-                                    ->whereColumn('inquiry_tasks.id', 'flow_notifications.inquiry_task_id')
-                                    ->whereNull('inquiry_tasks.deleted_at')
-                                    ->whereExists(function ($inquiries): void {
-                                        $inquiries
-                                            ->selectRaw('1')
-                                            ->from('inquiries')
-                                            ->whereColumn('inquiries.id', 'inquiry_tasks.inquiry_id')
-                                            ->whereNull('inquiries.deleted_at');
-                                    });
-                            });
-                    })
-                    ->orWhere(function (Builder $inquiryMention): void {
-                        $inquiryMention
-                            ->whereNull('flow_notifications.inquiry_task_id')
-                            ->whereNotNull('flow_notifications.inquiry_id')
-                            ->whereExists(function ($inquiries): void {
-                                $inquiries
-                                    ->selectRaw('1')
-                                    ->from('inquiries')
-                                    ->whereColumn('inquiries.id', 'flow_notifications.inquiry_id')
-                                    ->whereNull('inquiries.deleted_at');
-                            });
-                    });
-            });
+        return $query->where('flow_notifications.type', 'mention');
     }
 
     public function operationalHealth(User $user): array

@@ -10,9 +10,16 @@
             'inquiry_status' => 'inquiry status',
             default => 'master data',
         };
+        $canCreateMaster = auth()->user()->canModule('masterdata', 'create');
+        $canEditMaster = auth()->user()->canModule('masterdata', 'edit');
+        $canDeleteMaster = auth()->user()->canModule('masterdata', 'delete');
     @endphp
     <x-ui.page-head title="Master Data" subtitle="Maintain the values used across jobs, Task Packs, workflows, documents, production and shipment">
-        <x-slot:actions><button class="primary" wire:click="open">＋ Add Record</button></x-slot:actions>
+        <x-slot:actions>
+            @if($canCreateMaster)
+                <button class="primary" wire:click="open">＋ Add Record</button>
+            @endif
+        </x-slot:actions>
     </x-ui.page-head>
 
     @if(session('success'))<div class="flash success">{{ session('success') }}</div>@endif
@@ -65,6 +72,7 @@
                                             value="{{ $rowColor }}"
                                             wire:change="updateColor({{ $r->id }}, $event.target.value)"
                                             wire:loading.attr="disabled"
+                                            @disabled(!$canEditMaster)
                                             aria-label="Choose color for {{ $r->name }}"
                                         >
                                         <span>{{ $rowColor }}</span>
@@ -72,7 +80,20 @@
                                 </td>
                             @endif
                             <td data-label="Status"><x-ui.badge :label="$r->status==='active'?'Active':'Inactive'"/></td>
-                            <td data-label="Actions"><div class="row-actions"><button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button><button class="mini-btn" wire:click="toggle({{ $r->id }})">{{ $r->status==='active'?'Deactivate':'Activate' }}</button><button class="mini-btn" wire:click="deleteRecord({{ $r->id }})" wire:confirm="Delete this master record?">Delete</button></div></td>
+                            <td data-label="Actions">
+                                <div class="row-actions">
+                                    @if($canEditMaster)
+                                        <button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button>
+                                        <button class="mini-btn" wire:click="toggle({{ $r->id }})">{{ $r->status === 'active' ? 'Deactivate' : 'Activate' }}</button>
+                                    @endif
+                                    @if($canDeleteMaster)
+                                        <button class="mini-btn" wire:click="deleteRecord({{ $r->id }})" wire:confirm="Delete this master record?">Delete</button>
+                                    @endif
+                                    @if(!$canEditMaster && !$canDeleteMaster)
+                                        <span class="small muted">View only</span>
+                                    @endif
+                                </div>
+                            </td>
                         </tr>
                     @empty
                         <tr><td colspan="{{ $columnCount }}"><div class="empty-state">No records found.</div></td></tr>

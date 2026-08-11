@@ -1,17 +1,17 @@
 <section class="ft-detail-card ft-attachment-card">
     <h2>Attachments <span>{{ $inquiry->documents_count }}</span></h2>
     <div class="ft-upload-zone compact ft-task-upload-zone">
-        @if($canEditInquiry && !$showInquiryDocumentPicker)
+        @if($canEditInquiry && $canCreateDocuments && !$showInquiryDocumentPicker)
             <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadInquiryFiles" for="inquiryOverviewUpload-{{ $inquiry->id }}">
                 <input id="inquiryOverviewUpload-{{ $inquiry->id }}" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
                 <span class="ft-paperclip">⌕</span>
                 <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
             </label>
-        @elseif(!$canEditInquiry)
+        @elseif(!$canEditInquiry || (!$canCreateDocuments && !$canLinkDocuments))
             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Inquiry attachments.</small></div></div>
         @endif
-        @if(auth()->user()->canModule('documents','link'))
-            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker">{{ $showInquiryDocumentPicker && $canEditInquiry ? 'Upload new' : 'Choose from Documents' }}</button>
+        @if($canEditInquiry && $canLinkDocuments)
+            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker">{{ $showInquiryDocumentPicker && $canCreateDocuments ? 'Upload new' : 'Choose from Documents' }}</button>
         @endif
     </div>
 
@@ -47,8 +47,8 @@
                 </div>
                 <div class="ft-inquiry-attachment-actions">
                     <a class="ft-link-blue ft-inquiry-attachment-open" href="{{ route('inquiries.documents.open', $document) }}" target="_blank" rel="noopener">Open</a>
-                    <a class="ft-link-blue ft-inquiry-attachment-download" href="{{ route('inquiries.documents.download', $document) }}">Download</a>
-                    @if($canEditInquiry)
+                    @if($canExportDocuments)<a class="ft-link-blue ft-inquiry-attachment-download" href="{{ route('inquiries.documents.download', $document) }}">Download</a>@endif
+                    @if($canEditInquiry && $canDeleteDocuments)
                         <button type="button" class="ft-doc-delete-button" wire:click="deleteInquiryDocument({{ $document->id }})" wire:confirm="Remove this attachment from the Inquiry?" aria-label="Remove {{ $document->name }}">×</button>
                     @endif
                 </div>

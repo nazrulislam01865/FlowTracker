@@ -44,6 +44,8 @@ class Index extends Component
 
     public function open(?int $id = null): void
     {
+        $action = $id ? 'edit' : 'create';
+        abort_unless(auth()->user()?->canModule('masterdata', $action), 403);
         $service = app(MasterDataService::class);
         $this->recordsReady = true;
         $this->showModal = true;

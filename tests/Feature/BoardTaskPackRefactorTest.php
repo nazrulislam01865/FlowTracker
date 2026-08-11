@@ -33,28 +33,28 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringNotContainsString('x-board.task-job-matrix', $board);
     }
 
-    public function test_task_pack_scope_exposes_full_associated_job_context_without_exposing_unrelated_jobs(): void
+    public function test_task_pack_scope_follows_the_tasks_matrix_without_exposing_sibling_tasks(): void
     {
         $service = file_get_contents(app_path('Services/BoardTaskPackService.php'));
 
-        $this->assertStringContainsString("from('tasks as board_assigned_tasks')", $service);
-        $this->assertStringContainsString("where('board_assigned_tasks.assignee_id', $user->id)", $service);
-        $this->assertStringContainsString("whereNull('board_assigned_tasks.deleted_at')", $service);
-        $this->assertStringContainsString('if ($access->isAdministrator($user))', $service);
-        $this->assertStringContainsString('Task::query()', $service);
+        $this->assertStringContainsString('applyTaskScope(Task::query(), $user)', $service);
+        $this->assertStringContainsString("->select('tasks.flow_job_id')", $service);
+        $this->assertStringContainsString("->whereIn('flow_jobs.id', $visibleTaskIds)", $service);
+        $this->assertStringContainsString('Never hydrate sibling tasks outside the Tasks matrix scope', $service);
+        $this->assertStringContainsString("Task::query()->whereIn('tasks.flow_job_id', $jobIds)", $service);
         $this->assertStringContainsString("'assignee:id,name,department_id,profile_image_path'", $service);
         $this->assertStringContainsString("'assignee' => (string) (\$task->assignee?->name ?: 'Unassigned')", $service);
-        $this->assertStringContainsString("->whereIn('tasks.flow_job_id', $visibleJobIds)", $service);
     }
 
-    public function test_qualifying_job_loads_full_context_except_mentions_which_load_only_exact_matching_tasks(): void
+    public function test_qualifying_job_never_loads_out_of_scope_siblings_and_mentions_remain_task_level(): void
     {
         $service = file_get_contents(app_path('Services/BoardTaskPackService.php'));
 
         $this->assertStringContainsString('Normally filters choose which Job groups belong on the page', $service);
         $this->assertStringContainsString('$mentionsOnly = (string) ($filters[\'quick\'] ?? \'all\') === \'mentions\';', $service);
         $this->assertStringContainsString('? (clone $baseTasks)->whereIn(\'tasks.flow_job_id\', $jobIds)', $service);
-        $this->assertStringContainsString(': Task::query()->whereIn(\'tasks.flow_job_id\', $jobIds);', $service);
+        $this->assertStringContainsString('app(AccessControlService::class)->applyTaskScope(', $service);
+        $this->assertStringContainsString("Task::query()->whereIn('tasks.flow_job_id', $jobIds)", $service);
         $this->assertStringContainsString("->whereColumn('board_task_mention_activity.subject_id', 'tasks.id')", $service);
         $this->assertStringContainsString("->where('board_task_mention_activity.event', 'task.comment')", $service);
         $this->assertStringContainsString('mention_user_ids', $service);

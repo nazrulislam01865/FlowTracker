@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\FlowJob;
+use App\Models\InquiryTask;
 use App\Models\MasterRecord;
 use App\Models\Task;
 use App\Models\TaskPack;
@@ -99,9 +100,9 @@ class TaskPackService
 
     public function savePackWithItems(array $packData, array $items, ?int $id = null): TaskPack
     {
-        $this->assertManage();
+        $this->assertAction($id ? 'edit' : 'create');
         return DB::transaction(function () use ($packData, $items, $id) {
-            $pack = $this->savePack($packData, $id);
+            $pack = $this->savePack($packData, $id, false);
             $keepIds = [];
 
             foreach (array_values($items) as $index => $row) {
@@ -120,13 +121,17 @@ class TaskPackService
                     'due_offset_days' => $row['due_offset_days'] ?? 1,
                     'is_required' => (bool) ($row['is_required'] ?? true),
                     'sort_order' => $index,
-                ], $itemId);
+                ], $itemId, false);
                 $keepIds[] = $saved->id;
             }
 
             $removed = $pack->items()->when($keepIds, fn ($q) => $q->whereNotIn('id', $keepIds))->pluck('id');
+            if ($removed->isNotEmpty()) {
+                $user = auth()->user();
+                abort_unless($user && app(AccessControlService::class)->can($user, 'taskpacks', 'delete'), 403);
+            }
             foreach ($removed as $removedId) {
-                $this->deleteItem((int) $removedId);
+                $this->deleteItem((int) $removedId, false);
             }
 
             $this->normalize($pack->id);
@@ -134,9 +139,9 @@ class TaskPackService
         });
     }
 
-    public function savePack(array $data, ?int $id = null): TaskPack
+    public function savePack(array $data, ?int $id = null, bool $authorize = true): TaskPack
     {
-        $this->assertManage();
+        if ($authorize) $this->assertAction($id ? 'edit' : 'create');
         $workspaceId = $this->workspaceId();
         $code = strtoupper(trim($data['code']));
         if (TaskPack::where('workspace_id', $workspaceId)->where('code', $code)->when($id, fn ($q) => $q->whereKeyNot($id))->exists()) {
@@ -165,7 +170,7 @@ class TaskPackService
 
     public function togglePack(int $id): void
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
         $pack->update(['is_active' => !$pack->is_active]);
     }
@@ -176,7 +181,7 @@ class TaskPackService
      */
     public function packDeleteImpact(int $id): array
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $pack = TaskPack::query()
             ->where('workspace_id', $this->workspaceId())
             ->where('is_snapshot', false)
@@ -251,7 +256,7 @@ class TaskPackService
 
     public function deletePack(int $id): array
     {
-        $this->assertManage();
+        $this->assertAction('delete');
         $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
 
         $mappedPhases = WorkflowPhase::query()
@@ -306,9 +311,9 @@ class TaskPackService
         ];
     }
 
-    public function saveItem(TaskPack $pack, array $data, ?int $id = null): TaskPackItem
+    public function saveItem(TaskPack $pack, array $data, ?int $id = null, bool $authorize = true): TaskPackItem
     {
-        $this->assertManage();
+        if ($authorize) $this->assertAction('edit');
         abort_if((bool) $pack->is_snapshot, 404);
         return DB::transaction(function () use ($pack, $data, $id) {
             $existingItem = $id ? TaskPackItem::query()->findOrFail($id) : null;
@@ -408,11 +413,31 @@ class TaskPackService
                     );
                 }
             });
+
+        // Inquiry taskflows keep the Task Pack assignee as their initial setup
+        // value too. Only rows still following that setup are synchronized; a
+        // manual reassignment by an Admin or the Inquiry creator is preserved.
+        if (Schema::hasTable('inquiry_tasks') && Schema::hasColumn('inquiry_tasks', 'setup_assignee_id')) {
+            InquiryTask::query()
+                ->where('source_task_pack_item_id', $item->id)
+                ->orderBy('id')
+                ->get()
+                ->each(function (InquiryTask $task) use ($desiredAssigneeId, $previousDefaultAssigneeId): void {
+                    $storedSetupId = $task->setup_assignee_id ? (int) $task->setup_assignee_id : null;
+                    $followsTaskPack = !$task->assignee_id
+                        || ($storedSetupId && (int) $task->assignee_id === $storedSetupId)
+                        || ($previousDefaultAssigneeId && (int) $task->assignee_id === $previousDefaultAssigneeId);
+
+                    $changes = ['setup_assignee_id' => $desiredAssigneeId];
+                    if ($followsTaskPack) $changes['assignee_id'] = $desiredAssigneeId;
+                    $task->update($changes);
+                });
+        }
     }
 
-    public function deleteItem(int $id): void
+    public function deleteItem(int $id, bool $authorize = true): void
     {
-        $this->assertManage();
+        if ($authorize) $this->assertAction('delete');
         $item = TaskPackItem::findOrFail($id);
         if (Task::where('task_pack_task_id', $item->id)->exists()) {
             throw ValidationException::withMessages(['item' => 'This Task Pack item has generated Tasks and cannot be deleted.']);
@@ -427,7 +452,7 @@ class TaskPackService
 
     public function moveItem(int $id, int $direction): void
     {
-        $this->assertManage();
+        $this->assertAction('edit');
         DB::transaction(function () use ($id, $direction) {
             $item = TaskPackItem::findOrFail($id);
             $items = TaskPackItem::where('task_pack_id', $item->task_pack_id)->orderBy('sort_order')->orderBy('id')->get()->values();
@@ -579,10 +604,10 @@ class TaskPackService
             ->all();
     }
 
-    private function assertManage(): void
+    private function assertAction(string $action): void
     {
         $user = auth()->user();
-        abort_unless($user && app(AccessControlService::class)->can($user, 'workflow', 'manage'), 403);
+        abort_unless($user && app(AccessControlService::class)->can($user, 'taskpacks', $action), 403);
     }
 
 }
