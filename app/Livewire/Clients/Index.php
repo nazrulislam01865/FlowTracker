@@ -34,6 +34,8 @@ class Index extends Component
     public string $outstanding = '';
     public string $quick = 'all';
     public bool $showArchived = false;
+    public string $archivedDate = '';
+    public string $createdBy = '';
     public int $perPage = 10;
     public ?int $selectedClientId = null;
     public bool $showClientPreview = false;
@@ -41,6 +43,8 @@ class Index extends Component
     public bool $showDetail = false;
     public bool $showEdit = false;
     public ?int $actionMenuClientId = null;
+    public ?int $deleteArchivedClientId = null;
+    public bool $deleteArchivedClientConfirmed = false;
     public string $clientDetailTab = 'overview';
     public string $clientOrderSearch = '';
     public string $clientOrderStatus = '';
@@ -95,6 +99,8 @@ class Index extends Component
     public function updatedManager(): void { $this->resetPage(); }
     public function updatedJobHealth(): void { $this->resetPage(); }
     public function updatedOutstanding(): void { $this->resetPage(); }
+    public function updatedArchivedDate(): void { $this->resetPage(); }
+    public function updatedCreatedBy(): void { $this->resetPage(); }
     public function updatedPerPage(): void { $this->resetPage(); }
     public function updatedClientOrderSearch(): void { $this->resetPage('clientOrdersPage'); }
     public function updatedClientOrderStatus(): void { $this->resetPage('clientOrdersPage'); }
@@ -150,6 +156,7 @@ class Index extends Component
         $this->showArchived = false;
         $this->quick = 'all';
         $this->actionMenuClientId = null;
+        $this->closePermanentDeleteClient();
         $this->resetPage();
     }
 
@@ -158,19 +165,20 @@ class Index extends Component
         $this->showArchived = true;
         $this->quick = 'all';
         $this->actionMenuClientId = null;
+        $this->closePermanentDeleteClient();
         $this->resetPage();
     }
 
     public function clearFilters(): void
     {
-        $this->reset(['search','country','manager','jobHealth','outstanding']);
+        $this->reset(['search','country','manager','jobHealth','outstanding','archivedDate','createdBy']);
         $this->quick = 'all';
         $this->resetPage();
     }
 
     public function clearFilter(string $filter): void
     {
-        abort_unless(in_array($filter, ['search','country','manager','jobHealth','outstanding'], true), 422);
+        abort_unless(in_array($filter, ['search','country','manager','jobHealth','outstanding','archivedDate','createdBy'], true), 422);
         $this->{$filter} = '';
         $this->resetPage();
     }
@@ -363,7 +371,7 @@ class Index extends Component
                 'billing_address_line1' => $billing['line1'] ?: null, 'billing_suite' => $billing['suite'] ?: null, 'billing_city' => $billing['city'] ?: null,
                 'billing_state' => $billing['state'] ?: null, 'billing_zip' => $billing['zip'] ?: null, 'billing_country' => $billing['country'] ?: null,
                 'contact_name' => $data['contactName'] ?: null, 'contact_job_title' => $data['contactJobTitle'] ?: null, 'email' => $data['email'] ?: null,
-                'phone' => $data['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'], 'preferred_language' => $data['preferredLanguage'] ?: 'English',
+                'phone' => $data['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'], 'created_by' => auth()->id(), 'preferred_language' => $data['preferredLanguage'] ?: 'English',
                 'outstanding_balance' => 0, 'ein_tax_id' => $data['einTaxId'] ?: null, 'sales_tax_status' => $data['salesTaxStatus'],
                 'payment_terms' => $data['paymentTerms'] ?: null, 'po_required' => (bool) $data['poRequired'], 'notes' => $data['notes'] ?: null,
                 'is_active' => true, 'is_draft' => $draft,
@@ -783,6 +791,64 @@ class Index extends Component
         $this->resetPage();
     }
 
+    public function openPermanentDeleteClient(int $id): void
+    {
+        abort_unless(auth()->user()->canModule('clients','delete'), 403);
+
+        app(ClientService::class)
+            ->visibleQuery(auth()->user())
+            ->where('is_active', false)
+            ->findOrFail($id);
+
+        $this->deleteArchivedClientId = $id;
+        $this->deleteArchivedClientConfirmed = false;
+        $this->actionMenuClientId = null;
+    }
+
+    public function closePermanentDeleteClient(): void
+    {
+        $this->deleteArchivedClientId = null;
+        $this->deleteArchivedClientConfirmed = false;
+    }
+
+    public function permanentlyDeleteClient(): void
+    {
+        abort_unless(auth()->user()->canModule('clients','delete'), 403);
+        abort_unless($this->showArchived && $this->deleteArchivedClientId, 422);
+
+        $this->validate([
+            'deleteArchivedClientConfirmed' => ['accepted'],
+        ], [
+            'deleteArchivedClientConfirmed.accepted' => 'Confirm that you understand this client cannot be recovered.',
+        ]);
+
+        $clientId = (int) $this->deleteArchivedClientId;
+        $name = app(ClientService::class)->permanentlyDeleteArchived(auth()->user(), $clientId);
+
+        $this->closePermanentDeleteClient();
+        if ($this->selectedClientId === $clientId) $this->selectedClientId = null;
+        $this->showClientPreview = false;
+        $this->showDetail = false;
+        $this->showEdit = false;
+        $this->resetPage();
+
+        session()->flash('success', $name.' was permanently deleted. Historical linked records were preserved.');
+
+        try {
+            app(\App\Services\NotificationService::class)->notifyUser(
+                auth()->user(),
+                'Archived client deleted',
+                'An archived client was permanently deleted. Historical linked records were preserved.',
+                'update',
+                null,
+                null,
+                auth()->user()
+            );
+        } catch (\Throwable $exception) {
+            report($exception);
+        }
+    }
+
     private function nextClientCode(): string
     {
         $next = (int) Client::max('id') + 1;
@@ -974,16 +1040,26 @@ class Index extends Component
             'outstanding' => $this->outstanding,
             'quick' => $this->quick,
             'archived' => $this->showArchived,
+            'archived_date' => $this->archivedDate,
+            'created_by' => $this->createdBy,
         ], $this->perPage);
+
+        $deleteCandidate = $this->showArchived && $this->deleteArchivedClientId
+            ? $service->visibleQuery($user)
+                ->where('is_active', false)
+                ->find($this->deleteArchivedClientId)
+            : null;
 
         return [
             'clients' => $clients,
             'summary' => $service->summary($user),
             'detail' => $this->showClientPreview && $this->selectedClientId ? $service->detail($user, $this->selectedClientId) : null,
-            'countryFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'countries', $this->showArchived ? 'clients-archived' : 'clients', '', $this->country, 5),
-            'managerFilterOptions' => app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->manager !== '' ? (int) $this->manager : null, 5),
-            'healthOptions' => app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), $user)
-                ->whereHas('client', fn ($client) => $client->where('is_active', !$this->showArchived))
+            'countryFilterOptions' => $this->showArchived ? collect() : app(\App\Services\FilterOptionService::class)->options($user, 'countries', 'clients', '', $this->country, 5),
+            'managerFilterOptions' => $this->showArchived ? collect() : app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->manager !== '' ? (int) $this->manager : null, 5),
+            'createdByFilterOptions' => $this->showArchived ? app(\App\Services\FilterOptionService::class)->options($user, 'users', 'clients', '', $this->createdBy !== '' ? (int) $this->createdBy : null, 5) : collect(),
+            'deleteCandidate' => $deleteCandidate,
+            'healthOptions' => $this->showArchived ? collect() : app(\App\Services\AccessControlService::class)->applyJobScope(FlowJob::query(), $user)
+                ->whereHas('client', fn ($client) => $client->where('is_active', true))
                 ->whereNotNull('health')->distinct()->orderBy('health')->pluck('health'),
             'users' => collect(),
         ];

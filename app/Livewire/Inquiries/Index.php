@@ -77,10 +77,13 @@ class Index extends Component
     public $taskUpload = null;
     public bool $showTaskDocumentModal = false;
     public ?int $taskDocumentModalTaskId = null;
+    public ?int $pendingCompletionTaskId = null;
     public string $taskDocumentSource = 'upload';
     public $taskDocumentUpload = null;
     public ?int $taskExistingDocumentId = null;
     public string $taskDocumentNote = '';
+    public ?int $taskLinkFormTaskId = null;
+    public string $taskLinkUrl = '';
     public string $taskComment = '';
     public string $inquiryComment = '';
     public string $inquiryActivityTab = 'all';
@@ -216,6 +219,7 @@ class Index extends Component
             'email' => trim((string) $data['newClientEmail']) ?: null,
             'phone' => trim((string) $data['newClientPhone']) ?: null,
             'account_manager_id' => auth()->id(),
+            'created_by' => auth()->id(),
             'preferred_language' => 'English',
             'outstanding_balance' => 0,
             'is_active' => true,
@@ -302,7 +306,7 @@ class Index extends Component
             $this->clientContact = '';
             return;
         }
-        $client = app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->find((int) $value);
+        $client = app(\App\Services\ClientService::class)->referenceQuery(auth()->user(), 'create-inquiry')->where('is_active', true)->find((int) $value);
         $this->clientContact = $client?->contact_name ?: '';
     }
 
@@ -324,7 +328,7 @@ class Index extends Component
             $this->clientId = $id;
             $this->selectedClientLabel = (string) ($selected['label'] ?? '');
             $this->resetValidation('clientId');
-            $client = app(\App\Services\ClientService::class)->visibleQuery($user)
+            $client = app(\App\Services\ClientService::class)->referenceQuery($user, 'create-inquiry')
                 ->where('is_active', true)
                 ->find($id, ['id', 'contact_name']);
             $this->clientContact = (string) ($client?->contact_name ?: '');
@@ -407,7 +411,7 @@ class Index extends Component
     {
         $inquiry = app(InquiryService::class)->findVisible(auth()->user(), $inquiryId);
         $saved = app(InquiryService::class)->updateStatus($inquiry, $status, auth()->user());
-        return ['ok' => true, 'status' => $saved->status, 'tone' => $this->tone($saved->status)];
+        return ['ok' => true, 'status' => $saved->status, 'tone' => $this->tone($saved->status), 'color' => app(\App\Services\MasterDataService::class)->displayColorFor('inquiry_status', (string) $saved->status)];
     }
 
     public function convertInquiryFromList(int $inquiryId): void
@@ -449,6 +453,10 @@ class Index extends Component
                 default => (string) $saved->{$field},
             },
         ];
+
+        if ($field === 'priority') {
+            $result['color'] = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $saved->priority);
+        }
 
         if ($field === 'requirement_notes') {
             $result['displayHtml'] = app(\App\Services\MentionService::class)
@@ -494,6 +502,7 @@ class Index extends Component
             'completed' => $saved->completed_at !== null,
             'inquiryStatus' => $inquiryStatus,
             'inquiryTone' => $this->tone($inquiryStatus),
+            'inquiryColor' => app(\App\Services\MasterDataService::class)->displayColorFor('inquiry_status', $inquiryStatus),
             'inquiryStartValue' => $localizedStart?->format('Y-m-d\\TH:i') ?? '',
             'inquiryStartDisplay' => $localizedStart?->format('M j, Y · g:i A') ?? '—',
         ];
@@ -582,8 +591,31 @@ class Index extends Component
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
         abort_unless(app(InquiryService::class)->canEditTask(auth()->user(), $task), 403);
-        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
 
+        $this->pendingCompletionTaskId = null;
+        $this->resetTaskDocumentModal();
+        $this->taskDocumentModalTaskId = $taskId;
+        $this->showTaskDocumentModal = true;
+    }
+
+    public function requestTaskCompletionFile(int $taskId): void
+    {
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        abort_unless($service->canEditTask(auth()->user(), $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change status.');
+
+        // If a required submission was added by another request between renders,
+        // complete immediately instead of opening an unnecessary modal.
+        if (! $task->requires_submission || $task->documents()->exists()) {
+            $service->updateTaskStatus($task, InquiryService::AUTO_COMPLETED_STATUS, auth()->user());
+            $this->metrics = $service->metrics(auth()->user());
+            return;
+        }
+
+        $this->pendingCompletionTaskId = $taskId;
         $this->resetTaskDocumentModal();
         $this->taskDocumentModalTaskId = $taskId;
         $this->showTaskDocumentModal = true;
@@ -592,6 +624,7 @@ class Index extends Component
     public function closeTaskDocumentModal(): void
     {
         $this->showTaskDocumentModal = false;
+        $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
         $this->resetValidation([
             'taskDocumentUpload',
@@ -620,7 +653,7 @@ class Index extends Component
         $task = $service->findVisibleTask(auth()->user(), (int) $this->taskDocumentModalTaskId, ['inquiry']);
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
         abort_unless($service->canEditTask(auth()->user(), $task), 403);
-        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
 
         $this->validate([
             'taskDocumentSource' => ['required', Rule::in(['upload', 'existing'])],
@@ -644,9 +677,20 @@ class Index extends Component
             $service->linkExistingDocumentToTask($task, $source, auth()->user(), $note);
         }
 
+        $completedAfterUpload = (int) ($this->pendingCompletionTaskId ?? 0) === (int) $task->id;
+        if ($completedAfterUpload) {
+            // The document now exists, so the normal service-level completion
+            // guard succeeds and completed_at/status are written atomically.
+            $task = $service->updateTaskStatus($task->fresh(), InquiryService::AUTO_COMPLETED_STATUS, auth()->user());
+            $this->metrics = $service->metrics(auth()->user());
+        }
+
         $this->showTaskDocumentModal = false;
+        $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
-        session()->flash('success', 'Document added to '.$task->title.'.');
+        session()->flash('success', $completedAfterUpload
+            ? 'Document added and '.$task->title.' completed.'
+            : 'Document added to '.$task->title.'.');
     }
 
     public function uploadTaskFile(): void
@@ -781,14 +825,75 @@ class Index extends Component
         session()->flash('success', 'Inquiry attachment removed.');
     }
 
+    public function openTaskLinkForm(int $taskId): void
+    {
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        abort_unless($service->canEditTask(auth()->user(), $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive links.');
+
+        $this->taskLinkFormTaskId = $taskId;
+        $this->taskLinkUrl = '';
+        $this->resetValidation(['taskLinkUrl']);
+    }
+
+    public function cancelTaskLinkForm(): void
+    {
+        $this->taskLinkFormTaskId = null;
+        $this->taskLinkUrl = '';
+        $this->resetValidation(['taskLinkUrl']);
+    }
+
+    public function saveTaskLink(int $taskId): void
+    {
+        abort_unless((int) $this->taskLinkFormTaskId === $taskId, 422);
+
+        $url = trim($this->taskLinkUrl);
+        if ($url !== '' && ! preg_match('#^https?://#i', $url)) {
+            $url = 'https://'.$url;
+        }
+        $this->taskLinkUrl = $url;
+
+        $this->validate([
+            'taskLinkUrl' => ['required', 'string', 'max:2048', 'url'],
+        ], [
+            'taskLinkUrl.required' => 'Enter a link to add.',
+            'taskLinkUrl.url' => 'Enter a valid website or file link.',
+            'taskLinkUrl.max' => 'The link is too long.',
+        ]);
+
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        $service->addTaskLink($task, $this->taskLinkUrl, auth()->user());
+
+        $this->taskLinkFormTaskId = null;
+        $this->taskLinkUrl = '';
+        $this->resetValidation(['taskLinkUrl']);
+        session()->flash('success', 'Link added to '.$task->title.'.');
+    }
+
+    public function deleteTaskLink(int $taskId, int $linkId): void
+    {
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
+        $service->removeTaskLink($task, $linkId, auth()->user());
+        session()->flash('success', 'Task link removed.');
+    }
+
     public function deleteTaskDocument(int $taskId, int $documentId): void
     {
         $service = app(InquiryService::class);
         $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
 
-        $service->removeTaskDocument($task, $documentId, auth()->user());
-        session()->flash('success', 'Task attachment removed.');
+        $reopened = $service->removeTaskDocument($task, $documentId, auth()->user());
+        $this->metrics = $service->metrics(auth()->user());
+        session()->flash('success', $reopened
+            ? 'Task attachment removed. The required-file task was reopened to In Progress.'
+            : 'Task attachment removed.');
     }
 
     public function addInquiryComment(): void
@@ -1007,6 +1112,7 @@ class Index extends Component
                 ->with([
                     'assignee:id,name,profile_image_path',
                     'documents:id,inquiry_id,inquiry_task_id,name,note,created_at',
+                    'links:id,inquiry_task_id,url,created_at',
                 ])
                 ->withCount(['documents', 'comments'])
                 ->orderBy('sequence');
@@ -1091,8 +1197,17 @@ class Index extends Component
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
         ]);
 
-        // A user may only create against a Client they can actually see.
-        app(\App\Services\ClientService::class)->visibleQuery(auth()->user())->findOrFail((int) $data['clientId']);
+        // Client is shared reference data for Inquiry creation. The user must
+        // have Inquiry create permission, and the Client must still be active.
+        $clientAvailable = app(\App\Services\ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-inquiry')
+            ->where('is_active', true)
+            ->whereKey((int) $data['clientId'])
+            ->exists();
+        if (! $clientAvailable) {
+            $this->addError('clientId', 'That client is no longer available.');
+            return;
+        }
 
         // Assigned-to uses the same remote option source as the UI. Re-check it
         // on save so a stale/inactive user cannot be submitted by changing the

@@ -8,19 +8,28 @@
         if (str_contains($value, 'progress') || str_contains($value, 'production') || str_contains($value, 'request')) return 'blue';
         return '';
     };
-    $taskFlag = static function ($task) use ($today): array {
-        if ($task->due_date && $task->due_date->lt($today)) return ['Overdue', 'red'];
-        if ($task->status === 'Waiting for Client') return ['Client wait', 'amber'];
-        if ($task->status === 'Revision Required') return ['Revision', 'amber'];
-        if ($task->status === 'Blocked') return ['Blocked', 'red'];
-        if (!$task->assignee_id) return ['Unassigned', 'blue'];
-        if ($task->needs_attention) return ['Attention', 'amber'];
-        return ['On track', 'green'];
+    $masterData = app(\App\Services\MasterDataService::class);
+    $taskFlagService = app(\App\Services\TaskFlagService::class);
+    $taskFlag = static function ($task) use ($today, $masterData, $taskFlagService): array {
+        if ($task->needs_attention) {
+            $label = $taskFlagService->labelForTask($task) ?: 'Management attention';
+            return [$label, 'amber', $masterData->colorFor('task_flag', $label)];
+        }
+        if ($task->due_date && $task->due_date->lt($today)) return ['Overdue', 'red', null];
+        if ($task->status === 'Waiting for Client') return ['Client wait', 'amber', null];
+        if ($task->status === 'Revision Required') return ['Revision', 'amber', null];
+        if ($task->status === 'Blocked') return ['Blocked', 'red', null];
+        if (!$task->assignee_id) return ['Unassigned', 'blue', null];
+        return ['On track', 'green', null];
     };
-    $jobFlag = static function ($job): array {
-        if (in_array($job->health, ['Delayed', 'Blocked'], true)) return [$job->health, 'red'];
-        if ($job->needs_attention || in_array($job->health, ['At Risk', 'Needs Attention'], true)) return ['At risk', 'amber'];
-        return ['On track', 'green'];
+    $jobFlag = static function ($job) use ($masterData, $taskFlagService): array {
+        if ($job->needs_attention) {
+            $label = $taskFlagService->labelForOrder($job) ?: 'Management attention';
+            return [$label, 'amber', $masterData->colorFor('task_flag', $label)];
+        }
+        if (in_array($job->health, ['Delayed', 'Blocked'], true)) return [$job->health, 'red', null];
+        if (in_array($job->health, ['At Risk', 'Needs Attention'], true)) return ['At risk', 'amber', null];
+        return ['On track', 'green', null];
     };
 @endphp
 
@@ -59,11 +68,11 @@
             <div class="ft-risk-list">
                 @forelse($attentionTasks as $task)
                     @php
-                        [$flagLabel, $flagTone] = $taskFlag($task);
+                        [$flagLabel, $flagTone, $flagColor] = $taskFlag($task);
                     @endphp
                     <div class="ft-risk" wire:key="dashboard-risk-{{ $task->id }}">
                         <a class="ft-risk-name ft-text-link" href="{{ route('jobs.index', ['open' => $task->flow_job_id, 'task' => $task->id]) }}" wire:navigate>{{ $task->title }}</a>
-                        <span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span>
+                        <span class="ft-flag {{ $flagColor ? 'ft-master-color' : $flagTone }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flagLabel }}</span>
                         <span class="ft-risk-meta">{{ $task->task_number }} · {{ $task->job?->displayOrderNumber() ?? 'Order' }} · {{ $task->assignee?->name ?? 'Unassigned' }} · {{ $task->due_date ? 'Due '.$task->due_date->format('M j') : 'No due date' }}</span>
                     </div>
                 @empty
@@ -83,13 +92,13 @@
                     <tbody>
                         @forelse($ongoingJobs as $job)
                             @php
-                                [$flagLabel, $flagTone] = $jobFlag($job);
+                                [$flagLabel, $flagTone, $flagColor] = $jobFlag($job);
                             @endphp
                             <tr wire:key="dashboard-job-{{ $job->id }}">
                                 <td data-label="Job"><a class="ft-text-link ft-cell-clip" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->title }}</a><span class="ft-ref">{{ $job->displayOrderNumber() }}</span></td>
                                 <td data-label="Client"><span class="ft-client-name-with-logo"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-cell-clip">{{ $job->client?->name ?? '—' }}</span></span></td>
                                 <td data-label="Status"><span class="ft-pill {{ $statusTone($job->phase?->short_name) }}">{{ $job->phase?->short_name ?? 'Unassigned' }}</span></td>
-                                <td data-label="Flag"><span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span></td>
+                                <td data-label="Flag"><span class="ft-flag {{ $flagColor ? 'ft-master-color' : $flagTone }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>View</a></td>
                             </tr>
                         @empty
@@ -109,14 +118,14 @@
                     <tbody>
                         @forelse($ongoingTasks as $task)
                             @php
-                        [$flagLabel, $flagTone] = $taskFlag($task);
+                        [$flagLabel, $flagTone, $flagColor] = $taskFlag($task);
                     @endphp
                             <tr wire:key="dashboard-task-{{ $task->id }}">
                                 <td data-label="Task"><a class="ft-text-link ft-cell-clip" href="{{ route('jobs.index', ['open' => $task->flow_job_id, 'task' => $task->id]) }}" wire:navigate>{{ $task->title }}</a><span class="ft-ref">{{ $task->task_number }}</span></td>
                                 <td data-label="Job"><a class="ft-text-link" href="{{ route('jobs.index', ['open' => $task->flow_job_id]) }}" wire:navigate>{{ str($task->job?->displayOrderNumber() ?? '—')->afterLast('-') }}</a></td>
                                 <td data-label="Assignee"><span class="ft-cell-clip">{{ $task->assignee?->name ?? 'Unassigned' }}</span></td>
-                                <td data-label="Status"><span class="ft-pill {{ $statusTone($task->status) }}">{{ $task->status }}</span></td>
-                                <td data-label="Flag"><span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span></td>
+                                <td data-label="Status">@php $taskStatusColor = $masterData->colorFor('task_status', (string) $task->status); @endphp<span class="ft-pill {{ $taskStatusColor ? 'ft-master-color' : $statusTone($task->status) }}" style="{{ \App\Support\MasterColor::style($taskStatusColor) }}">{{ $task->status }}</span></td>
+                                <td data-label="Flag"><span class="ft-flag {{ $flagColor ? 'ft-master-color' : $flagTone }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('jobs.index', ['open' => $task->flow_job_id, 'task' => $task->id]) }}" wire:navigate>View</a></td>
                             </tr>
                         @empty
@@ -151,19 +160,22 @@
                     <colgroup><col style="width:28%"><col style="width:15%"><col style="width:18%"><col style="width:19%"><col style="width:20%"></colgroup>
                     <thead><tr><th>Client</th><th>Jobs</th><th>Inquiries</th><th>At risk</th><th>On time</th></tr></thead>
                     <tbody>
-                        @forelse($clientPortfolio as $client)
+                        @forelse($clientPortfolio as $portfolioClient)
                             @php
-                                $onTime = $client->open_tasks_count > 0
-                                    ? max(0, (int) round((($client->open_tasks_count - $client->overdue_tasks_count) / $client->open_tasks_count) * 100))
+                                $portfolioOpenTasks = (int) ($portfolioClient->open_tasks_count ?? 0);
+                                $portfolioOverdueTasks = (int) ($portfolioClient->overdue_tasks_count ?? 0);
+                                $portfolioAtRiskJobs = (int) ($portfolioClient->at_risk_jobs_count ?? 0);
+                                $portfolioOnTime = $portfolioOpenTasks > 0
+                                    ? max(0, (int) round((($portfolioOpenTasks - $portfolioOverdueTasks) / $portfolioOpenTasks) * 100))
                                     : 100;
-                                $riskTone = $client->at_risk_jobs_count > 1 ? 'red' : ($client->at_risk_jobs_count === 1 ? 'amber' : 'green');
+                                $portfolioRiskTone = $portfolioAtRiskJobs > 1 ? 'red' : ($portfolioAtRiskJobs === 1 ? 'amber' : 'green');
                             @endphp
-                            <tr wire:key="dashboard-client-{{ $client->id }}">
-                                <td data-label="Client"><a class="ft-text-link ft-dashboard-client-logo-link" href="{{ route('clients.index') }}" wire:navigate><x-ui.client-logo :client="$client" :name="$client->name" :size="24" /><span>{{ $client->name }}</span></a></td>
-                                <td data-label="Jobs"><a class="ft-text-link" href="{{ route('jobs.index', ['client' => $client->id]) }}" wire:navigate>{{ $client->active_jobs_count }} ↗</a></td>
-                                <td data-label="Inquiries">0</td>
-                                <td data-label="At risk"><span class="ft-flag {{ $riskTone }}">{{ $client->at_risk_jobs_count }}</span></td>
-                                <td data-label="On time">{{ $onTime }}%</td>
+                            <tr wire:key="dashboard-client-portfolio-{{ $portfolioClient->id }}">
+                                <td data-label="Client"><a class="ft-text-link ft-dashboard-client-logo-link" href="{{ route('clients.index') }}" wire:navigate><x-ui.client-logo :client="$portfolioClient" :name="$portfolioClient->name" :size="24" /><span>{{ $portfolioClient->name }}</span></a></td>
+                                <td data-label="Jobs"><a class="ft-text-link" href="{{ route('jobs.index', ['client' => $portfolioClient->id]) }}" wire:navigate>{{ (int) ($portfolioClient->active_jobs_count ?? 0) }} ↗</a></td>
+                                <td data-label="Inquiries"><a class="ft-text-link" href="{{ route('inquiries.index') }}" wire:navigate>{{ (int) ($portfolioClient->open_inquiries_count ?? 0) }} ↗</a></td>
+                                <td data-label="At risk"><span class="ft-flag {{ $portfolioRiskTone }}">{{ $portfolioAtRiskJobs }}</span></td>
+                                <td data-label="On time">{{ $portfolioOnTime }}%</td>
                             </tr>
                         @empty
                             <tr class="ft-table-empty-row"><td colspan="5">No active clients.</td></tr>

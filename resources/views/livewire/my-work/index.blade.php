@@ -13,9 +13,6 @@
         <a class="row-action" style="width:auto;padding:0 10px" href="{{ route('all-tasks') }}" wire:navigate>All Tasks</a>
     </div>
 
-    <nav class="page-tabs" aria-label="My Work view">
-        <button type="button" class="page-tab active" aria-current="page">Task list</button>
-    </nav>
 
     <section class="work-view" aria-busy="false">
         <div class="metrics" aria-label="Personal work summary">
@@ -114,14 +111,14 @@
                                             select.disabled=true;
                                             try{
                                                 const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                                if(!result?.ok){select.value=previous;return;}
+                                                if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
                                                 // Keep the renderless status update, but re-query once when
                                                 // completion changes list membership. This removes the task now,
                                                 // and removes its Order group too if it was the final visible task.
                                                 if(result.completed && @js($hideCompleted))await $wire.$refresh();
-                                            }catch(error){select.value=previous;}
+                                            }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
                                             finally{this.saving=false;select.disabled=false;}
                                         }
                                     }"
@@ -152,12 +149,12 @@
                                         @endif
                                     </span>
                                     <span class="status-wrap" data-label="Status">
-                                        <select class="status-select" @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                            @if(!in_array($task['status'], $statusOptions, true))<option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>@endif
-                                            @foreach($statusOptions as $statusOption)<option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                        <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
+                                            @if(!in_array($task['status'], $statusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
+                                            @foreach($statusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                                         </select>
                                     </span>
-                                    <span class="flag {{ $task['flagTone'] }}" data-label="Flag">{{ $task['flag'] }}</span>
+                                    <span class="flag {{ $task['flagColor'] ? 'ft-master-color' : $task['flagTone'] }}" style="{{ \App\Support\MasterColor::style($task['flagColor']) }}" data-label="Flag">{{ $task['flag'] }}</span>
                                     <span class="updated" data-label="Updated">{{ $task['updated'] }}</span>
                                     <a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>
                                 </div>

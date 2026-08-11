@@ -31,6 +31,7 @@
 @php
     $team = \App\Support\JobDetailPresenter::team($job);
     $tabs = ['overview'=>'Overview','workflow'=>'Workflow','documents'=>'Documents','inquiry'=>'Inquiry'];
+    $jobPriorityColor = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $job->priority);
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
     <div class="ft-detail-toolbar ft-exact-job-header">
@@ -58,7 +59,7 @@
             <div class="ft-exact-job-meta">
                 <span class="ft-client-inline-identity"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-client-inline-name">{{ $job->client?->name }}</span></span>
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
-                <span class="ft-soft-pill red">{{ $job->priority }}</span>
+                <span class="ft-soft-pill {{ $jobPriorityColor ? 'ft-master-color' : 'red' }}" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}">{{ $job->priority }}</span>
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>
             </div>
         </div>

@@ -136,6 +136,7 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
         $appJs = file_get_contents(resource_path('js/app.js'));
         $dashboardCss = file_get_contents(public_path('css/flowtrack-dashboard-prototype.css'));
+        $secondaryView = file_get_contents(resource_path('views/livewire/dashboard/secondary.blade.php'));
 
         $this->assertStringContainsString('<livewire:dashboard.index />', $page);
         $this->assertStringContainsString('<livewire:dashboard.tagged-comments lazy />', $dashboard);
@@ -156,6 +157,11 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertStringNotContainsString("whereColumn('flow_task_comments.body', 'flow_notifications.message')", $dashboardService);
         $this->assertStringNotContainsString("whereColumn('activities.description', 'flow_notifications.message')", $dashboardService);
         $this->assertStringContainsString('secondaryData(auth()->user())', $secondaryComponent);
+        $this->assertStringContainsString('@forelse($clientPortfolio as $portfolioClient)', $secondaryView);
+        $this->assertStringContainsString(':client="$portfolioClient"', $secondaryView);
+        $this->assertStringContainsString('@endforelse', $secondaryView);
+        $this->assertStringNotContainsString('@foreach($clientPortfolio as $portfolioClient)', $secondaryView);
+        $this->assertStringNotContainsString('@else', $secondaryView);
         $this->assertStringContainsString("CACHE_VERSION = 'v10-role-aware-tagged-comments'", $dashboardService);
         $this->assertStringContainsString('dashboard_cache_seconds', $dashboardService);
         $this->assertStringContainsString('isSafeCacheValue', $dashboardService);

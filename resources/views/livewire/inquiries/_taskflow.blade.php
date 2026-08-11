@@ -8,10 +8,13 @@
             @php
                 $state = $task->completed_at ? 'done' : (strcasecmp(trim((string) $task->status), 'In Progress') === 0 ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
+                $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
+                $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
                 $canChangeStatusThisTask = !$inquiry->result && ($canEditInquiry || ((int)$task->assignee_id === (int)auth()->id() && auth()->user()->canModule('inquiries', 'view')));
-                // Assignee and due date stay editable even after completion.
-                // Attachments/action controls keep their completed-task lock.
+                // Assignee, due date and attachments stay available after completion.
+                // Completion itself is still protected by the required-file rule.
                 $canEditTaskFields = $canChangeStatusThisTask;
+                $canAttachThisTask = !$inquiry->result && $canChangeStatusThisTask;
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
                 $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
@@ -66,26 +69,52 @@
                         x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     >
+                        @php
+                            $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status);
+                        @endphp
                         <select
-                            class="ft-inline-task-status {{ \App\Support\JobDetailPresenter::taskStatusClass((string) $task->status) }}"
+                            data-master-color-select
+                            class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass((string) $task->status) }}"
+                            style="{{ \App\Support\MasterColor::style($taskStatusColor) }}"
                             x-model="draftValue"
-                            x-on:change="const next=$event.target.value; commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; })"
+                            x-on:change="const select=$event.target; const next=select.value; const needsRequiredFile=(next === @js($completedStatus) && @js($completionNeedsRequiredFile)); if(needsRequiredFile){ draftValue=value; select.value=value; window.FlowTrackMasterColor?.applySelect(select); $wire.requestTaskCompletionFile({{ $task->id }}); return; } window.FlowTrackMasterColor?.applySelect(select); commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result?.inquiryColor) inquiryStatusColor=result.inquiryColor; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; }).then(() => window.FlowTrackMasterColor?.applyAll(document))"
                             :disabled="status === 'saving'"
                             @disabled(!$canChangeStatusThisTask)
                             aria-label="Change {{ $task->title }} status"
                         >
                             @foreach(\App\Services\InquiryService::TASK_STATUSES as $statusOption)
-                                <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}">{{ $statusOption }}</option>
                             @endforeach
                         </select>
                         @if($canChangeStatusThisTask)<x-ui.inline-save-state compact />@endif
                     </span>
                 </div>
                 <div class="ft-inquiry-task-files">
-                    @if($canEditThisTask)
-                        <button class="ft-inquiry-attach-button" type="button" wire:click="openTaskDocumentModal({{ $task->id }})">＋ Attach</button>
+                    @if($canAttachThisTask)
+                        <div class="ft-inquiry-task-add-actions" aria-label="Add task resource">
+                            <button
+                                class="ft-inquiry-task-add-icon"
+                                type="button"
+                                wire:click="openTaskDocumentModal({{ $task->id }})"
+                                title="Add file"
+                                aria-label="Add file to {{ $task->title }}"
+                            >
+                                <span class="ft-inquiry-task-add-plus">+</span>
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+                            </button>
+                            <button
+                                class="ft-inquiry-task-add-icon {{ (int)$taskLinkFormTaskId === (int)$task->id ? 'is-active' : '' }}"
+                                type="button"
+                                wire:click="openTaskLinkForm({{ $task->id }})"
+                                title="Add link"
+                                aria-label="Add external link to {{ $task->title }}"
+                            >
+                                <span class="ft-inquiry-task-add-plus">+</span>
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </button>
+                        </div>
                     @endif
-                    <span><b>{{ $task->documents_count }}</b> file{{ $task->documents_count === 1 ? '' : 's' }}</span>
+                    <span class="ft-inquiry-task-resource-count"><b>{{ $task->documents_count }}</b> file{{ $task->documents_count === 1 ? '' : 's' }}@if($task->links->isNotEmpty()) · <b>{{ $task->links->count() }}</b> link{{ $task->links->count() === 1 ? '' : 's' }}@endif</span>
                 </div>
                 <div class="ft-inquiry-task-action">
                     @if($state === 'done')
@@ -97,8 +126,31 @@
                     @endif
                 </div>
             </div>
-            @if($task->documents->isNotEmpty())
-                <div class="ft-inquiry-task-document-list" wire:key="inquiry-task-documents-{{ $task->id }}">
+
+            @if((int)$taskLinkFormTaskId === (int)$task->id || $task->documents->isNotEmpty() || $task->links->isNotEmpty())
+                <div class="ft-inquiry-task-document-list ft-inquiry-task-resource-list" wire:key="inquiry-task-resources-{{ $task->id }}">
+                    @if((int)$taskLinkFormTaskId === (int)$task->id && $canAttachThisTask)
+                        <form class="ft-inquiry-task-link-form" wire:submit.prevent="saveTaskLink({{ $task->id }})" wire:key="inquiry-task-link-form-{{ $task->id }}">
+                            <div class="ft-inquiry-task-link-input-wrap">
+                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                <input
+                                    type="text"
+                                    inputmode="url"
+                                    wire:model="taskLinkUrl"
+                                    placeholder="Paste link, e.g. https://drive.google.com/..."
+                                    autocomplete="url"
+                                    autofocus
+                                    aria-label="External link"
+                                >
+                            </div>
+                            <div class="ft-inquiry-task-link-form-actions">
+                                <button class="secondary" type="button" wire:click="cancelTaskLinkForm">Cancel</button>
+                                <button class="primary" type="submit" wire:loading.attr="disabled" wire:target="saveTaskLink({{ $task->id }})">Add</button>
+                            </div>
+                            @error('taskLinkUrl')<div class="ft-inquiry-task-link-error">{{ $message }}</div>@enderror
+                        </form>
+                    @endif
+
                     @foreach($task->documents as $taskDocument)
                         <div class="ft-inquiry-task-document-row" wire:key="inquiry-task-document-{{ $taskDocument->id }}">
                             <span class="ft-inquiry-task-file-type">{{ strtoupper(pathinfo($taskDocument->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
@@ -109,8 +161,45 @@
                             </div>
                             <div class="ft-inquiry-task-file-actions">
                                 <a href="{{ route('inquiries.documents.open', $taskDocument) }}" target="_blank" rel="noopener">Open</a>
-                                @if($canEditThisTask)
-                                    <button type="button" class="ft-inquiry-task-file-remove" wire:click="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})" wire:loading.attr="disabled" wire:target="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})" title="Remove attachment" aria-label="Remove {{ $taskDocument->name }}">×</button>
+                                <a href="{{ route('inquiries.documents.download', $taskDocument) }}">Download</a>
+                                @if($canAttachThisTask)
+                                    <button
+                                        type="button"
+                                        class="ft-inquiry-task-file-remove"
+                                        wire:click="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})"
+                                        wire:loading.attr="disabled"
+                                        wire:target="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})"
+                                        wire:confirm="{{ $task->completed_at && $task->requires_submission && (int) $task->documents_count === 1 ? 'Remove this required file? The task will reopen to In Progress because a completed required-file task cannot remain complete without a file.' : 'Remove this attachment from the task?' }}"
+                                        title="Remove attachment"
+                                        aria-label="Remove {{ $taskDocument->name }}"
+                                    >×</button>
+                                @endif
+                            </div>
+                        </div>
+                    @endforeach
+
+                    @foreach($task->links as $taskLink)
+                        <div class="ft-inquiry-task-link-row" wire:key="inquiry-task-link-{{ $taskLink->id }}">
+                            <span class="ft-inquiry-task-link-type" aria-hidden="true">
+                                <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                            </span>
+                            <div class="ft-inquiry-task-link-copy">
+                                <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer" title="{{ $taskLink->url }}">{{ \Illuminate\Support\Str::limit($taskLink->url, 110) }}</a>
+                                <small>{{ $taskLink->created_at ? \App\Support\UserLocalTime::format($taskLink->created_at, 'M j, Y, g:i A') : '—' }}</small>
+                            </div>
+                            <div class="ft-inquiry-task-link-actions">
+                                <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer" title="Open external link">Open ↗</a>
+                                @if($canAttachThisTask)
+                                    <button
+                                        type="button"
+                                        class="ft-inquiry-task-file-remove"
+                                        wire:click="deleteTaskLink({{ $task->id }}, {{ $taskLink->id }})"
+                                        wire:loading.attr="disabled"
+                                        wire:target="deleteTaskLink({{ $task->id }}, {{ $taskLink->id }})"
+                                        wire:confirm="Remove this link from the task?"
+                                        title="Remove link"
+                                        aria-label="Remove link"
+                                    >×</button>
                                 @endif
                             </div>
                         </div>

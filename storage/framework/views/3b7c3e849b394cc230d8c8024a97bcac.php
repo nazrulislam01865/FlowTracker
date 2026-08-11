@@ -25,6 +25,7 @@
         <meta name="flowtrack-pusher-key" content="<?php echo e(config('services.pusher.key')); ?>">
         <meta name="flowtrack-pusher-cluster" content="<?php echo e(config('services.pusher.cluster','mt1')); ?>">
         <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.<?php echo e(auth()->id()); ?>">
+        <meta name="flowtrack-pusher-workspace-channel" content="private-flowtrack.workspace.<?php echo e(max(1, (int) config('flowtrack.workspace_id', 1))); ?>">
         <meta name="flowtrack-pusher-auth" content="<?php echo e(route('pusher.auth')); ?>">
         <script src="https://js.pusher.com/8.4.0/pusher.min.js" defer></script>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -42,9 +43,10 @@
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-17">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-01">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
+    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
@@ -63,6 +65,8 @@
 </div>
 <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::scripts(); ?>
 
+    <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
+    <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script>
     (() => {

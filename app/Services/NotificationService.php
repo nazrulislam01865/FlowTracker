@@ -27,7 +27,54 @@ class NotificationService
             $query->where('type', '!=', 'mention_admin');
         }
 
-        return $query;
+        return $this->constrainToLiveRecordContexts($query);
+    }
+
+    /**
+     * Notifications remain useful audit data in the database, but the UI must
+     * never offer a link to a soft-deleted Order/Task/Inquiry. Task notifications
+     * also require their parent Order/Inquiry to still exist; deleting a parent
+     * does not soft-delete every child row automatically.
+     */
+    private function constrainToLiveRecordContexts(Builder $query): Builder
+    {
+        return $query->where(function (Builder $live): void {
+            $live
+                ->where(function (Builder $generic): void {
+                    $generic
+                        ->whereNull('flow_job_id')
+                        ->whereNull('flow_task_id')
+                        ->whereNull('inquiry_id')
+                        ->whereNull('inquiry_task_id');
+                })
+                ->orWhere(function (Builder $task): void {
+                    $task
+                        ->whereNotNull('flow_task_id')
+                        ->whereHas('task.job');
+                })
+                ->orWhere(function (Builder $inquiryTask): void {
+                    $inquiryTask
+                        ->whereNull('flow_task_id')
+                        ->whereNotNull('inquiry_task_id')
+                        ->whereHas('inquiryTask.inquiry');
+                })
+                ->orWhere(function (Builder $job): void {
+                    $job
+                        ->whereNull('flow_task_id')
+                        ->whereNull('inquiry_task_id')
+                        ->whereNull('inquiry_id')
+                        ->whereNotNull('flow_job_id')
+                        ->whereHas('job');
+                })
+                ->orWhere(function (Builder $inquiry): void {
+                    $inquiry
+                        ->whereNull('flow_task_id')
+                        ->whereNull('inquiry_task_id')
+                        ->whereNull('flow_job_id')
+                        ->whereNotNull('inquiry_id')
+                        ->whereHas('inquiry');
+                });
+        });
     }
 
     public function list(User $user)
@@ -78,7 +125,12 @@ class NotificationService
         if ($task) {
             $visible = $access->applyTaskScope(Task::query()->whereKey($task->id), $recipient)->exists();
             if (!$visible) return null;
-            $job ??= $task->job()->first();
+
+            // A Task is not actionable after its parent Order has been deleted,
+            // even though the child Task row itself may still be soft-delete-live.
+            $liveParentJob = $task->job()->first();
+            if (! $liveParentJob) return null;
+            $job = $liveParentJob;
         } elseif ($job) {
             $visible = $access->applyJobScope(FlowJob::query()->whereKey($job->id), $recipient)->exists();
             if (!$visible) return null;
@@ -284,7 +336,7 @@ class NotificationService
             if (!$inquiry || $inquiry->trashed()) return;
 
             $inquiryTask = $inquiryTaskId ? InquiryTask::withTrashed()->find($inquiryTaskId) : null;
-            if ($inquiryTask?->trashed()) $inquiryTask = null;
+            if ($inquiryTaskId && (! $inquiryTask || $inquiryTask->trashed())) return;
 
             User::query()
                 ->whereIn('id', $ids->all())
@@ -372,17 +424,22 @@ class NotificationService
         $notificationJob = $job && !$job->trashed() ? $job : null;
         $notificationTask = $task && !$task->trashed() ? $task : null;
 
-        if ($notificationTask) {
+        // A mention that originated from a record must never be downgraded to a
+        // contextless notification if that record was deleted or became invisible
+        // before the post-commit fan-out runs.
+        if ($task) {
+            if (! $notificationTask) return null;
+
             $canOpenTask = $access->applyTaskScope(Task::query()->whereKey($notificationTask->id), $recipient)->exists();
-            if (!$canOpenTask) {
-                $notificationJob = null;
-                $notificationTask = null;
-            } else {
-                $notificationJob ??= $notificationTask->job()->first();
-            }
-        } elseif ($notificationJob) {
+            if (! $canOpenTask) return null;
+
+            $notificationJob = $notificationTask->job()->first();
+            if (! $notificationJob) return null;
+        } elseif ($job) {
+            if (! $notificationJob) return null;
+
             $canOpenJob = $access->applyJobScope(FlowJob::query()->whereKey($notificationJob->id), $recipient)->exists();
-            if (!$canOpenJob) $notificationJob = null;
+            if (! $canOpenJob) return null;
         }
 
         $notification = FlowNotification::create([

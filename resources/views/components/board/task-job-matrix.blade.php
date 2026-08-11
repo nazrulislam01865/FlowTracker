@@ -37,6 +37,7 @@
                 @foreach($laneStatuses as $laneStatus)
                     @php
                         $laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus));
+                        $laneColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $laneStatus);
                     @endphp
                     <div
                         class="ft-task-job-status-cell {{ $laneTasks->isEmpty() ? 'is-empty' : 'has-tasks' }}"
@@ -46,7 +47,7 @@
                             x-on:drop.prevent="if(draggedTask){ $wire.moveTask(draggedTask, {{ \Illuminate\Support\Js::from($laneStatus) }}); draggedTask=null }"
                         @endif
                     >
-                        <div class="ft-mobile-lane-label"><span>{{ $laneStatus }}</span><b>{{ $laneTasks->count() }}</b></div>
+                        <div class="ft-mobile-lane-label {{ $laneColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($laneColor) }}"><span>{{ $laneStatus }}</span><b>{{ $laneTasks->count() }}</b></div>
                         @forelse($laneTasks as $taskRow)
                             @php
                                 $canDragTask = $draggable && app(\App\Services\AccessControlService::class)->canEditVisibleTask(auth()->user(), $taskRow);

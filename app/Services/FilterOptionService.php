@@ -67,12 +67,7 @@ class FilterOptionService
 
     private function clients(User $user, string $context, string $search, int $limit): Collection
     {
-        $query = $context === 'board-task-pack'
-            ? Client::query()->whereIn(
-                'clients.id',
-                app(BoardTaskPackService::class)->visibleJobQuery($user)->reorder()->select('flow_jobs.client_id'),
-            )
-            : app(ClientService::class)->visibleQuery($user);
+        $query = $this->clientQueryForContext($user, $context);
 
         return $query
             ->where('is_active', true)
@@ -93,14 +88,28 @@ class FilterOptionService
     private function clientById(User $user, string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
-        $query = $context === 'board-task-pack'
-            ? Client::query()->whereIn(
-                'clients.id',
-                app(BoardTaskPackService::class)->visibleJobQuery($user)->reorder()->select('flow_jobs.client_id'),
-            )
-            : app(ClientService::class)->visibleQuery($user);
-        $row = $query->where('is_active', true)->find((int) $id, ['id', 'name', 'country']);
+        $row = $this->clientQueryForContext($user, $context)
+            ->where('is_active', true)
+            ->find((int) $id, ['id', 'name', 'country']);
         return $row ? ['id'=>(int)$row->id, 'label'=>(string)$row->name, 'meta'=>(string)($row->country ?: '')] : null;
+    }
+
+    private function clientQueryForContext(User $user, string $context)
+    {
+        if ($context === 'board-task-pack') {
+            return Client::query()
+                ->whereNull('clients.purged_at')
+                ->whereIn(
+                    'clients.id',
+                    app(BoardTaskPackService::class)->visibleJobQuery($user)->reorder()->select('flow_jobs.client_id'),
+                );
+        }
+
+        if (in_array($context, ['create-job', 'jobs', 'create-inquiry', 'inquiries', 'documents'], true)) {
+            return app(ClientService::class)->referenceQuery($user, $context);
+        }
+
+        return app(ClientService::class)->visibleQuery($user);
     }
 
     private function jobs(User $user, string $context, string $search, int $limit): Collection

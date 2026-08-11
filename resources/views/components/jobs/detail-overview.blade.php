@@ -13,6 +13,8 @@
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
+    $masterData = app(\App\Services\MasterDataService::class);
+    $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
 @endphp
 <div class="ft-job-overview-section ft-exact-overview">
     <div class="ft-overview-metrics">
@@ -197,16 +199,16 @@
             </div>
             <div
                 class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-priority'), label: 'priority', value: @js($job->priority), display: @js($job->priority) })"
+                x-data="{ ...window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-priority'), label: 'priority', value: @js($job->priority), display: @js($job->priority) }), priorityColor: @js($jobPriorityColor) }"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
             >
                 <span>Priority</span>
                 <b class="ft-planning-value">
-                    <span x-show="!editing" x-text="display">{{ $job->priority }}</span>
+                    <span x-show="!editing" class="ft-master-priority-display"><i class="ft-master-color-dot" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}" x-bind:style="priorityColor ? '--ft-master-color:'+priorityColor : ''"></i><span x-text="display">{{ $job->priority }}</span></span>
                     @if($canEditJob)
                         <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit priority" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.prioritySelect.focus())">✎</button>
-                        <select x-ref="prioritySelect" x-cloak x-show="editing" x-model="draftValue" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateJobPriority({{ $job->id }}, draftValue))">
-                            @foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach
+                        <select data-master-color-select x-ref="prioritySelect" x-cloak x-show="editing" x-model="draftValue" class="ft-master-color" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="const nextColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateJobPriority({{ $job->id }}, draftValue)).then(ok => { if(ok) priorityColor=nextColor; });">
+                            @foreach($priorities as $priority)<option value="{{ $priority->name }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach
                         </select>
                         <x-ui.inline-save-state compact />
                     @endif
@@ -343,10 +345,13 @@
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
-                                    <select class="ft-inline-task-status {{ \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" x-model="draftValue"
-                                        x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue))"
+                                    @php
+                                        $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status);
+                                    @endphp
+                                    <select data-master-color-select class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" style="{{ \App\Support\MasterColor::style($taskStatusColor) }}" x-model="draftValue"
+                                        x-on:change="window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue))"
                                         :disabled="status === 'saving'" @disabled(!$canEditTask)>
-                                        @foreach($taskStatuses as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach
+                                        @foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $status) }}">{{ $status }}</option>@endforeach
                                     </select>
                                     @if($canEditTask)<x-ui.inline-save-state compact />@endif
                                 </span>
@@ -398,7 +403,9 @@
             @if($canUploadDocument && count($jobDocumentUploads ?? []))
                 <div class="ft-pending-upload-list" aria-label="Files selected for upload">
                     @foreach($jobDocumentUploads as $uploadIndex => $upload)
-                        @php($uploadName = method_exists($upload, 'getClientOriginalName') ? $upload->getClientOriginalName() : ('File '.($uploadIndex + 1)))
+                        @php
+                            $uploadName = method_exists($upload, 'getClientOriginalName') ? $upload->getClientOriginalName() : ('File '.($uploadIndex + 1));
+                        @endphp
                         <div class="ft-pending-upload-item {{ $errors->has('jobDocumentUploads.'.$uploadIndex) ? 'has-error' : '' }}" wire:key="job-overview-doc-pending-{{ $job->id }}-{{ $uploadIndex }}-{{ md5($uploadName) }}">
                             <div class="ft-pending-upload-copy">
                                 <b>{{ $uploadName }}</b>
@@ -415,7 +422,7 @@
         @else
             <div class="ft-empty-taskpack-docs">No Task Pack document requirement is configured for this Job. Open Documents to review the document setup.</div>
         @endif
-        @foreach($job->documents as $doc)<div class="ft-job-file-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><b>{{ $doc->name }}</b><small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small></div><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if($canDeleteDocument)<button type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">Delete</button>@endif</div>@endforeach
+        @foreach($job->documents as $doc)<div class="ft-job-file-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><b>{{ $doc->name }}</b><small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small></div><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','export'))<a href="{{ route('documents.download',$doc) }}">Download</a>@endif @if($canDeleteDocument)<button type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">Delete</button>@endif</div>@endforeach
     </section>
 
     <x-jobs.detail-activity :job="$job" :mention-users="$mentionUsers" compact="true" :activity-tab="$activityTab" :activity-page="$activityPage" :focus-comment="$focusComment" />

@@ -477,6 +477,9 @@ class MyWorkService
         }
 
         $updatedAt = $task->updated_at?->copy()->setTimezone($displayTimezone);
+        $master = app(MasterDataService::class);
+        $statusColor = $master->colorFor('task_status', (string) $task->status);
+        $flagColor = (!$completed && $task->needs_attention) ? $master->colorFor('task_flag', $flag) : null;
 
         return [
             'id' => (int) $task->id,
@@ -493,8 +496,10 @@ class MyWorkService
             'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',
             'dueTone' => $dueTone,
             'status' => (string) $task->status,
+            'statusColor' => $statusColor,
             'flag' => $flag,
             'flagTone' => $this->tone($flag),
+            'flagColor' => $flagColor,
             'updated' => $updatedAt?->diffForHumans() ?: '—',
             'version' => (string) $task->getRawOriginal('updated_at'),
             'canEdit' => $access->canEditVisibleTask($user, $task),

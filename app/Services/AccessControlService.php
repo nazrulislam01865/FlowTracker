@@ -12,6 +12,13 @@ class AccessControlService
     private array $accessCache = [];
     public const ACTIONS = ['view','create','edit_own','edit_all','delete','assign','approve','link','export','override','manage'];
 
+    /**
+     * Workspace-wide reference/setup modules are not ownership-scoped.
+     * Their records are shared by the workspace; the role matrix controls
+     * which actions a user may perform, not which rows they may discover.
+     */
+    public const UNIVERSAL_RECORD_MODULES = ['clients', 'workflow', 'masterdata'];
+
     public const MODULES = [
         'dashboard' => ['name' => 'Dashboard', 'group' => 'General'],
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
@@ -75,7 +82,8 @@ class AccessControlService
         if (!$user->role || $user->role->is_active === false) return false;
 
         $access = $this->access($user, $module);
-        if (!$access || $access->record_scope === 'none') return false;
+        if (!$access) return false;
+        if (!self::isUniversalRecordModule($module) && $access->record_scope === 'none') return false;
         $actions = $access->actions ?: [];
 
         if ($action === 'edit') {
@@ -115,7 +123,18 @@ class AccessControlService
     {
         if (!$user->is_active) return 'none';
         if ($this->isAdministrator($user)) return 'all_records';
-        return $this->access($user, $module)?->record_scope ?: ($user->role?->default_scope ?: 'none');
+
+        $access = $this->access($user, $module);
+        if (self::isUniversalRecordModule($module)) {
+            return $access && !empty($access->actions) ? 'all_records' : 'none';
+        }
+
+        return $access?->record_scope ?: ($user->role?->default_scope ?: 'none');
+    }
+
+    public static function isUniversalRecordModule(string $module): bool
+    {
+        return in_array($module, self::UNIVERSAL_RECORD_MODULES, true);
     }
 
     public function canEditOwn(User $user, string $module): bool
@@ -150,11 +169,13 @@ class AccessControlService
     {
         $query = $this->eloquentBuilder($query);
         if (!$this->can($user, 'clients', 'view')) return $query->whereRaw('1 = 0');
-        $scope = $this->scope($user, 'clients');
-        if ($scope === 'all_records') return $query;
-        if ($scope === 'none') return $query->whereRaw('1 = 0');
 
-        return $query->whereHas('jobs', fn ($jobs) => $this->constrainJobs($jobs, $user, $scope));
+        // Clients are workspace-wide reference records. Restricting the client
+        // directory through Job ownership makes newly-created Clients vanish
+        // until an Order exists, and prevents legitimate Order creators from
+        // selecting shared Clients. Operational Jobs/Tasks remain scoped by
+        // their own modules; only the Client directory itself is universal.
+        return $query;
     }
 
     public function applyDocumentScope(Builder|Relation $query, User $user): Builder

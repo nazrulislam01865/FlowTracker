@@ -39,14 +39,19 @@
 
     @if($inquiryDocuments)
         @foreach($inquiryDocuments as $document)
-            <div class="ft-attachment-row" wire:key="inquiry-overview-doc-{{ $document->id }}">
+            <div class="ft-attachment-row ft-inquiry-attachment-row" wire:key="inquiry-overview-doc-{{ $document->id }}">
                 <span class="ft-file-type">{{ strtoupper(pathinfo($document->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
-                <b>{{ $document->name }}</b>
-                <small>{{ $document->created_at ? \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') : '—' }}</small>
-                <a class="ft-link-blue" href="{{ route('inquiries.documents.open', $document) }}" target="_blank" rel="noopener">Open</a>
-                @if($canEditInquiry)
-                    <button type="button" class="ft-doc-delete-button" wire:click="deleteInquiryDocument({{ $document->id }})" wire:confirm="Remove this attachment from the Inquiry?">×</button>
-                @endif
+                <div class="ft-inquiry-attachment-main">
+                    <b title="{{ $document->name }}">{{ $document->name }}</b>
+                    <small>{{ $document->created_at ? \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') : '—' }}</small>
+                </div>
+                <div class="ft-inquiry-attachment-actions">
+                    <a class="ft-link-blue ft-inquiry-attachment-open" href="{{ route('inquiries.documents.open', $document) }}" target="_blank" rel="noopener">Open</a>
+                    <a class="ft-link-blue ft-inquiry-attachment-download" href="{{ route('inquiries.documents.download', $document) }}">Download</a>
+                    @if($canEditInquiry)
+                        <button type="button" class="ft-doc-delete-button" wire:click="deleteInquiryDocument({{ $document->id }})" wire:confirm="Remove this attachment from the Inquiry?" aria-label="Remove {{ $document->name }}">×</button>
+                    @endif
+                </div>
             </div>
         @endforeach
         @if($inquiryDocuments->isEmpty())<div class="empty-state">No Inquiry attachments yet.</div>@endif

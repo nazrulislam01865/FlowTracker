@@ -4,6 +4,7 @@ namespace App\Services;
 
 use App\Models\MasterRecord;
 use App\Models\MasterValue;
+use App\Support\MasterColor;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -12,6 +13,11 @@ use Illuminate\Validation\ValidationException;
 
 class MasterDataService
 {
+    /** @var array<string,array<string,string>> */
+    private array $colorMaps = [];
+
+    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_status', 'task_flag'];
+
     public const LABELS = [
         'department' => 'Departments',
         'product_category' => 'Product Categories',
@@ -105,6 +111,49 @@ class MasterDataService
         return collect($rows)->map(fn (array $attributes) => (new MasterRecord())->newFromBuilder($attributes));
     }
 
+    public function colorFor(string $type, ?string $value): ?string
+    {
+        if (!in_array($type, self::COLOR_TYPES, true)) return null;
+
+        $value = strtolower(trim((string) $value));
+        if ($value === '') return null;
+
+        if (!array_key_exists($type, $this->colorMaps)) {
+            $map = [];
+            MasterRecord::query()
+                ->forWorkspace($this->workspaceId())
+                ->ofType($type)
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(['code', 'name', 'color'])
+                ->each(function (MasterRecord $record) use (&$map, $type): void {
+                    $color = MasterColor::normalize($record->color) ?: MasterColor::defaultFor($type, $record->name);
+
+                    $name = strtolower(trim((string) $record->name));
+                    $code = strtolower(trim((string) $record->code));
+                    if ($name !== '') $map[$name] = $color;
+                    if ($code !== '') $map[$code] = $color;
+                });
+
+            $this->colorMaps[$type] = $map;
+        }
+
+        return $this->colorMaps[$type][$value] ?? null;
+    }
+
+    public function displayColorFor(string $type, ?string $value): ?string
+    {
+        if (!in_array($type, self::COLOR_TYPES, true)) return null;
+        if (trim((string) $value) === '') return null;
+
+        return $this->colorFor($type, $value) ?: MasterColor::defaultFor($type, $value);
+    }
+
+    public function colorStyleFor(string $type, ?string $value): string
+    {
+        return MasterColor::style($this->displayColorFor($type, $value));
+    }
+
     public function nextCode(string $type): string
     {
         abort_unless(array_key_exists($type, self::LABELS), 404);
@@ -182,6 +231,9 @@ class MasterDataService
                 'code' => $code,
                 'name' => trim($data['name']),
                 'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
+                'color' => in_array($type, self::COLOR_TYPES, true)
+                    ? (MasterColor::normalize($data['color'] ?? null) ?: MasterColor::defaultFor($type, $data['name'] ?? null))
+                    : null,
                 'metadata' => $data['metadata'] ?? null,
                 'status' => ($data['status'] ?? 'active') === 'active' ? 'active' : 'inactive',
                 'sort_order' => (int) ($data['sort_order'] ?? 0),
@@ -200,6 +252,24 @@ class MasterDataService
             $this->forgetActiveCache($record->type);
             return $record;
         });
+    }
+
+    public function setColor(int $id, string $color): MasterRecord
+    {
+        $this->assertManage();
+        $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
+        abort_unless(in_array($record->type, self::COLOR_TYPES, true), 404);
+
+        $normalized = MasterColor::normalize($color);
+        if (!$normalized) {
+            throw ValidationException::withMessages(['color' => 'Choose a valid 6-digit hex color.']);
+        }
+
+        $record->update(['color' => $normalized]);
+        $this->mirrorLegacy($record);
+        $this->forgetActiveCache($record->type);
+
+        return $record;
     }
 
     public function toggle(int $id): MasterRecord
@@ -265,6 +335,9 @@ class MasterDataService
                 [
                     'name' => $legacy->name,
                     'description' => $legacy->description,
+                    'color' => in_array($type, self::COLOR_TYPES, true)
+                        ? (MasterColor::normalize(data_get($legacy->meta, 'color')) ?: MasterColor::defaultFor($type, $legacy->name))
+                        : null,
                     'metadata' => $legacy->meta,
                     'status' => $legacy->is_active ? 'active' : 'inactive',
                     'sort_order' => (int) $legacy->id,
@@ -361,6 +434,11 @@ class MasterDataService
             }
         }
 
+        $legacyMeta = (array) ($record->metadata ?? []);
+        if (in_array($record->type, self::COLOR_TYPES, true) && MasterColor::normalize($record->color)) {
+            $legacyMeta['color'] = MasterColor::normalize($record->color);
+        }
+
         MasterValue::query()->updateOrCreate(
             ['group_key' => $group, 'code' => $record->code],
             [
@@ -368,7 +446,7 @@ class MasterDataService
                 'description' => $record->description,
                 'parent_id' => $legacyParentId,
                 'is_active' => $record->status === 'active',
-                'meta' => $record->metadata,
+                'meta' => $legacyMeta ?: null,
             ]
         );
     }
@@ -380,6 +458,7 @@ class MasterDataService
     private function forgetActiveCache(string $type): void
     {
         Cache::forget($this->activeCacheKey($this->workspaceId(), $type));
+        unset($this->colorMaps[$type]);
     }
 
     private function assertManage(): void

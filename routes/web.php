@@ -25,8 +25,8 @@ use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\UserEditController;
 use App\Http\Controllers\WorkflowSetupController;
 use App\Models\Document;
+use App\Support\StoredFileResponse;
 use App\Services\JobService;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Route;
 
 
@@ -96,25 +96,25 @@ Route::middleware('auth')->group(function () {
     Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
     Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');
     Route::get('/inquiries/documents/{document}/open', function (\App\Models\InquiryDocument $document) {
-        $inquiry = app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
-        return Storage::disk((string) config('flowtrack.document_disk', 'public'))->response(
-            $document->path,
-            $document->name,
-            ['Content-Disposition' => 'inline; filename=\"'.addslashes($document->name).'\"']
-        );
+        app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
+
+        return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('inquiries.documents.open');
+    Route::get('/inquiries/documents/{document}/download', function (\App\Models\InquiryDocument $document) {
+        app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();
+
+        return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
+    })->name('inquiries.documents.download');
     Route::get('/documents/{document}/open', function (Document $document) {
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();
-        return Storage::disk((string) config('flowtrack.document_disk', 'public'))->response(
-            $document->path,
-            $document->name,
-            ['Content-Disposition' => 'inline; filename=\"'.addslashes($document->name).'\"']
-        );
+
+        return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('documents.open');
     Route::get('/documents/{document}/download', function (Document $document) {
         abort_unless(auth()->user()->canModule('documents', 'export'), 403);
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();
-        return Storage::disk((string) config('flowtrack.document_disk', 'public'))->download($document->path, $document->name);
+
+        return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('documents.download');
     // Reports page is intentionally disabled for now.
     // Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
@@ -123,10 +123,13 @@ Route::middleware('auth')->group(function () {
     Route::get('/notifications/unread-count', function () {
         $user = auth()->user();
         $service = app(\App\Services\NotificationService::class);
+        $shell = app(\App\Services\ShellDataService::class)->for($user);
         $latest = $service->latest($user);
 
         return response()->json([
-            'count' => $service->unreadCount($user),
+            'count' => (int) ($shell['unread_notifications'] ?? 0),
+            'my_work_count' => (int) ($shell['open_my_work'] ?? 0),
+            'data_version' => app(\App\Services\WorkspaceRefreshService::class)->version(),
             'latest' => $latest ? [
                 'id' => $latest->id,
                 'type' => $latest->type,

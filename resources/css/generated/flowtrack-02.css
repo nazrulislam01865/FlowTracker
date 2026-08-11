@@ -1,25 +1,4 @@
 
-
-@media(max-width:1100px){
-  .ft-taskpack-grid{grid-template-columns:1fr}.ft-workflow-admin-layout{grid-template-columns:210px minmax(0,1fr)}
-}
-@media(max-width:900px){
-  .ft-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-workflow-admin-layout{grid-template-columns:1fr}.ft-workflow-template-list{display:flex;gap:4px;overflow:auto}.ft-workflow-list-label{display:none}.ft-workflow-template-list button{min-width:180px}
-  .ft-admin-form-top{align-items:flex-start}.ft-task-editor-card{padding:11px}
-}
-@media(max-width:620px){
-  .ft-admin-page-head,.ft-admin-form-top,.ft-workflow-editor-head{flex-direction:column}.ft-admin-head-actions,.ft-workflow-editor-actions{width:100%}.ft-admin-head-actions>a,.ft-workflow-editor-actions>a,.ft-workflow-editor-actions>button{flex:1}.ft-admin-primary{height:36px}.ft-admin-stats{gap:8px}.ft-admin-stats>div{min-height:57px;padding:10px}.ft-admin-stats b{font-size:18px}.ft-taskpack-card{padding:11px}.ft-taskpack-item-row{grid-template-columns:1fr}.ft-taskpack-item-row>span{justify-self:start}.ft-admin-back{align-self:flex-end}.ft-sequence-title-row{align-items:flex-start}.ft-task-editor-head{flex-direction:column}.ft-task-editor-actions{align-self:flex-end}.ft-admin-form-footer{position:sticky;bottom:52px;z-index:3}.ft-phase-two-col{grid-template-columns:1fr}.ft-phase-reference-modal{top:12px;transform:translateX(-50%);max-height:calc(100vh - 24px)}.ft-phase-modal-head{height:60px}.ft-phase-modal-body{padding:14px}.ft-phase-checks label{font-size:11px}.ft-phase-modal-footer{padding:10px 14px}
-}
-
-/* ========================================================================== 
-   Board / My Work reference layout — 2026-08-04
-   Sticky controls, responsive dynamic filters and inline due-date editing.
-   ========================================================================== */
-.ft-board-page{position:relative}
-.ft-board-sticky-header{position:sticky;top:68px;z-index:16;background:#f4f7fb;padding:2px 0 7px;margin:0 0 7px;box-shadow:0 8px 14px rgba(20,42,72,.025)}
-.ft-board-sticky-header .ft-board-page-head{padding-top:2px}
-.ft-board-page .ft-board-page-head h1{font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-.035em}
-.ft-board-page .ft-board-page-head p{font-size:12px;color:#60728d}
 .ft-board-page .ft-new-job-btn{height:42px;min-width:78px;padding:0 15px;border-radius:9px;font-size:12px}
 
 .ft-reference-tabs{display:flex;align-items:center;gap:26px;border-bottom:1px solid #dbe3ee;margin:10px 0 10px!important}
@@ -1587,3 +1566,134 @@
     .ft-jobs-list-page .ft-list-head,
     .ft-exact-jobs-list .ft-list-head{margin-bottom:10px!important}
 }
+
+@media (max-width: 480px){
+    .ft-board-page .ft-board-page-head,
+    .ft-jobs-list-page .ft-list-head,
+    .ft-exact-jobs-list .ft-list-head{gap:8px!important}
+}
+
+/* 2026-08-05: full-width client list with click-to-open summary modal. */
+.ft-clients-layout.ft-clients-layout-full{
+    display:block;
+}
+.ft-clients-layout-full .ft-clients-main{
+    width:100%;
+    max-width:none;
+}
+.ft-client-preview-backdrop{
+    position:fixed;
+    inset:0;
+    z-index:1200;
+    display:grid;
+    place-items:center;
+    padding:24px;
+    overflow:auto;
+    overscroll-behavior:contain;
+    background:rgba(13,28,52,.48);
+    backdrop-filter:blur(3px);
+}
+.ft-client-preview-modal{
+    position:relative!important;
+    top:auto!important;
+    width:min(860px,calc(100vw - 48px))!important;
+    min-width:0!important;
+    max-height:calc(100vh - 48px);
+    overflow:auto;
+    border-radius:16px;
+    box-shadow:0 24px 70px rgba(13,28,52,.28);
+    outline:none;
+}
+.ft-client-preview-modal .ft-client-detail-head{
+    position:relative;
+    grid-template-columns:54px minmax(0,1fr) auto;
+    padding:22px 64px 18px 24px;
+}
+.ft-client-preview-modal .ft-client-detail-contact{
+    padding:12px 24px 18px;
+}
+.ft-client-preview-modal .ft-client-detail-stats{
+    margin:0 24px;
+}
+.ft-client-preview-modal .ft-client-detail-section{
+    padding:22px 24px 0;
+    overflow-x:auto;
+}
+.ft-client-preview-modal .ft-client-detail-section-head h3{
+    font-size:16px;
+}
+.ft-client-preview-modal .ft-client-detail-section-head a,
+.ft-client-preview-modal .ft-view-client-work{
+    font-size:12px;
+}
+.ft-client-preview-modal .ft-client-mini-table th{
+    font-size:10px;
+    padding:10px 8px;
+}
+.ft-client-preview-modal .ft-client-mini-table td{
+    font-size:10.5px;
+    padding:13px 8px;
+}
+.ft-client-preview-modal .ft-view-client-work{
+    padding:24px;
+}
+.ft-client-preview-close{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:2;
+    width:36px;
+    height:36px;
+    border:1px solid #d6e1ec;
+    border-radius:50%;
+    background:#fff;
+    color:#526783;
+    font-size:25px;
+    line-height:1;
+    cursor:pointer;
+    box-shadow:0 4px 12px rgba(13,28,52,.08);
+}
+.ft-client-preview-close:hover,
+.ft-client-preview-close:focus-visible{
+    border-color:#8fb2fa;
+    color:#1265ef;
+    outline:3px solid rgba(18,101,239,.12);
+}
+
+@media(max-width:760px){
+    .ft-client-preview-backdrop{
+        place-items:end center;
+        padding:12px;
+    }
+    .ft-client-preview-modal{
+        position:relative!important;
+        width:100%!important;
+        max-height:calc(100vh - 24px);
+        border-radius:15px;
+    }
+    .ft-client-preview-modal .ft-client-detail-head{
+        grid-template-columns:46px minmax(0,1fr)!important;
+        padding:18px 52px 14px 16px;
+    }
+    .ft-client-preview-modal .ft-open-client{
+        grid-column:1/-1!important;
+        width:100%;
+        justify-content:center;
+    }
+    .ft-client-preview-modal .ft-client-detail-contact,
+    .ft-client-preview-modal .ft-client-detail-stats{
+        margin-left:16px;
+        margin-right:16px;
+    }
+    .ft-client-preview-modal .ft-client-detail-contact{
+        padding:8px 0 14px;
+    }
+    .ft-client-preview-modal .ft-client-detail-section{
+        padding-left:16px;
+        padding-right:16px;
+    }
+}
+.ft-clients-layout-full .ft-client-table tbody tr{
+    cursor:pointer;
+}
+.ft-client-list-modes{display:flex;align-items:center;gap:8px;margin:0 0 16px}.ft-client-list-modes button{display:inline-flex;align-items:center;gap:8px;border:1px solid #d8e2ed;border-radius:9px;background:#fff;color:#526783;padding:9px 13px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.ft-client-list-modes button span{display:inline-flex;min-width:22px;height:20px;align-items:center;justify-content:center;border-radius:10px;background:#edf2f7;color:#526783;font-size:10px}.ft-client-list-modes button.active{border-color:#1265ef;background:#eef5ff;color:#1265ef}.ft-client-list-modes button.active span{background:#1265ef;color:#fff}@media(max-width:620px){.ft-client-list-modes{display:grid;grid-template-columns:1fr 1fr}.ft-client-list-modes button{justify-content:center}}

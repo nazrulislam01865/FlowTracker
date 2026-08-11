@@ -25,6 +25,20 @@ class NotificationOpenController extends Controller
             abort_unless(app(AccessControlService::class)->isAdministrator($user), 403);
         }
 
+        // Route model binding can still resolve a historical notification row.
+        // Re-check the live-context query before marking it read or generating a
+        // deep link so deleted Orders/Tasks/Inquiries are never visitable.
+        $notification = app(\App\Services\NotificationService::class)
+            ->visibleQuery($user)
+            ->whereKey($notification->id)
+            ->first();
+
+        if (! $notification) {
+            return redirect()
+                ->route('notifications')
+                ->with('warning', 'The record linked to this notification is no longer available.');
+        }
+
         if ($notification->read_at === null) {
             $notification->forceFill(['read_at' => now()])->save();
             app(DashboardService::class)->forgetMentions((int) $user->id);

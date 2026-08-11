@@ -1,4 +1,5 @@
 @php
+    $masterData = app(\App\Services\MasterDataService::class);
     $tone = static function (string $status): string {
         return match (true) {
             str_contains($status, 'Converted'), str_contains($status, 'Completed') => 'green',
@@ -90,7 +91,10 @@
                                 <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee"><div class="ownerline"><span class="avatar">{{ $initials($row['assignee']) }}</span><span class="title">{{ $row['assignee'] }}</span></div></div>
                                 <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title">{{ $row['startedDate'] }}</span><span class="sub">{{ $row['startedTime'] }}</span></div>
-                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $tone($row['status']) }}">{{ $row['status'] }}</span></div>
+                                @php
+                                    $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
+                                @endphp
+                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryStatusColor) }}">{{ $row['status'] }}</span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View <span aria-hidden="true">→</span></a></div>
                                 @if(auth()->user()->canModule('inquiries', 'delete'))
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
@@ -472,9 +476,12 @@
                 $completedTasks > 0 || $inquiryStartAt !== null => \App\Services\InquiryService::AUTO_IN_PROGRESS_STATUS,
                 default => \App\Services\InquiryService::AUTO_READY_STATUS,
             };
+            $detailStatusColor = $masterData->displayColorFor('inquiry_status', $detailStatus);
+            $detailPriorityColor = $masterData->displayColorFor('priority', (string) $inquiry->priority);
         @endphp
         <section class="view inquiry-detail-view" x-data="{
             inquiryStatus:@js($detailStatus),
+            inquiryStatusColor:@js($detailStatusColor),
             inquiryStartValue:@js($inquiryStartLocal?->format('Y-m-d\TH:i') ?? ''),
             inquiryStartDisplay:@js($inquiryStartLocal?->format('M j, Y · g:i A') ?? '—'),
             statusTone(status){
@@ -489,6 +496,7 @@
                 try{
                     const result=await $wire.updateTaskStatusInline(taskId,event.currentTarget.value);
                     if(result?.inquiryStatus)this.inquiryStatus=result.inquiryStatus;
+                    if(result?.inquiryColor)this.inquiryStatusColor=result.inquiryColor;
                     if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){
                         this.inquiryStartValue=result.inquiryStartValue || '';
                         this.inquiryStartDisplay=result.inquiryStartDisplay || '—';
@@ -555,21 +563,21 @@
                         <div class="ft-task-property ft-inquiry-auto-status-property">
                             <small>Status</small>
                             <div class="ft-task-property-display">
-                                <span class="status-dot" x-bind:class="statusTone(inquiryStatus)"></span>
+                                <span class="status-dot {{ $detailStatusColor ? 'ft-master-color-dot' : '' }}" style="{{ \App\Support\MasterColor::style($detailStatusColor) }}" x-bind:class="inquiryStatusColor ? 'ft-master-color-dot' : statusTone(inquiryStatus)" x-bind:style="inquiryStatusColor ? '--ft-master-color:'+inquiryStatusColor : ''"></span>
                                 <b class="ft-property-value" x-text="inquiryStatus">{{ $detailStatus }}</b>
                             </div>
                         </div>
 
                         <div
                             class="ft-task-property ft-inline-edit-shell"
-                            x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-'.$inquiry->id.'-priority'), label: 'Inquiry priority', value: @js($inquiry->priority), display: @js($inquiry->priority) })"
+                            x-data="{ ...window.FlowTrackInlineEdit({ key: @js('inquiry-'.$inquiry->id.'-priority'), label: 'Inquiry priority', value: @js($inquiry->priority), display: @js($inquiry->priority) }), priorityColor: @js($detailPriorityColor) }"
                             :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                             x-on:click.outside="if (editing) cancelEdit()"
                         >
                             <small>Priority</small>
-                            <div x-show="!editing" class="ft-task-property-display"><span class="status-dot amber"></span><b class="ft-property-value" x-text="display">{{ $inquiry->priority }}</b>@if($canEditInquiry && !$inquiry->result)<button type="button" :disabled="status === 'saving'" title="Edit priority" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryPriority?.showPicker ? $refs.inquiryPriority.showPicker() : $refs.inquiryPriority?.focus())">✎</button>@endif</div>
+                            <div x-show="!editing" class="ft-task-property-display"><span class="status-dot ft-master-color-dot" style="{{ \App\Support\MasterColor::style($detailPriorityColor) }}" x-bind:style="priorityColor ? '--ft-master-color:'+priorityColor : ''"></span><b class="ft-property-value" x-text="display">{{ $inquiry->priority }}</b>@if($canEditInquiry && !$inquiry->result)<button type="button" :disabled="status === 'saving'" title="Edit priority" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.inquiryPriority?.showPicker ? $refs.inquiryPriority.showPicker() : $refs.inquiryPriority?.focus())">✎</button>@endif</div>
                             @if($canEditInquiry && !$inquiry->result)
-                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select x-ref="inquiryPriority" x-model="draftValue" class="ft-task-property-inline-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateInquiryField('priority', draftValue))">@unless($inquiryPriorities->contains(fn($priority) => (string) $priority->name === (string) $inquiry->priority))<option value="{{ $inquiry->priority }}">{{ $inquiry->priority }}</option>@endunless @foreach($inquiryPriorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></div>
+                                <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select data-master-color-select x-ref="inquiryPriority" x-model="draftValue" class="ft-task-property-inline-input ft-master-color" style="{{ \App\Support\MasterColor::style($detailPriorityColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="const nextColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateInquiryField('priority', draftValue)).then(ok => { if(ok) priorityColor=nextColor; });">@unless($inquiryPriorities->contains(fn($priority) => (string) $priority->name === (string) $inquiry->priority))<option value="{{ $inquiry->priority }}" data-color="{{ $masterData->displayColorFor('priority', (string) $inquiry->priority) }}">{{ $inquiry->priority }}</option>@endunless @foreach($inquiryPriorities as $priority)<option value="{{ $priority->name }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach</select></div>
                                 <x-ui.inline-save-state compact />
                             @endif
                         </div>
@@ -656,12 +664,15 @@
             @endif
 
             @if($showTaskDocumentModal && $taskDocumentModalTask)
+                @php
+                    $completeAfterTaskDocument = (int) ($pendingCompletionTaskId ?? 0) === (int) $taskDocumentModalTask->id;
+                @endphp
                 <div class="ft-inquiry-task-document-modal-backdrop" wire:key="inquiry-task-document-modal" wire:click.self="closeTaskDocumentModal">
                     <section class="ft-inquiry-task-document-modal" role="dialog" aria-modal="true" aria-labelledby="task-document-modal-title">
                         <header class="ft-inquiry-task-document-modal-head">
                             <div>
-                                <h2 id="task-document-modal-title">Add new document to task</h2>
-                                <p>Upload a new file or choose a document that already exists.</p>
+                                <h2 id="task-document-modal-title">{{ $completeAfterTaskDocument ? 'Required file needed to complete task' : 'Add new document to task' }}</h2>
+                                <p>{{ $completeAfterTaskDocument ? 'Add the required file now. The task will be completed automatically after the document is saved.' : 'Upload a new file or choose a document that already exists.' }}</p>
                             </div>
                             <button type="button" class="ft-inquiry-task-document-modal-close" wire:click="closeTaskDocumentModal" aria-label="Close">×</button>
                         </header>
@@ -729,7 +740,10 @@
 
                             <div class="ft-inquiry-task-document-info">
                                 <span>ⓘ</span>
-                                <p>This document will appear directly under <strong>{{ $taskDocumentModalTask->title }}</strong>.</p>
+                                <p>
+                                    This document will appear directly under <strong>{{ $taskDocumentModalTask->title }}</strong>.
+                                    @if($completeAfterTaskDocument) Saving it will also mark the task as Completed. @elseif($taskDocumentModalTask->completed_at) Adding a document will not reopen or change the completed task. @endif
+                                </p>
                             </div>
                         </div>
 
@@ -737,8 +751,8 @@
                             <button type="button" class="secondary" wire:click="closeTaskDocumentModal">Cancel</button>
                             <button type="button" class="primary" wire:click="saveTaskDocument" wire:loading.attr="disabled" wire:target="saveTaskDocument,taskDocumentUpload"
                                 @disabled($taskDocumentSource === 'upload' ? !$taskDocumentUpload : !$taskExistingDocumentId)>
-                                <span wire:loading.remove wire:target="saveTaskDocument">Add document</span>
-                                <span wire:loading wire:target="saveTaskDocument">Adding...</span>
+                                <span wire:loading.remove wire:target="saveTaskDocument">{{ $completeAfterTaskDocument ? 'Add file & complete' : 'Add document' }}</span>
+                                <span wire:loading wire:target="saveTaskDocument">{{ $completeAfterTaskDocument ? 'Adding & completing...' : 'Adding...' }}</span>
                             </button>
                         </footer>
                     </section>

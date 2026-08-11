@@ -1,135 +1,4 @@
 
-
-@media (max-width: 480px){
-    .ft-board-page .ft-board-page-head,
-    .ft-jobs-list-page .ft-list-head,
-    .ft-exact-jobs-list .ft-list-head{gap:8px!important}
-}
-
-/* 2026-08-05: full-width client list with click-to-open summary modal. */
-.ft-clients-layout.ft-clients-layout-full{
-    display:block;
-}
-.ft-clients-layout-full .ft-clients-main{
-    width:100%;
-    max-width:none;
-}
-.ft-client-preview-backdrop{
-    position:fixed;
-    inset:0;
-    z-index:1200;
-    display:grid;
-    place-items:center;
-    padding:24px;
-    overflow:auto;
-    overscroll-behavior:contain;
-    background:rgba(13,28,52,.48);
-    backdrop-filter:blur(3px);
-}
-.ft-client-preview-modal{
-    position:relative!important;
-    top:auto!important;
-    width:min(860px,calc(100vw - 48px))!important;
-    min-width:0!important;
-    max-height:calc(100vh - 48px);
-    overflow:auto;
-    border-radius:16px;
-    box-shadow:0 24px 70px rgba(13,28,52,.28);
-    outline:none;
-}
-.ft-client-preview-modal .ft-client-detail-head{
-    position:relative;
-    grid-template-columns:54px minmax(0,1fr) auto;
-    padding:22px 64px 18px 24px;
-}
-.ft-client-preview-modal .ft-client-detail-contact{
-    padding:12px 24px 18px;
-}
-.ft-client-preview-modal .ft-client-detail-stats{
-    margin:0 24px;
-}
-.ft-client-preview-modal .ft-client-detail-section{
-    padding:22px 24px 0;
-    overflow-x:auto;
-}
-.ft-client-preview-modal .ft-client-detail-section-head h3{
-    font-size:16px;
-}
-.ft-client-preview-modal .ft-client-detail-section-head a,
-.ft-client-preview-modal .ft-view-client-work{
-    font-size:12px;
-}
-.ft-client-preview-modal .ft-client-mini-table th{
-    font-size:10px;
-    padding:10px 8px;
-}
-.ft-client-preview-modal .ft-client-mini-table td{
-    font-size:10.5px;
-    padding:13px 8px;
-}
-.ft-client-preview-modal .ft-view-client-work{
-    padding:24px;
-}
-.ft-client-preview-close{
-    position:absolute;
-    top:14px;
-    right:14px;
-    z-index:2;
-    width:36px;
-    height:36px;
-    border:1px solid #d6e1ec;
-    border-radius:50%;
-    background:#fff;
-    color:#526783;
-    font-size:25px;
-    line-height:1;
-    cursor:pointer;
-    box-shadow:0 4px 12px rgba(13,28,52,.08);
-}
-.ft-client-preview-close:hover,
-.ft-client-preview-close:focus-visible{
-    border-color:#8fb2fa;
-    color:#1265ef;
-    outline:3px solid rgba(18,101,239,.12);
-}
-
-@media(max-width:760px){
-    .ft-client-preview-backdrop{
-        place-items:end center;
-        padding:12px;
-    }
-    .ft-client-preview-modal{
-        position:relative!important;
-        width:100%!important;
-        max-height:calc(100vh - 24px);
-        border-radius:15px;
-    }
-    .ft-client-preview-modal .ft-client-detail-head{
-        grid-template-columns:46px minmax(0,1fr)!important;
-        padding:18px 52px 14px 16px;
-    }
-    .ft-client-preview-modal .ft-open-client{
-        grid-column:1/-1!important;
-        width:100%;
-        justify-content:center;
-    }
-    .ft-client-preview-modal .ft-client-detail-contact,
-    .ft-client-preview-modal .ft-client-detail-stats{
-        margin-left:16px;
-        margin-right:16px;
-    }
-    .ft-client-preview-modal .ft-client-detail-contact{
-        padding:8px 0 14px;
-    }
-    .ft-client-preview-modal .ft-client-detail-section{
-        padding-left:16px;
-        padding-right:16px;
-    }
-}
-.ft-clients-layout-full .ft-client-table tbody tr{
-    cursor:pointer;
-}
-.ft-client-list-modes{display:flex;align-items:center;gap:8px;margin:0 0 16px}.ft-client-list-modes button{display:inline-flex;align-items:center;gap:8px;border:1px solid #d8e2ed;border-radius:9px;background:#fff;color:#526783;padding:9px 13px;font:inherit;font-size:12px;font-weight:700;cursor:pointer}.ft-client-list-modes button span{display:inline-flex;min-width:22px;height:20px;align-items:center;justify-content:center;border-radius:10px;background:#edf2f7;color:#526783;font-size:10px}.ft-client-list-modes button.active{border-color:#1265ef;background:#eef5ff;color:#1265ef}.ft-client-list-modes button.active span{background:#1265ef;color:#fff}@media(max-width:620px){.ft-client-list-modes{display:grid;grid-template-columns:1fr 1fr}.ft-client-list-modes button{justify-content:center}}
 .ft-client-filter-card.is-archived{grid-template-columns:minmax(280px,1.8fr) repeat(3,minmax(150px,.7fr)) auto}.ft-archived-client-table{min-width:900px}.ft-archived-client-table tbody tr{cursor:default}.ft-archived-client-table tbody tr:hover{background:#fafcff}.ft-client-logo.is-archived{background:#edf1f5;color:#62748b}.ft-archived-status{display:inline-flex;align-items:center;border:1px solid #d6dee8;border-radius:999px;background:#f2f5f8;color:#5d6f85;padding:4px 8px;font-size:9px;font-weight:750}.ft-archived-client-table td>small{color:#77889d}.ft-archived-actions{display:flex;align-items:center;justify-content:flex-end;gap:7px;white-space:nowrap}.ft-archived-actions button{height:32px;border-radius:7px;padding:0 11px;font:inherit;font-size:10px;font-weight:750;cursor:pointer}.ft-archive-view{border:1px solid #d7e1ec;background:#fff;color:#536781}.ft-archive-restore{border:1px solid #a8c4fa;background:#edf4ff;color:#1265ef}.ft-archive-view:hover{background:#f5f8fb}.ft-archive-restore:hover{background:#dfebff}@media(max-width:1080px){.ft-client-filter-card.is-archived{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-client-filter-card.is-archived .ft-client-filter-search{grid-column:1/-1}}@media(max-width:700px){.ft-archived-actions{justify-content:flex-start;flex-wrap:wrap}}
 .ft-clients-layout-full .ft-client-table tbody tr:focus-visible{
     outline:3px solid rgba(18,101,239,.16);
@@ -1857,3 +1726,186 @@ a.ft-new-job-btn:active {
 }
 .ft-exact-job-detail .ft-doc-ux-title h2{font-size:24px}
 .ft-exact-job-detail .ft-doc-ux-title p{font-size:11px;max-width:620px}
+.ft-exact-job-detail .ft-doc-completion-copy{
+    flex:0 0 auto;
+    display:flex;
+    align-items:baseline;
+    gap:6px;
+    padding:7px 10px;
+    border:1px solid #dce5f0;
+    border-radius:9px;
+    background:#fff;
+    color:#60738c;
+}
+.ft-exact-job-detail .ft-doc-completion-copy strong{font-size:14px;color:#0c203c}
+.ft-exact-job-detail .ft-doc-completion-copy span{font-size:9px;font-weight:700}
+
+.ft-exact-job-detail .ft-doc-summary-strip{
+    display:grid;
+    grid-template-columns:repeat(4,minmax(0,1fr));
+    gap:8px;
+    margin-bottom:8px;
+}
+.ft-exact-job-detail .ft-doc-summary-item{
+    min-width:0;
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:9px 11px;
+    border:1px solid #dce5f0;
+    border-radius:10px;
+    background:#fff;
+}
+.ft-exact-job-detail .ft-doc-summary-item.needs-action{border-color:#f1d39b;background:#fffbf2}
+.ft-exact-job-detail .ft-doc-summary-item>div{min-width:0}
+.ft-exact-job-detail .ft-doc-summary-item small{
+    display:block;
+    color:#667a93;
+    font-size:8.5px;
+    font-weight:700;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+}
+.ft-exact-job-detail .ft-doc-summary-item b{display:block;margin-top:2px;font-size:17px;color:#0b1d36}
+.ft-exact-job-detail .ft-doc-summary-icon{
+    width:30px;
+    height:30px;
+    flex:0 0 30px;
+    display:grid;
+    place-items:center;
+    border-radius:8px;
+    font-size:12px;
+    font-weight:900;
+}
+.ft-exact-job-detail .ft-doc-summary-icon.blue{background:#edf4ff;color:#1767ef}
+.ft-exact-job-detail .ft-doc-summary-icon.neutral{background:#f0f4f8;color:#50647e}
+.ft-exact-job-detail .ft-doc-summary-icon.amber{background:#fff2d7;color:#b86a00}
+.ft-exact-job-detail .ft-doc-summary-icon.green{background:#e9f8ef;color:#13813d}
+
+.ft-exact-job-detail .ft-doc-required-progress{
+    margin:0 0 12px;
+    padding:8px 10px;
+    border:1px solid #dce5f0;
+    border-radius:9px;
+    background:#fbfdff;
+}
+.ft-exact-job-detail .ft-doc-required-progress>div{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px;font-size:9px;color:#62758d}
+.ft-exact-job-detail .ft-doc-required-progress b{color:#15375f}
+.ft-exact-job-detail .ft-doc-progress-track{display:block;height:6px;border-radius:999px;background:#e7edf4;overflow:hidden}
+.ft-exact-job-detail .ft-doc-progress-track i{display:block;height:100%;border-radius:inherit;background:#2168ef}
+
+.ft-exact-job-detail .ft-doc-upload-card{
+    padding:14px;
+    margin-bottom:12px;
+    border-color:#d6e2f0;
+    box-shadow:none;
+}
+.ft-exact-job-detail .ft-doc-upload-heading{display:flex;align-items:flex-start;gap:10px}
+.ft-exact-job-detail .ft-doc-upload-heading-icon{
+    width:32px;
+    height:32px;
+    flex:0 0 32px;
+    display:grid;
+    place-items:center;
+    border-radius:9px;
+    background:#eaf2ff;
+    color:#0f63f3;
+    font-size:18px;
+    font-weight:800;
+}
+.ft-exact-job-detail .ft-doc-upload-heading>div{min-width:0}
+.ft-exact-job-detail .ft-doc-upload-heading b{font-size:13px;color:#0b1d36}
+.ft-exact-job-detail .ft-doc-upload-heading p{margin:3px 0 0;font-size:10px;line-height:1.4;color:#62758d}
+.ft-exact-job-detail .ft-doc-upload-steps{
+    display:grid;
+    grid-template-columns:repeat(2,minmax(0,1fr));
+    gap:8px;
+    margin-top:12px;
+}
+.ft-exact-job-detail .ft-doc-upload-step{
+    display:grid;
+    grid-template-columns:26px minmax(0,1fr);
+    gap:8px;
+    align-items:center;
+    padding:8px 9px;
+    border:1px solid #e0e7ef;
+    border-radius:9px;
+    background:#fafcff;
+}
+.ft-exact-job-detail .ft-doc-upload-step>span{
+    width:24px;
+    height:24px;
+    display:grid;
+    place-items:center;
+    border-radius:50%;
+    background:#1f67ee;
+    color:#fff;
+    font-size:9px;
+    font-weight:800;
+}
+.ft-exact-job-detail .ft-doc-upload-step b{display:block;font-size:9.5px;color:#16304f}
+.ft-exact-job-detail .ft-doc-upload-step small{display:block;margin-top:1px;font-size:8px;color:#70829a;line-height:1.3}
+.ft-exact-job-detail .ft-doc-purpose-ux{margin-top:12px}
+.ft-exact-job-detail .ft-doc-purpose-ux>label{font-size:10px!important;margin-bottom:6px!important}
+.ft-exact-job-detail .ft-doc-purpose-ux .ft-document-purpose-select{
+    height:40px!important;
+    border-radius:8px!important;
+    font-size:10px!important;
+    font-weight:650;
+}
+.ft-exact-job-detail .ft-doc-purpose-ux .ft-document-match-note{font-size:8.5px!important;margin-top:5px!important}
+
+.ft-exact-job-detail .ft-doc-upload-actions{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) 170px;
+    gap:8px;
+    margin-top:10px;
+    padding:0;
+    background:transparent;
+    border:0;
+}
+.ft-exact-job-detail .ft-doc-primary-drop{
+    min-height:72px;
+    border:1px dashed #9ab3d1!important;
+    border-radius:10px!important;
+    background:#f8fbff!important;
+    padding:10px 12px!important;
+}
+.ft-exact-job-detail .ft-doc-primary-drop>div{min-width:0}
+.ft-exact-job-detail .ft-doc-primary-drop>div>b{display:block;font-size:10.5px;color:#142a46}
+.ft-exact-job-detail .ft-doc-primary-drop>div>span{display:block;margin-top:2px;font-size:9px;color:#506984}
+.ft-exact-job-detail .ft-doc-primary-drop>div>span strong{color:#0f63f3}
+.ft-exact-job-detail .ft-doc-primary-drop small{display:block;margin-top:3px;font-size:8px;color:#71849c}
+.ft-exact-job-detail .ft-doc-existing-action{
+    width:100%!important;
+    height:auto!important;
+    min-height:72px!important;
+    margin:0!important;
+    display:flex;
+    flex-direction:column;
+    gap:5px;
+    border-radius:10px;
+    color:#155ee9;
+}
+.ft-exact-job-detail .ft-doc-existing-action>span:first-child{font-size:17px}
+.ft-exact-job-detail .ft-doc-existing-action>span:last-child{font-size:9.5px}
+.ft-exact-job-detail .ft-doc-upload-ready{
+    margin-top:9px;
+    padding:8px 9px;
+    border:1px solid #cfe1ff;
+    border-radius:9px;
+    background:#f5f9ff;
+}
+.ft-exact-job-detail .ft-doc-existing-picker{
+    margin-top:10px;
+    padding:11px;
+    border:1px solid #dbe4ef;
+    border-radius:9px;
+    background:#fbfdff;
+}
+.ft-exact-job-detail .ft-doc-existing-picker .ft-card-row-head b{font-size:10.5px}
+.ft-exact-job-detail .ft-doc-existing-picker .ft-card-row-head p{font-size:8.5px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:8px;margin-top:9px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions select{min-width:0;width:100%;height:38px;border:1px solid #cedaea;border-radius:8px;padding:0 10px;background:#fff;color:#162844;font-size:9px}
+.ft-exact-job-detail .ft-doc-existing-picker-actions .ft-new-job-btn{height:38px}

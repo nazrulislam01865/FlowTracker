@@ -2,9 +2,20 @@
 
 namespace App\Providers;
 
+use App\Models\Client;
+use App\Models\FlowJob;
+use App\Models\FlowJobMember;
+use App\Models\Inquiry;
+use App\Models\InquiryTask;
+use App\Models\MasterRecord;
+use App\Models\Task;
+use App\Models\User;
+use App\Models\WorkflowPhase;
+use App\Observers\WorkspaceDataObserver;
 use App\Services\AccessControlService;
 use App\Services\BrandingService;
 use App\Services\MentionService;
+use App\Services\MasterDataService;
 use App\Services\ShellDataService;
 use App\Services\SetupContext;
 use App\Support\Performance\RequestPerformanceMonitor;
@@ -29,14 +40,30 @@ class AppServiceProvider extends ServiceProvider
     {
         $this->app->singleton(AccessControlService::class);
         $this->app->scoped(MentionService::class);
+        $this->app->scoped(MasterDataService::class);
         $this->app->scoped(BrandingService::class);
         $this->app->scoped(RequestPerformanceMonitor::class);
         $this->app->scoped(ShellDataService::class);
         $this->app->scoped(SetupContext::class);
+        $this->app->scoped(\App\Services\WorkspaceRefreshService::class);
     }
 
     public function boot(): void
     {
+        foreach ([
+            Client::class,
+            FlowJob::class,
+            FlowJobMember::class,
+            Inquiry::class,
+            InquiryTask::class,
+            MasterRecord::class,
+            Task::class,
+            User::class,
+            WorkflowPhase::class,
+        ] as $modelClass) {
+            $modelClass::observe(WorkspaceDataObserver::class);
+        }
+
         Event::listen(QueryExecuted::class, function (QueryExecuted $event): void {
             app(RequestPerformanceMonitor::class)->recordQuery($event);
         });

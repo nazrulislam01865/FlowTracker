@@ -8,12 +8,42 @@ use App\Models\Task;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Storage;
 
 class ClientService
 {
     public function visibleQuery(User $user): Builder
     {
-        return app(AccessControlService::class)->applyClientScope(Client::query(), $user);
+        return app(AccessControlService::class)->applyClientScope(
+            Client::query()->whereNull('clients.purged_at'),
+            $user
+        );
+    }
+
+    /**
+     * Query the shared Client directory when another permitted workflow needs
+     * Client reference data (for example Create Order/Create Inquiry). This is
+     * intentionally separate from visibleQuery(): opening the Clients module
+     * still requires clients.view, while operational creation screens can use
+     * the universal Client lookup they depend on without inheriting Job scope.
+     */
+    public function referenceQuery(User $user, string $context = ''): Builder
+    {
+        $access = app(AccessControlService::class);
+        $allowed = match ($context) {
+            'create-job', 'bulk-order-import' => $access->can($user, 'jobs', 'create'),
+            'jobs' => $access->can($user, 'jobs', 'view'),
+            'create-inquiry' => $access->can($user, 'inquiries', 'create'),
+            'inquiries' => $access->can($user, 'inquiries', 'view'),
+            'documents' => $access->can($user, 'documents', 'view'),
+            default => $access->can($user, 'clients', 'view'),
+        };
+
+        $query = Client::query()->whereNull('clients.purged_at');
+
+        return $allowed ? $query : $query->whereRaw('1 = 0');
     }
 
     public function filteredQuery(User $user, array $filters = []): Builder
@@ -23,8 +53,34 @@ class ClientService
 
         $archived = (bool) ($filters['archived'] ?? false);
 
+        if ($archived) {
+            return $this->visibleQuery($user)
+                ->where('clients.is_active', false)
+                ->when($filters['search'] ?? null, function ($q, $search) {
+                    $q->where(function ($x) use ($search) {
+                        $x->where('name', 'like', "%{$search}%")
+                            ->orWhere('code', 'like', "%{$search}%")
+                            ->orWhere('email', 'like', "%{$search}%")
+                            ->orWhere('contact_name', 'like', "%{$search}%");
+                    });
+                })
+                ->when($filters['created_by'] ?? null, fn ($q, $v) => $q->where('created_by', $v))
+                ->when($filters['archived_date'] ?? null, function ($q, $value) {
+                    $from = match ((string) $value) {
+                        '7d' => now()->subDays(7)->startOfDay(),
+                        '30d' => now()->subDays(30)->startOfDay(),
+                        '90d' => now()->subDays(90)->startOfDay(),
+                        'year' => now()->startOfYear(),
+                        default => null,
+                    };
+                    if ($from) $q->where('archived_at', '>=', $from);
+                })
+                ->orderByDesc('archived_at')
+                ->orderBy('name');
+        }
+
         return $this->visibleQuery($user)
-            ->where('clients.is_active', !$archived)
+            ->where('clients.is_active', true)
             ->with('accountManager')
             ->withMin([
                 'jobs as next_delivery_at' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->whereNotNull('flow_jobs.delivery_date'), $user),
@@ -97,7 +153,11 @@ class ClientService
     {
         $client = $this->visibleQuery($user)->findOrFail($clientId);
         if ($client->is_active) {
-            $client->update(['is_active' => false]);
+            $client->update([
+                'is_active' => false,
+                'archived_at' => now(),
+                'archived_by' => $user->id,
+            ]);
             $this->touchLifecycleVersion();
         }
 
@@ -108,11 +168,103 @@ class ClientService
     {
         $client = $this->visibleQuery($user)->findOrFail($clientId);
         if (!$client->is_active) {
-            $client->update(['is_active' => true]);
+            $client->update([
+                'is_active' => true,
+                'archived_at' => null,
+                'archived_by' => null,
+            ]);
             $this->touchLifecycleVersion();
         }
 
         return $client->refresh();
+    }
+
+    /**
+     * Irreversibly erase an archived client's profile while keeping the
+     * database row as a minimal tombstone. Linked Orders, Inquiries,
+     * Documents and other historical records keep their foreign keys and are
+     * therefore never cascade-deleted.
+     */
+    public function permanentlyDeleteArchived(User $user, int $clientId): string
+    {
+        $originalName = '';
+        $logoPath = '';
+
+        DB::transaction(function () use ($user, $clientId, &$originalName, &$logoPath): void {
+            $client = $this->visibleQuery($user)->lockForUpdate()->findOrFail($clientId);
+            abort_if($client->is_active, 422, 'Only archived clients can be permanently deleted.');
+
+            $originalName = (string) $client->name;
+            $logoPath = (string) ($client->logo_path ?? '');
+
+            // Client-owned profile/configuration records are removed. Historical
+            // operational records are deliberately left untouched.
+            $client->shippingAddresses()->delete();
+            if (Schema::hasTable('workflow_template_client')) {
+                DB::table('workflow_template_client')->where('client_id', $client->id)->delete();
+            }
+
+            $client->forceFill([
+                'name' => 'Deleted client #'.$client->id,
+                'code' => $this->purgedClientCode($client),
+                'logo_path' => null,
+                'legal_business_name' => null,
+                'website' => null,
+                'country' => null,
+                'contact_name' => null,
+                'contact_job_title' => null,
+                'email' => null,
+                'phone' => null,
+                'account_manager_id' => null,
+                'preferred_language' => 'English',
+                'preferred_currency' => 'USD',
+                'outstanding_balance' => 0,
+                'notes' => null,
+                'office_address' => null,
+                'office_address_line1' => null,
+                'office_suite' => null,
+                'office_city' => null,
+                'office_state' => null,
+                'office_zip' => null,
+                'billing_same_as_office' => true,
+                'billing_address_line1' => null,
+                'billing_suite' => null,
+                'billing_city' => null,
+                'billing_state' => null,
+                'billing_zip' => null,
+                'billing_country' => null,
+                'ein_tax_id' => null,
+                'sales_tax_status' => 'taxable',
+                'payment_terms' => null,
+                'po_required' => false,
+                'is_draft' => false,
+                'is_active' => false,
+                'purged_at' => now(),
+                'purged_by' => $user->id,
+            ])->save();
+        });
+
+        $disk = Storage::disk('public');
+        if ($logoPath !== '') $disk->delete($logoPath);
+        $disk->deleteDirectory('client-logos/'.$clientId);
+
+        $this->touchLifecycleVersion();
+
+        return $originalName;
+    }
+
+    private function purgedClientCode(Client $client): string
+    {
+        $base = 'DEL-'.$client->id.'-'.strtoupper(substr(hash('sha256', (string) $client->id), 0, 6));
+        $code = substr($base, 0, 20);
+        $suffix = 1;
+
+        while (Client::query()->where('code', $code)->where('id', '!=', $client->id)->exists()) {
+            $tail = '-'.$suffix++;
+            $code = substr($base, 0, 20 - strlen($tail)).$tail;
+        }
+
+        return $code;
     }
 
     public function lifecycleVersion(): int

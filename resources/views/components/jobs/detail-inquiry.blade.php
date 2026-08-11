@@ -16,6 +16,7 @@
     $nextAction = trim((string) ($job->next_action ?? '')) ?: 'No action currently required';
     $selectedClientMatch = $selectedInquiry && (int) $selectedInquiry->client_id === (int) $job->client_id;
     $searchLength = mb_strlen(trim((string) $search));
+    $masterData = app(\App\Services\MasterDataService::class);
 @endphp
 
 <div class="ft-order-inquiry-link" wire:key="order-inquiry-link-{{ $job->id }}">
@@ -114,7 +115,10 @@
                                             <span class="ft-oil-result-meta">{{ $product ?: ($inquiry->reference_number ?: 'Inquiry') }} · Updated {{ $updated }}</span>
                                         </span>
                                         <span class="ft-oil-result-client"><strong>{{ $inquiry->client?->name ?: 'No client' }}</strong><small>{{ $clientMatch ? 'Client match' : 'Different client' }}</small></span>
-                                        <span class="ft-oil-result-owner"><strong>{{ $inquiry->status }}</strong><small>{{ $eligible ? 'Owner: '.($inquiry->owner?->name ?: 'Unassigned') : ($linkedOrder ? 'Linked to '.$linkedOrder->displayOrderNumber() : 'Not eligible') }}</small></span>
+                                        @php
+                                            $resultInquiryStatusColor = $masterData->displayColorFor('inquiry_status', (string) $inquiry->status);
+                                        @endphp
+                                        <span class="ft-oil-result-owner"><strong class="ft-master-color-inline-label" style="{{ \App\Support\MasterColor::style($resultInquiryStatusColor) }}">{{ $inquiry->status }}</strong><small>{{ $eligible ? 'Owner: '.($inquiry->owner?->name ?: 'Unassigned') : ($linkedOrder ? 'Linked to '.$linkedOrder->displayOrderNumber() : 'Not eligible') }}</small></span>
                                     </button>
                                 @endforeach
                             @endif
@@ -158,7 +162,10 @@
                                     <span class="ft-oil-linked-title">{{ $linked->subject }}</span>
                                     <span class="ft-oil-linked-meta">
                                         <span>{{ $linked->client?->name ?: 'No client' }}</span>
-                                        <span>{{ $linked->status }}</span>
+                                        @php
+                                            $linkedInquiryStatusColor = $masterData->displayColorFor('inquiry_status', (string) $linked->status);
+                                        @endphp
+                                        <span class="ft-master-color-inline-label" style="{{ \App\Support\MasterColor::style($linkedInquiryStatusColor) }}">{{ $linked->status }}</span>
                                         <span>Owner: {{ $linked->owner?->name ?: 'Unassigned' }}</span>
                                         <span>Linked to {{ $job->displayOrderNumber() }}</span>
                                     </span>

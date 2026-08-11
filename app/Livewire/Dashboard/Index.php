@@ -18,6 +18,12 @@ class Index extends Component
         // the dedicated tagged-comments component.
     }
 
+    #[On('flowtrack-refresh')]
+    public function refreshWorkspace(): void
+    {
+        // Re-render from the latest workspace data after cross-user changes.
+    }
+
     public function render()
     {
         $user = auth()->user();

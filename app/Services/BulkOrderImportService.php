@@ -503,7 +503,7 @@ class BulkOrderImportService
     /** @return array{by_id:array<int,Client>,by_code:array<string,Client>,by_name:array<string,Client>} */
     private function clientMaps(User $actor): array
     {
-        $clients = app(ClientService::class)->visibleQuery($actor)->where('is_active', true)->get(['id', 'code', 'name']);
+        $clients = app(ClientService::class)->referenceQuery($actor, 'bulk-order-import')->where('is_active', true)->get(['id', 'code', 'name']);
         return [
             'by_id' => $clients->keyBy('id')->all(),
             'by_code' => $clients->keyBy(fn ($client) => strtoupper(trim((string) $client->code)))->all(),

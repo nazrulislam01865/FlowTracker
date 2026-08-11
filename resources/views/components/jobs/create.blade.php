@@ -1,5 +1,6 @@
 @props([
     'clients','workflows','categories','priorities','clientId','workflowId','ownerId','jobItems','jobAttachments',
+    'priority'=>'Medium',
     'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'mentionUsers'=>collect(),
 ])
@@ -11,6 +12,7 @@
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
     $createReady = $catalogReady && $assignmentReady && $workflowReady;
+    $masterData = app(\App\Services\MasterDataService::class);
 @endphp
 <div {{ $attributes->class('ft-create-job-page') }}>
     <div class="ft-create-shell">
@@ -105,7 +107,10 @@
             <div class="ft-create-section-title"><span>3</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Required delivery date *</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <label class="ft-create-field"><b>Priority</b><select wire:model="priority">@foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></label>
+                @php
+                    $createPriorityColor = $masterData->displayColorFor('priority', (string) $priority);
+                @endphp
+                <label class="ft-create-field"><b>Priority</b><select data-master-color-select class="{{ $createPriorityColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($createPriorityColor) }}" wire:model="priority">@foreach($priorities as $priorityOption)<option value="{{ $priorityOption->name }}" data-color="{{ $masterData->displayColorFor('priority', $priorityOption->name) }}">{{ $priorityOption->name }}</option>@endforeach</select></label>
                 <div class="ft-create-field">
                     <x-ui.remote-filter
                         class="ft-create-remote-select"

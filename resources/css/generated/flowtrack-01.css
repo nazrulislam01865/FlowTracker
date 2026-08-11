@@ -468,3 +468,24 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-phase-modal-body .ft-admin-field label{font-size:12px}.ft-phase-modal-body .ft-admin-field input,.ft-phase-modal-body .ft-admin-field select{min-height:45px;border-radius:9px;font-size:13px;padding:0 13px}
 .ft-phase-checks{border-top:0;display:flex;flex-direction:column}.ft-phase-checks label{min-height:42px;border-bottom:1px solid #dfe5ed;display:flex;align-items:center;gap:10px;font-size:13px}.ft-phase-checks input{width:16px;height:16px;accent-color:#1766ea}
 .ft-phase-modal-footer{border-top:1px solid #dfe5ed;padding:13px 20px;display:flex;justify-content:flex-end;gap:9px}.ft-phase-modal-footer .ft-admin-primary,.ft-phase-modal-footer .ft-admin-cancel{height:42px;font-size:12px;min-width:104px}
+
+@media(max-width:1100px){
+  .ft-taskpack-grid{grid-template-columns:1fr}.ft-workflow-admin-layout{grid-template-columns:210px minmax(0,1fr)}
+}
+@media(max-width:900px){
+  .ft-admin-stats{grid-template-columns:repeat(2,minmax(0,1fr))}.ft-workflow-admin-layout{grid-template-columns:1fr}.ft-workflow-template-list{display:flex;gap:4px;overflow:auto}.ft-workflow-list-label{display:none}.ft-workflow-template-list button{min-width:180px}
+  .ft-admin-form-top{align-items:flex-start}.ft-task-editor-card{padding:11px}
+}
+@media(max-width:620px){
+  .ft-admin-page-head,.ft-admin-form-top,.ft-workflow-editor-head{flex-direction:column}.ft-admin-head-actions,.ft-workflow-editor-actions{width:100%}.ft-admin-head-actions>a,.ft-workflow-editor-actions>a,.ft-workflow-editor-actions>button{flex:1}.ft-admin-primary{height:36px}.ft-admin-stats{gap:8px}.ft-admin-stats>div{min-height:57px;padding:10px}.ft-admin-stats b{font-size:18px}.ft-taskpack-card{padding:11px}.ft-taskpack-item-row{grid-template-columns:1fr}.ft-taskpack-item-row>span{justify-self:start}.ft-admin-back{align-self:flex-end}.ft-sequence-title-row{align-items:flex-start}.ft-task-editor-head{flex-direction:column}.ft-task-editor-actions{align-self:flex-end}.ft-admin-form-footer{position:sticky;bottom:52px;z-index:3}.ft-phase-two-col{grid-template-columns:1fr}.ft-phase-reference-modal{top:12px;transform:translateX(-50%);max-height:calc(100vh - 24px)}.ft-phase-modal-head{height:60px}.ft-phase-modal-body{padding:14px}.ft-phase-checks label{font-size:11px}.ft-phase-modal-footer{padding:10px 14px}
+}
+
+/* ========================================================================== 
+   Board / My Work reference layout — 2026-08-04
+   Sticky controls, responsive dynamic filters and inline due-date editing.
+   ========================================================================== */
+.ft-board-page{position:relative}
+.ft-board-sticky-header{position:sticky;top:68px;z-index:16;background:#f4f7fb;padding:2px 0 7px;margin:0 0 7px;box-shadow:0 8px 14px rgba(20,42,72,.025)}
+.ft-board-sticky-header .ft-board-page-head{padding-top:2px}
+.ft-board-page .ft-board-page-head h1{font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-.035em}
+.ft-board-page .ft-board-page-head p{font-size:12px;color:#60728d}

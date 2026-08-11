@@ -32,7 +32,11 @@
     $effectiveDescription = $task->description ?: $task->setupTemplate?->description;
     $effectiveStartDate = $task->start_date ?: \App\Support\UserLocalTime::localize($task->created_at);
     $completedOn = $task->completed_at?->copy()->timezone($displayTimezone);
+    $masterData = app(\App\Services\MasterDataService::class);
+    $currentStatusColor = $masterData->colorFor('task_status', (string) $task->status);
+    $currentPriorityColor = $masterData->displayColorFor('priority', (string) $task->priority);
     $currentTaskFlag = $task->needs_attention ? (app(\App\Services\TaskFlagService::class)->labelForTask($task) ?: 'Management attention') : '';
+    $currentTaskFlagColor = $currentTaskFlag !== '' ? $masterData->colorFor('task_flag', $currentTaskFlag) : null;
     $taskFlagNames = $taskFlags->pluck('name')->map(fn($name)=>trim((string)$name))->filter()->values();
     $commentEvents = $task->comments->map(fn($comment)=>(object)[
         'id'=>(int)$comment->id,'kind'=>'comment','event'=>'task.comment','user'=>$comment->user,'body'=>$comment->body,'created_at'=>$comment->created_at,
@@ -115,27 +119,27 @@
                 </div>
                 <div
                     class="ft-task-property ft-inline-edit-shell"
-                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
+                    x-data="{ ...window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) }), statusColor: @js($currentStatusColor) }"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     x-on:click.outside="if (editing) cancelEdit()"
                 >
                     <small>Status</small>
-                    <div x-show="!editing" class="ft-task-property-display"><span class="status-dot blue"></span><b class="ft-property-value" x-text="display">{{ $task->status }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.status?.showPicker ? $refs.status.showPicker() : $refs.status?.focus())">✎</button>@endif</div>
+                    <div x-show="!editing" class="ft-task-property-display"><span class="status-dot {{ $currentStatusColor ? 'ft-master-color-dot' : 'blue' }}" style="{{ \App\Support\MasterColor::style($currentStatusColor) }}" x-bind:style="statusColor ? '--ft-master-color:'+statusColor : ''"></span><b class="ft-property-value" x-text="display">{{ $task->status }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.status?.showPicker ? $refs.status.showPicker() : $refs.status?.focus())">✎</button>@endif</div>
                     @if($canEditTask)
-                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select x-ref="status" x-model="draftValue" class="ft-task-property-inline-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('status', draftValue))">@foreach($taskStatuses as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select></div>
+                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select data-master-color-select x-ref="status" x-model="draftValue" class="ft-task-property-inline-input {{ $currentStatusColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($currentStatusColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="statusColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('status', draftValue))">@foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ $masterData->colorFor('task_status', $status) }}">{{ $status }}</option>@endforeach</select></div>
                         <x-ui.inline-save-state compact />
                     @endif
                 </div>
                 <div
                     class="ft-task-property ft-inline-edit-shell"
-                    x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-priority'), label: 'task priority', value: @js($task->priority), display: @js($task->priority) })"
+                    x-data="{ ...window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-priority'), label: 'task priority', value: @js($task->priority), display: @js($task->priority) }), priorityColor: @js($currentPriorityColor) }"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     x-on:click.outside="if (editing) cancelEdit()"
                 >
                     <small>Priority</small>
-                    <div x-show="!editing" class="ft-task-property-display"><span class="status-dot amber"></span><b class="ft-property-value" x-text="display">{{ $task->priority }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit priority" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.priority?.showPicker ? $refs.priority.showPicker() : $refs.priority?.focus())">✎</button>@endif</div>
+                    <div x-show="!editing" class="ft-task-property-display"><span class="status-dot ft-master-color-dot" style="{{ \App\Support\MasterColor::style($currentPriorityColor) }}" x-bind:style="priorityColor ? '--ft-master-color:'+priorityColor : ''"></span><b class="ft-property-value" x-text="display">{{ $task->priority }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit priority" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.priority?.showPicker ? $refs.priority.showPicker() : $refs.priority?.focus())">✎</button>@endif</div>
                     @if($canEditTask)
-                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select x-ref="priority" x-model="draftValue" class="ft-task-property-inline-input" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('priority', draftValue))">@foreach($priorities as $priority)<option value="{{ $priority->name }}">{{ $priority->name }}</option>@endforeach</select></div>
+                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select data-master-color-select x-ref="priority" x-model="draftValue" class="ft-task-property-inline-input ft-master-color" style="{{ \App\Support\MasterColor::style($currentPriorityColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="const nextColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('priority', draftValue)).then(ok => { if(ok) priorityColor=nextColor; });">@foreach($priorities as $priority)<option value="{{ $priority->name }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach</select></div>
                         <x-ui.inline-save-state compact />
                     @endif
                 </div>
@@ -231,7 +235,7 @@
                     </div>
                     @error('taskExistingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
                 @endif
-                @foreach($task->documents->sortByDesc('created_at') as $doc)<div class="ft-attachment-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b><small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if($canDeleteDocument)<button type="button" class="ft-doc-delete-button" wire:click="deleteSelectedTaskDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</div>@endforeach
+                @foreach($task->documents->sortByDesc('created_at') as $doc)<div class="ft-attachment-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b><small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','export'))<a class="ft-link-blue" href="{{ route('documents.download',$doc) }}">Download</a>@endif @if($canDeleteDocument)<button type="button" class="ft-doc-delete-button" wire:click="deleteSelectedTaskDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</div>@endforeach
                 <p class="ft-upload-note">Every file uploaded here is linked to this task and appears in Order Documents. A required document is counted only when this Task Pack task defines that document type.</p>
             </section>
 
@@ -286,17 +290,17 @@
                 <div class="ft-attention-row ft-task-flag-row">
                     <span>Attention</span>
                     @if($canEditTask)
-                        <select class="ft-task-flag-select {{ $task->needs_attention ? 'is-flagged' : '' }}" wire:change="setTaskFlag($event.target.value)">
-                            <option value="" @selected($currentTaskFlag==='')>Not flagged</option>
+                        <select data-master-color-select class="ft-task-flag-select {{ $currentTaskFlagColor ? 'ft-master-color' : ($task->needs_attention ? 'is-flagged' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }}" wire:change="setTaskFlag($event.target.value)" onchange="window.FlowTrackMasterColor?.applySelect(this)">
+                            <option value="" data-color="" @selected($currentTaskFlag==='')>Not flagged</option>
                             @if($currentTaskFlag!=='' && !$taskFlagNames->contains($currentTaskFlag))
-                                <option value="{{ $currentTaskFlag }}" selected>{{ $currentTaskFlag }}</option>
+                                <option value="{{ $currentTaskFlag }}" data-color="{{ $masterData->colorFor('task_flag', $currentTaskFlag) }}" selected>{{ $currentTaskFlag }}</option>
                             @endif
                             @foreach($taskFlags as $flag)
-                                <option value="{{ $flag->name }}" @selected($currentTaskFlag===$flag->name)>{{ $flag->name }}</option>
+                                <option value="{{ $flag->name }}" data-color="{{ $masterData->colorFor('task_flag', $flag->name) }}" @selected($currentTaskFlag===$flag->name)>{{ $flag->name }}</option>
                             @endforeach
                         </select>
                     @else
-                        <b class="{{ $task->needs_attention ? 'danger-text' : '' }}"><span class="ft-red-flag">⚑</span> {{ $currentTaskFlag ?: 'Not flagged' }}</b>
+                        <b class="{{ $currentTaskFlagColor ? 'ft-master-color' : ($task->needs_attention ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="ft-red-flag">⚑</span> {{ $currentTaskFlag ?: 'Not flagged' }}</b>
                     @endif
                 </div>
                 @if($canEditTask && $taskFlags->isEmpty() && $currentTaskFlag==='')

@@ -38,6 +38,12 @@ class Index extends Component
         // only tells Livewire that fresh data is available.
     }
 
+    #[On('flowtrack-refresh')]
+    public function refreshWorkspace(): void
+    {
+        // Re-query so notifications attached to deleted records disappear at once.
+    }
+
     public function render()
     {
         return view('livewire.notifications.index', [

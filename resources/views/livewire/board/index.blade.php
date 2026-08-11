@@ -389,7 +389,7 @@ body{background:#f3f6fb;color:#172033}
                                             select.disabled=true;
                                             try{
                                                 const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                                if(!result?.ok){select.value=previous;return;}
+                                                if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
                                                 if(result.metrics)window.dispatchEvent(new CustomEvent('board-task-metrics',{detail:result.metrics}));
@@ -398,7 +398,7 @@ body{background:#f3f6fb;color:#172033}
                                                 // list once so the completed row disappears immediately and the
                                                 // Order disappears too when it no longer has any visible tasks.
                                                 if(result.completed && @js($hideCompleted))await $wire.$refresh();
-                                            }catch(error){select.value=previous;}
+                                            }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
                                             finally{this.saving=false;select.disabled=false;}
                                         }
                                     }"
@@ -414,11 +414,11 @@ body{background:#f3f6fb;color:#172033}
                                         <span class="assignee-name">{{ $task['assignee'] }}</span>
                                     </span>
                                     <time class="due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
-                                    <select class="status-select" @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>@endif
-                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                    <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
+                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
+                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                                     </select>
-                                    <span class="flag {{ $task['flagTone'] }}">{{ $task['flag'] }}</span>
+                                    <span class="flag {{ $task['flagColor'] ? 'ft-master-color' : $task['flagTone'] }}" style="{{ \App\Support\MasterColor::style($task['flagColor']) }}">{{ $task['flag'] }}</span>
                                     <span class="updated">{{ $task['updated'] }}</span>
                                     @if($task['route'])<a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>@else<span class="row-action" aria-disabled="true">—</span>@endif
                                 </div>

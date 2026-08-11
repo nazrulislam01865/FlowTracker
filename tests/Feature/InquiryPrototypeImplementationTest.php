@@ -203,4 +203,22 @@ class InquiryPrototypeImplementationTest extends TestCase
     }
 
 
+
+    public function test_completed_inquiry_task_documents_remain_manageable_without_breaking_required_file_completion(): void
+    {
+        $taskflow = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
+        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+
+        $this->assertStringContainsString('@if($canAttachThisTask)', $taskflow);
+        $this->assertStringContainsString('wire:click="deleteTaskDocument(', $taskflow);
+        $this->assertStringContainsString('The task will reopen to In Progress', $taskflow);
+        $this->assertStringContainsString('public function removeTaskDocument(InquiryTask $task, int $documentId, User $actor): bool', $service);
+        $this->assertStringContainsString("'status' => 'In Progress'", $service);
+        $this->assertStringContainsString("'completed_at' => null", $service);
+        $this->assertStringContainsString('final required file was removed', $service);
+        $this->assertStringContainsString('$this->syncAutomaticStatus($lockedTask->inquiry, $actor);', $service);
+        $this->assertStringContainsString('$this->metrics = $service->metrics(auth()->user());', $component);
+    }
+
 }

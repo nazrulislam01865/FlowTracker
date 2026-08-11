@@ -1,3 +1,6 @@
+@php
+    $masterData = app(\App\Services\MasterDataService::class);
+@endphp
 <div wire:init="loadTaskPackOptions" class="ft-admin-reference ft-taskpack-form-page">
     <div class="ft-admin-form-top">
         <div>
@@ -91,9 +94,9 @@
 
                         <div class="ft-admin-field">
                             <label>Priority</label>
-                            <select wire:model="tasks.{{ $index }}.priority_id">
+                            <select data-master-color-select wire:model="tasks.{{ $index }}.priority_id">
                                 <option value="">Use Job priority</option>
-                                @foreach($priorities as $priority)<option value="{{ $priority->id }}">{{ $priority->name }}</option>@endforeach
+                                @foreach($priorities as $priority)<option value="{{ $priority->id }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach
                             </select>
                         </div>
 

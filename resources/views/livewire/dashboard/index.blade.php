@@ -1,5 +1,6 @@
 @php
     $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
+    $masterData = app(\App\Services\MasterDataService::class);
     $canCreateOrder = auth()->user()->canAccess('jobs.create');
     $canCreateClient = auth()->user()->canModule('clients', 'create');
     $canCreateInquiry = auth()->user()->canModule('inquiries', 'create');
@@ -28,7 +29,7 @@
     <div class="ft-heading">
         <div class="ft-heading-copy">
             <h1>Management Dashboard</h1>
-            <p>{{ $today->format('l, F j') }} · Exceptions, workload, inquiries and delivery health</p>
+            <p>{{ $today->format('l, F j') }}</p>
         </div>
         <nav class="ft-quick-actions" aria-label="Quick actions">
             @if($canCreateOrder)
@@ -83,7 +84,10 @@
                                         <span class="ft-cell-clip">Unassigned</span>
                                     @endif
                                 </td>
-                                <td data-label="Status"><span class="ft-pill {{ $inquiryStatusTone($displayStatus) }}">{{ $displayStatus ?: 'Ready' }}</span></td>
+                                @php
+                                    $displayStatusColor = $masterData->displayColorFor('inquiry_status', $displayStatus ?: 'Ready');
+                                @endphp
+                                <td data-label="Status"><span class="ft-pill {{ $displayStatusColor ? 'ft-master-color' : $inquiryStatusTone($displayStatus) }}" style="{{ \App\Support\MasterColor::style($displayStatusColor) }}">{{ $displayStatus ?: 'Ready' }}</span></td>
                                 <td data-label="Flag"><span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('inquiries.index', ['open' => $inquiry->id]) }}" wire:navigate>View</a></td>
                             </tr>

@@ -1,5 +1,6 @@
 @props(['jobs', 'searchFilter' => '', 'clearAction' => 'clearSearch'])
 @php
+    $masterData = app(\App\Services\MasterDataService::class);
     $tone = static function (?string $value): string {
         $value = (string) $value;
         if (preg_match('/delayed|issue|overdue|blocked|attention|critical/i', $value)) return 'red';
@@ -183,6 +184,7 @@
                     $flag = $job->needs_attention
                         ? (app(\App\Services\TaskFlagService::class)->labelForOrder($job) ?: 'Management attention')
                         : (in_array($job->priority, ['Critical','Urgent','High'], true) ? $job->priority : null);
+                    $flagColor = $flag ? $masterData->displayColorFor($job->needs_attention ? 'task_flag' : 'priority', $flag) : null;
                     $deliveryOverdue = $job->delivery_date && !$job->completed_at && \App\Support\UserLocalTime::isDatePast($job->delivery_date);
                 @endphp
                 <article class="ft-job-row" wire:key="order-row-{{ $job->id }}">
@@ -212,7 +214,7 @@
                     </div>
                     <div class="ft-cell ft-stage-cell" data-label="Order stage"><span class="ft-pill {{ $tone($stage) }}">{{ $stage }}</span></div>
                     <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill {{ $tone($health) }}">{{ $health }}</span></div>
-                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $tone($flag) }}">{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
+                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $flagColor ? 'ft-master-color' : $tone($flag) }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
                     <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">
                         <div class="ft-owner">
                             <span class="ft-order-avatar">@if($ownerImage)<img src="{{ $ownerImage }}" alt="" loading="lazy" decoding="async">@else{{ $ownerInitials ?: 'FT' }}@endif</span>

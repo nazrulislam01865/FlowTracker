@@ -1,3 +1,6 @@
+@php
+    $masterData = app(\App\Services\MasterDataService::class);
+@endphp
 <div wire:init="loadTaskPacks" class="ft-admin-reference ft-taskpack-reference">
     <div class="ft-admin-page-head">
         <div>
@@ -43,7 +46,15 @@
                             <div>
                                 <b>{{ $loop->iteration }}. {{ $item->title }}</b>
                                 <small>
-                                    {{ $item->defaultAssignee?->name ?? 'Unassigned' }} · Due set from Task details · {{ $item->priority?->name ?? 'Use Job priority' }}
+                                    {{ $item->defaultAssignee?->name ?? 'Unassigned' }} · Due set from Task details ·
+                                    @if($item->priority)
+                                        @php
+                                            $itemPriorityColor = $masterData->displayColorFor('priority', $item->priority->name);
+                                        @endphp
+                                        <span class="ft-master-color-text" style="{{ \App\Support\MasterColor::style($itemPriorityColor) }}">{{ $item->priority->name }}</span>
+                                    @else
+                                        Use Job priority
+                                    @endif
                                     @if($item->documentCategory) · Required file: {{ $item->documentCategory->name }} @endif
                                 </small>
                             </div>

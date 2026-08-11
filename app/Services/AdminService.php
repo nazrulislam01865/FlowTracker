@@ -211,9 +211,18 @@ class AdminService
             : $actions->reject(fn ($x) => $x === $action)->values();
         $storedActions = $actions->all();
 
+        $recordScope = $row->record_scope;
+        if (AccessControlService::isUniversalRecordModule($module)) {
+            $recordScope = $storedActions ? 'all_records' : 'none';
+        } elseif ($storedActions && $recordScope === 'none') {
+            $recordScope = ($role->default_scope && $role->default_scope !== 'none')
+                ? $role->default_scope
+                : 'assigned_jobs';
+        }
+
         $row->update([
             'actions' => $storedActions,
-            'record_scope' => $storedActions && $row->record_scope === 'none' ? ($role->default_scope ?: 'assigned_jobs') : $row->record_scope,
+            'record_scope' => $recordScope,
         ]);
 
         $this->audit(
@@ -231,6 +240,7 @@ class AdminService
         $this->assertRoleWorkspace($role);
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator scope is always all records.');
         abort_unless(in_array($scope, ['none','own_records','assigned_jobs','selected_clients','department','all_records'], true), 422);
+        abort_if(AccessControlService::isUniversalRecordModule($module), 422, 'This module uses workspace-wide shared records and is always All records when permission is granted.');
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['actions' => [], 'record_scope' => 'none']);
         $row->update(['record_scope' => $scope]);
         $this->audit($role, 'access.scope_changed', 'Changed '.$module.' scope for '.$role->name.' to '.str_replace('_', ' ', $scope), $actor, compact('module','scope'));

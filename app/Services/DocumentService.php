@@ -5,8 +5,10 @@ namespace App\Services;
 use App\Models\Document;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\StoredFileResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Str;
 
 class DocumentService
 {
@@ -64,7 +66,9 @@ class DocumentService
 
         $disk = (string) config('flowtrack.document_disk', 'public');
         $jobId = $task?->flow_job_id ?: ($data['flow_job_id'] ?? 'general');
-        $path = $file->store('flowtrack/documents/'.$jobId, $disk);
+        $extension = strtolower(trim((string) $file->getClientOriginalExtension()));
+        $storedName = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
+        $path = $file->storeAs('flowtrack/documents/'.$jobId, $storedName, $disk);
         abort_if(!$path, 500, 'The document could not be stored.');
 
         $category = $task?->documentCategory?->name
@@ -86,7 +90,7 @@ class DocumentService
             'category' => $category,
             'name' => $file->getClientOriginalName(),
             'path' => $path,
-            'mime_type' => $file->getMimeType(),
+            'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $file->getMimeType()),
             'size' => $file->getSize(),
             'version' => $version,
             'is_final' => false,

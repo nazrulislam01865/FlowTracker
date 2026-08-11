@@ -25,6 +25,7 @@
         <meta name="flowtrack-pusher-key" content="{{ config('services.pusher.key') }}">
         <meta name="flowtrack-pusher-cluster" content="{{ config('services.pusher.cluster','mt1') }}">
         <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.{{ auth()->id() }}">
+        <meta name="flowtrack-pusher-workspace-channel" content="private-flowtrack.workspace.{{ max(1, (int) config('flowtrack.workspace_id', 1)) }}">
         <meta name="flowtrack-pusher-auth" content="{{ route('pusher.auth') }}">
         <script src="https://js.pusher.com/8.4.0/pusher.min.js" defer></script>
     @endif
@@ -45,10 +46,11 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260810-17">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-01">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
+    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
     @livewireStyles
 </head>
 <body>
@@ -65,6 +67,8 @@
     @include('layouts.partials.mobile-bottom')
 </div>
 @livewireScripts
+    <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
+    <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script>
     (() => {

@@ -40,6 +40,12 @@ class TaggedComments extends Component
         // recipient's dashboard caches before the browser receives this event.
     }
 
+    #[On('flowtrack-refresh')]
+    public function refreshWorkspace(): void
+    {
+        // Deleted parent records disappear from the mention query immediately.
+    }
+
     public function render()
     {
         $service = app(DashboardService::class);

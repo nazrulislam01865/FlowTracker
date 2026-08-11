@@ -96,55 +96,89 @@
             </div>
             @endif
 
-            <div class="ft-list-filter-shell {{ $showArchived ? 'is-archived' : '' }}">
-                <div class="ft-list-filter-grid ft-client-filter-grid">
-                    <x-ui.list-search property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
-                    <x-ui.remote-filter label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
-                    <x-ui.remote-filter label="Country" property="country" type="countries" :context="$showArchived ? 'clients-archived' : 'clients'" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
-                    @if(!$showArchived)<x-ui.select-filter label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />@endif
-                    <x-ui.select-filter label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
+            @if($showArchived)
+                <div class="ft-list-filter-shell is-archived ft-archived-prototype-toolbar">
+                    <div class="ft-list-filter-grid ft-client-filter-grid ft-archived-prototype-filter-grid">
+                        <x-ui.list-search property="search" :value="$search" placeholder="Search archived clients" />
+                        <x-ui.select-filter
+                            label="Archived date"
+                            property="archivedDate"
+                            :value="$archivedDate"
+                            placeholder="All dates"
+                            :options="collect([
+                                ['id'=>'7d','label'=>'Last 7 days'],
+                                ['id'=>'30d','label'=>'Last 30 days'],
+                                ['id'=>'90d','label'=>'Last 90 days'],
+                                ['id'=>'year','label'=>'This year'],
+                            ])"
+                        />
+                        <x-ui.remote-filter label="Created by" property="createdBy" type="users" context="clients" :value="$createdBy" placeholder="Anyone" :initial-options="$createdByFilterOptions" />
+                    </div>
+                    @php
+                        $chips = collect();
+                        if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                        if($archivedDate) $chips->push(['key'=>'archivedDate','label'=>'Archived: '.(['7d'=>'Last 7 days','30d'=>'Last 30 days','90d'=>'Last 90 days','year'=>'This year'][$archivedDate] ?? $archivedDate)]);
+                        if($createdBy) $chips->push(['key'=>'createdBy','label'=>'Created by: '.(collect($createdByFilterOptions)->firstWhere('id',(int)$createdBy)['label'] ?? 'Selected')]);
+                    @endphp
+                    @if($chips->isNotEmpty())
+                        <div class="ft-list-active-row">
+                            <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
+                            <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
+                        </div>
+                    @endif
                 </div>
-                @php
-                    $chips = collect();
-                    if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
-                    if($manager) $chips->push(['key'=>'manager','label'=>'Manager: '.(collect($managerFilterOptions)->firstWhere('id',(int)$manager)['label'] ?? 'Selected')]);
-                    if($country) $chips->push(['key'=>'country','label'=>'Country: '.$country]);
-                    if($jobHealth) $chips->push(['key'=>'jobHealth','label'=>'Health: '.$jobHealth]);
-                    if($outstanding) $chips->push(['key'=>'outstanding','label'=>'Outstanding: '.(['positive'=>'Has balance','high'=>'$10,000+','zero'=>'No balance'][$outstanding] ?? $outstanding)]);
-                @endphp
-                @if($chips->isNotEmpty() || $quick !== 'all')
-                <div class="ft-list-active-row">
-                    <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
-                    <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
+            @else
+                <div class="ft-list-filter-shell">
+                    <div class="ft-list-filter-grid ft-client-filter-grid">
+                        <x-ui.list-search property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
+                        <x-ui.remote-filter label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
+                        <x-ui.remote-filter label="Country" property="country" type="countries" context="clients" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
+                        <x-ui.select-filter label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />
+                        <x-ui.select-filter label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
+                    </div>
+                    @php
+                        $chips = collect();
+                        if($search) $chips->push(['key'=>'search','label'=>'Search: '.$search]);
+                        if($manager) $chips->push(['key'=>'manager','label'=>'Manager: '.(collect($managerFilterOptions)->firstWhere('id',(int)$manager)['label'] ?? 'Selected')]);
+                        if($country) $chips->push(['key'=>'country','label'=>'Country: '.$country]);
+                        if($jobHealth) $chips->push(['key'=>'jobHealth','label'=>'Health: '.$jobHealth]);
+                        if($outstanding) $chips->push(['key'=>'outstanding','label'=>'Outstanding: '.(['positive'=>'Has balance','high'=>'$10,000+','zero'=>'No balance'][$outstanding] ?? $outstanding)]);
+                    @endphp
+                    @if($chips->isNotEmpty() || $quick !== 'all')
+                        <div class="ft-list-active-row">
+                            <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
+                            <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
+                        </div>
+                    @endif
                 </div>
-                @endif
-            </div>
+            @endif
 
 
             <div class="ft-client-list-card">
-                <div class="ft-client-table-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,manager,country,jobHealth,outstanding,quick">
+                <div class="ft-client-table-scroll ft-results-refreshable" wire:loading.class="is-refreshing" wire:target="search,manager,country,jobHealth,outstanding,quick,archivedDate,createdBy">
                     @if($showArchived)
                     <table class="ft-client-table ft-archived-client-table">
-                        <thead><tr><th>Archived client</th><th>Account manager</th><th>Job history</th><th>Outstanding</th><th>Archived</th><th>Actions</th></tr></thead>
+                        <thead><tr><th>Client</th><th>Contact</th><th>Status</th><th>Archived</th><th>Actions</th></tr></thead>
                         <tbody>
                         @forelse($clients as $clientRow)
                             <tr wire:key="archived-client-row-{{ $clientRow->id }}">
-                                <td data-label="Archived client">
-                                    <div class="ft-client-identity"><x-ui.client-logo :client="$clientRow" :name="$clientRow->name" :size="34" :archived="true" /><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }} · {{ $clientRow->country ?: 'No country' }}</small></span></div>
+                                <td data-label="Client">
+                                    <div class="ft-client-identity"><x-ui.client-logo :client="$clientRow" :name="$clientRow->name" :size="34" :archived="true" /><span><b>{{ $clientRow->name }}</b><small>{{ $clientRow->code }}</small></span></div>
                                 </td>
-                                <td data-label="Account manager">@if($clientRow->accountManager)<div class="ft-client-person"><x-ui.avatar :user="$clientRow->accountManager" :name="$clientRow->accountManager->name" :size="26" /><span>{{ $clientRow->accountManager->name }}</span></div>@else<span class="muted">Unassigned</span>@endif</td>
-                                <td data-label="Job history"><b>{{ $clientRow->total_jobs_count }}</b> {{ \Illuminate\Support\Str::plural('Job', $clientRow->total_jobs_count) }} preserved</td>
-                                <td data-label="Outstanding"><b>${{ number_format($clientRow->outstanding_balance,0) }}</b></td>
-                                <td data-label="Archived"><span class="ft-archived-status">Archived</span><small>{{ $clientRow->updated_at?->diffForHumans(short:true) }}</small></td>
+                                <td data-label="Contact"><span class="ft-archived-contact">{{ $clientRow->email ?: ($clientRow->contact_name ?: '—') }}</span></td>
+                                <td data-label="Status"><span class="ft-archived-status">Archived</span></td>
+                                <td data-label="Archived"><span class="ft-archived-date">{{ ($clientRow->archived_at ?? $clientRow->updated_at)?->format('M j, Y') ?? '—' }}</span></td>
                                 <td data-label="Actions">
                                     <div class="ft-archived-actions">
-                                        <button type="button" class="ft-archive-view" wire:click="viewClient({{ $clientRow->id }})">View history</button>
-                                        @if(auth()->user()->canModule('clients','delete'))<button type="button" class="ft-archive-restore" wire:click="restoreClient({{ $clientRow->id }})" wire:confirm="Restore this client to the active client list?">Restore</button>@endif
+                                        @if(auth()->user()->canModule('clients','delete'))
+                                            <button type="button" class="ft-archive-restore" wire:click="restoreClient({{ $clientRow->id }})" wire:confirm="Restore this client to the active client list?">Restore</button>
+                                            <button type="button" class="ft-archive-delete" wire:click="openPermanentDeleteClient({{ $clientRow->id }})">Delete</button>
+                                        @endif
                                     </div>
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="6" class="ft-client-empty">No archived clients match the selected filters.</td></tr>
+                            <tr><td colspan="5" class="ft-client-empty">No archived clients match the selected filters.</td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -233,6 +267,62 @@
         </section>
 
     </div>
+
+    @if($deleteCandidate)
+        <div
+            class="ft-client-delete-layer"
+            wire:key="delete-archived-client-dialog-{{ $deleteCandidate->id }}"
+            x-data="{ acknowledged: false }"
+            x-on:keydown.escape.window="$wire.closePermanentDeleteClient()"
+        >
+            <section class="ft-client-delete-dialog" role="alertdialog" aria-modal="true" aria-labelledby="ft-client-delete-title" aria-describedby="ft-client-delete-description">
+                <header class="ft-client-delete-head">
+                    <div class="ft-client-delete-title-wrap">
+                        <span class="ft-client-delete-warning" aria-hidden="true">!</span>
+                        <div>
+                            <h2 id="ft-client-delete-title">Permanently delete client?</h2>
+                            <p id="ft-client-delete-description">This action cannot be undone.</p>
+                        </div>
+                    </div>
+                    <button type="button" class="ft-client-delete-close" wire:click="closePermanentDeleteClient" aria-label="Close">×</button>
+                </header>
+
+                <div class="ft-client-delete-summary">
+                    <x-ui.client-logo :client="$deleteCandidate" :name="$deleteCandidate->name" :size="32" :archived="true" />
+                    <span>
+                        <strong>{{ $deleteCandidate->name }}</strong>
+                        <small>{{ $deleteCandidate->code }} · Archived {{ ($deleteCandidate->archived_at ?? $deleteCandidate->updated_at)?->format('M j, Y') ?? '—' }}</small>
+                    </span>
+                </div>
+
+                <div class="ft-client-delete-danger-note">
+                    <strong>Permanent deletion</strong><br>
+                    The client profile, contacts and stored client information will be permanently removed. Historical linked records must not be cascade-deleted.
+                </div>
+
+                <label class="ft-client-delete-check">
+                    <input type="checkbox" x-model="acknowledged" wire:model="deleteArchivedClientConfirmed">
+                    <span>I understand that this client cannot be recovered after deletion.</span>
+                </label>
+                @error('deleteArchivedClientConfirmed')<div class="ft-client-delete-error">{{ $message }}</div>@enderror
+
+                <footer class="ft-client-delete-actions">
+                    <button type="button" class="ft-client-delete-cancel" wire:click="closePermanentDeleteClient">Cancel</button>
+                    <button
+                        type="button"
+                        class="ft-client-delete-confirm"
+                        x-bind:disabled="!acknowledged"
+                        wire:click="permanentlyDeleteClient"
+                        wire:loading.attr="disabled"
+                        wire:target="permanentlyDeleteClient"
+                    >
+                        <span wire:loading.remove wire:target="permanentlyDeleteClient">Permanently delete</span>
+                        <span wire:loading wire:target="permanentlyDeleteClient">Deleting…</span>
+                    </button>
+                </footer>
+            </section>
+        </div>
+    @endif
 
 
 </div>

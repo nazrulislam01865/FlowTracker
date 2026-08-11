@@ -244,7 +244,14 @@ class DashboardService
                                     ->selectRaw('1')
                                     ->from('tasks')
                                     ->whereColumn('tasks.id', 'flow_notifications.flow_task_id')
-                                    ->whereNull('tasks.deleted_at');
+                                    ->whereNull('tasks.deleted_at')
+                                    ->whereExists(function ($jobs): void {
+                                        $jobs
+                                            ->selectRaw('1')
+                                            ->from('flow_jobs')
+                                            ->whereColumn('flow_jobs.id', 'tasks.flow_job_id')
+                                            ->whereNull('flow_jobs.deleted_at');
+                                    });
                             });
                     })
                     ->orWhere(function (Builder $jobMention): void {
@@ -267,7 +274,14 @@ class DashboardService
                                     ->selectRaw('1')
                                     ->from('inquiry_tasks')
                                     ->whereColumn('inquiry_tasks.id', 'flow_notifications.inquiry_task_id')
-                                    ->whereNull('inquiry_tasks.deleted_at');
+                                    ->whereNull('inquiry_tasks.deleted_at')
+                                    ->whereExists(function ($inquiries): void {
+                                        $inquiries
+                                            ->selectRaw('1')
+                                            ->from('inquiries')
+                                            ->whereColumn('inquiries.id', 'inquiry_tasks.inquiry_id')
+                                            ->whereNull('inquiries.deleted_at');
+                                    });
                             });
                     })
                     ->orWhere(function (Builder $inquiryMention): void {
@@ -393,7 +407,12 @@ class DashboardService
     {
         return app(JobService::class)->activeQuery($user)
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.progress', 'flow_jobs.updated_at'])
-            ->with(['client:id,name,logo_path', 'phase:id,name,short_name'])
+            ->with([
+                'client:id,name,logo_path',
+                'phase:id,name,short_name',
+                'flaggedTasks:id,flow_job_id,task_flag_id,needs_attention,attention_reason,completed_at',
+                'flaggedTasks.attentionFlag:id,name,status,sort_order,color',
+            ])
             ->orderByDesc('flow_jobs.updated_at')
             ->limit(4)
             ->get();
@@ -425,7 +444,7 @@ class DashboardService
         $access = app(AccessControlService::class);
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
-        return app(ClientService::class)->visibleQuery($user)
+        $clients = app(ClientService::class)->visibleQuery($user)
             ->where('clients.is_active', true)
             ->select(['clients.id', 'clients.name', 'clients.logo_path'])
             ->withCount([
@@ -449,6 +468,26 @@ class DashboardService
             ->orderBy('clients.name')
             ->limit(4)
             ->get();
+
+        if ($clients->isEmpty()) {
+            return $clients;
+        }
+
+        // Inquiry volume must respect the signed-in user's record scope. Resolve
+        // all four portfolio clients in one grouped query instead of an N+1 count.
+        $inquiryCounts = app(InquiryService::class)->visibleQuery($user)
+            ->whereIn('inquiries.client_id', $clients->pluck('id'))
+            ->whereNull('inquiries.result')
+            ->where('inquiries.status', '!=', 'Draft')
+            ->selectRaw('inquiries.client_id, count(*) as aggregate')
+            ->groupBy('inquiries.client_id')
+            ->pluck('aggregate', 'inquiries.client_id');
+
+        $clients->each(function (Client $client) use ($inquiryCounts): void {
+            $client->setAttribute('open_inquiries_count', (int) ($inquiryCounts[$client->id] ?? 0));
+        });
+
+        return $clients;
     }
 
     private function activeTaskQuery(User $user): Builder
@@ -538,9 +577,12 @@ class DashboardService
         $clientVersion = $this->clientLifecycleVersion ??=
             app(ClientService::class)->lifecycleVersion();
 
+        $workspaceDataVersion = app(WorkspaceRefreshService::class)->version();
+
         return 'flowtrack:dashboard:'
             .self::CACHE_VERSION
             .':clients-'.$clientVersion
+            .':data-'.$workspaceDataVersion
             .':'.$section
             .':user:'.$userId;
     }

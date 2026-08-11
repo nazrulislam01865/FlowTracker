@@ -9,6 +9,7 @@
             :workflows="$workflows"
             :categories="$categories"
             :priorities="$priorities"
+            :priority="$priority"
             :mention-users="$mentionUsers"
             :client-id="$clientId"
             :workflow-id="$workflowId"

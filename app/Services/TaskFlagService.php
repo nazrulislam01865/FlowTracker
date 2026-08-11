@@ -69,6 +69,16 @@ class TaskFlagService
         return $this->defaultActive()?->name ?: 'Management attention';
     }
 
+
+    public function colorForTask(Task $task): ?string
+    {
+        return app(MasterDataService::class)->colorFor('task_flag', $this->labelForTask($task));
+    }
+
+    public function colorForOrder(FlowJob $job): ?string
+    {
+        return app(MasterDataService::class)->colorFor('task_flag', $this->labelForOrder($job));
+    }
     public function labelForOrder(FlowJob $job): ?string
     {
         if (!$job->needs_attention) return null;

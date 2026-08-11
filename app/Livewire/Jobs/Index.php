@@ -130,7 +130,10 @@ class Index extends Component
 
         $requestedClientFilter = request()->integer('client');
         if ($requestedClientFilter) {
-            app(ClientService::class)->visibleQuery(auth()->user())->findOrFail($requestedClientFilter);
+            app(ClientService::class)
+                ->referenceQuery(auth()->user(), 'jobs')
+                ->where('is_active', true)
+                ->findOrFail($requestedClientFilter);
             $this->client = (string) $requestedClientFilter;
         }
 
@@ -593,6 +596,16 @@ class Index extends Component
 
         if (count($this->jobAttachments) > 0) {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        }
+
+        $clientAvailable = app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->whereKey((int) $data['clientId'])
+            ->exists();
+        if (!$clientAvailable) {
+            $this->addError('clientId', 'That client is no longer available.');
+            return;
         }
 
         $workflowAvailable = WorkflowTemplate::query()
@@ -1718,7 +1731,7 @@ class Index extends Component
         $this->deliveryDate = app(WorkspaceSettingsService::class)->localNow()->addMonth()->format('Y-m-d');
 
         $clientQuery = app(ClientService::class)
-            ->visibleQuery(auth()->user())
+            ->referenceQuery(auth()->user(), 'create-job')
             ->where('is_active', true);
 
         $this->clientId = $requestedClientId && (clone $clientQuery)->whereKey($requestedClientId)->exists()
@@ -1828,7 +1841,7 @@ class Index extends Component
         // loaded by the shared remote selector only when the user opens them.
         $clients = $this->clientId
             ? app(ClientService::class)
-                ->visibleQuery($user)
+                ->referenceQuery($user, 'create-job')
                 ->where('is_active', true)
                 ->whereKey($this->clientId)
                 ->get(['id', 'name', 'contact_name'])

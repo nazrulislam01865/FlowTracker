@@ -72,10 +72,10 @@
                                     select.disabled=true;
                                     try{
                                         const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                        if(!result?.ok){select.value=previous;return;}
+                                        if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
                                         this.currentStatus=result.status||next;
                                         this.version=result.version||this.version;
-                                    }catch(error){select.value=previous;}
+                                    }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
                                     finally{this.saving=false;select.disabled={{ $task['canEdit'] ? 'false' : 'true' }};}
                                 }
                             }"
@@ -99,19 +99,21 @@
                             <time class="ft-board-taskpack-due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
 
                             <select
-                                class="ft-board-taskpack-status-select"
-                                @if($task['canEdit']) x-on:change="saveStatus($event)" @else disabled title="Read only" @endif
+                                data-master-color-select
+                                class="ft-board-taskpack-status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}"
+                                style="{{ \App\Support\MasterColor::style($task['statusColor']) }}"
+                                @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled title="Read only" @endif
                                 aria-label="Status for {{ $task['title'] }}"
                             >
                                 @if(!in_array($task['status'], $statusOptions, true))
-                                    <option value="{{ $task['status'] }}" selected>{{ $task['status'] }}</option>
+                                    <option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>
                                 @endif
                                 @foreach($statusOptions as $statusOption)
-                                    <option value="{{ $statusOption }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>
+                                    <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>
                                 @endforeach
                             </select>
 
-                            <span class="ft-board-taskpack-flag {{ $task['flagTone'] }}">{{ $task['flag'] }}</span>
+                            <span class="ft-board-taskpack-flag {{ $task['flagColor'] ? 'ft-master-color' : $task['flagTone'] }}" style="{{ \App\Support\MasterColor::style($task['flagColor']) }}">{{ $task['flag'] }}</span>
                             <span class="ft-board-taskpack-updated">{{ $task['updated'] }}</span>
 
                             @if($task['route'])

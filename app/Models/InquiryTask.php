@@ -16,5 +16,6 @@ class InquiryTask extends Model
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
     public function sourceTaskPackItem(): BelongsTo { return $this->belongsTo(TaskPackItem::class, 'source_task_pack_item_id'); }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
+    public function links(): HasMany { return $this->hasMany(InquiryTaskLink::class)->latest('id'); }
     public function comments(): HasMany { return $this->hasMany(InquiryTaskComment::class)->latest('id'); }
 }

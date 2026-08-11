@@ -11,10 +11,12 @@ use App\Models\InquiryDocument;
 use App\Models\InquiryItem;
 use App\Models\InquiryTask;
 use App\Models\InquiryTaskComment;
+use App\Models\InquiryTaskLink;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowTemplate;
+use App\Support\StoredFileResponse;
 use App\Support\UserLocalTime;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -951,13 +953,15 @@ class InquiryService
         abort_unless($this->canEdit($actor, $inquiry) || ($task && $this->canEditTask($actor, $task)), 403);
         if ($task) {
             abort_unless((int) $task->inquiry_id === (int) $inquiry->id, 422);
-            abort_if($task->completed_at, 422, 'Completed tasks are locked.');
-            // Future open tasks may receive attachments in advance. Completion
-            // remains sequential and is still restricted by completeTask().
+            abort_if($task->inquiry?->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
+            // Attachments are evidence, not workflow state. They may be added to
+            // a completed task without reopening or changing completed_at.
         }
 
         $disk = (string) config('flowtrack.document_disk', 'public');
-        $path = $file->store('flowtrack/inquiries/'.$inquiry->id, $disk);
+        $extension = strtolower(trim((string) $file->getClientOriginalExtension()));
+        $storedName = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
+        $path = $file->storeAs('flowtrack/inquiries/'.$inquiry->id, $storedName, $disk);
         abort_if(!$path, 500, 'The attachment could not be stored.');
 
         $document = InquiryDocument::create([
@@ -966,7 +970,7 @@ class InquiryService
             'uploaded_by' => $actor->id,
             'name' => $file->getClientOriginalName(),
             'path' => $path,
-            'mime_type' => $file->getMimeType(),
+            'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $file->getMimeType()),
             'size' => $file->getSize(),
             'note' => filled($note) ? trim((string) $note) : null,
         ]);
@@ -1010,7 +1014,7 @@ class InquiryService
     {
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
-        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
         abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'link'), 403);
         abort_unless((int) ($source->client_id ?? 0) === (int) $task->inquiry->client_id, 403, 'The selected document does not belong to this client.');
 
@@ -1040,6 +1044,54 @@ class InquiryService
         return $document;
     }
 
+    public function addTaskLink(InquiryTask $task, string $url, User $actor): InquiryTaskLink
+    {
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive links.');
+
+        $url = trim($url);
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        if (! filter_var($url, FILTER_VALIDATE_URL) || ! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            throw ValidationException::withMessages(['taskLinkUrl' => 'Enter a valid http:// or https:// link.']);
+        }
+
+        $link = InquiryTaskLink::create([
+            'inquiry_task_id' => $task->id,
+            'created_by' => $actor->id,
+            'url' => $url,
+        ]);
+
+        $this->activity(
+            $task->inquiry,
+            $actor,
+            'inquiry.task_link_added',
+            'External link added to '.$task->title.'.',
+            ['inquiry_task_id' => $task->id, 'inquiry_task_link_id' => $link->id, 'url' => $url],
+        );
+
+        return $link;
+    }
+
+    public function removeTaskLink(InquiryTask $task, int $linkId, User $actor): void
+    {
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change links.');
+
+        $link = $task->links()->whereKey($linkId)->firstOrFail();
+        $link->delete();
+
+        $this->activity(
+            $task->inquiry,
+            $actor,
+            'inquiry.task_link_removed',
+            'External link removed from '.$task->title.'.',
+            ['inquiry_task_id' => $task->id, 'inquiry_task_link_id' => $linkId],
+        );
+    }
+
     public function removeDocument(Inquiry $inquiry, int $documentId, User $actor): void
     {
         abort_unless($this->canEdit($actor, $inquiry), 403);
@@ -1058,30 +1110,88 @@ class InquiryService
         $this->activity($inquiry, $actor, 'inquiry.document_removed', $name.' removed from the Inquiry.');
     }
 
-    public function removeTaskDocument(InquiryTask $task, int $documentId, User $actor): void
+    public function removeTaskDocument(InquiryTask $task, int $documentId, User $actor): bool
     {
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
-        abort_if($task->completed_at, 422, 'Completed tasks are locked.');
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change documents.');
 
-        $document = $task->documents()->whereKey($documentId)->firstOrFail();
-        $path = (string) $document->path;
-        $name = (string) $document->name;
-        $document->delete();
+        $path = '';
+        $name = '';
+        $reopened = DB::transaction(function () use ($task, $documentId, $actor, &$path, &$name): bool {
+            // Lock the task so a simultaneous completion/document change cannot leave
+            // a required-file task completed without its required submission.
+            $lockedTask = InquiryTask::query()
+                ->whereKey($task->id)
+                ->lockForUpdate()
+                ->with('inquiry')
+                ->firstOrFail();
 
+            abort_unless($this->canEditTask($actor, $lockedTask), 403);
+            abort_if($lockedTask->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change documents.');
+
+            $document = $lockedTask->documents()->whereKey($documentId)->firstOrFail();
+            $path = (string) $document->path;
+            $name = (string) $document->name;
+            $wasCompleted = $lockedTask->completed_at !== null
+                || strcasecmp(trim((string) $lockedTask->status), self::AUTO_COMPLETED_STATUS) === 0;
+
+            $document->delete();
+
+            $mustReopen = $wasCompleted
+                && (bool) $lockedTask->requires_submission
+                && ! $lockedTask->documents()->exists();
+
+            if ($mustReopen) {
+                // Required files are a completion invariant. Users may remove files
+                // after completion, but removing the final required file reopens the
+                // task so the UI and business state never disagree.
+                $lockedTask->update([
+                    'status' => 'In Progress',
+                    'completed_at' => null,
+                ]);
+                $this->forgetMyTaskShell($lockedTask->assignee_id ? (int) $lockedTask->assignee_id : null);
+                $this->activity(
+                    $lockedTask->inquiry,
+                    $actor,
+                    'inquiry.task_reopened',
+                    $lockedTask->title.' reopened because its final required file was removed.',
+                    ['inquiry_task_id' => $lockedTask->id, 'removed_inquiry_document_id' => $documentId],
+                );
+            }
+
+            // Touch the Inquiry for realtime/dashboard invalidation even when the
+            // task remains completed (for example, deleting one of several files).
+            $lockedTask->inquiry->touch();
+
+            $this->activity(
+                $lockedTask->inquiry,
+                $actor,
+                'inquiry.task_document_removed',
+                $name.' removed from '.$lockedTask->title.'.',
+                [
+                    'inquiry_task_id' => $lockedTask->id,
+                    'inquiry_document_id' => $documentId,
+                    'task_reopened' => $mustReopen,
+                ],
+            );
+
+            if ($mustReopen) {
+                $this->syncAutomaticStatus($lockedTask->inquiry, $actor);
+            }
+
+            return $mustReopen;
+        });
+
+        // Delete the physical file only when no other FlowTrack document points
+        // to the same path. Database state has already committed successfully.
         if ($path !== ''
             && ! Document::query()->where('path', $path)->exists()
             && ! InquiryDocument::query()->where('path', $path)->exists()) {
             Storage::disk((string) config('flowtrack.document_disk', 'public'))->delete($path);
         }
 
-        $this->activity(
-            $task->inquiry,
-            $actor,
-            'inquiry.task_document_removed',
-            $name.' removed from '.$task->title.'.',
-            ['inquiry_task_id' => $task->id, 'inquiry_document_id' => $documentId],
-        );
+        return $reopened;
     }
 
     public function addInquiryComment(Inquiry $inquiry, string $body, User $actor): Activity
@@ -1357,6 +1467,7 @@ class InquiryService
                 'stage' => 'Inquiry',
                 'health' => (string) ($inquiry->status ?: 'In Progress'),
                 'healthTone' => $this->statusTone((string) $inquiry->status),
+                'healthColor' => app(MasterDataService::class)->displayColorFor('inquiry_status', (string) $inquiry->status),
                 'progress' => $total ? (int) round($done / $total * 100) : 0,
                 'taskCount' => 1,
                 'route' => route('inquiries.index', ['open' => $inquiry->id]),
@@ -1376,8 +1487,10 @@ class InquiryService
                     'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',
                     'dueTone' => $dueTone,
                     'status' => (string) $task->status,
+                    'statusColor' => app(MasterDataService::class)->colorFor('task_status', (string) $task->status),
                     'flag' => $flag,
                     'flagTone' => $flag === 'Overdue' ? 'red' : ($flag === 'Due Today' ? 'amber' : 'green'),
+                    'flagColor' => null,
                     'updated' => $updatedAt?->diffForHumans() ?: '—',
                     'version' => (string) $task->getRawOriginal('updated_at'),
                     'canEdit' => $this->canEditTask($user, $task),

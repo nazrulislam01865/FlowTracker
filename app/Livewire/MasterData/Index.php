@@ -6,6 +6,7 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use App\Support\MasterColor;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
@@ -24,6 +25,7 @@ class Index extends Component
     public string $code = '';
     public string $name = '';
     public string $description = '';
+    public string $color = '#2563EB';
     public ?int $parentId = null;
     public string $status = 'active';
     public int $sortOrder = 0;
@@ -53,12 +55,14 @@ class Index extends Component
             $this->code = $r->code;
             $this->name = $r->name;
             $this->description = (string) $r->description;
+            $this->color = MasterColor::normalize($r->color) ?: MasterColor::defaultFor($this->group, $r->name);
             $this->parentId = in_array($this->group, ['product', 'state'], true) ? $r->parent_id : null;
             $this->status = $r->status;
             $this->sortOrder = (int) $r->sort_order;
             $this->metadataJson = $r->metadata ? json_encode($r->metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
         } else {
             $this->reset(['code','name','description','parentId','metadataJson']);
+            $this->color = MasterColor::defaultFor($this->group);
             $this->code = $service->nextCode($this->group);
             $this->status = 'active';
             $this->sortOrder = (int) MasterRecord::where('workspace_id', $service->workspaceId())->where('type', $this->group)->max('sort_order') + 1;
@@ -94,6 +98,9 @@ class Index extends Component
             'code' => ['required','string','max:40'],
             'name' => ['required','string','max:255'],
             'description' => ['nullable','string','max:5000'],
+            'color' => in_array($this->group, MasterDataService::COLOR_TYPES, true)
+                ? ['required','regex:/^#[0-9A-Fa-f]{6}$/']
+                : ['nullable'],
             'parentId' => match ($this->group) {
                 'product' => ['nullable','integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q
                     ->where('workspace_id', $workspaceId)
@@ -124,6 +131,7 @@ class Index extends Component
             'code' => $data['code'],
             'name' => $data['name'],
             'description' => $data['description'],
+            'color' => in_array($this->group, MasterDataService::COLOR_TYPES, true) ? strtoupper($data['color']) : null,
             'parent_id' => in_array($this->group, ['product', 'state'], true) ? $data['parentId'] : null,
             'status' => $data['status'],
             'sort_order' => $data['sortOrder'],
@@ -141,6 +149,12 @@ class Index extends Component
             null,
             auth()->user(),
         );
+    }
+
+    public function updateColor(int $id, string $color): void
+    {
+        $this->recordsReady = true;
+        app(MasterDataService::class)->setColor($id, $color);
     }
 
     public function toggle(int $id): void

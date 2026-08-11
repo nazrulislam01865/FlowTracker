@@ -23,14 +23,14 @@
             <div class="card"><span>Notification rules</span><b>{{ $summary['rules'] }}</b><small>Active system rules</small></div>
         </div>
         <div class="ft-access-grid-2">
-            <section class="card ft-access-panel"><div class="section-head"><div><h3>Role coverage</h3><div class="small muted">Every non-admin user is restricted by module permissions and record scope.</div></div><button class="link-btn" wire:click="setTab('roles')">Manage roles</button></div>
+            <section class="card ft-access-panel"><div class="section-head"><div><h3>Role coverage</h3><div class="small muted">Module permissions always control actions. Operational records also use record scope; shared workspace reference data does not.</div></div><button class="link-btn" wire:click="setTab('roles')">Manage roles</button></div>
                 @foreach($roles as $role)
                     <div class="ft-role-line"><div><b>{{ $role->name }}</b><small>{{ $role->users->count() }} users · {{ str_replace('_',' ',$role->default_scope) }}</small></div><span class="badge {{ $role->is_active?'b-green':'b-gray' }}">{{ $role->is_active?'Active':'Inactive' }}</span></div>
                 @endforeach
             </section>
             <section class="card ft-access-panel"><div class="section-head"><div><h3>Enforcement model</h3><div class="small muted">The same rules are applied by routes, queries and update actions.</div></div></div>
                 <div class="ft-control-note"><b>1. Module permission</b><span>The role must allow the requested action.</span></div>
-                <div class="ft-control-note"><b>2. Record scope</b><span>Assigned users see their own assigned Jobs and Tasks unless the role grants all records.</span></div>
+                <div class="ft-control-note"><b>2. Record scope</b><span>Assigned users see scoped operational Jobs, Tasks, Inquiries and Documents. Clients and setup/reference data are shared workspace-wide once the relevant action is granted.</span></div>
                 <div class="ft-control-note"><b>3. Record ownership</b><span>Edit own allows task assignees or Job owners/coordinators to update only their records. Job workflow/status changes are stricter: only the assigned Job owner (or Admin/Super Admin) can transition a Job.</span></div>
                 <div class="ft-control-note"><b>4. Audit trail</b><span>Role, scope and user assignment changes are recorded with actor and time.</span></div>
             </section>
@@ -83,7 +83,8 @@
                                 </td>
                             @endforeach
                             @php
-                                $scopeLocked = in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
+                                $universalScope = \App\Services\AccessControlService::isUniversalRecordModule($code);
+                                $scopeLocked = $universalScope || in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
                             @endphp
                             @php
                                 $effectiveScope = $scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none');
@@ -97,7 +98,11 @@
                                 <select class="ft-scope-select" x-model="draftValue" :disabled="status === 'saving'"
                                     x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.setModuleScope({{ $selectedRole->id }}, '{{ $code }}', draftValue))"
                                     @disabled($scopeLocked)>
-                                    @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned Jobs','selected_clients'=>'Selected clients','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                                    @if($universalScope)
+                                        <option value="all_records">All records (shared)</option>
+                                    @else
+                                        @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned Jobs','selected_clients'=>'Selected clients','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
+                                    @endif
                                 </select>
                                 @unless($scopeLocked)<x-ui.inline-save-state compact />@endunless
                             </td>
@@ -106,7 +111,7 @@
                     </tbody>
                 </table>
             </div>
-            <div class="ft-access-info">For normal team roles, <b>Assigned Jobs</b> means the Job must belong to the user as owner/coordinator/member or contain a task assigned to that user. Task records remain restricted to the actual task assignee unless the role has <b>All records</b>.</div>
+            <div class="ft-access-info">For normal team roles, <b>Assigned Jobs</b> means the Job must belong to the user as owner/coordinator/member or contain a task assigned to that user. Task records remain restricted to the actual task assignee unless the role has <b>All records</b>. <b>Clients, Workflow Setup and Master Data are shared workspace modules:</b> their rows are universal once the corresponding action is enabled, while their create/edit/delete actions still follow this matrix.</div>
         @endif
     @elseif($tab==='users')
         <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><button class="primary" wire:click="openUser">＋ Add User</button></div>
