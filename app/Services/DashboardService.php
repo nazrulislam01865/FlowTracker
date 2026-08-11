@@ -145,8 +145,9 @@ class DashboardService
             ->with([
                 'client:id,name,logo_path',
                 'owner:id,name,profile_image_path',
-                'currentTask:id,inquiry_id,assignee_id,title,status,due_date,completed_at',
-                'currentTask.assignee:id,name,profile_image_path',
+                // Current task is still needed for due-date/flag calculation, but its assignee is not
+                // the Inquiry assignee shown on the dashboard.
+                'currentTask:id,inquiry_id,title,status,due_date,completed_at',
             ])
             ->latest('inquiries.updated_at')
             ->latest('inquiries.id')

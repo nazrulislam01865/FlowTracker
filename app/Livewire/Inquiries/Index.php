@@ -2,8 +2,10 @@
 
 namespace App\Livewire\Inquiries;
 
+use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
+use App\Models\InquiryItem;
 use App\Models\Document;
 use App\Models\Client;
 use App\Models\User;
@@ -13,6 +15,7 @@ use App\Services\InquiryService;
 use App\Services\MentionService;
 use App\Services\WorkspaceSettingsService;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
@@ -21,10 +24,11 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
-    use WithFileUploads, WithPagination;
+    use HandlesInlineEdits, WithFileUploads, WithPagination;
 
     public string $search = '';
     public string $quick = 'all';
+    public bool $hideCompleted = true;
     public int $perPage = 20;
     public array $metrics = ['active' => 0, 'converted' => 0, 'dead' => 0, 'dueToday' => 0];
 
@@ -37,6 +41,7 @@ class Index extends Component
     // Create Inquiry fields.
     public ?int $clientId = null;
     public string $clientContact = '';
+    public array $clientContactOptions = [];
     public string $referenceNumber = '';
     public string $subject = '';
     public string $requirementNotes = '';
@@ -61,6 +66,13 @@ class Index extends Component
     public ?int $createWorkflowId = null;
     public string $selectedWorkflowLabel = '';
     public array $createAttachments = [];
+    public array $createProductRows = [];
+    public array $createProductCategoryOptions = [];
+
+    // Inquiry product editor (Inquiry details).
+    public bool $editingInquiryProducts = false;
+    public array $inquiryProductRows = [];
+    public array $inquiryCategoryFilterOptions = [];
 
     // Options are loaded only when create/workflow management is opened.
     public array $userOptions = [];
@@ -140,6 +152,7 @@ class Index extends Component
 
     public function updatedSearch(): void { $this->resetPage('inquiryPage'); }
     public function updatedPerPage(): void { $this->perPage = max(10, min(50, $this->perPage)); $this->resetPage('inquiryPage'); }
+    public function updatedHideCompleted(): void { $this->resetPage('inquiryPage'); }
 
     public function setQuick(string $quick): void
     {
@@ -172,7 +185,28 @@ class Index extends Component
         if ($this->createReceivedDate === '') {
             $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         }
+        // Products remain optional, but keep one empty row visible by default so
+        // users can enter product details immediately without opening the section first.
+        if ($this->createProductRows === []) {
+            $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1];
+        }
         $this->loadCreateOptions();
+    }
+
+    public function addCreateProductRow(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
+        $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1];
+    }
+
+    public function removeCreateProductRow(int $index): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        abort_unless(array_key_exists($index, $this->createProductRows), 422);
+        unset($this->createProductRows[$index]);
+        $this->createProductRows = array_values($this->createProductRows);
+        $this->resetValidation('createProductRows');
     }
 
     public function cancelCreate(): void
@@ -301,14 +335,57 @@ class Index extends Component
         $this->newContactPhone = '';
     }
 
-    public function updatedClientId($value): void
+    private function loadClientContactOptions(?Client $client): void
     {
-        if (!$this->showCreate || !$value) {
+        if (! $client) {
+            $this->clientContactOptions = [];
             $this->clientContact = '';
             return;
         }
+
+        $contacts = collect();
+        if (Schema::hasTable('client_contacts')) {
+            $contacts = $client->contacts()->get(['name', 'email', 'job_title', 'is_primary', 'sort_order']);
+        }
+
+        if ($contacts->isEmpty() && trim((string) $client->contact_name) !== '') {
+            $contacts = collect([(object) [
+                'name' => $client->contact_name,
+                'email' => $client->email,
+                'job_title' => $client->contact_job_title,
+                'is_primary' => true,
+            ]]);
+        }
+
+        $this->clientContactOptions = $contacts->map(function ($contact): array {
+            $name = trim((string) ($contact->name ?? ''));
+            $email = trim((string) ($contact->email ?? ''));
+            $jobTitle = trim((string) ($contact->job_title ?? ''));
+            $meta = collect([$jobTitle, $email])->filter()->implode(' · ');
+            return [
+                'value' => $name,
+                'label' => $name,
+                'meta' => $meta,
+                'primary' => (bool) ($contact->is_primary ?? false),
+            ];
+        })->filter(fn ($contact) => $contact['value'] !== '')->values()->all();
+
+        $values = collect($this->clientContactOptions)->pluck('value');
+        if (! $values->contains($this->clientContact)) {
+            $this->clientContact = (string) ($values->first() ?? '');
+        }
+    }
+
+    public function updatedClientId($value): void
+    {
+        $this->resetValidation(['clientId', 'clientContact']);
+        if (!$this->showCreate || !$value) {
+            $this->clientContact = '';
+            $this->clientContactOptions = [];
+            return;
+        }
         $client = app(\App\Services\ClientService::class)->referenceQuery(auth()->user(), 'create-inquiry')->where('is_active', true)->find((int) $value);
-        $this->clientContact = $client?->contact_name ?: '';
+        $this->loadClientContactOptions($client);
     }
 
     public function setCreateSelector(string $property, mixed $value): void
@@ -319,6 +396,37 @@ class Index extends Component
         $raw = trim((string) $value);
         $options = app(\App\Services\FilterOptionService::class);
 
+        if (preg_match('/^createProductRows\.(\d+)\.(category|product)$/', $property, $matches) === 1) {
+            $index = (int) $matches[1];
+            $field = $matches[2];
+            abort_unless(array_key_exists($index, $this->createProductRows), 422, 'That product row is no longer available.');
+            abort_unless($raw !== '', 422, 'Please choose a valid option.');
+
+            $category = $field === 'product'
+                ? trim((string) ($this->createProductRows[$index]['category'] ?? ''))
+                : '';
+            $type = $field === 'category' ? 'product-categories' : 'products';
+            $valid = $options->options(
+                $user,
+                $type,
+                'create-inquiry',
+                '',
+                $raw,
+                20,
+                $field === 'product' ? ['category' => $category] : [],
+            )->contains(fn ($item) => (string) ($item['id'] ?? '') === $raw);
+            abort_unless($valid, 422, 'That option is no longer available.');
+
+            $this->createProductRows[$index][$field] = $raw;
+            $this->resetValidation("createProductRows.$index.$field");
+
+            if ($field === 'category') {
+                $this->createProductRows[$index]['product'] = '';
+                $this->resetValidation("createProductRows.$index.product");
+            }
+            return;
+        }
+
         if ($property === 'clientId') {
             abort_unless($raw !== '' && ctype_digit($raw), 422, 'Please choose a valid option.');
             $id = (int) $raw;
@@ -328,11 +436,11 @@ class Index extends Component
 
             $this->clientId = $id;
             $this->selectedClientLabel = (string) ($selected['label'] ?? '');
-            $this->resetValidation('clientId');
+            $this->resetValidation(['clientId', 'clientContact']);
             $client = app(\App\Services\ClientService::class)->referenceQuery($user, 'create-inquiry')
                 ->where('is_active', true)
-                ->find($id, ['id', 'contact_name']);
-            $this->clientContact = (string) ($client?->contact_name ?: '');
+                ->find($id);
+            $this->loadClientContactOptions($client);
             $this->refreshCreateWorkflowOptions();
             return;
         }
@@ -371,6 +479,215 @@ class Index extends Component
     }
 
 
+    #[Renderless]
+    public function updateInquiryItem(int $itemId, string $field, mixed $value): array
+    {
+        $label = match ($field) {
+            'category' => 'product category',
+            'item_name' => 'product',
+            'quantity' => 'quantity',
+            default => 'product detail',
+        };
+
+        return $this->persistInlineEdit($label, function () use ($itemId, $field, $value): void {
+            $user = auth()->user();
+            $inquiry = $this->selectedInquiry();
+            $item = InquiryItem::query()
+                ->where('inquiry_id', $inquiry->id)
+                ->findOrFail($itemId);
+
+            if ($field === 'category') {
+                abort_unless(
+                    app(\App\Services\MasterDataService::class)
+                        ->active('product_category')
+                        ->contains('name', trim((string) $value)),
+                    422,
+                    'Select a valid active product category.'
+                );
+            }
+
+            if ($field === 'item_name') {
+                abort_if(blank($item->category), 422, 'Select a product category first.');
+                $validProduct = app(\App\Services\FilterOptionService::class)
+                    ->options($user, 'products', 'inquiry-detail', '', trim((string) $value), 20, [
+                        'category' => (string) $item->category,
+                    ])
+                    ->contains(fn ($option) => (string) ($option['id'] ?? '') === trim((string) $value));
+                abort_unless($validProduct, 422, 'Select a valid active product for this category.');
+            }
+
+            app(InquiryService::class)->updateItem($inquiry, $item, $field, $value, $user);
+        });
+    }
+
+    public function addInquiryItem(): void
+    {
+        $user = auth()->user();
+        $inquiry = $this->selectedInquiry();
+        abort_unless(app(InquiryService::class)->canEdit($user, $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+        // Repeated clicks should never create a stack of unfinished rows.
+        if ($inquiry->items()->where('item_name', '')->exists()) {
+            return;
+        }
+
+        app(InquiryService::class)->addItem($inquiry, '', '', 1, $user);
+    }
+
+    public function removeInquiryItem(int $itemId): void
+    {
+        $user = auth()->user();
+        $inquiry = $this->selectedInquiry();
+        $item = InquiryItem::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->findOrFail($itemId);
+
+        app(InquiryService::class)->removeItem($inquiry, $item, $user);
+    }
+
+
+    public function beginInquiryProductEdit(): void
+    {
+        $service = app(InquiryService::class);
+        $inquiry = $this->selectedInquiry(['items']);
+        abort_unless($service->canEdit(auth()->user(), $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+        $this->inquiryProductRows = $inquiry->items
+            ->map(fn ($item) => [
+                'id' => (int) $item->id,
+                'category' => (string) ($item->category ?? ''),
+                'product' => (string) $item->item_name,
+                'quantity' => max(1, (int) round((float) $item->quantity)),
+            ])
+            ->values()
+            ->all();
+
+        if ($this->inquiryProductRows === []) {
+            $this->inquiryProductRows = [['id' => null, 'category' => '', 'product' => '', 'quantity' => 1]];
+        }
+
+        $this->inquiryCategoryFilterOptions = app(\App\Services\FilterOptionService::class)
+            ->options(auth()->user(), 'product-categories', 'inquiry-detail', '', null, 8)
+            ->all();
+        $this->editingInquiryProducts = true;
+        $this->resetValidation('inquiryProductRows');
+    }
+
+    public function cancelInquiryProductEdit(): void
+    {
+        $this->editingInquiryProducts = false;
+        $this->inquiryProductRows = [];
+        $this->inquiryCategoryFilterOptions = [];
+        $this->resetValidation('inquiryProductRows');
+    }
+
+    public function addInquiryProductRow(): void
+    {
+        abort_unless($this->editingInquiryProducts, 422);
+        abort_if(count($this->inquiryProductRows) >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
+        $this->inquiryProductRows[] = ['id' => null, 'category' => '', 'product' => '', 'quantity' => 1];
+    }
+
+    public function removeInquiryProductRow(int $index): void
+    {
+        abort_unless($this->editingInquiryProducts, 422);
+        abort_unless(array_key_exists($index, $this->inquiryProductRows), 422);
+        if (count($this->inquiryProductRows) <= 1) return;
+        unset($this->inquiryProductRows[$index]);
+        $this->inquiryProductRows = array_values($this->inquiryProductRows);
+        $this->resetValidation('inquiryProductRows');
+    }
+
+    public function setInquiryProductSelector(string $property, mixed $value): void
+    {
+        abort_unless($this->editingInquiryProducts && $this->selectedInquiryId, 403);
+        $inquiry = $this->selectedInquiry();
+        abort_unless(app(InquiryService::class)->canEdit(auth()->user(), $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+        if (preg_match('/^inquiryProductRows\.(\d+)\.(category|product)$/', $property, $matches) !== 1) {
+            abort(422, 'Unsupported Inquiry product selector.');
+        }
+
+        $index = (int) $matches[1];
+        $field = $matches[2];
+        abort_unless(array_key_exists($index, $this->inquiryProductRows), 422, 'That product row is no longer available.');
+
+        $raw = trim((string) $value);
+        abort_unless($raw !== '', 422, 'Please choose a valid option.');
+        $category = $field === 'product' ? trim((string) ($this->inquiryProductRows[$index]['category'] ?? '')) : '';
+        $type = $field === 'category' ? 'product-categories' : 'products';
+        $valid = app(\App\Services\FilterOptionService::class)->options(
+            auth()->user(),
+            $type,
+            'inquiry-detail',
+            '',
+            $raw,
+            20,
+            $field === 'product' ? ['category' => $category] : [],
+        )->contains(fn ($item) => (string) ($item['id'] ?? '') === $raw);
+        abort_unless($valid, 422, 'That option is no longer available.');
+
+        $this->inquiryProductRows[$index][$field] = $raw;
+        $this->resetValidation("inquiryProductRows.$index.$field");
+
+        if ($field === 'category') {
+            $this->inquiryProductRows[$index]['product'] = '';
+            $this->resetValidation("inquiryProductRows.$index.product");
+        }
+    }
+
+    public function saveInquiryProducts(): void
+    {
+        $service = app(InquiryService::class);
+        $inquiry = $this->selectedInquiry();
+        abort_unless($this->editingInquiryProducts && $service->canEdit(auth()->user(), $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+        $data = $this->validate([
+            'inquiryProductRows' => ['required', 'array', 'min:1', 'max:25'],
+            'inquiryProductRows.*.category' => ['required', 'string', 'max:255'],
+            'inquiryProductRows.*.product' => ['required', 'string', 'max:255'],
+            'inquiryProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+        ]);
+
+        $options = app(\App\Services\FilterOptionService::class);
+        $catalogInvalid = false;
+        foreach ($data['inquiryProductRows'] as $index => $row) {
+            $category = trim((string) $row['category']);
+            $product = trim((string) $row['product']);
+            $categoryValid = $options->options(auth()->user(), 'product-categories', 'inquiry-detail', '', $category, 20)
+                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $category);
+            $productValid = $options->options(auth()->user(), 'products', 'inquiry-detail', '', $product, 20, ['category' => $category])
+                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $product);
+
+            if (! $categoryValid) {
+                $catalogInvalid = true;
+                $this->addError("inquiryProductRows.$index.category", 'That product category is no longer available.');
+            }
+            if (! $productValid) {
+                $catalogInvalid = true;
+                $this->addError("inquiryProductRows.$index.product", 'That product is not available for the selected category.');
+            }
+        }
+        if ($catalogInvalid) return;
+
+        $service->replaceItems($inquiry, array_map(fn (array $row): array => [
+            'category' => trim((string) $row['category']),
+            'name' => trim((string) $row['product']),
+            'quantity' => (int) $row['quantity'],
+            'unit' => 'pcs',
+        ], $data['inquiryProductRows']), auth()->user());
+
+        $this->editingInquiryProducts = false;
+        $this->inquiryProductRows = [];
+        $this->inquiryCategoryFilterOptions = [];
+        session()->flash('success', 'Inquiry products updated.');
+    }
+
+
     public function saveDraft(): void { $this->persistInquiry(true); }
     public function createInquiry(): void { $this->persistInquiry(false); }
 
@@ -383,6 +700,9 @@ class Index extends Component
         $this->detailTab = 'overview';
         $this->selectedTaskId = null;
         $this->showAddTaskForm = false;
+        $this->editingInquiryProducts = false;
+        $this->inquiryProductRows = [];
+        $this->inquiryCategoryFilterOptions = [];
         $this->resetPage('inquiryDocumentsPage');
         $this->resetPage('inquiryActivityPage');
     }
@@ -393,6 +713,9 @@ class Index extends Component
         $this->selectedTaskId = null;
         $this->showWorkflowManager = false;
         $this->showAddTaskForm = false;
+        $this->editingInquiryProducts = false;
+        $this->inquiryProductRows = [];
+        $this->inquiryCategoryFilterOptions = [];
         $this->showInquiryDocumentPicker = false;
         $this->inquiryExistingDocumentId = null;
     }
@@ -1098,7 +1421,11 @@ class Index extends Component
     private function listPageData(User $user): array
     {
         $service = app(InquiryService::class);
-        $paginator = $service->paginate($user, ['search' => $this->search, 'quick' => $this->quick], $this->perPage);
+        $paginator = $service->paginate($user, [
+            'search' => $this->search,
+            'quick' => $this->quick,
+            'hide_completed' => $this->hideCompleted,
+        ], $this->perPage);
         return [
             'mode' => 'list',
             'inquiryPaginator' => $paginator,
@@ -1128,6 +1455,7 @@ class Index extends Component
             'owner:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
             'sourceWorkflow:id,name',
+            'items:id,inquiry_id,category,item_name,quantity,unit,sort_order',
             'currentTask:id,inquiry_id,assignee_id,title,due_date,status,started_at,completed_at',
             'currentTask.assignee:id,name,profile_image_path',
         ];
@@ -1218,30 +1546,63 @@ class Index extends Component
 
     private function persistInquiry(bool $draft): void
     {
+        // Product rows are optional. A completely blank row is treated as if the
+        // user did not add a product, while a partially completed row is still
+        // validated normally so incomplete catalogue data cannot be saved.
+        $this->createProductRows = collect($this->createProductRows)
+            ->map(fn (array $row): array => [
+                'category' => trim((string) ($row['category'] ?? '')),
+                'product' => trim((string) ($row['product'] ?? '')),
+                'quantity' => $row['quantity'] ?? 1,
+            ])
+            ->filter(fn (array $row): bool => $row['category'] !== '' || $row['product'] !== '')
+            ->values()
+            ->all();
+
         $data = $this->validate([
             'clientId' => ['required', 'exists:clients,id'],
             'referenceNumber' => ['nullable', 'string', 'max:255'],
-            'clientContact' => ['nullable', 'string', 'max:255'],
+            'clientContact' => ['required', 'string', 'max:255'],
             'subject' => ['required', 'string', 'max:255'],
             'requirementNotes' => ['nullable', 'string', 'max:60000'],
             'requestSource' => ['required', Rule::in(['Email', 'Phone', 'Other'])],
             'createReceivedDate' => ['required', 'date_format:Y-m-d'],
             'createOwnerId' => ['required', 'exists:users,id'],
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
+            'createProductRows' => ['array', 'max:25'],
+            'createProductRows.*.category' => ['required', 'string', 'max:255'],
+            'createProductRows.*.product' => ['required', 'string', 'max:255'],
+            'createProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
         ]);
 
-        // Client is shared reference data for Inquiry creation. The user must
-        // have Inquiry create permission, and the Client must still be active.
-        $clientAvailable = app(\App\Services\ClientService::class)
+        // Client is shared reference data for Inquiry creation. Fetch the
+        // authorized active Client once and reuse it for contact validation.
+        $selectedClient = app(\App\Services\ClientService::class)
             ->referenceQuery(auth()->user(), 'create-inquiry')
             ->where('is_active', true)
-            ->whereKey((int) $data['clientId'])
-            ->exists();
-        if (! $clientAvailable) {
+            ->find((int) $data['clientId']);
+        if (! $selectedClient) {
             $this->addError('clientId', 'That client is no longer available.');
             return;
         }
+
+        // Client contact is mandatory and must belong to the selected Client.
+        // Multiple contacts are supported; the Inquiry stores the selected name
+        // as its historical snapshot so later Client edits do not rewrite history.
+        $allowedContacts = collect();
+        if (Schema::hasTable('client_contacts')) {
+            $allowedContacts = $selectedClient->contacts()->pluck('name')->map(fn ($name) => trim((string) $name))->filter();
+        }
+        if ($allowedContacts->isEmpty() && trim((string) ($selectedClient->contact_name ?? '')) !== '') {
+            $allowedContacts = collect([trim((string) $selectedClient->contact_name)]);
+        }
+        $requestedContact = trim((string) $data['clientContact']);
+        if ($requestedContact === '' || ! $allowedContacts->containsStrict($requestedContact)) {
+            $this->addError('clientContact', 'Select a valid contact for this client.');
+            return;
+        }
+        $data['clientContact'] = $requestedContact;
 
         // Assigned-to uses the same remote option source as the UI. Re-check it
         // on save so a stale/inactive user cannot be submitted by changing the
@@ -1265,6 +1626,27 @@ class Index extends Component
             $this->addError('createWorkflowId', 'That Workflow is not available for the selected client.');
             return;
         }
+
+        $catalogOptions = app(\App\Services\FilterOptionService::class);
+        $catalogInvalid = false;
+        foreach ($data['createProductRows'] as $index => $row) {
+            $category = trim((string) $row['category']);
+            $product = trim((string) $row['product']);
+            $categoryValid = $catalogOptions->options(auth()->user(), 'product-categories', 'create-inquiry', '', $category, 20)
+                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $category);
+            $productValid = $catalogOptions->options(auth()->user(), 'products', 'create-inquiry', '', $product, 20, ['category' => $category])
+                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $product);
+
+            if (! $categoryValid) {
+                $catalogInvalid = true;
+                $this->addError("createProductRows.$index.category", 'That product category is no longer available.');
+            }
+            if (! $productValid) {
+                $catalogInvalid = true;
+                $this->addError("createProductRows.$index.product", 'That product is not available for the selected category.');
+            }
+        }
+        if ($catalogInvalid) return;
 
         $service = app(InquiryService::class);
         $canonicalRows = $service->workflowRows(
@@ -1294,7 +1676,12 @@ class Index extends Component
             'priority' => 'Medium',
             'owner_id' => (int) $data['createOwnerId'],
             'initial_follow_up_date' => null,
-            'items' => [],
+            'items' => array_map(fn (array $row): array => [
+                'category' => trim((string) $row['category']),
+                'name' => trim((string) $row['product']),
+                'quantity' => (int) $row['quantity'],
+                'unit' => 'pcs',
+            ], $data['createProductRows']),
             'tasks' => $tasks,
             'source_task_pack_id' => null,
             'source_workflow_template_id' => (int) $data['createWorkflowId'],
@@ -1321,6 +1708,7 @@ class Index extends Component
         $this->clientFilterOptions = $options->options($user, 'clients', 'create-inquiry', '', $this->clientId, 6)->all();
 
         $this->ownerFilterOptions = $options->options($user, 'users', 'create-inquiry', '', $this->createOwnerId, 6)->all();
+        $this->createProductCategoryOptions = $options->options($user, 'product-categories', 'create-inquiry', '', null, 8)->all();
         $selectedOwner = collect($this->ownerFilterOptions)
             ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $this->createOwnerId);
         if ($selectedOwner) {
@@ -1457,6 +1845,7 @@ class Index extends Component
     {
         $this->clientId = null;
         $this->clientContact = '';
+        $this->clientContactOptions = [];
         $this->selectedClientLabel = '';
         $this->referenceNumber = '';
         $this->subject = '';
@@ -1473,6 +1862,8 @@ class Index extends Component
         $this->newContactPhone = '';
         $this->resetCreateClientModal();
         $this->createAttachments = [];
+        $this->createProductRows = [];
+        $this->createProductCategoryOptions = [];
         $this->createWorkflowId = null;
         $this->selectedWorkflowLabel = '';
         $this->resetCreateCollections();

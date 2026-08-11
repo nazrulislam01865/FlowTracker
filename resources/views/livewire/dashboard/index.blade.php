@@ -70,7 +70,9 @@
                     <tbody>
                         @forelse($recentInquiries as $inquiry)
                             @php
-                                $assignee = $inquiry->currentTask?->assignee ?: $inquiry->owner;
+                                // The dashboard Assignee column represents the Inquiry's own assignee/owner.
+                                // Task assignees are deliberately not used here because they can differ per task.
+                                $assignee = $inquiry->owner;
                                 [$flagLabel, $flagTone] = $inquiryFlag($inquiry);
                                 $displayStatus = $inquiry->status;
                             @endphp

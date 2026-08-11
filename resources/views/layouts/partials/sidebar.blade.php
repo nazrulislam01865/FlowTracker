@@ -2,8 +2,21 @@
     $user = auth()->user();
     $unread = (int) ($shellData['unread_notifications'] ?? 0);
     $myWork = (int) ($shellData['open_my_work'] ?? 0);
+
+    $inquiryCreate = $user->canAccess('inquiries.create');
+    $inquiryView = $user->canAccess('inquiries.view');
+    $inquiryGroupActive = request()->routeIs('inquiries.*');
+
+    $orderView = $user->canAccess('jobs.view');
+    $orderCreate = $user->canAccess('jobs.create');
+    $taskView = $user->canAccess('tasks.view');
+    $orderGroupActive = request()->routeIs('jobs.*', 'orders.*', 'all-tasks', 'my-work');
+
+    $clientView = $user->canAccess('clients.view');
+    $clientCreate = $user->canAccess('clients.create');
+    $clientGroupActive = request()->routeIs('clients.*');
 @endphp
-<aside id="sidebar" class="sidebar">
+<aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
         @if($branding['logo_url'] ?? null)
             <img class="ft-system-logo" src="{{ $branding['logo_url'] }}" alt="{{ $branding['name'] ?? 'FlowTrack' }}">
@@ -11,24 +24,97 @@
             <div class="brand-mark">FT</div><span>{{ $branding['name'] ?? 'FlowTrack' }}</span>
         @endif
     </a>
-    <div class="sidebar-section">Workspace</div>
-    @if($user->canAccess('dashboard.view'))<x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />@endif
-    @if($user->canAccess('tasks.view'))<x-ui.nav-link route="my-work" label="My Task" :badge="$myWork" icon="work" />@endif
-    @if($user->canAccess('jobs.view'))<x-ui.nav-link route="jobs.index" label="Order" icon="jobs" />@endif
-    @if($user->canAccess('tasks.view'))<x-ui.nav-link route="all-tasks" label="All Task" icon="board" />@endif
-    @if($user->canAccess('inquiries.view'))<x-ui.nav-link route="inquiries.index" label="Inquiries" icon="inquiries" />@endif
-    @if($user->canAccess('clients.view'))<x-ui.nav-link route="clients.index" label="Clients" icon="clients" />@endif
-    @if($user->canAccess('documents.view'))<x-ui.nav-link route="documents.index" label="Documents" icon="documents" />@endif
-    {{-- Reports is intentionally hidden from the sidebar while the page is disabled. --}}
-    {{-- @if($user->canAccess('reports.view'))<x-ui.nav-link route="reports" label="Reports" icon="reports" />@endif --}}
-    <div class="sidebar-section">Administration</div>
-    @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
-    @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />@endif
-    @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
-    @if($user->canAccess('master.view'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
-    @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
+
+    <nav class="ft-sidebar-nav" aria-label="Primary navigation">
+        @if($user->canAccess('dashboard.view'))
+            <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />
+        @endif
+
+        @if($inquiryView || $inquiryCreate)
+            <details class="ft-sidebar-group" @if($inquiryGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $inquiryGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+                    </span>
+                    <span>Inquiry</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    @if($inquiryView)
+                        <x-ui.nav-link route="inquiries.index" label="Inquiries" icon="inquiries" child :active="request()->routeIs('inquiries.index') && !request()->boolean('create')" />
+                    @endif
+                    @if($inquiryCreate)
+                        <x-ui.nav-link route="inquiries.index" label="Create Inquiry" icon="plus" child :params="['create' => 1]" :active="request()->routeIs('inquiries.index') && request()->boolean('create')" />
+                    @endif
+                </div>
+            </details>
+        @endif
+
+        @if($orderView || $orderCreate || $taskView)
+            <details class="ft-sidebar-group" @if($orderGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $orderGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16v13H4z"/><path d="M8 7V4h8v3"/><path d="M4 12h16"/></svg>
+                    </span>
+                    <span>Order</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    @if($orderView)
+                        <x-ui.nav-link route="jobs.index" label="Orders" icon="jobs" child :active="request()->routeIs('jobs.index') && !request()->boolean('create')" />
+                    @endif
+                    @if($taskView)
+                        <x-ui.nav-link route="all-tasks" label="All Tasks" icon="board" child />
+                        <x-ui.nav-link route="my-work" label="My Tasks" icon="work" :badge="$myWork" child />
+                    @endif
+                    @if($orderCreate)
+                        <x-ui.nav-link route="jobs.index" label="Create Order" icon="plus" child :params="['create' => 1]" :active="request()->routeIs('jobs.index') && request()->boolean('create')" />
+                        <x-ui.nav-link route="orders.bulk-import" label="Create Bulk Order" icon="upload" child />
+                    @endif
+                </div>
+            </details>
+        @endif
+
+        @if($clientView || $clientCreate)
+            <details class="ft-sidebar-group" @if($clientGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $clientGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="7" r="4"/><path d="M2 21v-2a7 7 0 0 1 14 0v2"/></svg>
+                    </span>
+                    <span>Client</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    @if($clientView)
+                        <x-ui.nav-link route="clients.index" label="Clients" icon="clients" child :active="request()->routeIs('clients.index') && !request()->boolean('create')" />
+                    @endif
+                    @if($clientCreate)
+                        <x-ui.nav-link route="clients.index" label="Add Client" icon="plus" child :params="['create' => 1]" :active="request()->routeIs('clients.index') && request()->boolean('create')" />
+                    @endif
+                </div>
+            </details>
+        @endif
+
+        @if($user->canAccess('documents.view'))
+            <x-ui.nav-link route="documents.index" label="Documents" icon="documents" />
+        @endif
+
+        <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
+        @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
+        @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />@endif
+        @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
+        @if($user->canAccess('master.view'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
+        @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
+    </nav>
+
     <div class="sidebar-footer">
-        <div class="user-mini"><x-ui.avatar :user="$user" :name="$user->name" dark /><div><div style="color:#fff;font-size:12px;font-weight:650">{{ $user->name }}</div><div style="font-size:10px;color:#8397ae">{{ $user->role?->name ?? 'User' }}</div></div></div>
+        <div class="user-mini">
+            <x-ui.avatar :user="$user" :name="$user->name" dark />
+            <div class="ft-sidebar-user-copy">
+                <div class="ft-sidebar-user-name">{{ $user->name }}</div>
+                <div class="ft-sidebar-user-role">{{ $user->role?->name ?? 'User' }}</div>
+            </div>
+        </div>
         <form method="POST" action="{{ route('logout') }}" class="ft-sidebar-logout-form">
             @csrf
             <button type="submit" class="ft-sidebar-logout" aria-label="Log out of FlowTrack">

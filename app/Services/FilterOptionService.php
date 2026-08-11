@@ -332,7 +332,11 @@ class FilterOptionService
         $canCreate = $user->canAccess('jobs.create');
         $canEditFromJobDetail = $context === 'job-detail' && $user->canAccess('jobs.update');
         $canCreateInquiry = $context === 'create-inquiry' && $user->canModule('inquiries', 'create');
-        abort_unless($canCreate || $canEditFromJobDetail || $canCreateInquiry, 403);
+        // Inquiry product editing uses the same shared Master Data catalog as
+        // Create Order. Record-level edit authorization is enforced by the
+        // Inquiry Livewire action before anything can be saved.
+        $canUseInquiryCatalog = $context === 'inquiry-detail' && $user->canModule('inquiries', 'view');
+        abort_unless($canCreate || $canEditFromJobDetail || $canCreateInquiry || $canUseInquiryCatalog, 403);
     }
 
     private function workflows(User $user, string $context, string $search, int $limit, ?int $clientId = null): Collection

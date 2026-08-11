@@ -129,6 +129,21 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('public function syncAutomaticStatus(Inquiry $inquiry', $service);
     }
 
+    public function test_inquiry_hide_completed_uses_actual_taskflow_completion(): void
+    {
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+
+        $this->assertStringContainsString('private function applyUnfinishedListScope(Builder $query): Builder', $service);
+        $this->assertStringContainsString("->whereDoesntHave('tasks')", $service);
+        $this->assertStringContainsString("->orWhereHas('tasks', fn (Builder $task) => $task->whereNull('completed_at'))", $service);
+        $this->assertStringContainsString("\$quick === 'active' || (\$hideCompleted && \$quick === 'all')", $service);
+        $this->assertStringContainsString('public bool $hideCompleted = true;', $component);
+        $this->assertStringContainsString('public function updatedHideCompleted(): void', $component);
+        $this->assertStringContainsString('wire:model.live="hideCompleted"', $view);
+    }
+
     public function test_inquiry_tasks_are_not_merged_into_my_task(): void
     {
         $myWork = file_get_contents(app_path('Livewire/MyWork/Index.php'));

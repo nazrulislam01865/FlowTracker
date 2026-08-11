@@ -158,6 +158,8 @@ class Form extends Component
     public function render()
     {
         $master = app(MasterDataService::class);
+        $user = auth()->user();
+
         return view('livewire.task-pack-setup.form', [
             'users' => $this->optionsReady
                 ? User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
@@ -165,6 +167,7 @@ class Form extends Component
             'departments' => $this->optionsReady ? $master->active('department') : collect(),
             'priorities' => $this->optionsReady ? $master->active('priority') : collect(),
             'documentCategories' => $this->optionsReady ? $master->active('document_category') : collect(),
+            'canDeleteTaskPack' => (bool) ($user?->canModule('taskpacks', 'delete')),
         ]);
     }
 }

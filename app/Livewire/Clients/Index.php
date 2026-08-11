@@ -6,6 +6,7 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\Client;
 use App\Models\ClientShippingAddress;
+use App\Models\ClientContact;
 use App\Models\Activity;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
@@ -17,6 +18,7 @@ use App\Services\MasterDataService;
 use App\Services\SetupContext;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
@@ -78,6 +80,7 @@ class Index extends Component
     public string $contactJobTitle = '';
     public string $email = '';
     public string $phone = '';
+    public array $contacts = [];
     public ?int $accountManagerId = null;
     public string $preferredLanguage = 'English';
     public string $outstandingBalance = '0';
@@ -110,7 +113,7 @@ class Index extends Component
 
     public function setClientDetailTab(string $tab): void
     {
-        abort_unless(in_array($tab, ['overview','orders','documents','activity'], true), 422);
+        abort_unless(in_array($tab, ['overview','contacts','orders','documents','activity'], true), 422);
         $this->clientDetailTab = $tab;
     }
 
@@ -265,10 +268,11 @@ class Index extends Component
             // saved after the profile form was expanded.
             'clientCountry' => array_merge(['required','string','max:120'], $countryRule()),
             'preferredCurrency' => array_merge(['required','string','max:40'], $currencyRule),
-            'contactName' => [$draft ? 'nullable' : 'required','string','max:255'],
-            'contactJobTitle' => ['nullable','string','max:255'],
-            'email' => [$draft ? 'nullable' : 'required','email','max:255'],
-            'phone' => ['nullable','string','max:60'],
+            'contacts' => [$draft ? 'array' : 'required','array','min:1','max:20'],
+            'contacts.*.name' => [$draft ? 'nullable' : 'required','string','max:255'],
+            'contacts.*.job_title' => ['nullable','string','max:255'],
+            'contacts.*.email' => [$draft ? 'nullable' : 'required','email:rfc','max:255','distinct:ignore_case'],
+            'contacts.*.phone' => ['nullable','string','max:60'],
             'accountManagerId' => [$draft ? 'nullable' : 'required','nullable','exists:users,id'],
             'preferredLanguage' => ['nullable','string','max:50'],
             'officeAddressLine1' => [$draft ? 'nullable' : 'required','string','max:255'],
@@ -339,11 +343,113 @@ class Index extends Component
         return $rules;
     }
 
+    private function clientProfileValidationMessages(): array
+    {
+        return [
+            'contacts.*.email.required' => 'Contact email is required.',
+            'contacts.*.email.email' => 'Enter a valid email address.',
+            'contacts.*.email.distinct' => 'Each contact must use a unique email address.',
+        ];
+    }
+
+    private function assertContactEmailsUnique(array $contacts, ?int $ignoreClientId = null): void
+    {
+        $emailByIndex = collect($contacts)
+            ->mapWithKeys(function ($contact, int $index): array {
+                $email = mb_strtolower(trim((string) ($contact['email'] ?? '')));
+                return $email === '' ? [] : [$index => $email];
+            });
+
+        if ($emailByIndex->isEmpty()) return;
+
+        // The validation rule above catches duplicates inside the current form.
+        // This single indexed lookup catches an email already used by another
+        // saved client contact without creating an N+1 query per contact row.
+        $query = ClientContact::query()
+            ->whereIn('email', $emailByIndex->unique()->values()->all());
+
+        if ($ignoreClientId) {
+            $query->where('client_id', '!=', $ignoreClientId);
+        }
+
+        $existing = $query->pluck('email')
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
+            ->flip();
+
+        if ($existing->isEmpty()) return;
+
+        $messages = [];
+        foreach ($emailByIndex as $index => $email) {
+            if ($existing->has($email)) {
+                $messages["contacts.{$index}.email"] = 'This email is already used by another client contact.';
+            }
+        }
+
+        if ($messages !== []) {
+            throw ValidationException::withMessages($messages);
+        }
+    }
+
+    public function addContact(): void
+    {
+        abort_if(count($this->contacts) >= 20, 422, 'A client can have up to 20 contacts.');
+        $this->contacts[] = $this->blankContact();
+        $this->resetValidation();
+    }
+
+
+    public function removeContact(int $index): void
+    {
+        abort_unless(isset($this->contacts[$index]), 404);
+        array_splice($this->contacts, $index, 1);
+        if ($this->contacts === []) $this->contacts = [$this->blankContact()];
+        $this->contacts = array_values($this->contacts);
+        $this->resetValidation();
+    }
+
+    private function blankContact(): array
+    {
+        return ['name' => '', 'job_title' => '', 'email' => '', 'phone' => ''];
+    }
+
+    private function normalizedContacts(array $contacts): array
+    {
+        return collect($contacts)
+            ->map(fn ($contact) => [
+                'name' => trim((string) ($contact['name'] ?? '')),
+                'job_title' => trim((string) ($contact['job_title'] ?? '')),
+                'email' => mb_strtolower(trim((string) ($contact['email'] ?? ''))),
+                'phone' => trim((string) ($contact['phone'] ?? '')),
+            ])
+            ->filter(fn ($contact) => implode('', $contact) !== '')
+            ->values()
+            ->all();
+    }
+
+    private function persistContacts(Client $client, array $contacts): void
+    {
+        $contacts = $this->normalizedContacts($contacts);
+        $client->contacts()->delete();
+        foreach ($contacts as $index => $contact) {
+            ClientContact::create([
+                'client_id' => $client->id,
+                'name' => $contact['name'] !== '' ? $contact['name'] : ($contact['email'] !== '' ? $contact['email'] : 'Contact '.($index + 1)),
+                'job_title' => $contact['job_title'] ?: null,
+                'email' => $contact['email'] ?: null,
+                'phone' => $contact['phone'] ?: null,
+                'is_primary' => $index === 0,
+                'sort_order' => $index,
+            ]);
+        }
+    }
+
     private function persistNewClient(bool $draft): void
     {
         abort_unless(auth()->user()->canModule('clients','create'), 403);
 
-        $data = $this->validate($this->clientProfileRules($draft, !$draft));
+        $data = $this->validate($this->clientProfileRules($draft, !$draft), $this->clientProfileValidationMessages());
+        $this->assertContactEmailsUnique($data['contacts'] ?? []);
 
         if ($data['accountManagerId'] && (int) $data['accountManagerId'] !== (int) auth()->id()) {
             abort_unless(auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'), 403);
@@ -362,6 +468,9 @@ class Index extends Component
                 'state' => $data['billingState'] ?? '', 'zip' => $data['billingZip'] ?? '', 'country' => $data['billingCountry'] ?? '',
             ];
 
+            $contacts = $this->normalizedContacts($data['contacts'] ?? []);
+            $primaryContact = $contacts[0] ?? $this->blankContact();
+
             $client = Client::create([
                 'code' => $this->nextClientCode(), 'name' => $data['clientName'], 'legal_business_name' => $data['legalBusinessName'] ?: null,
                 'website' => $data['website'] ?: null, 'country' => $data['clientCountry'] ?: null, 'preferred_currency' => strtoupper($data['preferredCurrency']),
@@ -370,12 +479,14 @@ class Index extends Component
                 'office_zip' => $data['officeZip'] ?: null, 'billing_same_as_office' => $this->billingSameAsOffice,
                 'billing_address_line1' => $billing['line1'] ?: null, 'billing_suite' => $billing['suite'] ?: null, 'billing_city' => $billing['city'] ?: null,
                 'billing_state' => $billing['state'] ?: null, 'billing_zip' => $billing['zip'] ?: null, 'billing_country' => $billing['country'] ?: null,
-                'contact_name' => $data['contactName'] ?: null, 'contact_job_title' => $data['contactJobTitle'] ?: null, 'email' => $data['email'] ?: null,
-                'phone' => $data['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'], 'created_by' => auth()->id(), 'preferred_language' => $data['preferredLanguage'] ?: 'English',
+                'contact_name' => $primaryContact['name'] ?: null, 'contact_job_title' => $primaryContact['job_title'] ?: null, 'email' => $primaryContact['email'] ?: null,
+                'phone' => $primaryContact['phone'] ?: null, 'account_manager_id' => $data['accountManagerId'], 'created_by' => auth()->id(), 'preferred_language' => $data['preferredLanguage'] ?: 'English',
                 'outstanding_balance' => 0, 'ein_tax_id' => $data['einTaxId'] ?: null, 'sales_tax_status' => $data['salesTaxStatus'],
                 'payment_terms' => $data['paymentTerms'] ?: null, 'po_required' => (bool) $data['poRequired'], 'notes' => $data['notes'] ?: null,
                 'is_active' => true, 'is_draft' => $draft,
             ]);
+
+            $this->persistContacts($client, $contacts);
 
             $addresses = collect($data['shippingAddresses'] ?? [])
                 ->filter(fn ($address) => trim((string) ($address['label'] ?? '')) !== '' || trim((string) ($address['address_line1'] ?? '')) !== '')
@@ -472,7 +583,7 @@ class Index extends Component
         $this->clientCountry = $defaultCountry; $this->preferredCurrency = $defaultCurrency; $this->officeAddress = ''; $this->officeAddressLine1 = '';
         $this->officeSuite = ''; $this->officeCity = ''; $this->officeState = ''; $this->officeZip = ''; $this->billingSameAsOffice = true;
         $this->billingAddressLine1 = ''; $this->billingSuite = ''; $this->billingCity = ''; $this->billingState = ''; $this->billingZip = '';
-        $this->billingCountry = $defaultCountry; $this->contactName = ''; $this->contactJobTitle = ''; $this->email = ''; $this->phone = '';
+        $this->billingCountry = $defaultCountry; $this->contactName = ''; $this->contactJobTitle = ''; $this->email = ''; $this->phone = ''; $this->contacts = [$this->blankContact()];
         $this->accountManagerId = auth()->id(); $this->preferredLanguage = 'English'; $this->outstandingBalance = '0'; $this->einTaxId = '';
         $this->salesTaxStatus = 'taxable'; $this->paymentTerms = ''; $this->poRequired = false; $this->notes = '';
         $this->shippingAddresses = [$this->blankShippingAddress(true)]; $this->resetValidation();
@@ -557,7 +668,7 @@ class Index extends Component
 
     public function editClient(int $id): void
     {
-        $client = app(ClientService::class)->visibleQuery(auth()->user())->with('shippingAddresses')->findOrFail($id);
+        $client = app(ClientService::class)->visibleQuery(auth()->user())->with(['shippingAddresses','contacts'])->findOrFail($id);
         abort_unless($this->canEditClient($client), 403);
         $this->selectedClientId = $id;
         $this->showClientPreview = false;
@@ -595,6 +706,20 @@ class Index extends Component
         $this->contactJobTitle = $client->contact_job_title ?? '';
         $this->email = $client->email ?? '';
         $this->phone = $client->phone ?? '';
+        $this->contacts = $client->contacts->map(fn (ClientContact $contact) => [
+            'name' => $contact->name ?? '',
+            'job_title' => $contact->job_title ?? '',
+            'email' => $contact->email ?? '',
+            'phone' => $contact->phone ?? '',
+        ])->values()->all();
+        if ($this->contacts === []) {
+            $this->contacts = [[
+                'name' => $this->contactName,
+                'job_title' => $this->contactJobTitle,
+                'email' => $this->email,
+                'phone' => $this->phone,
+            ]];
+        }
         $this->accountManagerId = $client->account_manager_id;
         $this->preferredLanguage = $client->preferred_language ?: 'English';
         $this->outstandingBalance = (string) ($client->outstanding_balance ?? 0);
@@ -660,7 +785,8 @@ class Index extends Component
         // values already stored on older clients. The dropdowns still provide
         // current Master Data options, but stale historical values no longer make
         // the Save Client action appear to do nothing because validation failed.
-        $data = $this->validate($this->clientProfileRules(false, false, false));
+        $data = $this->validate($this->clientProfileRules(false, false, false), $this->clientProfileValidationMessages());
+        $this->assertContactEmailsUnique($data['contacts'] ?? [], $client->id);
 
         if ($data['accountManagerId'] && (int) $data['accountManagerId'] !== (int) $client->account_manager_id) {
             abort_unless(auth()->user()->canModule('clients','assign') || auth()->user()->canModule('clients','edit_all'), 403);
@@ -678,6 +804,9 @@ class Index extends Component
                 'line1' => $data['billingAddressLine1'] ?? '', 'suite' => $data['billingSuite'] ?? '', 'city' => $data['billingCity'] ?? '',
                 'state' => $data['billingState'] ?? '', 'zip' => $data['billingZip'] ?? '', 'country' => $data['billingCountry'] ?? '',
             ];
+
+            $contacts = $this->normalizedContacts($data['contacts'] ?? []);
+            $primaryContact = $contacts[0] ?? $this->blankContact();
 
             $client->update([
                 'name' => $data['clientName'],
@@ -698,10 +827,10 @@ class Index extends Component
                 'billing_state' => $billing['state'] ?: null,
                 'billing_zip' => $billing['zip'] ?: null,
                 'billing_country' => $billing['country'] ?: null,
-                'contact_name' => $data['contactName'] ?: null,
-                'contact_job_title' => $data['contactJobTitle'] ?: null,
-                'email' => $data['email'] ?: null,
-                'phone' => $data['phone'] ?: null,
+                'contact_name' => $primaryContact['name'] ?: null,
+                'contact_job_title' => $primaryContact['job_title'] ?: null,
+                'email' => $primaryContact['email'] ?: null,
+                'phone' => $primaryContact['phone'] ?: null,
                 'account_manager_id' => $data['accountManagerId'],
                 'preferred_language' => $data['preferredLanguage'] ?: 'English',
                 'ein_tax_id' => $data['einTaxId'] ?: null,
@@ -711,6 +840,8 @@ class Index extends Component
                 'notes' => $data['notes'] ?: null,
                 'is_draft' => false,
             ]);
+
+            $this->persistContacts($client, $contacts);
 
             $addresses = collect($data['shippingAddresses'] ?? [])
                 ->filter(fn ($address) => trim((string) ($address['label'] ?? '')) !== '' || trim((string) ($address['address_line1'] ?? '')) !== '')
@@ -911,6 +1042,7 @@ class Index extends Component
             'clientLanguages' => ['English','Chinese','Spanish','French','German','Arabic','Bengali'],
             'clientCurrencies' => $currencies->mapWithKeys(fn (MasterRecord $currency) => [$currency->code => $currency->name])->all(),
             'paymentTermOptions' => ['Net 15','Net 30','Net 45','Net 60','Due on receipt','Prepaid'],
+            'contacts' => $this->contacts,
         ];
     }
 

@@ -127,9 +127,19 @@ class InquiryService
     {
         $search = trim((string) ($filters['search'] ?? ''));
         $quick = (string) ($filters['quick'] ?? 'all');
+        $hideCompleted = (bool) ($filters['hide_completed'] ?? false);
 
         $query = $this->visibleQuery($user)
-            ->when($quick === 'active', fn (Builder $q) => $q->whereNull('result')->where('status', '!=', 'Draft'))
+            // Completion on the list is taskflow-derived. A legacy/imported Inquiry
+            // can still have status Ready/In Progress and completed_at = NULL even
+            // though every active Inquiry task is complete. Filter by both the
+            // Inquiry lifecycle fields and the actual taskflow so Hide completed
+            // always matches the Completed row the user sees in listRows().
+            ->when(
+                $quick === 'active' || ($hideCompleted && $quick === 'all'),
+                fn (Builder $q) => $this->applyUnfinishedListScope($q)
+            )
+            ->when($quick === 'active', fn (Builder $q) => $q->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'"))
             ->when($quick === 'converted', fn (Builder $q) => $q->where('result', 'converted'))
             ->when($quick === 'dead', fn (Builder $q) => $q->where('result', 'dead'))
             ->when($search !== '', function (Builder $q) use ($search): void {
@@ -138,6 +148,7 @@ class InquiryService
                     $match->where('inquiry_number', 'like', $like)
                         ->orWhere('subject', 'like', $like)
                         ->orWhere('reference_number', 'like', $like)
+                        ->orWhere('client_contact', 'like', $like)
                         ->orWhereHas('creator', fn (Builder $creator) => $creator->where('name', 'like', $like))
                         ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
                         ->orWhereHas('items', fn (Builder $item) => $item->where('item_name', 'like', $like)->orWhere('category', 'like', $like))
@@ -169,7 +180,7 @@ class InquiryService
             ->orderByDesc('inquiries.id')
             ->select([
                 'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id', 'inquiries.owner_id', 'inquiries.created_by',
-                'inquiries.subject', 'inquiries.received_date', 'inquiries.priority', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
+                'inquiries.subject', 'inquiries.client_contact', 'inquiries.received_date', 'inquiries.priority', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
                 'inquiries.converted_job_id', 'inquiries.created_at', 'inquiries.updated_at',
             ])
             ->selectSub($currentTask, 'current_task_title')
@@ -177,7 +188,7 @@ class InquiryService
             ->selectSub($currentTaskDue, 'current_task_due_date')
             ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
-            ->with(['client:id,name,logo_path', 'creator:id,name', 'convertedJob:id,job_number,order_number'])
+            ->with(['client:id,name,logo_path', 'owner:id,name,profile_image_path', 'creator:id,name,profile_image_path', 'convertedJob:id,job_number,order_number'])
             ->withCount([
                 'tasks',
                 'tasks as completed_tasks_count' => fn (Builder $task) => $task->whereNotNull('completed_at'),
@@ -201,6 +212,29 @@ class InquiryService
             ->limit(1);
     }
 
+    /**
+     * Restrict an Inquiry list query to records that are genuinely unfinished.
+     *
+     * The Inquiry list derives Completed from task counts, so checking only
+     * inquiries.status/completed_at is insufficient. This scope deliberately
+     * mirrors that visible behavior: an Inquiry with at least one task and no
+     * remaining incomplete task is finished even if its parent lifecycle fields
+     * have not been synchronized yet.
+     */
+    private function applyUnfinishedListScope(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('inquiries.completed_at')
+            ->whereNull('inquiries.result')
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) NOT IN ('completed', 'converted', 'closed', 'dead')")
+            ->where(function (Builder $taskflow): void {
+                // An Inquiry with no tasks is not considered completed. Otherwise
+                // at least one active task must still be incomplete.
+                $taskflow->whereDoesntHave('tasks')
+                    ->orWhereHas('tasks', fn (Builder $task) => $task->whereNull('completed_at'));
+            });
+    }
+
     public function listRows(LengthAwarePaginator $paginator, User $user): Collection
     {
         $canViewTasks = app(AccessControlService::class)->can($user, 'tasks', 'view');
@@ -211,7 +245,7 @@ class InquiryService
             : User::query()->whereIn('id', $assigneeIds)->get(['id', 'name', 'profile_image_path'])->keyBy('id');
 
         return collect($paginator->items())->map(function (Inquiry $inquiry) use ($assignees, $canViewTasks): array {
-            $assignee = $assignees->get((int) $inquiry->current_task_assignee_id);
+            $taskAssignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
             $progressed = min($total, max($done, (int) $inquiry->progressed_tasks_count));
@@ -226,6 +260,16 @@ class InquiryService
                 $done > 0 || filled($inquiry->started_at) => self::AUTO_IN_PROGRESS_STATUS,
                 default => self::AUTO_READY_STATUS,
             };
+            $isCompleted = $status === self::AUTO_COMPLETED_STATUS;
+
+            // While an Inquiry is active, keep the existing behavior and show the
+            // current task's assignee. Once the workflow is completed there is no
+            // active task assignee to represent, so the list must show the Inquiry's
+            // own assignee/owner. If the Inquiry has no owner, fall back to the
+            // creator so a completed row never incorrectly appears Unassigned.
+            $displayAssignee = $isCompleted
+                ? ($inquiry->owner ?: $inquiry->creator)
+                : $taskAssignee;
             // Progress on the Inquiry list represents taskflow advancement, not
             // only finished tasks. A task begins contributing as soon as it is
             // taken into a working status (started_at is set). This keeps a
@@ -243,15 +287,21 @@ class InquiryService
                 'titlePreview' => Str::words((string) $inquiry->subject, 12, '...'),
                 'client' => (string) ($inquiry->client?->name ?: 'No client'),
                 'clientLogoUrl' => $inquiry->client?->logoUrl(),
+                'clientContact' => (string) ($inquiry->client_contact ?: ''),
                 'item' => blank($inquiry->first_item_name) ? null : (string) $inquiry->first_item_name,
                 'currentTask' => $canViewTasks ? (string) ($inquiry->current_task_title ?: ($done === $total && $total > 0 ? 'Completed' : 'No active task')) : 'Restricted',
                 'taskCaption' => $canViewTasks ? ($done === $total && $total > 0 ? 'Workflow tasks finished' : 'Task '.$currentPosition.' of '.$total) : 'Task access not granted',
                 'progress' => $canViewTasks ? $progress : 0,
                 'total' => $canViewTasks ? $total : 0,
                 'progressPercent' => $canViewTasks ? $progressPercent : 0,
-                'assignee' => $canViewTasks ? (string) ($assignee?->name ?: 'Unassigned') : '—',
-                'assigneeAvatar' => $canViewTasks ? $assignee?->profile_image_path : null,
+                'assignee' => $isCompleted
+                    ? (string) ($displayAssignee?->name ?: 'System')
+                    : ($canViewTasks ? (string) ($displayAssignee?->name ?: 'Unassigned') : '—'),
+                'assigneeAvatar' => $isCompleted
+                    ? $displayAssignee?->profile_image_path
+                    : ($canViewTasks ? $displayAssignee?->profile_image_path : null),
                 'due' => $canViewTasks && $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
+                'hasStarted' => filled($inquiry->started_at),
                 'startedDate' => UserLocalTime::format($inquiry->started_at, 'M j, Y'),
                 'startedTime' => UserLocalTime::format($inquiry->started_at, 'g:i A'),
                 'priority' => (string) ($inquiry->priority ?: 'Medium'),
@@ -263,7 +313,16 @@ class InquiryService
     public function metrics(User $user): array
     {
         $base = $this->visibleQuery($user);
-        $summary = (clone $base)->reorder()->selectRaw("SUM(CASE WHEN result IS NULL AND status <> 'Draft' THEN 1 ELSE 0 END) AS active_count")
+
+        // Keep the Active metric on the exact same definition as the list filter.
+        // This intentionally checks the taskflow as well as the Inquiry row so a
+        // fully-completed workflow cannot remain counted as Active because of a
+        // stale lifecycle field.
+        $activeCount = $this->applyUnfinishedListScope(clone $base)
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->count();
+
+        $summary = (clone $base)->reorder()
             ->selectRaw("SUM(CASE WHEN result = 'converted' THEN 1 ELSE 0 END) AS converted_count")
             ->selectRaw("SUM(CASE WHEN result = 'dead' THEN 1 ELSE 0 END) AS dead_count")
             ->first();
@@ -279,7 +338,7 @@ class InquiryService
             : 0;
 
         return [
-            'active' => (int) ($summary?->active_count ?? 0),
+            'active' => (int) $activeCount,
             'converted' => (int) ($summary?->converted_count ?? 0),
             'dead' => (int) ($summary?->dead_count ?? 0),
             'dueToday' => (int) $dueToday,
@@ -405,6 +464,208 @@ class InquiryService
 
             return $inquiry->refresh();
         });
+    }
+
+
+    public function updateItem(Inquiry $inquiry, InquiryItem $item, string $field, mixed $value, User $actor): InquiryItem
+    {
+        abort_unless((int) $item->inquiry_id === (int) $inquiry->id, 404);
+        abort_unless(in_array($field, ['category', 'item_name', 'quantity'], true), 422, 'This Inquiry product field cannot be edited inline.');
+
+        $saved = DB::transaction(function () use ($inquiry, $item, $field, $value, $actor): InquiryItem {
+            $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->canEdit($actor, $lockedInquiry), 403);
+            abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+            $lockedItem = InquiryItem::query()
+                ->where('inquiry_id', $lockedInquiry->id)
+                ->lockForUpdate()
+                ->findOrFail($item->id);
+
+            $wasDraft = blank($lockedItem->item_name);
+            $originalCategory = (string) ($lockedItem->category ?? '');
+
+            if ($field === 'quantity') {
+                $value = (int) $value;
+                abort_if($value < 1 || $value > 999999999, 422, 'Quantity must be at least 1.');
+            } elseif ($field === 'category') {
+                $value = trim((string) $value);
+                abort_if($value === '', 422, 'Product category is required.');
+                abort_unless(
+                    app(MasterDataService::class)->active('product_category')->contains('name', $value),
+                    422,
+                    'Select a valid active product category.'
+                );
+            } else {
+                $value = trim((string) $value);
+                abort_if($value === '', 422, 'Product is required.');
+                abort_if(blank($lockedItem->category), 422, 'Select a product category first.');
+                $validProduct = app(FilterOptionService::class)
+                    ->options($actor, 'products', 'inquiry-detail', '', $value, 20, [
+                        'category' => (string) $lockedItem->category,
+                    ])
+                    ->contains(fn ($option) => (string) ($option['id'] ?? '') === $value);
+                abort_unless($validProduct, 422, 'Select a valid active product for this category.');
+            }
+
+            $lockedItem->update([$field => $value]);
+
+            // Category and product are dependent. Never leave a product selected
+            // from the previous category after an inline category change.
+            if ($field === 'category' && $value !== $originalCategory && filled($lockedItem->item_name)) {
+                $lockedItem->update(['item_name' => '']);
+            }
+
+            $lockedItem = $lockedItem->refresh();
+            if ($wasDraft && blank($lockedItem->item_name)) {
+                return $lockedItem;
+            }
+
+            if ($wasDraft && $field === 'item_name') {
+                $this->activity(
+                    $lockedInquiry,
+                    $actor,
+                    'inquiry.product_added',
+                    'Product '.$lockedItem->item_name.' added to the Inquiry.'
+                );
+            } else {
+                $this->activity(
+                    $lockedInquiry,
+                    $actor,
+                    'inquiry.product_updated',
+                    'Inquiry product/category/quantity updated.'
+                );
+            }
+
+            $lockedInquiry->touch();
+            return $lockedItem;
+        }, 3);
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+
+        return $saved;
+    }
+
+    public function addItem(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor): InquiryItem
+    {
+        $item = DB::transaction(function () use ($inquiry, $category, $product, $quantity, $actor): InquiryItem {
+            $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->canEdit($actor, $lockedInquiry), 403);
+            abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+            abort_if($lockedInquiry->items()->count() >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
+
+            $category = trim($category);
+            $product = trim($product);
+            if ($category !== '') {
+                abort_unless(
+                    app(MasterDataService::class)->active('product_category')->contains('name', $category),
+                    422,
+                    'Select a valid active product category.'
+                );
+            }
+            if ($product !== '') {
+                abort_if($category === '', 422, 'Select a product category first.');
+                $validProduct = app(FilterOptionService::class)
+                    ->options($actor, 'products', 'inquiry-detail', '', $product, 20, ['category' => $category])
+                    ->contains(fn ($option) => (string) ($option['id'] ?? '') === $product);
+                abort_unless($validProduct, 422, 'Select a valid active product for this category.');
+            }
+
+            $item = InquiryItem::create([
+                'inquiry_id' => $lockedInquiry->id,
+                'category' => $category !== '' ? $category : null,
+                'item_name' => $product,
+                'quantity' => max(1, min(999999999, $quantity)),
+                'unit' => 'pcs',
+                'sort_order' => ((int) $lockedInquiry->items()->max('sort_order')) + 1,
+            ]);
+
+            if ($product !== '') {
+                $this->activity($lockedInquiry, $actor, 'inquiry.product_added', 'Product '.$product.' added to the Inquiry.');
+            }
+            $lockedInquiry->touch();
+
+            return $item->refresh();
+        }, 3);
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+
+        return $item;
+    }
+
+    public function removeItem(Inquiry $inquiry, InquiryItem $item, User $actor): void
+    {
+        DB::transaction(function () use ($inquiry, $item, $actor): void {
+            $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->canEdit($actor, $lockedInquiry), 403);
+            abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+            $lockedItem = InquiryItem::query()
+                ->where('inquiry_id', $lockedInquiry->id)
+                ->lockForUpdate()
+                ->findOrFail($item->id);
+            $wasDraft = blank($lockedItem->item_name);
+            $completedProductCount = $lockedInquiry->items()->where('item_name', '!=', '')->count();
+            abort_if(! $wasDraft && $completedProductCount <= 1, 422, 'An Inquiry must keep at least one product.');
+
+            $productName = trim((string) $lockedItem->item_name);
+            $lockedItem->delete();
+            $lockedInquiry->touch();
+
+            if (! $wasDraft) {
+                $this->activity(
+                    $lockedInquiry,
+                    $actor,
+                    'inquiry.product_removed',
+                    ($productName !== '' ? 'Product '.$productName : 'Product').' removed from the Inquiry.'
+                );
+            }
+        }, 3);
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+    }
+
+
+    public function replaceItems(Inquiry $inquiry, array $items, User $actor): Inquiry
+    {
+        abort_unless($this->canEdit($actor, $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+        abort_if($items === [], 422, 'An Inquiry must keep at least one product.');
+
+        DB::transaction(function () use ($inquiry, $items, $actor): void {
+            $locked = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->canEdit($actor, $locked), 403);
+            abort_if($locked->result, 422, 'Products on a closed Inquiry cannot be changed.');
+
+            $locked->items()->delete();
+            foreach (array_values($items) as $index => $item) {
+                InquiryItem::create([
+                    'inquiry_id' => $locked->id,
+                    'category' => blank($item['category'] ?? null) ? null : trim((string) $item['category']),
+                    'item_name' => trim((string) $item['name']),
+                    'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                    'unit' => ($item['unit'] ?? null) ?: 'pcs',
+                    'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
+                    'sort_order' => $index,
+                ]);
+            }
+
+            $locked->touch();
+            $this->activity(
+                $locked,
+                $actor,
+                'inquiry.items_updated',
+                count($items).' '.Str::plural('product', count($items)).' updated on the Inquiry.',
+            );
+        });
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+
+        return $inquiry->fresh(['items']);
     }
 
     public function workflowSummary(int $workflowId): array

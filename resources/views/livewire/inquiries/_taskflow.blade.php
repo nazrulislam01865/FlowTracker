@@ -125,7 +125,15 @@
                 </div>
                 <div class="ft-inquiry-task-action">
                     @if($state === 'done')
-                        <span class="ft-inquiry-complete-state">✓ Completed</span>
+                        <div class="ft-inquiry-complete-block">
+                            <span class="ft-inquiry-complete-state">✓ Completed</span>
+                            @if($task->completed_at)
+                                <span class="ft-inquiry-completed-at">
+                                    <span>{{ \App\Support\UserLocalTime::format($task->completed_at, 'M j, Y') }}</span>
+                                    <span>{{ \App\Support\UserLocalTime::format($task->completed_at, 'g:i A') }}</span>
+                                </span>
+                            @endif
+                        </div>
                     @elseif($canCompleteThisTask)
                         <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline({{ $task->id }})" wire:loading.attr="disabled" wire:target="completeTaskInline({{ $task->id }})" @disabled(!$canEditThisTask || !$fileOk)>{{ !$fileOk ? 'File required' : 'Complete' }}</button>
                     @else

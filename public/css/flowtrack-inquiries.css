@@ -968,6 +968,7 @@
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell .title,
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .title{font-weight:720;white-space:nowrap}
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .sub{margin-top:3px}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .ft-inquiry-not-started{color:#8a96aa;font-weight:650}
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell{display:flex;align-items:center;min-width:0}
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{max-width:100%;min-height:26px;padding:5px 10px;border-radius:999px;overflow:hidden;font-size:9.5px;font-weight:760;text-overflow:ellipsis}
 .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell{display:flex;align-items:center;min-width:0}
@@ -2697,3 +2698,19 @@
   position:relative;
   z-index:11!important;
 }
+
+
+/* 2026-08-11: Inquiry list Hide completed control matches My Task / All Tasks. */
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{display:inline-flex;min-height:32px;align-items:center;gap:7px;padding:0 11px;border:1px solid #d8e1ec;border-radius:16px;background:#fff;color:#52627a;font-size:10.5px;font-weight:750;white-space:nowrap;cursor:pointer;user-select:none}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle:hover,.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle.active{border-color:#bfd0f5;background:var(--blue-soft);color:#155ce9}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle input{position:absolute;width:1px;height:1px;opacity:0;pointer-events:none}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-check{display:grid;width:16px;height:16px;flex:0 0 16px;place-items:center;border:1px solid #b9c8dc;border-radius:4px;background:#fff;color:transparent;font-size:10px;line-height:1}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle.active .completed-check{border-color:#2463eb;background:#2463eb;color:#fff}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-not-started{color:#d14848;font-weight:700}
+@media(max-width:900px){.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{width:100%;justify-content:center;min-height:36px;border-radius:10px}}
+
+
+/* 2026-08-11: Show task completion date/time directly below the Completed action state. */
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-complete-block{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:100%;min-width:0;text-align:center}
+.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-completed-at{display:flex;flex-direction:column;align-items:center;gap:1px;color:#75849a;font-size:8px;font-weight:550;line-height:1.25;white-space:nowrap}
+@media(max-width:760px){.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-complete-block{align-items:flex-start;text-align:left}.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-completed-at{align-items:flex-start}}

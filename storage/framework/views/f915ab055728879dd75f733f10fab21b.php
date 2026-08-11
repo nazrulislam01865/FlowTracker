@@ -251,7 +251,15 @@
                 </div>
                 <div class="ft-inquiry-task-action">
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($state === 'done'): ?>
-                        <span class="ft-inquiry-complete-state">✓ Completed</span>
+                        <div class="ft-inquiry-complete-block">
+                            <span class="ft-inquiry-complete-state">✓ Completed</span>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task->completed_at): ?>
+                                <span class="ft-inquiry-completed-at">
+                                    <span><?php echo e(\App\Support\UserLocalTime::format($task->completed_at, 'M j, Y')); ?></span>
+                                    <span><?php echo e(\App\Support\UserLocalTime::format($task->completed_at, 'g:i A')); ?></span>
+                                </span>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
                     <?php elseif($canCompleteThisTask): ?>
                         <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="completeTaskInline(<?php echo e($task->id); ?>)" <?php if(!$canEditThisTask || !$fileOk): echo 'disabled'; endif; ?>><?php echo e(!$fileOk ? 'File required' : 'Complete'); ?></button>
                     <?php else: ?>

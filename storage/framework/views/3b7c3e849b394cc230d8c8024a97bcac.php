@@ -41,9 +41,11 @@
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-07">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-09">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
@@ -68,6 +70,7 @@
     <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
     <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
+<script src="/js/flowtrack-client-validation-focus.js?v=20260811-1"></script>
 <script>
     (() => {
         const bindFlowtrackSessionRecovery = () => {

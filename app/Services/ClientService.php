@@ -203,6 +203,7 @@ class ClientService
             // Client-owned profile/configuration records are removed. Historical
             // operational records are deliberately left untouched.
             $client->shippingAddresses()->delete();
+            if (Schema::hasTable('client_contacts')) $client->contacts()->delete();
             if (Schema::hasTable('workflow_template_client')) {
                 DB::table('workflow_template_client')->where('client_id', $client->id)->delete();
             }
@@ -285,7 +286,7 @@ class ClientService
 
     public function detail(User $user, int $clientId): array
     {
-        $client = $this->visibleQuery($user)->with(['accountManager','shippingAddresses'])->findOrFail($clientId);
+        $client = $this->visibleQuery($user)->with(['accountManager','shippingAddresses','contacts'])->findOrFail($clientId);
         $jobs = app(JobService::class)->visibleQuery($user)
             ->where('client_id', $client->id)
             ->with(['phase','owner'])

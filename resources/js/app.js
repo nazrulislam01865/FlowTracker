@@ -67,6 +67,17 @@ const bootShell = () => {
         shade.dataset.flowtrackBound = '1';
         shade.addEventListener('click', closeSidebar);
     }
+
+    // On phones/tablets, close the off-canvas navigation immediately after a
+    // destination is chosen. This also works with Livewire wire:navigate.
+    if (sidebar && !sidebar.dataset.flowtrackNavCloseBound) {
+        sidebar.dataset.flowtrackNavCloseBound = '1';
+        sidebar.addEventListener('click', (event) => {
+            const link = event.target.closest('a.nav-btn, a.ft-system-brand');
+            if (!link || window.matchMedia('(min-width: 901px)').matches) return;
+            closeSidebar();
+        });
+    }
 };
 
 const setRealtimeUnreadCount = (count) => {

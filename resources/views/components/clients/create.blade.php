@@ -15,6 +15,7 @@
     'billingSameAsOffice' => true,
     'salesTaxStatus' => 'taxable',
     'shippingAddresses' => [],
+    'contacts' => [],
     'mode' => 'create',
     'clientLogoUpload' => null,
     'existingClientLogoUrl' => '',
@@ -31,8 +32,11 @@
         try { $clientLogoPreview = $clientLogoUpload->temporaryUrl(); } catch (\Throwable $e) { $clientLogoPreview = null; }
     }
     if (! $clientLogoPreview && ! $removeClientLogo && $existingClientLogoUrl !== '') $clientLogoPreview = $existingClientLogoUrl;
+    $clientValidationSignature = $errors->any()
+        ? sha1((string) json_encode($errors->getMessages(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))
+        : '';
 @endphp
-<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype' : 'ft-create-client-page ft-client-create-prototype' }}">
+<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype' : 'ft-create-client-page ft-client-create-prototype' }}" data-client-validation-signature="{{ $clientValidationSignature }}">
     <div class="ft-client-create-shell">
         @unless($isEdit)
             <div class="ft-client-create-top">
@@ -125,14 +129,35 @@
                 </div>
             </section>
 
-            <section class="ft-client-prototype-section">
-                <div class="ft-client-section-title"><span>2</span><div><h3>Primary contact</h3><p>Main person for inquiries, orders and documents.</p></div></div>
-                <div class="ft-client-grid ft-client-grid-2">
-                    <label class="ft-proto-field"><b>Contact name <em>*</em></b><input wire:model="contactName" placeholder="Sarah Chen">@error('contactName')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field"><b>Job title <span>(Optional)</span></b><input wire:model="contactJobTitle" placeholder="Purchasing Manager"></label>
-                    <label class="ft-proto-field"><b>Email <em>*</em></b><input type="email" wire:model="email" placeholder="purchasing@acmeapparel.com">@error('email')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field"><b>Phone <span>(Optional)</span></b><input wire:model="phone" placeholder="+1 (212) 555-0184"></label>
+            <section class="ft-client-prototype-section ft-client-contacts-editor">
+                <div class="ft-client-section-title">
+                    <div class="ft-section-title-left"><span>2</span><div><h3>Contact</h3><p>Add the people your team can use for inquiries, orders and documents. The first contact is primary.</p></div></div>
                 </div>
+                <div class="ft-client-contact-editor-list">
+                    @foreach($contacts as $contactIndex => $contact)
+                        <article class="ft-client-contact-editor-row" wire:key="client-contact-row-{{ $contactIndex }}">
+                            <div class="ft-client-contact-row-label">
+                                <b>{{ $contactIndex === 0 ? 'Primary contact' : 'Contact '.($contactIndex + 1) }}</b>
+                                @if($contactIndex === 0)<span>Primary</span>@endif
+                            </div>
+                            <label class="ft-proto-field"><b>Contact name <em>*</em></b><input wire:model="contacts.{{ $contactIndex }}.name" placeholder="Sarah Chen">@error('contacts.'.$contactIndex.'.name')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                            <label class="ft-proto-field"><b>Job title <span>(Optional)</span></b><input wire:model="contacts.{{ $contactIndex }}.job_title" placeholder="Purchasing Manager"></label>
+                            <label class="ft-proto-field"><b>Email <em>*</em></b><input type="email" wire:model="contacts.{{ $contactIndex }}.email" placeholder="purchasing@acmeapparel.com">@error('contacts.'.$contactIndex.'.email')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                            <label class="ft-proto-field"><b>Phone <span>(Optional)</span></b><input wire:model="contacts.{{ $contactIndex }}.phone" placeholder="+1 (212) 555-0184"></label>
+                            @if(count($contacts) > 1)
+                                <button type="button" class="ft-client-remove-contact" wire:click="removeContact({{ $contactIndex }})" aria-label="Remove {{ $contactIndex === 0 ? 'primary contact' : 'contact '.($contactIndex + 1) }}">×</button>
+                            @else
+                                <span class="ft-client-contact-remove-spacer" aria-hidden="true"></span>
+                            @endif
+                        </article>
+                    @endforeach
+                    @if(count($contacts) < 20)
+                        <div class="ft-client-contact-add-row" wire:key="client-contact-add-row">
+                            <button type="button" class="ft-client-add-contact" wire:click="addContact">+ Add contact</button>
+                        </div>
+                    @endif
+                </div>
+                @error('contacts')<small class="validation-error ft-client-contacts-error">{{ $message }}</small>@enderror
             </section>
 
             <section class="ft-client-prototype-section">
@@ -172,7 +197,10 @@
                 <div class="ft-shipping-list">
                     @foreach($shippingAddresses as $index => $address)
                         @php
-                            $expanded = (bool)($address['expanded'] ?? false);
+                            $hasShippingValidationError = collect($errors->keys())->contains(
+                                fn ($errorKey) => str_starts_with((string) $errorKey, "shippingAddresses.{$index}.")
+                            );
+                            $expanded = (bool)($address['expanded'] ?? false) || $hasShippingValidationError;
                             $displayLabel = trim((string)($address['label'] ?? '')) ?: 'Shipping address '.($index + 1);
                             $displayAddress = collect([$address['address_line1'] ?? '', $address['suite'] ?? '', $address['city'] ?? '', $address['state'] ?? '', $address['zip'] ?? '', $address['country'] ?? ''])->filter()->implode(', ');
                         @endphp
@@ -225,13 +253,7 @@
             </section>
 
             <footer class="ft-client-prototype-footer">
-                <span>
-                    @if($errors->any())
-                        <em class="validation-error">Please correct the highlighted fields before saving.</em>
-                    @else
-                        Required fields are marked with&nbsp; <em>*</em>
-                    @endif
-                </span>
+                <span>Required fields are marked with&nbsp; <em>*</em></span>
                 <div>
                     @if($isEdit)
                         <button type="button" class="ft-create-cancel" wire:click="cancelEditClient">Cancel</button>

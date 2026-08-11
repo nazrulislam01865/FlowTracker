@@ -41,12 +41,14 @@
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4">@endif
     {{-- Inquiry CSS is deliberately loaded for the authenticated shell, not only
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-07">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-09">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
@@ -70,6 +72,7 @@
     <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
     <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
+<script src="/js/flowtrack-client-validation-focus.js?v=20260811-1"></script>
 <script>
     (() => {
         const bindFlowtrackSessionRecovery = () => {

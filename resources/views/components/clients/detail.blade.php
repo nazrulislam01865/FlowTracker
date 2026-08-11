@@ -24,6 +24,7 @@
     'billingSameAsOffice' => true,
     'salesTaxStatus' => 'taxable',
     'editShippingAddresses' => [],
+    'contacts' => [],
     'clientLogoUpload' => null,
     'existingClientLogoUrl' => '',
     'removeClientLogo' => false,
@@ -48,6 +49,8 @@
     $currencyText = $currencyCode.(isset($currencyNames[$currencyCode]) ? ' · '.$currencyNames[$currencyCode] : '');
     $primaryInitials = collect(preg_split('/\s+/', trim((string) ($client->contact_name ?: 'Primary Contact'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'PC';
     $managerInitials = collect(preg_split('/\s+/', trim((string) ($client->accountManager?->name ?: 'Unassigned'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'AM';
+    $contactCount = $client->contacts->count();
+    if ($contactCount === 0 && (filled($client->contact_name) || filled($client->email) || filled($client->phone))) $contactCount = 1;
 
     $formatAddress = function (?string $line1, ?string $suite, ?string $city, ?string $state, ?string $zip, ?string $country): array {
         $first = collect([$line1, $suite])->filter(fn ($v) => filled($v))->implode(', ');
@@ -127,6 +130,7 @@
 
     <nav class="ft-client-proto-tabs" aria-label="Client detail sections">
         <button type="button" wire:click="setClientDetailTab('overview')" class="{{ $tab === 'overview' ? 'active' : '' }}">Overview</button>
+        <button type="button" wire:click="setClientDetailTab('contacts')" class="{{ $tab === 'contacts' ? 'active' : '' }}">Contacts <span>{{ $contactCount }}</span></button>
         <button type="button" wire:click="setClientDetailTab('orders')" class="{{ $tab === 'orders' ? 'active' : '' }}">Orders <span>{{ $jobs->count() }}</span></button>
         <button type="button" wire:click="setClientDetailTab('documents')" class="{{ $tab === 'documents' ? 'active' : '' }}">Documents <span>{{ $documentCount }}</span></button>
         <button type="button" wire:click="setClientDetailTab('activity')" class="{{ $tab === 'activity' ? 'active' : '' }}">Activity</button>
@@ -151,6 +155,7 @@
             :billing-same-as-office="$billingSameAsOffice"
             :sales-tax-status="$salesTaxStatus"
             :shipping-addresses="$editShippingAddresses"
+            :contacts="$contacts"
             :client-logo-upload="$clientLogoUpload"
             :existing-client-logo-url="$existingClientLogoUrl"
             :remove-client-logo="$removeClientLogo"
@@ -175,7 +180,7 @@
             </article>
         </div>
 
-        <div class="ft-client-overview-main-grid">
+        <div class="ft-client-overview-main-grid is-single">
             <section class="ft-client-proto-card ft-client-info-card">
                 <div class="ft-client-card-head"><h2>Client information</h2>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L8 18l-4 1 1-4Z"/></svg> Edit details</button>@endif</div>
                 <dl class="ft-client-info-list">
@@ -190,17 +195,6 @@
                 </dl>
             </section>
 
-            <section class="ft-client-proto-card ft-client-contacts-card">
-                <div class="ft-client-card-head"><h2>Contacts</h2>@if($canEdit)<button class="outlined" type="button" wire:click="editClient({{ $client->id }})">＋ Add contact</button>@endif</div>
-                <div class="ft-client-contact-row">
-                    <div class="ft-client-contact-label">Primary contact <span>Primary</span></div>
-                    <div class="ft-client-contact-content"><span class="ft-client-contact-avatar is-blue">{{ $primaryInitials }}</span><div><b>{{ $client->contact_name ?: 'Not set' }}</b><span>{{ $client->contact_job_title ?: '—' }}</span><span>{{ $client->email ?: 'No email recorded' }}</span><span>{{ $client->phone ?: 'No phone recorded' }}</span></div>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit primary contact">✎</button>@endif</div>
-                </div>
-                <div class="ft-client-contact-row">
-                    <div class="ft-client-contact-label">Billing contact</div>
-                    <div class="ft-client-contact-content"><span class="ft-client-contact-avatar is-purple">BC</span><div><b>Not set</b><span>No billing contact recorded</span><span>—</span><span>—</span></div>@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit billing contact">✎</button>@endif</div>
-                </div>
-            </section>
         </div>
 
         <section class="ft-client-proto-card ft-client-addresses-card">
@@ -248,6 +242,58 @@
                 <div class="ft-client-info-banner"><span>i</span> Orders, documents and activity are available in their respective tabs.</div>
             </section>
         </div>
+    @elseif($tab === 'contacts')
+        <section class="ft-client-proto-card ft-client-contacts-tab-card">
+            <div class="ft-client-card-head ft-client-contacts-tab-head">
+                <div>
+                    <h2>Client contacts</h2>
+                    <p>People available for inquiries, orders and documents for {{ $client->name }}.</p>
+                </div>
+                <div class="ft-client-contacts-tab-actions">
+                    <span>{{ $contactCount }} {{ \Illuminate\Support\Str::plural('contact', $contactCount) }}</span>
+                    @if($canEdit)<button class="outlined" type="button" wire:click="editClient({{ $client->id }})">＋ Manage contacts</button>@endif
+                </div>
+            </div>
+
+            <div class="ft-client-contact-directory">
+                <div class="ft-client-contact-directory-head" aria-hidden="true">
+                    <span>Contact</span><span>Job title</span><span>Email</span><span>Phone</span><span>Action</span>
+                </div>
+                @forelse($client->contacts as $contactIndex => $contact)
+                    @php
+                        $contactInitials = collect(preg_split('/\s+/', trim((string) $contact->name)))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p, 0, 1)))->implode('') ?: 'C';
+                    @endphp
+                    <article class="ft-client-contact-directory-row {{ $contactIndex === 0 ? 'is-primary' : '' }}">
+                        <div class="ft-client-contact-person" data-label="Contact">
+                            <span class="ft-client-contact-avatar {{ $contactIndex % 2 === 0 ? 'is-blue' : 'is-purple' }}">{{ $contactInitials }}</span>
+                            <div><b>{{ $contact->name }}</b>@if($contactIndex === 0)<em>Primary</em>@endif</div>
+                        </div>
+                        <div class="ft-client-contact-field" data-label="Job title"><span>{{ $contact->job_title ?: '—' }}</span></div>
+                        <div class="ft-client-contact-field" data-label="Email">@if($contact->email)<a href="mailto:{{ $contact->email }}">{{ $contact->email }}</a>@else<span>—</span>@endif</div>
+                        <div class="ft-client-contact-field" data-label="Phone">@if($contact->phone)<a href="tel:{{ preg_replace('/[^+0-9]/', '', $contact->phone) }}">{{ $contact->phone }}</a>@else<span>—</span>@endif</div>
+                        <div class="ft-client-contact-row-action" data-label="Action">
+                            @if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})" aria-label="Edit {{ $contact->name }}">Edit</button>@else<span>—</span>@endif
+                        </div>
+                    </article>
+                @empty
+                    @if(filled($client->contact_name) || filled($client->email) || filled($client->phone))
+                        <article class="ft-client-contact-directory-row is-primary">
+                            <div class="ft-client-contact-person" data-label="Contact"><span class="ft-client-contact-avatar is-blue">{{ $primaryInitials }}</span><div><b>{{ $client->contact_name ?: 'Primary contact' }}</b><em>Primary</em></div></div>
+                            <div class="ft-client-contact-field" data-label="Job title"><span>{{ $client->contact_job_title ?: '—' }}</span></div>
+                            <div class="ft-client-contact-field" data-label="Email">@if($client->email)<a href="mailto:{{ $client->email }}">{{ $client->email }}</a>@else<span>—</span>@endif</div>
+                            <div class="ft-client-contact-field" data-label="Phone">@if($client->phone)<a href="tel:{{ preg_replace('/[^+0-9]/', '', $client->phone) }}">{{ $client->phone }}</a>@else<span>—</span>@endif</div>
+                            <div class="ft-client-contact-row-action" data-label="Action">@if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})">Edit</button>@else<span>—</span>@endif</div>
+                        </article>
+                    @else
+                        <div class="ft-client-contacts-empty">
+                            <span class="ft-client-contacts-empty-icon">+</span>
+                            <div><b>No contacts added yet</b><p>Add a contact so the team can select the right person on inquiries and orders.</p></div>
+                            @if($canEdit)<button type="button" wire:click="editClient({{ $client->id }})">Add contact</button>@endif
+                        </div>
+                    @endif
+                @endforelse
+            </div>
+        </section>
     @elseif($tab === 'orders')
         <div class="ft-client-order-metrics">
             <article><span class="is-blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="5" width="16" height="15" rx="2"/><path d="M8 3v4M16 3v4M4 10h16"/></svg></span><div><small>Open orders</small><b>{{ number_format($orderMetrics['open'] ?? 0) }}</b><em>Across active phases</em></div></article>

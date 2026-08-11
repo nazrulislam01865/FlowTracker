@@ -55,6 +55,11 @@
                         <button class="chip {{ $quick === 'active' ? 'active' : '' }}" type="button" wire:click="setQuick('active')">Active</button>
                         <button class="chip {{ $quick === 'converted' ? 'active' : '' }}" type="button" wire:click="setQuick('converted')">Converted</button>
                         <button class="chip {{ $quick === 'dead' ? 'active' : '' }}" type="button" wire:click="setQuick('dead')">Closed</button>
+                        <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
+                            <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed inquiries">
+                            <span class="completed-check" aria-hidden="true">✓</span>
+                            <span>Hide completed</span>
+                        </label>
                     </div>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
@@ -88,6 +93,7 @@
                                 </div>
                                 <div class="cell ft-inquiry-list-client-cell" data-label="Client / Item">
                                     <span class="ft-client-name-with-logo"><x-ui.client-logo :name="$row['client']" :src="$row['clientLogoUrl'] ?? null" :size="24" /><span class="title">{{ $row['client'] }}</span></span>
+                                    <span class="sub">Contact: {{ $row['clientContact'] ?: '—' }}</span>
                                     @if($row['item'])<span class="sub">{{ $row['item'] }}</span>@endif
                                 </div>
                                 <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
@@ -99,7 +105,14 @@
                                 </div>
                                 <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee"><div class="ownerline"><span class="avatar">{{ $initials($row['assignee']) }}</span><span class="title">{{ $row['assignee'] }}</span></div></div>
                                 <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
-                                <div class="cell ft-inquiry-list-started-cell" data-label="Started At"><span class="title">{{ $row['startedDate'] }}</span><span class="sub">{{ $row['startedTime'] }}</span></div>
+                                <div class="cell ft-inquiry-list-started-cell" data-label="Started At">
+                                    @if($row['hasStarted'])
+                                        <span class="title">{{ $row['startedDate'] }}</span>
+                                        <span class="sub">{{ $row['startedTime'] }}</span>
+                                    @else
+                                        <span class="title ft-inquiry-not-started">Not Started</span>
+                                    @endif
+                                </div>
                                 @php
                                     $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
                                     $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
@@ -231,27 +244,31 @@
                                         :clearable="false"
                                         wire:key="inquiry-create-client-selector-{{ $clientId ?: 'none' }}-{{ substr(md5($selectedClientLabel ?: 'none'), 0, 8) }}"
                                     />
-                                    @if(auth()->user()->canModule('clients','create'))
-                                        <button class="secondary ft-inquiry-new-client-btn" type="button" wire:click="openCreateClientModal">＋ New client</button>
-                                    @endif
                                 </div>
                                 @error('clientId')<small class="field-error">{{ $message }}</small>@enderror
                             </div>
 
                             <div class="ft-inquiry-create-field">
-                                <label>Client contact</label>
+                                <label>Client contact *</label>
                                 <div class="ft-inquiry-client-control-row">
                                     <div class="ft-inquiry-contact-select-wrap">
-                                        <select wire:model="clientContact" @disabled(!$clientId || !$clientContact)>
-                                            @if($clientId && $clientContact)
-                                                <option value="{{ $clientContact }}">{{ $clientContact }}</option>
+                                        <select wire:model="clientContact" @disabled(!$clientId || empty($clientContactOptions)) aria-required="true">
+                                            @if(!$clientId)
+                                                <option value="">Select a client first</option>
+                                            @elseif(empty($clientContactOptions))
+                                                <option value="">No contact recorded</option>
                                             @else
-                                                <option value="">{{ $clientId ? 'No contact recorded' : 'Select a client first' }}</option>
+                                                @foreach($clientContactOptions as $contactOption)
+                                                    <option value="{{ $contactOption['value'] }}">{{ $contactOption['label'] }}{{ $contactOption['primary'] ? ' · Primary' : '' }}{{ $contactOption['meta'] ? ' · '.$contactOption['meta'] : '' }}</option>
+                                                @endforeach
                                             @endif
                                         </select>
                                     </div>
-                                    <button class="secondary ft-inquiry-new-contact-btn" type="button" wire:click="openCreateContactModal" @disabled(!$clientId)>＋ New contact</button>
                                 </div>
+                                @if($clientId && empty($clientContactOptions))
+                                    <small class="ft-inquiry-field-help">This client has no contact. Add a contact from Clients before creating the Inquiry.</small>
+                                @endif
+                                @error('clientContact')<small class="field-error">{{ $message }}</small>@enderror
                             </div>
                         </div>
 
@@ -294,9 +311,78 @@
                         </div>
                     </section>
 
+                    @php
+                        $createProductUnits = collect($createProductRows)->sum(fn ($item) => (int) ($item['quantity'] ?? 0));
+                    @endphp
+                    <section class="section ft-inquiry-create-section ft-inquiry-products-create-section">
+                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-product-step-title">
+                            <span>2</span><h2>Products &amp; quantities</h2><em>Optional</em>
+                        </div>
+
+                        <div class="ft-product-rows">
+                            @foreach($createProductRows as $index => $item)
+                                @php
+                                    $selectedCategory = (string) ($item['category'] ?? '');
+                                    $selectedProduct = (string) ($item['product'] ?? '');
+                                @endphp
+                                <div class="ft-product-row" wire:key="create-inquiry-product-row-{{ $index }}">
+                                    <div>
+                                        <x-ui.remote-filter
+                                            class="ft-create-remote-select"
+                                            label="Product category"
+                                            property="createProductRows.{{ $index }}.category"
+                                            type="product-categories"
+                                            context="create-inquiry"
+                                            action="setCreateSelector"
+                                            :value="$selectedCategory"
+                                            :selected-label="$selectedCategory ?: null"
+                                            placeholder="Select category"
+                                            :initial-options="$createProductCategoryOptions"
+                                            :clearable="false"
+                                            wire:key="create-inquiry-category-selector-{{ $index }}"
+                                        />
+                                        @error("createProductRows.$index.category")<small class="validation-error">{{ $message }}</small>@enderror
+                                    </div>
+                                    <div>
+                                        <x-ui.remote-filter
+                                            class="ft-create-remote-select"
+                                            label="Product"
+                                            property="createProductRows.{{ $index }}.product"
+                                            type="products"
+                                            context="create-inquiry"
+                                            action="setCreateSelector"
+                                            :value="$selectedProduct"
+                                            :selected-label="$selectedProduct ?: null"
+                                            :placeholder="$selectedCategory ? 'Select product' : 'Select category first'"
+                                            :params="['category' => $selectedCategory]"
+                                            :disabled="blank($selectedCategory)"
+                                            :clearable="false"
+                                            wire:key="create-inquiry-product-selector-{{ $index }}-{{ md5($selectedCategory) }}"
+                                        />
+                                        @error("createProductRows.$index.product")<small class="validation-error">{{ $message }}</small>@enderror
+                                    </div>
+                                    <label class="ft-qty-field">
+                                        <b>Quantity</b>
+                                        <input type="number" min="1" step="1" wire:model.live.debounce.300ms="createProductRows.{{ $index }}.quantity">
+                                        @error("createProductRows.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror
+                                    </label>
+                                    <button type="button" class="ft-product-delete" wire:click="removeCreateProductRow({{ $index }})" title="Remove product" aria-label="Remove product">▱</button>
+                                </div>
+                            @endforeach
+                        </div>
+                        <div class="ft-product-row-footer">
+                            <button type="button" wire:click="addCreateProductRow" @disabled(count($createProductRows) >= 25)>＋ Add product</button>
+                            @if(count($createProductRows))
+                                <span>{{ count($createProductRows) }} {{ \Illuminate\Support\Str::plural('product', count($createProductRows)) }} · {{ number_format((float) $createProductUnits) }} total units</span>
+                            @else
+                                <span>Optional · add only when needed</span>
+                            @endif
+                        </div>
+                    </section>
+
                     <section class="section ft-inquiry-create-section ft-inquiry-attachments-section">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>2</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
+                            <span>3</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
                         </div>
                         <div
                             class="inquiry-dropzone ft-inquiry-prototype-dropzone"
@@ -373,7 +459,7 @@
 
                     <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>3</span><h2>What happens next</h2>
+                            <span>4</span><h2>What happens next</h2>
                             @if($workflowOptionCount > 0)<em>{{ $workflowOptionCount }} {{ \Illuminate\Support\Str::plural('workflow', $workflowOptionCount) }} available</em>@endif
                         </div>
 
@@ -549,6 +635,8 @@
                     <div class="ft-inquiry-header-meta" aria-label="Inquiry information">
                         <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span class="ft-client-inline-identity"><x-ui.client-logo :client="$inquiry->client" :name="$inquiry->client?->name ?: 'Client'" :size="20" /><span>Client <strong>{{ $inquiry->client?->name ?: '—' }}</strong></span></span></span>
                         <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Client contact <strong>{{ $inquiry->client_contact ?: '—' }}</strong></span></span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
                         <span class="ft-inquiry-header-meta-item ft-inquiry-header-reference">
                             <span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7l4 4V20.5H7z"></path><path d="M14 3.5v4h4"></path></svg></span>
                             <span>Reference <strong>{{ $inquiry->reference_number ?: '—' }}</strong></span>
@@ -693,6 +781,152 @@
                                     <button type="button" class="primary" data-rich-text-submit :disabled="status === 'saving'" x-on:click="saveRichText($refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => $wire.updateInquiryField('requirement_notes', clean))">Save</button>
                                     <x-ui.inline-save-state compact />
                                 </div>
+                            </div>
+                        @endif
+                    </section>
+
+                    @php
+                        $inquiryItemRows = collect($inquiry->items ?? collect())->values();
+                        $completedInquiryProductRows = $inquiryItemRows->filter(fn ($item) => filled($item->item_name))->values();
+                        $inquiryItemCount = $completedInquiryProductRows->count();
+                        $inquiryItemUnits = (float) $completedInquiryProductRows->sum('quantity');
+                        $canEditInquiryProducts = $canEditInquiry && !$inquiry->result;
+                    @endphp
+                    <section class="ft-detail-card ft-inquiry-products-card ft-inquiry-inline-products-card">
+                        <div class="ft-inquiry-description-head ft-inquiry-inline-products-head">
+                            <div>
+                                <h2>Products &amp; quantities</h2>
+                                <p class="ft-inquiry-products-subtitle">Products requested for this Inquiry.</p>
+                            </div>
+                            <span class="ft-inquiry-product-summary">{{ $inquiryItemCount }} {{ \Illuminate\Support\Str::plural('product', $inquiryItemCount) }} · {{ number_format($inquiryItemUnits, fmod($inquiryItemUnits, 1.0) === 0.0 ? 0 : 2) }} total units</span>
+                        </div>
+
+                        <div class="ft-inquiry-inline-product-table-wrap">
+                            <table class="ft-mini-grid-table ft-inline-product-table ft-inquiry-inline-product-table">
+                                <thead>
+                                    <tr>
+                                        <th>Category</th>
+                                        <th>Product</th>
+                                        <th>Quantity</th>
+                                        <th class="ft-product-delete-column"><span class="sr-only">Action</span></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                @forelse($inquiryItemRows as $item)
+                                    @php
+                                        $isDraftInquiryItem = blank($item->item_name);
+                                        $categoryNeedsSelection = filled($item->id) && blank($item->category);
+                                        $productNeedsSelection = filled($item->id) && filled($item->category) && blank($item->item_name);
+                                        $categoryLabel = $item->category ?: 'Select category';
+                                        $productLabel = $item->item_name ?: (blank($item->category) ? 'Select category first' : 'Select product');
+                                        $productPickerKey = 'inquiry-item-'.$item->id.'-product-'.md5((string) ($item->category ?? '').'|'.(string) ($item->item_name ?? ''));
+                                        $cannotRemoveInquiryItem = !$isDraftInquiryItem && $inquiryItemCount <= 1;
+                                    @endphp
+                                    <tr wire:key="inquiry-item-{{ $item->id }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, draftProductReady: @js(filled($item->item_name)) }" @class(['ft-inline-product-draft-row' => $isDraftInquiryItem])>
+                                        <td data-label="Category">
+                                            <div
+                                                class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
+                                                wire:key="inquiry-item-{{ $item->id }}-category-{{ md5((string) ($item->category ?? '')) }}"
+                                                x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category ?? ''), display: @js($categoryLabel) })"
+                                                x-init="if (@js($canEditInquiryProducts && $categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                                x-on:click.outside="if (editing && !@js($categoryNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-cancel.stop="if (!@js($categoryNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateInquiryItem({{ $item->id }}, 'category', nextValue)).then(async (ok) => { categorySaving = false; if (ok && changed) await $wire.$refresh(); })"
+                                            >
+                                                <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $categoryLabel }}</span>
+                                                @if($canEditInquiryProducts)
+                                                    <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                                    <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                        <x-ui.inline-remote-catalog
+                                                            type="product-categories"
+                                                            context="inquiry-detail"
+                                                            :value="$item->category ?? ''"
+                                                            :selected-label="$categoryLabel"
+                                                            placeholder="Select category"
+                                                            search-label="product category"
+                                                            :menu-width="320"
+                                                        />
+                                                    </div>
+                                                    <x-ui.inline-save-state compact />
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td data-label="Product">
+                                            <div
+                                                class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
+                                                wire:key="{{ $productPickerKey }}"
+                                                x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-item-'.$item->id.'-product'), label: 'product', value: @js($item->item_name ?? ''), display: @js($productLabel) })"
+                                                x-init="if (@js($canEditInquiryProducts && $productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                                x-on:click.outside="if (editing && !@js($productNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-cancel.stop="if (!@js($productNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateInquiryItem({{ $item->id }}, 'item_name', nextValue)).then((ok) => { productSaving = false; if (ok) { draftProductReady = true; $nextTick(() => setTimeout(() => { const input = $el.closest('tr')?.querySelector('[data-inquiry-item-quantity]'); input?.focus(); input?.select(); }, 0)); } })"
+                                            >
+                                                <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $productLabel }}</span>
+                                                @if($canEditInquiryProducts)
+                                                    <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || @js(blank($item->category))" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="{{ blank($item->category) ? 'Select a category first' : 'Edit product' }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                                    <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                        <x-ui.inline-remote-catalog
+                                                            type="products"
+                                                            context="inquiry-detail"
+                                                            :value="$item->item_name ?? ''"
+                                                            :selected-label="$productLabel"
+                                                            :placeholder="blank($item->category) ? 'Select category first' : 'Select product'"
+                                                            search-label="product"
+                                                            :params="['category' => (string) ($item->category ?? '')]"
+                                                            :disabled="blank($item->category)"
+                                                            :menu-width="340"
+                                                        />
+                                                    </div>
+                                                    <x-ui.inline-save-state compact />
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td class="ft-product-quantity-cell" data-label="Quantity">
+                                            <div
+                                                class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
+                                                x-data="window.FlowTrackInlineEdit({ key: @js('inquiry-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) max(1, (int) $item->quantity)), display: @js(number_format((int) max(1, (int) $item->quantity))) })"
+                                                x-init="if (@js($canEditInquiryProducts && $isDraftInquiryItem)) editing = true"
+                                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                            >
+                                                <span x-show="!editing" class="ft-inline-field-value" x-text="display">{{ number_format((int) max(1, (int) $item->quantity)) }}</span>
+                                                @if($canEditInquiryProducts)
+                                                    <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
+                                                    <input x-ref="quantityInput" data-inquiry-item-quantity x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" max="999999999" step="1" :disabled="categorySaving || productSaving"
+                                                        x-on:keydown.escape.prevent="cancelEdit()"
+                                                        x-on:keydown.enter.prevent="$event.target.blur()"
+                                                        x-on:blur="if (editing && !categorySaving && !productSaving && !quantitySaving) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateInquiryItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { quantitySaving = false; if (ok && @js($isDraftInquiryItem)) await $wire.$refresh(); else if (!ok) editing = true; }) } else { editing = false; if (@js($isDraftInquiryItem) && draftProductReady) $wire.$refresh(); } }">
+                                                    <x-ui.inline-save-state compact />
+                                                @endif
+                                            </div>
+                                        </td>
+                                        <td class="ft-product-delete-cell" data-label="Action">
+                                            @if($canEditInquiryProducts)
+                                                <button
+                                                    type="button"
+                                                    class="ft-inline-product-delete"
+                                                    title="{{ $cannotRemoveInquiryItem ? 'An Inquiry must keep at least one product' : 'Remove product' }}"
+                                                    aria-label="Remove product"
+                                                    wire:click.stop="removeInquiryItem({{ $item->id }})"
+                                                    wire:confirm="Remove this product from the Inquiry?"
+                                                    wire:loading.attr="disabled"
+                                                    wire:target="removeInquiryItem({{ $item->id }})"
+                                                    :disabled="categorySaving || productSaving || quantitySaving || @js($cannotRemoveInquiryItem)"
+                                                >×</button>
+                                            @endif
+                                        </td>
+                                    </tr>
+                                @empty
+                                    <tr class="ft-inquiry-product-empty-row"><td colspan="4">No products added yet.</td></tr>
+                                @endforelse
+                                </tbody>
+                            </table>
+                        </div>
+
+                        @if($canEditInquiryProducts)
+                            <div class="ft-product-actions ft-inquiry-inline-product-actions">
+                                <button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addInquiryItem" wire:loading.attr="disabled" wire:target="addInquiryItem">＋ Add product</button>
                             </div>
                         @endif
                     </section>
