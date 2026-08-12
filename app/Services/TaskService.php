@@ -6,6 +6,7 @@ use App\Models\FlowJobMember;
 use App\Models\FlowTaskChecklistItem;
 use App\Models\FlowTaskComment;
 use App\Models\Task;
+use App\Models\TaskLink;
 use App\Models\User;
 use App\Support\BoardLaneResolver;
 use Illuminate\Database\Eloquent\Builder;
@@ -55,6 +56,42 @@ class TaskService
             'needs_attention' => $task->needs_attention,
             'attention_reason' => $task->attention_reason,
         ], $actor);
+    }
+
+
+    public function addExternalLink(Task $task, string $url, User $actor): TaskLink
+    {
+        $this->assertEditable($task, $actor);
+        $url = trim($url);
+        $scheme = strtolower((string) parse_url($url, PHP_URL_SCHEME));
+        $host = (string) parse_url($url, PHP_URL_HOST);
+        if (! filter_var($url, FILTER_VALIDATE_URL) || ! in_array($scheme, ['http', 'https'], true) || $host === '') {
+            throw ValidationException::withMessages(['overviewTaskLinkUrl' => 'Enter a valid http:// or https:// link.']);
+        }
+
+        $link = TaskLink::create([
+            'task_id' => $task->id,
+            'created_by' => $actor->id,
+            'url' => $url,
+        ]);
+
+        $this->record($task, $actor, 'task.link_added', 'External link added.', [
+            'task_link_id' => $link->id,
+            'url' => $url,
+        ]);
+
+        return $link;
+    }
+
+    public function removeExternalLink(Task $task, int $linkId, User $actor): void
+    {
+        $this->assertEditable($task, $actor);
+        $link = $task->links()->whereKey($linkId)->firstOrFail();
+        $link->delete();
+
+        $this->record($task, $actor, 'task.link_removed', 'External link removed.', [
+            'task_link_id' => $linkId,
+        ]);
     }
 
     public function updateDueDate(Task $task, ?string $dueDate, User $actor): Task

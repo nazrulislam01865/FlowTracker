@@ -29,7 +29,7 @@
 
 <div class="ft-inquiry-prototype">
     @if(session('success'))<div class="flash-inline">{{ session('success') }}</div>@endif
-    @if($errors->any())<div class="error-inline">{{ $errors->first() }}</div>@endif
+    @if($mode !== 'create' && $errors->any())<div class="error-inline">{{ $errors->first() }}</div>@endif
 
     @if($mode === 'list')
         <section class="view">
@@ -40,21 +40,53 @@
                 </div>
             </div>
 
-            <div class="metrics">
-                <div class="metric"><i>?</i><span><small>Active inquiries</small><strong>{{ $metrics['active'] }}</strong></span></div>
-                <div class="metric"><i>✓</i><span><small>Converted to order</small><strong>{{ $metrics['converted'] }}</strong></span></div>
-                <div class="metric"><i>×</i><span><small>Closed inquiries</small><strong>{{ $metrics['dead'] }}</strong></span></div>
-                <div class="metric"><i>⌁</i><span><small>Tasks due today</small><strong>{{ $metrics['dueToday'] }}</strong></span></div>
+            <div class="metrics" aria-label="Inquiry summary filters">
+                <button class="metric metric-filter-card {{ $metricFilter === 'active' ? 'active' : '' }}" type="button" wire:click="setMetricFilter('active')" aria-pressed="{{ $metricFilter === 'active' ? 'true' : 'false' }}">
+                    <i>?</i><span><small>Active inquiries</small><strong>{{ $metrics['active'] }}</strong></span>
+                </button>
+                <button class="metric metric-filter-card {{ $metricFilter === 'completed' ? 'active' : '' }}" type="button" wire:click="setMetricFilter('completed')" aria-pressed="{{ $metricFilter === 'completed' ? 'true' : 'false' }}">
+                    <i>✓</i><span><small>Completed inquiries</small><strong>{{ $metrics['completed'] }}</strong></span>
+                </button>
+                <button class="metric metric-filter-card {{ $metricFilter === 'attention' ? 'active' : '' }}" type="button" wire:click="setMetricFilter('attention')" aria-pressed="{{ $metricFilter === 'attention' ? 'true' : 'false' }}">
+                    <i>⚠</i><span><small>Requires attention</small><strong>{{ $metrics['attention'] }}</strong></span>
+                </button>
+                <button class="metric metric-filter-card {{ $metricFilter === 'dueToday' ? 'active' : '' }}" type="button" wire:click="setMetricFilter('dueToday')" aria-pressed="{{ $metricFilter === 'dueToday' ? 'true' : 'false' }}">
+                    <i>⌁</i><span><small>Tasks due today</small><strong>{{ $metrics['dueToday'] }}</strong></span>
+                </button>
             </div>
 
             <div class="shell inquiry-list-v2">
                 <div class="toolbar">
                     <div class="search"><span>⌕</span><input wire:model.live.debounce.350ms="search" placeholder="Search inquiry, title, client, task or assignee"></div>
-                    <div class="filters">
+                    <div class="filters inquiry-filter-controls">
                         <button class="chip {{ $quick === 'all' ? 'active' : '' }}" type="button" wire:click="setQuick('all')">All</button>
-                        <button class="chip {{ $quick === 'active' ? 'active' : '' }}" type="button" wire:click="setQuick('active')">Active</button>
-                        <button class="chip {{ $quick === 'converted' ? 'active' : '' }}" type="button" wire:click="setQuick('converted')">Converted</button>
-                        <button class="chip {{ $quick === 'dead' ? 'active' : '' }}" type="button" wire:click="setQuick('dead')">Closed</button>
+                        <button class="chip ft-inquiry-attention-filter {{ $quick === 'attention' ? 'active' : '' }}" type="button" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}">
+                            <span aria-hidden="true">⚠</span> Attention needed
+                        </button>
+                        <label class="ft-inquiry-status-filter">
+                            <select wire:model.live="listStatus" aria-label="Filter inquiries by task status">
+                                <option value="">All task statuses</option>
+                                @foreach($listStatusOptions as $statusOption)
+                                    <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                @endforeach
+                            </select>
+                            <span class="ft-inquiry-status-filter-chevron" aria-hidden="true">⌄</span>
+                        </label>
+                        <x-ui.remote-filter
+                            class="ft-inquiry-list-client-filter"
+                            label="Client"
+                            property="listClient"
+                            type="clients"
+                            context="inquiries"
+                            action="setInquiryListFilter"
+                            :value="$listClient"
+                            placeholder="All clients"
+                            :selected-label="$listClientLabel ?: null"
+                            :initial-options="$listClientFilterOptions"
+                            :menu-width="300"
+                            :fixed-menu="true"
+                            wire:key="inquiry-list-client-filter-{{ $listClient ?: 'all' }}-{{ substr(md5($listClientLabel ?: 'all'), 0, 8) }}"
+                        />
                         <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
                             <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed inquiries">
                             <span class="completed-check" aria-hidden="true">✓</span>
@@ -68,6 +100,8 @@
                         <div>Title</div>
                         <div>Client / Item</div>
                         <div>Current Task</div>
+                        <div>Task Status</div>
+                        <div>Flag</div>
                         <div>Progress</div>
                         <div>Assignee</div>
                         <div>Due Date</div>
@@ -89,14 +123,35 @@
                                     <span class="sub ft-inquiry-created-at">{{ $row['createdDate'] }} · {{ $row['createdTime'] }}</span>
                                 </div>
                                 <div class="cell ft-inquiry-list-title-cell" data-label="Title">
-                                    <span class="title ft-inquiry-title-preview" title="{{ $row['title'] }}">{{ $row['titlePreview'] }}</span>
+                                    <span class="title ft-inquiry-title-preview ft-inquiry-title-desktop" title="{{ $row['title'] }}">{{ $row['titlePreview'] }}</span>
+                                    <span class="title ft-inquiry-title-mobile" title="{{ $row['title'] }}">{{ $row['title'] }}</span>
+                                    <span class="sub ft-inquiry-mobile-created">Created by {{ $row['createdBy'] }} · {{ $row['createdDate'] }} · {{ $row['createdTime'] }}</span>
                                 </div>
+                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-task" aria-hidden="true"></div>
                                 <div class="cell ft-inquiry-list-client-cell" data-label="Client / Item">
                                     <span class="ft-client-name-with-logo"><x-ui.client-logo :name="$row['client']" :src="$row['clientLogoUrl'] ?? null" :size="24" /><span class="title">{{ $row['client'] }}</span></span>
                                     <span class="sub">Contact: {{ $row['clientContact'] ?: '—' }}</span>
                                     @if($row['item'])<span class="sub">{{ $row['item'] }}</span>@endif
                                 </div>
                                 <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
+                                @php
+                                    $rowTaskStatusColor = $masterData->displayColorFor('task_status', $row['taskStatus']);
+                                    $rowTaskFlagTone = match ($row['flag']) {
+                                        'Requires attention', 'Overdue' => 'red',
+                                        'Due Today' => 'amber',
+                                        'No flag' => 'green',
+                                        default => 'blue',
+                                    };
+                                @endphp
+                                <div class="cell ft-inquiry-list-task-status-cell" data-label="Task Status"><span class="pill {{ $rowTaskStatusColor ? 'ft-master-color' : $tone($row['taskStatus']) }}" style="{{ \App\Support\MasterColor::style($rowTaskStatusColor) }}">{{ $row['taskStatus'] }}</span></div>
+                                <div class="cell ft-inquiry-list-flag-cell" data-label="Flag">
+                                    @if($row['flag'] === 'No flag')
+                                        <span class="ft-inquiry-no-flag">No flag</span>
+                                    @else
+                                        <span class="pill {{ $rowTaskFlagTone }}">{{ $row['flag'] }}</span>
+                                    @endif
+                                </div>
+                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-after-task" aria-hidden="true"></div>
                                 <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
                                     <div class="ft-inquiry-list-progress">
                                         <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $row['progressPercent'] }}" aria-label="{{ $row['progress'] }} of {{ $row['total'] }} tasks completed"><span style="width:{{ $row['progressPercent'] }}%"></span></div>
@@ -113,13 +168,14 @@
                                         <span class="title ft-inquiry-not-started">Not Started</span>
                                     @endif
                                 </div>
+                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
                                 @php
                                     $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
                                     $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
                                 @endphp
                                 <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill {{ $rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryPriorityColor) }}">{{ $row['priority'] }}</span></div>
                                 <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryStatusColor) }}">{{ $row['status'] }}</span></div>
-                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View <span aria-hidden="true">→</span></a></div>
+                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View<span aria-hidden="true">→</span></a></div>
                                 @if(auth()->user()->canModule('inquiries', 'delete'))
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
                                         <button
@@ -275,7 +331,7 @@
                         <div class="ft-inquiry-create-grid">
                             <label class="ft-inquiry-create-field">
                                 <span>Reference number</span>
-                                <input wire:model="referenceNumber" placeholder="Email or client reference (optional)">
+                                <input wire:model="referenceNumber" placeholder="Enter the client-provided ES or NEQ number">
                             </label>
 
                             <div class="ft-inquiry-create-field">
@@ -311,74 +367,7 @@
                         </div>
                     </section>
 
-                    @php
-                        $createProductUnits = collect($createProductRows)->sum(fn ($item) => (int) ($item['quantity'] ?? 0));
-                    @endphp
-                    <section class="section ft-inquiry-create-section ft-inquiry-products-create-section">
-                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-product-step-title">
-                            <span>2</span><h2>Products &amp; quantities</h2><em>Optional</em>
-                        </div>
-
-                        <div class="ft-product-rows">
-                            @foreach($createProductRows as $index => $item)
-                                @php
-                                    $selectedCategory = (string) ($item['category'] ?? '');
-                                    $selectedProduct = (string) ($item['product'] ?? '');
-                                @endphp
-                                <div class="ft-product-row" wire:key="create-inquiry-product-row-{{ $index }}">
-                                    <div>
-                                        <x-ui.remote-filter
-                                            class="ft-create-remote-select"
-                                            label="Product category"
-                                            property="createProductRows.{{ $index }}.category"
-                                            type="product-categories"
-                                            context="create-inquiry"
-                                            action="setCreateSelector"
-                                            :value="$selectedCategory"
-                                            :selected-label="$selectedCategory ?: null"
-                                            placeholder="Select category"
-                                            :initial-options="$createProductCategoryOptions"
-                                            :clearable="false"
-                                            wire:key="create-inquiry-category-selector-{{ $index }}"
-                                        />
-                                        @error("createProductRows.$index.category")<small class="validation-error">{{ $message }}</small>@enderror
-                                    </div>
-                                    <div>
-                                        <x-ui.remote-filter
-                                            class="ft-create-remote-select"
-                                            label="Product"
-                                            property="createProductRows.{{ $index }}.product"
-                                            type="products"
-                                            context="create-inquiry"
-                                            action="setCreateSelector"
-                                            :value="$selectedProduct"
-                                            :selected-label="$selectedProduct ?: null"
-                                            :placeholder="$selectedCategory ? 'Select product' : 'Select category first'"
-                                            :params="['category' => $selectedCategory]"
-                                            :disabled="blank($selectedCategory)"
-                                            :clearable="false"
-                                            wire:key="create-inquiry-product-selector-{{ $index }}-{{ md5($selectedCategory) }}"
-                                        />
-                                        @error("createProductRows.$index.product")<small class="validation-error">{{ $message }}</small>@enderror
-                                    </div>
-                                    <label class="ft-qty-field">
-                                        <b>Quantity</b>
-                                        <input type="number" min="1" step="1" wire:model.live.debounce.300ms="createProductRows.{{ $index }}.quantity">
-                                        @error("createProductRows.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror
-                                    </label>
-                                    <button type="button" class="ft-product-delete" wire:click="removeCreateProductRow({{ $index }})" title="Remove product" aria-label="Remove product">▱</button>
-                                </div>
-                            @endforeach
-                        </div>
-                        <div class="ft-product-row-footer">
-                            <button type="button" wire:click="addCreateProductRow" @disabled(count($createProductRows) >= 25)>＋ Add product</button>
-                            @if(count($createProductRows))
-                                <span>{{ count($createProductRows) }} {{ \Illuminate\Support\Str::plural('product', count($createProductRows)) }} · {{ number_format((float) $createProductUnits) }} total units</span>
-                            @else
-                                <span>Optional · add only when needed</span>
-                            @endif
-                        </div>
-                    </section>
+                    @include('components.inquiries.create-products')
 
                     <section class="section ft-inquiry-create-section ft-inquiry-attachments-section">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
@@ -472,7 +461,7 @@
                                     <span>{{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
                                 </span>
                                 @if(auth()->user()->canAccess('workflow.view'))
-                                    <a href="{{ route('workflow.setup') }}" wire:navigate x-on:click.stop>Preview workflow ↗</a>
+                                    <span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span>
                                 @endif
                                 <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
                             </div>
@@ -707,6 +696,7 @@
                                         trigger-class="ft-task-property-inline-input"
                                         variant="compact"
                                         :menu-width="300"
+                            :fixed-menu="true"
                                     />
                                 </div>
                                 <x-ui.inline-save-state compact />
@@ -785,12 +775,12 @@
                         @endif
                     </section>
 
+                    @if($canViewInquiryProducts)
                     @php
                         $inquiryItemRows = collect($inquiry->items ?? collect())->values();
                         $completedInquiryProductRows = $inquiryItemRows->filter(fn ($item) => filled($item->item_name))->values();
                         $inquiryItemCount = $completedInquiryProductRows->count();
                         $inquiryItemUnits = (float) $completedInquiryProductRows->sum('quantity');
-                        $canEditInquiryProducts = $canEditInquiry && !$inquiry->result;
                     @endphp
                     <section class="ft-detail-card ft-inquiry-products-card ft-inquiry-inline-products-card">
                         <div class="ft-inquiry-description-head ft-inquiry-inline-products-head">
@@ -902,7 +892,7 @@
                                             </div>
                                         </td>
                                         <td class="ft-product-delete-cell" data-label="Action">
-                                            @if($canEditInquiryProducts)
+                                            @if($canDeleteInquiryProducts)
                                                 <button
                                                     type="button"
                                                     class="ft-inline-product-delete"
@@ -924,12 +914,13 @@
                             </table>
                         </div>
 
-                        @if($canEditInquiryProducts)
+                        @if($canCreateInquiryProducts)
                             <div class="ft-product-actions ft-inquiry-inline-product-actions">
                                 <button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addInquiryItem" wire:loading.attr="disabled" wire:target="addInquiryItem">＋ Add product</button>
                             </div>
                         @endif
                     </section>
+                    @endif
 
                     <div id="tab-workflow" class="ft-inquiry-overview-taskflow ft-inquiry-workflow-pane">
                         @if(auth()->user()->canModule('tasks', 'view'))
@@ -965,6 +956,7 @@
                                     <small>ATTACHING TO</small>
                                     <strong>{{ $taskDocumentModalTask->title }}</strong>
                                     <span>INQ-TASK-{{ str_pad((string) $taskDocumentModalTask->id, 5, '0', STR_PAD_LEFT) }} &nbsp;·&nbsp; {{ $inquiry->sourceWorkflow?->name ?? 'Inquiry Taskflow' }}</span>
+                                    <span class="ft-inquiry-task-document-reference"><b>Inquiry Reference:</b> {{ $inquiry->reference_number ?: '—' }}</span>
                                 </div>
                                 <span class="ft-inquiry-task-document-target-lock">▣&nbsp; Task selected</span>
                             </div>

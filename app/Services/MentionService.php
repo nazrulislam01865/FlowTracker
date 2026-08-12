@@ -10,7 +10,10 @@ use Illuminate\Support\Str;
 
 class MentionService
 {
+    private const DISPLAY_TOKEN_PATTERN = '/@\[([^\]\r\n]+)\]\((\d+)\)|(?<![\pL\pN._-])@([\pL\pN][\pL\pN._-]*\.(\d+))\b|(?<![\pL\pN._-])@([\pL\pN][\pL\pN._-]{0,80})/u';
+
     private ?Collection $renderUsers = null;
+    private ?Collection $renderAliases = null;
 
     public function optionsForCreate(User $actor): Collection
     {
@@ -105,15 +108,53 @@ class MentionService
         return nl2br($this->renderTokens(e($text)));
     }
 
+    /**
+     * Return notification/list-safe plain text with stored mention handles replaced
+     * by the user's current display name. The stored content is left untouched so
+     * mention parsing and deep links keep using the durable user-id token.
+     */
+    public function displayText(?string $text): string
+    {
+        $plain = app(RichTextService::class)->plainText((string) $text);
+        if ($plain === '') return '';
+
+        $users = $this->renderUsers();
+        $aliases = $this->renderAliases();
+
+        return preg_replace_callback(
+            self::DISPLAY_TOKEN_PATTERN,
+            function (array $match) use ($users, $aliases): string {
+                $id = (int) (($match[2] ?? 0) ?: ($match[4] ?? 0));
+                $user = $id > 0 ? $users->get($id) : null;
+
+                if (!$user) {
+                    $plainAlias = Str::lower(trim((string) ($match[5] ?? ''), '._-'));
+                    $userId = $plainAlias !== '' ? $aliases->get($plainAlias) : null;
+                    $user = $userId ? $users->get((int) $userId) : null;
+                }
+
+                return $user ? '@'.$user->name : $match[0];
+            },
+            $plain,
+        ) ?? $plain;
+    }
+
     private function renderTokens(string $safeContent): string
     {
         $users = $this->renderUsers();
 
         return preg_replace_callback(
-            '/@\[([^\]\r\n]+)\]\((\d+)\)|(?<![\pL\pN._-])@([\pL\pN][\pL\pN._-]*\.(\d+))\b/u',
+            self::DISPLAY_TOKEN_PATTERN,
             function (array $match) use ($users): string {
-                $id = (int) ($match[2] ?: ($match[4] ?? 0));
-                $user = $users->get($id);
+                $id = (int) (($match[2] ?? 0) ?: ($match[4] ?? 0));
+                $user = $id > 0 ? $users->get($id) : null;
+
+                if (!$user) {
+                    $plainAlias = Str::lower(trim((string) ($match[5] ?? ''), '._-'));
+                    $userId = $plainAlias !== '' ? $this->renderAliases()->get($plainAlias) : null;
+                    $user = $userId ? $users->get((int) $userId) : null;
+                }
+
                 if (!$user) return $match[0];
 
                 return '<span class="ft-user-mention" title="'.e($user->name).'">@'.e($user->name).'</span>';
@@ -143,10 +184,29 @@ class MentionService
 
     private function renderUsers(): Collection
     {
+        // Historical content should continue to show the human name even if a
+        // previously-mentioned account is later deactivated. Creation/search
+        // options still remain active-user-only in activeUserOptions().
         return $this->renderUsers ??= User::query()
-            ->where('is_active', true)
             ->get(['id', 'name', 'email'])
             ->keyBy('id');
+    }
+
+    private function renderAliases(): Collection
+    {
+        if ($this->renderAliases) return $this->renderAliases;
+
+        $aliases = [];
+        foreach ($this->renderUsers() as $user) {
+            foreach ($this->aliasesFor($user) as $alias) {
+                $aliases[$alias] ??= [];
+                $aliases[$alias][] = (int) $user->id;
+            }
+        }
+
+        return $this->renderAliases = collect($aliases)
+            ->filter(fn (array $ids) => count(array_unique($ids)) === 1)
+            ->map(fn (array $ids) => (int) array_values(array_unique($ids))[0]);
     }
 
     private function baseHandle(User $user): string

@@ -11,7 +11,6 @@
     $isActive = is_bool($active) ? $active : request()->routeIs($route);
     if (!is_bool($active)) {
         if ($route === 'task-pack.setup') $isActive = $isActive || request()->routeIs('task-pack.*');
-        if ($route === 'workflow.setup') $isActive = $isActive || request()->routeIs('workflow.*');
         if ($route === 'jobs.index') $isActive = $isActive || request()->routeIs('orders.bulk-import*');
     }
 @endphp
@@ -28,6 +27,7 @@
         @case('notifications')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 7-3 9h18c0-2-3-2-3-9"/><path d="M10 21h4"/></svg>@break
         @case('workflow')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 5h5v5H5zM14 5h5v5h-5zM14 14h5v5h-5z"/><path d="M10 7.5h4M16.5 10v4M5 16.5h9"/></svg>@break
         @case('master')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v4H4zM4 11h16v4H4zM4 17h16v3H4z"/></svg>@break
+        @case('dot')<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none"/></svg>@break
         @case('plus')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>@break
         @case('upload')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>@break
         @default<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>

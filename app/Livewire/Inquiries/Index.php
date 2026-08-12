@@ -6,6 +6,7 @@ use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
 use App\Models\InquiryItem;
+use App\Models\MasterRecord;
 use App\Models\Document;
 use App\Models\Client;
 use App\Models\User;
@@ -13,6 +14,8 @@ use App\Models\WorkflowTemplate;
 use App\Services\AccessControlService;
 use App\Services\InquiryService;
 use App\Services\MentionService;
+use App\Services\MasterDataService;
+use App\Services\ProductImageService;
 use App\Services\WorkspaceSettingsService;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Schema;
@@ -21,16 +24,22 @@ use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
+use Throwable;
 
 class Index extends Component
 {
     use HandlesInlineEdits, WithFileUploads, WithPagination;
 
+    private const INQUIRIES_PER_PAGE = 10;
+
     public string $search = '';
     public string $quick = 'all';
-    public bool $hideCompleted = true;
-    public int $perPage = 20;
-    public array $metrics = ['active' => 0, 'converted' => 0, 'dead' => 0, 'dueToday' => 0];
+    public string $metricFilter = '';
+    public string $listClient = '';
+    public string $listClientLabel = '';
+    public string $listStatus = '';
+    public bool $hideCompleted = false;
+    public array $metrics = ['active' => 0, 'completed' => 0, 'attention' => 0, 'dueToday' => 0];
 
     public bool $showCreate = false;
     public ?int $selectedInquiryId = null;
@@ -68,6 +77,16 @@ class Index extends Component
     public array $createAttachments = [];
     public array $createProductRows = [];
     public array $createProductCategoryOptions = [];
+    public string $createProductSearch = '';
+    public string $createProductCategoryFilter = '';
+    public bool $createProductShowAllResults = false;
+    public bool $showCreateOrderProductModal = false;
+    public string $newProductCode = '';
+    public ?int $newProductCategoryId = null;
+    public string $newProductCategorySearch = '';
+    public string $newProductCategoryName = '';
+    public string $newProductName = '';
+    public $newProductImage = null;
 
     // Inquiry product editor (Inquiry details).
     public bool $editingInquiryProducts = false;
@@ -151,13 +170,73 @@ class Index extends Component
     }
 
     public function updatedSearch(): void { $this->resetPage('inquiryPage'); }
-    public function updatedPerPage(): void { $this->perPage = max(10, min(50, $this->perPage)); $this->resetPage('inquiryPage'); }
-    public function updatedHideCompleted(): void { $this->resetPage('inquiryPage'); }
+    public function updatedListClient(): void { $this->resetPage('inquiryPage'); }
+    public function updatedListStatus(): void
+    {
+        $allowedStatuses = app(InquiryService::class)->taskStatusFilterOptions();
+        abort_unless(
+            $this->listStatus === '' || $allowedStatuses->contains($this->listStatus),
+            422,
+            'Invalid task status filter.'
+        );
+
+        $this->resetPage('inquiryPage');
+    }
+
+    public function setInquiryListFilter(string $property, mixed $value): void
+    {
+        abort_unless($property === 'listClient', 422, 'Unsupported Inquiry filter.');
+        abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
+
+        $raw = trim((string) $value);
+        if ($raw === '') {
+            $this->listClient = '';
+            $this->listClientLabel = '';
+            $this->resetPage('inquiryPage');
+            return;
+        }
+
+        abort_unless(ctype_digit($raw), 422, 'Please choose a valid client.');
+        $id = (int) $raw;
+        $selected = app(\App\Services\FilterOptionService::class)
+            ->options(auth()->user(), 'clients', 'inquiries', '', $id, 20)
+            ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
+        abort_unless($selected, 422, 'That client is no longer available.');
+
+        $this->listClient = (string) $id;
+        $this->listClientLabel = (string) ($selected['label'] ?? '');
+        $this->resetPage('inquiryPage');
+    }
+    public function updatedHideCompleted(): void
+    {
+        // Hide completed and the Completed summary card are mutually exclusive.
+        if ($this->hideCompleted && $this->metricFilter === 'completed') {
+            $this->metricFilter = '';
+        }
+        $this->resetPage('inquiryPage');
+    }
 
     public function setQuick(string $quick): void
     {
-        abort_unless(in_array($quick, ['all', 'active', 'converted', 'dead'], true), 422);
+        abort_unless(in_array($quick, ['all', 'attention'], true), 422);
         $this->quick = $quick;
+        $this->resetPage('inquiryPage');
+    }
+
+    public function setMetricFilter(string $metric): void
+    {
+        abort_unless(in_array($metric, ['active', 'completed', 'attention', 'dueToday'], true), 422);
+        abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
+
+        // Clicking the selected summary card again clears only the card filter.
+        $this->metricFilter = $this->metricFilter === $metric ? '' : $metric;
+
+        // The Completed summary must remain visible even if the user had
+        // previously enabled Hide completed. Keep the controls mutually honest.
+        if ($this->metricFilter === 'completed') {
+            $this->hideCompleted = false;
+        }
+
         $this->resetPage('inquiryPage');
     }
 
@@ -185,11 +264,6 @@ class Index extends Component
         if ($this->createReceivedDate === '') {
             $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         }
-        // Products remain optional, but keep one empty row visible by default so
-        // users can enter product details immediately without opening the section first.
-        if ($this->createProductRows === []) {
-            $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1];
-        }
         $this->loadCreateOptions();
     }
 
@@ -207,6 +281,358 @@ class Index extends Component
         unset($this->createProductRows[$index]);
         $this->createProductRows = array_values($this->createProductRows);
         $this->resetValidation('createProductRows');
+    }
+
+    public function updatedCreateProductSearch(): void
+    {
+        $this->createProductShowAllResults = false;
+    }
+
+    public function updatedCreateProductCategoryFilter(): void
+    {
+        $this->createProductShowAllResults = false;
+    }
+
+    public function showAllCreateProductResults(): void
+    {
+        $this->createProductShowAllResults = true;
+    }
+
+    public function focusCreateProductSearch(): void
+    {
+        $this->dispatch('focus-create-order-product-search');
+    }
+
+    public function selectCreateProduct(int $productId): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+
+        $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
+        $productCategory = trim((string) ($product->parent?->name ?? ''));
+        if ($productCategory === '') {
+            $legacyDescription = trim((string) $product->description);
+            $productCategory = trim(explode(' ·', $legacyDescription, 2)[0]);
+        }
+        $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
+
+        $alreadySelected = collect($this->createProductRows)->contains(
+            fn (array $row): bool => (int) ($row['product_id'] ?? 0) === (int) $product->id
+        );
+
+        if (!$alreadySelected) {
+            abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
+            $this->createProductRows[] = [
+                'product_id' => (int) $product->id,
+                'category' => $productCategory,
+                'product' => (string) $product->name,
+                'quantity' => 1000,
+                'notes' => '',
+            ];
+        }
+
+        $this->resetValidation('createProductRows');
+        $this->dispatch('create-order-product-selected');
+    }
+
+    public function incrementCreateProductQuantity(int $index): void
+    {
+        abort_unless(array_key_exists($index, $this->createProductRows), 422);
+        $current = max(1, (int) ($this->createProductRows[$index]['quantity'] ?? 1));
+        $this->createProductRows[$index]['quantity'] = min(999999999, $current + 1);
+        $this->resetValidation("createProductRows.$index.quantity");
+    }
+
+    public function decrementCreateProductQuantity(int $index): void
+    {
+        abort_unless(array_key_exists($index, $this->createProductRows), 422);
+        $current = max(1, (int) ($this->createProductRows[$index]['quantity'] ?? 1));
+        $this->createProductRows[$index]['quantity'] = max(1, $current - 1);
+        $this->resetValidation("createProductRows.$index.quantity");
+    }
+
+    public function openCreateOrderProductModal(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
+
+        $this->resetCreateOrderProductModal();
+        $this->showCreateOrderProductModal = true;
+    }
+
+    public function openCreateOrderProductModalFromSearch(): void
+    {
+        $searchedName = trim($this->createProductSearch);
+        $this->openCreateOrderProductModal();
+        $this->newProductName = $searchedName;
+    }
+
+    public function closeCreateOrderProductModal(): void
+    {
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+    }
+
+    public function selectCreateOrderProductCategory(int $categoryId): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        if (!$this->newProductCodeReadyForCategory()) return;
+
+        $category = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product_category')
+            ->active()
+            ->findOrFail($categoryId);
+
+        $this->newProductCategoryId = (int) $category->id;
+        $this->newProductCategorySearch = (string) $category->name;
+        $this->newProductCategoryName = '';
+        $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+        $this->dispatch('create-order-product-category-selected');
+    }
+
+    public function beginCreateOrderProductCategory(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        if (!$this->newProductCodeReadyForCategory()) return;
+        $this->newProductCategoryName = trim($this->newProductCategorySearch);
+        $this->resetValidation('newProductCategoryName');
+    }
+
+    public function cancelCreateOrderProductCategory(): void
+    {
+        $this->newProductCategoryName = '';
+        $this->resetValidation('newProductCategoryName');
+    }
+
+    public function createCreateOrderProductCategory(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        if (!$this->newProductCodeReadyForCategory()) return;
+
+        $name = trim($this->newProductCategoryName ?: $this->newProductCategorySearch);
+        $this->newProductCategoryName = $name;
+        $this->validate(['newProductCategoryName' => ['required', 'string', 'max:255']]);
+
+        $service = app(MasterDataService::class);
+        $workspaceId = $service->workspaceId();
+        $existing = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType('product_category')
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->first();
+
+        if ($existing) {
+            if ($existing->trashed() || $existing->status !== 'active') {
+                $this->addError('newProductCategoryName', 'A category with this name already exists but is inactive. Activate it from Product Categories first.');
+                return;
+            }
+
+            $this->newProductCategoryId = (int) $existing->id;
+            $this->newProductCategorySearch = (string) $existing->name;
+            $this->newProductCategoryName = '';
+            $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+            $this->dispatch('create-order-product-category-created');
+            return;
+        }
+
+        $category = $service->save('product_category', [
+            'code' => $service->nextCode('product_category'),
+            'name' => $name,
+            'description' => null,
+            'parent_id' => null,
+            'status' => 'active',
+            'sort_order' => ((int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->max('sort_order')) + 1,
+            'metadata' => null,
+        ]);
+
+        $this->newProductCategoryId = (int) $category->id;
+        $this->newProductCategorySearch = (string) $category->name;
+        $this->newProductCategoryName = '';
+        $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+        $this->dispatch('create-order-product-category-created');
+    }
+
+    public function updatedNewProductCategorySearch(): void
+    {
+        $search = trim($this->newProductCategorySearch);
+        if ($this->newProductCategoryId) {
+            $selectedName = MasterRecord::query()
+                ->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product_category')
+                ->whereKey($this->newProductCategoryId)
+                ->value('name');
+
+            if (!$selectedName || mb_strtolower(trim((string) $selectedName)) !== mb_strtolower($search)) {
+                $this->newProductCategoryId = null;
+            }
+        }
+        $this->resetValidation('newProductCategoryId');
+    }
+
+    public function updatedNewProductCode(): void
+    {
+        $this->newProductCode = strtoupper(trim($this->newProductCode));
+        $this->resetValidation('newProductCode');
+    }
+
+    private function newProductCodeReadyForCategory(): bool
+    {
+        $code = strtoupper(trim($this->newProductCode));
+        $this->newProductCode = $code;
+
+        if ($code === '') {
+            $this->addError('newProductCode', 'Enter the SKU / product code first.');
+            return false;
+        }
+
+        if (mb_strlen($code) > 40 || preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $code) !== 1) {
+            $this->addError('newProductCode', 'Use letters, numbers, dots, dashes or underscores only. Maximum 40 characters.');
+            return false;
+        }
+
+        $duplicate = MasterRecord::withTrashed()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+            ->first();
+
+        if ($duplicate) {
+            $this->addError('newProductCode', $duplicate->trashed()
+                ? 'This product code is reserved by an archived product.'
+                : 'This product code already exists.');
+            return false;
+        }
+
+        $this->resetValidation('newProductCode');
+        return true;
+    }
+
+    public function updatedNewProductImage(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        $this->validateOnly('newProductImage', [
+            'newProductImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+    }
+
+    public function selectDuplicateCreateOrderProduct(int $productId): void
+    {
+        $this->selectCreateProduct($productId);
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+    }
+
+    public function viewSimilarCreateProducts(): void
+    {
+        $this->createProductSearch = trim($this->newProductName);
+        if ($this->newProductCategoryId) {
+            $this->createProductCategoryFilter = (string) $this->newProductCategoryId;
+        }
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal(false);
+        $this->dispatch('focus-create-order-product-search');
+    }
+
+    public function createAndAddOrderProduct(): void
+    {
+        abort_unless($this->showCreate && $this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('inquiries', 'create'), 403);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
+
+        $this->newProductCode = strtoupper(trim($this->newProductCode));
+        $this->newProductName = trim($this->newProductName);
+
+        $data = $this->validate([
+            'newProductCode' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
+            'newProductCategoryId' => ['required', 'integer'],
+            'newProductName' => ['required', 'string', 'max:255'],
+            'newProductImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $service = app(MasterDataService::class);
+        $workspaceId = $service->workspaceId();
+        $duplicate = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType('product')
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($data['newProductCode'])])
+            ->first();
+
+        if ($duplicate) {
+            $this->addError('newProductCode', $duplicate->trashed()
+                ? 'This product code is reserved by an archived product.'
+                : 'This product code already exists.');
+            return;
+        }
+
+        $category = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('product_category')
+            ->active()
+            ->find((int) $data['newProductCategoryId']);
+        if (!$category) {
+            $this->addError('newProductCategoryId', 'Select a valid active product category.');
+            return;
+        }
+
+        try {
+            $product = $service->save('product', [
+                'code' => $data['newProductCode'],
+                'name' => $data['newProductName'],
+                'description' => null,
+                'parent_id' => $category->id,
+                'status' => 'active',
+                'sort_order' => ((int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->max('sort_order')) + 1,
+                'metadata' => null,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'The product could not be created.';
+            $this->addError('newProductCode', $message);
+            return;
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->addError('newProductCode', 'The product could not be created. Please try again.');
+            return;
+        }
+
+        $imageStored = true;
+        if ($this->newProductImage) {
+            try {
+                app(ProductImageService::class)->replace($product, $this->newProductImage);
+            } catch (Throwable $exception) {
+                report($exception);
+                $imageStored = false;
+            }
+        }
+
+        $this->selectCreateProduct((int) $product->id);
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+        if (!$imageStored) {
+            $this->dispatch('flowtrack-toast', message: 'Product created and selected. The image could not be stored.');
+        }
+    }
+
+    private function resetCreateOrderProductModal(bool $resetSearchErrors = true): void
+    {
+        $this->newProductCode = '';
+        $this->newProductCategoryId = null;
+        $this->newProductCategorySearch = '';
+        $this->newProductCategoryName = '';
+        $this->newProductName = '';
+        $this->newProductImage = null;
+        if ($resetSearchErrors) {
+            $this->resetValidation([
+                'newProductCode',
+                'newProductCategoryId',
+                'newProductCategoryName',
+                'newProductName',
+                'newProductImage',
+            ]);
+        }
     }
 
     public function cancelCreate(): void
@@ -551,6 +977,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $inquiry = $this->selectedInquiry(['items']);
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
         abort_unless($service->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -604,6 +1031,7 @@ class Index extends Component
     {
         abort_unless($this->editingInquiryProducts && $this->selectedInquiryId, 403);
         $inquiry = $this->selectedInquiry();
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
         abort_unless(app(InquiryService::class)->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -643,6 +1071,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $inquiry = $this->selectedInquiry();
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
         abort_unless($this->editingInquiryProducts && $service->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1421,15 +1850,24 @@ class Index extends Component
     private function listPageData(User $user): array
     {
         $service = app(InquiryService::class);
+        $selectedClientId = $this->listClient !== '' ? (int) $this->listClient : null;
         $paginator = $service->paginate($user, [
             'search' => $this->search,
             'quick' => $this->quick,
+            'metric_filter' => $this->metricFilter,
+            'client_id' => $selectedClientId,
+            'status' => $this->listStatus,
             'hide_completed' => $this->hideCompleted,
-        ], $this->perPage);
+        ], self::INQUIRIES_PER_PAGE);
+        $listClientFilterOptions = app(\App\Services\FilterOptionService::class)
+            ->options($user, 'clients', 'inquiries', '', $selectedClientId, 6);
+
         return [
             'mode' => 'list',
             'inquiryPaginator' => $paginator,
             'inquiryRows' => $service->listRows($paginator, $user),
+            'listClientFilterOptions' => $listClientFilterOptions,
+            'listStatusOptions' => $service->taskStatusFilterOptions(),
             'selectedInquiry' => null,
             'selectedTask' => null,
         ];
@@ -1437,16 +1875,142 @@ class Index extends Component
 
     private function createPageData(): array
     {
+        $user = auth()->user();
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $productCategories = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('product_category')
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->get(['id', 'name', 'code']);
+
+        $catalog = app(\App\Services\ProductCatalogService::class);
+        $activeProductCount = $catalog->activeCount();
+        $search = trim($this->createProductSearch);
+        $categoryFilterId = ctype_digit(trim($this->createProductCategoryFilter))
+            ? (int) $this->createProductCategoryFilter
+            : 0;
+        $productResultTotal = $catalog->orderSearchCount($search, $categoryFilterId ?: null);
+        $resultLimit = $this->createProductShowAllResults || $productResultTotal <= 20 ? 20 : 3;
+        $productSearchResults = $catalog->searchForOrderCreation($search, $categoryFilterId ?: null, $resultLimit);
+        $selectedProductDetails = $catalog->selectedProducts(collect($this->createProductRows)->pluck('product_id'));
+
+        $duplicateProduct = null;
+        $newProductCategoryMatches = collect();
+        $newProductSimilarCategories = collect();
+        $newProductSimilarProducts = collect();
+        $newProductSelectedCategory = null;
+        $newProductHasExactCategory = false;
+        $newProductImagePreview = null;
+
+        if ($this->showCreateOrderProductModal) {
+            $code = trim($this->newProductCode);
+            if ($code !== '') {
+                $duplicateProduct = MasterRecord::withTrashed()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->with('parent:id,name,status')
+                    ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+                    ->first(['id', 'type', 'parent_id', 'name', 'code', 'metadata', 'status']);
+            }
+
+            $categorySearch = trim($this->newProductCategorySearch);
+            $newProductCategoryMatches = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->active()
+                ->when($categorySearch !== '', fn ($query) => $query->where('name', 'like', '%'.$categorySearch.'%'))
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->limit(6)
+                ->get(['id', 'name', 'code']);
+
+            if ($categorySearch !== '') {
+                $newProductHasExactCategory = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($categorySearch)])
+                    ->exists();
+
+                $tokens = collect(preg_split('/\s+/', $categorySearch) ?: [])
+                    ->map(fn ($token) => trim($token))
+                    ->filter(fn ($token) => mb_strlen($token) >= 3)
+                    ->take(3)
+                    ->values();
+
+                if ($tokens->isNotEmpty()) {
+                    $newProductSimilarCategories = MasterRecord::query()
+                        ->forWorkspace($workspaceId)
+                        ->ofType('product_category')
+                        ->active()
+                        ->where(function ($query) use ($tokens) {
+                            foreach ($tokens as $token) $query->orWhere('name', 'like', '%'.$token.'%');
+                        })
+                        ->when($newProductCategoryMatches->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $newProductCategoryMatches->pluck('id')))
+                        ->orderBy('name')
+                        ->limit(2)
+                        ->get(['id', 'name', 'code']);
+                }
+            }
+
+            if ($this->newProductCategoryId) {
+                $newProductSelectedCategory = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->active()
+                    ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+            }
+
+            $nameSearch = trim($this->newProductName);
+            if (mb_strlen($nameSearch) >= 3) {
+                $newProductSimilarProducts = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->active()
+                    ->with('parent:id,name,status')
+                    ->where('name', 'like', '%'.$nameSearch.'%')
+                    ->when($duplicateProduct, fn ($query) => $query->whereKeyNot($duplicateProduct->id))
+                    ->orderBy('name')
+                    ->limit(3)
+                    ->get(['id', 'type', 'parent_id', 'name', 'code', 'metadata', 'status']);
+            }
+
+            if ($this->newProductImage) {
+                try {
+                    $newProductImagePreview = $this->newProductImage->temporaryUrl();
+                } catch (Throwable) {
+                    $newProductImagePreview = null;
+                }
+            }
+        }
+
         return [
             'mode' => 'create',
             'selectedInquiry' => null,
             'selectedTask' => null,
+            'catalogReady' => true,
+            'productCategories' => $productCategories,
+            'productSearchResults' => $productSearchResults,
+            'selectedProductDetails' => $selectedProductDetails,
+            'activeProductCount' => $activeProductCount,
+            'productResultTotal' => $productResultTotal,
+            'canCreateCatalogProduct' => $user->canModule('masterdata', 'create'),
+            'duplicateProduct' => $duplicateProduct,
+            'newProductCategoryMatches' => $newProductCategoryMatches,
+            'newProductSimilarCategories' => $newProductSimilarCategories,
+            'newProductSimilarProducts' => $newProductSimilarProducts,
+            'newProductSelectedCategory' => $newProductSelectedCategory,
+            'newProductHasExactCategory' => $newProductHasExactCategory,
+            'newProductImagePreview' => $newProductImagePreview,
         ];
     }
 
     private function detailPageData(User $user): array
     {
         $service = app(InquiryService::class);
+        $access = app(AccessControlService::class);
+        $canViewInquiryProducts = $access->can($user, 'products', 'view');
         $canViewTasks = $user->canModule('tasks', 'view')
             || Inquiry::query()->whereKey($this->selectedInquiryId)->where('created_by', $user->id)->exists();
         $with = [
@@ -1455,10 +2019,12 @@ class Index extends Component
             'owner:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
             'sourceWorkflow:id,name',
-            'items:id,inquiry_id,category,item_name,quantity,unit,sort_order',
             'currentTask:id,inquiry_id,assignee_id,title,due_date,status,started_at,completed_at',
             'currentTask.assignee:id,name,profile_image_path',
         ];
+        if ($canViewInquiryProducts) {
+            $with[] = 'items:id,inquiry_id,category,item_name,quantity,unit,sort_order';
+        }
         if ($this->detailTab === 'overview' && $canViewTasks) {
             // Overview owns the fully interactive Inquiry Taskflow. Load only tasks allowed by the Tasks matrix.
             $with['tasks'] = fn ($query) => app(AccessControlService::class)->applyInquiryTaskScope($query, $user)
@@ -1514,6 +2080,7 @@ class Index extends Component
         // task documents/comments into a modal on every task deep-link/render.
         $task = null;
         $canEditInquiry = $service->canEditVisible($user, $inquiry);
+        $canManageInquiryRecord = $canEditInquiry && ! $inquiry->result;
         // Keep overview editing aligned with the same current-task rule used by
         // the Inquiry list: furthest started open task, otherwise first queued.
         $activeTask = $inquiry->currentTask ?: $inquiry->tasks->first(fn (InquiryTask $row) => !$row->completed_at);
@@ -1535,6 +2102,10 @@ class Index extends Component
             'canExportDocuments' => $user->canModule('documents', 'export'),
             'canAssignInquiry' => $user->canModule('inquiries', 'assign') || app(AccessControlService::class)->isInquiryCreator($user, $inquiry),
             'canEditInquiry' => $canEditInquiry,
+            'canViewInquiryProducts' => $canViewInquiryProducts,
+            'canCreateInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'products', 'create') && $access->canEditParentRecordModule($user, 'products', $inquiry),
+            'canEditInquiryProducts' => $canManageInquiryRecord && $access->canEditParentRecordModule($user, 'products', $inquiry),
+            'canDeleteInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'products', 'delete'),
             'canEditActiveTask' => $canEditActiveTask,
             'canAddInquiryTask' => app(AccessControlService::class)->canCreateInquiryTask($user, $inquiry) && !$inquiry->result,
             'inquiryPriorities' => $this->detailTab === 'overview' ? app(\App\Services\MasterDataService::class)->active('priority') : collect(),
@@ -1546,16 +2117,17 @@ class Index extends Component
 
     private function persistInquiry(bool $draft): void
     {
-        // Product rows are optional. A completely blank row is treated as if the
-        // user did not add a product, while a partially completed row is still
-        // validated normally so incomplete catalogue data cannot be saved.
+        // Products remain optional for Inquiry creation. Rows selected from the
+        // canonical Product catalog are normalized here before validation.
         $this->createProductRows = collect($this->createProductRows)
             ->map(fn (array $row): array => [
+                'product_id' => (int) ($row['product_id'] ?? 0),
                 'category' => trim((string) ($row['category'] ?? '')),
                 'product' => trim((string) ($row['product'] ?? '')),
                 'quantity' => $row['quantity'] ?? 1,
+                'notes' => trim((string) ($row['notes'] ?? '')),
             ])
-            ->filter(fn (array $row): bool => $row['category'] !== '' || $row['product'] !== '')
+            ->filter(fn (array $row): bool => $row['product_id'] > 0 || $row['category'] !== '' || $row['product'] !== '')
             ->values()
             ->all();
 
@@ -1570,9 +2142,11 @@ class Index extends Component
             'createOwnerId' => ['required', 'exists:users,id'],
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
             'createProductRows' => ['array', 'max:25'],
+            'createProductRows.*.product_id' => ['required', 'integer'],
             'createProductRows.*.category' => ['required', 'string', 'max:255'],
             'createProductRows.*.product' => ['required', 'string', 'max:255'],
             'createProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'createProductRows.*.notes' => ['nullable', 'string', 'max:2000'],
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
         ]);
 
@@ -1627,23 +2201,26 @@ class Index extends Component
             return;
         }
 
-        $catalogOptions = app(\App\Services\FilterOptionService::class);
         $catalogInvalid = false;
+        $workspaceId = app(MasterDataService::class)->workspaceId();
         foreach ($data['createProductRows'] as $index => $row) {
-            $category = trim((string) $row['category']);
-            $product = trim((string) $row['product']);
-            $categoryValid = $catalogOptions->options(auth()->user(), 'product-categories', 'create-inquiry', '', $category, 20)
-                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $category);
-            $productValid = $catalogOptions->options(auth()->user(), 'products', 'create-inquiry', '', $product, 20, ['category' => $category])
-                ->contains(fn ($item) => (string) ($item['id'] ?? '') === $product);
+            $product = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product')
+                ->active()
+                ->with('parent:id,name,status,type')
+                ->find((int) $row['product_id']);
 
-            if (! $categoryValid) {
+            $valid = $product
+                && $product->parent
+                && $product->parent->type === 'product_category'
+                && $product->parent->status === 'active'
+                && (string) $product->name === trim((string) $row['product'])
+                && (string) $product->parent->name === trim((string) $row['category']);
+
+            if (!$valid) {
                 $catalogInvalid = true;
-                $this->addError("createProductRows.$index.category", 'That product category is no longer available.');
-            }
-            if (! $productValid) {
-                $catalogInvalid = true;
-                $this->addError("createProductRows.$index.product", 'That product is not available for the selected category.');
+                $this->addError("createProductRows.$index.product", 'That product is no longer available in the product catalog.');
             }
         }
         if ($catalogInvalid) return;
@@ -1681,6 +2258,7 @@ class Index extends Component
                 'name' => trim((string) $row['product']),
                 'quantity' => (int) $row['quantity'],
                 'unit' => 'pcs',
+                'notes' => trim((string) ($row['notes'] ?? '')),
             ], $data['createProductRows']),
             'tasks' => $tasks,
             'source_task_pack_id' => null,
@@ -1864,6 +2442,11 @@ class Index extends Component
         $this->createAttachments = [];
         $this->createProductRows = [];
         $this->createProductCategoryOptions = [];
+        $this->createProductSearch = '';
+        $this->createProductCategoryFilter = '';
+        $this->createProductShowAllResults = false;
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
         $this->createWorkflowId = null;
         $this->selectedWorkflowLabel = '';
         $this->resetCreateCollections();

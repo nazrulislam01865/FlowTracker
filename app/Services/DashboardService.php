@@ -180,22 +180,79 @@ class DashboardService
             default => null,
         };
 
-        return $query
-            ->select([
-                'id', 'user_id', 'flow_job_id', 'flow_task_id', 'inquiry_id',
-                'inquiry_task_id', 'type', 'title', 'message', 'read_at', 'created_at',
-            ])
-            ->with([
-                'job:id,job_number,title,client_id',
-                'job.client:id,name,logo_path',
-                'task:id,task_number,title,flow_job_id',
-                'inquiry:id,inquiry_number,subject',
-                'inquiryTask:id,inquiry_id,title',
-            ])
+        $columns = [
+            'id', 'user_id', 'flow_job_id', 'flow_task_id', 'inquiry_id',
+            'inquiry_task_id', 'type', 'title', 'message', 'read_at', 'created_at',
+        ];
+        $relations = [
+            'job:id,job_number,title,client_id',
+            'job.client:id,name,logo_path',
+            'task:id,task_number,title,flow_job_id',
+            'inquiry:id,inquiry_number,subject',
+            'inquiryTask:id,inquiry_id,title',
+        ];
+
+        if (FlowNotification::supportsActorIdentity()) {
+            $columns[] = 'actor_id';
+            array_unshift($relations, 'actor:id,name,profile_image_path');
+        }
+
+        $mentions = $query
+            ->select($columns)
+            ->with($relations)
             ->latest('created_at')
             ->latest('id')
             ->limit(max(1, min(50, $limit)))
             ->get();
+
+        // actor_id did not exist in older installations, and some historic rows
+        // may remain null even after the migration. The actor name is already
+        // encoded in mention titles, so resolve those rows in one query and attach
+        // the real User model. This keeps avatars/names correct during rolling
+        // deployments and for legacy data without creating an N+1 query.
+        $this->hydrateLegacyMentionActors($mentions);
+
+        return $mentions;
+    }
+
+    private function hydrateLegacyMentionActors(Collection $mentions): void
+    {
+        $nameByNotificationId = $mentions
+            ->filter(fn (FlowNotification $notification) => ! $notification->relationLoaded('actor') || ! $notification->getRelation('actor'))
+            ->mapWithKeys(function (FlowNotification $notification): array {
+                if (! preg_match('/^(.*?) mentioned (?:you|a user) in /u', (string) $notification->title, $match)) {
+                    return [];
+                }
+
+                $name = trim((string) ($match[1] ?? ''));
+                return $name !== '' ? [(int) $notification->id => $name] : [];
+            });
+
+        if ($nameByNotificationId->isEmpty()) {
+            return;
+        }
+
+        $names = $nameByNotificationId->values()->unique()->values();
+        $usersByName = User::query()
+            ->whereIn('name', $names->all())
+            ->get(['id', 'name', 'profile_image_path'])
+            ->groupBy(fn (User $candidate) => mb_strtolower(trim((string) $candidate->name)))
+            ->filter(fn (Collection $matches) => $matches->count() === 1)
+            ->map(fn (Collection $matches) => $matches->first());
+
+        foreach ($mentions as $notification) {
+            if ($notification->relationLoaded('actor') && $notification->getRelation('actor')) {
+                continue;
+            }
+
+            $name = $nameByNotificationId->get((int) $notification->id);
+            if (! $name) {
+                $notification->setRelation('actor', null);
+                continue;
+            }
+
+            $notification->setRelation('actor', $usersByName->get(mb_strtolower($name)));
+        }
     }
 
     public function unreadMentionCount(User $user): int

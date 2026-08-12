@@ -1,0 +1,107 @@
+/* 2026-08-12: Order detail header metadata aligned with Inquiry detail header. */
+.ft-exact-job-detail .ft-exact-job-header{
+    align-items:flex-start;
+    margin-bottom:12px;
+}
+.ft-exact-job-detail .ft-exact-job-header .ft-job-heading-copy{
+    flex:1 1 auto;
+    min-width:0;
+}
+.ft-exact-job-detail .ft-order-header-meta{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:8px 14px;
+    margin-top:14px;
+    color:#6d7d94;
+    font-size:12.5px;
+    font-weight:500;
+    line-height:1.35;
+}
+.ft-exact-job-detail .ft-order-header-meta-item{
+    display:inline-flex;
+    min-width:0;
+    align-items:center;
+    gap:7px;
+    white-space:nowrap;
+}
+.ft-exact-job-detail .ft-order-header-meta-item>span:last-child{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+}
+.ft-exact-job-detail .ft-order-header-meta-item strong{
+    color:#243650;
+    font-weight:650;
+}
+.ft-exact-job-detail .ft-order-header-meta-icon{
+    display:inline-grid;
+    width:17px;
+    height:17px;
+    flex:0 0 17px;
+    place-items:center;
+    color:#71839c;
+    font-size:13px;
+    line-height:1;
+}
+.ft-exact-job-detail .ft-order-header-meta-icon svg{
+    width:16px;
+    height:16px;
+    stroke:currentColor;
+    stroke-width:1.8;
+    stroke-linecap:round;
+    stroke-linejoin:round;
+}
+.ft-exact-job-detail .ft-order-header-meta-separator{
+    color:#8190a5;
+    font-size:12px;
+}
+.ft-exact-job-detail .ft-order-header-reference{gap:6px}
+.ft-exact-job-detail .ft-order-header-copy{
+    width:22px;
+    height:22px;
+    min-width:22px;
+    margin-left:1px;
+    padding:0;
+    border:0;
+    background:transparent;
+}
+.ft-exact-job-detail .ft-order-status-row{
+    display:flex;
+    align-items:center;
+    flex-wrap:wrap;
+    gap:9px;
+    margin-top:12px;
+}
+.ft-exact-job-detail .ft-order-status-row .ft-soft-pill{
+    min-height:29px;
+    padding:6px 11px;
+    border-radius:9px;
+    font-size:11px;
+    font-weight:800;
+}
+
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-order-header-meta{
+        gap:8px 10px;
+        font-size:11.5px;
+    }
+    .ft-exact-job-detail .ft-order-header-meta-separator{display:none}
+}
+
+@media(max-width:620px){
+    .ft-exact-job-detail .ft-order-header-meta{
+        display:grid;
+        grid-template-columns:1fr;
+    }
+    .ft-exact-job-detail .ft-order-header-meta-item{white-space:normal}
+    .ft-exact-job-detail .ft-order-status-row{
+        gap:7px;
+        margin-top:10px;
+    }
+    .ft-exact-job-detail .ft-order-status-row .ft-soft-pill{
+        min-height:28px;
+        padding:5px 9px;
+        font-size:10.5px;
+    }
+}

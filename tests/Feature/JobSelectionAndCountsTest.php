@@ -76,7 +76,7 @@ class JobSelectionAndCountsTest extends TestCase
             ->assertSet('createAssignmentReady', false)
             ->assertSet('createWorkflowReady', false)
             ->assertSet('workflowId', null)
-            ->assertCount('jobItems', 1)
+            ->assertCount('jobItems', 0)
             ->assertSee('Order basics')
             ->assertSee('Loading this section when needed')
             ->assertDontSee('Fast access to every active and completed order')

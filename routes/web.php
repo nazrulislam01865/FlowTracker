@@ -18,12 +18,12 @@ use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
+use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\RichTextImageController;
 // Reports page is intentionally disabled for now.
 // use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\UserEditController;
-use App\Http\Controllers\WorkflowSetupController;
 use App\Models\Document;
 use App\Support\StoredFileResponse;
 use App\Services\JobService;
@@ -69,15 +69,16 @@ Route::middleware('auth')->group(function () {
 
         return response()->noContent();
     })->name('session.timezone');
-    Route::post('/pusher/auth', function (\Illuminate\Http\Request $request) {
+    Route::post('/realtime/auth', function (\Illuminate\Http\Request $request) {
         $data = $request->validate([
             'socket_id' => ['required','string','max:80'],
             'channel_name' => ['required','string','max:160'],
         ]);
-        return response()->json(app(\App\Services\PusherChannelService::class)->authenticate(
+
+        return response()->json(app(\App\Services\ReverbChannelService::class)->authenticate(
             $data['socket_id'], $data['channel_name'], (int) auth()->id()
         ));
-    })->name('pusher.auth');
+    })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|countries|job-statuses|job-healths|phases')->name('filter-options.index');
@@ -150,6 +151,10 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('client')
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('client-logos.show');
+    Route::get('/master-data/products/{product}/image/{filename}', ProductImageController::class)
+        ->whereNumber('product')
+        ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
+        ->name('master-data.product-image');
     Route::post('/rich-text-images', [RichTextImageController::class, 'store'])
         ->name('rich-text-images.store');
     Route::get('/rich-text-images/{filename}/download', [RichTextImageController::class, 'download'])
@@ -162,10 +167,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/{user}/edit', UserEditController::class)->whereNumber('user')->name('users.edit');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 
-    // Workflow Setup can be granted read-only access independently from configuration rights.
-    Route::get('/workflow-setup', [WorkflowSetupController::class, 'index'])->middleware('permission:workflow.view')->name('workflow.setup');
-    Route::get('/workflow-setup/create', [WorkflowSetupController::class, 'create'])->middleware('permission:workflow.create')->name('workflow.create');
-    Route::get('/workflow-setup/{workflow}/edit', [WorkflowSetupController::class, 'edit'])->middleware('permission:workflow.update')->whereNumber('workflow')->name('workflow.edit');
+    // Workflow Setup page is intentionally muted for now.
+    // The workflow engine remains active for Orders/Inquiries, but no web route
+    // is exposed until the setup page is re-enabled.
 
     Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->middleware('permission:taskpacks.view')->name('task-pack.setup');
     Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');

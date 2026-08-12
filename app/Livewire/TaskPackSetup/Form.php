@@ -6,6 +6,7 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 
 use App\Models\TaskPack;
 use App\Models\User;
+use App\Services\FilterOptionService;
 use App\Services\MasterDataService;
 use App\Services\TaskPackService;
 use Illuminate\Validation\Rule;
@@ -29,7 +30,7 @@ class Form extends Component
             $pack = TaskPack::query()
                 ->where('workspace_id', app(TaskPackService::class)->workspaceId())
                 ->where('is_snapshot', false)
-                ->with('items')
+                ->with('items.defaultAssignee:id,name')
                 ->findOrFail($taskPackId);
 
             $this->packCode = (string) $pack->code;
@@ -41,6 +42,7 @@ class Form extends Component
                 'title' => (string) $item->title,
                 'description' => (string) $item->description,
                 'default_assignee_id' => $item->default_assignee_id,
+                'default_assignee_label' => (string) ($item->defaultAssignee?->name ?: 'Unassigned'),
                 'default_department_id' => $item->default_department_id,
                 'priority_id' => $item->priority_id,
                 'document_category_id' => $item->document_category_id,
@@ -65,6 +67,30 @@ class Form extends Component
     public function loadTaskPackOptions(): void
     {
         $this->optionsReady = true;
+    }
+
+    public function setTaskPackAssignee(string $property, mixed $value): void
+    {
+        abort_unless(auth()->user()?->canModule('taskpacks', $this->taskPackId ? 'edit' : 'create'), 403);
+        abort_unless(preg_match('/^tasks\.(\d+)\.default_assignee_id$/', $property, $matches) === 1, 422);
+
+        $index = (int) $matches[1];
+        abort_unless(array_key_exists($index, $this->tasks), 422);
+
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            $this->tasks[$index]['default_assignee_id'] = null;
+            $this->tasks[$index]['default_assignee_label'] = 'Unassigned';
+            $this->resetValidation("tasks.$index.default_assignee_id");
+            return;
+        }
+
+        abort_unless(ctype_digit($raw), 422);
+        $assignee = User::query()->where('is_active', true)->findOrFail((int) $raw);
+
+        $this->tasks[$index]['default_assignee_id'] = (int) $assignee->id;
+        $this->tasks[$index]['default_assignee_label'] = (string) $assignee->name;
+        $this->resetValidation("tasks.$index.default_assignee_id");
     }
 
     public function removeTask(int $index): void
@@ -147,6 +173,7 @@ class Form extends Component
             'title' => '',
             'description' => '',
             'default_assignee_id' => null,
+            'default_assignee_label' => 'Unassigned',
             'default_department_id' => null,
             'priority_id' => null,
             'document_category_id' => null,
@@ -160,10 +187,12 @@ class Form extends Component
         $master = app(MasterDataService::class);
         $user = auth()->user();
 
+        $assigneeFilterOptions = $this->optionsReady
+            ? app(FilterOptionService::class)->options($user, 'users', 'task-pack-setup', '', null, 5)
+            : collect();
+
         return view('livewire.task-pack-setup.form', [
-            'users' => $this->optionsReady
-                ? User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name'])
-                : collect(),
+            'assigneeFilterOptions' => $assigneeFilterOptions,
             'departments' => $this->optionsReady ? $master->active('department') : collect(),
             'priorities' => $this->optionsReady ? $master->active('priority') : collect(),
             'documentCategories' => $this->optionsReady ? $master->active('document_category') : collect(),

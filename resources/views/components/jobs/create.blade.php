@@ -2,6 +2,11 @@
     'clients','workflows','categories','priorities','clientId','workflowId','ownerId','jobItems','jobAttachments',
     'priority'=>'Medium',
     'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
+    'productCategories'=>collect(),'productSearchResults'=>collect(),'selectedProductDetails'=>collect(),'activeProductCount'=>0,'productResultTotal'=>0,
+    'canCreateCatalogProduct'=>false,'duplicateProduct'=>null,'newProductCategoryMatches'=>collect(),'newProductSimilarCategories'=>collect(),
+    'newProductSimilarProducts'=>collect(),'newProductSelectedCategory'=>null,'newProductHasExactCategory'=>false,'newProductImagePreview'=>null,
+    'createProductSearch'=>'','createProductCategoryFilter'=>'','createProductShowAllResults'=>false,'showCreateOrderProductModal'=>false,
+    'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'',
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'mentionUsers'=>collect(),
 ])
 @php
@@ -47,60 +52,7 @@
             </div>
         </section>
 
-        @if($catalogReady)
-        <section class="ft-create-section" wire:key="create-catalog-ready">
-            <div class="ft-create-section-title"><span>2</span><h2>Products & quantities</h2></div>
-            <div class="ft-product-rows">
-                @foreach($jobItems as $index => $item)
-                    @php
-                        $selectedCategory = $item['category'] ?? '';
-                        $selectedProduct = $item['product'] ?? '';
-                    @endphp
-                    <div class="ft-product-row" wire:key="job-product-{{ $index }}">
-                        <div>
-                            <x-ui.remote-filter
-                                class="ft-create-remote-select"
-                                label="Product category"
-                                property="jobItems.{{ $index }}.category"
-                                type="product-categories"
-                                context="create-job"
-                        action="setCreateSelector"
-                                :value="$selectedCategory"
-                                :selected-label="$selectedCategory ?: null"
-                                placeholder="Select category"
-                                :initial-options="$categoryFilterOptions"
-                                :clearable="false"
-                                wire:key="create-category-selector-{{ $index }}"
-                            />
-                            @error("jobItems.$index.category")<small class="validation-error">{{ $message }}</small>@enderror
-                        </div>
-                        <div>
-                            <x-ui.remote-filter
-                                class="ft-create-remote-select"
-                                label="Product"
-                                property="jobItems.{{ $index }}.product"
-                                type="products"
-                                context="create-job"
-                        action="setCreateSelector"
-                                :value="$selectedProduct"
-                                :selected-label="$selectedProduct ?: null"
-                                :placeholder="$selectedCategory ? 'Select product' : 'Select category first'"
-                                :params="['category' => $selectedCategory]"
-                                :disabled="blank($selectedCategory)"
-                                wire:key="create-product-selector-{{ $index }}-{{ md5($selectedCategory) }}"
-                            />
-                            @error("jobItems.$index.product")<small class="validation-error">{{ $message }}</small>@enderror
-                        </div>
-                        <label class="ft-qty-field"><b>Quantity</b><input type="number" min="1" wire:model.live="jobItems.{{ $index }}.quantity">@error("jobItems.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <button type="button" class="ft-product-delete" wire:click="removeProductRow({{ $index }})" @disabled(count($jobItems) <= 1) title="Remove product">▱</button>
-                    </div>
-                @endforeach
-            </div>
-            <div class="ft-product-row-footer"><button type="button" wire:click="addProductRow">＋ Add product</button><span>{{ count($jobItems) }} {{ \Illuminate\Support\Str::plural('product',count($jobItems)) }} · {{ number_format($totalUnits) }} total units</span></div>
-        </section>
-        @else
-            <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
-        @endif
+        @include('components.jobs.create-products')
 
         @if($assignmentReady)
         <section class="ft-create-section" wire:key="create-assignment-ready">
@@ -160,7 +112,7 @@
                     @error('workflowId')<small class="validation-error">{{ $message }}</small>@enderror
                 </div>
                 <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span>@if(auth()->user()->canAccess('workflow.view'))<a href="{{ route('workflow.setup') }}" wire:navigate>Preview workflow ↗</a>@else<span>Preview workflow ↗</span>@endif</div>
+                <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span><span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span></div>
                 <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>
             </div>
         </section>

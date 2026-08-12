@@ -74,6 +74,11 @@ class Task extends Model
         return $this->hasMany(Document::class, 'task_id');
     }
 
+    public function links(): HasMany
+    {
+        return $this->hasMany(TaskLink::class, 'task_id')->latest('id');
+    }
+
     public function activities(): MorphMany
     {
         return $this->morphMany(Activity::class, 'subject');

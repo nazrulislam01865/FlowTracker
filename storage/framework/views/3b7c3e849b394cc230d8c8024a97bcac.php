@@ -21,13 +21,14 @@
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && app(\App\Services\PusherChannelService::class)->enabled()): ?>
-        <meta name="flowtrack-pusher-key" content="<?php echo e(config('services.pusher.key')); ?>">
-        <meta name="flowtrack-pusher-cluster" content="<?php echo e(config('services.pusher.cluster','mt1')); ?>">
-        <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.<?php echo e(auth()->id()); ?>">
-        <meta name="flowtrack-pusher-workspace-channel" content="private-flowtrack.workspace.<?php echo e(max(1, (int) config('flowtrack.workspace_id', 1))); ?>">
-        <meta name="flowtrack-pusher-auth" content="<?php echo e(route('pusher.auth')); ?>">
-        <script src="https://js.pusher.com/8.4.0/pusher.min.js" defer></script>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->check() && app(\App\Services\ReverbChannelService::class)->enabled()): ?>
+        <meta name="flowtrack-reverb-key" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.key')); ?>">
+        <meta name="flowtrack-reverb-host" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.options.host')); ?>">
+        <meta name="flowtrack-reverb-port" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.options.port', 443)); ?>">
+        <meta name="flowtrack-reverb-scheme" content="<?php echo e(data_get(config('reverb'), 'apps.apps.0.options.scheme', 'https')); ?>">
+        <meta name="flowtrack-reverb-channel" content="private-flowtrack.user.<?php echo e(auth()->id()); ?>">
+        <meta name="flowtrack-reverb-workspace-channel" content="private-flowtrack.workspace.<?php echo e(max(1, (int) config('flowtrack.workspace_id', 1))); ?>">
+        <meta name="flowtrack-reverb-auth" content="<?php echo e(route('realtime.auth')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php echo app('Illuminate\Foundation\Vite')([
         'resources/css/generated/flowtrack-01.css',
@@ -36,19 +37,22 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ]); ?>
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-4">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260812-taskpack-assignee-1">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-09">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260812-20">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260812-4">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260812-19">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260812-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
@@ -59,7 +63,7 @@
     <main class="main">
         <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
         <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?>">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile','inquiries.*')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>
     </main>
@@ -67,7 +71,8 @@
 </div>
 <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::scripts(); ?>
 
-    <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
+    <script src="/js/flowtrack-reverb-client.js?v=20260812-1"></script>
+    <script src="/js/flowtrack-workspace-refresh.js?v=20260812-reverb-1"></script>
     <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script src="/js/flowtrack-client-validation-focus.js?v=20260811-1"></script>

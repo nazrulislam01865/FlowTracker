@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Models\FlowJob;
+use App\Models\Inquiry;
 use App\Models\InquiryTask;
 use App\Models\RoleModuleAccess;
 use App\Models\User;
@@ -20,6 +22,8 @@ class AccessControlService
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
         'inquiries' => ['name' => 'Inquiries', 'group' => 'Commercial'],
         'jobs' => ['name' => 'Orders', 'group' => 'Commercial'],
+        'products' => ['name' => 'Product', 'group' => 'Commercial'],
+        'finance' => ['name' => 'Finance', 'group' => 'Commercial'],
         'tasks' => ['name' => 'Tasks & Checklists', 'group' => 'Operations'],
         'documents' => ['name' => 'Documents', 'group' => 'Records'],
         'workflow' => ['name' => 'Workflow Setup', 'group' => 'Administration'],
@@ -42,6 +46,8 @@ class AccessControlService
         'clients' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'inquiries' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'jobs' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'products' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'finance' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'tasks' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'documents' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'workflow' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
@@ -51,6 +57,9 @@ class AccessControlService
 
     /** These modules do not have per-record ownership scope. */
     public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata'];
+
+    /** Shared Product/Finance capabilities inherit record visibility from the parent Inquiry/Order. */
+    public const PARENT_RECORD_MODULES = ['products', 'finance'];
 
     public const SCOPED_MODULES = ['inquiries', 'jobs', 'tasks', 'documents'];
 
@@ -132,7 +141,7 @@ class AccessControlService
 
         $access = $this->access($user, $module);
         if (!$access) return false;
-        if (!self::isUniversalRecordModule($module) && $access->record_scope === 'none') return false;
+        if (!self::isUniversalRecordModule($module) && !self::isParentRecordModule($module) && $access->record_scope === 'none') return false;
         $actions = $access->actions ?: [];
 
         if ($action === 'edit') {
@@ -174,7 +183,7 @@ class AccessControlService
         if ($this->isAdministrator($user)) return 'all_records';
 
         $access = $this->access($user, $module);
-        if (self::isUniversalRecordModule($module)) {
+        if (self::isUniversalRecordModule($module) || self::isParentRecordModule($module)) {
             return $access && !empty($access->actions) ? 'all_records' : 'none';
         }
 
@@ -184,6 +193,36 @@ class AccessControlService
     public static function isUniversalRecordModule(string $module): bool
     {
         return in_array($module, self::UNIVERSAL_RECORD_MODULES, true);
+    }
+
+    public static function isParentRecordModule(string $module): bool
+    {
+        return in_array($module, self::PARENT_RECORD_MODULES, true);
+    }
+
+    /**
+     * Apply Edit Own / Edit All semantics for shared Product/Finance modules while
+     * the parent Inquiry/Order continues to own record visibility and scope.
+     */
+    public function canEditParentRecordModule(User $user, string $module, object $parent): bool
+    {
+        if (! self::isParentRecordModule($module)) return false;
+        if ($this->isAdministrator($user)) return true;
+        if (! $this->can($user, $module, 'view') || ! $this->can($user, $module, 'edit')) return false;
+        if ($this->canEditAll($user, $module)) return true;
+
+        if ($parent instanceof Inquiry) {
+            return $this->isInquiryCreator($user, $parent)
+                || (int) ($parent->owner_id ?? 0) === (int) $user->id;
+        }
+
+        if ($parent instanceof FlowJob) {
+            return $this->isJobCreator($user, $parent)
+                || (int) ($parent->owner_id ?? 0) === (int) $user->id
+                || (int) ($parent->coordinator_id ?? 0) === (int) $user->id;
+        }
+
+        return false;
     }
 
     public function canEditOwn(User $user, string $module): bool

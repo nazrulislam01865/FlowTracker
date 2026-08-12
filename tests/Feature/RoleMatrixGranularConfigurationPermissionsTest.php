@@ -25,13 +25,14 @@ class RoleMatrixGranularConfigurationPermissionsTest extends TestCase
         );
     }
 
-    public function test_configuration_routes_use_granular_permissions(): void
+    public function test_enabled_configuration_routes_use_granular_permissions_and_workflow_setup_is_muted(): void
     {
         $routes = file_get_contents(base_path('routes/web.php'));
 
-        $this->assertStringContainsString("middleware('permission:workflow.view')->name('workflow.setup')", $routes);
-        $this->assertStringContainsString("middleware('permission:workflow.create')->name('workflow.create')", $routes);
-        $this->assertStringContainsString("middleware('permission:workflow.update')->whereNumber('workflow')->name('workflow.edit')", $routes);
+        $this->assertStringNotContainsString("name('workflow.setup')", $routes);
+        $this->assertStringNotContainsString("name('workflow.create')", $routes);
+        $this->assertStringNotContainsString("name('workflow.edit')", $routes);
+        $this->assertStringContainsString('Workflow Setup page is intentionally muted for now.', $routes);
         $this->assertStringContainsString("middleware('permission:taskpacks.view')->name('task-pack.setup')", $routes);
         $this->assertStringContainsString("middleware('permission:taskpacks.create')->name('task-pack.create')", $routes);
         $this->assertStringContainsString("middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit')", $routes);

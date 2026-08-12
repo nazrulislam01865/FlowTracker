@@ -26,7 +26,7 @@
                 <b>{{ $blockers->count() === 1 ? $blockers->first()->label : $blockers->count().' Task Pack requirements block the next phase' }}</b>
                 <p>{{ $blockers->pluck('description')->implode(' ') }}</p>
             </div>
-            @if($blockingTask)<button type="button" wire:click="openTask({{ $blockingTask->id }})">View blocking task</button>@else<button type="button" wire:click="setDetailTab('documents')">View documents</button>@endif
+            @if($blockingTask)<button type="button" wire:click="openTask({{ $blockingTask->id }})">View blocking task</button>@else<button type="button" wire:click="setDetailTab('overview')">Review tasks</button>@endif
         </div>
     @else
         <div class="ft-success-banner"><span>✓</span><div><b>Ready for the next phase</b><p>All required Task Pack tasks and Task Pack documents are complete.</p></div></div>
@@ -66,14 +66,14 @@
                         <span class="{{ $documentsReady ? 'ok' : 'warn' }}">{{ $documentsReady ? '✓' : '!' }}</span><b>2</b><span>Task Pack documents</span>
                         <strong>{{ $currentRequired->isEmpty() ? 'Not required' : $receivedCurrent.' of '.$currentRequired->count().' received' }}</strong>
                         <em class="{{ $documentsReady ? 'complete' : 'blocked' }}">{{ $documentsReady ? 'Complete' : 'Review' }}</em>
-                        <button wire:click="setDetailTab('documents')">View documents</button>
+                        <button wire:click="setDetailTab('overview')">Review tasks</button>
                     </div>
                 </div>
 
                 <div class="ft-next-phase-box">
                     <span>▣</span>
                     <div><b>Next phase: {{ $next?->name ?? 'Completed' }}</b><p>{{ $blockers->isEmpty() ? 'All Task Pack requirements are ready.' : 'Complete the remaining Task Pack requirements.' }}</p></div>
-                    @if($blockingTask)<button class="ft-outline-btn" type="button" wire:click="openTask({{ $blockingTask->id }})">Open blocking task</button>@elseif(!$documentsReady)<button class="ft-outline-btn" type="button" wire:click="setDetailTab('documents')">Open documents</button>@else<button class="ft-outline-btn" type="button" wire:click="setDetailTab('overview')">Review</button>@endif
+                    @if($blockingTask)<button class="ft-outline-btn" type="button" wire:click="openTask({{ $blockingTask->id }})">Open blocking task</button>@elseif(!$documentsReady)<button class="ft-outline-btn" type="button" wire:click="setDetailTab('overview')">Review required files</button>@else<button class="ft-outline-btn" type="button" wire:click="setDetailTab('overview')">Review</button>@endif
                     @if($canChangeJobStatus)
                         <button class="{{ $blockers->isEmpty() ? 'ft-new-job-btn' : 'ft-disabled-btn' }}" wire:click="completePhase" @disabled($blockers->isNotEmpty())>Move to {{ $next?->name ?? 'Completed' }}</button>
                     @else

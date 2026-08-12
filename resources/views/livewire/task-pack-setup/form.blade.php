@@ -77,11 +77,22 @@
 
                         @if($optionsReady)
                         <div class="ft-admin-field" wire:key="task-pack-options-{{ $index }}">
-                            <label>Default assignee</label>
-                            <select wire:model="tasks.{{ $index }}.default_assignee_id">
-                                <option value="">Unassigned</option>
-                                @foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach
-                            </select>
+                            <x-ui.remote-filter
+                                class="ft-taskpack-assignee-filter"
+                                label="Default assignee"
+                                property="tasks.{{ $index }}.default_assignee_id"
+                                type="users"
+                                context="task-pack-setup"
+                                action="setTaskPackAssignee"
+                                :value="$task['default_assignee_id'] ?? ''"
+                                placeholder="Unassigned"
+                                :selected-label="$task['default_assignee_label'] ?? 'Unassigned'"
+                                :initial-options="$assigneeFilterOptions"
+                                :menu-width="320"
+                                :fixed-menu="true"
+                                wire:key="task-pack-assignee-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_assignee_id'] ?? 'none' }}"
+                            />
+                            @error("tasks.$index.default_assignee_id")<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
 
                         <div class="ft-admin-field">

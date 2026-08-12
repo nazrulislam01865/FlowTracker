@@ -90,6 +90,7 @@ class DocumentService
             'uploaded_by' => $user->id,
             'category' => $category,
             'name' => $file->getClientOriginalName(),
+            'note' => filled($data['note'] ?? null) ? trim((string) $data['note']) : null,
             'path' => $path,
             'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $file->getMimeType()),
             'size' => $file->getSize(),
@@ -102,7 +103,7 @@ class DocumentService
         return $document;
     }
 
-    public function linkExisting(Document $source, Task $task, User $user, bool $allowGenericAttachment = false): Document
+    public function linkExisting(Document $source, Task $task, User $user, bool $allowGenericAttachment = false, ?string $note = null): Document
     {
         abort_unless(app(AccessControlService::class)->can($user, 'documents', 'link'), 403);
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $user)->firstOrFail();
@@ -119,7 +120,7 @@ class DocumentService
         $document = Document::create([
             'document_number' => $this->nextNumber(), 'flow_job_id' => $task->flow_job_id, 'client_id' => $task->job?->client_id,
             'task_id' => $task->id, 'uploaded_by' => $user->id, 'category' => $category, 'name' => $source->name,
-            'path' => $source->path, 'mime_type' => $source->mime_type, 'size' => $source->size, 'version' => max(1, $version), 'is_final' => (bool) $source->is_final,
+            'note' => filled($note) ? trim((string) $note) : null, 'path' => $source->path, 'mime_type' => $source->mime_type, 'size' => $source->size, 'version' => max(1, $version), 'is_final' => (bool) $source->is_final,
         ]);
         $this->recordDocumentActivity($document, $user, 'linked');
         $this->notifyDocumentChange($document, $user, 'linked');

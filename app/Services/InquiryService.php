@@ -56,6 +56,21 @@ class InquiryService
             ->values();
     }
 
+    /**
+     * Inquiry-list Status filter options come directly from active Task Status
+     * Master Data for the current workspace.
+     */
+    public function taskStatusFilterOptions(): Collection
+    {
+        return app(MasterDataService::class)
+            ->active('task_status')
+            ->pluck('name')
+            ->map(fn ($name) => trim((string) $name))
+            ->filter()
+            ->unique()
+            ->values();
+    }
+
     public function defaultInquiryStatus(): string
     {
         $statuses = $this->inquiryStatusOptions();
@@ -127,7 +142,18 @@ class InquiryService
     {
         $search = trim((string) ($filters['search'] ?? ''));
         $quick = (string) ($filters['quick'] ?? 'all');
+        $metricFilter = (string) ($filters['metric_filter'] ?? '');
+        $clientId = (int) ($filters['client_id'] ?? 0);
+        $status = trim((string) ($filters['status'] ?? ''));
         $hideCompleted = (bool) ($filters['hide_completed'] ?? false);
+
+        if (!in_array($metricFilter, ['', 'active', 'completed', 'attention', 'dueToday'], true)) {
+            $metricFilter = '';
+        }
+
+        if ($status !== '' && !$this->taskStatusFilterOptions()->contains($status)) {
+            $status = '';
+        }
 
         $query = $this->visibleQuery($user)
             // Completion on the list is taskflow-derived. A legacy/imported Inquiry
@@ -135,13 +161,11 @@ class InquiryService
             // though every active Inquiry task is complete. Filter by both the
             // Inquiry lifecycle fields and the actual taskflow so Hide completed
             // always matches the Completed row the user sees in listRows().
-            ->when(
-                $quick === 'active' || ($hideCompleted && $quick === 'all'),
-                fn (Builder $q) => $this->applyUnfinishedListScope($q)
-            )
-            ->when($quick === 'active', fn (Builder $q) => $q->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'"))
-            ->when($quick === 'converted', fn (Builder $q) => $q->where('result', 'converted'))
-            ->when($quick === 'dead', fn (Builder $q) => $q->where('result', 'dead'))
+            ->when($hideCompleted && $metricFilter !== 'completed', fn (Builder $q) => $this->applyUnfinishedListScope($q))
+            ->when($metricFilter !== '', fn (Builder $q) => $this->applyMetricListScope($q, $metricFilter, $user))
+            ->when($status !== '', fn (Builder $q) => $this->applyTaskStatusListScope($q, $status))
+            ->when($quick === 'attention', fn (Builder $q) => $this->applyAttentionNeededListScope($q, $user))
+            ->when($clientId > 0, fn (Builder $q) => $q->where('inquiries.client_id', $clientId))
             ->when($search !== '', function (Builder $q) use ($search): void {
                 $q->where(function (Builder $match) use ($search): void {
                     $like = '%'.$search.'%';
@@ -163,10 +187,19 @@ class InquiryService
         // task. If nothing has started yet, fall back to the first queued task.
         // Keep every current-task subquery on the exact same ordering so title,
         // assignee, due date and position always describe the same task.
-        $currentTask = $this->currentTaskSubquery('title');
-        $currentTaskAssignee = $this->currentTaskSubquery('assignee_id');
-        $currentTaskDue = $this->currentTaskSubquery('due_date');
-        $currentTaskSequence = $this->currentTaskSubquery('sequence');
+        // When the Tasks due today summary filter is active, every task field
+        // shown in the Inquiry row must come from an unfinished task due today.
+        // Otherwise an Inquiry could match because one task is due today while
+        // the normal current-task selector displays an older overdue task, which
+        // makes the filter appear to include previous dates.
+        $currentTaskDueDate = $metricFilter === 'dueToday'
+            ? app(WorkspaceSettingsService::class)->localToday()->toDateString()
+            : null;
+        $currentTask = $this->currentTaskSubquery('title', $currentTaskDueDate);
+        $currentTaskAssignee = $this->currentTaskSubquery('assignee_id', $currentTaskDueDate);
+        $currentTaskDue = $this->currentTaskSubquery('due_date', $currentTaskDueDate);
+        $currentTaskStatus = $this->currentTaskSubquery('status', $currentTaskDueDate);
+        $currentTaskSequence = $this->currentTaskSubquery('sequence', $currentTaskDueDate);
         $firstItem = InquiryItem::query()
             ->select('item_name')
             ->whereColumn('inquiry_items.inquiry_id', 'inquiries.id')
@@ -186,6 +219,7 @@ class InquiryService
             ->selectSub($currentTask, 'current_task_title')
             ->selectSub($currentTaskAssignee, 'current_task_assignee_id')
             ->selectSub($currentTaskDue, 'current_task_due_date')
+            ->selectSub($currentTaskStatus, 'current_task_status')
             ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
             ->with(['client:id,name,logo_path', 'owner:id,name,profile_image_path', 'creator:id,name,profile_image_path', 'convertedJob:id,job_number,order_number'])
@@ -199,13 +233,111 @@ class InquiryService
             ->paginate(max(1, min(50, $perPage)), ['*'], $pageName);
     }
 
-    private function currentTaskSubquery(string $column): Builder
+    /**
+     * Apply one of the four summary-card filters. Each scope mirrors the metric
+     * displayed on the card so the card acts as a predictable list shortcut.
+     */
+    private function applyMetricListScope(Builder $query, string $metric, User $user): Builder
+    {
+        return match ($metric) {
+            'active' => $this->applyUnfinishedListScope($query)
+                ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'"),
+            'completed' => $this->applyCompletedListScope($query),
+            'attention' => $this->applyAttentionNeededListScope($query, $user),
+            'dueToday' => $this->applyDueTodayInquiryListScope($query, $user),
+            default => $query,
+        };
+    }
+
+    /**
+     * Match the same Completed state shown in listRows(): the Inquiry has a
+     * taskflow, every active task is completed, and it has not already moved to
+     * a final converted/closed result.
+     */
+    private function applyCompletedListScope(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('inquiries.result')
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->whereHas('tasks')
+            ->whereDoesntHave('tasks', fn (Builder $task) => $task->whereNull('completed_at'));
+    }
+
+    private function applyDueTodayInquiryListScope(Builder $query, User $user): Builder
+    {
+        $access = app(AccessControlService::class);
+        if (!$access->can($user, 'tasks', 'view')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $dueInquiryIds = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
+            ->whereNull('inquiry_tasks.completed_at')
+            ->whereDate('inquiry_tasks.due_date', $today)
+            ->select('inquiry_tasks.inquiry_id');
+
+        return $query
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->whereIn('inquiries.id', $dueInquiryIds);
+    }
+
+    /**
+     * Filter Inquiries by Task Status Master Data. An Inquiry matches when any
+     * of its active taskflow tasks currently has the selected task status.
+     */
+    private function applyTaskStatusListScope(Builder $query, string $status): Builder
+    {
+        return $query->whereHas('tasks', fn (Builder $task) => $task->where('status', $status));
+    }
+
+    /**
+     * The Inquiry-list "Requires attention" flag is derived from the CURRENT
+     * unfinished task shown in the row. Keep this predicate aligned with
+     * listRows() so both the summary card and quick filter return only rows
+     * whose visible Flag column is exactly "Requires attention".
+     */
+    private function isAttentionTaskStatus(string $status): bool
+    {
+        $normalized = mb_strtolower(trim($status));
+        if ($normalized === '') return false;
+
+        return str_starts_with($normalized, 'waiting')
+            || str_contains($normalized, 'attention')
+            || in_array($normalized, ['blocked', 'on hold', 'delayed', 'at risk'], true)
+            || str_contains($normalized, 'revision');
+    }
+
+    private function applyAttentionNeededListScope(Builder $query, User $user): Builder
+    {
+        $access = app(AccessControlService::class);
+        if (!$access->can($user, 'tasks', 'view')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // Use the same correlated current-task selector used by the Inquiry row.
+        // The old implementation matched ANY unfinished attention-like task,
+        // which allowed an Inquiry to pass the filter even when the task shown
+        // in the row produced Overdue, Due Today, or No flag instead.
+        $currentTaskStatusSql = $this->currentTaskSubquery('status')->toSql();
+        $normalizedCurrentStatus = "LOWER(TRIM(COALESCE(($currentTaskStatusSql), '')))";
+
+        return $query
+            ->whereNull('inquiries.result')
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->whereRaw(
+                "$normalizedCurrentStatus REGEXP ?",
+                ['^(waiting.*|.*attention.*|blocked|on hold|.*revision.*|delayed|at risk)$']
+            );
+    }
+
+    private function currentTaskSubquery(string $column, ?string $dueDate = null): Builder
     {
         return InquiryTask::query()
             ->select($column)
             ->whereColumn('inquiry_tasks.inquiry_id', 'inquiries.id')
             ->whereNull('inquiry_tasks.deleted_at')
             ->whereNull('inquiry_tasks.completed_at')
+            ->when($dueDate !== null, fn (Builder $task) => $task->whereDate('inquiry_tasks.due_date', $dueDate))
             ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN 0 ELSE 1 END')
             ->orderByRaw('CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC')
             ->orderBy('inquiry_tasks.sequence')
@@ -243,8 +375,9 @@ class InquiryService
         $assignees = $assigneeIds->isEmpty()
             ? collect()
             : User::query()->whereIn('id', $assigneeIds)->get(['id', 'name', 'profile_image_path'])->keyBy('id');
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
-        return collect($paginator->items())->map(function (Inquiry $inquiry) use ($assignees, $canViewTasks): array {
+        return collect($paginator->items())->map(function (Inquiry $inquiry) use ($assignees, $canViewTasks, $today): array {
             $taskAssignee = $assignees->get((int) $inquiry->current_task_assignee_id);
             $total = (int) $inquiry->tasks_count;
             $done = (int) $inquiry->completed_tasks_count;
@@ -261,6 +394,21 @@ class InquiryService
                 default => self::AUTO_READY_STATUS,
             };
             $isCompleted = $status === self::AUTO_COMPLETED_STATUS;
+            $currentTaskStatus = $canViewTasks
+                ? trim((string) ($inquiry->current_task_status ?: ($isCompleted ? self::AUTO_COMPLETED_STATUS : '')))
+                : 'Restricted';
+            $currentTaskDueDate = $canViewTasks && $inquiry->current_task_due_date
+                ? date('Y-m-d', strtotime((string) $inquiry->current_task_due_date))
+                : null;
+            $attentionStatus = $this->isAttentionTaskStatus($currentTaskStatus);
+            $taskFlag = match (true) {
+                !$canViewTasks => 'Restricted',
+                $isCompleted || $currentTaskStatus === '' => 'No flag',
+                $attentionStatus => 'Requires attention',
+                $currentTaskDueDate !== null && $currentTaskDueDate < $today => 'Overdue',
+                $currentTaskDueDate === $today => 'Due Today',
+                default => 'No flag',
+            };
 
             // While an Inquiry is active, keep the existing behavior and show the
             // current task's assignee. Once the workflow is completed there is no
@@ -301,6 +449,8 @@ class InquiryService
                     ? $displayAssignee?->profile_image_path
                     : ($canViewTasks ? $displayAssignee?->profile_image_path : null),
                 'due' => $canViewTasks && $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
+                'taskStatus' => $currentTaskStatus !== '' ? $currentTaskStatus : '—',
+                'flag' => $taskFlag,
                 'hasStarted' => filled($inquiry->started_at),
                 'startedDate' => UserLocalTime::format($inquiry->started_at, 'M j, Y'),
                 'startedTime' => UserLocalTime::format($inquiry->started_at, 'g:i A'),
@@ -314,33 +464,31 @@ class InquiryService
     {
         $base = $this->visibleQuery($user);
 
-        // Keep the Active metric on the exact same definition as the list filter.
-        // This intentionally checks the taskflow as well as the Inquiry row so a
-        // fully-completed workflow cannot remain counted as Active because of a
-        // stale lifecycle field.
+        // Keep every card count on the same query definition used when that
+        // card is clicked, so the number always matches the filtered list.
         $activeCount = $this->applyUnfinishedListScope(clone $base)
             ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
             ->count();
-
-        $summary = (clone $base)->reorder()
-            ->selectRaw("SUM(CASE WHEN result = 'converted' THEN 1 ELSE 0 END) AS converted_count")
-            ->selectRaw("SUM(CASE WHEN result = 'dead' THEN 1 ELSE 0 END) AS dead_count")
-            ->first();
+        $completedCount = $this->applyCompletedListScope(clone $base)->count();
+        $attentionCount = $this->applyAttentionNeededListScope(clone $base, $user)->count();
 
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         $access = app(AccessControlService::class);
         $dueToday = $access->can($user, 'tasks', 'view')
             ? $access->applyInquiryTaskScope(InquiryTask::query(), $user)
-                ->whereIn('inquiry_id', (clone $base)->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
+                ->whereIn('inquiry_id', (clone $base)
+                    ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+                    ->select('inquiries.id'))
                 ->whereNull('completed_at')
                 ->whereDate('due_date', $today)
-                ->count()
+                ->distinct('inquiry_id')
+                ->count('inquiry_id')
             : 0;
 
         return [
             'active' => (int) $activeCount,
-            'converted' => (int) ($summary?->converted_count ?? 0),
-            'dead' => (int) ($summary?->dead_count ?? 0),
+            'completed' => (int) $completedCount,
+            'attention' => (int) $attentionCount,
             'dueToday' => (int) $dueToday,
         ];
     }
@@ -467,13 +615,54 @@ class InquiryService
     }
 
 
+    public function updateFinanceField(Inquiry $inquiry, string $field, mixed $value, User $actor): Inquiry
+    {
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'finance', $inquiry), 403);
+        abort_unless($this->canEdit($actor, $inquiry), 403);
+        abort_if($inquiry->result, 422, 'Finance on a closed Inquiry cannot be changed.');
+        abort_unless(in_array($field, ['target_price', 'currency'], true), 422, 'This Inquiry finance field cannot be edited inline.');
+
+        if ($field === 'target_price') {
+            $raw = trim((string) $value);
+            if ($raw === '') {
+                $value = null;
+            } else {
+                abort_unless(is_numeric($raw), 422, 'Target price must be a number.');
+                $value = round((float) $raw, 4);
+                abort_if($value < 0 || $value > 9999999999.9999, 422, 'Target price is outside the allowed range.');
+            }
+        } else {
+            $value = strtoupper(trim((string) $value));
+            abort_unless((bool) preg_match('/^[A-Z]{3}$/', $value), 422, 'Currency must be a 3-letter code.');
+            $currentCurrency = strtoupper((string) ($inquiry->currency ?? ''));
+            $validCurrency = $value === $currentCurrency
+                || app(MasterDataService::class)->active('currency')->contains(fn ($currency) => strtoupper((string) $currency->code) === $value);
+            abort_unless($validCurrency, 422, 'Select a valid active currency.');
+        }
+
+        $inquiry->update([$field => $value]);
+        $this->activity(
+            $inquiry,
+            $actor,
+            'inquiry.finance_updated',
+            $field === 'target_price' ? 'Inquiry target price updated.' : 'Inquiry currency updated.'
+        );
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+
+        return $inquiry->refresh();
+    }
+
     public function updateItem(Inquiry $inquiry, InquiryItem $item, string $field, mixed $value, User $actor): InquiryItem
     {
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $inquiry), 403);
         abort_unless((int) $item->inquiry_id === (int) $inquiry->id, 404);
         abort_unless(in_array($field, ['category', 'item_name', 'quantity'], true), 422, 'This Inquiry product field cannot be edited inline.');
 
         $saved = DB::transaction(function () use ($inquiry, $item, $field, $value, $actor): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $lockedInquiry), 403);
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
             abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -549,6 +738,7 @@ class InquiryService
 
     public function addItem(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor): InquiryItem
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'create'), 403);
         $item = DB::transaction(function () use ($inquiry, $category, $product, $quantity, $actor): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
@@ -597,6 +787,7 @@ class InquiryService
 
     public function removeItem(Inquiry $inquiry, InquiryItem $item, User $actor): void
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'delete'), 403);
         DB::transaction(function () use ($inquiry, $item, $actor): void {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
@@ -631,12 +822,14 @@ class InquiryService
 
     public function replaceItems(Inquiry $inquiry, array $items, User $actor): Inquiry
     {
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $inquiry), 403);
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
         abort_if($items === [], 422, 'An Inquiry must keep at least one product.');
 
         DB::transaction(function () use ($inquiry, $items, $actor): void {
             $locked = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $locked), 403);
             abort_unless($this->canEdit($actor, $locked), 403);
             abort_if($locked->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1946,7 +2139,7 @@ class InquiryService
 
         $recipient = User::query()->where('is_active', true)->find($assigneeId);
         if (!$recipient) return;
-        $this->createNotification($recipient, $task->inquiry, $task, 'Task assigned: '.$task->title, $task->inquiry->inquiry_number.' · '.($task->due_date?->format('M j, Y') ?: 'No due date'), 'assignment');
+        $this->createNotification($recipient, $task->inquiry, $task, 'Task assigned: '.$task->title, $task->inquiry->inquiry_number.' · '.($task->due_date?->format('M j, Y') ?: 'No due date'), 'assignment', $actor);
     }
 
     private function forgetMyTaskShell(?int $userId): void
@@ -1970,10 +2163,11 @@ class InquiryService
         );
     }
 
-    private function createNotification(User $recipient, Inquiry $inquiry, ?InquiryTask $task, string $title, string $message, string $type): void
+    private function createNotification(User $recipient, Inquiry $inquiry, ?InquiryTask $task, string $title, string $message, string $type, ?User $actor = null): void
     {
         FlowNotification::create([
             'user_id' => $recipient->id,
+            'actor_id' => $actor?->id,
             'flow_job_id' => null,
             'flow_task_id' => null,
             'inquiry_id' => $inquiry->id,

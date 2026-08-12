@@ -732,3 +732,29 @@
     padding:9px 10px 6px;
   }
 }
+
+/* Task Pack Setup uses the same searchable remote assignee control as the
+   Inquiry/Job pickers, while matching the compact admin form field sizing. */
+.ft-taskpack-form-page .ft-taskpack-assignee-filter > label {
+  margin: 0 0 6px;
+  color: #20334f;
+  font-size: 10.5px;
+  font-weight: 700;
+}
+
+.ft-taskpack-form-page .ft-taskpack-assignee-filter .ft-remote-filter-button {
+  min-height: 38px;
+  height: 38px;
+  border-color: #d7e1ed;
+  border-radius: 8px;
+  padding: 0 11px;
+  color: #1d304b;
+  background: #fff;
+  font-size: 11px;
+}
+
+.ft-taskpack-form-page .ft-taskpack-assignee-filter .ft-remote-filter-button:hover,
+.ft-taskpack-form-page .ft-taskpack-assignee-filter .ft-remote-filter-button[aria-expanded="true"] {
+  border-color: #8db2fb;
+  box-shadow: 0 0 0 2px rgba(23,102,234,.07);
+}

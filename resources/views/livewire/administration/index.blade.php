@@ -153,8 +153,9 @@
                             @endforeach
                             @php
                                 $universalScope = \App\Services\AccessControlService::isUniversalRecordModule($code);
+                                $parentRecordScope = \App\Services\AccessControlService::isParentRecordModule($code);
                                 $scopeSupported = \App\Services\AccessControlService::supportsScope($code);
-                                $scopeLocked = !$scopeSupported || $universalScope || in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
+                                $scopeLocked = !$scopeSupported || $universalScope || $parentRecordScope || in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
                             @endphp
                             @php
                                 $effectiveScope = !$scopeSupported ? 'all_records' : ($scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none'));
@@ -180,7 +181,7 @@
                                     "
                                     @disabled($scopeLocked)>
                                     @if(!$scopeSupported || $universalScope)
-                                        <option value="all_records">All records{{ $universalScope ? ' (shared)' : '' }}</option>
+                                        <option value="all_records">{{ $parentRecordScope ? 'Parent record access' : ('All records'.($universalScope ? ' (shared)' : '')) }}</option>
                                     @else
                                         @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned / related','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
                                     @endif
@@ -198,7 +199,7 @@
                 </table>
                 </div>
             </div>
-            <div class="ft-access-info">Every permission cell is selectable by an administrator. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. <b>Workflow Setup, Task Pack Setup and Master Data</b> support separate View/Create/Edit/Delete permissions plus Manage for full control. <b>Clients are shared workspace reference data</b>, so users with Client View can see all active clients while Orders, Inquiries, Tasks and Documents keep their own selected scopes.</div>
+            <div class="ft-access-info">Every permission cell is selectable by an administrator. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. <b>Workflow Setup, Task Pack Setup and Master Data</b> support separate View/Create/Edit/Delete permissions plus Manage for full control. <b>Clients are shared workspace reference data</b>, so users with Client View can see all active clients while Orders, Inquiries, Tasks and Documents keep their own selected scopes. <b>Inquiry/Order Product and Finance permissions inherit the parent record scope</b>: the role must first be able to open that Inquiry or Order, then the corresponding tab permission controls whether the tab can be viewed or changed.</div>
             </div>
         @endif
     @elseif($tab==='users')

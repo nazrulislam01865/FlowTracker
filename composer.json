@@ -11,6 +11,7 @@
     "require": {
         "php": "^8.3",
         "laravel/framework": "^13.8",
+        "laravel/reverb": "^1.11",
         "laravel/tinker": "^3.0",
         "livewire/livewire": "^4.3"
     },
@@ -37,7 +38,7 @@
     },
     "scripts": {
         "setup": [
-            "composer install",
+            "composer update laravel/reverb --with-all-dependencies",
             "@php -r \"file_exists('.env') || copy('.env.example', '.env');\"",
             "@php artisan key:generate",
             "@php artisan migrate --force",
@@ -70,8 +71,10 @@
             "@php artisan optimize:clear",
             "@php artisan migrate --force",
             "@php artisan optimize",
-            "@php artisan queue:restart"
-        ]
+            "@php artisan queue:restart",
+            "@php artisan reverb:restart"
+        ],
+        "reverb:local": "@php artisan reverb:start --host=127.0.0.1 --port=8080 --debug"
     },
     "extra": {
         "laravel": {

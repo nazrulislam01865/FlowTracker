@@ -242,7 +242,7 @@ class AdminService
         $storedActions = $actions->filter(fn ($value) => in_array($value, $supported, true))->unique()->values()->all();
 
         $recordScope = $row->record_scope;
-        if (AccessControlService::isUniversalRecordModule($module)) {
+        if (AccessControlService::isUniversalRecordModule($module) || AccessControlService::isParentRecordModule($module)) {
             $recordScope = $storedActions ? 'all_records' : 'none';
         } elseif ($storedActions && $recordScope === 'none') {
             $recordScope = ($role->default_scope && $role->default_scope !== 'none')

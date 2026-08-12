@@ -15,6 +15,15 @@
     $clientView = $user->canAccess('clients.view');
     $clientCreate = $user->canAccess('clients.create');
     $clientGroupActive = request()->routeIs('clients.*');
+
+    $masterView = $user->canAccess('master.view');
+    $masterGroupActive = request()->routeIs('master-data');
+    $masterGroup = (string) request()->query('group', 'product');
+    $masterLabels = \App\Services\MasterDataService::LABELS;
+    if (!array_key_exists($masterGroup, $masterLabels)) $masterGroup = 'product';
+    $masterLinks = collect(['product' => $masterLabels['product'], 'product_category' => $masterLabels['product_category']])
+        ->merge(collect($masterLabels)->except(['product', 'product_category']))
+        ->all();
 @endphp
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
@@ -101,9 +110,30 @@
 
         <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
-        @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="workflow" />@endif
         @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
-        @if($user->canAccess('master.view'))<x-ui.nav-link route="master-data" label="Master Data" icon="master" />@endif
+        @if($masterView)
+            <details class="ft-sidebar-group" @if($masterGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $masterGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h16v4H4zM4 11h16v4H4zM4 17h16v3H4z"/></svg>
+                    </span>
+                    <span>Master Data</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children ft-master-sidebar-children">
+                    @foreach($masterLinks as $masterKey => $masterLabel)
+                        <x-ui.nav-link
+                            route="master-data"
+                            :label="$masterLabel"
+                            icon="dot"
+                            child
+                            :params="['group' => $masterKey]"
+                            :active="$masterGroupActive && $masterGroup === $masterKey"
+                        />
+                    @endforeach
+                </div>
+            </details>
+        @endif
         @if(app(\App\Services\AccessControlService::class)->isAdministrator($user))<x-ui.nav-link route="administration" label="Roles & Access" icon="settings" />@endif
     </nav>
 

@@ -576,6 +576,11 @@ class FilterOptionService
             $isParentCreator = \App\Models\Inquiry::query()->whereKey($parentId)->where('created_by', $user->id)->exists();
         }
 
+        if ($context === 'task-pack-setup') {
+            abort_unless($user->canModule('taskpacks', 'create') || $user->canModule('taskpacks', 'edit'), 403);
+            return User::query()->where('is_active', true);
+        }
+
         if ($context === 'create-job') {
             if ($user->canModule('jobs', 'assign') || $user->canModule('tasks', 'assign')) {
                 return User::query()->where('is_active', true);

@@ -31,7 +31,7 @@ npm run build
 
 ## Production performance deployment
 
-The cloud performance implementation, Redis/Pusher configuration, queue worker setup, monitoring, and query-plan verification steps are documented in [`PERFORMANCE_IMPLEMENTATION.md`](PERFORMANCE_IMPLEMENTATION.md).
+The cloud performance implementation, Redis/Reverb configuration, queue worker setup, monitoring, and query-plan verification steps are documented in [`PERFORMANCE_IMPLEMENTATION.md`](PERFORMANCE_IMPLEMENTATION.md).
 
 For production deployment, begin with `.env.production.example` and run:
 
@@ -100,3 +100,23 @@ Notes:
 - The exact screen/window/tab choices are controlled by the browser/operating system.
 - Browsers without `getDisplayMedia()` show a clear unsupported-browser message; normal paste/image upload continues to work.
 - No database migration is required.
+
+## 2026-08-12 — Laravel Reverb realtime migration
+
+Pusher Cloud has been replaced by self-hosted Laravel Reverb for FlowTrack realtime notifications and workspace refresh signals. Database notifications and the polling fallback are unchanged. Local and Alibaba Cloud setup instructions are in [`REVERB_IMPLEMENTATION.md`](REVERB_IMPLEMENTATION.md).
+
+## 2026-08-12 — Create Order product search correction
+
+The Create Order **Products & quantities** prototype now renders only real Product master records in its search results. Product Category remains metadata/filter information only. Legacy product descriptions that started with the category name (for example `Caps · Embroidery`) are normalized only for display so the result card shows the product detail (`Embroidery`) instead of repeating the category. Product queries now also load the `type` field required by the existing product-image helper, restoring catalogue images in search results, selected-product rows, and duplicate-product cards without changing stored data or the supplied UI design.
+
+No database migration is required for this correction.
+
+## 2026-08-12 — Create Order product master source fix
+
+The Create Order **Products & quantities** search now reads from the exact same `product` Master Data query used by the Products page. Product Categories are loaded separately and are used only as filter/display metadata, so a category record can never be emitted as a product result. The category filter now uses the category record ID internally while preserving the supplied UI design, and selecting a result always stores the Product master record ID/name in the Order item.
+
+No database migration is required for this fix. After deployment run:
+
+```bash
+php artisan optimize:clear
+```

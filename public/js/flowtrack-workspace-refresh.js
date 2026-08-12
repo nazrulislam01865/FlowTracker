@@ -2,7 +2,7 @@
     const state = window.__flowtrackWorkspaceRefresh ??= {
         version: null,
         channel: null,
-        pusher: null,
+        realtime: null,
         retryTimer: null,
         retryCount: 0,
         pollTimer: null,
@@ -12,7 +12,7 @@
     };
 
     const endpoint = () => document.querySelector('meta[name="flowtrack-notification-count-url"]')?.content || null;
-    const workspaceChannelName = () => document.querySelector('meta[name="flowtrack-pusher-workspace-channel"]')?.content || null;
+    const workspaceChannelName = () => document.querySelector('meta[name="flowtrack-reverb-workspace-channel"]')?.content || null;
 
     const setUnreadCount = (count) => {
         const unread = Math.max(0, Number.parseInt(String(count ?? 0), 10) || 0);
@@ -102,7 +102,7 @@
                 if (dispatchOnVersionChange) dispatchRefresh();
             }
         } catch (_) {
-            // Focus, Pusher reconnect, or the next polling interval will retry.
+            // Focus, Reverb reconnect, or the next polling interval will retry.
         } finally {
             state.syncing = false;
         }
@@ -144,23 +144,23 @@
             return;
         }
 
-        const pusher = window.FlowTrackPusher;
-        if (!pusher) {
-            // app.js creates the authenticated Pusher connection on DOM ready.
+        const realtime = window.FlowTrackRealtime;
+        if (!realtime) {
+            // app.js creates the authenticated Reverb connection on DOM ready.
             scheduleRetry();
             startPolling();
             return;
         }
 
-        if (state.pusher === pusher && state.channel) {
-            startPolling(pusher.connection?.state === 'connected' ? 60000 : 30000);
+        if (state.realtime === realtime && state.channel) {
+            startPolling(realtime.connection?.state === 'connected' ? 60000 : 30000);
             return;
         }
 
         clearRetry();
         state.retryCount = 0;
-        state.pusher = pusher;
-        state.channel = pusher.subscribe(channelName);
+        state.realtime = realtime;
+        state.channel = realtime.subscribe(channelName);
         state.channel.bind('flowtrack.refresh', (payload = {}) => {
             const incomingVersion = payload?.version == null ? null : String(payload.version);
             if (incomingVersion) state.version = incomingVersion;
@@ -172,18 +172,18 @@
             syncState({ dispatchOnVersionChange: false });
         });
 
-        pusher.connection?.bind('connected', () => {
+        realtime.connection?.bind('connected', () => {
             startPolling(60000);
             syncState();
         });
         ['disconnected', 'unavailable', 'failed'].forEach((connectionState) => {
-            pusher.connection?.bind(connectionState, () => startPolling(30000));
+            realtime.connection?.bind(connectionState, () => startPolling(30000));
         });
-        pusher.connection?.bind('error', () => {
-            if (pusher.connection?.state !== 'connected') startPolling(30000);
+        realtime.connection?.bind('error', () => {
+            if (realtime.connection?.state !== 'connected') startPolling(30000);
         });
 
-        if (pusher.connection?.state === 'connected') {
+        if (realtime.connection?.state === 'connected') {
             startPolling(60000);
             syncState();
         } else {

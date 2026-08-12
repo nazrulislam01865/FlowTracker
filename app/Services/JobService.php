@@ -256,6 +256,7 @@ class JobService
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
+                'creator:id,name,profile_image_path',
                 'members.user:id,name,profile_image_path',
             ])
             ->withCount('documents')
@@ -417,9 +418,8 @@ class JobService
         abort_unless(in_array($tab, ['overview', 'workflow', 'documents', 'inquiry'], true), 422);
 
         if ($tab === 'overview') {
-            $job->load([
+            $relations = [
                 'workflow.phases.taskPack.items.documentCategory',
-                'items',
                 'tasks' => fn ($query) => app(AccessControlService::class)
                     ->applyTaskScope($query, $user)
                     ->with([
@@ -428,14 +428,20 @@ class JobService
                         'template',
                         'documentCategory',
                         'setupTemplate.documentCategory',
+                        'links.creator:id,name',
                     ]),
-                // The current Overview Blade visibly renders attachments.
+                // The restored Archive 10 Overview visibly renders attachments.
                 // Activity itself is paginated separately so opening an Order
                 // never hydrates its entire history.
                 'documents.uploader:id,name,profile_image_path',
                 'documents.task:id,title',
-            ]);
+            ];
 
+            if (app(AccessControlService::class)->can($user, 'products', 'view')) {
+                $relations[] = 'items';
+            }
+
+            $job->load($relations);
             return $job;
         }
 
@@ -622,6 +628,7 @@ class JobService
                     'product_name' => $item['product'] ?? null,
                     'category_name' => $item['category'] ?? null,
                     'quantity' => (int) ($item['quantity'] ?? 1),
+                    'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
                     'sort_order' => $sort,
                 ]);
             }
@@ -864,8 +871,38 @@ class JobService
         return $fresh;
     }
 
+    public function updateFinanceField(FlowJob $job, string $field, mixed $value, User $actor): FlowJob
+    {
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'finance', $job), 403);
+        $this->assertEditable($job, $actor);
+        abort_unless(in_array($field, ['commercial_value', 'currency'], true), 422, 'This Order finance field cannot be edited inline.');
+
+        if ($field === 'commercial_value') {
+            abort_unless(is_numeric($value), 422, 'Commercial value must be a number.');
+            $value = round((float) $value, 2);
+            abort_if($value < 0 || $value > 999999999999.99, 422, 'Commercial value is outside the allowed range.');
+        } else {
+            $value = strtoupper(trim((string) $value));
+            abort_unless((bool) preg_match('/^[A-Z]{3}$/', $value), 422, 'Currency must be a 3-letter code.');
+            $currentCurrency = strtoupper((string) ($job->currency ?? ''));
+            $validCurrency = $value === $currentCurrency
+                || app(MasterDataService::class)->active('currency')->contains(fn ($currency) => strtoupper((string) $currency->code) === $value);
+            abort_unless($validCurrency, 422, 'Select a valid active currency.');
+        }
+
+        $job->update([$field => $value]);
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.finance_updated',
+            'description' => $field === 'commercial_value' ? 'Order commercial value updated' : 'Order currency updated',
+        ]);
+
+        return $job->refresh();
+    }
+
     public function updateItem(FlowJob $job, FlowJobItem $item, string $field, mixed $value, User $actor): FlowJobItem
     {
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $job), 403);
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
         abort_unless(in_array($field, ['category_name', 'product_name', 'quantity'], true), 422, 'This Job item field cannot be edited inline.');
@@ -920,6 +957,7 @@ class JobService
 
     public function addItem(FlowJob $job, string $category, string $product, int $quantity, User $actor): FlowJobItem
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'create'), 403);
         $this->assertEditable($job, $actor);
         $category = trim($category);
         $product = trim($product);
@@ -959,9 +997,9 @@ class JobService
 
     public function removeItem(FlowJob $job, FlowJobItem $item, User $actor): void
     {
+        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'delete'), 403);
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
-        abort_if($job->items()->count() <= 1, 422, 'A Job must keep at least one product.');
         $wasDraft = blank($item->product_name);
         $item->delete();
         $this->syncItemSummary($job);

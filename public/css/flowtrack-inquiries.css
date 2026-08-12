@@ -935,8 +935,11 @@
 .ft-inquiry-prototype .inquiry-list-v2 .row{
   position:relative;min-height:88px;padding:13px 22px 13px 15px;border-bottom:1px solid #e5ebf2;background:#fff;transition:background .15s ease,box-shadow .15s ease;
 }
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row:nth-child(odd){background:#f3f4f6}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row:nth-child(even){background:#fff}
 .ft-inquiry-prototype .inquiry-list-v2 .row:last-child{border-bottom:0}
-.ft-inquiry-prototype .inquiry-list-v2 .row:hover{background:#f9fbff;box-shadow:inset 3px 0 0 #2463eb}
+/* .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row:nth-child(odd):hover{background:#075ee9;box-shadow:inset 3px 0 0 #2463eb}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row:nth-child(even):hover{background:#f8fcfa;box-shadow:inset 3px 0 0 #2463eb} */
 .ft-inquiry-prototype .inquiry-list-v2 .cell{align-self:center}
 .ft-inquiry-prototype .inquiry-list-v2 .id{font-size:11.5px;font-weight:800;line-height:1.25}
 .ft-inquiry-prototype .inquiry-list-v2 .id:hover{text-decoration:underline;text-underline-offset:2px}
@@ -1735,6 +1738,8 @@
 .ft-inquiry-prototype .ft-inquiry-task-document-target small{color:#41618f;font-size:9px;font-weight:800;letter-spacing:.05em}
 .ft-inquiry-prototype .ft-inquiry-task-document-target strong{overflow:hidden;margin-top:2px;color:#17263c;font-size:12px;font-weight:750;text-overflow:ellipsis;white-space:nowrap}
 .ft-inquiry-prototype .ft-inquiry-task-document-target div span{margin-top:3px;color:#58708f;font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-task-document-target .ft-inquiry-task-document-reference{margin-top:4px;color:#365b8d;font-weight:700;line-height:1.35;overflow-wrap:anywhere;white-space:normal}
+.ft-inquiry-prototype .ft-inquiry-task-document-target .ft-inquiry-task-document-reference b{color:#274c7f;font-weight:800}
 .ft-inquiry-prototype .ft-inquiry-task-document-target-lock{color:#48617f;font-size:9.5px;font-weight:650;white-space:nowrap}
 .ft-inquiry-prototype .ft-inquiry-task-document-source-label{margin-bottom:-8px;color:#17263c;font-size:11px;font-weight:750}
 .ft-inquiry-prototype .ft-inquiry-task-document-source-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px}
@@ -2714,3 +2719,783 @@
 .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-complete-block{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;width:100%;min-width:0;text-align:center}
 .ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-completed-at{display:flex;flex-direction:column;align-items:center;gap:1px;color:#75849a;font-size:8px;font-weight:550;line-height:1.25;white-space:nowrap}
 @media(max-width:760px){.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-complete-block{align-items:flex-start;text-align:left}.ft-inquiry-prototype .inquiry-detail-view #tab-workflow .ft-inquiry-completed-at{align-items:flex-start}}
+
+/* 2026-08-12: Inquiry list client filter.
+   Reuse the shared remote-search dropdown so large client lists stay searchable
+   without loading every client into the Inquiry page. */
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{
+  width:220px;min-width:190px;flex:0 0 220px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter>label{display:none}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button{
+  height:32px;min-height:32px;padding:0 10px 0 12px;border:1px solid #d8e1ec;border-radius:16px;background:#fff;color:#52627a;font-size:10.5px;font-weight:750;line-height:1;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button[aria-expanded="true"]{
+  border-color:#bfd0f5;background:var(--blue-soft);color:#155ce9;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-filter-chevron{margin-left:auto}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-menu{
+  width:min(300px,calc(100vw - 24px))!important;min-width:min(260px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important;
+}
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{width:100%;min-width:0;flex:1 1 auto}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button{width:100%;height:36px;min-height:36px;border-radius:10px}
+}
+
+/* 2026-08-12: Exact small-device Inquiry card from the approved prototype. */
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-mobile,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-created,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator{display:none}
+
+@media(max-width:640px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{
+    display:grid;
+    width:100%;
+    min-width:0;
+    gap:14px;
+    padding:14px 12px;
+    background:#f8fafc;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    position:relative;
+    display:grid;
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    grid-template-areas:
+      "identity identity identity identity identity identity"
+      "title title title title title title"
+      "sep-before-task sep-before-task sep-before-task sep-before-task sep-before-task sep-before-task"
+      "task task task task task task"
+      "sep-after-task sep-after-task sep-after-task sep-after-task sep-after-task sep-after-task"
+      "due due due started started started"
+      "sep-before-footer sep-before-footer sep-before-footer sep-before-footer sep-before-footer sep-before-footer"
+      "status status priority priority view view";
+    width:100%;
+    min-width:0;
+    min-height:0;
+    gap:0 16px;
+    margin:0;
+    padding:24px 22px 24px;
+    border:1px solid #d7e0ec;
+    border-radius:22px;
+    background:#fff;
+    box-shadow:0 3px 12px rgba(20,42,74,.045);
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .row:last-child{border-bottom:1px solid #d7e0ec}
+  .ft-inquiry-prototype .inquiry-list-v2 .row:hover{background:#fff;box-shadow:0 4px 14px rgba(20,42,74,.065)}
+
+  .ft-inquiry-prototype .inquiry-list-v2 .cell{min-width:0;align-self:start}
+  .ft-inquiry-prototype .inquiry-list-v2 .cell::before{
+    display:block;
+    margin:0 0 11px;
+    color:#64748b;
+    font-size:11px;
+    font-weight:800;
+    letter-spacing:.085em;
+    line-height:1;
+    text-transform:uppercase;
+  }
+
+  /* The prototype intentionally omits these desktop/tablet fields on phones. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-cell,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-progress-cell,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-assignee-cell{display:none!important}
+
+  /* Inquiry number + copy control. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity{
+    grid-area:identity;
+    padding:0 72px 0 0;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity::before{margin-bottom:14px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-code-wrap{
+    display:inline-flex;
+    max-width:100%;
+    align-items:center;
+    gap:10px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .id{
+    color:#155ce9;
+    font-size:23px;
+    font-weight:850;
+    line-height:1.12;
+    letter-spacing:-.015em;
+    white-space:nowrap;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .ft-copy-id-btn{
+    width:27px;
+    height:27px;
+    flex:0 0 27px;
+    border:0;
+    border-radius:7px;
+    background:transparent;
+    color:#64748b;
+    font-size:17px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-created-by,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-created-at{display:none!important}
+
+  /* The action menu is fixed to the top-right of the card, exactly as in the prototype. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell{
+    position:absolute;
+    top:24px;
+    right:22px;
+    z-index:4;
+    display:flex;
+    width:52px;
+    height:52px;
+    align-items:center;
+    justify-content:center;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell::before{display:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger{
+    display:grid;
+    width:52px;
+    height:52px;
+    padding:0;
+    place-items:center;
+    border:1px solid #d8e0eb;
+    border-radius:15px;
+    background:#fff;
+    color:#273b59;
+    font-size:23px;
+    font-weight:800;
+    line-height:1;
+    box-shadow:none;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger:hover,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger[aria-expanded="true"]{
+    border-color:#cbd7e7;
+    background:#f8fafc;
+    color:#172b4d;
+  }
+
+  /* Title + creator line. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-title-cell{
+    grid-area:title;
+    display:block;
+    margin-top:28px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-desktop{display:none!important}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-mobile{
+    display:block;
+    color:#10264a;
+    font-size:20px;
+    font-weight:820;
+    line-height:1.25;
+    overflow-wrap:anywhere;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-created{
+    display:block;
+    margin-top:15px;
+    color:#71829a;
+    font-size:12px;
+    font-weight:500;
+    line-height:1.45;
+  }
+
+  /* Full-width divider lines from the approved card. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator{
+    display:block;
+    width:100%;
+    height:1px;
+    background:#dce4ee;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-before-task{
+    grid-area:sep-before-task;
+    margin:27px 0 18px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-after-task{
+    grid-area:sep-after-task;
+    margin:18px 0 24px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-before-footer{
+    grid-area:sep-before-footer;
+    margin:24px 0 22px;
+  }
+
+  /* Current Task panel occupies the complete card width. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell{
+    grid-area:task;
+    display:block;
+    width:100%;
+    min-width:0;
+    justify-self:stretch;
+    padding:17px 18px 18px;
+    border-radius:16px;
+    background:#f4f6fa;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell::before{
+    margin-bottom:12px;
+    color:#64748b;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .title{
+    display:block;
+    color:#10264a;
+    font-size:16px;
+    font-weight:820;
+    line-height:1.3;
+    overflow-wrap:anywhere;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .sub{
+    display:block;
+    margin-top:12px;
+    color:#71829a;
+    font-size:13px;
+    font-weight:500;
+    line-height:1.3;
+  }
+
+  /* Due / Started two-column row. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell{grid-area:due}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell{grid-area:started;justify-self:start}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell .title,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .title{
+    display:block;
+    color:#10264a;
+    font-size:15px;
+    font-weight:820;
+    line-height:1.25;
+    white-space:normal;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .sub{
+    display:block;
+    margin-top:7px;
+    color:#71829a;
+    font-size:12px;
+    line-height:1.25;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .ft-inquiry-not-started{
+    color:#64748b;
+    font-weight:760;
+  }
+
+  /* Bottom row: Status, Priority, View details. Keep all three on one line. */
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell{
+    grid-area:status;
+    display:block;
+    min-width:0;
+    align-self:end;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell{
+    grid-area:priority;
+    display:block;
+    min-width:0;
+    align-self:end;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell::before,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell::before{margin-bottom:10px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{
+    display:inline-flex;
+    width:auto;
+    max-width:100%;
+    min-height:40px;
+    align-items:center;
+    justify-content:center;
+    margin:0;
+    padding:9px 15px;
+    border-radius:999px;
+    font-size:12px;
+    font-weight:800;
+    line-height:1;
+    white-space:nowrap;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell{
+    grid-area:view;
+    display:flex;
+    min-width:0;
+    align-self:end;
+    justify-self:end;
+    align-items:center;
+    justify-content:flex-end;
+    padding:0 0 8px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell::before{display:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{
+    display:inline-flex;
+    width:auto;
+    min-width:0;
+    height:auto;
+    align-items:center;
+    justify-content:flex-end;
+    gap:8px;
+    padding:0;
+    border:0;
+    border-radius:0;
+    background:transparent;
+    color:#155ce9;
+    font-size:13px;
+    font-weight:820;
+    line-height:1.2;
+    white-space:nowrap;
+    box-shadow:none;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn span{
+    font-size:21px;
+    font-weight:600;
+    line-height:1;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn:hover{
+    border:0;
+    background:transparent;
+    box-shadow:none;
+    text-decoration:none;
+  }
+}
+
+@media(max-width:430px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{padding:12px 9px}
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    padding:22px 18px 22px;
+    gap:0 12px;
+    border-radius:20px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity{padding-right:66px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell{top:22px;right:18px;width:48px;height:48px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger{width:48px;height:48px;border-radius:14px;font-size:22px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .id{font-size:21px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-title-cell{margin-top:25px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-mobile{font-size:18px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-created{font-size:11.5px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell{padding:16px;border-radius:15px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .title{font-size:15px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .sub{font-size:12.5px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell .title,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .title{font-size:14px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{min-height:38px;padding:8px 13px;font-size:11.5px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{gap:6px;font-size:12px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn span{font-size:19px}
+}
+
+@media(max-width:360px){
+  .ft-inquiry-prototype .inquiry-list-v2 .row{padding-inline:16px;gap:0 9px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell{right:16px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{padding-inline:10px;font-size:11px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{font-size:11.5px}
+}
+
+
+/* 2026-08-12: Compact refinement for the approved small-device Inquiry card.
+   Keep the prototype hierarchy and field order unchanged while reducing vertical
+   whitespace and control sizes so more inquiries fit comfortably on phones. */
+@media(max-width:640px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{
+    gap:11px;
+    padding:10px 8px;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    gap:0 12px;
+    padding:17px 16px 18px;
+    border-radius:18px;
+    box-shadow:0 2px 8px rgba(20,42,74,.04);
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .cell::before{
+    margin-bottom:8px;
+    font-size:9.5px;
+    letter-spacing:.075em;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity{
+    padding-right:58px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity::before{
+    margin-bottom:9px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-code-wrap{
+    gap:7px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .id{
+    font-size:20px;
+    line-height:1.08;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .ft-copy-id-btn{
+    width:23px;
+    height:23px;
+    flex-basis:23px;
+    font-size:14px;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell{
+    top:16px;
+    right:16px;
+    width:44px;
+    height:44px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger{
+    width:44px;
+    height:44px;
+    border-radius:13px;
+    font-size:20px;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-title-cell{
+    margin-top:18px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-mobile{
+    font-size:17px;
+    line-height:1.2;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-created{
+    margin-top:8px;
+    font-size:10.5px;
+    line-height:1.35;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-before-task{
+    margin:17px 0 12px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-after-task{
+    margin:12px 0 16px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-separator-before-footer{
+    margin:16px 0 14px;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell{
+    display:block!important;
+    visibility:visible!important;
+    width:100%;
+    min-height:0;
+    padding:13px 14px 14px;
+    border-radius:13px;
+    background:#f4f6fa;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell::before{
+    display:block!important;
+    margin-bottom:8px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .title{
+    display:block!important;
+    font-size:14px;
+    line-height:1.25;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .sub{
+    display:block!important;
+    margin-top:7px;
+    font-size:11.5px;
+    line-height:1.25;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell .title,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .title{
+    font-size:13.5px;
+    line-height:1.2;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .sub{
+    margin-top:4px;
+    font-size:10.5px;
+  }
+
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell::before,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell::before{
+    margin-bottom:8px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{
+    min-height:34px;
+    padding:7px 12px;
+    font-size:10.5px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell{
+    padding-bottom:6px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{
+    gap:5px;
+    font-size:11.5px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn span{
+    font-size:17px;
+  }
+}
+
+@media(max-width:430px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body{
+    padding:9px 6px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    padding:15px 14px 16px;
+    gap:0 10px;
+    border-radius:17px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity{
+    padding-right:54px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-actions-cell{
+    top:14px;
+    right:14px;
+    width:42px;
+    height:42px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-row-action-trigger{
+    width:42px;
+    height:42px;
+    border-radius:12px;
+    font-size:19px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-identity .id{font-size:19px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-title-cell{margin-top:16px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-title-mobile{font-size:16px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-mobile-created{font-size:10px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell{padding:12px 13px 13px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .title{font-size:13.5px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-cell .sub{font-size:11px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-due-cell .title,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-started-cell .title{font-size:13px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-priority-cell .pill{
+    min-height:32px;
+    padding:6px 10px;
+    font-size:10px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-view-cell .openbtn{font-size:11px}
+}
+
+
+/* 2026-08-12: Inquiry list Status + Attention Needed filters. */
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter{
+  position:relative;display:inline-flex;width:150px;min-width:145px;flex:0 0 150px;align-items:center;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select{
+  width:100%;height:32px;min-height:32px;appearance:none;-webkit-appearance:none;padding:0 31px 0 12px;
+  border:1px solid #d8e1ec;border-radius:16px;background:#fff;color:#52627a;outline:0;
+  font-family:inherit;font-size:10.5px;font-weight:750;line-height:1;cursor:pointer;transition:border-color .16s ease,background .16s ease,color .16s ease,box-shadow .16s ease;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select:focus{
+  border-color:#bfd0f5;background:var(--blue-soft);color:#155ce9;box-shadow:none;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter-chevron{
+  position:absolute;right:11px;top:50%;transform:translateY(-52%);pointer-events:none;color:#718198;font-size:12px;line-height:1;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-attention-filter{display:inline-flex;align-items:center;justify-content:center;gap:5px}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-attention-filter>span{font-size:10px;line-height:1;color:#d97706}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-attention-filter.active>span{color:currentColor}
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter{width:100%;min-width:0;flex:1 1 auto}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select{height:36px;min-height:36px;border-radius:10px}
+}
+
+
+/* 2026-08-12: Inquiry list filter-bar refinement.
+   Match the compact square controls used by My Work while preserving the
+   Inquiry-specific status/client filters and responsive behavior. */
+.ft-inquiry-prototype .inquiry-list-v2 .toolbar{
+  display:flex;align-items:center;gap:8px;padding:10px;border-bottom:1px solid var(--line);background:#fff;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .search{
+  min-width:280px;max-width:none;flex:1 1 420px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .search input{
+  width:100%;height:38px;min-height:38px;padding:0 12px 0 35px;border:1px solid #ccd8e8;border-radius:8px;background:#fff;font-size:11.5px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .search input:hover{border-color:#b9c8dc}
+.ft-inquiry-prototype .inquiry-list-v2 .search input:focus{border-color:#78a0f2;box-shadow:0 0 0 3px rgba(36,99,235,.08)}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{
+  display:flex;min-width:0;flex:0 1 auto;align-items:center;gap:6px;flex-wrap:nowrap;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .chip{
+  display:inline-flex;height:35px;min-height:35px;align-items:center;justify-content:center;padding:0 10px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:10.5px;font-weight:720;line-height:1;white-space:nowrap;transition:border-color .15s ease,background .15s ease,color .15s ease;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .chip:hover{border-color:#91afea;background:#f8fbff;color:#245fcf}
+.ft-inquiry-prototype .inquiry-list-v2 .chip.active{border-color:#91afea;background:#edf3ff;color:#245fcf}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-attention-filter{gap:6px}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-attention-filter>span{font-size:11px}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter{
+  position:relative;display:inline-flex;width:150px;min-width:150px;flex:0 0 150px;align-items:center;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select{
+  width:100%;height:35px;min-height:35px;padding:0 30px 0 10px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:10.5px;font-weight:720;line-height:1;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select:focus{
+  border-color:#91afea;background:#f8fbff;color:#245fcf;box-shadow:none;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter-chevron{right:10px;color:#66768c}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{
+  width:190px;min-width:170px;flex:0 0 190px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button{
+  width:100%;height:35px;min-height:35px;padding:0 10px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:10.5px;font-weight:720;line-height:1;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button[aria-expanded="true"]{
+  border-color:#91afea;background:#f8fbff;color:#245fcf;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{
+  min-height:35px;height:35px;padding:0 10px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:10.5px;font-weight:720;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .completed-toggle.active{border-color:#91afea;background:#f8fbff;color:#245fcf}
+
+@media(max-width:1220px){
+  .ft-inquiry-prototype .inquiry-list-v2 .toolbar{align-items:stretch;flex-wrap:wrap}
+  .ft-inquiry-prototype .inquiry-list-v2 .search{width:100%;max-width:none;min-width:0;flex:1 1 100%}
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{width:100%;flex:1 1 100%;flex-wrap:wrap}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{flex:1 1 165px;width:auto;min-width:145px}
+}
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .toolbar{padding:10px;gap:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px}
+  .ft-inquiry-prototype .inquiry-list-v2 .chip,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter,
+  .ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{width:100%;min-width:0;max-width:none}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter select,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter .ft-remote-filter-button,
+  .ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{height:36px;min-height:36px;border-radius:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .completed-toggle{justify-content:center}
+}
+@media(max-width:680px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{grid-template-columns:1fr}
+}
+
+
+/* 2026-08-12: equal-size Inquiry list filter controls.
+   Search remains flexible; every other toolbar control shares one size. */
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{
+  --ft-inquiry-filter-width:160px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.chip,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-status-filter,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-list-client-filter,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.completed-toggle{
+  width:var(--ft-inquiry-filter-width);min-width:var(--ft-inquiry-filter-width);max-width:var(--ft-inquiry-filter-width);
+  height:36px;min-height:36px;flex:0 0 var(--ft-inquiry-filter-width);border-radius:8px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.chip{
+  padding:0 10px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-status-filter select,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-list-client-filter .ft-remote-filter-button{
+  width:100%;height:36px;min-height:36px;border-radius:8px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.completed-toggle{
+  justify-content:center;padding:0 10px;
+}
+@media(max-width:1220px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{
+    display:grid;grid-template-columns:repeat(5,minmax(0,1fr));width:100%;gap:7px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.chip,
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-status-filter,
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-list-client-filter,
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.completed-toggle{
+    width:100%;min-width:0;max-width:none;flex:none;
+  }
+}
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+}
+@media(max-width:680px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media(max-width:480px){
+  .ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls{grid-template-columns:1fr}
+}
+
+
+/* 2026-08-12: Inquiry summary cards are direct list filters. No hover animation/effect. */
+.ft-inquiry-prototype .metric-filter-card{
+  width:100%;margin:0;color:inherit;text-align:left;font:inherit;appearance:none;
+  cursor:pointer;transition:none!important;transform:none!important;box-shadow:none!important;
+}
+.ft-inquiry-prototype .metric-filter-card:hover{
+  border-color:var(--line);background:#fff;transform:none!important;box-shadow:none!important;
+}
+.ft-inquiry-prototype .metric-filter-card.active,
+.ft-inquiry-prototype .metric-filter-card.active:hover{
+  border-color:#8fb1f3;background:#f7faff;transform:none!important;box-shadow:0 0 0 1px rgba(36,99,235,.06)!important;
+}
+.ft-inquiry-prototype .metric-filter-card:focus-visible{
+  outline:2px solid #8fb1f3;outline-offset:2px;
+}
+
+/* 2026-08-12: Inquiry list summary filters + Current Task Status / Flag columns. */
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-table{
+  --ft-inquiry-list-min-width:1880px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .listhead,
+.ft-inquiry-prototype .inquiry-list-v2 .row{
+  grid-template-columns:
+    minmax(175px,1.05fr)
+    minmax(165px,1.12fr)
+    minmax(160px,.96fr)
+    minmax(175px,1.08fr)
+    minmax(120px,.72fr)
+    minmax(125px,.74fr)
+    minmax(125px,.74fr)
+    minmax(145px,.86fr)
+    minmax(88px,.52fr)
+    minmax(118px,.70fr)
+    minmax(100px,.60fr)
+    minmax(125px,.74fr)
+    72px
+    44px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .listhead>div:nth-child(13){text-align:center}
+.ft-inquiry-prototype .inquiry-list-v2 .listhead>div:nth-child(14){width:100%;height:100%}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell{
+  display:flex;min-width:0;align-items:center;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell .pill,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell .pill{
+  max-width:100%;min-height:26px;padding:5px 10px;border-radius:999px;overflow:hidden;font-size:9.5px;font-weight:760;text-overflow:ellipsis;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-no-flag{
+  color:#8a96a8;font-size:10px;font-weight:650;white-space:nowrap;
+}
+
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+    grid-template-areas:
+      "identity controls"
+      "title title"
+      "client task"
+      "taskstatus flag"
+      "progress progress"
+      "assignee status"
+      "due priority"
+      "started started";
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell{grid-area:taskstatus;display:block}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell{grid-area:flag;display:block}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell .pill{max-width:100%;white-space:normal;text-align:center}
+}
+
+@media(max-width:640px){
+  .ft-inquiry-prototype .inquiry-list-v2 .row{
+    grid-template-columns:repeat(6,minmax(0,1fr));
+    grid-template-areas:
+      "identity identity identity identity identity identity"
+      "title title title title title title"
+      "sep-before-task sep-before-task sep-before-task sep-before-task sep-before-task sep-before-task"
+      "task task task task task task"
+      "sep-after-task sep-after-task sep-after-task sep-after-task sep-after-task sep-after-task"
+      "taskstatus taskstatus taskstatus flag flag flag"
+      "due due due started started started"
+      "sep-before-footer sep-before-footer sep-before-footer sep-before-footer sep-before-footer sep-before-footer"
+      "status status priority priority view view";
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell{display:block!important;align-self:start}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell::before,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell::before{margin-bottom:8px}
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-task-status-cell .pill,
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-flag-cell .pill{
+    display:inline-flex;width:auto;max-width:100%;min-height:34px;align-items:center;justify-content:center;padding:7px 11px;font-size:10.5px;white-space:normal;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-no-flag{display:inline-flex;min-height:34px;align-items:center;font-size:10.5px}
+}

@@ -2,7 +2,7 @@
 
 namespace App\Jobs;
 
-use App\Services\PusherChannelService;
+use App\Services\ReverbChannelService;
 use Illuminate\Bus\Queueable;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
@@ -22,11 +22,11 @@ class DeliverRealtimeNotification implements ShouldQueue
         public readonly string $event,
         public readonly array $payload,
     ) {
-        $this->onQueue((string) config('services.pusher.queue', 'realtime'));
+        $this->onQueue((string) config('services.realtime.queue', 'realtime'));
     }
 
-    public function handle(PusherChannelService $pusher): void
+    public function handle(ReverbChannelService $reverb): void
     {
-        $pusher->triggerUser($this->userId, $this->event, $this->payload);
+        $reverb->triggerUser($this->userId, $this->event, $this->payload);
     }
 }

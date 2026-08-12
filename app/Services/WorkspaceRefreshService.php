@@ -56,13 +56,13 @@ class WorkspaceRefreshService
         $version = $this->newVersion();
         Cache::forever($this->versionKey(), $version);
 
-        $pusher = app(PusherChannelService::class);
-        if (! $pusher->enabled()) {
+        $reverb = app(ReverbChannelService::class);
+        if (! $reverb->enabled()) {
             return;
         }
 
         // Bulk imports/workflow transitions can still cause several independent
-        // commits. Coalesce their Pusher traffic into a single delayed signal.
+        // commits. Coalesce their realtime traffic into a single delayed signal.
         // Receivers always re-query the latest authorized database state.
         if (! Cache::add($this->dispatchGateKey(), true, now()->addSecond())) {
             return;
@@ -77,7 +77,7 @@ class WorkspaceRefreshService
                     'reason' => $reason,
                 ],
             )
-                ->onConnection((string) config('services.pusher.queue_connection', 'database'))
+                ->onConnection((string) config('services.realtime.queue_connection', 'database'))
                 ->delay(now()->addSecond());
         } catch (\Throwable $exception) {
             Log::warning('Workspace refresh event could not be queued.', [

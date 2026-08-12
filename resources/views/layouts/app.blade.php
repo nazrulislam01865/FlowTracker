@@ -21,13 +21,14 @@
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
-    @if(auth()->check() && app(\App\Services\PusherChannelService::class)->enabled())
-        <meta name="flowtrack-pusher-key" content="{{ config('services.pusher.key') }}">
-        <meta name="flowtrack-pusher-cluster" content="{{ config('services.pusher.cluster','mt1') }}">
-        <meta name="flowtrack-pusher-channel" content="private-flowtrack.user.{{ auth()->id() }}">
-        <meta name="flowtrack-pusher-workspace-channel" content="private-flowtrack.workspace.{{ max(1, (int) config('flowtrack.workspace_id', 1)) }}">
-        <meta name="flowtrack-pusher-auth" content="{{ route('pusher.auth') }}">
-        <script src="https://js.pusher.com/8.4.0/pusher.min.js" defer></script>
+    @if(auth()->check() && app(\App\Services\ReverbChannelService::class)->enabled())
+        <meta name="flowtrack-reverb-key" content="{{ data_get(config('reverb'), 'apps.apps.0.key') }}">
+        <meta name="flowtrack-reverb-host" content="{{ data_get(config('reverb'), 'apps.apps.0.options.host') }}">
+        <meta name="flowtrack-reverb-port" content="{{ data_get(config('reverb'), 'apps.apps.0.options.port', 443) }}">
+        <meta name="flowtrack-reverb-scheme" content="{{ data_get(config('reverb'), 'apps.apps.0.options.scheme', 'https') }}">
+        <meta name="flowtrack-reverb-channel" content="private-flowtrack.user.{{ auth()->id() }}">
+        <meta name="flowtrack-reverb-workspace-channel" content="private-flowtrack.workspace.{{ max(1, (int) config('flowtrack.workspace_id', 1)) }}">
+        <meta name="flowtrack-reverb-auth" content="{{ route('realtime.auth') }}">
     @endif
     @vite([
         'resources/css/generated/flowtrack-01.css',
@@ -36,23 +37,26 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260808-4">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260812-taskpack-assignee-1">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
-    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260809-4">@endif
+    @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1">@endif
     {{-- Inquiry CSS is deliberately loaded for the authenticated shell, not only
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260811-09">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260812-20">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260812-4">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260812-19">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260812-1">
     @livewireStyles
 </head>
 <body>
@@ -62,14 +66,15 @@
     <main class="main">
         @include('layouts.partials.topbar')
         <div class="content {{ request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : '' }}">
-            @if(session('success') && !request()->routeIs('task-pack.setup','workflow.setup','master-data','profile','inquiries.*'))<div class="flash">{{ session('success') }}</div>@endif
+            @if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>
     </main>
     @include('layouts.partials.mobile-bottom')
 </div>
 @livewireScripts
-    <script src="/js/flowtrack-workspace-refresh.js?v=20260811-1"></script>
+    <script src="/js/flowtrack-reverb-client.js?v=20260812-1"></script>
+    <script src="/js/flowtrack-workspace-refresh.js?v=20260812-reverb-1"></script>
     <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script src="/js/flowtrack-client-validation-focus.js?v=20260811-1"></script>

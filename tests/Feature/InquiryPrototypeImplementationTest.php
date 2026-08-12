@@ -6,6 +6,58 @@ use Tests\TestCase;
 
 class InquiryPrototypeImplementationTest extends TestCase
 {
+
+    public function test_inquiry_list_uses_searchable_client_filter_without_active_or_closed_quick_filters(): void
+    {
+        $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $service = file_get_contents(app_path('Services/InquiryService.php'));
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
+
+        $this->assertStringNotContainsString('wire:click="setQuick(\'active\')">Active</button>', $view);
+        $this->assertStringNotContainsString('wire:click="setQuick(\'dead\')">Closed</button>', $view);
+        $this->assertStringContainsString('class="ft-inquiry-list-client-filter"', $view);
+        $this->assertStringContainsString('property="listClient"', $view);
+        $this->assertStringContainsString('action="setInquiryListFilter"', $view);
+        $this->assertStringContainsString(':selected-label="$listClientLabel ?: null"', $view);
+        $this->assertStringContainsString('wire:key="inquiry-list-client-filter-', $view);
+        $this->assertStringContainsString('type="clients"', $view);
+        $this->assertStringContainsString('context="inquiries"', $view);
+        $this->assertStringContainsString(':fixed-menu="true"', $view);
+        $this->assertStringContainsString('public string $listClient', $component);
+        $this->assertStringContainsString('public string $listClientLabel', $component);
+        $this->assertStringContainsString('public function setInquiryListFilter(string $property, mixed $value): void', $component);
+        $this->assertStringContainsString("->options(auth()->user(), 'clients', 'inquiries', '', \$id, 20)", $component);
+        $this->assertStringContainsString("'client_id' => \$selectedClientId", $component);
+        $this->assertStringContainsString("->options(\$user, 'clients', 'inquiries', '', \$selectedClientId, 6)", $component);
+        $this->assertStringContainsString('private const INQUIRIES_PER_PAGE = 10;', $component);
+        $this->assertStringContainsString('], self::INQUIRIES_PER_PAGE);', $component);
+        $this->assertStringContainsString("->when(\$clientId > 0, fn (Builder \$q) => \$q->where('inquiries.client_id', \$clientId))", $service);
+        $this->assertStringContainsString('.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{', $css);
+        $this->assertStringContainsString("'fixedMenu' => false", file_get_contents(resource_path('views/components/ui/remote-filter.blade.php')));
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('active')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('completed')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('attention')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('dueToday')\"", $view);
+        $this->assertStringContainsString('public string $metricFilter', $component);
+        $this->assertStringContainsString('public function setMetricFilter(string $metric): void', $component);
+        $this->assertStringContainsString("'metric_filter' => \$this->metricFilter", $component);
+        $this->assertStringContainsString('private function applyMetricListScope', $service);
+        $this->assertStringContainsString('private function applyDueTodayInquiryListScope', $service);
+        $this->assertStringContainsString("->whereDate('inquiry_tasks.due_date', \$today)", $service);
+        $this->assertStringContainsString("\$currentTaskDueDate = \$metricFilter === 'dueToday'", $service);
+        $this->assertStringContainsString("currentTaskSubquery('due_date', \$currentTaskDueDate)", $service);
+        $this->assertStringContainsString('private function currentTaskSubquery(string $column, ?string $dueDate = null): Builder', $service);
+        $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
+        $this->assertStringContainsString('.ft-inquiry-prototype .metric-filter-card:hover{', $css);
+        $this->assertStringContainsString('<div>Task Status</div>', $view);
+        $this->assertStringContainsString('<div>Flag</div>', $view);
+        $this->assertStringContainsString("currentTaskSubquery('status', \$currentTaskDueDate)", $service);
+        $this->assertStringContainsString("\$currentTaskStatusSql = \$this->currentTaskSubquery('status')->toSql();", $service);
+        $this->assertStringContainsString("\$normalizedCurrentStatus REGEXP ?", $service);
+        $this->assertStringNotContainsString("->whereIn('inquiries.id', \$attentionTasks)", $service);
+    }
+
     public function test_inquiry_create_matches_prototype_and_uses_workflow_setup(): void
     {
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
@@ -53,6 +105,10 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("public string \$detailTab = 'overview';", $component);
         $this->assertStringContainsString("The separate Taskflow tab was removed", $component);
         $this->assertStringContainsString("in_array(\$tab, ['overview', 'workflow'], true)", $component);
+        $this->assertStringContainsString('<button class="tab active" type="button">Overview</button>', $view);
+        $this->assertStringContainsString('Products &amp; quantities', $view);
+        $this->assertStringNotContainsString("setDetailTab('products')", $view);
+        $this->assertStringNotContainsString("setDetailTab('finance')", $view);
         $this->assertStringNotContainsString("setDetailTab('documents')", $view);
         $this->assertStringNotContainsString("setDetailTab('activity')", $view);
         $this->assertStringContainsString("@include('livewire.inquiries._attachments')", $view);
@@ -138,8 +194,8 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('private function applyUnfinishedListScope(Builder $query): Builder', $service);
         $this->assertStringContainsString("->whereDoesntHave('tasks')", $service);
         $this->assertStringContainsString("->orWhereHas('tasks', fn (Builder $task) => $task->whereNull('completed_at'))", $service);
-        $this->assertStringContainsString("\$quick === 'active' || (\$hideCompleted && \$quick === 'all')", $service);
-        $this->assertStringContainsString('public bool $hideCompleted = true;', $component);
+        $this->assertStringContainsString("\$hideCompleted && \$metricFilter !== 'completed'", $service);
+        $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
         $this->assertStringContainsString('public function updatedHideCompleted(): void', $component);
         $this->assertStringContainsString('wire:model.live="hideCompleted"', $view);
     }

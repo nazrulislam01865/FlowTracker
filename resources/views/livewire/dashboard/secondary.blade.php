@@ -84,7 +84,7 @@
 
     <div class="ft-grid ft-grid-balanced">
         <section class="ft-panel ft-dashboard-jobs-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing jobs</h2><div class="ft-panel-note">Current stage, health and exception flags</div></div><a class="ft-link" href="{{ route('jobs.index') }}" wire:navigate>View jobs</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing Orders</h2><div class="ft-panel-note">Current stage, health and exception flags</div></div><a class="ft-link" href="{{ route('jobs.index') }}" wire:navigate>View orders</a></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-jobs-table">
                     <colgroup><col style="width:31%"><col style="width:18%"><col style="width:23%"><col style="width:18%"><col style="width:10%"></colgroup>
@@ -144,7 +144,7 @@
                 @forelse($recentActivity as $notification)
                     <div class="ft-activity" wire:key="dashboard-activity-{{ $notification->id }}">
                         <span class="ft-activity-icon">{{ in_array($notification->type, ['mention', 'mention_admin'], true) ? '@' : '✓' }}</span>
-                        <span><strong>{{ $notification->title }}</strong><span class="ft-activity-copy">{{ app(\App\Services\RichTextService::class)->plainText($notification->message) }}</span></span>
+                        <span><strong>{{ $notification->title }}</strong><span class="ft-activity-copy">{{ app(\App\Services\MentionService::class)->displayText($notification->message) }}</span></span>
                         <time class="ft-activity-time">{{ $notification->created_at?->diffForHumans(short: true) }}</time>
                     </div>
                 @empty

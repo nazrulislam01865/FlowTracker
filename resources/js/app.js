@@ -118,7 +118,7 @@ const markRealtimeUnread = (payload = {}) => {
 
 const clearRealtimeUnread = () => setRealtimeUnreadCount(0);
 
-const realtimeState = { pusherBooted: false, connected: false, unreadTimer: null, listenerBound: false, latestNotificationId: null, initialNotificationSynced: false };
+const realtimeState = { booted: false, connected: false, unreadTimer: null, listenerBound: false, latestNotificationId: null, initialNotificationSynced: false };
 const unreadFallbackIntervalMs = 60000;
 
 const syncUnreadCount = async () => {
@@ -173,72 +173,51 @@ const bootLivewireNotificationEvents = () => {
 };
 
 const bootRealtimeNotifications = () => {
-    if (realtimeState.pusherBooted) return;
+    if (realtimeState.booted) return;
+    realtimeState.booted = true;
 
-    const key = document.querySelector('meta[name="flowtrack-pusher-key"]')?.content;
-    const cluster = document.querySelector('meta[name="flowtrack-pusher-cluster"]')?.content;
-    const channelName = document.querySelector('meta[name="flowtrack-pusher-channel"]')?.content;
-    const authEndpoint = document.querySelector('meta[name="flowtrack-pusher-auth"]')?.content;
-    const csrf = document.querySelector('meta[name="csrf-token"]')?.content;
-
-    // Poll only when realtime notifications are unavailable.
-    if (!window.Pusher || !key || !cluster || !channelName || !authEndpoint || !csrf) {
-        startUnreadFallback();
-        return;
-    }
-
-    realtimeState.pusherBooted = true;
-
-    const pusher = new window.Pusher(key, {
-        cluster,
-        forceTLS: true,
-        channelAuthorization: {
-            endpoint: authEndpoint,
-            transport: 'ajax',
-            headers: {
-                'X-CSRF-TOKEN': csrf,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-        },
-    });
-
-    pusher.connection.bind('connected', () => {
-        realtimeState.connected = true;
-
-        // Pusher is working, so polling is unnecessary.
-        stopUnreadFallback();
-
-        // One synchronization after connecting is enough.
-        syncUnreadCount();
-    });
-
-    ['disconnected', 'unavailable', 'failed'].forEach((state) => {
-        pusher.connection.bind(state, () => {
-            realtimeState.connected = false;
+    const bindRealtimeState = () => {
+        const realtime = window.FlowTrackRealtime;
+        if (!realtime?.connection?.bind) {
             startUnreadFallback();
-        });
-    });
+            return false;
+        }
 
-    pusher.connection.bind('error', () => {
-        if (!realtimeState.connected) {
+        realtime.connection.bind('connected', () => {
+            realtimeState.connected = true;
+            stopUnreadFallback();
+            syncUnreadCount();
+        });
+        ['disconnected', 'unavailable', 'failed'].forEach((state) => {
+            realtime.connection.bind(state, () => {
+                realtimeState.connected = false;
+                startUnreadFallback();
+            });
+        });
+        realtime.connection.bind('error', () => {
+            if (!realtimeState.connected) startUnreadFallback();
+        });
+
+        if (realtime.connection.state === 'connected') {
+            realtimeState.connected = true;
+            stopUnreadFallback();
+            syncUnreadCount();
+        } else {
             startUnreadFallback();
         }
-    });
+        return true;
+    };
 
-    const channel = pusher.subscribe(channelName);
-    channel.bind('flowtrack.notification', (payload) => {
-        const notificationId = Number.parseInt(String(payload?.id ?? 0), 10) || 0;
-        const previousLatestId = realtimeState.latestNotificationId || 0;
-        if (notificationId > 0) realtimeState.latestNotificationId = Math.max(notificationId, previousLatestId);
-        realtimeState.initialNotificationSynced = true;
-
-        // Realtime notifications are intentionally silent in the page UI.
-        // Keep unread badges and the Notifications page updated immediately.
-        markRealtimeUnread(payload);
-        window.Livewire?.dispatch?.('flowtrack-notification');
-    });
-
-    window.FlowTrackPusher = pusher;
+    if (!bindRealtimeState()) {
+        // The standalone Reverb client is loaded near the end of the layout.
+        // Retry briefly, then polling remains the safe fallback if Reverb is
+        // intentionally disabled or unavailable.
+        let attempts = 0;
+        const timer = window.setInterval(() => {
+            attempts += 1;
+            if (bindRealtimeState() || attempts >= 20) window.clearInterval(timer);
+        }, 250);
+    }
 };
 
 const flowtrackSessionState = { lastHumanActivity: Date.now(), statusTimer: null, idleTimer: null, bound: false, ownerChecked: false };

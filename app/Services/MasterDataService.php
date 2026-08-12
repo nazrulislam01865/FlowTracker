@@ -76,27 +76,35 @@ class MasterDataService
 
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
 
-    public function query(string $type, string $search = '')
+    public function query(string $type, string $search = '', array $filters = [])
     {
+        $status = trim((string) ($filters['status'] ?? ''));
+        $parentId = (int) ($filters['parent_id'] ?? 0);
+
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
             ->when(in_array($type, ['product', 'state'], true), fn ($q) => $q->with('parent'))
+            ->when($type === 'product', fn ($q) => $q->with('creator'))
             ->when($search, fn ($q) => $q->where(fn ($x) => $x
                 ->where('code', 'like', "%{$search}%")
                 ->orWhere('name', 'like', "%{$search}%")
                 ->orWhere('description', 'like', "%{$search}%")))
+            ->when(in_array($status, ['active', 'inactive'], true), fn ($q) => $q->where('status', $status))
+            ->when($type === 'product' && $parentId > 0, fn ($q) => $q->where('parent_id', $parentId))
             ->orderBy('sort_order')->orderBy('name');
     }
 
-    public function list(string $type, string $search = '')
+    public function list(string $type, string $search = '', array $filters = [])
     {
-        return $this->query($type, $search)->get();
+        return $this->query($type, $search, $filters)->get();
     }
 
-    public function paginate(string $type, string $search = '', int $perPage = 30)
+    public function paginate(string $type, string $search = '', int $perPage = 30, array $filters = [])
     {
-        return $this->query($type, $search)->paginate($perPage, ['*'], 'masterPage');
+        $perPage = max(1, min(100, $perPage));
+
+        return $this->query($type, $search, $filters)->paginate($perPage, ['*'], 'masterPage');
     }
 
     public function active(string $type)
@@ -224,6 +232,12 @@ class MasterDataService
                 ? MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id)
                 : new MasterRecord();
 
+            // Record the original creator once. Edits must never replace the
+            // user who originally created the Master Data record.
+            if (! $record->exists) {
+                $record->created_by = auth()->id();
+            }
+
             $record->fill([
                 'workspace_id' => $workspaceId,
                 'parent_id' => $parentId,
@@ -314,6 +328,10 @@ class MasterDataService
         if ($record->type === 'task_flag' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_flag_id') && DB::table('tasks')->where('task_flag_id', $record->id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This Task Flag is already assigned to one or more tasks and cannot be deleted. Deactivate it instead.']);
         }
+        if ($record->type === 'product' && data_get($record->metadata, 'product_image_path')) {
+            app(ProductImageService::class)->remove($record);
+        }
+
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);
         if (Schema::hasTable('master_values')) MasterValue::where('group_key', $legacyGroup)->where('code', $record->code)->delete();
         $type = $record->type;

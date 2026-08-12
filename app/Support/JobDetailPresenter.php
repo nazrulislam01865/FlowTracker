@@ -18,11 +18,12 @@ final class JobDetailPresenter
     public static function products(FlowJob $job): Collection
     {
         if ($job->relationLoaded('items') && $job->items->isNotEmpty()) return $job->items;
+        if (blank($job->product)) return collect();
 
         return collect([(object) [
             'id' => null,
             'category_name' => $job->category ?: 'General',
-            'product_name' => $job->product ?: 'Product',
+            'product_name' => $job->product,
             'quantity' => $job->quantity,
         ]]);
     }

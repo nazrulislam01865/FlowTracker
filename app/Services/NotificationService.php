@@ -189,6 +189,7 @@ class NotificationService
 
         $notification = FlowNotification::create([
             'user_id' => $recipient->id,
+            'actor_id' => $actor?->id,
             'flow_job_id' => $job?->id,
             'flow_task_id' => $task?->id,
             'type' => $type,
@@ -295,6 +296,7 @@ class NotificationService
 
                     FlowNotification::query()->create([
                         'user_id' => $administrator->id,
+                        'actor_id' => $source->actor_id,
                         'flow_job_id' => $source->flow_job_id,
                         'flow_task_id' => $source->flow_task_id,
                         'inquiry_id' => $source->inquiry_id,
@@ -381,8 +383,9 @@ class NotificationService
         $directLookup = array_fill_keys($directIds->all(), true);
         $inquiryId = (int) $inquiry->id;
         $inquiryTaskId = $inquiryTask?->id ? (int) $inquiryTask->id : null;
+        $actorId = $actor?->id ? (int) $actor->id : null;
 
-        $this->runAfterCommit(function () use ($ids, $directLookup, $title, $message, $inquiryId, $inquiryTaskId): void {
+        $this->runAfterCommit(function () use ($ids, $directLookup, $title, $message, $inquiryId, $inquiryTaskId, $actorId): void {
             $inquiry = Inquiry::withTrashed()->find($inquiryId);
             if (!$inquiry || $inquiry->trashed()) return;
 
@@ -393,7 +396,7 @@ class NotificationService
                 ->whereIn('id', $ids->all())
                 ->where('is_active', true)
                 ->get()
-                ->each(function (User $recipient) use ($directLookup, $title, $message, $inquiry, $inquiryTask): void {
+                ->each(function (User $recipient) use ($directLookup, $title, $message, $inquiry, $inquiryTask, $actorId): void {
                     $visible = app(InquiryService::class)
                         ->visibleQuery($recipient)
                         ->whereKey($inquiry->id)
@@ -403,6 +406,7 @@ class NotificationService
                     $direct = isset($directLookup[(int) $recipient->id]);
                     $notification = FlowNotification::create([
                         'user_id' => $recipient->id,
+                        'actor_id' => $actorId,
                         'flow_job_id' => null,
                         'flow_task_id' => null,
                         'inquiry_id' => $inquiry->id,
@@ -495,6 +499,7 @@ class NotificationService
 
         $notification = FlowNotification::create([
             'user_id' => $recipient->id,
+            'actor_id' => $actor?->id,
             'flow_job_id' => $notificationJob?->id,
             'flow_task_id' => $notificationTask?->id,
             'type' => $type,
@@ -535,6 +540,25 @@ class NotificationService
         });
     }
 
+    private function legacyActorFromMentionTitle(string $title): ?User
+    {
+        if (! preg_match('/^(.*?) mentioned (?:you|a user) in /u', $title, $match)) {
+            return null;
+        }
+
+        $name = trim((string) ($match[1] ?? ''));
+        if ($name === '') {
+            return null;
+        }
+
+        $matches = User::query()
+            ->where('name', $name)
+            ->limit(2)
+            ->get(['id', 'name', 'profile_image_path']);
+
+        return $matches->count() === 1 ? $matches->first() : null;
+    }
+
     private function deliverRealtime(
         User $recipient,
         FlowNotification $notification,
@@ -543,14 +567,24 @@ class NotificationService
         ?Inquiry $inquiry = null,
         ?InquiryTask $inquiryTask = null,
     ): void {
-        $pusher = app(PusherChannelService::class);
-        if (!$pusher->enabled()) return;
+        $reverb = app(ReverbChannelService::class);
+        if (!$reverb->enabled()) return;
+
+        if (FlowNotification::supportsActorIdentity()) {
+            $notification->loadMissing('actor:id,name,profile_image_path');
+            $actor = $notification->actor;
+        } else {
+            $actor = $this->legacyActorFromMentionTitle((string) $notification->title);
+        }
 
         $payload = [
             'id' => $notification->id,
             'type' => $notification->type,
             'title' => $notification->title,
-            'message' => app(RichTextService::class)->plainText($notification->message),
+            'message' => app(MentionService::class)->displayText($notification->message),
+            'actor_id' => $actor?->id,
+            'actor_name' => $actor?->name,
+            'actor_avatar_url' => $actor?->profileImageUrl(),
             'job_id' => $job?->id,
             'job_number' => $job?->displayOrderNumber(),
             'task_id' => $task?->id,
@@ -563,9 +597,9 @@ class NotificationService
             'unread_count' => $this->unreadCount($recipient),
         ];
 
-        // Never make a Livewire/browser request wait for an external Pusher
+        // Never make a Livewire/browser request wait for an realtime WebSocket
         // HTTP call. Realtime delivery belongs on the queue so a slow or
-        // unreachable Pusher endpoint cannot turn a successful database
+        // temporarily unavailable Reverb endpoint cannot turn a successful database
         // action into a 30-second timeout.
         try {
             DeliverRealtimeNotification::dispatch(
@@ -573,7 +607,7 @@ class NotificationService
                 'flowtrack.notification',
                 $payload,
             )
-                ->onConnection((string) config('services.pusher.queue_connection', 'database'))
+                ->onConnection((string) config('services.realtime.queue_connection', 'database'))
                 ->afterCommit();
         } catch (\Throwable $exception) {
             // The database notification is already saved. Realtime is an

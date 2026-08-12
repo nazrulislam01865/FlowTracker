@@ -9,6 +9,7 @@ use App\Models\Activity;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\FlowJobItem;
+use App\Models\MasterRecord;
 use App\Models\FlowTaskComment;
 use App\Models\Task;
 use App\Models\User;
@@ -20,6 +21,7 @@ use App\Services\DocumentService;
 use App\Services\JobService;
 use App\Services\InquiryService;
 use App\Services\MasterDataService;
+use App\Services\ProductImageService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
 use App\Support\BoardLaneResolver;
@@ -85,6 +87,16 @@ class Index extends Component
     public string $deliveryDate = '';
     public string $description = '';
     public array $jobItems = [];
+    public string $createProductSearch = '';
+    public string $createProductCategoryFilter = '';
+    public bool $createProductShowAllResults = false;
+    public bool $showCreateOrderProductModal = false;
+    public string $newProductCode = '';
+    public ?int $newProductCategoryId = null;
+    public string $newProductCategorySearch = '';
+    public string $newProductCategoryName = '';
+    public string $newProductName = '';
+    public $newProductImage = null;
     public array $jobAttachments = [];
     public array $jobDocumentUploads = [];
     public $jobRequiredDocumentUpload = null;
@@ -108,6 +120,16 @@ class Index extends Component
     public int $jobActivityPage = 1;
     public int $activityPerPage = 30;
     public array $taskDocumentUploads = [];
+    /** Per-task temporary uploads used by the compact Order Overview taskflow. */
+    public array $overviewTaskUploads = [];
+    public bool $showOverviewTaskDocumentModal = false;
+    public ?int $overviewTaskDocumentModalTaskId = null;
+    public string $overviewTaskDocumentSource = 'upload';
+    public $overviewTaskDocumentUpload = null;
+    public ?int $overviewTaskExistingDocumentId = null;
+    public string $overviewTaskDocumentNote = '';
+    public ?int $overviewTaskLinkFormTaskId = null;
+    public string $overviewTaskLinkUrl = '';
     public ?int $taskExistingDocumentId = null;
     public bool $showTaskDocumentPicker = false;
 
@@ -247,6 +269,366 @@ class Index extends Component
         // previous category.
         $this->jobItems[$index]['product'] = '';
     }
+
+
+    public function updatedCreateProductSearch(): void
+    {
+        $this->createProductShowAllResults = false;
+    }
+
+    public function updatedCreateProductCategoryFilter(): void
+    {
+        $this->createProductShowAllResults = false;
+    }
+
+    public function showAllCreateProductResults(): void
+    {
+        $this->createProductShowAllResults = true;
+    }
+
+    public function focusCreateProductSearch(): void
+    {
+        $this->dispatch('focus-create-order-product-search');
+    }
+
+    public function selectCreateProduct(int $productId): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+
+        // Resolve from the canonical Product catalogue. Passing a Product
+        // Category ID here now results in 404 instead of ever selecting it.
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail($productId);
+
+        // The selected row is always a Product master record. Category is
+        // metadata copied from its parent (or a safe legacy fallback), never
+        // the value used as the selected product itself.
+        $productCategory = trim((string) ($product->parent?->name ?? ''));
+        if ($productCategory === '') {
+            $legacyDescription = trim((string) $product->description);
+            $productCategory = trim(explode(' ·', $legacyDescription, 2)[0]);
+        }
+        $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
+
+        $alreadySelected = collect($this->jobItems)->contains(
+            fn (array $row): bool => (int) ($row['product_id'] ?? 0) === (int) $product->id
+        );
+
+        if (!$alreadySelected) {
+            abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
+            $this->jobItems[] = [
+                'product_id' => (int) $product->id,
+                'category' => $productCategory,
+                'product' => (string) $product->name,
+                'quantity' => 1000,
+                'notes' => '',
+            ];
+        }
+
+        $this->resetValidation('jobItems');
+        $this->dispatch('create-order-product-selected');
+    }
+
+    public function incrementCreateProductQuantity(int $index): void
+    {
+        abort_unless(array_key_exists($index, $this->jobItems), 422);
+        $current = max(1, (int) ($this->jobItems[$index]['quantity'] ?? 1));
+        $this->jobItems[$index]['quantity'] = min(999999999, $current + 1);
+        $this->resetValidation("jobItems.$index.quantity");
+    }
+
+    public function decrementCreateProductQuantity(int $index): void
+    {
+        abort_unless(array_key_exists($index, $this->jobItems), 422);
+        $current = max(1, (int) ($this->jobItems[$index]['quantity'] ?? 1));
+        $this->jobItems[$index]['quantity'] = max(1, $current - 1);
+        $this->resetValidation("jobItems.$index.quantity");
+    }
+
+    public function openCreateOrderProductModal(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
+
+        $this->resetCreateOrderProductModal();
+        $this->showCreateOrderProductModal = true;
+    }
+
+    public function openCreateOrderProductModalFromSearch(): void
+    {
+        $searchedName = trim($this->createProductSearch);
+        $this->openCreateOrderProductModal();
+        $this->newProductName = $searchedName;
+    }
+
+    public function closeCreateOrderProductModal(): void
+    {
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+    }
+
+    public function selectCreateOrderProductCategory(int $categoryId): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        if (!$this->newProductCodeReadyForCategory()) return;
+
+        $category = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product_category')
+            ->active()
+            ->findOrFail($categoryId);
+
+        $this->newProductCategoryId = (int) $category->id;
+        $this->newProductCategorySearch = (string) $category->name;
+        $this->newProductCategoryName = '';
+        $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+        $this->dispatch('create-order-product-category-selected');
+    }
+
+    public function beginCreateOrderProductCategory(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        if (!$this->newProductCodeReadyForCategory()) return;
+        $this->newProductCategoryName = trim($this->newProductCategorySearch);
+        $this->resetValidation('newProductCategoryName');
+    }
+
+    public function cancelCreateOrderProductCategory(): void
+    {
+        $this->newProductCategoryName = '';
+        $this->resetValidation('newProductCategoryName');
+    }
+
+    public function createCreateOrderProductCategory(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        if (!$this->newProductCodeReadyForCategory()) return;
+
+        $name = trim($this->newProductCategoryName ?: $this->newProductCategorySearch);
+        $this->newProductCategoryName = $name;
+        $this->validate(['newProductCategoryName' => ['required', 'string', 'max:255']]);
+
+        $service = app(MasterDataService::class);
+        $workspaceId = $service->workspaceId();
+        $existing = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType('product_category')
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->first();
+
+        if ($existing) {
+            if ($existing->trashed() || $existing->status !== 'active') {
+                $this->addError('newProductCategoryName', 'A category with this name already exists but is inactive. Activate it from Product Categories first.');
+                return;
+            }
+
+            $this->newProductCategoryId = (int) $existing->id;
+            $this->newProductCategorySearch = (string) $existing->name;
+            $this->newProductCategoryName = '';
+            $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+            $this->dispatch('create-order-product-category-created');
+            return;
+        }
+
+        $category = $service->save('product_category', [
+            'code' => $service->nextCode('product_category'),
+            'name' => $name,
+            'description' => null,
+            'parent_id' => null,
+            'status' => 'active',
+            'sort_order' => ((int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->max('sort_order')) + 1,
+            'metadata' => null,
+        ]);
+
+        $this->newProductCategoryId = (int) $category->id;
+        $this->newProductCategorySearch = (string) $category->name;
+        $this->newProductCategoryName = '';
+        $this->resetValidation(['newProductCategoryId', 'newProductCategoryName']);
+        $this->dispatch('create-order-product-category-created');
+    }
+
+    public function updatedNewProductCategorySearch(): void
+    {
+        $search = trim($this->newProductCategorySearch);
+        if ($this->newProductCategoryId) {
+            $selectedName = MasterRecord::query()
+                ->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product_category')
+                ->whereKey($this->newProductCategoryId)
+                ->value('name');
+
+            if (!$selectedName || mb_strtolower(trim((string) $selectedName)) !== mb_strtolower($search)) {
+                $this->newProductCategoryId = null;
+            }
+        }
+        $this->resetValidation('newProductCategoryId');
+    }
+
+    public function updatedNewProductCode(): void
+    {
+        $this->newProductCode = strtoupper(trim($this->newProductCode));
+        $this->resetValidation('newProductCode');
+    }
+
+    private function newProductCodeReadyForCategory(): bool
+    {
+        $code = strtoupper(trim($this->newProductCode));
+        $this->newProductCode = $code;
+
+        if ($code === '') {
+            $this->addError('newProductCode', 'Enter the SKU / product code first.');
+            return false;
+        }
+
+        if (mb_strlen($code) > 40 || preg_match('/^[A-Za-z0-9][A-Za-z0-9._-]*$/', $code) !== 1) {
+            $this->addError('newProductCode', 'Use letters, numbers, dots, dashes or underscores only. Maximum 40 characters.');
+            return false;
+        }
+
+        $duplicate = MasterRecord::withTrashed()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product')
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+            ->first();
+
+        if ($duplicate) {
+            $this->addError('newProductCode', $duplicate->trashed()
+                ? 'This product code is reserved by an archived product.'
+                : 'This product code already exists.');
+            return false;
+        }
+
+        $this->resetValidation('newProductCode');
+        return true;
+    }
+
+    public function updatedNewProductImage(): void
+    {
+        abort_unless($this->showCreateOrderProductModal, 422);
+        $this->validateOnly('newProductImage', [
+            'newProductImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+    }
+
+    public function selectDuplicateCreateOrderProduct(int $productId): void
+    {
+        $this->selectCreateProduct($productId);
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+    }
+
+    public function viewSimilarCreateProducts(): void
+    {
+        $this->createProductSearch = trim($this->newProductName);
+        if ($this->newProductCategoryId) {
+            $this->createProductCategoryFilter = (string) $this->newProductCategoryId;
+        }
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal(false);
+        $this->dispatch('focus-create-order-product-search');
+    }
+
+    public function createAndAddOrderProduct(): void
+    {
+        abort_unless($this->showCreate && $this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canAccess('jobs.create'), 403);
+        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
+
+        $this->newProductCode = strtoupper(trim($this->newProductCode));
+        $this->newProductName = trim($this->newProductName);
+
+        $data = $this->validate([
+            'newProductCode' => ['required', 'string', 'max:40', 'regex:/^[A-Za-z0-9][A-Za-z0-9._-]*$/'],
+            'newProductCategoryId' => ['required', 'integer'],
+            'newProductName' => ['required', 'string', 'max:255'],
+            'newProductImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'],
+        ]);
+
+        $service = app(MasterDataService::class);
+        $workspaceId = $service->workspaceId();
+        $duplicate = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType('product')
+            ->whereRaw('LOWER(code) = ?', [mb_strtolower($data['newProductCode'])])
+            ->first();
+
+        if ($duplicate) {
+            $this->addError('newProductCode', $duplicate->trashed()
+                ? 'This product code is reserved by an archived product.'
+                : 'This product code already exists.');
+            return;
+        }
+
+        $category = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('product_category')
+            ->active()
+            ->find((int) $data['newProductCategoryId']);
+        if (!$category) {
+            $this->addError('newProductCategoryId', 'Select a valid active product category.');
+            return;
+        }
+
+        try {
+            $product = $service->save('product', [
+                'code' => $data['newProductCode'],
+                'name' => $data['newProductName'],
+                'description' => null,
+                'parent_id' => $category->id,
+                'status' => 'active',
+                'sort_order' => ((int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->max('sort_order')) + 1,
+                'metadata' => null,
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $exception) {
+            $message = collect($exception->errors())->flatten()->first() ?: 'The product could not be created.';
+            $this->addError('newProductCode', $message);
+            return;
+        } catch (Throwable $exception) {
+            report($exception);
+            $this->addError('newProductCode', 'The product could not be created. Please try again.');
+            return;
+        }
+
+        $imageStored = true;
+        if ($this->newProductImage) {
+            try {
+                app(ProductImageService::class)->replace($product, $this->newProductImage);
+            } catch (Throwable $exception) {
+                report($exception);
+                $imageStored = false;
+            }
+        }
+
+        $this->selectCreateProduct((int) $product->id);
+        $this->showCreateOrderProductModal = false;
+        $this->resetCreateOrderProductModal();
+        if (!$imageStored) {
+            $this->dispatch('flowtrack-toast', message: 'Product created and selected. The image could not be stored.');
+        }
+    }
+
+    private function resetCreateOrderProductModal(bool $resetSearchErrors = true): void
+    {
+        $this->newProductCode = '';
+        $this->newProductCategoryId = null;
+        $this->newProductCategorySearch = '';
+        $this->newProductCategoryName = '';
+        $this->newProductName = '';
+        $this->newProductImage = null;
+        if ($resetSearchErrors) {
+            $this->resetValidation([
+                'newProductCode',
+                'newProductCategoryId',
+                'newProductCategoryName',
+                'newProductName',
+                'newProductImage',
+            ]);
+        }
+    }
     public function updatedSearch(): void { $this->resetJobSelection(); }
     public function updatedPhase(): void { $this->resetJobSelection(); }
     public function updatedHealth(): void { $this->resetJobSelection(); }
@@ -374,8 +756,8 @@ class Index extends Component
 
         abort(422, 'Unknown Create Order section.');
     }
-    public function addProductRow(): void { $this->jobItems[] = ['category' => '', 'product' => '', 'quantity' => 1]; }
-    public function removeProductRow(int $index): void { if (count($this->jobItems) <= 1) return; unset($this->jobItems[$index]); $this->jobItems = array_values($this->jobItems); }
+    public function addProductRow(): void { $this->focusCreateProductSearch(); }
+    public function removeProductRow(int $index): void { if (!array_key_exists($index, $this->jobItems)) return; unset($this->jobItems[$index]); $this->jobItems = array_values($this->jobItems); $this->resetValidation('jobItems'); }
 
     public function openJob(int $id): void
     {
@@ -390,6 +772,8 @@ class Index extends Component
         $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
+        $this->overviewTaskUploads = [];
+        $this->resetOverviewTaskResourceUi();
         $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
         $this->existingDocumentId = null;
@@ -415,6 +799,8 @@ class Index extends Component
         $this->showInquiryUnlinkConfirm = false;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
+        $this->overviewTaskUploads = [];
+        $this->resetOverviewTaskResourceUi();
         $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
         $this->existingDocumentId = null;
@@ -427,12 +813,12 @@ class Index extends Component
 
     public function setDetailTab(string $tab): void
     {
-        abort_unless(in_array($tab, ['overview','workflow','documents','inquiry'], true), 422);
+        // The Order Details Documents tab is temporarily muted. Documents remain
+        // available globally and task-level attachments continue to work from Overview.
+        abort_unless(in_array($tab, ['overview','inquiry'], true), 422);
         $this->detailTab = $tab;
+        if ($tab !== 'overview') $this->resetOverviewTaskResourceUi();
         $this->resetValidation('inquiryLink');
-        if ($tab === 'documents' && $this->selectedJobId) {
-            $this->setDefaultDocumentTask();
-        }
     }
 
     public function updatedInquirySearch(): void
@@ -587,11 +973,16 @@ class Index extends Component
             'coordinatorId' => ['nullable','exists:users,id'],
             'deliveryDate' => ['required','date'],
             'description' => ['nullable','string'],
-            'jobItems' => ['required','array','min:1'],
+            'jobItems' => ['required','array','min:1','max:25'],
+            'jobItems.*.product_id' => ['required','integer'],
             'jobItems.*.category' => ['required','string','max:255'],
             'jobItems.*.product' => ['required','string','max:255'],
-            'jobItems.*.quantity' => ['required','integer','min:1'],
+            'jobItems.*.quantity' => ['required','integer','min:1','max:999999999'],
+            'jobItems.*.notes' => ['nullable','string','max:2000'],
             'jobAttachments.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+        ], [
+            'jobItems.required' => 'Select at least one product for this Order.',
+            'jobItems.min' => 'Select at least one product for this Order.',
         ]);
 
         if (count($this->jobAttachments) > 0) {
@@ -621,12 +1012,35 @@ class Index extends Component
             return;
         }
 
+        $catalogInvalid = false;
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        foreach ($data['jobItems'] as $index => $row) {
+            $product = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product')
+                ->active()
+                ->with('parent:id,name,status')
+                ->find((int) $row['product_id']);
+
+            $valid = $product
+                && $product->parent
+                && $product->parent->status === 'active'
+                && (string) $product->name === trim((string) $row['product'])
+                && (string) $product->parent->name === trim((string) $row['category']);
+
+            if (!$valid) {
+                $catalogInvalid = true;
+                $this->addError("jobItems.$index.product", 'That product is no longer available in the selected catalog.');
+            }
+        }
+        if ($catalogInvalid) return;
+
         $first = collect($data['jobItems'])->first();
         $job = app(JobService::class)->create([
             'order_number' => $data['referenceNumber'],
             'title' => $data['jobTitle'],
-            'product' => $first['product'],
-            'category' => $first['category'],
+            'product' => $first['product'] ?? null,
+            'category' => $first['category'] ?? null,
             'quantity' => collect($data['jobItems'])->sum('quantity'),
             'items' => $data['jobItems'],
             'priority' => $data['priority'],
@@ -979,27 +1393,6 @@ class Index extends Component
         ]);
     }
 
-    public function openJobExistingDocumentPickerFromOverview(): void
-    {
-        abort_unless(auth()->user()->canModule('documents', 'link'), 403);
-        abort_unless($this->selectedJobId, 422);
-
-        // Moving from Overview to "Choose from Documents" is a source switch,
-        // not an additional action. Remove any pending upload first.
-        $this->jobDocumentUploads = [];
-        $this->jobRequiredDocumentUpload = null;
-        $this->existingDocumentId = null;
-        $this->showDocumentPicker = true;
-        $this->detailTab = 'documents';
-        $this->setDefaultDocumentTask();
-        $this->resetValidation([
-            'existingDocumentId',
-            'jobRequiredDocumentUpload',
-            'jobDocumentUploads',
-            'jobDocumentUploads.*',
-        ]);
-    }
-
     public function updatedJobDocumentUploads(): void
     {
         // Temporary upload completion and permanent document persistence are two
@@ -1013,6 +1406,254 @@ class Index extends Component
         $this->showDocumentPicker = false;
         $this->existingDocumentId = null;
         $this->resetValidation(['existingDocumentId']);
+    }
+
+    /**
+     * Livewire hook for the file button shown on each Order Overview task row.
+     * Each task owns its temporary upload slot so several rows can be used
+     * independently without changing the selected Task detail state.
+     */
+    public function openOverviewTaskDocumentModal(int $taskId): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job', 'documentCategory', 'setupTemplate.documentCategory'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+        $canCreate = auth()->user()->canModule('documents', 'create');
+        $canLink = auth()->user()->canModule('documents', 'link');
+        abort_unless($canCreate || $canLink, 403, 'Your role cannot add documents.');
+
+        $this->showOverviewTaskDocumentModal = false;
+        $this->overviewTaskLinkFormTaskId = null;
+        $this->overviewTaskLinkUrl = '';
+        $this->overviewTaskDocumentModalTaskId = $task->id;
+        $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->resetValidation([
+            'overviewTaskDocumentUpload',
+            'overviewTaskExistingDocumentId',
+            'overviewTaskDocumentNote',
+        ]);
+        $this->showOverviewTaskDocumentModal = true;
+    }
+
+    public function closeOverviewTaskDocumentModal(): void
+    {
+        $this->showOverviewTaskDocumentModal = false;
+        $this->overviewTaskDocumentModalTaskId = null;
+        $this->overviewTaskDocumentSource = 'upload';
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->resetValidation([
+            'overviewTaskDocumentUpload',
+            'overviewTaskExistingDocumentId',
+            'overviewTaskDocumentNote',
+        ]);
+    }
+
+    public function setOverviewTaskDocumentSource(string $source): void
+    {
+        abort_unless(in_array($source, ['upload', 'existing'], true), 422);
+        if ($source === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        } else {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+        }
+
+        $this->overviewTaskDocumentSource = $source;
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskExistingDocumentId']);
+    }
+
+    public function saveOverviewTaskDocument(): void
+    {
+        abort_unless($this->selectedJobId && $this->overviewTaskDocumentModalTaskId, 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job', 'documentCategory', 'setupTemplate.documentCategory'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail((int) $this->overviewTaskDocumentModalTaskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+        $this->validate([
+            'overviewTaskDocumentSource' => ['required', Rule::in(['upload', 'existing'])],
+            'overviewTaskDocumentNote' => ['nullable', 'string', 'max:2000'],
+        ]);
+        $note = trim($this->overviewTaskDocumentNote);
+        $note = $note !== '' ? $note : null;
+        $documentService = app(DocumentService::class);
+
+        if ($this->overviewTaskDocumentSource === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+            $this->validate([
+                'overviewTaskDocumentUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+            ], [
+                'overviewTaskDocumentUpload.max' => 'The file is too large. Maximum file size is 20 MB.',
+                'overviewTaskDocumentUpload.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT, CSV or AI.',
+            ]);
+
+            $storeData = [
+                'flow_job_id' => $task->flow_job_id,
+                'client_id' => $task->job?->client_id,
+                'task_id' => $task->id,
+                'note' => $note,
+            ];
+            if ($documentService->taskHasRequirement($task)) {
+                $storeData['require_task_pack_requirement'] = true;
+            } else {
+                $storeData['category'] = 'Task attachment';
+            }
+            $documentService->store($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+        } else {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+            $this->validate(['overviewTaskExistingDocumentId' => ['required', 'integer', 'exists:documents,id']]);
+            $source = app(AccessControlService::class)
+                ->applyDocumentScope(Document::query()->whereKey((int) $this->overviewTaskExistingDocumentId), auth()->user())
+                ->firstOrFail();
+            abort_unless((int) $source->client_id === (int) $task->job?->client_id, 403, 'The selected document does not belong to this client.');
+            $documentService->linkExisting($source, $task, auth()->user(), true, $note);
+        }
+
+        $title = (string) $task->title;
+        $this->closeOverviewTaskDocumentModal();
+        session()->flash('success', 'Document added to '.$title.'.');
+    }
+
+    public function openOverviewTaskLinkForm(int $taskId): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        $this->showOverviewTaskDocumentModal = false;
+        $this->overviewTaskDocumentModalTaskId = null;
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->overviewTaskLinkFormTaskId = $task->id;
+        $this->overviewTaskLinkUrl = '';
+        $this->resetValidation(['overviewTaskLinkUrl']);
+    }
+
+    public function cancelOverviewTaskLinkForm(): void
+    {
+        $this->overviewTaskLinkFormTaskId = null;
+        $this->overviewTaskLinkUrl = '';
+        $this->resetValidation(['overviewTaskLinkUrl']);
+    }
+
+    public function saveOverviewTaskLink(int $taskId): void
+    {
+        abort_unless((int) $this->overviewTaskLinkFormTaskId === $taskId, 422);
+        $url = trim($this->overviewTaskLinkUrl);
+        if ($url !== '' && ! preg_match('#^https?://#i', $url)) {
+            $url = 'https://'.$url;
+        }
+        $this->overviewTaskLinkUrl = $url;
+        $this->validate([
+            'overviewTaskLinkUrl' => ['required', 'string', 'max:2048', 'url'],
+        ], [
+            'overviewTaskLinkUrl.required' => 'Enter a link to add.',
+            'overviewTaskLinkUrl.url' => 'Enter a valid website or file link.',
+            'overviewTaskLinkUrl.max' => 'The link is too long.',
+        ]);
+
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+        app(TaskService::class)->addExternalLink($task, $this->overviewTaskLinkUrl, auth()->user());
+        $this->cancelOverviewTaskLinkForm();
+        session()->flash('success', 'Link added to '.$task->title.'.');
+    }
+
+    public function deleteOverviewTaskLink(int $taskId, int $linkId): void
+    {
+        abort_unless($this->selectedJobId, 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+        app(TaskService::class)->removeExternalLink($task, $linkId, auth()->user());
+        session()->flash('success', 'Task link removed.');
+    }
+
+    public function updatedOverviewTaskUploads(mixed $value, string|int $key): void
+    {
+        if (!$value || !is_numeric($key)) return;
+
+        $this->uploadOverviewTaskFile((int) $key);
+    }
+
+    public function uploadOverviewTaskFile(int $taskId): array
+    {
+        abort_unless($this->selectedJobId, 422);
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+
+        $property = 'overviewTaskUploads.'.$taskId;
+        $this->resetValidation([$property]);
+        $upload = $this->overviewTaskUploads[$taskId] ?? null;
+
+        if (!$upload) {
+            return ['ok' => false, 'message' => 'Choose a file to upload.'];
+        }
+
+        $validator = validator(['overviewTaskUploads' => [$taskId => $upload]], [
+            $property => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+        ], [
+            $property.'.required' => 'Choose a file to upload.',
+            $property.'.max' => 'The file is too large. Maximum file size is 20 MB.',
+            $property.'.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
+        ]);
+
+        if ($validator->fails()) {
+            foreach ($validator->errors()->get($property) as $message) {
+                $this->addError($property, $message);
+            }
+            return ['ok' => false, 'message' => $validator->errors()->first($property)];
+        }
+
+        $task = app(TaskService::class)
+            ->visibleQuery(auth()->user())
+            ->with(['job', 'documentCategory', 'setupTemplate.documentCategory'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+
+        $documentService = app(DocumentService::class);
+        $storeData = [
+            'flow_job_id' => $task->flow_job_id,
+            'client_id' => $task->job?->client_id,
+            'task_id' => $task->id,
+        ];
+
+        if ($documentService->taskHasRequirement($task)) {
+            // Preserve Task Pack requirement semantics so the Overview upload
+            // immediately satisfies the same required-document gate used by
+            // Workflow and Order Documents.
+            $storeData['require_task_pack_requirement'] = true;
+        } else {
+            $storeData['category'] = 'Task attachment';
+        }
+
+        try {
+            $documentService->store($upload, $storeData, auth()->user());
+        } catch (\Throwable $e) {
+            report($e);
+            $message = 'FlowTrack could not store this task attachment. Please try again.';
+            $this->addError($property, $message);
+            return ['ok' => false, 'message' => $message];
+        }
+
+        unset($this->overviewTaskUploads[$taskId]);
+        $this->resetValidation([$property]);
+        session()->flash('success', 'Document uploaded and linked to '.$task->title.'.');
+
+        return ['ok' => true];
     }
 
     public function uploadJobOverviewDocuments(): array
@@ -1210,6 +1851,7 @@ class Index extends Component
         $this->selectedTaskId = $task->id;
         $this->focusComment = null;
         $this->taskEditMode = $editMode;
+        $this->resetOverviewTaskResourceUi();
         $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->showTaskDocumentPicker = false;
@@ -1719,7 +2361,7 @@ class Index extends Component
             ? $requestedClientId
             : $clientQuery->value('id');
         $this->applyClientWorkflowDefault($this->clientId);
-        $this->jobItems = [['category' => '', 'product' => '', 'quantity' => 1000]];
+        $this->jobItems = [];
     }
 
     private function resetCreateForm(): void
@@ -1737,6 +2379,16 @@ class Index extends Component
             'deliveryDate',
             'description',
             'jobItems',
+            'createProductSearch',
+            'createProductCategoryFilter',
+            'createProductShowAllResults',
+            'showCreateOrderProductModal',
+            'newProductCode',
+            'newProductCategoryId',
+            'newProductCategorySearch',
+            'newProductCategoryName',
+            'newProductName',
+            'newProductImage',
             'jobAttachments',
             'createCatalogReady',
             'createAssignmentReady',
@@ -1842,6 +2494,133 @@ class Index extends Component
                 ->get()
             : collect();
 
+        $workspaceId = $master->workspaceId();
+        $productCategories = collect();
+        $productSearchResults = collect();
+        $selectedProductDetails = collect();
+        $activeProductCount = 0;
+        $productResultTotal = 0;
+
+        if ($this->createCatalogReady) {
+            $productCategories = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->active()
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->get(['id', 'name', 'code']);
+
+            // Canonical Product catalogue source. This service can only return
+            // master_records.type = 'product'. Product Categories are loaded
+            // separately above and are permitted only as filters/metadata.
+            $catalog = app(\App\Services\ProductCatalogService::class);
+            $activeProductCount = $catalog->activeCount();
+
+            $search = trim($this->createProductSearch);
+            $categoryFilterId = ctype_digit(trim($this->createProductCategoryFilter))
+                ? (int) $this->createProductCategoryFilter
+                : 0;
+            $productResultTotal = $catalog->orderSearchCount($search, $categoryFilterId ?: null);
+            // With a small catalogue, show every Product record immediately so the
+            // selector cannot be mistaken for a category suggestion list. Large
+            // catalogues keep the prototype's Top matches + View all behaviour.
+            $resultLimit = $this->createProductShowAllResults || $productResultTotal <= 20 ? 20 : 3;
+            $productSearchResults = $catalog->searchForOrderCreation($search, $categoryFilterId ?: null, $resultLimit);
+
+            $selectedProductDetails = $catalog->selectedProducts(
+                collect($this->jobItems)->pluck('product_id')
+            );
+        }
+
+        $duplicateProduct = null;
+        $newProductCategoryMatches = collect();
+        $newProductSimilarCategories = collect();
+        $newProductSimilarProducts = collect();
+        $newProductSelectedCategory = null;
+        $newProductHasExactCategory = false;
+        $newProductImagePreview = null;
+
+        if ($this->showCreateOrderProductModal) {
+            $code = trim($this->newProductCode);
+            if ($code !== '') {
+                $duplicateProduct = MasterRecord::withTrashed()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->with('parent:id,name,status')
+                    ->whereRaw('LOWER(code) = ?', [mb_strtolower($code)])
+                    ->first(['id', 'type', 'parent_id', 'name', 'code', 'metadata', 'status']);
+            }
+
+            $categorySearch = trim($this->newProductCategorySearch);
+            $newProductCategoryMatches = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_category')
+                ->active()
+                ->when($categorySearch !== '', fn ($query) => $query->where('name', 'like', '%'.$categorySearch.'%'))
+                ->orderBy('sort_order')
+                ->orderBy('name')
+                ->limit(6)
+                ->get(['id', 'name', 'code']);
+
+            if ($categorySearch !== '') {
+                $newProductHasExactCategory = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->whereRaw('LOWER(name) = ?', [mb_strtolower($categorySearch)])
+                    ->exists();
+
+                $tokens = collect(preg_split('/\s+/', $categorySearch) ?: [])
+                    ->map(fn ($token) => trim($token))
+                    ->filter(fn ($token) => mb_strlen($token) >= 3)
+                    ->take(3)
+                    ->values();
+
+                if ($tokens->isNotEmpty()) {
+                    $newProductSimilarCategories = MasterRecord::query()
+                        ->forWorkspace($workspaceId)
+                        ->ofType('product_category')
+                        ->active()
+                        ->where(function ($query) use ($tokens) {
+                            foreach ($tokens as $token) $query->orWhere('name', 'like', '%'.$token.'%');
+                        })
+                        ->when($newProductCategoryMatches->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $newProductCategoryMatches->pluck('id')))
+                        ->orderBy('name')
+                        ->limit(2)
+                        ->get(['id', 'name', 'code']);
+                }
+            }
+
+            if ($this->newProductCategoryId) {
+                $newProductSelectedCategory = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->active()
+                    ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+            }
+
+            $nameSearch = trim($this->newProductName);
+            if (mb_strlen($nameSearch) >= 3) {
+                $newProductSimilarProducts = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->active()
+                    ->with('parent:id,name,status')
+                    ->where('name', 'like', '%'.$nameSearch.'%')
+                    ->when($duplicateProduct, fn ($query) => $query->whereKeyNot($duplicateProduct->id))
+                    ->orderBy('name')
+                    ->limit(3)
+                    ->get(['id', 'type', 'parent_id', 'name', 'code', 'metadata', 'status']);
+            }
+
+            if ($this->newProductImage) {
+                try {
+                    $newProductImagePreview = $this->newProductImage->temporaryUrl();
+                } catch (Throwable) {
+                    $newProductImagePreview = null;
+                }
+            }
+        }
+
         return [
             'selectedJob' => null,
             'selectedTask' => null,
@@ -1866,6 +2645,19 @@ class Index extends Component
             'workflowFilterOptions' => $this->createWorkflowReady
                 ? $options->options($user, 'workflows', 'create-job', '', $this->workflowId, 6, ['client_id' => $this->clientId])
                 : collect(),
+            'productCategories' => $productCategories,
+            'productSearchResults' => $productSearchResults,
+            'selectedProductDetails' => $selectedProductDetails,
+            'activeProductCount' => $activeProductCount,
+            'productResultTotal' => $productResultTotal,
+            'canCreateCatalogProduct' => $user->canModule('masterdata', 'create'),
+            'duplicateProduct' => $duplicateProduct,
+            'newProductCategoryMatches' => $newProductCategoryMatches,
+            'newProductSimilarCategories' => $newProductSimilarCategories,
+            'newProductSimilarProducts' => $newProductSimilarProducts,
+            'newProductSelectedCategory' => $newProductSelectedCategory,
+            'newProductHasExactCategory' => $newProductHasExactCategory,
+            'newProductImagePreview' => $newProductImagePreview,
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForCreate($user),
         ];
     }
@@ -1906,6 +2698,10 @@ class Index extends Component
 
     private function jobPageData(User $user): array
     {
+        if (! in_array($this->detailTab, ['overview', 'inquiry'], true)) {
+            $this->detailTab = 'overview';
+        }
+
         $master = app(MasterDataService::class);
         $jobService = app(JobService::class);
         $selected = $jobService->findVisibleBase($user, $this->selectedJobId);
@@ -1920,14 +2716,21 @@ class Index extends Component
             );
         }
 
-        $availableDocuments = $this->detailTab === 'documents'
-            ? app(DocumentService::class)
-                ->query($user, ['client' => $selected->client_id])
-                ->with(['job:id,job_number', 'task:id,title'])
-                ->latest('id')
-                ->limit(60)
-                ->get()
-            : collect();
+        $availableDocuments = collect();
+
+        $overviewTaskDocumentModalTask = null;
+        $overviewTaskAvailableDocuments = collect();
+        if ($this->detailTab === 'overview' && $this->showOverviewTaskDocumentModal && $this->overviewTaskDocumentModalTaskId) {
+            $overviewTaskDocumentModalTask = $selected->tasks->firstWhere('id', (int) $this->overviewTaskDocumentModalTaskId);
+            if ($overviewTaskDocumentModalTask && $this->overviewTaskDocumentSource === 'existing') {
+                $overviewTaskAvailableDocuments = app(DocumentService::class)
+                    ->query($user, ['client' => $selected->client_id])
+                    ->with(['job:id,job_number', 'task:id,title'])
+                    ->latest('id')
+                    ->limit(60)
+                    ->get();
+            }
+        }
 
         $inquiryResults = collect();
         $selectedLinkInquiry = null;
@@ -1964,7 +2767,9 @@ class Index extends Component
             'products' => collect(),
             'categories' => collect(),
             'availableDocuments' => $availableDocuments,
-            'healthOptions' => $this->detailTab === 'workflow' ? $this->healthOptions() : collect(),
+            'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,
+            'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,
+            'healthOptions' => collect(),
             'mentionUsers' => $this->detailTab === 'overview'
                 ? app(\App\Services\MentionService::class)->optionsForJob($selected, $user)
                 : collect(),
@@ -2033,6 +2838,18 @@ class Index extends Component
             'status' => $this->jobStatusFilter,
             'sort' => $this->sort,
         ];
+    }
+
+    private function resetOverviewTaskResourceUi(): void
+    {
+        $this->showOverviewTaskDocumentModal = false;
+        $this->overviewTaskDocumentModalTaskId = null;
+        $this->overviewTaskDocumentSource = 'upload';
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->overviewTaskLinkFormTaskId = null;
+        $this->overviewTaskLinkUrl = '';
     }
 
     private function resetJobSelection(): void

@@ -44,6 +44,11 @@ class MasterDataTaskPackProgressiveRenderingTest extends TestCase
         $this->assertStringContainsString('$master->active(\'document_category\')', $component);
         $this->assertStringContainsString('wire:init="loadTaskPackOptions"', $view);
         $this->assertStringContainsString('@if($optionsReady)', $view);
+        $this->assertStringContainsString('context="task-pack-setup"', $view);
+        $this->assertStringContainsString('action="setTaskPackAssignee"', $view);
+        $this->assertStringContainsString(':fixed-menu="true"', $view);
+        $this->assertStringContainsString('function setTaskPackAssignee', $component);
+        $this->assertStringNotContainsString('wire:model="tasks.{{ $index }}.default_assignee_id"', $view);
     }
 
     public function test_workflow_only_loads_shared_phase_options_when_its_modal_is_open(): void

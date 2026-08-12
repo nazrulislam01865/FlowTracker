@@ -1,16 +1,20 @@
-@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[]])
+@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
     $completedProductRows = $productRows->filter(fn ($item) => filled($item->product_name ?? null));
-    $persistedProductRowCount = $productRows->filter(fn ($item) => filled($item->id ?? null))->count();
     $nextTask = \App\Support\JobDetailPresenter::nextTask($job);
     $currentTasks = \App\Support\JobDetailPresenter::phaseTasks($job);
     $done = \App\Support\JobDetailPresenter::completedCount($currentTasks);
     $accessControl = app(\App\Services\AccessControlService::class);
     $canEditJob = $accessControl->canEditVisibleJob(auth()->user(), $job);
+    $canViewOrderProducts = $accessControl->can(auth()->user(), 'products', 'view');
+    $canEditOrderProducts = $canEditJob && $accessControl->canEditParentRecordModule(auth()->user(), 'products', $job);
+    $canCreateOrderProducts = $canEditOrderProducts && $accessControl->can(auth()->user(), 'products', 'create');
+    $canDeleteOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'products', 'delete');
     $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
+    $canLinkDocument = $accessControl->can(auth()->user(), 'documents', 'link');
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
     $masterData = app(\App\Services\MasterDataService::class);
@@ -51,6 +55,7 @@
                     <x-ui.inline-save-state />
                 @endif
             </div>
+            @if($canViewOrderProducts)
             <div class="ft-card-section-head"><b>Products &amp; quantities</b><span>{{ $completedProductRows->count() }} product · {{ number_format($completedProductRows->sum('quantity')) }} total units</span></div>
             <table class="ft-mini-grid-table ft-inline-product-table">
                 <thead><tr><th>Category</th><th>Product</th><th>Quantity</th><th class="ft-product-delete-column"><span class="sr-only">Action</span></th></tr></thead>
@@ -71,14 +76,14 @@
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($categoryLabel) })"
-                                    x-init="if (@js($categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                    x-init="if (@js($canEditOrderProducts && $categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                     x-on:click.outside="if (editing && !@js($categoryNeedsSelection)) cancelEdit()"
                                     x-on:ft-inline-remote-cancel.stop="if (!@js($categoryNeedsSelection)) cancelEdit()"
                                     x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
                                 >
                                     <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $categoryLabel }}</span>
-                                    @if($canEditJob)
+                                    @if($canEditOrderProducts)
                                         <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
                                         <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
                                             <x-ui.inline-remote-catalog
@@ -103,14 +108,14 @@
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
                                     wire:key="{{ $productPickerKey }}"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name ?? ''), display: @js($productLabel) })"
-                                    x-init="if (@js($productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                    x-init="if (@js($canEditOrderProducts && $productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                     x-on:click.outside="if (editing && !@js($productNeedsSelection)) cancelEdit()"
                                     x-on:ft-inline-remote-cancel.stop="if (!@js($productNeedsSelection)) cancelEdit()"
                                     x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'product_name', nextValue)).then((ok) => { productSaving = false; if (ok) { draftProductReady = true; $nextTick(() => setTimeout(() => { const input = $el.closest('tr')?.querySelector('[data-job-item-quantity]'); input?.focus(); input?.select(); }, 0)) } })"
                                 >
                                     <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $productLabel }}</span>
-                                    @if($canEditJob)
+                                    @if($canEditOrderProducts)
                                         <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || @js(blank($item->category_name))" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="{{ blank($item->category_name) ? 'Select a category first' : 'Edit product' }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
                                         <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
                                             <x-ui.inline-remote-catalog
@@ -136,11 +141,11 @@
                                 <div
                                     class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
-                                    @if($isDraftItem) x-init="editing = true" @endif
+                                    @if($canEditOrderProducts && $isDraftItem) x-init="editing = true" @endif
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
                                     <span x-show="!editing" class="ft-inline-field-value" x-text="display">{{ number_format((int)$item->quantity) }}</span>
-                                    @if($canEditJob)
+                                    @if($canEditOrderProducts)
                                         <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
                                         <input x-ref="quantityInput" data-job-item-quantity x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
                                             x-on:keydown.escape.prevent="cancelEdit()"
@@ -154,17 +159,17 @@
                             @endif
                         </td>
                         <td class="ft-product-delete-cell" data-label="Action">
-                            @if($item->id && $canEditJob)
+                            @if($item->id && $canDeleteOrderProducts)
                                 <button
                                     type="button"
                                     class="ft-inline-product-delete"
-                                    title="{{ $persistedProductRowCount <= 1 ? 'An Order must keep at least one product' : 'Remove product' }}"
+                                    title="Remove product"
                                     aria-label="Remove product"
                                     wire:click.stop="removeJobItem({{ $item->id }})"
                                     wire:confirm="Remove this product from the Order?"
                                     wire:loading.attr="disabled"
                                     wire:target="removeJobItem({{ $item->id }})"
-                                    :disabled="categorySaving || productSaving || quantitySaving || @js($persistedProductRowCount <= 1)"
+                                    :disabled="categorySaving || productSaving || quantitySaving"
                                 >×</button>
                             @endif
                         </td>
@@ -172,8 +177,9 @@
                 @endforeach
                 </tbody>
             </table>
-            @if($canEditJob)
+            @if($canCreateOrderProducts)
                 <div class="ft-product-actions"><button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addJobItem({{ $job->id }})" wire:loading.attr="disabled" wire:target="addJobItem({{ $job->id }})">＋ Add product</button></div>
+            @endif
             @endif
         </section>
 
@@ -254,7 +260,7 @@
 
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         @foreach($job->workflow->phases as $phase)
-            <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" wire:click="setDetailTab('workflow')">
+            <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" disabled aria-disabled="true" title="Workflow page is temporarily disabled">
                 <span>{{ $phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence }}</span><small>{{ $phase->short_name }}</small>
             </button>
         @endforeach
@@ -273,7 +279,7 @@
             </div>
         </div>
         <div class="ft-phase-load-note"><span>◉ All {{ $configuredTasks->count() }} configured Task Pack tasks are loaded</span><span>Task status changes save automatically</span></div>
-        <div class="ft-phase-task-table">
+        <div class="ft-phase-task-table ft-order-overview-taskflow">
             @foreach($job->workflow->phases as $phase)
                 @php
                     $allPhaseTasks = \App\Support\JobDetailPresenter::phaseTasks($job,$phase);
@@ -281,28 +287,41 @@
                     $phaseProgress = $allPhaseTasks->count() ? round($completed/max(1,$allPhaseTasks->count())*100) : 0;
                     $phaseTasks = $allPhaseTasks;
                     $expanded = in_array((int) $phase->id, array_map('intval', $expandedPhaseIds), true);
+                    $phaseTone = ((max(1, (int) $phase->sequence) - 1) % 6) + 1;
                 @endphp
-                <div class="ft-phase-group {{ $expanded ? 'open' : '' }}" wire:key="job-phase-{{ $phase->id }}">
-                    <div class="ft-phase-group-head">
+                <div class="ft-phase-group ft-phase-tone-{{ $phaseTone }} {{ $expanded ? 'open' : '' }}" wire:key="job-phase-{{ $phase->id }}">
+                    <div class="ft-phase-group-head ft-order-phase-head">
                         <b class="{{ $phase->id === $job->phase->id ? 'current-number' : '' }}">{{ $phase->sequence }}</b>
                         <strong>{{ $phase->name }}</strong>
                         <small>{{ $completed }} of {{ $allPhaseTasks->count() }} complete</small>
                         <em style="--phase-progress:{{ $phaseProgress }}%"></em>
                     </div>
                     @if($expanded)
-                        <div class="ft-phase-task-columns"><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Action</span></div>
+                        <div class="ft-phase-task-columns"><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Files</span><span>Action</span></div>
                         @forelse($phaseTasks as $task)
                             @php
                                 $taskAccess = app(\App\Services\AccessControlService::class);
                                 $canEditTask = $taskAccess->canEditVisibleTask(auth()->user(), $task);
                                 $canAssignTask = $taskAccess->canAssignTask(auth()->user(), $task);
                                 $canDeleteTask = $taskAccess->can(auth()->user(), 'tasks', 'delete');
+                                $taskDocuments = $job->documents->where('task_id', $task->id)->sortByDesc('created_at')->values();
+                                $taskLinks = $task->relationLoaded('links') ? $task->links : collect();
+                                $taskRequirement = $requiredDocuments->first(fn ($requirement) => (int) ($requirement->task?->id ?? 0) === (int) $task->id);
+                                $effectiveTaskDescription = $task->description ?: $task->setupTemplate?->description;
+                                $taskStripeClass = $loop->odd ? 'is-green' : 'is-white';
                             @endphp
-                            <div class="ft-phase-task-line ft-editable-task-line" wire:key="job-task-{{ $task->id }}">
-                                <span>{{ $phase->sequence }}.{{ $loop->iteration }}</span>
-                                <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
+                            <div class="ft-phase-task-line ft-editable-task-line ft-order-taskflow-row {{ $taskStripeClass }}" wire:key="job-task-{{ $task->id }}">
+                                <span class="ft-order-task-number">{{ $phase->sequence }}.{{ $loop->iteration }}</span>
+                                <div class="ft-order-task-copy">
+                                    <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
+                                    <span class="ft-order-task-description">{{ $effectiveTaskDescription ? \Illuminate\Support\Str::limit(strip_tags((string) $effectiveTaskDescription), 110) : 'No instructions added.' }}</span>
+                                    @if($taskRequirement)
+                                        <span class="ft-order-task-required-file {{ $taskRequirement->complete ? 'is-complete' : '' }}">{{ $taskRequirement->complete ? '✓ File submitted' : '□ Required file: '.$taskRequirement->name }}</span>
+                                    @endif
+                                </div>
                                 <span
                                     class="ft-task-inline-editor ft-inline-edit-shell"
+                                    data-field-label="Assignee"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                     x-on:click.outside="if (editing) cancelEdit()"
@@ -331,6 +350,7 @@
                                 </span>
                                 <span
                                     class="ft-task-inline-editor ft-inline-edit-shell"
+                                    data-field-label="Due date"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j, Y') ?? 'Set due date') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
@@ -346,6 +366,7 @@
                                 </span>
                                 <span
                                     class="ft-task-inline-status-shell ft-inline-edit-shell"
+                                    data-field-label="Status"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-status'), label: 'task status', value: @js($task->status), display: @js($task->status) })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
@@ -359,6 +380,23 @@
                                     </select>
                                     @if($canEditTask)<x-ui.inline-save-state compact />@endif
                                 </span>
+                                <div class="ft-order-task-files" data-field-label="Files">
+                                    @if($canEditTask)
+                                        <div class="ft-order-task-resource-add-actions" aria-label="Add task resource">
+                                            @if($canUploadDocument || $canLinkDocument)
+                                                <button class="ft-order-task-resource-add-icon" type="button" wire:click="openOverviewTaskDocumentModal({{ $task->id }})" title="Add file" aria-label="Add file to {{ $task->title }}">
+                                                    <span class="ft-order-task-resource-plus">+</span>
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
+                                                </button>
+                                            @endif
+                                            <button class="ft-order-task-resource-add-icon {{ (int) $overviewTaskLinkFormTaskId === (int) $task->id ? 'is-active' : '' }}" type="button" wire:click="openOverviewTaskLinkForm({{ $task->id }})" title="Add link" aria-label="Add external link to {{ $task->title }}">
+                                                <span class="ft-order-task-resource-plus">+</span>
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                            </button>
+                                        </div>
+                                    @endif
+                                    <span class="ft-order-task-file-count"><b>{{ $taskDocuments->count() }}</b> file{{ $taskDocuments->count() === 1 ? '' : 's' }}@if($taskLinks->isNotEmpty()) · <b>{{ $taskLinks->count() }}</b> link{{ $taskLinks->count() === 1 ? '' : 's' }}@endif</span>
+                                </div>
                                 <div class="ft-task-action-wrap" x-data="{ open: false }" x-on:click.stop>
                                     <button class="ft-table-kebab" type="button" x-on:click="open = !open" aria-label="Task actions" :aria-expanded="open ? 'true' : 'false'">•••</button>
                                     <div class="ft-task-action-menu" x-cloak x-show="open" x-on:click.outside="open = false">
@@ -372,6 +410,56 @@
                                     </div>
                                 </div>
                             </div>
+
+                            @if((int) $overviewTaskLinkFormTaskId === (int) $task->id || $taskDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
+                                <div class="ft-order-task-resource-list {{ $taskStripeClass }}" wire:key="job-task-resources-{{ $task->id }}">
+                                    @if((int) $overviewTaskLinkFormTaskId === (int) $task->id && $canEditTask)
+                                        <form class="ft-order-task-link-form" wire:submit.prevent="saveOverviewTaskLink({{ $task->id }})" wire:key="job-task-link-form-{{ $task->id }}">
+                                            <div class="ft-order-task-link-input-wrap">
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                                <input type="text" inputmode="url" wire:model="overviewTaskLinkUrl" placeholder="Paste link, e.g. https://drive.google.com/..." autocomplete="url" autofocus aria-label="External link">
+                                            </div>
+                                            <div class="ft-order-task-link-form-actions">
+                                                <button class="secondary" type="button" wire:click="cancelOverviewTaskLinkForm">Cancel</button>
+                                                <button class="primary" type="submit" wire:loading.attr="disabled" wire:target="saveOverviewTaskLink({{ $task->id }})">Add</button>
+                                            </div>
+                                            @error('overviewTaskLinkUrl')<div class="ft-order-task-link-error">{{ $message }}</div>@enderror
+                                        </form>
+                                    @endif
+
+                                    @foreach($taskDocuments as $taskDocument)
+                                        <div class="ft-order-task-document-row" wire:key="job-task-document-{{ $taskDocument->id }}">
+                                            <span class="ft-order-task-file-type">{{ strtoupper(pathinfo($taskDocument->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                                            <div class="ft-order-task-file-copy">
+                                                <b title="{{ $taskDocument->name }}">{{ $taskDocument->name }}</b>
+                                                @if($taskDocument->note)<span class="ft-order-task-file-note">{{ $taskDocument->note }}</span>@endif
+                                                <small>{{ $taskDocument->category ?: 'Task attachment' }} · {{ $taskDocument->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($taskDocument->created_at, 'M j, Y, g:i A') }}</small>
+                                            </div>
+                                            <div class="ft-order-task-file-actions">
+                                                <a href="{{ route('documents.open', $taskDocument) }}" target="_blank" rel="noopener">Open</a>
+                                                @if(auth()->user()->canModule('documents','export'))<a href="{{ route('documents.download', $taskDocument) }}">Download</a>@endif
+                                                @if($canDeleteDocument)
+                                                    <button type="button" wire:click="deleteJobDocument({{ $taskDocument->id }})" wire:loading.attr="disabled" wire:target="deleteJobDocument({{ $taskDocument->id }})" wire:confirm="Delete this document link?" title="Remove attachment" aria-label="Remove {{ $taskDocument->name }}">×</button>
+                                                @endif
+                                            </div>
+                                        </div>
+                                    @endforeach
+
+                                    @foreach($taskLinks as $taskLink)
+                                        <div class="ft-order-task-link-row" wire:key="job-task-link-{{ $taskLink->id }}">
+                                            <span class="ft-order-task-link-type" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg></span>
+                                            <div class="ft-order-task-link-copy">
+                                                <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer" title="{{ $taskLink->url }}">{{ \Illuminate\Support\Str::limit($taskLink->url, 110) }}</a>
+                                                <small>{{ $taskLink->created_at ? \App\Support\UserLocalTime::format($taskLink->created_at, 'M j, Y, g:i A') : '—' }}</small>
+                                            </div>
+                                            <div class="ft-order-task-link-actions">
+                                                <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer">Open ↗</a>
+                                                @if($canEditTask)<button type="button" wire:click="deleteOverviewTaskLink({{ $task->id }}, {{ $taskLink->id }})" wire:confirm="Remove this link from the task?" title="Remove link" aria-label="Remove link">×</button>@endif
+                                            </div>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            @endif
                         @empty
                             <div class="ft-phase-empty-row">No configured tasks in this phase.</div>
                         @endforelse
@@ -394,7 +482,6 @@
                 @else
                     <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Job attachments.</small></div></div>
                 @endif
-                <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="openJobExistingDocumentPickerFromOverview">Choose from Documents</button>
             </div>
             @if($canUploadDocument)
                 @error('jobDocumentUploads')
@@ -426,8 +513,112 @@
         @else
             <div class="ft-empty-taskpack-docs">No Task Pack document requirement is configured for this Job. Open Documents to review the document setup.</div>
         @endif
-        @foreach($job->documents as $doc)<div class="ft-job-file-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span><div><b>{{ $doc->name }}</b><small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small></div><a href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','export'))<a href="{{ route('documents.download',$doc) }}">Download</a>@endif @if($canDeleteDocument)<button type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?">Delete</button>@endif</div>@endforeach
+        @foreach($job->documents as $doc)
+            <div class="ft-job-file-row" wire:key="job-overview-document-{{ $doc->id }}">
+                <span class="ft-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                <div class="ft-job-file-main">
+                    <b title="{{ $doc->name }}">{{ $doc->name }}</b>
+                    <small>{{ $doc->task?->title ?: 'Job document' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
+                </div>
+                <div class="ft-job-file-actions">
+                    <a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>
+                    @if(auth()->user()->canModule('documents','export'))
+                        <a class="ft-link-blue" href="{{ route('documents.download',$doc) }}">Download</a>
+                    @endif
+                    @if($canDeleteDocument)
+                        <button type="button" class="ft-job-file-delete" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?" title="Remove attachment" aria-label="Remove {{ $doc->name }}">×</button>
+                    @endif
+                </div>
+            </div>
+        @endforeach
     </section>
 
     <x-jobs.detail-activity :job="$job" :mention-users="$mentionUsers" compact="true" :activity-tab="$activityTab" :activity-page="$activityPage" :focus-comment="$focusComment" />
+
+    @if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask)
+        <div class="ft-order-task-document-modal-backdrop" wire:key="order-task-document-modal" wire:click.self="closeOverviewTaskDocumentModal">
+            <section class="ft-order-task-document-modal" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
+                <header class="ft-order-task-document-modal-head">
+                    <div>
+                        <h2 id="order-task-document-modal-title">Add new document to task</h2>
+                        <p>Upload a new file or choose a document that already exists.</p>
+                    </div>
+                    <button type="button" class="ft-order-task-document-modal-close" wire:click="closeOverviewTaskDocumentModal" aria-label="Close">×</button>
+                </header>
+
+                <div class="ft-order-task-document-modal-body">
+                    <div class="ft-order-task-document-target">
+                        <span class="ft-order-task-document-target-icon">▣</span>
+                        <div>
+                            <small>ATTACHING TO</small>
+                            <strong>{{ $overviewTaskDocumentModalTask->title }}</strong>
+                            <span>{{ $overviewTaskDocumentModalTask->task_number ?: 'TASK-'.str_pad((string) $overviewTaskDocumentModalTask->id, 5, '0', STR_PAD_LEFT) }} &nbsp;·&nbsp; {{ $overviewTaskDocumentModalTask->phase?->name ?? 'Order Taskflow' }}</span>
+                            <span class="ft-order-task-document-reference"><b>Order Reference:</b> {{ $job->order_number ?: '—' }}</span>
+                        </div>
+                        <span class="ft-order-task-document-target-lock">▣&nbsp; Task selected</span>
+                    </div>
+
+                    <div class="ft-order-task-document-source-label">Document source</div>
+                    <div class="ft-order-task-document-source-tabs">
+                        <button type="button" class="{{ $overviewTaskDocumentSource === 'upload' ? 'active' : '' }}" wire:click="setOverviewTaskDocumentSource('upload')" @disabled(!$canUploadDocument)><span>↥</span> Upload new</button>
+                        <button type="button" class="{{ $overviewTaskDocumentSource === 'existing' ? 'active' : '' }}" wire:click="setOverviewTaskDocumentSource('existing')" @disabled(!$canLinkDocument)><span>▤</span> Choose existing</button>
+                    </div>
+
+                    @if($overviewTaskDocumentSource === 'upload' && $canUploadDocument)
+                        <label class="ft-order-task-document-dropzone">
+                            <input type="file" wire:model="overviewTaskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
+                            <span class="ft-order-task-document-upload-icon">⇧</span>
+                            @if($overviewTaskDocumentUpload)
+                                <strong>{{ $overviewTaskDocumentUpload->getClientOriginalName() }}</strong>
+                                <b>File selected — choose another file</b>
+                                <small>{{ number_format(max(1, (int) ceil($overviewTaskDocumentUpload->getSize() / 1024))) }} KB · ready to add</small>
+                            @else
+                                <strong>Drop a file here</strong>
+                                <b>or browse files</b>
+                                <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small>
+                            @endif
+                        </label>
+                        @error('overviewTaskDocumentUpload')<p class="ft-order-task-document-error">{{ $message }}</p>@enderror
+                    @else
+                        <div class="ft-order-task-document-existing">
+                            @if($overviewTaskAvailableDocuments->isEmpty())
+                                <div class="ft-order-task-document-existing-empty">No existing client documents are available.</div>
+                            @else
+                                <label>
+                                    <span>Choose an existing document</span>
+                                    <select wire:model="overviewTaskExistingDocumentId">
+                                        <option value="">Select a document...</option>
+                                        @foreach($overviewTaskAvailableDocuments as $sourceDocument)
+                                            <option value="{{ $sourceDocument->id }}">{{ $sourceDocument->name }}</option>
+                                        @endforeach
+                                    </select>
+                                </label>
+                            @endif
+                        </div>
+                        @error('overviewTaskExistingDocumentId')<p class="ft-order-task-document-error">{{ $message }}</p>@enderror
+                    @endif
+
+                    <label class="ft-order-task-document-note">
+                        <span>Document note (optional)</span>
+                        <input type="text" wire:model="overviewTaskDocumentNote" placeholder="Add a short note about this document...">
+                    </label>
+                    @error('overviewTaskDocumentNote')<p class="ft-order-task-document-error">{{ $message }}</p>@enderror
+
+                    <div class="ft-order-task-document-info">
+                        <span>ⓘ</span>
+                        <p>This document will appear directly under <strong>{{ $overviewTaskDocumentModalTask->title }}</strong> and in Order Documents.</p>
+                    </div>
+                </div>
+
+                <footer class="ft-order-task-document-modal-actions">
+                    <button type="button" class="secondary" wire:click="closeOverviewTaskDocumentModal">Cancel</button>
+                    <button type="button" class="primary" wire:click="saveOverviewTaskDocument" wire:loading.attr="disabled" wire:target="saveOverviewTaskDocument,overviewTaskDocumentUpload"
+                        @disabled($overviewTaskDocumentSource === 'upload' ? !$overviewTaskDocumentUpload : !$overviewTaskExistingDocumentId)>
+                        <span wire:loading.remove wire:target="saveOverviewTaskDocument">Add document</span>
+                        <span wire:loading wire:target="saveOverviewTaskDocument">Adding...</span>
+                    </button>
+                </footer>
+            </section>
+        </div>
+    @endif
 </div>

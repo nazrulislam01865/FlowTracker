@@ -12,6 +12,7 @@
     'clearable' => true,
     'action' => null,
     'menuWidth' => 300,
+    'fixedMenu' => false,
 ])
 @php
     $items = collect($initialOptions)->map(fn ($item) => is_array($item) ? $item : (array) $item)->values();
@@ -30,6 +31,7 @@
     params: @js($params),
     disabled: @js((bool)$disabled),
     menuWidth: @js((int)$menuWidth),
+    fixedMenu: @js((bool)$fixedMenu),
 })" x-effect="syncSelection(@js(['value' => (string)$value, 'label' => $resolvedLabel]), @js($params), @js($items->all()))" x-on:keydown.escape.window="close()" x-on:resize.window="open && reposition()" x-on:scroll.window="open && reposition()">
     <label>{{ $label }}</label>
     <button x-ref="trigger" type="button" class="ft-remote-filter-button" x-on:click="toggle()" :aria-expanded="open.toString()" @disabled($disabled)>

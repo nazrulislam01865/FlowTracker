@@ -9,6 +9,13 @@
     'products'=>collect(),
     'categories'=>collect(),
     'availableDocuments'=>collect(),
+    'overviewTaskDocumentModalTask'=>null,
+    'overviewTaskAvailableDocuments'=>collect(),
+    'showOverviewTaskDocumentModal'=>false,
+    'overviewTaskDocumentSource'=>'upload',
+    'overviewTaskDocumentUpload'=>null,
+    'overviewTaskExistingDocumentId'=>null,
+    'overviewTaskLinkFormTaskId'=>null,
     'healthOptions'=>collect(),
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
@@ -30,7 +37,7 @@
 ])
 @php
     $team = \App\Support\JobDetailPresenter::team($job);
-    $tabs = ['overview'=>'Overview','workflow'=>'Workflow','documents'=>'Documents','inquiry'=>'Inquiry'];
+    $tabs = ['overview'=>'Overview','inquiry'=>'Inquiry'];
     $jobPriorityColor = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $job->priority);
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
@@ -56,8 +63,31 @@
                     <x-ui.inline-save-state />
                 @endif
             </h1>
-            <div class="ft-exact-job-meta">
-                <span class="ft-client-inline-identity"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-client-inline-name">{{ $job->client?->name }}</span></span>
+            <div class="ft-order-header-meta" aria-label="Order information">
+                <span class="ft-order-header-meta-item">
+                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span>
+                    <span class="ft-client-inline-identity"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="20" /><span>Client <strong>{{ $job->client?->name ?: '—' }}</strong></span></span>
+                </span>
+                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
+                <span class="ft-order-header-meta-item ft-order-header-reference">
+                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7l4 4V20.5H7z"></path><path d="M14 3.5v4h4"></path></svg></span>
+                    <span>Reference <strong>{{ $job->order_number ?: '—' }}</strong></span>
+                    @if($job->order_number)
+                        <button type="button" class="ft-copy-id-btn ft-order-header-copy" title="Copy Reference Number" aria-label="Copy reference number {{ $job->order_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->order_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
+                    @endif
+                </span>
+                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
+                <span class="ft-order-header-meta-item">
+                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span>
+                    <span>Created by <strong>{{ $job->creator?->name ?: 'System' }}</strong></span>
+                </span>
+                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
+                <span class="ft-order-header-meta-item">
+                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span>
+                    <span>Created <strong>{{ $job->created_at ? \App\Support\UserLocalTime::format($job->created_at, 'M j, Y') : '—' }}@if($job->created_at) at {{ \App\Support\UserLocalTime::format($job->created_at, 'g:i A') }}@endif</strong></span>
+                </span>
+            </div>
+            <div class="ft-exact-job-meta ft-order-status-row" aria-label="Order status">
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
                 <span class="ft-soft-pill {{ $jobPriorityColor ? 'ft-master-color' : 'red' }}" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}">{{ $job->priority }}</span>
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>
@@ -96,19 +126,13 @@
             :activity-page="$activityPage"
             :focus-comment="$focusComment"
             :job-document-uploads="$jobDocumentUploads"
-        />
-    @elseif($detailTab==='workflow')
-        <x-jobs.detail-workflow :job="$job" :users="$users" :health-options="$healthOptions" />
-    @elseif($detailTab==='documents')
-        <x-jobs.detail-documents
-            :job="$job"
-            :available-documents="$availableDocuments"
-            :job-document-uploads="$jobDocumentUploads"
-            :job-required-document-upload="$jobRequiredDocumentUpload"
-            :job-document-task-id="$jobDocumentTaskId"
-            :show-document-picker="$showDocumentPicker"
-            :last-job-document-upload-id="$lastJobDocumentUploadId"
-            :last-job-document-task-id="$lastJobDocumentTaskId"
+            :overview-task-document-modal-task="$overviewTaskDocumentModalTask"
+            :overview-task-available-documents="$overviewTaskAvailableDocuments"
+            :show-overview-task-document-modal="$showOverviewTaskDocumentModal"
+            :overview-task-document-source="$overviewTaskDocumentSource"
+            :overview-task-document-upload="$overviewTaskDocumentUpload"
+            :overview-task-existing-document-id="$overviewTaskExistingDocumentId"
+            :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
         />
     @elseif($detailTab==='inquiry')
         <x-jobs.detail-inquiry

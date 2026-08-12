@@ -12,7 +12,18 @@
         @forelse($mentions as $mention)
             @php
                 $route = app(\App\Services\NotificationService::class)->urlFor($mention);
-                $initials = collect(preg_split('/\s+/', trim($mention->title)))->filter()->take(2)->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
+                $actor = $mention->actor;
+                $actorName = $actor?->name;
+
+                // Legacy mention rows created before actor_id existed still keep
+                // the actor's name in the title. Use it as a safe initials fallback
+                // if the migration could not resolve a unique user record.
+                if (!$actorName && preg_match('/^(.*?) mentioned (?:you|a user) in /u', (string) $mention->title, $actorMatch)) {
+                    $actorName = trim((string) ($actorMatch[1] ?? ''));
+                }
+
+                $actorName = $actorName ?: 'FlowTrack';
+                $messagePreview = str(app(\App\Services\MentionService::class)->displayText($mention->message))->limit(90);
                 $contextLabel = $mention->inquiry_task_id
                     ? (($mention->inquiry?->inquiry_number ?: 'Inquiry').' · '.($mention->inquiryTask?->title ?: 'Task'))
                     : ($mention->inquiry_id
@@ -20,8 +31,8 @@
                         : ($mention->task?->task_number ?: ($mention->job?->displayOrderNumber() ?: 'Notification')));
             @endphp
             <a class="ft-mention {{ $mention->read_at ? '' : 'unread' }}" href="{{ $route }}" wire:key="dashboard-mention-{{ $mention->id }}">
-                <span class="ft-avatar">{{ $initials ?: '@' }}</span>
-                <span><strong class="ft-mention-copy">{{ $mention->title }}: <strong>“{{ str(app(\App\Services\RichTextService::class)->plainText($mention->message))->limit(90) }}”</strong></strong><span class="ft-mention-meta">{{ $contextLabel }}</span></span>
+                <x-ui.avatar class="ft-avatar" :user="$actor" :name="$actorName" :size="29" />
+                <span><strong class="ft-mention-copy">{{ $mention->title }}: <strong>“{{ $messagePreview }}”</strong></strong><span class="ft-mention-meta">{{ $contextLabel }}</span></span>
                 <time class="ft-mention-time">{{ $mention->created_at?->diffForHumans() }}</time>
             </a>
         @empty
