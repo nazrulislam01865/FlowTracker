@@ -22,7 +22,9 @@ class AccessControlService
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
         'inquiries' => ['name' => 'Inquiries', 'group' => 'Commercial'],
         'jobs' => ['name' => 'Orders', 'group' => 'Commercial'],
-        'products' => ['name' => 'Product', 'group' => 'Commercial'],
+        'catalog_products' => ['name' => 'Products', 'group' => 'Catalogue'],
+        'product_categories' => ['name' => 'Product Categories', 'group' => 'Catalogue'],
+        'suppliers' => ['name' => 'Suppliers', 'group' => 'Catalogue'],
         'finance' => ['name' => 'Finance', 'group' => 'Commercial'],
         'tasks' => ['name' => 'Tasks & Checklists', 'group' => 'Operations'],
         'documents' => ['name' => 'Documents', 'group' => 'Records'],
@@ -46,7 +48,9 @@ class AccessControlService
         'clients' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'inquiries' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'jobs' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
-        'products' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'catalog_products' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'product_categories' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'suppliers' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'finance' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'tasks' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'documents' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
@@ -56,10 +60,10 @@ class AccessControlService
     ];
 
     /** These modules do not have per-record ownership scope. */
-    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata'];
+    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata', 'catalog_products', 'product_categories', 'suppliers'];
 
     /** Shared Product/Finance capabilities inherit record visibility from the parent Inquiry/Order. */
-    public const PARENT_RECORD_MODULES = ['products', 'finance'];
+    public const PARENT_RECORD_MODULES = ['finance'];
 
     public const SCOPED_MODULES = ['inquiries', 'jobs', 'tasks', 'documents'];
 
@@ -113,6 +117,18 @@ class AccessControlService
         'master.update' => ['masterdata','edit'],
         'master.delete' => ['masterdata','delete'],
         'master.manage' => ['masterdata','manage'],
+        'catalog-products.view' => ['catalog_products','view'],
+        'catalog-products.create' => ['catalog_products','create'],
+        'catalog-products.update' => ['catalog_products','edit'],
+        'catalog-products.delete' => ['catalog_products','delete'],
+        'product-categories.view' => ['product_categories','view'],
+        'product-categories.create' => ['product_categories','create'],
+        'product-categories.update' => ['product_categories','edit'],
+        'product-categories.delete' => ['product_categories','delete'],
+        'suppliers.view' => ['suppliers','view'],
+        'suppliers.create' => ['suppliers','create'],
+        'suppliers.update' => ['suppliers','edit'],
+        'suppliers.delete' => ['suppliers','delete'],
         'users.manage' => ['users','manage'],
         'administration.manage' => ['users','manage'],
         'jobs.view-assigned' => ['jobs','view'],
@@ -201,8 +217,8 @@ class AccessControlService
     }
 
     /**
-     * Apply Edit Own / Edit All semantics for shared Product/Finance modules while
-     * the parent Inquiry/Order continues to own record visibility and scope.
+     * Apply Edit Own / Edit All semantics for parent-scoped modules such as Finance.
+     * Product catalogue permissions are managed exclusively by catalog_products.
      */
     public function canEditParentRecordModule(User $user, string $module, object $parent): bool
     {

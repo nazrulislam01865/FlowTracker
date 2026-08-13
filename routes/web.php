@@ -174,6 +174,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->middleware('permission:taskpacks.view')->name('task-pack.setup');
     Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');
     Route::get('/task-pack-setup/{taskPack}/edit', [TaskPackSetupController::class, 'edit'])->middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit');
-    Route::get('/master-data', MasterDataController::class)->middleware('permission:master.view')->name('master-data');
+    Route::get('/master-data', MasterDataController::class)->name('master-data');
     Route::get('/administration', AdministrationController::class)->middleware('super.admin')->name('administration');
 });

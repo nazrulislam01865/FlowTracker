@@ -437,7 +437,7 @@ class JobService
                 'documents.task:id,title',
             ];
 
-            if (app(AccessControlService::class)->can($user, 'products', 'view')) {
+            if (app(AccessControlService::class)->can($user, 'catalog_products', 'view')) {
                 $relations[] = 'items';
             }
 
@@ -902,7 +902,7 @@ class JobService
 
     public function updateItem(FlowJob $job, FlowJobItem $item, string $field, mixed $value, User $actor): FlowJobItem
     {
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $job), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
         abort_unless(in_array($field, ['category_name', 'product_name', 'quantity'], true), 422, 'This Job item field cannot be edited inline.');
@@ -957,7 +957,7 @@ class JobService
 
     public function addItem(FlowJob $job, string $category, string $product, int $quantity, User $actor): FlowJobItem
     {
-        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'create'), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'create'), 403);
         $this->assertEditable($job, $actor);
         $category = trim($category);
         $product = trim($product);
@@ -997,7 +997,7 @@ class JobService
 
     public function removeItem(FlowJob $job, FlowJobItem $item, User $actor): void
     {
-        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'delete'), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'delete'), 403);
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
         $wasDraft = blank($item->product_name);

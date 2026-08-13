@@ -3,7 +3,7 @@
     'priority'=>'Medium',
     'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
     'productCategories'=>collect(),'productSearchResults'=>collect(),'selectedProductDetails'=>collect(),'activeProductCount'=>0,'productResultTotal'=>0,
-    'canCreateCatalogProduct'=>false,'duplicateProduct'=>null,'newProductCategoryMatches'=>collect(),'newProductSimilarCategories'=>collect(),
+    'canUseOrderProductSelector'=>false,'canCreateCatalogProduct'=>false,'canViewProductCategories'=>false,'canCreateProductCategory'=>false,'duplicateProduct'=>null,'newProductCategoryMatches'=>collect(),'newProductSimilarCategories'=>collect(),
     'newProductSimilarProducts'=>collect(),'newProductSelectedCategory'=>null,'newProductHasExactCategory'=>false,'newProductImagePreview'=>null,
     'createProductSearch'=>'','createProductCategoryFilter'=>'','createProductShowAllResults'=>false,'showCreateOrderProductModal'=>false,
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'',
@@ -16,7 +16,7 @@
     $allowedPhases = $selectedWorkflow?->phases?->where('allow_job_start', true) ?? collect();
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
-    $createReady = $catalogReady && $assignmentReady && $workflowReady;
+    $createReady = $catalogReady && $assignmentReady && $workflowReady && $canUseOrderProductSelector;
     $masterData = app(\App\Services\MasterDataService::class);
 @endphp
 <div {{ $attributes->class('ft-create-job-page') }}>

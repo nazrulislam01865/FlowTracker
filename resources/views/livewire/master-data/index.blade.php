@@ -11,9 +11,12 @@
             'inquiry_status' => 'inquiry status',
             default => 'master data',
         };
-        $canCreateMaster = auth()->user()->canModule('masterdata', 'create');
-        $canEditMaster = auth()->user()->canModule('masterdata', 'edit');
-        $canDeleteMaster = auth()->user()->canModule('masterdata', 'delete');
+        $permissionModule = \App\Services\MasterDataService::permissionModuleForType($group);
+        $canCreateMaster = auth()->user()->canModule($permissionModule, 'create');
+        $canEditMaster = auth()->user()->canModule($permissionModule, 'edit');
+        $canDeleteMaster = auth()->user()->canModule($permissionModule, 'delete');
+        $canCreateProductCategory = auth()->user()->canModule('product_categories', 'create');
+        $catalogueGroup = in_array($group, ['product', 'product_category', 'supplier'], true);
         $pageTitle = $labels[$group] ?? 'Master Data';
         $singularLabel = match ($group) {
             'product' => 'product',
@@ -54,7 +57,7 @@
     @endphp
 
     <div class="ft-master-breadcrumb" aria-label="Breadcrumb">
-        <span>Master Data</span><i>/</i><strong>{{ $pageTitle }}</strong>
+        <span>{{ $catalogueGroup ? 'Catalogue' : 'Master Data' }}</span><i>/</i><strong>{{ $pageTitle }}</strong>
     </div>
 
     <div class="ft-master-page-head">
@@ -486,7 +489,7 @@
                                 </div>
                             @endif
 
-                            @if($productCodeReady && $categorySearchValue !== '' && !$hasExactCategory && $canCreateMaster)
+                            @if($productCodeReady && $categorySearchValue !== '' && !$hasExactCategory && $canCreateProductCategory)
                                 <button
                                     type="button"
                                     class="ft-product-category-create-row"
@@ -517,7 +520,7 @@
                                 </div>
                             @endif
 
-                            @if($canCreateMaster)
+                            @if($canCreateProductCategory)
                                 <div class="ft-product-category-create-form" x-cloak x-show="creatingCategory" x-transition>
                                     <label>New category name</label>
                                     <div>

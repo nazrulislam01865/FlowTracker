@@ -367,11 +367,13 @@
                         </div>
                     </section>
 
-                    @include('components.inquiries.create-products')
+                    @if($canUseInquiryProductSelector)
+                        @include('components.inquiries.create-products')
+                    @endif
 
                     <section class="section ft-inquiry-create-section ft-inquiry-attachments-section">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>3</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
+                            <span>{{ $canUseInquiryProductSelector ? 3 : 2 }}</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
                         </div>
                         <div
                             class="inquiry-dropzone ft-inquiry-prototype-dropzone"
@@ -448,7 +450,7 @@
 
                     <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>4</span><h2>What happens next</h2>
+                            <span>{{ $canUseInquiryProductSelector ? 4 : 3 }}</span><h2>What happens next</h2>
                             @if($workflowOptionCount > 0)<em>{{ $workflowOptionCount }} {{ \Illuminate\Support\Str::plural('workflow', $workflowOptionCount) }} available</em>@endif
                         </div>
 

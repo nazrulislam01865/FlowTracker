@@ -46,7 +46,7 @@
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260812-20">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-assignee-highlight-1">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">

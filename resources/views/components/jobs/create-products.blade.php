@@ -16,7 +16,7 @@
     $productNameReady = $productCategoryReady && trim((string) $newProductName) !== '';
 @endphp
 
-@if($catalogReady)
+@if($catalogReady && $canUseOrderProductSelector)
 <section
     class="ft-create-section ft-order-products-prototype"
     wire:key="create-catalog-ready"
@@ -139,12 +139,14 @@
             </div>
         </div>
 
-        <select class="ft-order-product-category-filter" wire:model.live="createProductCategoryFilter" x-on:change="openProductResults()" aria-label="Filter products by category">
-            <option value="">All categories</option>
-            @foreach($productCategories as $category)
-                <option value="{{ $category->id }}">{{ $category->name }}</option>
-            @endforeach
-        </select>
+        @if($canViewProductCategories)
+            <select class="ft-order-product-category-filter" wire:model.live="createProductCategoryFilter" x-on:change="openProductResults()" aria-label="Filter products by category">
+                <option value="">All categories</option>
+                @foreach($productCategories as $category)
+                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                @endforeach
+            </select>
+        @endif
     </div>
 
     @if(count($jobItems))
@@ -239,8 +241,17 @@
         </div>
     </div>
 </section>
-@else
+@elseif(!$catalogReady)
     <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
+@else
+    <section class="ft-create-section ft-order-products-prototype" wire:key="create-catalog-restricted">
+        <div class="ft-order-products-title-row">
+            <div class="ft-create-section-title ft-order-products-title">
+                <span>2</span><h2>Products &amp; quantities</h2>
+            </div>
+        </div>
+        <div class="ft-create-note">Products are hidden because this role does not have <b>Products → View</b> permission. Product access on Create Order is controlled only by the Products role.</div>
+    </section>
 @endif
 
 @if($showCreateOrderProductModal)
@@ -311,6 +322,7 @@
                 @error('newProductCode')<div class="validation-error">{{ $message }}</div>@enderror
             </div>
 
+            @if($canViewProductCategories)
             <div class="ft-product-create-field ft-product-category-field ft-product-sequence-field {{ !$productCodeReady ? 'is-step-locked' : '' }}" x-on:click.outside="categoryOpen = false">
                 <label><b class="ft-product-step-number">2</b> Product category <span>*</span></label>
                 <div class="ft-product-category-picker">
@@ -353,7 +365,7 @@
                             </div>
                         @endif
 
-                        @if($productCodeReady && $categorySearchValue !== '' && !$newProductHasExactCategory && $canCreateCatalogProduct)
+                        @if($productCodeReady && $categorySearchValue !== '' && !$newProductHasExactCategory && $canCreateProductCategory)
                             <button type="button" class="ft-product-category-create-row" wire:click="beginCreateOrderProductCategory" x-on:click="creatingCategory = true; categoryOpen = true">
                                 <span class="ft-product-category-plus">+</span>
                                 <span class="ft-product-category-create-copy"><strong>Create '{{ $categorySearchValue }}'</strong><small>The category will be created and selected for this product.</small></span>
@@ -394,6 +406,12 @@
                 @endif
                 @error('newProductCategoryId')<div class="validation-error">{{ $message }}</div>@enderror
             </div>
+            @else
+            <div class="ft-product-create-field ft-product-category-field ft-product-sequence-field is-step-locked">
+                <label><b class="ft-product-step-number">2</b> Product category <span>*</span></label>
+                <div class="ft-create-note">Product Categories <b>View</b> permission is required to select a category for a new product.</div>
+            </div>
+            @endif
 
             <div class="ft-product-create-field ft-product-sequence-field {{ !$productCategoryReady ? 'is-step-locked' : '' }}">
                 <label><b class="ft-product-step-number">3</b> Product name <span>*</span></label>
@@ -483,7 +501,16 @@
         <div class="ft-product-create-foot">
             <div class="ft-product-create-permission-note">
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="13" r="6"/><path d="M9 7V5.8a3 3 0 0 1 6 0V7M12 11v4"/></svg>
-                <span>You have permission to create products and categories</span>
+                <span>
+                    Product create permission granted.
+                    @if($canCreateProductCategory)
+                        Product Category create permission granted.
+                    @elseif($canViewProductCategories)
+                        Product Categories are view-only for this role.
+                    @else
+                        Product Category view permission is required to finish a new product.
+                    @endif
+                </span>
             </div>
             <div class="ft-product-create-actions">
                 <button type="button" class="ghost" wire:click="closeCreateOrderProductModal">Cancel</button>

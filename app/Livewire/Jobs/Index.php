@@ -143,7 +143,7 @@ class Index extends Component
         $this->showCreate = request()->boolean('create');
 
         if ($this->showCreate) {
-            abort_unless(auth()->user()->canAccess('jobs.create'), 403);
+            abort_unless(auth()->user()->canModule('jobs', 'create'), 403);
             $this->selectedJobId = null;
             $this->selectedTaskId = null;
             $this->initializeCreateForm(request()->integer('client') ?: null);
@@ -228,6 +228,7 @@ class Index extends Component
             abort(422, 'Unsupported Create Order selector.');
         }
 
+        $this->authorizeCreateOrderProducts();
         $index = (int) $matches[1];
         $field = $matches[2];
         abort_unless(array_key_exists($index, $this->jobItems), 422, 'That product row is no longer available.');
@@ -278,22 +279,27 @@ class Index extends Component
 
     public function updatedCreateProductCategoryFilter(): void
     {
+        if (trim($this->createProductCategoryFilter) !== '') {
+            abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        }
         $this->createProductShowAllResults = false;
     }
 
     public function showAllCreateProductResults(): void
     {
+        $this->authorizeCreateOrderProducts();
         $this->createProductShowAllResults = true;
     }
 
     public function focusCreateProductSearch(): void
     {
+        $this->authorizeCreateOrderProducts();
         $this->dispatch('focus-create-order-product-search');
     }
 
     public function selectCreateProduct(int $productId): void
     {
-        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+        $this->authorizeCreateOrderProducts();
 
         // Resolve from the canonical Product catalogue. Passing a Product
         // Category ID here now results in 404 instead of ever selecting it.
@@ -331,6 +337,7 @@ class Index extends Component
 
     public function incrementCreateProductQuantity(int $index): void
     {
+        $this->authorizeCreateOrderProducts();
         abort_unless(array_key_exists($index, $this->jobItems), 422);
         $current = max(1, (int) ($this->jobItems[$index]['quantity'] ?? 1));
         $this->jobItems[$index]['quantity'] = min(999999999, $current + 1);
@@ -339,6 +346,7 @@ class Index extends Component
 
     public function decrementCreateProductQuantity(int $index): void
     {
+        $this->authorizeCreateOrderProducts();
         abort_unless(array_key_exists($index, $this->jobItems), 422);
         $current = max(1, (int) ($this->jobItems[$index]['quantity'] ?? 1));
         $this->jobItems[$index]['quantity'] = max(1, $current - 1);
@@ -347,8 +355,8 @@ class Index extends Component
 
     public function openCreateOrderProductModal(): void
     {
-        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        $this->authorizeCreateOrderProducts();
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
         abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
 
         $this->resetCreateOrderProductModal();
@@ -370,7 +378,10 @@ class Index extends Component
 
     public function selectCreateOrderProductCategory(int $categoryId): void
     {
+        $this->authorizeCreateOrderProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
 
         $category = MasterRecord::query()
@@ -388,8 +399,11 @@ class Index extends Component
 
     public function beginCreateOrderProductCategory(): void
     {
+        $this->authorizeCreateOrderProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'create'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
         $this->newProductCategoryName = trim($this->newProductCategorySearch);
         $this->resetValidation('newProductCategoryName');
@@ -403,8 +417,11 @@ class Index extends Component
 
     public function createCreateOrderProductCategory(): void
     {
+        $this->authorizeCreateOrderProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'create'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
 
         $name = trim($this->newProductCategoryName ?: $this->newProductCategorySearch);
@@ -452,6 +469,9 @@ class Index extends Component
 
     public function updatedNewProductCategorySearch(): void
     {
+        if ($this->showCreateOrderProductModal) {
+            abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        }
         $search = trim($this->newProductCategorySearch);
         if ($this->newProductCategoryId) {
             $selectedName = MasterRecord::query()
@@ -533,9 +553,10 @@ class Index extends Component
 
     public function createAndAddOrderProduct(): void
     {
-        abort_unless($this->showCreate && $this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canAccess('jobs.create'), 403);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        $this->authorizeCreateOrderProducts();
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
 
         $this->newProductCode = strtoupper(trim($this->newProductCode));
@@ -703,9 +724,23 @@ class Index extends Component
             'delete' => 'Selected Orders deleted.',
         });
     }
+    private function canUseCreateOrderProducts(User $user): bool
+    {
+        // Create-Order catalogue access is owned by the Products module. The
+        // legacy Inquiry / Order Product Lines permission does not participate
+        // in catalogue visibility or Product creation on this screen.
+        return $user->canModule('jobs', 'create')
+            && $user->canModule('catalog_products', 'view');
+    }
+
+    private function authorizeCreateOrderProducts(): void
+    {
+        abort_unless($this->showCreate && $this->canUseCreateOrderProducts(auth()->user()), 403);
+    }
+
     public function openCreate(): void
     {
-        abort_unless(auth()->user()->canAccess('jobs.create'), 403);
+        abort_unless(auth()->user()->canModule('jobs', 'create'), 403);
         $this->selectedJobId = null;
         $this->selectedTaskId = null;
         $this->showCreate = true;
@@ -720,7 +755,7 @@ class Index extends Component
 
     public function loadCreateSection(string $section): void
     {
-        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
 
         if ($section === 'catalog') {
             $this->createCatalogReady = true;
@@ -955,7 +990,7 @@ class Index extends Component
 
     private function persistJob(bool $draft): void
     {
-        abort_unless(auth()->user()->canAccess('jobs.create'), 403);
+        abort_unless($this->canUseCreateOrderProducts(auth()->user()), 403);
 
         if (!$this->createCatalogReady || !$this->createAssignmentReady || !$this->createWorkflowReady) {
             $this->addError('createLoading', 'Please wait for the remaining Create Order fields to finish loading.');
@@ -2495,20 +2530,24 @@ class Index extends Component
             : collect();
 
         $workspaceId = $master->workspaceId();
+        $canUseOrderProductSelector = $this->canUseCreateOrderProducts($user);
+        $canViewProductCategories = $user->canModule('product_categories', 'view');
         $productCategories = collect();
         $productSearchResults = collect();
         $selectedProductDetails = collect();
         $activeProductCount = 0;
         $productResultTotal = 0;
 
-        if ($this->createCatalogReady) {
-            $productCategories = MasterRecord::query()
-                ->forWorkspace($workspaceId)
-                ->ofType('product_category')
-                ->active()
-                ->orderBy('sort_order')
-                ->orderBy('name')
-                ->get(['id', 'name', 'code']);
+        if ($this->createCatalogReady && $canUseOrderProductSelector) {
+            if ($canViewProductCategories) {
+                $productCategories = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->active()
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'code']);
+            }
 
             // Canonical Product catalogue source. This service can only return
             // master_records.type = 'product'. Product Categories are loaded
@@ -2517,7 +2556,7 @@ class Index extends Component
             $activeProductCount = $catalog->activeCount();
 
             $search = trim($this->createProductSearch);
-            $categoryFilterId = ctype_digit(trim($this->createProductCategoryFilter))
+            $categoryFilterId = $canViewProductCategories && ctype_digit(trim($this->createProductCategoryFilter))
                 ? (int) $this->createProductCategoryFilter
                 : 0;
             $productResultTotal = $catalog->orderSearchCount($search, $categoryFilterId ?: null);
@@ -2540,7 +2579,7 @@ class Index extends Component
         $newProductHasExactCategory = false;
         $newProductImagePreview = null;
 
-        if ($this->showCreateOrderProductModal) {
+        if ($canUseOrderProductSelector && $this->showCreateOrderProductModal) {
             $code = trim($this->newProductCode);
             if ($code !== '') {
                 $duplicateProduct = MasterRecord::withTrashed()
@@ -2552,7 +2591,8 @@ class Index extends Component
             }
 
             $categorySearch = trim($this->newProductCategorySearch);
-            $newProductCategoryMatches = MasterRecord::query()
+            if ($canViewProductCategories) {
+                $newProductCategoryMatches = MasterRecord::query()
                 ->forWorkspace($workspaceId)
                 ->ofType('product_category')
                 ->active()
@@ -2590,12 +2630,13 @@ class Index extends Component
                 }
             }
 
-            if ($this->newProductCategoryId) {
-                $newProductSelectedCategory = MasterRecord::query()
-                    ->forWorkspace($workspaceId)
-                    ->ofType('product_category')
-                    ->active()
-                    ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+                if ($this->newProductCategoryId) {
+                    $newProductSelectedCategory = MasterRecord::query()
+                        ->forWorkspace($workspaceId)
+                        ->ofType('product_category')
+                        ->active()
+                        ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+                }
             }
 
             $nameSearch = trim($this->newProductName);
@@ -2628,7 +2669,7 @@ class Index extends Component
             'workflows' => $workflows,
             'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
-            'categoryFilterOptions' => $this->createCatalogReady
+            'categoryFilterOptions' => $this->createCatalogReady && $canUseOrderProductSelector && $canViewProductCategories
                 ? $options->options($user, 'product-categories', 'create-job', '', null, 6)
                 : collect(),
             'clientFilterOptions' => $options->options(
@@ -2650,7 +2691,10 @@ class Index extends Component
             'selectedProductDetails' => $selectedProductDetails,
             'activeProductCount' => $activeProductCount,
             'productResultTotal' => $productResultTotal,
-            'canCreateCatalogProduct' => $user->canModule('masterdata', 'create'),
+            'canUseOrderProductSelector' => $canUseOrderProductSelector,
+            'canCreateCatalogProduct' => $canUseOrderProductSelector && $user->canModule('catalog_products', 'create'),
+            'canViewProductCategories' => $canViewProductCategories,
+            'canCreateProductCategory' => $canViewProductCategories && $user->canModule('product_categories', 'create'),
             'duplicateProduct' => $duplicateProduct,
             'newProductCategoryMatches' => $newProductCategoryMatches,
             'newProductSimilarCategories' => $newProductSimilarCategories,

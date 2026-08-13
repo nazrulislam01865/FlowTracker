@@ -7,10 +7,10 @@
     $done = \App\Support\JobDetailPresenter::completedCount($currentTasks);
     $accessControl = app(\App\Services\AccessControlService::class);
     $canEditJob = $accessControl->canEditVisibleJob(auth()->user(), $job);
-    $canViewOrderProducts = $accessControl->can(auth()->user(), 'products', 'view');
-    $canEditOrderProducts = $canEditJob && $accessControl->canEditParentRecordModule(auth()->user(), 'products', $job);
-    $canCreateOrderProducts = $canEditOrderProducts && $accessControl->can(auth()->user(), 'products', 'create');
-    $canDeleteOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'products', 'delete');
+    $canViewOrderProducts = $accessControl->can(auth()->user(), 'catalog_products', 'view');
+    $canEditOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'edit');
+    $canCreateOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'create');
+    $canDeleteOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'delete');
     $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');

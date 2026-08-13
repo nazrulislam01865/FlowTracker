@@ -122,7 +122,7 @@ class Index extends Component
     public ?int $inquiryExistingDocumentId = null;
     public ?int $taskAssigneeId = null;
     public string $taskDueDate = '';
-    public string $taskStatus = 'In Progress';
+    public string $taskStatus = '';
 
     // Admin-only task append form on Inquiry details.
     public bool $showAddTaskForm = false;
@@ -267,16 +267,30 @@ class Index extends Component
         $this->loadCreateOptions();
     }
 
+    private function canUseCreateInquiryProducts(User $user): bool
+    {
+        // Create-Inquiry catalogue access is owned by the Products module.
+        // The legacy Inquiry / Order Product Lines permission must not gate the
+        // Product selector or the Create Product action on this screen.
+        return $user->canModule('inquiries', 'create')
+            && $user->canModule('catalog_products', 'view');
+    }
+
+    private function authorizeCreateInquiryProducts(): void
+    {
+        abort_unless($this->showCreate && $this->canUseCreateInquiryProducts(auth()->user()), 403);
+    }
+
     public function addCreateProductRow(): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        $this->authorizeCreateInquiryProducts();
         abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
         $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1];
     }
 
     public function removeCreateProductRow(int $index): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        $this->authorizeCreateInquiryProducts();
         abort_unless(array_key_exists($index, $this->createProductRows), 422);
         unset($this->createProductRows[$index]);
         $this->createProductRows = array_values($this->createProductRows);
@@ -290,22 +304,27 @@ class Index extends Component
 
     public function updatedCreateProductCategoryFilter(): void
     {
+        if (trim($this->createProductCategoryFilter) !== '') {
+            abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        }
         $this->createProductShowAllResults = false;
     }
 
     public function showAllCreateProductResults(): void
     {
+        $this->authorizeCreateInquiryProducts();
         $this->createProductShowAllResults = true;
     }
 
     public function focusCreateProductSearch(): void
     {
+        $this->authorizeCreateInquiryProducts();
         $this->dispatch('focus-create-order-product-search');
     }
 
     public function selectCreateProduct(int $productId): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
+        $this->authorizeCreateInquiryProducts();
 
         $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
         $productCategory = trim((string) ($product->parent?->name ?? ''));
@@ -336,6 +355,7 @@ class Index extends Component
 
     public function incrementCreateProductQuantity(int $index): void
     {
+        $this->authorizeCreateInquiryProducts();
         abort_unless(array_key_exists($index, $this->createProductRows), 422);
         $current = max(1, (int) ($this->createProductRows[$index]['quantity'] ?? 1));
         $this->createProductRows[$index]['quantity'] = min(999999999, $current + 1);
@@ -344,6 +364,7 @@ class Index extends Component
 
     public function decrementCreateProductQuantity(int $index): void
     {
+        $this->authorizeCreateInquiryProducts();
         abort_unless(array_key_exists($index, $this->createProductRows), 422);
         $current = max(1, (int) ($this->createProductRows[$index]['quantity'] ?? 1));
         $this->createProductRows[$index]['quantity'] = max(1, $current - 1);
@@ -352,8 +373,8 @@ class Index extends Component
 
     public function openCreateOrderProductModal(): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('inquiries', 'create'), 403);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        $this->authorizeCreateInquiryProducts();
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
         abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
 
         $this->resetCreateOrderProductModal();
@@ -375,7 +396,10 @@ class Index extends Component
 
     public function selectCreateOrderProductCategory(int $categoryId): void
     {
+        $this->authorizeCreateInquiryProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
 
         $category = MasterRecord::query()
@@ -393,8 +417,11 @@ class Index extends Component
 
     public function beginCreateOrderProductCategory(): void
     {
+        $this->authorizeCreateInquiryProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'create'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
         $this->newProductCategoryName = trim($this->newProductCategorySearch);
         $this->resetValidation('newProductCategoryName');
@@ -408,8 +435,11 @@ class Index extends Component
 
     public function createCreateOrderProductCategory(): void
     {
+        $this->authorizeCreateInquiryProducts();
         abort_unless($this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'create'), 403);
         if (!$this->newProductCodeReadyForCategory()) return;
 
         $name = trim($this->newProductCategoryName ?: $this->newProductCategorySearch);
@@ -457,6 +487,9 @@ class Index extends Component
 
     public function updatedNewProductCategorySearch(): void
     {
+        if ($this->showCreateOrderProductModal) {
+            abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
+        }
         $search = trim($this->newProductCategorySearch);
         if ($this->newProductCategoryId) {
             $selectedName = MasterRecord::query()
@@ -538,9 +571,10 @@ class Index extends Component
 
     public function createAndAddOrderProduct(): void
     {
-        abort_unless($this->showCreate && $this->showCreateOrderProductModal, 422);
-        abort_unless(auth()->user()->canModule('inquiries', 'create'), 403);
-        abort_unless(auth()->user()->canModule('masterdata', 'create'), 403);
+        $this->authorizeCreateInquiryProducts();
+        abort_unless($this->showCreateOrderProductModal, 422);
+        abort_unless(auth()->user()->canModule('catalog_products', 'create'), 403);
+        abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
 
         $this->newProductCode = strtoupper(trim($this->newProductCode));
@@ -823,6 +857,7 @@ class Index extends Component
         $options = app(\App\Services\FilterOptionService::class);
 
         if (preg_match('/^createProductRows\.(\d+)\.(category|product)$/', $property, $matches) === 1) {
+            $this->authorizeCreateInquiryProducts();
             $index = (int) $matches[1];
             $field = $matches[2];
             abort_unless(array_key_exists($index, $this->createProductRows), 422, 'That product row is no longer available.');
@@ -977,7 +1012,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $inquiry = $this->selectedInquiry(['items']);
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'edit'), 403);
         abort_unless($service->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1031,7 +1066,7 @@ class Index extends Component
     {
         abort_unless($this->editingInquiryProducts && $this->selectedInquiryId, 403);
         $inquiry = $this->selectedInquiry();
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'edit'), 403);
         abort_unless(app(InquiryService::class)->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1071,7 +1106,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $inquiry = $this->selectedInquiry();
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule(auth()->user(), 'products', $inquiry), 403);
+        abort_unless(auth()->user()->canModule('catalog_products', 'edit'), 403);
         abort_unless($this->editingInquiryProducts && $service->canEdit(auth()->user(), $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1320,13 +1355,14 @@ class Index extends Component
 
     public function saveTask(): void
     {
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), (int) $this->selectedTaskId);
         $this->validate([
             'taskAssigneeId' => ['nullable', 'exists:users,id'],
             'taskDueDate' => ['nullable', 'date'],
-            'taskStatus' => ['required', Rule::in(InquiryService::WORKING_STATUSES)],
+            'taskStatus' => ['required', Rule::in($service->openTaskStatusOptions((string) $task->status)->all())],
         ]);
-        $task = app(InquiryService::class)->findVisibleTask(auth()->user(), (int) $this->selectedTaskId);
-        app(InquiryService::class)->updateTask($task, [
+        $service->updateTask($task, [
             'assignee_id' => $this->taskAssigneeId,
             'due_date' => $this->taskDueDate,
             'status' => $this->taskStatus,
@@ -1662,7 +1698,7 @@ class Index extends Component
         $reopened = $service->removeTaskDocument($task, $documentId, auth()->user());
         $this->metrics = $service->metrics(auth()->user());
         session()->flash('success', $reopened
-            ? 'Task attachment removed. The required-file task was reopened to In Progress.'
+            ? 'Task attachment removed. The required-file task was reopened.'
             : 'Task attachment removed.');
     }
 
@@ -1877,24 +1913,36 @@ class Index extends Component
     {
         $user = auth()->user();
         $workspaceId = app(MasterDataService::class)->workspaceId();
-        $productCategories = MasterRecord::query()
-            ->forWorkspace($workspaceId)
-            ->ofType('product_category')
-            ->active()
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'name', 'code']);
+        $canUseInquiryProductSelector = $this->canUseCreateInquiryProducts($user);
+        $canViewProductCategories = $user->canModule('product_categories', 'view');
+        $productCategories = collect();
+        $productSearchResults = collect();
+        $selectedProductDetails = collect();
+        $activeProductCount = 0;
+        $productResultTotal = 0;
 
-        $catalog = app(\App\Services\ProductCatalogService::class);
-        $activeProductCount = $catalog->activeCount();
-        $search = trim($this->createProductSearch);
-        $categoryFilterId = ctype_digit(trim($this->createProductCategoryFilter))
-            ? (int) $this->createProductCategoryFilter
-            : 0;
-        $productResultTotal = $catalog->orderSearchCount($search, $categoryFilterId ?: null);
-        $resultLimit = $this->createProductShowAllResults || $productResultTotal <= 20 ? 20 : 3;
-        $productSearchResults = $catalog->searchForOrderCreation($search, $categoryFilterId ?: null, $resultLimit);
-        $selectedProductDetails = $catalog->selectedProducts(collect($this->createProductRows)->pluck('product_id'));
+        if ($canUseInquiryProductSelector) {
+            if ($canViewProductCategories) {
+                $productCategories = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_category')
+                    ->active()
+                    ->orderBy('sort_order')
+                    ->orderBy('name')
+                    ->get(['id', 'name', 'code']);
+            }
+
+            $catalog = app(\App\Services\ProductCatalogService::class);
+            $activeProductCount = $catalog->activeCount();
+            $search = trim($this->createProductSearch);
+            $categoryFilterId = $canViewProductCategories && ctype_digit(trim($this->createProductCategoryFilter))
+                ? (int) $this->createProductCategoryFilter
+                : 0;
+            $productResultTotal = $catalog->orderSearchCount($search, $categoryFilterId ?: null);
+            $resultLimit = $this->createProductShowAllResults || $productResultTotal <= 20 ? 20 : 3;
+            $productSearchResults = $catalog->searchForOrderCreation($search, $categoryFilterId ?: null, $resultLimit);
+            $selectedProductDetails = $catalog->selectedProducts(collect($this->createProductRows)->pluck('product_id'));
+        }
 
         $duplicateProduct = null;
         $newProductCategoryMatches = collect();
@@ -1904,7 +1952,7 @@ class Index extends Component
         $newProductHasExactCategory = false;
         $newProductImagePreview = null;
 
-        if ($this->showCreateOrderProductModal) {
+        if ($canUseInquiryProductSelector && $this->showCreateOrderProductModal) {
             $code = trim($this->newProductCode);
             if ($code !== '') {
                 $duplicateProduct = MasterRecord::withTrashed()
@@ -1916,7 +1964,8 @@ class Index extends Component
             }
 
             $categorySearch = trim($this->newProductCategorySearch);
-            $newProductCategoryMatches = MasterRecord::query()
+            if ($canViewProductCategories) {
+                $newProductCategoryMatches = MasterRecord::query()
                 ->forWorkspace($workspaceId)
                 ->ofType('product_category')
                 ->active()
@@ -1954,12 +2003,13 @@ class Index extends Component
                 }
             }
 
-            if ($this->newProductCategoryId) {
-                $newProductSelectedCategory = MasterRecord::query()
-                    ->forWorkspace($workspaceId)
-                    ->ofType('product_category')
-                    ->active()
-                    ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+                if ($this->newProductCategoryId) {
+                    $newProductSelectedCategory = MasterRecord::query()
+                        ->forWorkspace($workspaceId)
+                        ->ofType('product_category')
+                        ->active()
+                        ->find($this->newProductCategoryId, ['id', 'name', 'code']);
+                }
             }
 
             $nameSearch = trim($this->newProductName);
@@ -1989,13 +2039,16 @@ class Index extends Component
             'mode' => 'create',
             'selectedInquiry' => null,
             'selectedTask' => null,
-            'catalogReady' => true,
+            'catalogReady' => $canUseInquiryProductSelector,
+            'canUseInquiryProductSelector' => $canUseInquiryProductSelector,
             'productCategories' => $productCategories,
             'productSearchResults' => $productSearchResults,
             'selectedProductDetails' => $selectedProductDetails,
             'activeProductCount' => $activeProductCount,
             'productResultTotal' => $productResultTotal,
-            'canCreateCatalogProduct' => $user->canModule('masterdata', 'create'),
+            'canCreateCatalogProduct' => $canUseInquiryProductSelector && $user->canModule('catalog_products', 'create'),
+            'canViewProductCategories' => $canViewProductCategories,
+            'canCreateProductCategory' => $canViewProductCategories && $user->canModule('product_categories', 'create'),
             'duplicateProduct' => $duplicateProduct,
             'newProductCategoryMatches' => $newProductCategoryMatches,
             'newProductSimilarCategories' => $newProductSimilarCategories,
@@ -2010,7 +2063,7 @@ class Index extends Component
     {
         $service = app(InquiryService::class);
         $access = app(AccessControlService::class);
-        $canViewInquiryProducts = $access->can($user, 'products', 'view');
+        $canViewInquiryProducts = $access->can($user, 'catalog_products', 'view');
         $canViewTasks = $user->canModule('tasks', 'view')
             || Inquiry::query()->whereKey($this->selectedInquiryId)->where('created_by', $user->id)->exists();
         $with = [
@@ -2103,12 +2156,13 @@ class Index extends Component
             'canAssignInquiry' => $user->canModule('inquiries', 'assign') || app(AccessControlService::class)->isInquiryCreator($user, $inquiry),
             'canEditInquiry' => $canEditInquiry,
             'canViewInquiryProducts' => $canViewInquiryProducts,
-            'canCreateInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'products', 'create') && $access->canEditParentRecordModule($user, 'products', $inquiry),
-            'canEditInquiryProducts' => $canManageInquiryRecord && $access->canEditParentRecordModule($user, 'products', $inquiry),
-            'canDeleteInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'products', 'delete'),
+            'canCreateInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'create'),
+            'canEditInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'edit'),
+            'canDeleteInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'delete'),
             'canEditActiveTask' => $canEditActiveTask,
             'canAddInquiryTask' => app(AccessControlService::class)->canCreateInquiryTask($user, $inquiry) && !$inquiry->result,
             'inquiryPriorities' => $this->detailTab === 'overview' ? app(\App\Services\MasterDataService::class)->active('priority') : collect(),
+            'inquiryTaskStatusOptions' => $this->detailTab === 'overview' ? $service->taskStatusOptions() : collect(),
             'canCreateOrder' => $user->canModule('jobs', 'create'),
             'selectedTaskIsActive' => false,
             'selectedTaskCanEdit' => false,
@@ -2117,6 +2171,17 @@ class Index extends Component
 
     private function persistInquiry(bool $draft): void
     {
+        $user = auth()->user();
+        $canUseInquiryProducts = $this->canUseCreateInquiryProducts($user);
+        if (!$canUseInquiryProducts && collect($this->createProductRows)->contains(fn (array $row): bool =>
+            (int) ($row['product_id'] ?? 0) > 0
+            || trim((string) ($row['category'] ?? '')) !== ''
+            || trim((string) ($row['product'] ?? '')) !== ''
+        )) {
+            abort(403, 'Your role is not allowed to add Products to an Inquiry.');
+        }
+        if (!$canUseInquiryProducts) $this->createProductRows = [];
+
         // Products remain optional for Inquiry creation. Rows selected from the
         // canonical Product catalog are normalized here before validation.
         $this->createProductRows = collect($this->createProductRows)
@@ -2286,7 +2351,11 @@ class Index extends Component
         $this->clientFilterOptions = $options->options($user, 'clients', 'create-inquiry', '', $this->clientId, 6)->all();
 
         $this->ownerFilterOptions = $options->options($user, 'users', 'create-inquiry', '', $this->createOwnerId, 6)->all();
-        $this->createProductCategoryOptions = $options->options($user, 'product-categories', 'create-inquiry', '', null, 8)->all();
+        // Product/category permissions must never block opening Create Inquiry.
+        // The create page loads its visible catalogue controls in createPageData();
+        // this legacy preload was unused and could turn a hidden optional control
+        // into a full-page 403.
+        $this->createProductCategoryOptions = [];
         $selectedOwner = collect($this->ownerFilterOptions)
             ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $this->createOwnerId);
         if ($selectedOwner) {
@@ -2394,7 +2463,7 @@ class Index extends Component
     {
         $this->taskAssigneeId = $task->assignee_id;
         $this->taskDueDate = $task->due_date?->toDateString() ?: '';
-        $this->taskStatus = in_array($task->status, InquiryService::WORKING_STATUSES, true) ? $task->status : 'In Progress';
+        $this->taskStatus = (string) $task->status;
     }
 
     private function blankWorkflowRow(): array

@@ -125,6 +125,8 @@
         <div class="ft-actions">
             @if(auth()->user()->canAccess('jobs.create'))
                 <a class="ft-button ft-bulk-import-button" href="{{ route('orders.bulk-import') }}">⇧ Bulk Import</a>
+            @endif
+            @if(auth()->user()->canModule('jobs', 'create'))
                 <a class="ft-new-job-btn ft-dashboard-action-match" href="{{ route('jobs.index', ['create' => 1]) }}" wire:navigate><span class="ft-dashboard-action-match-icon">+</span>New Order</a>
             @endif
         </div>

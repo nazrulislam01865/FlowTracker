@@ -181,6 +181,7 @@ class FilterOptionService
     private function productCategories(User $user, string $context, string $search, int $limit): Collection
     {
         $this->authorizeCatalogAccess($user, $context);
+        abort_unless($user->canModule('product_categories', 'view'), 403);
 
         return MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
@@ -204,6 +205,7 @@ class FilterOptionService
     {
         if ($name === '') return null;
         $this->authorizeCatalogAccess($user, $context);
+        abort_unless($user->canModule('product_categories', 'view'), 403);
 
         $row = MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
@@ -222,6 +224,9 @@ class FilterOptionService
     private function products(User $user, string $context, string $search, int $limit, string $category): Collection
     {
         $this->authorizeCatalogAccess($user, $context);
+        if (trim($category) !== '') {
+            abort_unless($user->canModule('product_categories', 'view'), 403);
+        }
 
         $workspaceId = app(SetupContext::class)->workspaceId();
         $categoryId = $this->productCategoryId($workspaceId, $category);
@@ -271,6 +276,9 @@ class FilterOptionService
     {
         if ($name === '') return null;
         $this->authorizeCatalogAccess($user, $context);
+        if (trim($category) !== '') {
+            abort_unless($user->canModule('product_categories', 'view'), 403);
+        }
 
         $workspaceId = app(SetupContext::class)->workspaceId();
         $categoryId = $this->productCategoryId($workspaceId, $category);
@@ -329,14 +337,20 @@ class FilterOptionService
 
     private function authorizeCatalogAccess(User $user, string $context): void
     {
-        $canCreate = $user->canAccess('jobs.create');
-        $canEditFromJobDetail = $context === 'job-detail' && $user->canAccess('jobs.update');
-        $canCreateInquiry = $context === 'create-inquiry' && $user->canModule('inquiries', 'create');
-        // Inquiry product editing uses the same shared Master Data catalog as
-        // Create Order. Record-level edit authorization is enforced by the
-        // Inquiry Livewire action before anything can be saved.
-        $canUseInquiryCatalog = $context === 'inquiry-detail' && $user->canModule('inquiries', 'view');
-        abort_unless($canCreate || $canEditFromJobDetail || $canCreateInquiry || $canUseInquiryCatalog, 403);
+        // Products is the single authority for Product catalogue visibility and
+        // Product-row operations. Inquiry/Order permissions still control access
+        // to the parent record, but there is no separate Product Lines module.
+        abort_unless($user->canModule('catalog_products', 'view'), 403);
+
+        $allowed = match ($context) {
+            'create-job' => $user->canModule('jobs', 'create'),
+            'create-inquiry' => $user->canModule('inquiries', 'create'),
+            'job-detail' => $user->canModule('jobs', 'view') && $user->canModule('catalog_products', 'edit'),
+            'inquiry-detail' => $user->canModule('inquiries', 'view') && $user->canModule('catalog_products', 'edit'),
+            default => false,
+        };
+
+        abort_unless($allowed, 403);
     }
 
     private function workflows(User $user, string $context, string $search, int $limit, ?int $clientId = null): Collection

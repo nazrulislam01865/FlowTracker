@@ -18,6 +18,17 @@ class MasterDataService
 
     public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_status', 'task_flag'];
 
+    public const ACCESS_MODULES = [
+        'product' => 'catalog_products',
+        'product_category' => 'product_categories',
+        'supplier' => 'suppliers',
+    ];
+
+    public static function permissionModuleForType(string $type): string
+    {
+        return self::ACCESS_MODULES[$type] ?? 'masterdata';
+    }
+
     public const LABELS = [
         'department' => 'Departments',
         'product_category' => 'Product Categories',
@@ -197,7 +208,7 @@ class MasterDataService
 
     public function save(string $type, array $data, ?int $id = null): MasterRecord
     {
-        $this->assertAction($id ? 'edit' : 'create');
+        $this->assertAction($type, $id ? 'edit' : 'create');
         abort_unless(array_key_exists($type, self::LABELS), 404);
         $workspaceId = $this->workspaceId();
         $code = strtoupper(trim($data['code']));
@@ -270,8 +281,8 @@ class MasterDataService
 
     public function setColor(int $id, string $color): MasterRecord
     {
-        $this->assertAction('edit');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
+        $this->assertAction($record->type, 'edit');
         abort_unless(in_array($record->type, self::COLOR_TYPES, true), 404);
 
         $normalized = MasterColor::normalize($color);
@@ -288,8 +299,8 @@ class MasterDataService
 
     public function toggle(int $id): MasterRecord
     {
-        $this->assertAction('edit');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
+        $this->assertAction($record->type, 'edit');
         $record->update(['status' => $record->status === 'active' ? 'inactive' : 'active']);
         $this->mirrorLegacy($record);
         $this->forgetActiveCache($record->type);
@@ -298,8 +309,8 @@ class MasterDataService
 
     public function delete(int $id): void
     {
-        $this->assertAction('delete');
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
+        $this->assertAction($record->type, 'delete');
 
         // Inquiry Status is intentionally force-removable from the Master Data UI.
         // Inquiries store their status label as text, not as a foreign key, and
@@ -479,10 +490,11 @@ class MasterDataService
         unset($this->colorMaps[$type]);
     }
 
-    private function assertAction(string $action): void
+    private function assertAction(string $type, string $action): void
     {
         $user = auth()->user();
-        abort_unless($user && app(AccessControlService::class)->can($user, 'masterdata', $action), 403);
+        $module = self::permissionModuleForType($type);
+        abort_unless($user && app(AccessControlService::class)->can($user, $module, $action), 403);
     }
 
 }

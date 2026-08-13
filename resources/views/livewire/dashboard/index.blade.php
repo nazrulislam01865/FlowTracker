@@ -49,7 +49,7 @@
     </nav>
 
     <section class="ft-kpis" aria-label="Key metrics">
-        <a class="ft-kpi" href="{{ route('jobs.index') }}" wire:navigate><span class="ft-kpi-label">Active Jobs <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value">{{ $metrics['activeJobs'] }}</strong><span class="ft-kpi-foot">Across all active phases</span></a>
+        <a class="ft-kpi" href="{{ route('jobs.index') }}" wire:navigate><span class="ft-kpi-label">Active Orders <i class="ft-kpi-icon">◎</i></span><strong class="ft-kpi-value">{{ $metrics['activeJobs'] }}</strong><span class="ft-kpi-foot">Across all active phases</span></a>
         <a class="ft-kpi" href="{{ route('all-tasks') }}" wire:navigate><span class="ft-kpi-label">Needs Attention <i class="ft-kpi-icon">!</i></span><strong class="ft-kpi-value">{{ $metrics['needsAttention'] }}</strong><span class="ft-kpi-foot">Risk, delay or blocker</span></a>
         <a class="ft-kpi" href="{{ route('all-tasks') }}" wire:navigate><span class="ft-kpi-label">Overdue Tasks <i class="ft-kpi-icon">◷</i></span><strong class="ft-kpi-value">{{ $metrics['overdueTasks'] }}</strong><span class="ft-kpi-foot">Require immediate update</span></a>
         <a class="ft-kpi" href="{{ route('clients.index') }}" wire:navigate><span class="ft-kpi-label">Active Clients <i class="ft-kpi-icon">♙</i></span><strong class="ft-kpi-value">{{ $metrics['activeClients'] }}</strong><span class="ft-kpi-foot">Current active client records</span></a>

@@ -17,13 +17,18 @@
     $clientGroupActive = request()->routeIs('clients.*');
 
     $masterView = $user->canAccess('master.view');
-    $masterGroupActive = request()->routeIs('master-data');
     $masterGroup = (string) request()->query('group', 'product');
     $masterLabels = \App\Services\MasterDataService::LABELS;
     if (!array_key_exists($masterGroup, $masterLabels)) $masterGroup = 'product';
-    $masterLinks = collect(['product' => $masterLabels['product'], 'product_category' => $masterLabels['product_category']])
-        ->merge(collect($masterLabels)->except(['product', 'product_category']))
-        ->all();
+
+    $catalogueGroups = ['product', 'product_category', 'supplier'];
+    $catalogProductView = $user->canModule('catalog_products', 'view');
+    $productCategoryView = $user->canModule('product_categories', 'view');
+    $supplierView = $user->canModule('suppliers', 'view');
+    $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
+
+    $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
+    $masterLinks = collect($masterLabels)->except($catalogueGroups)->all();
 ?>
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="<?php echo e(route('dashboard')); ?>" wire:navigate aria-label="Open Dashboard">
@@ -312,6 +317,79 @@
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
             </details>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogProductView): ?>
+            <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Products','icon' => 'products','params' => ['group' => 'product'],'active' => $catalogueGroupActive && $masterGroup === 'product']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Products','icon' => 'products','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product')]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCategoryView): ?>
+            <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','params' => ['group' => 'product_category'],'active' => $catalogueGroupActive && $masterGroup === 'product_category']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product_category']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product_category')]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($supplierView): ?>
+            <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Suppliers','icon' => 'suppliers','params' => ['group' => 'supplier'],'active' => $catalogueGroupActive && $masterGroup === 'supplier']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Suppliers','icon' => 'suppliers','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'supplier']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'supplier')]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($user->canAccess('documents.view')): ?>

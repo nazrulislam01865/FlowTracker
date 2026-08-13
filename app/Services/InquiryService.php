@@ -29,8 +29,6 @@ use Illuminate\Validation\ValidationException;
 
 class InquiryService
 {
-    public const WORKING_STATUSES = ['In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold'];
-    public const TASK_STATUSES = ['Waiting', 'In Progress', 'Waiting for Client', 'Waiting for Supplier', 'On Hold', 'Completed'];
     public const FINAL_STATUSES = ['Converted', 'Dead'];
     public const AUTO_READY_STATUS = 'Ready';
     public const AUTO_IN_PROGRESS_STATUS = 'In Progress';
@@ -57,18 +55,82 @@ class InquiryService
     }
 
     /**
-     * Inquiry-list Status filter options come directly from active Task Status
-     * Master Data for the current workspace.
+     * Inquiry task statuses come directly from active Task Status Master Data.
+     * A task's existing status may be supplied so a removed/deactivated value
+     * remains visible for historical records until the user changes it.
      */
-    public function taskStatusFilterOptions(): Collection
+    public function taskStatusOptions(?string $currentStatus = null): Collection
     {
-        return app(MasterDataService::class)
+        $statuses = app(MasterDataService::class)
             ->active('task_status')
             ->pluck('name')
             ->map(fn ($name) => trim((string) $name))
             ->filter()
-            ->unique()
+            ->unique(fn (string $name) => mb_strtolower($name))
             ->values();
+
+        $currentStatus = trim((string) $currentStatus);
+        if ($currentStatus !== '' && !$statuses->contains(fn (string $name) => strcasecmp($name, $currentStatus) === 0)) {
+            $statuses->prepend($currentStatus);
+        }
+
+        return $statuses->values();
+    }
+
+    /** Active, non-terminal task statuses used by task edit forms. */
+    public function openTaskStatusOptions(?string $currentStatus = null): Collection
+    {
+        return $this->taskStatusOptions($currentStatus)
+            ->reject(fn (string $name) => strcasecmp($name, self::AUTO_COMPLETED_STATUS) === 0)
+            ->values();
+    }
+
+    /**
+     * New/queued Inquiry tasks prefer a Master Data status named "Waiting".
+     * If it was removed, the first active non-completed status becomes the
+     * workspace default. This keeps Task Status fully manageable in Master Data.
+     */
+    public function defaultTaskStatus(): string
+    {
+        $statuses = $this->taskStatusOptions();
+        $preferred = $statuses->first(fn (string $name) => strcasecmp($name, 'Waiting') === 0);
+        $fallback = $statuses->first(fn (string $name) => strcasecmp($name, self::AUTO_COMPLETED_STATUS) !== 0);
+        $status = $preferred ?: $fallback ?: $statuses->first();
+
+        if (!$status) {
+            throw ValidationException::withMessages([
+                'task_status' => 'Add at least one active Task Status in Master Data before creating or editing Inquiry tasks.',
+            ]);
+        }
+
+        return (string) $status;
+    }
+
+    public function isWorkingTaskStatus(string $status): bool
+    {
+        $status = trim($status);
+        if ($status === '' || strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0) return false;
+
+        return strcasecmp($status, $this->defaultTaskStatus()) !== 0;
+    }
+
+    /** Status used when system rules reopen a completed Inquiry task. */
+    public function resumeTaskStatus(): string
+    {
+        $statuses = $this->openTaskStatusOptions();
+        $preferred = $statuses->first(fn (string $name) => strcasecmp($name, 'In Progress') === 0);
+        if ($preferred) return (string) $preferred;
+
+        $default = $this->defaultTaskStatus();
+        $working = $statuses->first(fn (string $name) => strcasecmp($name, $default) !== 0);
+
+        return (string) ($working ?: $default);
+    }
+
+    /** Inquiry-list Status filter uses the same Master Data source as task editors. */
+    public function taskStatusFilterOptions(): Collection
+    {
+        return $this->taskStatusOptions();
     }
 
     public function defaultInquiryStatus(): string
@@ -583,7 +645,7 @@ class InquiryService
                     'description' => app(RichTextService::class)->normalize($task['description'] ?? null, 10000, 'description'),
                     'sequence' => $index + 1,
                     'due_date' => ($task['due_date'] ?? null) ?: null,
-                    'status' => 'Waiting',
+                    'status' => $this->defaultTaskStatus(),
                     'started_at' => null,
                     'requires_submission' => (bool) ($task['requires_submission'] ?? false),
                     'submission_label' => blank($task['submission_label'] ?? null) ? null : trim((string) $task['submission_label']),
@@ -656,13 +718,13 @@ class InquiryService
 
     public function updateItem(Inquiry $inquiry, InquiryItem $item, string $field, mixed $value, User $actor): InquiryItem
     {
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $inquiry), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
         abort_unless((int) $item->inquiry_id === (int) $inquiry->id, 404);
         abort_unless(in_array($field, ['category', 'item_name', 'quantity'], true), 422, 'This Inquiry product field cannot be edited inline.');
 
         $saved = DB::transaction(function () use ($inquiry, $item, $field, $value, $actor): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
-            abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $lockedInquiry), 403);
+            abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
             abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -738,7 +800,7 @@ class InquiryService
 
     public function addItem(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor): InquiryItem
     {
-        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'create'), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'create'), 403);
         $item = DB::transaction(function () use ($inquiry, $category, $product, $quantity, $actor): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
@@ -787,7 +849,7 @@ class InquiryService
 
     public function removeItem(Inquiry $inquiry, InquiryItem $item, User $actor): void
     {
-        abort_unless(app(AccessControlService::class)->can($actor, 'products', 'view') && app(AccessControlService::class)->can($actor, 'products', 'delete'), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'delete'), 403);
         DB::transaction(function () use ($inquiry, $item, $actor): void {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
@@ -822,14 +884,14 @@ class InquiryService
 
     public function replaceItems(Inquiry $inquiry, array $items, User $actor): Inquiry
     {
-        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $inquiry), 403);
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
         abort_if($items === [], 422, 'An Inquiry must keep at least one product.');
 
         DB::transaction(function () use ($inquiry, $items, $actor): void {
             $locked = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
-            abort_unless(app(AccessControlService::class)->canEditParentRecordModule($actor, 'products', $locked), 403);
+            abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
             abort_unless($this->canEdit($actor, $locked), 403);
             abort_if($locked->result, 422, 'Products on a closed Inquiry cannot be changed.');
 
@@ -1117,7 +1179,7 @@ class InquiryService
             $inquiry->update(['status' => self::AUTO_READY_STATUS]);
             $first = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->first();
             if ($first) {
-                $first->update(['status' => 'Waiting', 'started_at' => null]);
+                $first->update(['status' => $this->defaultTaskStatus(), 'started_at' => null]);
                 $this->notifyTaskAssigned($first, $actor);
             }
             $this->activity($inquiry, $actor, 'inquiry.status_changed', 'Inquiry activated and is Ready to start.');
@@ -1132,13 +1194,14 @@ class InquiryService
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->completed_at, 422, 'Completed tasks are locked.');
 
-        // Open Inquiry tasks may be prepared independently. Completion is allowed
-        // whenever that task itself is explicitly moved to In Progress.
-        $isActive = $this->isActiveTask($task);
-        $allowedStatuses = array_merge(['Waiting'], self::WORKING_STATUSES);
-        $nextStatus = in_array((string) ($data['status'] ?? ''), $allowedStatuses, true)
-            ? (string) $data['status']
-            : ($isActive ? 'In Progress' : 'Waiting');
+        // Inquiry task status choices are workspace Master Data. Completed is
+        // handled by updateTaskStatus()/completeTask() because it also updates
+        // completed_at and the parent Inquiry lifecycle.
+        $requestedStatus = trim((string) ($data['status'] ?? ''));
+        $allowedStatuses = $this->openTaskStatusOptions((string) $task->status);
+        $nextStatus = $allowedStatuses->contains(fn (string $name) => strcasecmp($name, $requestedStatus) === 0)
+            ? (string) $allowedStatuses->first(fn (string $name) => strcasecmp($name, $requestedStatus) === 0)
+            : ((string) $task->status ?: $this->defaultTaskStatus());
         $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
         $nextAssigneeId = ($data['assignee_id'] ?? null) ? (int) $data['assignee_id'] : null;
         if ((int) ($oldAssigneeId ?? 0) !== (int) ($nextAssigneeId ?? 0)) {
@@ -1150,7 +1213,7 @@ class InquiryService
             'status' => $nextStatus,
         ];
         $taskStartAt = null;
-        if (in_array($nextStatus, self::WORKING_STATUSES, true) && !$task->started_at) {
+        if ($this->isWorkingTaskStatus($nextStatus) && !$task->started_at) {
             $taskStartAt = now();
             $taskUpdate['started_at'] = $taskStartAt;
         }
@@ -1158,7 +1221,7 @@ class InquiryService
         // The Inquiry starts the first time any of its tasks is explicitly taken
         // In Progress. Use an atomic WHERE NULL update so simultaneous task
         // changes cannot overwrite the original Inquiry start timestamp.
-        if (strcasecmp($nextStatus, 'In Progress') === 0 && !$task->inquiry->started_at) {
+        if ($this->isWorkingTaskStatus($nextStatus) && !$task->inquiry->started_at) {
             $inquiryStartAt = $taskStartAt ?: now();
             Inquiry::query()
                 ->whereKey($task->inquiry_id)
@@ -1188,7 +1251,11 @@ class InquiryService
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change status.');
 
         $status = trim($status);
-        abort_unless(in_array($status, self::TASK_STATUSES, true), 422, 'Invalid Inquiry task status.');
+        $activeStatus = $this->taskStatusOptions()->first(fn (string $name) => strcasecmp($name, $status) === 0);
+        $isSystemCompletion = strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0;
+        $isExistingHistoricalStatus = strcasecmp($status, trim((string) $task->status)) === 0;
+        abort_unless($activeStatus || $isSystemCompletion || $isExistingHistoricalStatus, 422, 'Invalid or inactive Inquiry task status.');
+        if ($activeStatus) $status = (string) $activeStatus;
 
         return DB::transaction(function () use ($task, $status, $actor): InquiryTask {
             $task->refresh();
@@ -1214,7 +1281,7 @@ class InquiryService
             // Keep the first time the task was actually started. A task completed
             // directly from Waiting still receives a start timestamp, matching the
             // order-task ability to move directly to Completed.
-            if (($willComplete || in_array($status, self::WORKING_STATUSES, true)) && !$task->started_at) {
+            if (($willComplete || $this->isWorkingTaskStatus($status)) && !$task->started_at) {
                 $updates['started_at'] = now();
             }
 
@@ -1223,7 +1290,7 @@ class InquiryService
 
             // The Inquiry start date is established the first time any task enters
             // In Progress or Completed. Reopening a task never overwrites it.
-            if ((strcasecmp($status, 'In Progress') === 0 || $willComplete) && !$task->inquiry->started_at) {
+            if (($this->isWorkingTaskStatus($status) || $willComplete) && !$task->inquiry->started_at) {
                 $inquiryStartAt = $task->started_at ?: now();
                 Inquiry::query()
                     ->whereKey($task->inquiry_id)
@@ -1327,7 +1394,7 @@ class InquiryService
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'sequence' => $lastSequence + 1,
                 'due_date' => ($data['due_date'] ?? null) ?: null,
-                'status' => 'Waiting',
+                'status' => $this->defaultTaskStatus(),
                 'started_at' => null,
                 'requires_submission' => (bool) ($data['requires_submission'] ?? false),
                 'submission_label' => blank($data['submission_label'] ?? null) ? null : trim((string) $data['submission_label']),
@@ -1429,7 +1496,7 @@ class InquiryService
                 } else {
                     InquiryTask::create($payload + [
                         'inquiry_id' => $inquiry->id,
-                        'status' => 'Waiting',
+                        'status' => $this->defaultTaskStatus(),
                     ]);
                 }
             }
@@ -1650,7 +1717,7 @@ class InquiryService
                 // after completion, but removing the final required file reopens the
                 // task so the UI and business state never disagree.
                 $lockedTask->update([
-                    'status' => 'In Progress',
+                    'status' => $this->resumeTaskStatus(),
                     'completed_at' => null,
                 ]);
                 $this->forgetMyTaskShell($lockedTask->assignee_id ? (int) $lockedTask->assignee_id : null);
@@ -2061,19 +2128,22 @@ class InquiryService
 
     private function normalizeTaskStates(Inquiry $inquiry): void
     {
+        $defaultStatus = $this->defaultTaskStatus();
         $open = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->get();
         foreach ($open as $index => $task) {
             if ($index === 0) {
+                // Preserve a status already chosen on a started task even when
+                // that Master Data value is later deactivated/deleted.
                 $task->update([
-                    'status' => $task->started_at && in_array((string) $task->status, self::WORKING_STATUSES, true)
+                    'status' => $task->started_at && trim((string) $task->status) !== ''
                         ? $task->status
-                        : 'Waiting',
+                        : $defaultStatus,
                 ]);
                 continue;
             }
 
-            // Future tasks stay queued until the sequence reaches them.
-            if (!$task->started_at) $task->update(['status' => 'Waiting']);
+            // Future tasks use the workspace's current Master Data default.
+            if (!$task->started_at) $task->update(['status' => $defaultStatus]);
         }
 
         $this->syncAutomaticStatus($inquiry);

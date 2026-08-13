@@ -6,7 +6,7 @@
     <div class="ft-inquiry-task-list">
         @forelse($inquiry->tasks as $i => $task)
             @php
-                $state = $task->completed_at ? 'done' : (strcasecmp(trim((string) $task->status), 'In Progress') === 0 ? 'active' : 'wait');
+                $state = $task->completed_at ? 'done' : ($task->started_at ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
                 $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
                 $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
@@ -20,7 +20,7 @@
                 $canAttachThisTask = $canAttachFileThisTask; // legacy alias used by the modal/resource block.
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
-                $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
+                $canCompleteThisTask = !$task->completed_at && $task->started_at !== null;
             @endphp
             <div class="ft-inquiry-task-row {{ $state }} {{ $taskDeepLinked ? 'is-highlighted' : '' }}" wire:key="inquiry-task-row-{{ $task->id }}">
                 <div class="ft-inquiry-task-step"><span>{{ $state === 'done' ? '✓' : $i + 1 }}</span></div>
@@ -85,7 +85,10 @@
                             @disabled(!$canChangeStatusThisTask)
                             aria-label="Change {{ $task->title }} status"
                         >
-                            @foreach(\App\Services\InquiryService::TASK_STATUSES as $statusOption)
+                            @if(!$inquiryTaskStatusOptions->contains(fn ($statusOption) => strcasecmp((string) $statusOption, (string) $task->status) === 0))
+                                <option value="{{ $task->status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status) }}" selected>{{ $task->status }}</option>
+                            @endif
+                            @foreach($inquiryTaskStatusOptions as $statusOption)
                                 <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}">{{ $statusOption }}</option>
                             @endforeach
                         </select>

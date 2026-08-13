@@ -3499,3 +3499,28 @@
   }
   .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-no-flag{display:inline-flex;min-height:34px;align-items:center;font-size:10.5px}
 }
+
+/* 2026-08-13: Match Inquiry assignee picker highlight behavior to Order Details.
+   Inquiry defines --blue2 as a dark action blue, while the shared remote picker
+   expects --blue2 to be a light selection/hover surface. Keep the Inquiry brand
+   variables unchanged and scope the correction only to assignee menus. */
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option:hover,
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option:focus {
+  background:#eaf1ff!important;
+  color:#172235!important;
+  outline:none!important;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option[aria-selected="true"] {
+  background:#eaf1ff!important;
+  color:#245fcf!important;
+  font-weight:700!important;
+  box-shadow:inset 3px 0 0 #2563eb;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option[aria-selected="true"] > small {
+  color:#245fcf!important;
+}
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option[aria-selected="true"]:hover,
+.ft-inquiry-prototype .inquiry-detail-view .ft-inline-remote-user-menu .ft-remote-filter-option[aria-selected="true"]:focus {
+  background:#dce8ff!important;
+  color:#1d4ed8!important;
+}

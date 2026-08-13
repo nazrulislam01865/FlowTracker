@@ -36,7 +36,10 @@ class RoleMatrixGranularConfigurationPermissionsTest extends TestCase
         $this->assertStringContainsString("middleware('permission:taskpacks.view')->name('task-pack.setup')", $routes);
         $this->assertStringContainsString("middleware('permission:taskpacks.create')->name('task-pack.create')", $routes);
         $this->assertStringContainsString("middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit')", $routes);
-        $this->assertStringContainsString("middleware('permission:master.view')->name('master-data')", $routes);
+        $this->assertStringContainsString("Route::get('/master-data', MasterDataController::class)->name('master-data')", $routes);
+        $controller = file_get_contents(app_path('Http/Controllers/MasterDataController.php'));
+        $this->assertStringContainsString('MasterDataService::permissionModuleForType($group)', $controller);
+        $this->assertStringContainsString("canModule(\$module, 'view')", $controller);
     }
 
     public function test_every_matrix_action_is_selectable_for_every_module(): void

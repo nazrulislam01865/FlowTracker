@@ -11,14 +11,7 @@ class ProductImageController extends Controller
     public function __invoke(MasterRecord $product, string $filename)
     {
         $user = auth()->user();
-        $canUseCatalog = $user && (
-            $user->canAccess('master.view')
-            || $user->canAccess('jobs.create')
-            || $user->canAccess('jobs.update')
-            || $user->canModule('inquiries', 'create')
-            || $user->canModule('inquiries', 'view')
-        );
-        abort_unless($canUseCatalog, 403);
+        abort_unless($user?->canModule('catalog_products', 'view'), 403);
         abort_unless($product->workspace_id === app(MasterDataService::class)->workspaceId(), 404);
         abort_unless($product->type === 'product', 404);
 

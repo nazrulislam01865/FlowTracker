@@ -17,13 +17,18 @@
     $clientGroupActive = request()->routeIs('clients.*');
 
     $masterView = $user->canAccess('master.view');
-    $masterGroupActive = request()->routeIs('master-data');
     $masterGroup = (string) request()->query('group', 'product');
     $masterLabels = \App\Services\MasterDataService::LABELS;
     if (!array_key_exists($masterGroup, $masterLabels)) $masterGroup = 'product';
-    $masterLinks = collect(['product' => $masterLabels['product'], 'product_category' => $masterLabels['product_category']])
-        ->merge(collect($masterLabels)->except(['product', 'product_category']))
-        ->all();
+
+    $catalogueGroups = ['product', 'product_category', 'supplier'];
+    $catalogProductView = $user->canModule('catalog_products', 'view');
+    $productCategoryView = $user->canModule('product_categories', 'view');
+    $supplierView = $user->canModule('suppliers', 'view');
+    $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
+
+    $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
+    $masterLinks = collect($masterLabels)->except($catalogueGroups)->all();
 @endphp
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
@@ -102,6 +107,16 @@
                     @endif
                 </div>
             </details>
+        @endif
+
+        @if($catalogProductView)
+            <x-ui.nav-link route="master-data" label="Products" icon="products" :params="['group' => 'product']" :active="$catalogueGroupActive && $masterGroup === 'product'" />
+        @endif
+        @if($productCategoryView)
+            <x-ui.nav-link route="master-data" label="Product Categories" icon="categories" :params="['group' => 'product_category']" :active="$catalogueGroupActive && $masterGroup === 'product_category'" />
+        @endif
+        @if($supplierView)
+            <x-ui.nav-link route="master-data" label="Suppliers" icon="suppliers" :params="['group' => 'supplier']" :active="$catalogueGroupActive && $masterGroup === 'supplier'" />
         @endif
 
         @if($user->canAccess('documents.view'))

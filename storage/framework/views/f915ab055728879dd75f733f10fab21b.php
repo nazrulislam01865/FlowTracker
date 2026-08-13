@@ -6,7 +6,7 @@
     <div class="ft-inquiry-task-list">
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $inquiry->tasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $i => $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
             <?php
-                $state = $task->completed_at ? 'done' : (strcasecmp(trim((string) $task->status), 'In Progress') === 0 ? 'active' : 'wait');
+                $state = $task->completed_at ? 'done' : ($task->started_at ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
                 $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
                 $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
@@ -20,7 +20,7 @@
                 $canAttachThisTask = $canAttachFileThisTask; // legacy alias used by the modal/resource block.
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;
                 $taskDeepLinked = (int)($selectedTaskId ?? 0) === (int)$task->id;
-                $canCompleteThisTask = !$task->completed_at && strcasecmp(trim((string) $task->status), 'In Progress') === 0;
+                $canCompleteThisTask = !$task->completed_at && $task->started_at !== null;
             ?>
             <div class="ft-inquiry-task-row <?php echo e($state); ?> <?php echo e($taskDeepLinked ? 'is-highlighted' : ''); ?>" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'inquiry-task-row-'.e($task->id).''; ?>wire:key="inquiry-task-row-<?php echo e($task->id); ?>">
                 <div class="ft-inquiry-task-step"><span><?php echo e($state === 'done' ? '✓' : $i + 1); ?></span></div>
@@ -190,7 +190,10 @@
                             <?php if(!$canChangeStatusThisTask): echo 'disabled'; endif; ?>
                             aria-label="Change <?php echo e($task->title); ?> status"
                         >
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = \App\Services\InquiryService::TASK_STATUSES; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $statusOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$inquiryTaskStatusOptions->contains(fn ($statusOption) => strcasecmp((string) $statusOption, (string) $task->status) === 0)): ?>
+                                <option value="<?php echo e($task->status); ?>" data-color="<?php echo e(app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status)); ?>" selected><?php echo e($task->status); ?></option>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $inquiryTaskStatusOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $statusOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                 <option value="<?php echo e($statusOption); ?>" data-color="<?php echo e(app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption)); ?>"><?php echo e($statusOption); ?></option>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                         </select>

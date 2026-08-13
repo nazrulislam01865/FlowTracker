@@ -49,11 +49,14 @@ class Index extends Component
         if (!array_key_exists($this->group, MasterDataService::LABELS)) {
             $this->group = 'product';
         }
+
+        $this->authorizeGroupAction('view');
     }
 
     public function selectGroup(string $group): void
     {
         abort_unless(array_key_exists($group, MasterDataService::LABELS), 404);
+        $this->authorizeGroupAction('view', $group);
         $this->group = $group;
         $this->recordsReady = true;
         $this->search = '';
@@ -69,7 +72,7 @@ class Index extends Component
     public function open(?int $id = null): void
     {
         $action = $id ? 'edit' : 'create';
-        abort_unless(auth()->user()?->canModule('masterdata', $action), 403);
+        $this->authorizeGroupAction($action);
         $service = app(MasterDataService::class);
         $this->recordsReady = true;
         $this->showModal = true;
@@ -194,7 +197,7 @@ class Index extends Component
     public function beginProductCategoryCreation(): void
     {
         abort_unless($this->group === 'product' && $this->showModal && !$this->editId, 404);
-        abort_unless(auth()->user()?->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()?->canModule('product_categories', 'create'), 403);
         if (!$this->productCodeReadyForCategory()) return;
 
         $this->newProductCategoryName = trim($this->productCategorySearch);
@@ -210,7 +213,7 @@ class Index extends Component
     public function createProductCategory(): void
     {
         abort_unless($this->group === 'product' && $this->showModal && !$this->editId, 404);
-        abort_unless(auth()->user()?->canModule('masterdata', 'create'), 403);
+        abort_unless(auth()->user()?->canModule('product_categories', 'create'), 403);
         if (!$this->productCodeReadyForCategory()) return;
 
         $name = trim($this->newProductCategoryName ?: $this->productCategorySearch);
@@ -442,7 +445,7 @@ class Index extends Component
     public function editProduct(int $id): void
     {
         abort_unless($this->group === 'product', 404);
-        abort_unless(auth()->user()?->canModule('masterdata', 'edit'), 403);
+        abort_unless(auth()->user()?->canModule('catalog_products', 'edit'), 403);
 
         // Resolve the row inside the active workspace/type before opening the
         // editor. This prevents a stale/tampered action id from ever opening a
@@ -458,7 +461,7 @@ class Index extends Component
     public function deleteProduct(int $id): void
     {
         abort_unless($this->group === 'product', 404);
-        abort_unless(auth()->user()?->canModule('masterdata', 'delete'), 403);
+        abort_unless(auth()->user()?->canModule('catalog_products', 'delete'), 403);
 
         $service = app(MasterDataService::class);
         $product = MasterRecord::query()
@@ -491,14 +494,15 @@ class Index extends Component
     public function updateColor(int $id, string $color): void
     {
         $this->recordsReady = true;
-        app(MasterDataService::class)->setColor($id, $color);
+        $record = $this->currentGroupRecord($id);
+        app(MasterDataService::class)->setColor($record->id, $color);
     }
 
     public function toggle(int $id): void
     {
         $this->recordsReady = true;
-        $record = MasterRecord::where('workspace_id', app(MasterDataService::class)->workspaceId())->findOrFail($id);
-        app(MasterDataService::class)->toggle($id);
+        $record = $this->currentGroupRecord($id);
+        app(MasterDataService::class)->toggle($record->id);
         session()->flash('success', 'Master data status updated.');
         app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Master data status updated', $record->name.' status was changed.', 'update', null, null, auth()->user());
     }
@@ -506,8 +510,9 @@ class Index extends Component
     public function deleteRecord(int $id): void
     {
         $this->recordsReady = true;
+        $record = $this->currentGroupRecord($id);
         try {
-            app(MasterDataService::class)->delete($id);
+            app(MasterDataService::class)->delete($record->id);
             $this->resetPage('masterPage');
             session()->flash('success', 'Master data record deleted.');
             app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Master data deleted', 'A master data record was deleted.', 'update', null, null, auth()->user());
@@ -516,12 +521,30 @@ class Index extends Component
         }
     }
 
+    private function authorizeGroupAction(string $action, ?string $group = null): void
+    {
+        $group ??= $this->group;
+        abort_unless(array_key_exists($group, MasterDataService::LABELS), 404);
+        $module = MasterDataService::permissionModuleForType($group);
+        abort_unless(auth()->user()?->canModule($module, $action), 403);
+    }
+
+    private function currentGroupRecord(int $id): MasterRecord
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType($this->group)
+            ->findOrFail($id);
+    }
+
     public function render()
     {
+        $this->authorizeGroupAction('view');
         $service = app(MasterDataService::class);
         $workspaceId = $service->workspaceId();
         $summaries = MasterRecord::query()
             ->where('workspace_id', $workspaceId)
+            ->where('type', $this->group)
             ->selectRaw('type, count(*) as total_count')
             ->selectRaw("sum(case when status = 'active' then 1 else 0 end) as active_count")
             ->groupBy('type')

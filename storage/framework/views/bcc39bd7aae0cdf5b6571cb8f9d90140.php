@@ -455,11 +455,13 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         </div>
                     </section>
 
-                    <?php echo $__env->make('components.inquiries.create-products', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canUseInquiryProductSelector): ?>
+                        <?php echo $__env->make('components.inquiries.create-products', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <section class="section ft-inquiry-create-section ft-inquiry-attachments-section">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>3</span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
+                            <span><?php echo e($canUseInquiryProductSelector ? 3 : 2); ?></span><h2>Attachments</h2><p>Add emails, specifications, artwork or reference images.</p>
                         </div>
                         <div
                             class="inquiry-dropzone ft-inquiry-prototype-dropzone"
@@ -536,7 +538,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                     <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
                         <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>4</span><h2>What happens next</h2>
+                            <span><?php echo e($canUseInquiryProductSelector ? 4 : 3); ?></span><h2>What happens next</h2>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowOptionCount > 0): ?><em><?php echo e($workflowOptionCount); ?> <?php echo e(\Illuminate\Support\Str::plural('workflow', $workflowOptionCount)); ?> available</em><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
 
