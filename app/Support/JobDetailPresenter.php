@@ -37,11 +37,15 @@ final class JobDetailPresenter
         if ($phase->taskPack) {
             $allowedItemIds = $phase->taskPack->items->pluck('id')->map(fn ($id) => (int) $id)->all();
             $tasks = $tasks->filter(function (Task $task) use ($allowedItemIds, $phase) {
+                // Manual Order tasks belong to the phase directly and do not have
+                // a Task Pack item. Keep them visible beside configured tasks.
+                if (!$task->task_pack_task_id) return true;
                 if (in_array((int) $task->task_pack_task_id, $allowedItemIds, true)) return true;
                 return (int) ($task->setupTemplate?->task_pack_id ?? 0) === (int) $phase->task_pack_id;
             });
         } else {
-            $tasks = collect();
+            // A phase without a Task Pack can still contain manually added tasks.
+            $tasks = $tasks->filter(fn (Task $task) => !$task->task_pack_task_id);
         }
 
         return $tasks

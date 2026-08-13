@@ -8,6 +8,7 @@
             @php
                 $state = $task->completed_at ? 'done' : ($task->started_at ? 'active' : 'wait');
                 $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
+                $inquiryTaskService = app(\App\Services\InquiryService::class);
                 $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
                 $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
                 $taskAccess = app(\App\Services\AccessControlService::class);
@@ -73,25 +74,30 @@
                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     >
                         @php
-                            $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status);
+                            $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('inquiry_task_status', (string) $task->status);
                         @endphp
                         <select
                             data-master-color-select
                             class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass((string) $task->status) }}"
                             style="{{ \App\Support\MasterColor::style($taskStatusColor) }}"
                             x-model="draftValue"
-                            x-on:change="const select=$event.target; const next=select.value; const needsRequiredFile=(next === @js($completedStatus) && @js($completionNeedsRequiredFile)); if(needsRequiredFile){ draftValue=value; select.value=value; window.FlowTrackMasterColor?.applySelect(select); $wire.requestTaskCompletionFile({{ $task->id }}); return; } window.FlowTrackMasterColor?.applySelect(select); commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result?.inquiryColor) inquiryStatusColor=result.inquiryColor; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; }).then(() => window.FlowTrackMasterColor?.applyAll(document))"
+                            x-on:change="const select=$event.target; const next=select.value; const needsRequiredFile=(select.selectedOptions?.[0]?.dataset?.completes === '1' && @js($completionNeedsRequiredFile)); if(needsRequiredFile){ draftValue=value; select.value=value; window.FlowTrackMasterColor?.applySelect(select); $wire.requestTaskCompletionFile({{ $task->id }}); return; } window.FlowTrackMasterColor?.applySelect(select); commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result?.inquiryColor) inquiryStatusColor=result.inquiryColor; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; }).then(() => window.FlowTrackMasterColor?.applyAll(document))"
                             :disabled="status === 'saving'"
                             @disabled(!$canChangeStatusThisTask)
                             aria-label="Change {{ $task->title }} status"
                         >
                             @if(!$inquiryTaskStatusOptions->contains(fn ($statusOption) => strcasecmp((string) $statusOption, (string) $task->status) === 0))
-                                <option value="{{ $task->status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status) }}" selected>{{ $task->status }}</option>
+                                <option value="{{ $task->status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('inquiry_task_status', (string) $task->status) }}" data-completes="{{ $inquiryTaskService->autoInquiryStatusForTaskStatus((string) $task->status) === $completedStatus ? '1' : '0' }}" selected>{{ $task->status }}</option>
                             @endif
                             @foreach($inquiryTaskStatusOptions as $statusOption)
-                                <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}">{{ $statusOption }}</option>
+                                <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('inquiry_task_status', $statusOption) }}" data-completes="{{ $inquiryTaskService->autoInquiryStatusForTaskStatus((string) $statusOption) === $completedStatus ? '1' : '0' }}">{{ $statusOption }}</option>
                             @endforeach
                         </select>
+                        @if($canChangeStatusThisTask && ($task->needs_attention || $inquiryTaskService->taskStatusNeedsAttention((string) $task->status)))
+                            <button type="button" class="ft-inquiry-task-flag-icon" wire:click.stop="openTaskAttentionReason({{ $task->id }})" title="{{ $task->attention_reason ? 'View or update flag reason' : 'Add flag reason' }}" aria-label="Flag reason for {{ $task->title }}">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V4"></path><path d="M7 5h10l-2 4 2 4H7"></path></svg>
+                            </button>
+                        @endif
                         @if($canChangeStatusThisTask)<x-ui.inline-save-state compact />@endif
                     </span>
                 </div>
@@ -140,7 +146,7 @@
                     @elseif($canCompleteThisTask)
                         <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline({{ $task->id }})" wire:loading.attr="disabled" wire:target="completeTaskInline({{ $task->id }})" @disabled(!$canEditThisTask || !$fileOk)>{{ !$fileOk ? 'File required' : 'Complete' }}</button>
                     @else
-                        <button class="ft-inquiry-action-button" type="button" disabled>Waiting</button>
+                        <button class="ft-inquiry-action-button" type="button" disabled>{{ $task->status ?: app(\App\Services\InquiryService::class)->defaultTaskStatus() }}</button>
                     @endif
                 </div>
             </div>

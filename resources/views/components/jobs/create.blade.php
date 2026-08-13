@@ -7,13 +7,13 @@
     'newProductSimilarProducts'=>collect(),'newProductSelectedCategory'=>null,'newProductHasExactCategory'=>false,'newProductImagePreview'=>null,
     'createProductSearch'=>'','createProductCategoryFilter'=>'','createProductShowAllResults'=>false,'showCreateOrderProductModal'=>false,
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'',
-    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'mentionUsers'=>collect(),
+    'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'workflowPhaseId'=>null,'mentionUsers'=>collect(),
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
     $selectedWorkflow = $workflows->firstWhere('id', (int)$workflowId);
     $selectedOwnerOption = collect($ownerFilterOptions)->first(fn($item) => (int)($item['id'] ?? 0) === (int)($ownerId ?? 0));
-    $allowedPhases = $selectedWorkflow?->phases?->where('allow_job_start', true) ?? collect();
+    $allowedPhases = $selectedWorkflow?->phases?->where('is_active', true)->where('allow_job_start', true) ?? collect();
     $taskCount = $selectedWorkflow?->phases?->sum(fn($phase) => $phase->taskPack?->templates?->count() ?? 0) ?? 0;
     $totalUnits = collect($jobItems)->sum(fn($item)=>(int)($item['quantity'] ?? 0));
     $createReady = $catalogReady && $assignmentReady && $workflowReady && $canUseOrderProductSelector;
@@ -88,36 +88,28 @@
         @endif
 
         @if($workflowReady)
-        <section class="ft-create-section" wire:key="create-workflow-ready">
-            <div class="ft-create-section-title"><span>4</span><h2>Workflow</h2></div>
-            <div class="ft-create-fields">
-                <div class="ft-create-field">
-                    <x-ui.remote-filter
-                        class="ft-create-remote-select"
-                        label="Workflow"
-                        property="workflowId"
-                        type="workflows"
-                        context="create-job"
-                        action="setCreateSelector"
-                        :value="$workflowId"
-                        :placeholder="$clientId ? 'Select order workflow' : 'Select a client first'"
-                        :selected-label="$selectedWorkflow?->name"
-                        :initial-options="$workflowFilterOptions"
-                        :params="['client_id' => $clientId]"
-                        :disabled="blank($clientId)"
-                        :clearable="false"
-                        wire:key="create-workflow-selector-{{ $clientId ?: 'none' }}-{{ $workflowSelectorVersion }}"
-                    />
-                    <small>Only active Order workflows configured for the selected client are shown.</small>
-                    @error('workflowId')<small class="validation-error">{{ $message }}</small>@enderror
-                </div>
-                <label class="ft-create-field"><b>Starting phase</b><select wire:model.live="workflowPhaseId">@foreach($allowedPhases as $phase)<option value="{{ $phase->id }}">{{ $phase->sequence }}. {{ $phase->name }}</option>@endforeach</select>@error('workflowPhaseId')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                <div class="ft-workflow-summary"><span>ⓘ {{ $selectedWorkflow?->phases?->count() ?? 0 }} phases · {{ $taskCount }} tasks will be created</span><span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span></div>
-                <p class="ft-create-note">Workflow and starting phase are fixed after creation; transitions are managed from the Workflow tab.</p>
-            </div>
-        </section>
+            <x-ui.create-workflow-picker
+                class="ft-create-section"
+                step="4"
+                title="What happens next"
+                :workflow-options="$workflowFilterOptions"
+                :selected-workflow-id="$workflowId"
+                :selected-workflow-name="$selectedWorkflow?->name ?? 'Select workflow'"
+                :phase-count="$selectedWorkflow?->phases?->where('is_active', true)->count() ?? 0"
+                :task-count="$taskCount"
+                selection-property="workflowId"
+                option-fallback="Order workflow"
+                footnote="Tasks are created when you select Create order. Workflow and starting phase are fixed after creation."
+                :preview-allowed="auth()->user()->canAccess('workflow.view')"
+                error-field="workflowId"
+                :start-phases="$allowedPhases"
+                :start-phase-id="$workflowPhaseId"
+                start-phase-property="workflowPhaseId"
+                start-phase-error-field="workflowPhaseId"
+                wire:key="create-order-workflow-picker-{{ $clientId ?: 'none' }}-{{ $workflowSelectorVersion }}"
+            />
         @else
-            <x-jobs.create-section-placeholder number="4" title="Workflow" section="workflow" :rows="2" />
+            <x-jobs.create-section-placeholder number="4" title="What happens next" section="workflow" :rows="2" />
         @endif
 
         <section class="ft-create-section">

@@ -1,8 +1,4 @@
 @php
-    $selectedIds = collect($jobItems)->pluck('product_id')->filter()->map(fn($id) => (int) $id)->all();
-    $resultCount = $productSearchResults->count();
-    $productSearchValue = trim((string) $createProductSearch);
-    $showCreateProductSuggestion = $productSearchValue !== '' && (int) $productResultTotal === 0;
     $categorySearchValue = trim((string) $newProductCategorySearch);
     $categorySuggestions = $categorySearchValue === '' ? $productCategories->take(6) : $newProductCategoryMatches;
     $hasDuplicateCode = (bool) $duplicateProduct;
@@ -17,230 +13,25 @@
 @endphp
 
 @if($catalogReady && $canUseOrderProductSelector)
-<section
-    class="ft-create-section ft-order-products-prototype"
-    wire:key="create-catalog-ready"
-    x-data="{
-        resultsOpen: false,
-        resultsMaxHeight: 420,
-        fitProductResults() {
-            this.$nextTick(() => {
-                const host = this.$refs.productSearchHost;
-                if (!host) return;
-                const resultsTop = host.getBoundingClientRect().top + 42;
-                const available = window.innerHeight - resultsTop - 14;
-                this.resultsMaxHeight = Math.max(120, Math.min(520, available));
-            });
-        },
-        openProductResults() {
-            this.resultsOpen = true;
-            this.fitProductResults();
-        }
-    }"
-    x-on:create-order-product-selected.window="resultsOpen = false"
-    x-on:focus-create-order-product-search.window="$nextTick(() => { openProductResults(); $refs.productSearch?.focus(); })"
-    x-on:resize.window="if (resultsOpen) fitProductResults()"
->
-    <div class="ft-order-products-title-row">
-        <div class="ft-create-section-title ft-order-products-title">
-            <span>2</span>
-            <h2>Products &amp; quantities</h2>
-            <em class="is-required">Required</em>
-        </div>
-        <p>Search all {{ number_format((int) $activeProductCount) }} products &mdash; at least one product is required.</p>
-        @error('jobItems')<div class="validation-error ft-order-products-section-error">{{ $message }}</div>@enderror
-    </div>
-
-    <div class="ft-order-product-search-label">Search product</div>
-    <div class="ft-order-product-search-row">
-        <div class="ft-order-product-search-host" x-ref="productSearchHost" x-on:click.outside="resultsOpen = false">
-            <div class="ft-order-product-search-input" :class="resultsOpen ? 'is-open' : ''">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                <input
-                    x-ref="productSearch"
-                    type="search"
-                    wire:model.live.debounce.220ms="createProductSearch"
-                    x-on:focus="openProductResults()"
-                    x-on:keydown.escape="resultsOpen = false"
-                    placeholder="Search by product name or SKU..."
-                    autocomplete="off"
-                    aria-label="Search product"
-                >
-                <span class="ft-order-product-shortcut">&#8984; K</span>
-            </div>
-
-            <div class="ft-order-product-results" x-cloak x-show="resultsOpen" x-transition.origin.top :style="`max-height:${resultsMaxHeight}px`">
-                <div class="ft-order-product-results-head">
-                    <span>Top matches</span>
-                    @if(!$createProductShowAllResults && $productResultTotal > $resultCount)
-                        <button type="button" wire:click="showAllCreateProductResults">View all results <span>&nearr;</span></button>
-                    @endif
-                </div>
-
-                <div class="ft-order-product-result-list">
-                    @forelse($productSearchResults as $product)
-                        @continue($product->type !== 'product')
-                        @php
-                            $isSelected = in_array((int) $product->id, $selectedIds, true);
-                            $detailText = $product->productCatalogSummary();
-                            $imageUrl = $product->productImageUrl();
-                        @endphp
-                        <button
-                            type="button"
-                            class="ft-order-product-result {{ $isSelected ? 'is-selected' : '' }}"
-                            wire:click="selectCreateProduct({{ $product->id }})"
-                            @disabled($isSelected)
-                        >
-                            <span class="ft-order-product-thumb">
-                                @if($imageUrl)
-                                    <img src="{{ $imageUrl }}" alt="">
-                                @else
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
-                                @endif
-                            </span>
-                            <span class="ft-order-product-result-copy">
-                                <strong>{{ $product->name }}</strong>
-                                <span>Product code: {{ $product->code }}</span>
-                                @if(filled($detailText))<small>{{ \Illuminate\Support\Str::limit($detailText, 95) }}</small>@endif
-                            </span>
-                            @if($isSelected)<span class="ft-order-product-selected-mark">Selected</span>@endif
-                        </button>
-                    @empty
-                        <div class="ft-order-product-no-results">
-                            <strong>No products found</strong>
-                            <span>Try another product name or SKU.</span>
-                        </div>
-                    @endforelse
-                </div>
-
-                @if($showCreateProductSuggestion)
-                    <div class="ft-order-product-create-row">
-                        @if($canCreateCatalogProduct)
-                            <button type="button" wire:click="openCreateOrderProductModalFromSearch">
-                                <span class="ft-order-product-create-icon">+</span>
-                                <span><strong>Create Product</strong><small>No matching product found. Add "{{ $productSearchValue }}" to the catalog</small></span>
-                            </button>
-                            <span class="ft-order-product-permission-ok">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>
-                                You have permission
-                            </span>
-                        @else
-                            <button type="button" disabled>
-                                <span class="ft-order-product-create-icon">+</span>
-                                <span><strong>Create Product</strong><small>No matching product found for "{{ $productSearchValue }}"</small></span>
-                            </button>
-                            <span class="ft-order-product-permission-required">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><rect x="6" y="10" width="12" height="10" rx="2"/><path d="M9 10V7a3 3 0 0 1 6 0v3"/></svg>
-                                Product create permission required
-                            </span>
-                        @endif
-                    </div>
-                @endif
-            </div>
-        </div>
-
-        @if($canViewProductCategories)
-            <select class="ft-order-product-category-filter" wire:model.live="createProductCategoryFilter" x-on:change="openProductResults()" aria-label="Filter products by category">
-                <option value="">All categories</option>
-                @foreach($productCategories as $category)
-                    <option value="{{ $category->id }}">{{ $category->name }}</option>
-                @endforeach
-            </select>
-        @endif
-    </div>
-
-    @if(count($jobItems))
-        <div class="ft-order-selected-products">
-            <div class="ft-order-selected-products-title">Selected products ({{ count($jobItems) }})</div>
-            <div class="ft-order-selected-products-table">
-                <div class="ft-order-selected-products-head">
-                    <span>Product</span><span>Quantity</span><span>Notes</span><span>Action</span>
-                </div>
-                @foreach($jobItems as $index => $item)
-                    @php
-                        $detail = $selectedProductDetails->get((int) ($item['product_id'] ?? 0));
-                        $itemImage = $detail?->productImageUrl();
-                        $itemCode = (string) ($detail?->code ?? '');
-                        $itemCategory = (string) ($detail?->parent?->name ?? ($item['category'] ?? ''));
-                        $itemName = (string) ($detail?->name ?? ($item['product'] ?? 'Product'));
-                    @endphp
-                    <div class="ft-order-selected-product-row" wire:key="selected-order-product-{{ $item['product_id'] ?? $index }}-{{ $index }}">
-                        <div class="ft-order-selected-product-info">
-                            <span class="ft-order-product-thumb">
-                                @if($itemImage)
-                                    <img src="{{ $itemImage }}" alt="">
-                                @else
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
-                                @endif
-                            </span>
-                            <span>
-                                <strong>{{ $itemName }}</strong>
-                                <small>SKU: {{ $itemCode ?: 'N/A' }} <i>&bull;</i> {{ $itemCategory ?: 'Uncategorized' }}</small>
-                            </span>
-                        </div>
-                        <div class="ft-order-product-quantity-control">
-                            <button type="button" wire:click="decrementCreateProductQuantity({{ $index }})" aria-label="Decrease quantity">&minus;</button>
-                            <input type="number" min="1" max="999999999" wire:model.live.debounce.300ms="jobItems.{{ $index }}.quantity" aria-label="Quantity for {{ $itemName }}">
-                            <button type="button" wire:click="incrementCreateProductQuantity({{ $index }})" aria-label="Increase quantity">+</button>
-                            @error("jobItems.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror
-                        </div>
-                        <div class="ft-order-product-notes">
-                            <input type="text" maxlength="2000" wire:model.blur="jobItems.{{ $index }}.notes" placeholder="Optional notes..." aria-label="Notes for {{ $itemName }}">
-                            @error("jobItems.$index.notes")<small class="validation-error">{{ $message }}</small>@enderror
-                            @error("jobItems.$index.product")<small class="validation-error">{{ $message }}</small>@enderror
-                        </div>
-                        <button type="button" class="ft-order-selected-product-remove" wire:click="removeProductRow({{ $index }})" aria-label="Remove {{ $itemName }}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M8 10v7M12 10v7M16 10v7M6 7l1 14h10l1-14"/></svg>
-                        </button>
-                    </div>
-                @endforeach
-            </div>
-        </div>
-    @endif
-
-    <div class="ft-order-products-summary-row">
-        <span>{{ count($jobItems) }} {{ \Illuminate\Support\Str::plural('product', count($jobItems)) }} <i>&bull;</i> {{ number_format($totalUnits) }} total units</span>
-
-        <div class="ft-order-products-summary-actions">
-            @if($canCreateCatalogProduct)
-                <button
-                    type="button"
-                    class="ft-order-products-create-new-button"
-                    wire:click="openCreateOrderProductModal"
-                    @disabled(count($jobItems) >= 25)
-                    aria-label="Create product and add it to this order"
-                >
-                    <span class="ft-order-products-create-new-icon" aria-hidden="true">+</span>
-                    <span class="ft-order-products-create-new-copy">
-                        <strong>Create Product</strong>
-                        <small>Can't find it? Add a product to the catalog</small>
-                    </span>
-                </button>
-            @else
-                <button
-                    type="button"
-                    class="ft-order-products-create-new-button"
-                    disabled
-                    title="Product create permission required"
-                    aria-label="Create product unavailable: product create permission required"
-                >
-                    <span class="ft-order-products-create-new-icon" aria-hidden="true">+</span>
-                    <span class="ft-order-products-create-new-copy">
-                        <strong>Create Product</strong>
-                        <small>Product create permission required</small>
-                    </span>
-                </button>
-            @endif
-
-            <button
-                type="button"
-                class="ft-order-products-add-another-button"
-                wire:click="focusCreateProductSearch"
-                @disabled(count($jobItems) >= 25)
-            ><span>+</span> Add Product</button>
-        </div>
-    </div>
-</section>
+    <x-catalog.create-product-quantity
+        :rows="$jobItems"
+        rows-property="jobItems"
+        remove-method="removeProductRow"
+        :required="true"
+        required-error-field="jobItems"
+        :active-product-count="$activeProductCount"
+        :product-search-results="$productSearchResults"
+        :product-result-total="$productResultTotal"
+        :create-product-search="$createProductSearch"
+        :create-product-category-filter="$createProductCategoryFilter"
+        :create-product-show-all-results="$createProductShowAllResults"
+        :product-categories="$productCategories"
+        :selected-product-details="$selectedProductDetails"
+        :can-view-product-categories="$canViewProductCategories"
+        :can-create-catalog-product="$canCreateCatalogProduct"
+        wire-key="create-order-products-ready"
+        row-key-prefix="selected-order-product"
+    />
 @elseif(!$catalogReady)
     <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
 @else

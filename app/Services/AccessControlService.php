@@ -426,6 +426,14 @@ class AccessControlService
             || (int) ($job->coordinator_id ?? 0) === (int) $user->id;
     }
 
+    public function canCreateJobTask(User $user, object $job): bool
+    {
+        if ($this->isAdministrator($user) || $this->isJobCreator($user, $job)) return true;
+        if (!$this->can($user, 'tasks', 'create') || empty($job->id)) return false;
+
+        return app(JobService::class)->visibleQuery($user)->whereKey($job->id)->exists();
+    }
+
     public function canEditTask(User $user, object $task): bool
     {
         if ($this->isAdministrator($user) || $this->isTaskParentCreator($user, $task)) return true;

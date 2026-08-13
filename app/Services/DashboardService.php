@@ -147,7 +147,7 @@ class DashboardService
                 'owner:id,name,profile_image_path',
                 // Current task is still needed for due-date/flag calculation, but its assignee is not
                 // the Inquiry assignee shown on the dashboard.
-                'currentTask:id,inquiry_id,title,status,due_date,completed_at',
+                'currentTask:id,inquiry_id,title,status,needs_attention,attention_reason,due_date,completed_at',
             ])
             ->latest('inquiries.updated_at')
             ->latest('inquiries.id')

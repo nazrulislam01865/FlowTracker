@@ -1,4 +1,4 @@
-@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null])
+@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
     $completedProductRows = $productRows->filter(fn ($item) => filled($item->product_name ?? null));
@@ -12,6 +12,10 @@
     $canCreateOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'create');
     $canDeleteOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'delete');
     $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
+    $canAddOrderTask = $accessControl->canCreateJobTask(auth()->user(), $job)
+        && !$job->completed_at
+        && $job->status !== 'Completed'
+        && !in_array($job->status, \App\Services\JobService::INACTIVE_STATUSES, true);
     $canDeleteDocument = $accessControl->can(auth()->user(), 'documents', 'delete');
     $canUploadDocument = $accessControl->can(auth()->user(), 'documents', 'create');
     $canLinkDocument = $accessControl->can(auth()->user(), 'documents', 'link');
@@ -269,16 +273,80 @@
     <section class="ft-detail-card ft-phase-table-card ft-overview-task-card">
         <div class="ft-card-row-head ft-task-card-heading">
             <div><h2>All phase tasks</h2><p>{{ $configuredTasks->count() }} tasks across {{ $job->workflow->phases->count() }} phases</p></div>
-            <div class="ft-row-actions ft-phase-toolbar-icons" aria-label="Phase task controls">
-                <button type="button" class="ft-phase-toolbar-icon" wire:click="expandAllJobPhases" title="Expand all phases" aria-label="Expand all phases">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg>
-                </button>
-                <button type="button" class="ft-phase-toolbar-icon" wire:click="collapseAllJobPhases" title="Collapse all phases" aria-label="Collapse all phases">
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg>
-                </button>
+            <div class="ft-row-actions ft-order-taskflow-controls" aria-label="Order taskflow controls">
+                <span class="ft-order-task-count-pill">{{ $configuredTasks->count() }} Tasks</span>
+                <span class="ft-order-taskflow-badge">Taskflow</span>
+                @if($canAddOrderTask)
+                    <button type="button" class="ft-order-add-task-button" wire:click="openAddOrderTaskForm">＋ Add Task</button>
+                @endif
+                <div class="ft-phase-toolbar-icons" aria-label="Phase task controls">
+                    <button type="button" class="ft-phase-toolbar-icon" wire:click="expandAllJobPhases" title="Expand all phases" aria-label="Expand all phases">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 7 6 6 6-6"/><path d="m6 12 6 6 6-6"/></svg>
+                    </button>
+                    <button type="button" class="ft-phase-toolbar-icon" wire:click="collapseAllJobPhases" title="Collapse all phases" aria-label="Collapse all phases">
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m6 12 6-6 6 6"/><path d="m6 17 6-6 6 6"/></svg>
+                    </button>
+                </div>
             </div>
         </div>
-        <div class="ft-phase-load-note"><span>◉ All {{ $configuredTasks->count() }} configured Task Pack tasks are loaded</span><span>Task status changes save automatically</span></div>
+        <div class="ft-phase-load-note"><span>◉ All {{ $configuredTasks->count() }} configured and added tasks are loaded</span><span>Task status changes save automatically</span></div>
+        @if($showAddOrderTaskForm && $canAddOrderTask)
+            <div class="ft-order-add-task" wire:key="order-add-task-form">
+                <div class="ft-order-add-task-head">
+                    <div>
+                        <strong>Add taskflow task</strong>
+                        <span>The task will be added to the current phase{{ $job->phase?->name ? ': '.$job->phase->name : '' }}.</span>
+                    </div>
+                    <button class="ft-order-add-task-close" type="button" wire:click="cancelAddOrderTask" aria-label="Close add task form">×</button>
+                </div>
+                <div class="ft-order-add-task-grid">
+                    <label class="ft-order-add-task-field ft-order-add-task-field-wide">
+                        <span>Task name *</span>
+                        <input type="text" wire:model="newOrderTaskName" placeholder="Task name" maxlength="255">
+                    </label>
+                    @php
+                        $newOrderTaskAssignee = $users->firstWhere('id', $newOrderTaskAssigneeId);
+                    @endphp
+                    <div
+                        class="ft-order-add-task-field ft-order-add-task-assignee"
+                        x-data
+                        x-on:ft-inline-remote-selected.stop="const raw = String($event.detail?.value ?? ''); $wire.$set('newOrderTaskAssigneeId', raw === '' ? null : Number(raw));"
+                    >
+                        <span>Assignee</span>
+                        <x-ui.inline-remote-user
+                            :value="$newOrderTaskAssigneeId ?? ''"
+                            :selected-label="$newOrderTaskAssignee?->name ?? 'Unassigned'"
+                            context="task-assignee"
+                            parent-type="job"
+                            :parent-id="$job->id"
+                            search-placeholder="Search assignee…"
+                            trigger-class="ft-order-add-task-assignee-trigger"
+                            variant="compact"
+                            :menu-width="320"
+                            wire:key="order-add-task-assignee-{{ $job->id }}-{{ $newOrderTaskAssigneeId ?? 'none' }}"
+                        />
+                    </div>
+                    <label class="ft-order-add-task-field">
+                        <span>Due date</span>
+                        <input type="date" wire:model="newOrderTaskDueDate" onclick="this.showPicker && this.showPicker()">
+                    </label>
+                    <label class="ft-order-add-task-field ft-order-add-task-field-description">
+                        <span>Instructions</span>
+                        <textarea data-rich-text wire:model="newOrderTaskDescription" placeholder="Describe what must be completed for this task or paste screenshots here."></textarea>
+                    </label>
+                </div>
+                @error('newOrderTaskName')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
+                @error('newOrderTaskAssigneeId')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
+                @error('newOrderTaskDueDate')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
+                <div class="ft-order-add-task-actions">
+                    <button class="ft-outline-btn" type="button" wire:click="cancelAddOrderTask">Cancel</button>
+                    <button class="ft-order-add-task-submit" type="button" wire:click="addOrderTask" wire:loading.attr="disabled" wire:target="addOrderTask">
+                        <span wire:loading.remove wire:target="addOrderTask">Add Task</span>
+                        <span wire:loading wire:target="addOrderTask">Adding…</span>
+                    </button>
+                </div>
+            </div>
+        @endif
         <div class="ft-phase-task-table ft-order-overview-taskflow">
             @foreach($job->workflow->phases as $phase)
                 @php

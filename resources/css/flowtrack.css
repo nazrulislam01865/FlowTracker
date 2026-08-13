@@ -6428,3 +6428,77 @@ body:has(.ft-client-prototype-page) .content{max-width:none;margin:0;padding:17p
     .ft-overview-task-card .ft-order-taskflow-row>.ft-task-action-wrap{position:absolute!important;top:10px;right:7px;z-index:20;width:36px!important;min-height:32px!important;padding:0!important}
     .ft-overview-task-card .ft-order-task-resource-list{width:100%!important;min-width:0!important;padding:0 10px 8px 54px!important}
 }
+
+/* Shared Create Inquiry / Create Order workflow chooser. */
+.ft-create-workflow-next{position:relative}
+.ft-create-workflow-heading{display:flex;align-items:center;gap:8px;margin-bottom:12px}
+.ft-create-workflow-heading>span{display:grid;width:24px;height:24px;place-items:center;flex:0 0 24px;border-radius:7px;background:#edf3ff;color:#2463eb;font-size:11px;font-weight:850}
+.ft-create-workflow-heading h2{margin:0;color:#17243a;font-size:15px;line-height:1.2;letter-spacing:-.015em}
+.ft-create-workflow-heading em{margin-left:4px;padding:3px 7px;border-radius:999px;background:#edf3ff;color:#2463eb;font-size:9.5px;font-style:normal;font-weight:800;white-space:nowrap}
+.ft-create-workflow-card{overflow:hidden;border:1px solid #c9d9f5;border-radius:8px;background:#f8fbff;box-shadow:inset 0 0 0 1px rgba(36,99,235,.02)}
+.ft-create-workflow-selected{display:grid;width:100%;grid-template-columns:42px minmax(0,1fr) auto 20px;gap:10px;align-items:center;padding:10px 11px;border:0;background:transparent;color:inherit;text-align:left;cursor:pointer}
+.ft-create-workflow-selected:hover{background:#f3f7ff}
+.ft-create-workflow-selected:focus-visible{outline:2px solid rgba(36,99,235,.28);outline-offset:-2px}
+.ft-create-workflow-icon{display:grid;width:34px;height:34px;place-items:center;border:2px solid #7da8f5;border-radius:50%;background:#edf3ff;color:#155ce9;font-size:14px;font-weight:900}
+.ft-create-workflow-copy{display:block;min-width:0}
+.ft-create-workflow-copy small{display:block;color:#6f8098;font-size:9.5px}
+.ft-create-workflow-copy strong{display:block;overflow:hidden;margin-top:2px;color:#14243c;font-size:13px;text-overflow:ellipsis;white-space:nowrap}
+.ft-create-workflow-copy>span{display:block;margin-top:2px;color:#77879c;font-size:10px}
+.ft-create-workflow-selected>.ft-workflow-preview-muted{font-size:10px;font-weight:750;white-space:nowrap}
+.ft-create-workflow-chevron{color:#536987;font-size:11px;transition:transform .15s ease}
+.ft-create-workflow-card.is-open .ft-create-workflow-chevron{transform:rotate(180deg)}
+.ft-create-workflow-options{max-height:260px;overflow:auto;border-top:1px solid #dbe5f5;background:#fff}
+.ft-create-workflow-option{display:grid;width:100%;grid-template-columns:18px minmax(0,1fr);gap:9px;align-items:center;padding:9px 12px;border:0;border-bottom:1px solid #edf1f6;background:#fff;color:inherit;text-align:left;cursor:pointer}
+.ft-create-workflow-option:last-child{border-bottom:0}
+.ft-create-workflow-option:hover,.ft-create-workflow-option.is-selected{background:#f8fbff}
+.ft-create-workflow-option:focus-visible{outline:2px solid rgba(36,99,235,.22);outline-offset:-2px}
+.ft-create-workflow-radio{width:13px;height:13px;border:1.5px solid #aebbd0;border-radius:50%}
+.ft-create-workflow-option.is-selected .ft-create-workflow-radio{border:4px solid #2463eb}
+.ft-create-workflow-option strong{display:block;color:#26354c;font-size:11px}
+.ft-create-workflow-option small{display:block;margin-top:2px;color:#7a899d;font-size:9.25px}
+.ft-create-workflow-empty{padding:12px;color:#7a899d;font-size:10px;text-align:center}
+.ft-create-workflow-start-phase{display:grid;grid-template-columns:auto minmax(220px,360px);gap:6px 12px;align-items:center;margin-top:10px;padding:10px 11px;border:1px solid #dbe5f5;border-radius:8px;background:#fff}
+.ft-create-workflow-start-phase>span{color:#26354c;font-size:11px;font-weight:800}
+.ft-create-workflow-start-phase select{width:100%;min-height:36px;padding:0 32px 0 10px;border:1px solid #cad6e7;border-radius:7px;background:#fff;color:#26354c;font-size:11px;outline:0}
+.ft-create-workflow-start-phase select:focus{border-color:#2463eb;box-shadow:0 0 0 2px rgba(36,99,235,.08)}
+.ft-create-workflow-start-phase small{grid-column:2;color:#7c8a9e;font-size:9px}
+.ft-create-workflow-next>.field-error,.ft-create-workflow-next>.validation-error{display:block;margin-top:7px}
+.ft-create-workflow-footnote{margin:7px 0 0;color:#7c8a9e;font-size:9.75px}
+@media(max-width:900px){
+    .ft-create-workflow-selected{grid-template-columns:40px minmax(0,1fr) 18px}
+    .ft-create-workflow-selected>.ft-workflow-preview-muted{grid-column:2/3;justify-self:start}
+}
+@media(max-width:640px){
+    .ft-create-workflow-heading{align-items:flex-start;flex-wrap:wrap}
+    .ft-create-workflow-heading em{margin-left:32px}
+    .ft-create-workflow-selected{grid-template-columns:36px minmax(0,1fr) 18px;gap:8px}
+    .ft-create-workflow-icon{width:32px;height:32px}
+    .ft-create-workflow-start-phase{grid-template-columns:1fr}
+    .ft-create-workflow-start-phase small{grid-column:1}
+}
+
+/* Product/catalog footer count placement */
+.ft-product-pagination-left{display:flex;align-items:center;gap:18px;min-width:0}.ft-product-result-count-footer{margin:0;white-space:nowrap}.ft-category-subbar-actions-only{justify-content:flex-end}.ft-category-footer-left{display:flex;align-items:center;gap:18px;min-width:0}.ft-category-footer-count{white-space:nowrap;color:var(--ft-muted,#61708a)}
+@media(max-width:900px){.ft-product-pagination-left,.ft-category-footer-left{flex-wrap:wrap;gap:10px}.ft-product-result-count-footer,.ft-category-footer-count{width:100%}}
+
+/* Product and Product Category list footers: single balanced desktop row */
+@media (min-width:821px){
+  .ft-master-page:has(.ft-product-list-head) .ft-product-pagination{display:grid;grid-template-columns:minmax(430px,1fr) auto minmax(360px,1fr);align-items:center;column-gap:28px;row-gap:0;min-height:48px;padding:8px 14px}
+  .ft-master-page:has(.ft-product-list-head) .ft-product-pagination-left{display:flex;align-items:center;flex-wrap:nowrap;gap:24px;min-width:0}
+  .ft-master-page:has(.ft-product-list-head) .ft-product-result-count-footer{flex:0 0 auto;width:auto;min-height:0;margin:0;white-space:nowrap}
+  .ft-master-page:has(.ft-product-list-head) .ft-product-rows-per-page{display:flex;align-items:center;flex:0 0 auto;min-width:0;gap:8px;white-space:nowrap}
+  .ft-master-page:has(.ft-product-list-head) .ft-product-page-position{display:block;justify-self:center;white-space:nowrap}
+  .ft-master-page:has(.ft-product-list-head) .ft-product-page-buttons{justify-self:end;flex-wrap:nowrap;white-space:nowrap}
+}
+@media (min-width:721px){
+  .ft-category-footer{display:grid;grid-template-columns:minmax(430px,1fr) auto minmax(320px,1fr);align-items:center;column-gap:28px;row-gap:0;padding:8px 14px}
+  .ft-category-footer-left{display:flex;align-items:center;flex-wrap:nowrap;gap:24px;min-width:0}
+  .ft-category-footer-count{flex:0 0 auto;width:auto;white-space:nowrap}
+  .ft-category-footer-left>label{display:flex;align-items:center;flex:0 0 auto;gap:8px;white-space:nowrap}
+  .ft-category-footer>span{justify-self:center;white-space:nowrap}
+  .ft-category-pages{justify-self:end;flex-wrap:nowrap;white-space:nowrap}
+}
+
+/* Product Categories: keep collapse/expand controls pinned to the right */
+.ft-category-subbar-actions-only{display:flex!important;justify-content:flex-end!important;width:100%!important;}
+.ft-category-subbar-actions-only .ft-category-expand-controls{margin-left:auto!important;justify-content:flex-end!important;}

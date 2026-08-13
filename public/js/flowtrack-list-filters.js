@@ -464,6 +464,8 @@
         ...positioningMethods,
         searchable: true,
         menuWidth: Number(config.menuWidth || 320),
+        fixedMenu: config.fixedMenu === true,
+        disabled: config.disabled === true,
         open: false,
         query: '',
         items: Array.isArray(config.items) ? config.items : [],
@@ -477,7 +479,7 @@
             );
         },
         toggle() {
-            if (config.disabled) return;
+            if (this.disabled) return;
             if (this.open) {
                 this.close();
                 return;
@@ -527,6 +529,20 @@
 
             this.selectedValue = next;
             this.selectedLabel = resolved;
+        },
+        syncOptions(value, label, items, disabled = false, placeholder = config.placeholder) {
+            config.placeholder = placeholder || config.placeholder;
+            this.disabled = disabled === true;
+            const nextItems = Array.isArray(items) ? items : [];
+            const currentSignature = JSON.stringify(this.items.map((item) => [String(item?.id ?? ''), String(item?.label ?? ''), String(item?.meta ?? '')]));
+            const nextSignature = JSON.stringify(nextItems.map((item) => [String(item?.id ?? ''), String(item?.label ?? ''), String(item?.meta ?? '')]));
+            if (currentSignature !== nextSignature) {
+                this.items = nextItems;
+                this.query = '';
+                if (this.open) this.reposition();
+            }
+            this.sync(value, label);
+            if (this.disabled && this.open) this.close();
         },
     });
 })();

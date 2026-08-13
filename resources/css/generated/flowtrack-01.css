@@ -737,3 +737,14 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
 .ft-inline-planning-row .ft-inline-remote-user-menu .ft-remote-filter-search{height:40px;min-height:40px;margin:0 0 8px;padding:0 12px;border:1px solid #d7e1ed;border-radius:8px;background:#fff;color:#0b1d36;font:inherit;font-weight:600;outline:none}
 .ft-inline-planning-row .ft-inline-remote-user-menu .ft-remote-filter-search:focus{border-color:#8fb7ff;box-shadow:0 0 0 3px rgba(23,103,232,.08)}
 .ft-inline-planning-row select:hover,.ft-inline-planning-row select:focus,.ft-inline-planning-row input:hover,.ft-inline-planning-row input:focus{border-color:#a9c4f7;background:#fff;box-shadow:0 0 0 2px rgba(37,99,235,.05)}
+.ft-inline-planning-row select:disabled,.ft-inline-planning-row input:disabled{opacity:1;color:inherit;appearance:none}
+
+.ft-phase-toggle{width:100%;border:0;text-align:left;cursor:pointer;color:inherit;font:inherit}
+.ft-phase-toggle i{font-style:normal;width:24px;height:24px;border:1px solid #7ca6ff;border-radius:5px;color:#0f63f3;display:grid;place-items:center;background:#fff;justify-self:end}
+.ft-overview-task-card .ft-phase-group.open>.ft-phase-toggle{background:#fbfdff}
+.ft-editable-task-line{cursor:default}
+.ft-inline-task-link{border:0;background:transparent;color:#10233e;font:inherit;font-weight:650;text-align:left;padding:0;cursor:pointer}
+.ft-inline-task-link:hover{color:#0f63f3;text-decoration:underline}
+.ft-inline-task-status{height:31px;min-width:150px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;color:#10233e;font-size:10px;font-weight:700;padding:0 26px 0 9px;outline:0}
+.ft-inline-task-status.done{background:#eaf8ef;color:#087c34}
+.ft-inline-task-status.waiting{background:#fff4df;color:#a96000}

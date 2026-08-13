@@ -15,7 +15,7 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_inquiry_status_can_be_deleted_even_when_current_inquiries_use_its_name(): void
+    public function test_inquiry_task_status_can_be_deleted_without_rewriting_historical_inquiry_text(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $this->actingAs($user);
@@ -25,7 +25,7 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
 
         $status = MasterRecord::query()->create([
             'workspace_id' => $workspaceId,
-            'type' => 'inquiry_status',
+            'type' => 'inquiry_task_status',
             'code' => 'IST-999',
             'name' => 'Custom Review',
             'status' => 'active',
@@ -33,7 +33,7 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
         ]);
 
         MasterValue::query()->create([
-            'group_key' => 'inquiry_statuses',
+            'group_key' => 'inquiry_task_statuses',
             'code' => 'IST-999',
             'name' => 'Custom Review',
             'is_active' => true,
@@ -57,13 +57,13 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
         ]);
 
         // Warm the active-status cache so deletion also proves cache invalidation.
-        $this->assertTrue($service->active('inquiry_status')->contains('id', $status->id));
+        $this->assertTrue($service->active('inquiry_task_status')->contains('id', $status->id));
 
         $service->delete($status->id);
 
         $this->assertSoftDeleted('master_records', ['id' => $status->id]);
         $this->assertDatabaseMissing('master_values', [
-            'group_key' => 'inquiry_statuses',
+            'group_key' => 'inquiry_task_statuses',
             'code' => 'IST-999',
         ]);
         $this->assertDatabaseHas('inquiries', [
@@ -71,10 +71,10 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
             'status' => 'Custom Review',
             'deleted_at' => null,
         ]);
-        $this->assertFalse($service->active('inquiry_status')->contains('id', $status->id));
+        $this->assertFalse($service->active('inquiry_task_status')->contains('id', $status->id));
     }
 
-    public function test_soft_deleted_inquiries_do_not_prevent_inquiry_status_deletion(): void
+    public function test_soft_deleted_inquiries_do_not_prevent_inquiry_task_status_deletion(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $this->actingAs($user);
@@ -84,7 +84,7 @@ class InquiryStatusMasterDataDeletionTest extends TestCase
 
         $status = MasterRecord::query()->create([
             'workspace_id' => $workspaceId,
-            'type' => 'inquiry_status',
+            'type' => 'inquiry_task_status',
             'code' => 'IST-998',
             'name' => 'Old Status',
             'status' => 'active',

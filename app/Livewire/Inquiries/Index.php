@@ -55,6 +55,7 @@ class Index extends Component
     public string $subject = '';
     public string $requirementNotes = '';
     public string $requestSource = 'Email';
+    public string $createPriority = 'Medium';
     public string $createReceivedDate = '';
     public ?int $createOwnerId = null;
 
@@ -123,6 +124,11 @@ class Index extends Component
     public ?int $taskAssigneeId = null;
     public string $taskDueDate = '';
     public string $taskStatus = '';
+    public bool $showTaskAttentionModal = false;
+    public ?int $taskAttentionTaskId = null;
+    public string $taskAttentionReason = '';
+    public bool $showInquiryAttentionModal = false;
+    public string $inquiryAttentionReason = '';
 
     // Admin-only task append form on Inquiry details.
     public bool $showAddTaskForm = false;
@@ -264,6 +270,12 @@ class Index extends Component
         if ($this->createReceivedDate === '') {
             $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         }
+        $priorityOptions = app(MasterDataService::class)->active('priority');
+        if (! $priorityOptions->contains(fn ($priority) => (string) $priority->name === (string) $this->createPriority)) {
+            $preferred = $priorityOptions->first(fn ($priority) => strcasecmp((string) $priority->name, 'Medium') === 0)
+                ?? $priorityOptions->first();
+            $this->createPriority = (string) ($preferred?->name ?? '');
+        }
         $this->loadCreateOptions();
     }
 
@@ -308,6 +320,7 @@ class Index extends Component
             abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         }
         $this->createProductShowAllResults = false;
+        $this->dispatch('open-create-order-product-results');
     }
 
     public function showAllCreateProductResults(): void
@@ -1182,6 +1195,9 @@ class Index extends Component
         $this->inquiryCategoryFilterOptions = [];
         $this->showInquiryDocumentPicker = false;
         $this->inquiryExistingDocumentId = null;
+        $this->showTaskAttentionModal = false;
+        $this->taskAttentionTaskId = null;
+        $this->taskAttentionReason = '';
     }
 
     public function setDetailTab(string $tab): void
@@ -1200,7 +1216,7 @@ class Index extends Component
     {
         $inquiry = app(InquiryService::class)->findVisible(auth()->user(), $inquiryId);
         $saved = app(InquiryService::class)->updateStatus($inquiry, $status, auth()->user());
-        return ['ok' => true, 'status' => $saved->status, 'tone' => $this->tone($saved->status), 'color' => app(\App\Services\MasterDataService::class)->displayColorFor('inquiry_status', (string) $saved->status)];
+        return ['ok' => true, 'status' => $saved->status, 'tone' => $this->tone($saved->status), 'color' => app(InquiryService::class)->inquiryStatusColor((string) $saved->status)];
     }
 
     public function convertInquiryFromList(int $inquiryId): void
@@ -1289,16 +1305,112 @@ class Index extends Component
         $localizedStart = \App\Support\UserLocalTime::localize($updatedInquiry->started_at);
         $this->metrics = app(InquiryService::class)->metrics(auth()->user());
 
+        // Attention is driven by the Inquiry Task Status configuration in Master Data.
+        // Changing to a flagged status (for example Waiting) should only surface the
+        // configured flag indicator in the task row. Do not interrupt the user with
+        // the reason modal automatically; the modal remains available explicitly by
+        // clicking the flag icon when a reason / @mention is actually needed.
+        if (!(bool) $saved->needs_attention
+            && (int) ($this->taskAttentionTaskId ?? 0) === (int) $saved->id) {
+            $this->closeTaskAttentionReason();
+        }
+
         return [
             'ok' => true,
             'status' => $saved->status,
             'completed' => $saved->completed_at !== null,
+            'needsAttention' => (bool) $saved->needs_attention,
+            'attentionReason' => (string) ($saved->attention_reason ?: ''),
+            'statusColor' => app(MasterDataService::class)->displayColorFor('inquiry_task_status', (string) $saved->status),
             'inquiryStatus' => $inquiryStatus,
             'inquiryTone' => $this->tone($inquiryStatus),
-            'inquiryColor' => app(\App\Services\MasterDataService::class)->displayColorFor('inquiry_status', $inquiryStatus),
+            'inquiryColor' => app(InquiryService::class)->inquiryStatusColor($inquiryStatus, (string) $saved->status),
             'inquiryStartValue' => $localizedStart?->format('Y-m-d\\TH:i') ?? '',
             'inquiryStartDisplay' => $localizedStart?->format('M j, Y · g:i A') ?? '—',
         ];
+    }
+
+    public function openInquiryAttentionReason(): void
+    {
+        $inquiry = $this->selectedInquiry();
+        abort_if($inquiry->result, 422, 'A completed Inquiry cannot be flagged for attention.');
+
+        $this->resetValidation('inquiryAttentionReason');
+        $this->inquiryAttentionReason = (string) ($inquiry->attention_reason ?: '');
+        $this->showInquiryAttentionModal = true;
+    }
+
+    public function closeInquiryAttentionReason(): void
+    {
+        $this->showInquiryAttentionModal = false;
+        $this->inquiryAttentionReason = '';
+        $this->resetValidation('inquiryAttentionReason');
+    }
+
+    public function saveInquiryAttentionReason(): void
+    {
+        $this->validate([
+            'inquiryAttentionReason' => ['required', 'string', 'max:2000'],
+        ], [
+            'inquiryAttentionReason.required' => 'Write why this Inquiry needs attention.',
+        ]);
+
+        $service = app(InquiryService::class);
+        $service->setInquiryAttentionReason($this->selectedInquiry(), $this->inquiryAttentionReason, auth()->user());
+        $this->closeInquiryAttentionReason();
+        $this->metrics = $service->metrics(auth()->user());
+        $this->resetPage('inquiryActivityPage');
+        session()->flash('success', 'Attention request saved and added to comments.');
+    }
+
+    public function clearInquiryAttention(): void
+    {
+        $service = app(InquiryService::class);
+        $service->clearInquiryAttention($this->selectedInquiry(), auth()->user());
+        $this->closeInquiryAttentionReason();
+        $this->metrics = $service->metrics(auth()->user());
+        $this->resetPage('inquiryActivityPage');
+    }
+
+    public function openTaskAttentionReason(int $taskId): void
+    {
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), $taskId);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 422);
+        abort_unless($service->canEditTask(auth()->user(), $task), 403);
+        abort_unless($task->needs_attention || $service->taskStatusNeedsAttention((string) $task->status), 422, 'This task does not require attention.');
+
+        $this->resetValidation('taskAttentionReason');
+        $this->taskAttentionTaskId = (int) $task->id;
+        $this->taskAttentionReason = (string) ($task->attention_reason ?: '');
+        $this->showTaskAttentionModal = true;
+    }
+
+    public function closeTaskAttentionReason(): void
+    {
+        $this->showTaskAttentionModal = false;
+        $this->taskAttentionTaskId = null;
+        $this->taskAttentionReason = '';
+        $this->resetValidation('taskAttentionReason');
+    }
+
+    public function saveTaskAttentionReason(): void
+    {
+        $this->validate([
+            'taskAttentionReason' => ['required', 'string', 'max:2000'],
+        ], [
+            'taskAttentionReason.required' => 'Write the reason why this task requires attention.',
+        ]);
+
+        abort_unless($this->taskAttentionTaskId, 422);
+        $service = app(InquiryService::class);
+        $task = $service->findVisibleTask(auth()->user(), (int) $this->taskAttentionTaskId);
+        abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 422);
+
+        $service->setTaskAttentionReason($task, $this->taskAttentionReason, auth()->user());
+        $this->closeTaskAttentionReason();
+        $this->metrics = $service->metrics(auth()->user());
+        session()->flash('success', 'Attention reason saved and added to comments.');
     }
 
     #[Renderless]
@@ -2056,6 +2168,7 @@ class Index extends Component
             'newProductSelectedCategory' => $newProductSelectedCategory,
             'newProductHasExactCategory' => $newProductHasExactCategory,
             'newProductImagePreview' => $newProductImagePreview,
+            'createPriorityOptions' => app(MasterDataService::class)->active('priority'),
         ];
     }
 
@@ -2072,7 +2185,7 @@ class Index extends Component
             'owner:id,name,profile_image_path',
             'convertedJob:id,job_number,order_number',
             'sourceWorkflow:id,name',
-            'currentTask:id,inquiry_id,assignee_id,title,due_date,status,started_at,completed_at',
+            'currentTask:id,inquiry_id,assignee_id,title,due_date,status,needs_attention,attention_reason,started_at,completed_at',
             'currentTask.assignee:id,name,profile_image_path',
         ];
         if ($canViewInquiryProducts) {
@@ -2203,6 +2316,16 @@ class Index extends Component
             'subject' => ['required', 'string', 'max:255'],
             'requirementNotes' => ['nullable', 'string', 'max:60000'],
             'requestSource' => ['required', Rule::in(['Email', 'Phone', 'Other'])],
+            'createPriority' => [
+                'required',
+                'string',
+                'max:100',
+                Rule::exists('master_records', 'name')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'priority')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
             'createReceivedDate' => ['required', 'date_format:Y-m-d'],
             'createOwnerId' => ['required', 'exists:users,id'],
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
@@ -2315,7 +2438,7 @@ class Index extends Component
             'target_price' => null,
             'currency' => 'USD',
             'required_delivery_date' => null,
-            'priority' => 'Medium',
+            'priority' => $data['createPriority'],
             'owner_id' => (int) $data['createOwnerId'],
             'initial_follow_up_date' => null,
             'items' => array_map(fn (array $row): array => [
@@ -2498,6 +2621,10 @@ class Index extends Component
         $this->subject = '';
         $this->requirementNotes = '';
         $this->requestSource = 'Email';
+        $priorityOptions = app(MasterDataService::class)->active('priority');
+        $preferredPriority = $priorityOptions->first(fn ($priority) => strcasecmp((string) $priority->name, 'Medium') === 0)
+            ?? $priorityOptions->first();
+        $this->createPriority = (string) ($preferredPriority?->name ?? '');
         $this->createReceivedDate = app(WorkspaceSettingsService::class)->localToday()->toDateString();
         $this->createOwnerId = (int) auth()->id();
         $this->selectedOwnerLabel = 'Me · '.(string) auth()->user()->name;

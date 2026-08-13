@@ -12,6 +12,8 @@
     'overviewTaskDocumentModalTask'=>null,
     'overviewTaskAvailableDocuments'=>collect(),
     'showOverviewTaskDocumentModal'=>false,
+    'showAddOrderTaskForm'=>false,
+    'newOrderTaskAssigneeId'=>null,
     'overviewTaskDocumentSource'=>'upload',
     'overviewTaskDocumentUpload'=>null,
     'overviewTaskExistingDocumentId'=>null,
@@ -133,6 +135,8 @@
             :overview-task-document-upload="$overviewTaskDocumentUpload"
             :overview-task-existing-document-id="$overviewTaskExistingDocumentId"
             :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
+            :show-add-order-task-form="$showAddOrderTaskForm"
+            :new-order-task-assignee-id="$newOrderTaskAssigneeId"
         />
     @elseif($detailTab==='inquiry')
         <x-jobs.detail-inquiry

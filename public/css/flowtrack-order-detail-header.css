@@ -105,3 +105,173 @@
         font-size:10.5px;
     }
 }
+
+/* Order overview taskflow: manual Add Task control and form. */
+.ft-exact-job-detail .ft-order-taskflow-controls{
+    display:flex;
+    align-items:center;
+    justify-content:flex-end;
+    gap:7px;
+    flex-wrap:wrap;
+}
+.ft-exact-job-detail .ft-order-task-count-pill,
+.ft-exact-job-detail .ft-order-taskflow-badge{
+    display:inline-flex;
+    min-height:24px;
+    align-items:center;
+    justify-content:center;
+    padding:0 9px;
+    border-radius:999px;
+    background:#edf4ff;
+    color:#2a63cb;
+    font-size:9.5px;
+    font-weight:700;
+    white-space:nowrap;
+}
+.ft-exact-job-detail .ft-order-taskflow-badge{
+    background:#f1f4f8;
+    color:#607087;
+}
+.ft-exact-job-detail .ft-order-add-task-button,
+.ft-exact-job-detail .ft-order-add-task-submit{
+    display:inline-flex;
+    min-height:32px;
+    align-items:center;
+    justify-content:center;
+    gap:6px;
+    padding:0 11px;
+    border:1px solid #2463eb;
+    border-radius:9px;
+    background:#2463eb;
+    color:#fff;
+    font-size:10px;
+    font-weight:700;
+    line-height:1;
+    white-space:nowrap;
+    cursor:pointer;
+}
+.ft-exact-job-detail .ft-order-add-task-button:hover,
+.ft-exact-job-detail .ft-order-add-task-submit:hover{background:#1e56cf;border-color:#1e56cf}
+.ft-exact-job-detail .ft-order-add-task-submit:disabled{opacity:.55;cursor:default}
+.ft-exact-job-detail .ft-order-taskflow-controls .ft-phase-toolbar-icons{display:flex;gap:6px;flex:0 0 auto}
+.ft-exact-job-detail .ft-order-add-task{
+    margin:0 11px 11px;
+    padding:12px;
+    border:1px solid #cfdcf0;
+    border-radius:11px;
+    background:#f8fbff;
+}
+.ft-exact-job-detail .ft-order-add-task-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:10px;
+}
+.ft-exact-job-detail .ft-order-add-task-head strong{display:block;color:#1f2c43;font-size:12px;font-weight:650}
+.ft-exact-job-detail .ft-order-add-task-head span{display:block;margin-top:3px;color:#68778d;font-size:10px;line-height:1.4}
+.ft-exact-job-detail .ft-order-add-task-close{
+    display:grid;
+    width:28px;
+    height:28px;
+    flex:0 0 28px;
+    place-items:center;
+    border:1px solid #d4deec;
+    border-radius:8px;
+    background:#fff;
+    color:#53647a;
+    font-size:15px;
+    cursor:pointer;
+}
+.ft-exact-job-detail .ft-order-add-task-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1fr) minmax(220px,280px) minmax(220px,280px);
+    gap:8px;
+    align-items:end;
+}
+.ft-exact-job-detail .ft-order-add-task-field{display:grid;gap:5px;min-width:0}
+.ft-exact-job-detail .ft-order-add-task-field span{color:#44536a;font-size:10px;font-weight:600}
+.ft-exact-job-detail .ft-order-add-task-field input,
+.ft-exact-job-detail .ft-order-add-task-field select,
+.ft-exact-job-detail .ft-order-add-task-field textarea{
+    width:100%;
+    min-width:0;
+    border:1px solid #cfd9e7;
+    border-radius:8px;
+    background:#fff;
+    color:#172033;
+    font-size:11px;
+    outline:0;
+}
+.ft-exact-job-detail .ft-order-add-task-field input,
+.ft-exact-job-detail .ft-order-add-task-field select{height:36px;padding:0 10px}
+.ft-exact-job-detail .ft-order-add-task-field textarea{min-height:72px;padding:9px 10px;resize:vertical;line-height:1.45}
+.ft-exact-job-detail .ft-order-add-task-field-description{grid-column:1/-1}
+.ft-exact-job-detail .ft-order-add-task-field input:focus,
+.ft-exact-job-detail .ft-order-add-task-field select:focus,
+.ft-exact-job-detail .ft-order-add-task-field textarea:focus{border-color:#7ba2f3;box-shadow:0 0 0 3px rgba(36,99,235,.08)}
+.ft-exact-job-detail .ft-order-add-task-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:10px}
+.ft-exact-job-detail .ft-order-add-task-actions .ft-outline-btn{min-height:32px;font-size:10px}
+.ft-exact-job-detail .ft-order-add-task-error{margin-top:7px;color:#c43f3f;font-size:10px}
+
+@media(max-width:900px){
+    .ft-exact-job-detail .ft-order-taskflow-controls{justify-content:flex-start}
+    .ft-exact-job-detail .ft-order-add-task-grid{grid-template-columns:1fr 1fr}
+    .ft-exact-job-detail .ft-order-add-task-field-wide,
+    .ft-exact-job-detail .ft-order-add-task-field-description{grid-column:1/-1}
+}
+@media(max-width:620px){
+    .ft-exact-job-detail .ft-task-card-heading{align-items:flex-start}
+    .ft-exact-job-detail .ft-order-taskflow-controls{width:100%;justify-content:flex-start}
+    .ft-exact-job-detail .ft-order-task-count-pill,
+    .ft-exact-job-detail .ft-order-taskflow-badge{min-height:22px;padding:0 7px;font-size:9px}
+    .ft-exact-job-detail .ft-order-add-task-button{min-height:30px;padding:0 9px;font-size:9.5px}
+    .ft-exact-job-detail .ft-order-taskflow-controls .ft-phase-toolbar-icons{margin-left:auto}
+    .ft-exact-job-detail .ft-order-add-task{margin:0 8px 9px;padding:10px}
+    .ft-exact-job-detail .ft-order-add-task-grid{grid-template-columns:1fr}
+    .ft-exact-job-detail .ft-order-add-task-field-wide,
+    .ft-exact-job-detail .ft-order-add-task-field-description{grid-column:auto}
+}
+
+/* Order add-task assignee: reuse the same searchable assignee picker used elsewhere. */
+.ft-exact-job-detail .ft-order-add-task-assignee > span{
+    color:#44536a;
+    font-size:10px;
+    font-weight:600;
+}
+.ft-exact-job-detail .ft-order-add-task-assignee .ft-inline-remote-user{
+    width:100%;
+    max-width:none;
+    min-width:0;
+}
+.ft-exact-job-detail .ft-order-add-task-assignee-trigger{
+    width:100%;
+    height:36px;
+    min-height:36px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:10px;
+    padding:0 10px;
+    border:1px solid #cfd9e7;
+    border-radius:7px;
+    background:#fff;
+    color:#26354c;
+    font-size:11px;
+    font-weight:500;
+    text-align:left;
+    cursor:pointer;
+}
+.ft-exact-job-detail .ft-order-add-task-assignee-trigger:hover{
+    border-color:#aebfd4;
+}
+.ft-exact-job-detail .ft-order-add-task-assignee-trigger:focus,
+.ft-exact-job-detail .ft-order-add-task-assignee-trigger[aria-expanded="true"]{
+    outline:none;
+    border-color:#7ba2f3;
+    box-shadow:0 0 0 3px rgba(36,99,235,.08);
+}
+.ft-exact-job-detail .ft-order-add-task-assignee .ft-filter-chevron{
+    flex:0 0 auto;
+    color:#66778e;
+}

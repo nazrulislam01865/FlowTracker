@@ -23,9 +23,12 @@
 
     $catalogueGroups = ['product', 'product_category', 'supplier'];
     $catalogProductView = $user->canModule('catalog_products', 'view');
+    $catalogProductCreate = $user->canModule('catalog_products', 'create');
     $productCategoryView = $user->canModule('product_categories', 'view');
+    $productCategoryCreate = $user->canModule('product_categories', 'create');
     $supplierView = $user->canModule('suppliers', 'view');
     $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
+    $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
 
     $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
     $masterLinks = collect($masterLabels)->except($catalogueGroups)->all();
@@ -319,17 +322,27 @@
             </details>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogProductView): ?>
-            <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogProductView || $catalogProductCreate || $productCategoryView || $productCategoryCreate): ?>
+            <details class="ft-sidebar-group" <?php if($productMenuActive): ?> open <?php endif; ?>>
+                <summary class="ft-sidebar-group-toggle <?php echo e($productMenuActive ? 'is-active' : ''); ?>">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                    </span>
+                    <span>Product</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogProductView): ?>
+                        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Products','icon' => 'products','params' => ['group' => 'product'],'active' => $catalogueGroupActive && $masterGroup === 'product']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Products','icon' => 'products','child' => true,'params' => ['group' => 'product'],'active' => $catalogueGroupActive && $masterGroup === 'product' && !request()->boolean('create')]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['route' => 'master-data','label' => 'Products','icon' => 'products','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product')]); ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Products','icon' => 'products','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product' && !request()->boolean('create'))]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -342,18 +355,18 @@
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
 <?php endif; ?>
-        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCategoryView): ?>
-            <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($catalogProductCreate): ?>
+                        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','params' => ['group' => 'product_category'],'active' => $catalogueGroupActive && $masterGroup === 'product_category']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Create Product','icon' => 'plus','child' => true,'params' => ['group' => 'product', 'create' => 1],'active' => $catalogueGroupActive && $masterGroup === 'product' && request()->boolean('create')]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product_category']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product_category')]); ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Create Product','icon' => 'plus','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product', 'create' => 1]),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product' && request()->boolean('create'))]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -366,6 +379,57 @@
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
 <?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCategoryView): ?>
+                        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','child' => true,'params' => ['group' => 'product_category'],'active' => $catalogueGroupActive && $masterGroup === 'product_category' && !request()->boolean('create')]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Product Categories','icon' => 'categories','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product_category']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product_category' && !request()->boolean('create'))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCategoryCreate): ?>
+                        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'master-data','label' => 'Create Product Category','icon' => 'plus','child' => true,'params' => ['group' => 'product_category', 'create' => 1],'active' => $catalogueGroupActive && $masterGroup === 'product_category' && request()->boolean('create')]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'master-data','label' => 'Create Product Category','icon' => 'plus','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => 'product_category', 'create' => 1]),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($catalogueGroupActive && $masterGroup === 'product_category' && request()->boolean('create'))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                </div>
+            </details>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($supplierView): ?>
             <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>

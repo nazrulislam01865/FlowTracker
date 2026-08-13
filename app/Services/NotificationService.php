@@ -422,6 +422,49 @@ class NotificationService
         });
     }
 
+    public function notifyInquiryAttentionUsers(
+        array $recipientIds,
+        string $title,
+        string $message,
+        Inquiry $inquiry,
+        ?InquiryTask $inquiryTask = null,
+        ?User $actor = null,
+    ): void {
+        $ids = collect($recipientIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        if ($ids->isEmpty()) return;
+
+        $inquiryId = (int) $inquiry->id;
+        $inquiryTaskId = $inquiryTask?->id ? (int) $inquiryTask->id : null;
+        $actorId = $actor?->id ? (int) $actor->id : null;
+
+        $this->runAfterCommit(function () use ($ids, $title, $message, $inquiryId, $inquiryTaskId, $actorId): void {
+            $inquiry = Inquiry::withTrashed()->find($inquiryId);
+            if (! $inquiry || $inquiry->trashed()) return;
+            $inquiryTask = $inquiryTaskId ? InquiryTask::withTrashed()->find($inquiryTaskId) : null;
+            if ($inquiryTaskId && (! $inquiryTask || $inquiryTask->trashed())) return;
+
+            User::query()->whereIn('id', $ids->all())->where('is_active', true)->get()->each(function (User $recipient) use ($title, $message, $inquiry, $inquiryTask, $actorId): void {
+                $visible = app(InquiryService::class)->visibleQuery($recipient)->whereKey($inquiry->id)->exists();
+                if (! $visible) return;
+
+                $notification = FlowNotification::create([
+                    'user_id' => $recipient->id,
+                    'actor_id' => $actorId,
+                    'flow_job_id' => null,
+                    'flow_task_id' => null,
+                    'inquiry_id' => $inquiry->id,
+                    'inquiry_task_id' => $inquiryTask?->id,
+                    'type' => 'risk',
+                    'title' => $title,
+                    'message' => $message,
+                ]);
+
+                $this->forgetRecipientCaches($recipient);
+                $this->deliverRealtime($recipient, $notification, null, null, $inquiry, $inquiryTask);
+            });
+        });
+    }
+
     public function notifyTaskAssigned(Task $task, ?User $actor = null): void
     {
         if (!$task->assignee_id) return;

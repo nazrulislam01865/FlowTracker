@@ -18,6 +18,7 @@ use App\Http\Controllers\NotificationsController;
 use App\Http\Controllers\NotificationOpenController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
+use App\Http\Controllers\ProductDocumentController;
 use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\RichTextImageController;
 // Reports page is intentionally disabled for now.
@@ -155,6 +156,11 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('product')
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('master-data.product-image');
+    Route::get('/master-data/products/{product}/documents/{kind}/{filename}', ProductDocumentController::class)
+        ->whereNumber('product')
+        ->whereIn('kind', ['certificate', 'template'])
+        ->where('filename', '[A-Za-z0-9._-]+')
+        ->name('master-data.product-document');
     Route::post('/rich-text-images', [RichTextImageController::class, 'store'])
         ->name('rich-text-images.store');
     Route::get('/rich-text-images/{filename}/download', [RichTextImageController::class, 'download'])

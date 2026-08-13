@@ -17,7 +17,7 @@
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp')); ?>">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260811-role-matrix-save-ux-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260813-product-search-select-1"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -46,13 +46,14 @@
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-assignee-highlight-1">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-23">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260812-4">
-    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260812-19">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260812-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260813-actions-right-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260813-22">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260813-add-task-spacing-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

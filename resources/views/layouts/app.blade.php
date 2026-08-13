@@ -17,7 +17,7 @@
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp') }}">
     <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260811-role-matrix-save-ux-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260810-client-selection-atomic-3"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260813-product-search-select-1"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -49,14 +49,15 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-assignee-highlight-1">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-23">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260812-4">
-    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260812-19">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260812-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260813-actions-right-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260813-22">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260813-add-task-spacing-1">
     @livewireStyles
 </head>
 <body>

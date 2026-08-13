@@ -35,7 +35,7 @@ final class MasterColor
             };
         }
 
-        if ($type === 'task_status') {
+        if (in_array($type, ['task_status', 'inquiry_task_status'], true)) {
             return match (true) {
                 str_contains($name, 'complete'), str_contains($name, 'done') => '#16A34A',
                 str_contains($name, 'cancel') => '#DC2626',

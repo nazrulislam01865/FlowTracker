@@ -1,5 +1,6 @@
 <?php
     $masterData = app(\App\Services\MasterDataService::class);
+    $inquiryService = app(\App\Services\InquiryService::class);
     $tone = static function (string $status): string {
         return match (true) {
             str_contains($status, 'Converted'), str_contains($status, 'Completed') => 'green',
@@ -106,15 +107,16 @@
                         <div>Inquiry</div>
                         <div>Title</div>
                         <div>Client / Item</div>
-                        <div>Current Task</div>
-                        <div>Task Status</div>
-                        <div>Flag</div>
-                        <div>Progress</div>
-                        <div>Assignee</div>
-                        <div>Due Date</div>
-                        <div>Started At</div>
                         <div>Priority</div>
+                        <div>Due Date</div>
                         <div>Status</div>
+                        <div>Flag</div>
+                        <div>Current Task</div>
+                        <div>Assignee</div>
+                        <div>Task Status</div>
+                        <div>Started At</div>
+                        <div>Progress</div>
+                        <div>Updated At</div>
                         <div>View</div>
                         <div aria-label="Actions"></div>
                     </div>
@@ -161,17 +163,20 @@
                                     <span class="sub">Contact: <?php echo e($row['clientContact'] ?: '—'); ?></span>
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['item']): ?><span class="sub"><?php echo e($row['item']); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </div>
-                                <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title"><?php echo e($row['currentTask']); ?></span><span class="sub"><?php echo e($row['taskCaption']); ?></span></div>
                                 <?php
-                                    $rowTaskStatusColor = $masterData->displayColorFor('task_status', $row['taskStatus']);
+                                    $rowTaskStatusColor = $masterData->displayColorFor('inquiry_task_status', $row['taskStatus']);
                                     $rowTaskFlagTone = match ($row['flag']) {
                                         'Requires attention', 'Overdue' => 'red',
                                         'Due Today' => 'amber',
                                         'No flag' => 'green',
                                         default => 'blue',
                                     };
+                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
+                                    $rowInquiryStatusColor = $inquiryService->inquiryStatusColor($row['status'], $row['taskStatus']);
                                 ?>
-                                <div class="cell ft-inquiry-list-task-status-cell" data-label="Task Status"><span class="pill <?php echo e($rowTaskStatusColor ? 'ft-master-color' : $tone($row['taskStatus'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowTaskStatusColor)); ?>"><?php echo e($row['taskStatus']); ?></span></div>
+                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill <?php echo e($rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryPriorityColor)); ?>"><?php echo e($row['priority']); ?></span></div>
+                                <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title"><?php echo e($row['due']); ?></span></div>
+                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill <?php echo e($rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryStatusColor)); ?>"><?php echo e($row['status']); ?></span></div>
                                 <div class="cell ft-inquiry-list-flag-cell" data-label="Flag">
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['flag'] === 'No flag'): ?>
                                         <span class="ft-inquiry-no-flag">No flag</span>
@@ -179,15 +184,36 @@
                                         <span class="pill <?php echo e($rowTaskFlagTone); ?>"><?php echo e($row['flag']); ?></span>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </div>
-                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-after-task" aria-hidden="true"></div>
-                                <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
-                                    <div class="ft-inquiry-list-progress">
-                                        <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?php echo e($row['progressPercent']); ?>" aria-label="<?php echo e($row['progress']); ?> of <?php echo e($row['total']); ?> tasks completed"><span style="width:<?php echo e($row['progressPercent']); ?>%"></span></div>
-                                        <b><?php echo e($row['progress']); ?>/<?php echo e($row['total']); ?></b>
+                                <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title"><?php echo e($row['currentTask']); ?></span><span class="sub"><?php echo e($row['taskCaption']); ?></span></div>
+                                <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee">
+                                    <div class="ownerline">
+                                        <?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['class' => 'ft-inquiry-assignee-avatar','name' => $row['assignee'],'src' => $row['assigneeAvatar'] ?? null,'size' => 34]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.avatar'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'ft-inquiry-assignee-avatar','name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($row['assignee']),'src' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($row['assigneeAvatar'] ?? null),'size' => 34]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $attributes = $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
+<?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
+<?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
+<?php endif; ?>
+                                        <span class="title" title="<?php echo e($row['assignee']); ?>"><?php echo e($row['assignee']); ?></span>
                                     </div>
                                 </div>
-                                <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee"><div class="ownerline"><span class="avatar"><?php echo e($initials($row['assignee'])); ?></span><span class="title"><?php echo e($row['assignee']); ?></span></div></div>
-                                <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title"><?php echo e($row['due']); ?></span></div>
+                                <div class="cell ft-inquiry-list-task-status-cell" data-label="Task Status"><span class="pill <?php echo e($rowTaskStatusColor ? 'ft-master-color' : $tone($row['taskStatus'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowTaskStatusColor)); ?>"><?php echo e($row['taskStatus']); ?></span></div>
+                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-after-task" aria-hidden="true"></div>
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At">
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['hasStarted']): ?>
                                         <span class="title"><?php echo e($row['startedDate']); ?></span>
@@ -196,13 +222,17 @@
                                         <span class="title ft-inquiry-not-started">Not Started</span>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </div>
+                                <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
+                                    <div class="ft-inquiry-list-progress">
+                                        <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="<?php echo e($row['progressPercent']); ?>" aria-label="<?php echo e($row['progress']); ?> of <?php echo e($row['total']); ?> tasks completed"><span style="width:<?php echo e($row['progressPercent']); ?>%"></span></div>
+                                        <b><?php echo e($row['progress']); ?>/<?php echo e($row['total']); ?></b>
+                                    </div>
+                                </div>
+                                <div class="cell ft-inquiry-list-updated-cell" data-label="Updated At">
+                                    <span class="title"><?php echo e($row['updatedDate']); ?></span>
+                                    <span class="sub"><?php echo e($row['updatedTime']); ?></span>
+                                </div>
                                 <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
-                                <?php
-                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
-                                    $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
-                                ?>
-                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill <?php echo e($rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryPriorityColor)); ?>"><?php echo e($row['priority']); ?></span></div>
-                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill <?php echo e($rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status'])); ?>" style="<?php echo e(\App\Support\MasterColor::style($rowInquiryStatusColor)); ?>"><?php echo e($row['status']); ?></span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="<?php echo e(route('inquiries.index', ['open' => $row['id']])); ?>" aria-label="View <?php echo e($row['number']); ?>" wire:navigate>View<span aria-hidden="true">→</span></a></div>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('inquiries', 'delete')): ?>
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
@@ -272,7 +302,6 @@
         <?php
             $selectedWorkflow = collect($workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createWorkflowId);
             $selectedWorkflowName = (string) ($selectedWorkflow['label'] ?? $selectedWorkflowLabel ?: 'Select workflow');
-            $workflowOptionCount = count($workflowFilterOptions);
         ?>
         <section class="view ft-inquiry-create-v3" x-on:keydown.meta.enter.window="$wire.createInquiry()" x-on:keydown.ctrl.enter.window="$wire.createInquiry()">
             <div class="formwrap ft-inquiry-create-shell">
@@ -435,6 +464,25 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             </div>
                         </div>
 
+                        <div class="ft-inquiry-create-field ft-inquiry-create-field-full">
+                            <label>Priority *</label>
+                            <select data-master-color-select wire:model="createPriority" aria-label="Inquiry priority">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $createPriorityOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $priority): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <option value="<?php echo e($priority->name); ?>" data-color="<?php echo e($priority->color); ?>"><?php echo e($priority->name); ?></option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    <option value="">No active priorities</option>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </select>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['createPriority'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><small class="field-error"><?php echo e($message); ?></small><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
                         <label class="ft-inquiry-create-field ft-inquiry-create-field-full">
                             <span>Inquiry title *</span>
                             <input wire:model="subject" placeholder="e.g. 5,000 embroidered polo shirts for September">
@@ -536,51 +584,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </section>
 
-                    <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
-                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span><?php echo e($canUseInquiryProductSelector ? 4 : 3); ?></span><h2>What happens next</h2>
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowOptionCount > 0): ?><em><?php echo e($workflowOptionCount); ?> <?php echo e(\Illuminate\Support\Str::plural('workflow', $workflowOptionCount)); ?> available</em><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        </div>
+                    <?php if (isset($component)) { $__componentOriginaldc75731e81ba1cac015b7a03337954d0 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginaldc75731e81ba1cac015b7a03337954d0 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.create-workflow-picker','data' => ['class' => 'section ft-inquiry-create-section ft-inquiry-next-section','step' => $canUseInquiryProductSelector ? 4 : 3,'title' => 'What happens next','workflowOptions' => $workflowFilterOptions,'selectedWorkflowId' => $createWorkflowId,'selectedWorkflowName' => $selectedWorkflowName,'phaseCount' => $createWorkflowPhaseCount,'taskCount' => $createWorkflowTaskCount,'selectionProperty' => 'createWorkflowId','optionFallback' => 'Inquiry workflow','footnote' => 'Tasks are created when you select Create inquiry.','previewAllowed' => auth()->user()->canAccess('workflow.view'),'emptyMessage' => $createWorkflowId && $createWorkflowTaskCount === 0 ? 'This Workflow has no active Task Pack tasks.' : null,'errorField' => 'createWorkflowId','wire:key' => 'create-inquiry-workflow-picker']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.create-workflow-picker'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'section ft-inquiry-create-section ft-inquiry-next-section','step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canUseInquiryProductSelector ? 4 : 3),'title' => 'What happens next','workflow-options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowFilterOptions),'selected-workflow-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createWorkflowId),'selected-workflow-name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedWorkflowName),'phase-count' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createWorkflowPhaseCount),'task-count' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createWorkflowTaskCount),'selection-property' => 'createWorkflowId','option-fallback' => 'Inquiry workflow','footnote' => 'Tasks are created when you select Create inquiry.','preview-allowed' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(auth()->user()->canAccess('workflow.view')),'empty-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createWorkflowId && $createWorkflowTaskCount === 0 ? 'This Workflow has no active Task Pack tasks.' : null),'error-field' => 'createWorkflowId','wire:key' => 'create-inquiry-workflow-picker']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
-                        <div class="ft-inquiry-workflow-card" :class="{ 'is-open': workflowOpen }">
-                            <div class="ft-inquiry-workflow-selected" role="button" tabindex="0" x-on:click="workflowOpen = !workflowOpen" x-on:keydown.enter.prevent="workflowOpen = !workflowOpen" x-on:keydown.space.prevent="workflowOpen = !workflowOpen" :aria-expanded="workflowOpen.toString()">
-                                <span class="ft-inquiry-workflow-icon">✓</span>
-                                <span class="ft-inquiry-workflow-copy">
-                                    <small>Default workflow</small>
-                                    <strong><?php echo e($selectedWorkflowName); ?></strong>
-                                    <span><?php echo e($createWorkflowPhaseCount); ?> <?php echo e(\Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount)); ?> · <?php echo e($createWorkflowTaskCount); ?> <?php echo e(\Illuminate\Support\Str::plural('task', $createWorkflowTaskCount)); ?> will be created</span>
-                                </span>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('workflow.view')): ?>
-                                    <span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span>
-                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
-                            </div>
-
-                            <div class="ft-inquiry-workflow-options" x-cloak x-show="workflowOpen">
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $workflowFilterOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $workflowOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                    <button type="button" class="ft-inquiry-workflow-option <?php echo e((int) ($workflowOption['id'] ?? 0) === (int) $createWorkflowId ? 'is-selected' : ''); ?>"
-                                        wire:click="setCreateSelector('createWorkflowId', '<?php echo e($workflowOption['id']); ?>')"
-                                        x-on:click="workflowOpen = false">
-                                        <span class="ft-inquiry-workflow-radio"></span>
-                                        <span><strong><?php echo e($workflowOption['label']); ?></strong><small><?php echo e($workflowOption['meta'] ?: 'Inquiry workflow'); ?></small></span>
-                                    </button>
-                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                            </div>
-                        </div>
-                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($createWorkflowId && $createWorkflowTaskCount === 0): ?>
-                            <small class="field-error">This Workflow has no active Task Pack tasks.</small>
-                        <?php else: ?>
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['createWorkflowId'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><small class="field-error"><?php echo e($message); ?></small><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        <p class="ft-inquiry-workflow-footnote">Tasks are created when you select Create inquiry.</p>
-                    </section>
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginaldc75731e81ba1cac015b7a03337954d0)): ?>
+<?php $attributes = $__attributesOriginaldc75731e81ba1cac015b7a03337954d0; ?>
+<?php unset($__attributesOriginaldc75731e81ba1cac015b7a03337954d0); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginaldc75731e81ba1cac015b7a03337954d0)): ?>
+<?php $component = $__componentOriginaldc75731e81ba1cac015b7a03337954d0; ?>
+<?php unset($__componentOriginaldc75731e81ba1cac015b7a03337954d0); ?>
+<?php endif; ?>
 
                     <div class="formactions ft-inquiry-create-actions">
                         <span>Required fields are marked with *</span>
@@ -683,12 +708,17 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 $inquiry->result === 'converted' => 'Converted',
                 $inquiry->result === 'dead' => 'Closed',
                 (string) $inquiry->status === 'Draft' => 'Draft',
-                $readyForDecision => \App\Services\InquiryService::AUTO_COMPLETED_STATUS,
-                $completedTasks > 0 || $inquiryStartAt !== null => \App\Services\InquiryService::AUTO_IN_PROGRESS_STATUS,
-                default => \App\Services\InquiryService::AUTO_READY_STATUS,
+                default => (string) ($inquiry->status ?: \App\Services\InquiryService::AUTO_READY_STATUS),
             };
-            $detailStatusColor = $masterData->displayColorFor('inquiry_status', $detailStatus);
+            $detailStatusColor = $inquiryService->inquiryStatusColor($detailStatus, (string) ($currentTask?->status ?: ''));
             $detailPriorityColor = $masterData->displayColorFor('priority', (string) $inquiry->priority);
+            $headerFlagTask = $currentTask?->needs_attention ? $currentTask : $inquiry->tasks->first(fn ($task) => (bool) $task->needs_attention);
+            $headerFlagLabel = $inquiry->needs_attention
+                ? 'Requires attention'
+                : ($headerFlagTask ? 'Requires attention' : '');
+            $headerFlagReason = $inquiry->needs_attention
+                ? (string) ($inquiry->attention_reason ?? '')
+                : (string) ($headerFlagTask?->attention_reason ?? '');
         ?>
         <section class="view inquiry-detail-view" x-data="{
             inquiryStatus:<?php echo \Illuminate\Support\Js::from($detailStatus)->toHtml() ?>,
@@ -804,6 +834,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Created by <strong><?php echo e($inquiry->creator?->name ?: 'System'); ?></strong></span></span>
                         <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
                         <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span><span>Created <strong><?php echo e($inquiry->created_at ? \App\Support\UserLocalTime::format($inquiry->created_at, 'M j, Y') : '—'); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inquiry->created_at): ?> at <?php echo e(\App\Support\UserLocalTime::format($inquiry->created_at, 'g:i A')); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></strong></span></span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item ft-inquiry-header-action" title="<?php echo e($headerFlagReason ?: 'Request attention from the Inquiry creator and administrators'); ?>">
+                            <span>Action:</span>
+                            <button type="button" class="ft-inquiry-header-flag-button <?php echo e($headerFlagLabel !== '' ? 'is-flagged' : ''); ?>" wire:click="openInquiryAttentionReason" <?php if($inquiry->result): echo 'disabled'; endif; ?> aria-label="Request attention" title="<?php echo e($headerFlagLabel !== '' ? 'View or update attention request' : 'Request attention'); ?>">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V4"></path><path d="M7 5h10l-2 4 2 4H7"></path></svg>
+                            </button>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($headerFlagLabel !== ''): ?><strong class="ft-inquiry-header-flag-label"><?php echo e($headerFlagLabel); ?></strong><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1458,6 +1496,80 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <?php if($taskDocumentSource === 'upload' ? !$taskDocumentUpload : !$taskExistingDocumentId): echo 'disabled'; endif; ?>>
                                 <span wire:loading.remove wire:target="saveTaskDocument"><?php echo e($completeAfterTaskDocument ? 'Add file & complete' : 'Add document'); ?></span>
                                 <span wire:loading wire:target="saveTaskDocument"><?php echo e($completeAfterTaskDocument ? 'Adding & completing...' : 'Adding...'); ?></span>
+                            </button>
+                        </footer>
+                    </section>
+                </div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showInquiryAttentionModal): ?>
+                <div class="ft-inquiry-attention-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'inquiry-attention-modal'; ?>wire:key="inquiry-attention-modal" wire:click.self="closeInquiryAttentionReason">
+                    <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="inquiry-attention-modal-title">
+                        <header class="ft-inquiry-attention-modal-head">
+                            <div>
+                                <h2 id="inquiry-attention-modal-title">Request attention</h2>
+                                <p><?php echo e($inquiry->inquiry_number); ?> · Admin, Super Admin and the Inquiry creator will be notified.</p>
+                            </div>
+                            <button type="button" class="ft-inquiry-attention-modal-close" wire:click="closeInquiryAttentionReason" aria-label="Close">×</button>
+                        </header>
+                        <div class="ft-inquiry-attention-modal-body ft-mention-host">
+                            <label for="inquiry-attention-reason">Reason for flag *</label>
+                            <textarea id="inquiry-attention-reason" class="ft-mention-input" wire:model="inquiryAttentionReason" rows="5" maxlength="2000" autocomplete="off" data-mention-users="<?php echo e(json_encode($inquiryMentionUsers->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>" placeholder="Explain what needs attention. Type @ to mention a user..."></textarea>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['inquiryAttentionReason'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="ft-inquiry-attention-modal-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <p class="ft-inquiry-attention-modal-help">The reason is added to Inquiry comments. Use <b>@</b> to mention specific users in addition to the automatic Admin/Super Admin/creator notification.</p>
+                        </div>
+                        <footer class="ft-inquiry-attention-modal-actions">
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inquiry->needs_attention): ?><button type="button" class="ft-inquiry-attention-clear" wire:click="clearInquiryAttention" wire:loading.attr="disabled" wire:target="clearInquiryAttention">Clear flag</button><?php else: ?><span></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <div>
+                                <button type="button" class="secondary" wire:click="closeInquiryAttentionReason">Cancel</button>
+                                <button type="button" class="primary" wire:click="saveInquiryAttentionReason" wire:loading.attr="disabled" wire:target="saveInquiryAttentionReason">
+                                    <span wire:loading.remove wire:target="saveInquiryAttentionReason">Request attention</span>
+                                    <span wire:loading wire:target="saveInquiryAttentionReason">Saving...</span>
+                                </button>
+                            </div>
+                        </footer>
+                    </section>
+                </div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showTaskAttentionModal && $taskAttentionTaskId): ?>
+                <?php
+                    $attentionTask = $inquiry->tasks->firstWhere('id', (int) $taskAttentionTaskId);
+                ?>
+                <div class="ft-inquiry-attention-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'inquiry-task-attention-modal'; ?>wire:key="inquiry-task-attention-modal" wire:click.self="closeTaskAttentionReason">
+                    <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="task-attention-modal-title">
+                        <header class="ft-inquiry-attention-modal-head">
+                            <div>
+                                <h2 id="task-attention-modal-title">Why is attention required?</h2>
+                                <p><?php echo e($attentionTask?->title ?: 'Inquiry task'); ?> · <?php echo e($attentionTask?->status ?: 'Attention required'); ?></p>
+                            </div>
+                            <button type="button" class="ft-inquiry-attention-modal-close" wire:click="closeTaskAttentionReason" aria-label="Close">×</button>
+                        </header>
+                        <div class="ft-inquiry-attention-modal-body ft-mention-host">
+                            <label for="inquiry-task-attention-reason">Reason for flag *</label>
+                            <textarea id="inquiry-task-attention-reason" class="ft-mention-input" wire:model="taskAttentionReason" rows="5" maxlength="2000" autocomplete="off" data-mention-users="<?php echo e(json_encode($inquiryMentionUsers->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES)); ?>" placeholder="Explain what is blocking the task or what needs attention. Type @ to mention a user..."></textarea>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['taskAttentionReason'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="ft-inquiry-attention-modal-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <p class="ft-inquiry-attention-modal-help">Saving this reason adds it to Inquiry comments, notifies Admin/Super Admin/the Inquiry creator, and supports <b>@mentions</b>.</p>
+                        </div>
+                        <footer class="ft-inquiry-attention-modal-actions">
+                            <button type="button" class="secondary" wire:click="closeTaskAttentionReason">Cancel</button>
+                            <button type="button" class="primary" wire:click="saveTaskAttentionReason" wire:loading.attr="disabled" wire:target="saveTaskAttentionReason">
+                                <span wire:loading.remove wire:target="saveTaskAttentionReason">Save reason</span>
+                                <span wire:loading wire:target="saveTaskAttentionReason">Saving...</span>
                             </button>
                         </footer>
                     </section>

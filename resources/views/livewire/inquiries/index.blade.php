@@ -1,5 +1,6 @@
 @php
     $masterData = app(\App\Services\MasterDataService::class);
+    $inquiryService = app(\App\Services\InquiryService::class);
     $tone = static function (string $status): string {
         return match (true) {
             str_contains($status, 'Converted'), str_contains($status, 'Completed') => 'green',
@@ -99,15 +100,16 @@
                         <div>Inquiry</div>
                         <div>Title</div>
                         <div>Client / Item</div>
-                        <div>Current Task</div>
-                        <div>Task Status</div>
-                        <div>Flag</div>
-                        <div>Progress</div>
-                        <div>Assignee</div>
-                        <div>Due Date</div>
-                        <div>Started At</div>
                         <div>Priority</div>
+                        <div>Due Date</div>
                         <div>Status</div>
+                        <div>Flag</div>
+                        <div>Current Task</div>
+                        <div>Assignee</div>
+                        <div>Task Status</div>
+                        <div>Started At</div>
+                        <div>Progress</div>
+                        <div>Updated At</div>
                         <div>View</div>
                         <div aria-label="Actions"></div>
                     </div>
@@ -133,17 +135,20 @@
                                     <span class="sub">Contact: {{ $row['clientContact'] ?: '—' }}</span>
                                     @if($row['item'])<span class="sub">{{ $row['item'] }}</span>@endif
                                 </div>
-                                <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
                                 @php
-                                    $rowTaskStatusColor = $masterData->displayColorFor('task_status', $row['taskStatus']);
+                                    $rowTaskStatusColor = $masterData->displayColorFor('inquiry_task_status', $row['taskStatus']);
                                     $rowTaskFlagTone = match ($row['flag']) {
                                         'Requires attention', 'Overdue' => 'red',
                                         'Due Today' => 'amber',
                                         'No flag' => 'green',
                                         default => 'blue',
                                     };
+                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
+                                    $rowInquiryStatusColor = $inquiryService->inquiryStatusColor($row['status'], $row['taskStatus']);
                                 @endphp
-                                <div class="cell ft-inquiry-list-task-status-cell" data-label="Task Status"><span class="pill {{ $rowTaskStatusColor ? 'ft-master-color' : $tone($row['taskStatus']) }}" style="{{ \App\Support\MasterColor::style($rowTaskStatusColor) }}">{{ $row['taskStatus'] }}</span></div>
+                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill {{ $rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryPriorityColor) }}">{{ $row['priority'] }}</span></div>
+                                <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
+                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryStatusColor) }}">{{ $row['status'] }}</span></div>
                                 <div class="cell ft-inquiry-list-flag-cell" data-label="Flag">
                                     @if($row['flag'] === 'No flag')
                                         <span class="ft-inquiry-no-flag">No flag</span>
@@ -151,15 +156,20 @@
                                         <span class="pill {{ $rowTaskFlagTone }}">{{ $row['flag'] }}</span>
                                     @endif
                                 </div>
-                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-after-task" aria-hidden="true"></div>
-                                <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
-                                    <div class="ft-inquiry-list-progress">
-                                        <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $row['progressPercent'] }}" aria-label="{{ $row['progress'] }} of {{ $row['total'] }} tasks completed"><span style="width:{{ $row['progressPercent'] }}%"></span></div>
-                                        <b>{{ $row['progress'] }}/{{ $row['total'] }}</b>
+                                <div class="cell ft-inquiry-list-task-cell" data-label="Current Task"><span class="title">{{ $row['currentTask'] }}</span><span class="sub">{{ $row['taskCaption'] }}</span></div>
+                                <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee">
+                                    <div class="ownerline">
+                                        <x-ui.avatar
+                                            class="ft-inquiry-assignee-avatar"
+                                            :name="$row['assignee']"
+                                            :src="$row['assigneeAvatar'] ?? null"
+                                            :size="34"
+                                        />
+                                        <span class="title" title="{{ $row['assignee'] }}">{{ $row['assignee'] }}</span>
                                     </div>
                                 </div>
-                                <div class="cell ft-inquiry-list-assignee-cell" data-label="Assignee"><div class="ownerline"><span class="avatar">{{ $initials($row['assignee']) }}</span><span class="title">{{ $row['assignee'] }}</span></div></div>
-                                <div class="cell ft-inquiry-list-due-cell" data-label="Due Date"><span class="title">{{ $row['due'] }}</span></div>
+                                <div class="cell ft-inquiry-list-task-status-cell" data-label="Task Status"><span class="pill {{ $rowTaskStatusColor ? 'ft-master-color' : $tone($row['taskStatus']) }}" style="{{ \App\Support\MasterColor::style($rowTaskStatusColor) }}">{{ $row['taskStatus'] }}</span></div>
+                                <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-after-task" aria-hidden="true"></div>
                                 <div class="cell ft-inquiry-list-started-cell" data-label="Started At">
                                     @if($row['hasStarted'])
                                         <span class="title">{{ $row['startedDate'] }}</span>
@@ -168,13 +178,17 @@
                                         <span class="title ft-inquiry-not-started">Not Started</span>
                                     @endif
                                 </div>
+                                <div class="cell ft-inquiry-list-progress-cell" data-label="Progress">
+                                    <div class="ft-inquiry-list-progress">
+                                        <div class="ft-inquiry-list-progress-track" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="{{ $row['progressPercent'] }}" aria-label="{{ $row['progress'] }} of {{ $row['total'] }} tasks completed"><span style="width:{{ $row['progressPercent'] }}%"></span></div>
+                                        <b>{{ $row['progress'] }}/{{ $row['total'] }}</b>
+                                    </div>
+                                </div>
+                                <div class="cell ft-inquiry-list-updated-cell" data-label="Updated At">
+                                    <span class="title">{{ $row['updatedDate'] }}</span>
+                                    <span class="sub">{{ $row['updatedTime'] }}</span>
+                                </div>
                                 <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
-                                @php
-                                    $rowInquiryPriorityColor = $masterData->displayColorFor('priority', $row['priority']);
-                                    $rowInquiryStatusColor = $masterData->displayColorFor('inquiry_status', $row['status']);
-                                @endphp
-                                <div class="cell ft-inquiry-list-priority-cell" data-label="Priority"><span class="pill {{ $rowInquiryPriorityColor ? 'ft-master-color' : $priorityTone($row['priority']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryPriorityColor) }}">{{ $row['priority'] }}</span></div>
-                                <div class="cell ft-inquiry-list-status-cell" data-label="Status"><span class="pill {{ $rowInquiryStatusColor ? 'ft-master-color' : $tone($row['status']) }}" style="{{ \App\Support\MasterColor::style($rowInquiryStatusColor) }}">{{ $row['status'] }}</span></div>
                                 <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View<span aria-hidden="true">→</span></a></div>
                                 @if(auth()->user()->canModule('inquiries', 'delete'))
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
@@ -243,7 +257,6 @@
         @php
             $selectedWorkflow = collect($workflowFilterOptions)->first(fn ($item) => (int) ($item['id'] ?? 0) === (int) $createWorkflowId);
             $selectedWorkflowName = (string) ($selectedWorkflow['label'] ?? $selectedWorkflowLabel ?: 'Select workflow');
-            $workflowOptionCount = count($workflowFilterOptions);
         @endphp
         <section class="view ft-inquiry-create-v3" x-on:keydown.meta.enter.window="$wire.createInquiry()" x-on:keydown.ctrl.enter.window="$wire.createInquiry()">
             <div class="formwrap ft-inquiry-create-shell">
@@ -354,6 +367,18 @@
                             </div>
                         </div>
 
+                        <div class="ft-inquiry-create-field ft-inquiry-create-field-full">
+                            <label>Priority *</label>
+                            <select data-master-color-select wire:model="createPriority" aria-label="Inquiry priority">
+                                @forelse($createPriorityOptions as $priority)
+                                    <option value="{{ $priority->name }}" data-color="{{ $priority->color }}">{{ $priority->name }}</option>
+                                @empty
+                                    <option value="">No active priorities</option>
+                                @endforelse
+                            </select>
+                            @error('createPriority')<small class="field-error">{{ $message }}</small>@enderror
+                        </div>
+
                         <label class="ft-inquiry-create-field ft-inquiry-create-field-full">
                             <span>Inquiry title *</span>
                             <input wire:model="subject" placeholder="e.g. 5,000 embroidered polo shirts for September">
@@ -448,44 +473,23 @@
                         @endif
                     </section>
 
-                    <section class="section ft-inquiry-create-section ft-inquiry-next-section" x-data="{ workflowOpen: false }">
-                        <div class="sectiontitle ft-inquiry-step-title ft-inquiry-step-title-inline">
-                            <span>{{ $canUseInquiryProductSelector ? 4 : 3 }}</span><h2>What happens next</h2>
-                            @if($workflowOptionCount > 0)<em>{{ $workflowOptionCount }} {{ \Illuminate\Support\Str::plural('workflow', $workflowOptionCount) }} available</em>@endif
-                        </div>
-
-                        <div class="ft-inquiry-workflow-card" :class="{ 'is-open': workflowOpen }">
-                            <div class="ft-inquiry-workflow-selected" role="button" tabindex="0" x-on:click="workflowOpen = !workflowOpen" x-on:keydown.enter.prevent="workflowOpen = !workflowOpen" x-on:keydown.space.prevent="workflowOpen = !workflowOpen" :aria-expanded="workflowOpen.toString()">
-                                <span class="ft-inquiry-workflow-icon">✓</span>
-                                <span class="ft-inquiry-workflow-copy">
-                                    <small>Default workflow</small>
-                                    <strong>{{ $selectedWorkflowName }}</strong>
-                                    <span>{{ $createWorkflowPhaseCount }} {{ \Illuminate\Support\Str::plural('phase', $createWorkflowPhaseCount) }} · {{ $createWorkflowTaskCount }} {{ \Illuminate\Support\Str::plural('task', $createWorkflowTaskCount) }} will be created</span>
-                                </span>
-                                @if(auth()->user()->canAccess('workflow.view'))
-                                    <span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span>
-                                @endif
-                                <span class="ft-inquiry-workflow-chevron" aria-hidden="true">⌄</span>
-                            </div>
-
-                            <div class="ft-inquiry-workflow-options" x-cloak x-show="workflowOpen">
-                                @foreach($workflowFilterOptions as $workflowOption)
-                                    <button type="button" class="ft-inquiry-workflow-option {{ (int) ($workflowOption['id'] ?? 0) === (int) $createWorkflowId ? 'is-selected' : '' }}"
-                                        wire:click="setCreateSelector('createWorkflowId', '{{ $workflowOption['id'] }}')"
-                                        x-on:click="workflowOpen = false">
-                                        <span class="ft-inquiry-workflow-radio"></span>
-                                        <span><strong>{{ $workflowOption['label'] }}</strong><small>{{ $workflowOption['meta'] ?: 'Inquiry workflow' }}</small></span>
-                                    </button>
-                                @endforeach
-                            </div>
-                        </div>
-                        @if($createWorkflowId && $createWorkflowTaskCount === 0)
-                            <small class="field-error">This Workflow has no active Task Pack tasks.</small>
-                        @else
-                            @error('createWorkflowId')<small class="field-error">{{ $message }}</small>@enderror
-                        @endif
-                        <p class="ft-inquiry-workflow-footnote">Tasks are created when you select Create inquiry.</p>
-                    </section>
+                    <x-ui.create-workflow-picker
+                        class="section ft-inquiry-create-section ft-inquiry-next-section"
+                        :step="$canUseInquiryProductSelector ? 4 : 3"
+                        title="What happens next"
+                        :workflow-options="$workflowFilterOptions"
+                        :selected-workflow-id="$createWorkflowId"
+                        :selected-workflow-name="$selectedWorkflowName"
+                        :phase-count="$createWorkflowPhaseCount"
+                        :task-count="$createWorkflowTaskCount"
+                        selection-property="createWorkflowId"
+                        option-fallback="Inquiry workflow"
+                        footnote="Tasks are created when you select Create inquiry."
+                        :preview-allowed="auth()->user()->canAccess('workflow.view')"
+                        :empty-message="$createWorkflowId && $createWorkflowTaskCount === 0 ? 'This Workflow has no active Task Pack tasks.' : null"
+                        error-field="createWorkflowId"
+                        wire:key="create-inquiry-workflow-picker"
+                    />
 
                     <div class="formactions ft-inquiry-create-actions">
                         <span>Required fields are marked with *</span>
@@ -560,12 +564,17 @@
                 $inquiry->result === 'converted' => 'Converted',
                 $inquiry->result === 'dead' => 'Closed',
                 (string) $inquiry->status === 'Draft' => 'Draft',
-                $readyForDecision => \App\Services\InquiryService::AUTO_COMPLETED_STATUS,
-                $completedTasks > 0 || $inquiryStartAt !== null => \App\Services\InquiryService::AUTO_IN_PROGRESS_STATUS,
-                default => \App\Services\InquiryService::AUTO_READY_STATUS,
+                default => (string) ($inquiry->status ?: \App\Services\InquiryService::AUTO_READY_STATUS),
             };
-            $detailStatusColor = $masterData->displayColorFor('inquiry_status', $detailStatus);
+            $detailStatusColor = $inquiryService->inquiryStatusColor($detailStatus, (string) ($currentTask?->status ?: ''));
             $detailPriorityColor = $masterData->displayColorFor('priority', (string) $inquiry->priority);
+            $headerFlagTask = $currentTask?->needs_attention ? $currentTask : $inquiry->tasks->first(fn ($task) => (bool) $task->needs_attention);
+            $headerFlagLabel = $inquiry->needs_attention
+                ? 'Requires attention'
+                : ($headerFlagTask ? 'Requires attention' : '');
+            $headerFlagReason = $inquiry->needs_attention
+                ? (string) ($inquiry->attention_reason ?? '')
+                : (string) ($headerFlagTask?->attention_reason ?? '');
         @endphp
         <section class="view inquiry-detail-view" x-data="{
             inquiryStatus:@js($detailStatus),
@@ -639,6 +648,14 @@
                         <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span><span>Created by <strong>{{ $inquiry->creator?->name ?: 'System' }}</strong></span></span>
                         <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
                         <span class="ft-inquiry-header-meta-item"><span class="ft-inquiry-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span><span>Created <strong>{{ $inquiry->created_at ? \App\Support\UserLocalTime::format($inquiry->created_at, 'M j, Y') : '—' }}@if($inquiry->created_at) at {{ \App\Support\UserLocalTime::format($inquiry->created_at, 'g:i A') }}@endif</strong></span></span>
+                        <span class="ft-inquiry-header-meta-separator" aria-hidden="true">•</span>
+                        <span class="ft-inquiry-header-meta-item ft-inquiry-header-action" title="{{ $headerFlagReason ?: 'Request attention from the Inquiry creator and administrators' }}">
+                            <span>Action:</span>
+                            <button type="button" class="ft-inquiry-header-flag-button {{ $headerFlagLabel !== '' ? 'is-flagged' : '' }}" wire:click="openInquiryAttentionReason" @disabled($inquiry->result) aria-label="Request attention" title="{{ $headerFlagLabel !== '' ? 'View or update attention request' : 'Request attention' }}">
+                                <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V4"></path><path d="M7 5h10l-2 4 2 4H7"></path></svg>
+                            </button>
+                            @if($headerFlagLabel !== '')<strong class="ft-inquiry-header-flag-label">{{ $headerFlagLabel }}</strong>@endif
+                        </span>
                     </div>
                 </div>
             </div>
@@ -1028,6 +1045,66 @@
                                 @disabled($taskDocumentSource === 'upload' ? !$taskDocumentUpload : !$taskExistingDocumentId)>
                                 <span wire:loading.remove wire:target="saveTaskDocument">{{ $completeAfterTaskDocument ? 'Add file & complete' : 'Add document' }}</span>
                                 <span wire:loading wire:target="saveTaskDocument">{{ $completeAfterTaskDocument ? 'Adding & completing...' : 'Adding...' }}</span>
+                            </button>
+                        </footer>
+                    </section>
+                </div>
+            @endif
+
+            @if($showInquiryAttentionModal)
+                <div class="ft-inquiry-attention-modal-backdrop" wire:key="inquiry-attention-modal" wire:click.self="closeInquiryAttentionReason">
+                    <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="inquiry-attention-modal-title">
+                        <header class="ft-inquiry-attention-modal-head">
+                            <div>
+                                <h2 id="inquiry-attention-modal-title">Request attention</h2>
+                                <p>{{ $inquiry->inquiry_number }} · Admin, Super Admin and the Inquiry creator will be notified.</p>
+                            </div>
+                            <button type="button" class="ft-inquiry-attention-modal-close" wire:click="closeInquiryAttentionReason" aria-label="Close">×</button>
+                        </header>
+                        <div class="ft-inquiry-attention-modal-body ft-mention-host">
+                            <label for="inquiry-attention-reason">Reason for flag *</label>
+                            <textarea id="inquiry-attention-reason" class="ft-mention-input" wire:model="inquiryAttentionReason" rows="5" maxlength="2000" autocomplete="off" data-mention-users="{{ json_encode($inquiryMentionUsers->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}" placeholder="Explain what needs attention. Type @ to mention a user..."></textarea>
+                            @error('inquiryAttentionReason')<p class="ft-inquiry-attention-modal-error">{{ $message }}</p>@enderror
+                            <p class="ft-inquiry-attention-modal-help">The reason is added to Inquiry comments. Use <b>@</b> to mention specific users in addition to the automatic Admin/Super Admin/creator notification.</p>
+                        </div>
+                        <footer class="ft-inquiry-attention-modal-actions">
+                            @if($inquiry->needs_attention)<button type="button" class="ft-inquiry-attention-clear" wire:click="clearInquiryAttention" wire:loading.attr="disabled" wire:target="clearInquiryAttention">Clear flag</button>@else<span></span>@endif
+                            <div>
+                                <button type="button" class="secondary" wire:click="closeInquiryAttentionReason">Cancel</button>
+                                <button type="button" class="primary" wire:click="saveInquiryAttentionReason" wire:loading.attr="disabled" wire:target="saveInquiryAttentionReason">
+                                    <span wire:loading.remove wire:target="saveInquiryAttentionReason">Request attention</span>
+                                    <span wire:loading wire:target="saveInquiryAttentionReason">Saving...</span>
+                                </button>
+                            </div>
+                        </footer>
+                    </section>
+                </div>
+            @endif
+
+            @if($showTaskAttentionModal && $taskAttentionTaskId)
+                @php
+                    $attentionTask = $inquiry->tasks->firstWhere('id', (int) $taskAttentionTaskId);
+                @endphp
+                <div class="ft-inquiry-attention-modal-backdrop" wire:key="inquiry-task-attention-modal" wire:click.self="closeTaskAttentionReason">
+                    <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="task-attention-modal-title">
+                        <header class="ft-inquiry-attention-modal-head">
+                            <div>
+                                <h2 id="task-attention-modal-title">Why is attention required?</h2>
+                                <p>{{ $attentionTask?->title ?: 'Inquiry task' }} · {{ $attentionTask?->status ?: 'Attention required' }}</p>
+                            </div>
+                            <button type="button" class="ft-inquiry-attention-modal-close" wire:click="closeTaskAttentionReason" aria-label="Close">×</button>
+                        </header>
+                        <div class="ft-inquiry-attention-modal-body ft-mention-host">
+                            <label for="inquiry-task-attention-reason">Reason for flag *</label>
+                            <textarea id="inquiry-task-attention-reason" class="ft-mention-input" wire:model="taskAttentionReason" rows="5" maxlength="2000" autocomplete="off" data-mention-users="{{ json_encode($inquiryMentionUsers->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}" placeholder="Explain what is blocking the task or what needs attention. Type @ to mention a user..."></textarea>
+                            @error('taskAttentionReason')<p class="ft-inquiry-attention-modal-error">{{ $message }}</p>@enderror
+                            <p class="ft-inquiry-attention-modal-help">Saving this reason adds it to Inquiry comments, notifies Admin/Super Admin/the Inquiry creator, and supports <b>@mentions</b>.</p>
+                        </div>
+                        <footer class="ft-inquiry-attention-modal-actions">
+                            <button type="button" class="secondary" wire:click="closeTaskAttentionReason">Cancel</button>
+                            <button type="button" class="primary" wire:click="saveTaskAttentionReason" wire:loading.attr="disabled" wire:target="saveTaskAttentionReason">
+                                <span wire:loading.remove wire:target="saveTaskAttentionReason">Save reason</span>
+                                <span wire:loading wire:target="saveTaskAttentionReason">Saving...</span>
                             </button>
                         </footer>
                     </section>

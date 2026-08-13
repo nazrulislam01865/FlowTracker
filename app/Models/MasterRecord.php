@@ -40,6 +40,141 @@ class MasterRecord extends Model
 
     public function getIsActiveAttribute(): bool { return $this->status === 'active'; }
 
+
+
+    public function inquiryAutoStatus(): string
+    {
+        if ($this->type !== 'inquiry_task_status') return trim((string) $this->name);
+
+        $configured = trim((string) data_get($this->metadata, 'auto_inquiry_status'));
+        if ($configured === '__task_status__' || $configured === '') {
+            return trim((string) $this->name);
+        }
+
+        return $configured;
+    }
+
+    public function requiresAttention(): bool
+    {
+        return $this->type === 'inquiry_task_status'
+            && filter_var(data_get($this->metadata, 'requires_attention', false), FILTER_VALIDATE_BOOL);
+    }
+
+
+    public function productDisplayCode(): string
+    {
+        if ($this->type !== 'product') return trim((string) $this->code);
+
+        return 'PRD-'.str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
+    }
+
+    public function productReferenceCode(): string
+    {
+        $metadata = (array) ($this->metadata ?? []);
+        if (array_key_exists('reference_code', $metadata)) {
+            return trim((string) $metadata['reference_code']);
+        }
+
+        return trim((string) $this->code);
+    }
+
+    public function productMainCategory(): string
+    {
+        if ($this->type !== 'product') return '';
+
+        return trim((string) (
+            data_get($this->metadata, 'main_category')
+            ?: data_get($this->metadata, 'excel_main_category')
+            ?: data_get($this->parent?->metadata, 'excel_main_category')
+            ?: $this->parent?->name
+            ?: 'Uncategorized'
+        ));
+    }
+
+    public function productClassificationPath(): string
+    {
+        if ($this->type !== 'product') return '';
+
+        $category = trim((string) ($this->parent?->name ?? data_get($this->metadata, 'category') ?? data_get($this->metadata, 'excel_category')));
+        $subCategory = trim((string) (data_get($this->metadata, 'sub_category') ?: data_get($this->metadata, 'excel_sub_category') ?: $this->productCatalogSummary()));
+
+        return collect([$category, $subCategory])->filter()->unique()->implode(' > ');
+    }
+
+    public function productSize(): string
+    {
+        if ($this->type !== 'product') return '';
+
+        return trim((string) (data_get($this->metadata, 'product_size') ?? ''));
+    }
+
+    /** @return array<int,string> */
+    public function productAvailabilityLabels(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $metadata = (array) ($this->metadata ?? []);
+        $labels = $metadata['client_availability_labels'] ?? $metadata['client_codes'] ?? $metadata['clients'] ?? null;
+
+        if (is_array($labels)) {
+            $labels = array_values(array_filter(array_map(static fn ($value) => trim((string) $value), $labels)));
+            return $labels ?: ['All clients'];
+        }
+
+        $availability = trim((string) ($metadata['client_availability'] ?? ''));
+        if ($availability === '' || in_array(strtolower($availability), ['all', 'all clients'], true)) {
+            return ['All clients'];
+        }
+
+        return array_values(array_filter(array_map('trim', preg_split('/[,|]+/', $availability) ?: []))) ?: ['All clients'];
+    }
+
+    public function hasSpecificProductAvailability(): bool
+    {
+        $labels = $this->productAvailabilityLabels();
+
+        return ! ($labels === [] || (count($labels) === 1 && strtolower($labels[0]) === 'all clients'));
+    }
+
+    /** @return array<int,array{kind:string,label:string,url:?string,download_url:?string}> */
+    public function productDocuments(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $metadata = (array) ($this->metadata ?? []);
+        $documents = [];
+        $definitions = [
+            'certificate' => ['certificate_test_report', 'certificate_test_report_url', 'certificate_test_report_path'],
+            'template' => ['template_doc', 'template_doc_url', 'template_doc_path'],
+        ];
+
+        foreach ($definitions as $kind => [$labelKey, $urlKey, $pathKey]) {
+            $label = trim((string) ($metadata[$labelKey] ?? ''));
+            $url = trim((string) ($metadata[$urlKey] ?? ''));
+            $path = trim((string) ($metadata[$pathKey] ?? ''));
+            if ($label === '' && $url === '' && $path === '') continue;
+
+            if ($path !== '') {
+                $filename = basename($path);
+                $url = route('master-data.product-document', [
+                    'product' => $this->id,
+                    'kind' => $kind,
+                    'filename' => $filename,
+                ], false);
+                $label = $label !== '' ? $label : $filename;
+            }
+
+            $documents[] = [
+                'kind' => $kind,
+                'label' => $label !== '' ? $label : basename(parse_url($url, PHP_URL_PATH) ?: $url),
+                'url' => $url !== '' ? $url : null,
+                'download_url' => $path !== '' ? $url.'?download=1' : ($url !== '' ? $url : null),
+            ];
+        }
+
+        return $documents;
+    }
+
     public function productImageUrl(): ?string
     {
         if (! $this->id || $this->type !== 'product') return null;

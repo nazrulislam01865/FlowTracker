@@ -1,6 +1,7 @@
 @php
     $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
     $masterData = app(\App\Services\MasterDataService::class);
+    $inquiryService = app(\App\Services\InquiryService::class);
     $canCreateOrder = auth()->user()->canAccess('jobs.create');
     $canCreateClient = auth()->user()->canModule('clients', 'create');
     $canCreateInquiry = auth()->user()->canModule('inquiries', 'create');
@@ -9,6 +10,7 @@
         $status = strtolower((string) ($task?->status ?: $inquiry->status));
         $due = $task?->due_date;
 
+        if ($task?->needs_attention) return ['Requires attention', 'red'];
         if ($due && $due->lt($today)) return ['Overdue', 'red'];
         if ($due && $due->isSameDay($today)) return ['Due today', 'amber'];
         if (str_contains($status, 'waiting for client')) return ['Client wait', 'amber'];
@@ -87,9 +89,9 @@
                                     @endif
                                 </td>
                                 @php
-                                    $displayStatusColor = $masterData->displayColorFor('inquiry_status', $displayStatus ?: 'Ready');
+                                    $displayStatusColor = $inquiryService->inquiryStatusColor($displayStatus ?: 'To do', (string) ($inquiry->currentTask?->status ?: ''));
                                 @endphp
-                                <td data-label="Status"><span class="ft-pill {{ $displayStatusColor ? 'ft-master-color' : $inquiryStatusTone($displayStatus) }}" style="{{ \App\Support\MasterColor::style($displayStatusColor) }}">{{ $displayStatus ?: 'Ready' }}</span></td>
+                                <td data-label="Status"><span class="ft-pill {{ $displayStatusColor ? 'ft-master-color' : $inquiryStatusTone($displayStatus) }}" style="{{ \App\Support\MasterColor::style($displayStatusColor) }}">{{ $displayStatus ?: 'To do' }}</span></td>
                                 <td data-label="Flag"><span class="ft-flag {{ $flagTone }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('inquiries.index', ['open' => $inquiry->id]) }}" wire:navigate>View</a></td>
                             </tr>

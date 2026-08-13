@@ -53,8 +53,8 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('<div>Task Status</div>', $view);
         $this->assertStringContainsString('<div>Flag</div>', $view);
         $this->assertStringContainsString("currentTaskSubquery('status', \$currentTaskDueDate)", $service);
-        $this->assertStringContainsString("\$currentTaskStatusSql = \$this->currentTaskSubquery('status')->toSql();", $service);
-        $this->assertStringContainsString("\$normalizedCurrentStatus REGEXP ?", $service);
+        $this->assertStringContainsString("\$currentTaskAttentionSql = \$this->currentTaskSubquery('needs_attention')->toSql();", $service);
+        $this->assertStringContainsString("COALESCE((\$currentTaskAttentionSql), 0) = 1", $service);
         $this->assertStringNotContainsString("->whereIn('inquiries.id', \$attentionTasks)", $service);
     }
 
@@ -153,12 +153,12 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString("Complete the previous taskflow task first.", $service);
         $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php')));
         $this->assertStringNotContainsString('View only', $view);
-        $this->assertStringContainsString("'started_at'=>'datetime'", $taskModel);
+        $this->assertStringContainsString("'started_at' => 'datetime'", $taskModel);
         $this->assertStringContainsString("timestamp('started_at')", $migration);
-        $this->assertStringContainsString("'status' => \$this->defaultTaskStatus()", $service);
+        $this->assertStringContainsString('...$this->defaultTaskStatusPayload()', $service);
         $this->assertStringContainsString("'started_at' => null", $service);
         $this->assertStringContainsString('public function taskStatusOptions(?string $currentStatus = null): Collection', $service);
-        $this->assertStringContainsString("->active('task_status')", $service);
+        $this->assertStringContainsString("->active('inquiry_task_status')", $service);
         $this->assertStringContainsString("if (\$this->detailTab === 'overview')", $component);
         $this->assertStringContainsString('.ft-inquiry-task-document-modal', $css);
         $this->assertStringContainsString('openTaskDocumentModal(', $taskflow);
@@ -180,7 +180,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString('Not created yet', $view);
         $this->assertStringContainsString('ft-inquiry-auto-status-property', $view);
         $this->assertStringNotContainsString('inquiryOverviewStatus', $view);
-        $this->assertStringContainsString("public const AUTO_READY_STATUS = 'Ready';", $service);
+        $this->assertStringContainsString("public const AUTO_READY_STATUS = 'To do';", $service);
         $this->assertStringContainsString("public const AUTO_IN_PROGRESS_STATUS = 'In Progress';", $service);
         $this->assertStringContainsString("public const AUTO_COMPLETED_STATUS = 'Completed';", $service);
         $this->assertStringContainsString('public function syncAutomaticStatus(Inquiry $inquiry', $service);

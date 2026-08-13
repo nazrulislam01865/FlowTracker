@@ -1052,6 +1052,78 @@ class JobService
         }
     }
 
+    public function appendTask(FlowJob $job, array $data, User $actor): Task
+    {
+        $access = app(AccessControlService::class);
+        abort_unless($access->canCreateJobTask($actor, $job), 403);
+        abort_if($job->completed_at || $job->status === 'Completed', 422, 'A completed Order cannot receive another task.');
+        abort_if(in_array($job->status, self::INACTIVE_STATUSES, true), 422, 'An inactive Order cannot receive another task.');
+
+        return DB::transaction(function () use ($job, $data, $actor): Task {
+            $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $lockedJob->loadMissing('phase', 'workflow.phases');
+
+            $phaseId = (int) ($lockedJob->workflow_phase_id ?: ($lockedJob->phase?->id ?? 0));
+            abort_unless($phaseId > 0, 422, 'The Order does not have an active workflow phase.');
+
+            $nextNumber = max(301, (int) Task::withTrashed()->max('id') + 301);
+            do {
+                $taskNumber = 'TSK-'.str_pad((string) $nextNumber, 5, '0', STR_PAD_LEFT);
+                $nextNumber++;
+            } while (Task::withTrashed()->where('task_number', $taskNumber)->exists());
+
+            $isDraft = $lockedJob->status === 'Draft';
+            $assigneeId = filled($data['assignee_id'] ?? null) ? (int) $data['assignee_id'] : null;
+            $task = Task::create([
+                'task_number' => $taskNumber,
+                'flow_job_id' => $lockedJob->id,
+                'workflow_phase_id' => $phaseId,
+                'task_pack_task_id' => null,
+                'assignee_id' => $assigneeId,
+                'setup_assignee_id' => null,
+                'title' => trim((string) $data['title']),
+                'description' => blank($data['description'] ?? null) ? null : trim((string) $data['description']),
+                'status' => $isDraft ? 'Not Started' : 'Ready',
+                'priority' => $lockedJob->priority ?: 'Medium',
+                'progress' => 0,
+                'start_date' => $isDraft ? null : app(WorkspaceSettingsService::class)->localToday(),
+                'due_date' => blank($data['due_date'] ?? null) ? null : $data['due_date'],
+            ]);
+
+            FlowTaskComment::create([
+                'flow_task_id' => $task->id,
+                'user_id' => $actor->id,
+                'body' => 'Task added manually to the Order taskflow.',
+            ]);
+
+            if ($assigneeId) {
+                FlowJobMember::firstOrCreate(
+                    ['flow_job_id' => $lockedJob->id, 'user_id' => $assigneeId],
+                    ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+                );
+            }
+
+            $lockedJob->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.task_added',
+                'description' => 'Task added: '.$task->title,
+                'meta' => ['task_id' => $task->id, 'phase_id' => $phaseId],
+            ]);
+
+            $this->recalculateProgress($lockedJob->refresh());
+
+            if ($assigneeId) {
+                $taskId = $task->id;
+                DB::afterCommit(function () use ($taskId, $actor): void {
+                    $freshTask = Task::with(['job', 'phase', 'assignee'])->find($taskId);
+                    if ($freshTask) app(NotificationService::class)->notifyTaskAssigned($freshTask, $actor);
+                });
+            }
+
+            return $task->refresh();
+        });
+    }
+
     public function recalculateProgress(FlowJob $job): int
     {
         $job->loadMissing('workflow.phases.taskPack.items', 'tasks.setupTemplate', 'tasks.template');

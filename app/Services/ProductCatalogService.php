@@ -58,6 +58,33 @@ class ProductCatalogService
         return $this->filteredOrderProductQuery(trim($search), max(0, (int) $categoryId))->count();
     }
 
+
+    public function mainCategories(): Collection
+    {
+        $catalogued = MasterRecord::query()
+            ->forWorkspace($this->workspaceId())
+            ->ofType('product_main_category')
+            ->active()
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('name');
+
+        $legacy = MasterRecord::query()
+            ->forWorkspace($this->workspaceId())
+            ->ofType('product')
+            ->with('parent:id,metadata,name')
+            ->get(['id', 'parent_id', 'metadata'])
+            ->map(fn (MasterRecord $product) => $product->productMainCategory());
+
+        return $catalogued
+            ->concat($legacy)
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->unique(fn ($value) => mb_strtolower((string) $value))
+            ->sort(SORT_NATURAL | SORT_FLAG_CASE)
+            ->values();
+    }
+
     public function activeCount(): int
     {
         return $this->activeProductsQuery()->count();
@@ -106,7 +133,8 @@ class ProductCatalogService
             // exclusively through the separate category filter beside the box.
             ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $match) use ($search): void {
                 $match->where('master_records.name', 'like', '%'.$search.'%')
-                    ->orWhere('master_records.code', 'like', '%'.$search.'%');
+                    ->orWhere('master_records.code', 'like', '%'.$search.'%')
+                    ->orWhere('master_records.metadata->reference_code', 'like', '%'.$search.'%');
             }));
     }
 }

@@ -291,7 +291,6 @@ const mentionInputsWithin = (root) => {
 const bootMentionInputs = (root = document) => {
     mentionInputsWithin(root).forEach((input) => {
         if (input.__flowtrackMentionBound) return;
-        if (parseMentionUsers(input).length === 0) return;
 
         input.__flowtrackMentionBound = true;
         input.dataset.flowtrackMentionBound = '1';
@@ -306,6 +305,10 @@ const bootMentionInputs = (root = document) => {
         menu.hidden = true;
         menu.setAttribute('role', 'listbox');
         menu.style.position = 'fixed';
+        // The attention dialog sits above the normal application shell. Keep
+        // mention results above every modal even when an older stylesheet is
+        // still cached by the browser.
+        menu.style.zIndex = '2005';
         document.body.appendChild(menu);
 
         let matches = [];
@@ -342,14 +345,21 @@ const bootMentionInputs = (root = document) => {
         const activeToken = () => {
             const caret = input.selectionStart ?? input.value.length;
             const before = input.value.slice(0, caret);
-            const token = before.match(/(^|[\s([{,:;])@([A-Za-z0-9._-]*)$/);
-            if (!token) return null;
+            const at = before.lastIndexOf('@');
+            if (at < 0) return null;
 
-            return {
-                query: token[2] || '',
-                start: caret - (token[2]?.length || 0) - 1,
-                end: caret,
-            };
+            // Do not treat an @ inside an email/word as a mention. The user may
+            // otherwise type @ at the start of a sentence or after whitespace/
+            // punctuation, then continue searching with a multi-word name.
+            const boundary = at > 0 ? before.charAt(at - 1) : '';
+            if (boundary && /[\p{L}\p{N}._-]/u.test(boundary)) return null;
+
+            const query = before.slice(at + 1);
+            if (query.length > 90) return null;
+            if (/[\r\n,;:()[\]{}]/u.test(query)) return null;
+            if (!/^[\p{L}\p{N} ._'’\-]*$/u.test(query)) return null;
+
+            return { query, start: at, end: caret };
         };
 
         const selectUser = (user) => {
@@ -417,9 +427,9 @@ const bootMentionInputs = (root = document) => {
             const users = parseMentionUsers(input);
             mentionStart = token.start;
             mentionEnd = token.end;
-            const query = token.query.toLowerCase().replace(/[._-]+/g, ' ').trim();
+            const query = token.query.toLowerCase().replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim();
             matches = users.filter((user) => {
-                const haystack = `${user.name || ''} ${user.handle || ''}`.toLowerCase().replace(/[._-]+/g, ' ');
+                const haystack = `${user.name || ''} ${user.handle || ''}`.toLowerCase().replace(/[._-]+/g, ' ').replace(/\s+/g, ' ');
                 return query === '' || haystack.includes(query);
             }).slice(0, 8);
             selectedIndex = Math.min(selectedIndex, Math.max(0, matches.length - 1));
@@ -457,6 +467,7 @@ const bootMentionInputs = (root = document) => {
 
         const onInput = () => update();
         const onClick = () => update();
+        const onFocus = () => update();
         const onKeyup = (event) => {
             if (!['ArrowUp', 'ArrowDown', 'Enter', 'Escape', 'Tab'].includes(event.key)) update();
         };
@@ -465,6 +476,7 @@ const bootMentionInputs = (root = document) => {
 
         input.addEventListener('input', onInput);
         input.addEventListener('click', onClick);
+        input.addEventListener('focus', onFocus);
         input.addEventListener('keyup', onKeyup);
         input.addEventListener('keydown', onKeydown, true);
         input.addEventListener('blur', onBlur);
@@ -474,6 +486,7 @@ const bootMentionInputs = (root = document) => {
         input.__flowtrackMentionCleanup = () => {
             input.removeEventListener('input', onInput);
             input.removeEventListener('click', onClick);
+            input.removeEventListener('focus', onFocus);
             input.removeEventListener('keyup', onKeyup);
             input.removeEventListener('keydown', onKeydown, true);
             input.removeEventListener('blur', onBlur);

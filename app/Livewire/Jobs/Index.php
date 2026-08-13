@@ -132,6 +132,11 @@ class Index extends Component
     public string $overviewTaskLinkUrl = '';
     public ?int $taskExistingDocumentId = null;
     public bool $showTaskDocumentPicker = false;
+    public bool $showAddOrderTaskForm = false;
+    public string $newOrderTaskName = '';
+    public string $newOrderTaskDescription = '';
+    public ?int $newOrderTaskAssigneeId = null;
+    public string $newOrderTaskDueDate = '';
 
     public function mount(): void
     {
@@ -283,6 +288,7 @@ class Index extends Component
             abort_unless(auth()->user()->canModule('product_categories', 'view'), 403);
         }
         $this->createProductShowAllResults = false;
+        $this->dispatch('open-create-order-product-results');
     }
 
     public function showAllCreateProductResults(): void
@@ -808,6 +814,7 @@ class Index extends Component
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->overviewTaskUploads = [];
+        $this->cancelAddOrderTask(false);
         $this->resetOverviewTaskResourceUi();
         $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
@@ -835,6 +842,7 @@ class Index extends Component
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->overviewTaskUploads = [];
+        $this->cancelAddOrderTask(false);
         $this->resetOverviewTaskResourceUi();
         $this->jobRequiredDocumentUpload = null;
         $this->jobDocumentTaskId = null;
@@ -852,7 +860,10 @@ class Index extends Component
         // available globally and task-level attachments continue to work from Overview.
         abort_unless(in_array($tab, ['overview','inquiry'], true), 422);
         $this->detailTab = $tab;
-        if ($tab !== 'overview') $this->resetOverviewTaskResourceUi();
+        if ($tab !== 'overview') {
+            $this->cancelAddOrderTask(false);
+            $this->resetOverviewTaskResourceUi();
+        }
         $this->resetValidation('inquiryLink');
     }
 
@@ -1448,6 +1459,85 @@ class Index extends Component
      * Each task owns its temporary upload slot so several rows can be used
      * independently without changing the selected Task detail state.
      */
+    public function openAddOrderTaskForm(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canCreateJobTask($user, $job), 403);
+        abort_if($job->completed_at || $job->status === 'Completed', 422, 'A completed Order cannot receive another task.');
+        abort_if(in_array($job->status, JobService::INACTIVE_STATUSES, true), 422, 'An inactive Order cannot receive another task.');
+
+        $this->newOrderTaskName = '';
+        $this->newOrderTaskDescription = '';
+        $this->newOrderTaskAssigneeId = $user->id;
+        $this->newOrderTaskDueDate = app(WorkspaceSettingsService::class)->localToday()->addDays(3)->toDateString();
+        $this->showAddOrderTaskForm = true;
+        $this->resetValidation([
+            'newOrderTaskName',
+            'newOrderTaskDescription',
+            'newOrderTaskAssigneeId',
+            'newOrderTaskDueDate',
+        ]);
+    }
+
+    public function cancelAddOrderTask(bool $resetValidation = true): void
+    {
+        $this->showAddOrderTaskForm = false;
+        $this->newOrderTaskName = '';
+        $this->newOrderTaskDescription = '';
+        $this->newOrderTaskAssigneeId = null;
+        $this->newOrderTaskDueDate = '';
+        if ($resetValidation) {
+            $this->resetValidation([
+                'newOrderTaskName',
+                'newOrderTaskDescription',
+                'newOrderTaskAssigneeId',
+                'newOrderTaskDueDate',
+            ]);
+        }
+    }
+
+    public function addOrderTask(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canCreateJobTask($user, $job), 403);
+
+        $data = $this->validate([
+            'newOrderTaskName' => ['required', 'string', 'max:255'],
+            'newOrderTaskDescription' => ['nullable', 'string', 'max:60000'],
+            'newOrderTaskAssigneeId' => ['nullable', 'integer', 'exists:users,id'],
+            'newOrderTaskDueDate' => ['nullable', 'date'],
+        ]);
+
+        if (filled($data['newOrderTaskAssigneeId'] ?? null)) {
+            $allowedAssigneeIds = $this->userOptions($user)->pluck('id')->map(fn ($id) => (int) $id);
+            abort_unless($allowedAssigneeIds->contains((int) $data['newOrderTaskAssigneeId']), 403);
+        }
+
+        app(JobService::class)->appendTask($job, [
+            'title' => $data['newOrderTaskName'],
+            'description' => $data['newOrderTaskDescription'] ?? null,
+            'assignee_id' => $data['newOrderTaskAssigneeId'] ?? null,
+            'due_date' => $data['newOrderTaskDueDate'] ?? null,
+        ], $user);
+
+        $phaseId = (int) ($job->workflow_phase_id ?: 0);
+        if ($phaseId > 0) {
+            $this->expandedPhaseIds = array_values(array_unique([
+                ...array_map('intval', $this->expandedPhaseIds),
+                $phaseId,
+            ]));
+        }
+
+        $this->cancelAddOrderTask();
+        session()->flash('success', 'Order task added.');
+    }
+
     public function openOverviewTaskDocumentModal(int $taskId): void
     {
         abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);

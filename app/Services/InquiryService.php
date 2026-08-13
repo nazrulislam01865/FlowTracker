@@ -12,6 +12,7 @@ use App\Models\InquiryItem;
 use App\Models\InquiryTask;
 use App\Models\InquiryTaskComment;
 use App\Models\InquiryTaskLink;
+use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Models\Workflow;
@@ -30,7 +31,7 @@ use Illuminate\Validation\ValidationException;
 class InquiryService
 {
     public const FINAL_STATUSES = ['Converted', 'Dead'];
-    public const AUTO_READY_STATUS = 'Ready';
+    public const AUTO_READY_STATUS = 'To do';
     public const AUTO_IN_PROGRESS_STATUS = 'In Progress';
     public const AUTO_COMPLETED_STATUS = 'Completed';
 
@@ -40,29 +41,32 @@ class InquiryService
     }
 
     /**
-     * Inquiry working statuses are workspace Master Data. Draft, Ready for Decision,
-     * Converted, and Dead remain system lifecycle states and are not user-managed options.
+     * Parent Inquiry working statuses are derived from Inquiry Task Status
+     * Master Data. There is no separate editable Inquiry Status catalogue.
      */
     public function inquiryStatusOptions(): Collection
     {
-        return app(MasterDataService::class)
-            ->active('inquiry_status')
-            ->pluck('name')
-            ->map(fn ($name) => trim((string) $name))
+        return $this->taskStatusRecords()
+            ->map(fn (MasterRecord $record): string => $record->inquiryAutoStatus())
+            ->map(fn (string $name): string => trim($name))
             ->filter()
-            ->unique()
+            ->unique(fn (string $name): string => mb_strtolower($name))
             ->values();
     }
 
+    /** Active Inquiry Task Status Master Data records in configured sequence. */
+    public function taskStatusRecords(): Collection
+    {
+        return app(MasterDataService::class)->active('inquiry_task_status');
+    }
+
     /**
-     * Inquiry task statuses come directly from active Task Status Master Data.
-     * A task's existing status may be supplied so a removed/deactivated value
-     * remains visible for historical records until the user changes it.
+     * Inquiry task statuses come directly from active Inquiry Task Status
+     * Master Data. A task's historical status remains visible until changed.
      */
     public function taskStatusOptions(?string $currentStatus = null): Collection
     {
-        $statuses = app(MasterDataService::class)
-            ->active('task_status')
+        $statuses = $this->taskStatusRecords()
             ->pluck('name')
             ->map(fn ($name) => trim((string) $name))
             ->filter()
@@ -77,29 +81,114 @@ class InquiryService
         return $statuses->values();
     }
 
+    public function taskStatusRecord(string $status, bool $activeOnly = true): ?MasterRecord
+    {
+        $status = trim($status);
+        if ($status === '') return null;
+
+        $active = $this->taskStatusRecords()->first(
+            fn (MasterRecord $record): bool => strcasecmp((string) $record->name, $status) === 0
+        );
+        if ($active || $activeOnly) return $active;
+
+        return MasterRecord::withTrashed()
+            ->forWorkspace($this->workspaceId())
+            ->ofType('inquiry_task_status')
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($status)])
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    public function autoInquiryStatusForTaskStatus(string $status): string
+    {
+        if ($record = $this->taskStatusRecord($status, false)) {
+            return $record->inquiryAutoStatus();
+        }
+
+        $normalized = mb_strtolower(trim($status));
+        return match (true) {
+            in_array($normalized, ['not started', 'ready', 'to do', 'todo'], true) => self::AUTO_READY_STATUS,
+            in_array($normalized, ['completed', 'complete', 'done'], true) => self::AUTO_COMPLETED_STATUS,
+            in_array($normalized, ['cancelled', 'canceled'], true) => 'Cancelled',
+            in_array($normalized, ['in progress', 'in review', 'review', 'revision required', 'waiting', 'waiting for client', 'waiting for supplier'], true) => self::AUTO_IN_PROGRESS_STATUS,
+            default => trim($status) !== '' ? trim($status) : self::AUTO_READY_STATUS,
+        };
+    }
+
+    public function taskStatusNeedsAttention(string $status): bool
+    {
+        if ($record = $this->taskStatusRecord($status, false)) {
+            return $record->requiresAttention();
+        }
+
+        $normalized = mb_strtolower(trim($status));
+        return str_starts_with($normalized, 'waiting')
+            || str_contains($normalized, 'attention')
+            || in_array($normalized, ['blocked', 'on hold', 'delayed', 'at risk'], true)
+            || str_contains($normalized, 'revision');
+    }
+
+    public function inquiryStatusColor(?string $autoStatus, ?string $taskStatus = null): ?string
+    {
+        $masterData = app(MasterDataService::class);
+        if (filled($taskStatus) && ($record = $this->taskStatusRecord((string) $taskStatus, false))) {
+            return $masterData->displayColorFor('inquiry_task_status', (string) $record->name);
+        }
+
+        $autoStatus = trim((string) $autoStatus);
+        $mapped = $this->taskStatusRecords()->first(
+            fn (MasterRecord $record): bool => strcasecmp($record->inquiryAutoStatus(), $autoStatus) === 0
+        );
+
+        return $mapped
+            ? $masterData->displayColorFor('inquiry_task_status', (string) $mapped->name)
+            : \App\Support\MasterColor::defaultFor('inquiry_status', $autoStatus);
+    }
+
+    private function isCompletionTaskStatus(string $status): bool
+    {
+        return strcasecmp($this->autoInquiryStatusForTaskStatus($status), self::AUTO_COMPLETED_STATUS) === 0;
+    }
+
+    private function taskStatusPayload(string $status, ?InquiryTask $existing = null): array
+    {
+        $record = $this->taskStatusRecord($status, false);
+        $canonical = $record?->name ?: trim($status);
+        $needsAttention = $record ? $record->requiresAttention() : $this->taskStatusNeedsAttention($canonical);
+        $sameStatus = $existing && strcasecmp(trim((string) $existing->status), trim((string) $canonical)) === 0;
+
+        return [
+            'status' => $canonical,
+            'inquiry_task_status_id' => $record?->id,
+            'needs_attention' => $needsAttention,
+            'attention_reason' => $needsAttention && $sameStatus ? $existing?->attention_reason : null,
+        ];
+    }
+
+    private function defaultTaskStatusPayload(?InquiryTask $existing = null): array
+    {
+        return $this->taskStatusPayload($this->defaultTaskStatus(), $existing);
+    }
+
     /** Active, non-terminal task statuses used by task edit forms. */
     public function openTaskStatusOptions(?string $currentStatus = null): Collection
     {
         return $this->taskStatusOptions($currentStatus)
-            ->reject(fn (string $name) => strcasecmp($name, self::AUTO_COMPLETED_STATUS) === 0)
+            ->reject(fn (string $name) => $this->isCompletionTaskStatus($name))
             ->values();
     }
 
     /**
-     * New/queued Inquiry tasks prefer a Master Data status named "Waiting".
-     * If it was removed, the first active non-completed status becomes the
-     * workspace default. This keeps Task Status fully manageable in Master Data.
+     * The first active non-terminal Inquiry Task Status in Master Data sequence
+     * is the initial status for every new/queued Inquiry task.
      */
     public function defaultTaskStatus(): string
     {
-        $statuses = $this->taskStatusOptions();
-        $preferred = $statuses->first(fn (string $name) => strcasecmp($name, 'Waiting') === 0);
-        $fallback = $statuses->first(fn (string $name) => strcasecmp($name, self::AUTO_COMPLETED_STATUS) !== 0);
-        $status = $preferred ?: $fallback ?: $statuses->first();
+        $status = $this->openTaskStatusOptions()->first();
 
         if (!$status) {
             throw ValidationException::withMessages([
-                'task_status' => 'Add at least one active Task Status in Master Data before creating or editing Inquiry tasks.',
+                'task_status' => 'Add at least one active non-completed Inquiry Task Status in Master Data before creating or editing Inquiry tasks.',
             ]);
         }
 
@@ -108,23 +197,21 @@ class InquiryService
 
     public function isWorkingTaskStatus(string $status): bool
     {
-        $status = trim($status);
-        if ($status === '' || strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0) return false;
-
-        return strcasecmp($status, $this->defaultTaskStatus()) !== 0;
+        $auto = mb_strtolower($this->autoInquiryStatusForTaskStatus($status));
+        return !in_array($auto, [mb_strtolower(self::AUTO_READY_STATUS), mb_strtolower(self::AUTO_COMPLETED_STATUS), 'cancelled'], true);
     }
 
-    /** Status used when system rules reopen a completed Inquiry task. */
+    /**
+     * Status used when system rules reopen a completed Inquiry task.
+     */
     public function resumeTaskStatus(): string
     {
         $statuses = $this->openTaskStatusOptions();
-        $preferred = $statuses->first(fn (string $name) => strcasecmp($name, 'In Progress') === 0);
-        if ($preferred) return (string) $preferred;
-
         $default = $this->defaultTaskStatus();
-        $working = $statuses->first(fn (string $name) => strcasecmp($name, $default) !== 0);
+        $working = $statuses->first(fn (string $name) => $this->isWorkingTaskStatus($name));
+        $next = $statuses->first(fn (string $name) => strcasecmp($name, $default) !== 0);
 
-        return (string) ($working ?: $default);
+        return (string) ($working ?: $next ?: $default);
     }
 
     /** Inquiry-list Status filter uses the same Master Data source as task editors. */
@@ -136,12 +223,12 @@ class InquiryService
     public function defaultInquiryStatus(): string
     {
         $statuses = $this->inquiryStatusOptions();
-        $preferred = $statuses->first(fn (string $status) => strcasecmp($status, 'In Progress') === 0);
+        $preferred = $statuses->first(fn (string $status) => strcasecmp($status, self::AUTO_READY_STATUS) === 0);
         $status = $preferred ?: $statuses->first();
 
         if (!$status) {
             throw ValidationException::withMessages([
-                'status' => 'Add at least one active Inquiry Status in Master Data before creating or activating an Inquiry.',
+                'status' => 'Add at least one active Inquiry Task Status in Master Data before creating or activating an Inquiry.',
             ]);
         }
 
@@ -261,6 +348,8 @@ class InquiryService
         $currentTaskAssignee = $this->currentTaskSubquery('assignee_id', $currentTaskDueDate);
         $currentTaskDue = $this->currentTaskSubquery('due_date', $currentTaskDueDate);
         $currentTaskStatus = $this->currentTaskSubquery('status', $currentTaskDueDate);
+        $currentTaskNeedsAttention = $this->currentTaskSubquery('needs_attention', $currentTaskDueDate);
+        $currentTaskAttentionReason = $this->currentTaskSubquery('attention_reason', $currentTaskDueDate);
         $currentTaskSequence = $this->currentTaskSubquery('sequence', $currentTaskDueDate);
         $firstItem = InquiryItem::query()
             ->select('item_name')
@@ -271,17 +360,19 @@ class InquiryService
 
         return $query
             ->reorder()
-            ->orderByDesc('inquiries.updated_at')
+            ->orderByDesc('inquiries.created_at')
             ->orderByDesc('inquiries.id')
             ->select([
                 'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id', 'inquiries.owner_id', 'inquiries.created_by',
-                'inquiries.subject', 'inquiries.client_contact', 'inquiries.received_date', 'inquiries.priority', 'inquiries.status', 'inquiries.started_at', 'inquiries.result',
+                'inquiries.subject', 'inquiries.client_contact', 'inquiries.received_date', 'inquiries.priority', 'inquiries.status', 'inquiries.needs_attention', 'inquiries.attention_reason', 'inquiries.started_at', 'inquiries.result',
                 'inquiries.converted_job_id', 'inquiries.created_at', 'inquiries.updated_at',
             ])
             ->selectSub($currentTask, 'current_task_title')
             ->selectSub($currentTaskAssignee, 'current_task_assignee_id')
             ->selectSub($currentTaskDue, 'current_task_due_date')
             ->selectSub($currentTaskStatus, 'current_task_status')
+            ->selectSub($currentTaskNeedsAttention, 'current_task_needs_attention')
+            ->selectSub($currentTaskAttentionReason, 'current_task_attention_reason')
             ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
             ->with(['client:id,name,logo_path', 'owner:id,name,profile_image_path', 'creator:id,name,profile_image_path', 'convertedJob:id,job_number,order_number'])
@@ -353,22 +444,9 @@ class InquiryService
     }
 
     /**
-     * The Inquiry-list "Requires attention" flag is derived from the CURRENT
-     * unfinished task shown in the row. Keep this predicate aligned with
-     * listRows() so both the summary card and quick filter return only rows
-     * whose visible Flag column is exactly "Requires attention".
+     * The Inquiry-list "Requires attention" filter follows the explicit flag
+     * configured on the CURRENT Inquiry Task Status Master Data record.
      */
-    private function isAttentionTaskStatus(string $status): bool
-    {
-        $normalized = mb_strtolower(trim($status));
-        if ($normalized === '') return false;
-
-        return str_starts_with($normalized, 'waiting')
-            || str_contains($normalized, 'attention')
-            || in_array($normalized, ['blocked', 'on hold', 'delayed', 'at risk'], true)
-            || str_contains($normalized, 'revision');
-    }
-
     private function applyAttentionNeededListScope(Builder $query, User $user): Builder
     {
         $access = app(AccessControlService::class);
@@ -376,20 +454,15 @@ class InquiryService
             return $query->whereRaw('1 = 0');
         }
 
-        // Use the same correlated current-task selector used by the Inquiry row.
-        // The old implementation matched ANY unfinished attention-like task,
-        // which allowed an Inquiry to pass the filter even when the task shown
-        // in the row produced Overdue, Due Today, or No flag instead.
-        $currentTaskStatusSql = $this->currentTaskSubquery('status')->toSql();
-        $normalizedCurrentStatus = "LOWER(TRIM(COALESCE(($currentTaskStatusSql), '')))";
+        $currentTaskAttentionSql = $this->currentTaskSubquery('needs_attention')->toSql();
 
         return $query
             ->whereNull('inquiries.result')
             ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
-            ->whereRaw(
-                "$normalizedCurrentStatus REGEXP ?",
-                ['^(waiting.*|.*attention.*|blocked|on hold|.*revision.*|delayed|at risk)$']
-            );
+            ->where(function (Builder $attention) use ($currentTaskAttentionSql): void {
+                $attention->where('inquiries.needs_attention', true)
+                    ->orWhereRaw("COALESCE(($currentTaskAttentionSql), 0) = 1");
+            });
     }
 
     private function currentTaskSubquery(string $column, ?string $dueDate = null): Builder
@@ -451,9 +524,7 @@ class InquiryService
                 $inquiry->result === 'converted' => 'Converted',
                 $inquiry->result === 'dead' => 'Closed',
                 (string) $inquiry->status === 'Draft' => 'Draft',
-                $total > 0 && $done === $total => self::AUTO_COMPLETED_STATUS,
-                $done > 0 || filled($inquiry->started_at) => self::AUTO_IN_PROGRESS_STATUS,
-                default => self::AUTO_READY_STATUS,
+                default => (string) ($inquiry->status ?: self::AUTO_READY_STATUS),
             };
             $isCompleted = $status === self::AUTO_COMPLETED_STATUS;
             $currentTaskStatus = $canViewTasks
@@ -462,11 +533,17 @@ class InquiryService
             $currentTaskDueDate = $canViewTasks && $inquiry->current_task_due_date
                 ? date('Y-m-d', strtotime((string) $inquiry->current_task_due_date))
                 : null;
-            $attentionStatus = $this->isAttentionTaskStatus($currentTaskStatus);
+            $taskNeedsAttention = $canViewTasks && (bool) $inquiry->current_task_needs_attention;
+            $inquiryNeedsAttention = (bool) ($inquiry->needs_attention ?? false);
+            $needsAttention = $inquiryNeedsAttention || $taskNeedsAttention;
+            $attentionReason = $inquiryNeedsAttention
+                ? trim((string) ($inquiry->attention_reason ?? ''))
+                : ($taskNeedsAttention ? trim((string) $inquiry->current_task_attention_reason) : '');
             $taskFlag = match (true) {
-                !$canViewTasks => 'Restricted',
+                !$canViewTasks && !$inquiryNeedsAttention => 'Restricted',
+                $inquiryNeedsAttention => 'Requires attention',
                 $isCompleted || $currentTaskStatus === '' => 'No flag',
-                $attentionStatus => 'Requires attention',
+                $taskNeedsAttention => 'Requires attention',
                 $currentTaskDueDate !== null && $currentTaskDueDate < $today => 'Overdue',
                 $currentTaskDueDate === $today => 'Due Today',
                 default => 'No flag',
@@ -508,14 +585,17 @@ class InquiryService
                     ? (string) ($displayAssignee?->name ?: 'System')
                     : ($canViewTasks ? (string) ($displayAssignee?->name ?: 'Unassigned') : '—'),
                 'assigneeAvatar' => $isCompleted
-                    ? $displayAssignee?->profile_image_path
-                    : ($canViewTasks ? $displayAssignee?->profile_image_path : null),
+                    ? $displayAssignee?->profileImageUrl()
+                    : ($canViewTasks ? $displayAssignee?->profileImageUrl() : null),
                 'due' => $canViewTasks && $inquiry->current_task_due_date ? date('M j', strtotime((string) $inquiry->current_task_due_date)) : '—',
                 'taskStatus' => $currentTaskStatus !== '' ? $currentTaskStatus : '—',
                 'flag' => $taskFlag,
+                'flagReason' => $attentionReason,
                 'hasStarted' => filled($inquiry->started_at),
                 'startedDate' => UserLocalTime::format($inquiry->started_at, 'M j, Y'),
                 'startedTime' => UserLocalTime::format($inquiry->started_at, 'g:i A'),
+                'updatedDate' => UserLocalTime::format($inquiry->updated_at, 'M j, Y'),
+                'updatedTime' => UserLocalTime::format($inquiry->updated_at, 'g:i A'),
                 'priority' => (string) ($inquiry->priority ?: 'Medium'),
                 'status' => $status,
             ];
@@ -645,7 +725,7 @@ class InquiryService
                     'description' => app(RichTextService::class)->normalize($task['description'] ?? null, 10000, 'description'),
                     'sequence' => $index + 1,
                     'due_date' => ($task['due_date'] ?? null) ?: null,
-                    'status' => $this->defaultTaskStatus(),
+                    ...$this->defaultTaskStatusPayload(),
                     'started_at' => null,
                     'requires_submission' => (bool) ($task['requires_submission'] ?? false),
                     'submission_label' => blank($task['submission_label'] ?? null) ? null : trim((string) $task['submission_label']),
@@ -1179,10 +1259,10 @@ class InquiryService
             $inquiry->update(['status' => self::AUTO_READY_STATUS]);
             $first = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->first();
             if ($first) {
-                $first->update(['status' => $this->defaultTaskStatus(), 'started_at' => null]);
+                $first->update($this->defaultTaskStatusPayload($first) + ['started_at' => null]);
                 $this->notifyTaskAssigned($first, $actor);
             }
-            $this->activity($inquiry, $actor, 'inquiry.status_changed', 'Inquiry activated and is Ready to start.');
+            $this->activity($inquiry, $actor, 'inquiry.status_changed', 'Inquiry activated and is To do.');
         }
 
         return $this->syncAutomaticStatus($inquiry, $actor);
@@ -1210,8 +1290,7 @@ class InquiryService
         $taskUpdate = [
             'assignee_id' => ($data['assignee_id'] ?? null) ?: null,
             'due_date' => ($data['due_date'] ?? null) ?: null,
-            'status' => $nextStatus,
-        ];
+        ] + $this->taskStatusPayload($nextStatus, $task);
         $taskStartAt = null;
         if ($this->isWorkingTaskStatus($nextStatus) && !$task->started_at) {
             $taskStartAt = now();
@@ -1252,7 +1331,7 @@ class InquiryService
 
         $status = trim($status);
         $activeStatus = $this->taskStatusOptions()->first(fn (string $name) => strcasecmp($name, $status) === 0);
-        $isSystemCompletion = strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0;
+        $isSystemCompletion = $this->isCompletionTaskStatus($status);
         $isExistingHistoricalStatus = strcasecmp($status, trim((string) $task->status)) === 0;
         abort_unless($activeStatus || $isSystemCompletion || $isExistingHistoricalStatus, 422, 'Invalid or inactive Inquiry task status.');
         if ($activeStatus) $status = (string) $activeStatus;
@@ -1262,8 +1341,8 @@ class InquiryService
             $task->loadMissing('inquiry');
 
             $oldStatus = (string) $task->status;
-            $wasCompleted = $task->completed_at !== null || strcasecmp($oldStatus, self::AUTO_COMPLETED_STATUS) === 0;
-            $willComplete = strcasecmp($status, self::AUTO_COMPLETED_STATUS) === 0;
+            $wasCompleted = $task->completed_at !== null || $this->isCompletionTaskStatus($oldStatus);
+            $willComplete = $this->isCompletionTaskStatus($status);
 
             if ($oldStatus === $status && (($willComplete && $task->completed_at) || (!$willComplete && !$task->completed_at))) {
                 return $task;
@@ -1273,14 +1352,13 @@ class InquiryService
                 throw ValidationException::withMessages(['task' => 'Required file must be uploaded before completion.']);
             }
 
-            $updates = [
-                'status' => $status,
+            $updates = $this->taskStatusPayload($status, $task) + [
                 'completed_at' => $willComplete ? ($task->completed_at ?: now()) : null,
             ];
 
             // Keep the first time the task was actually started. A task completed
-            // directly from Waiting still receives a start timestamp, matching the
-            // order-task ability to move directly to Completed.
+            // directly from its initial Master Data status still receives a start
+            // timestamp, matching the order-task ability to move directly to Completed.
             if (($willComplete || $this->isWorkingTaskStatus($status)) && !$task->started_at) {
                 $updates['started_at'] = now();
             }
@@ -1357,9 +1435,117 @@ class InquiryService
         return $task->refresh();
     }
 
+    private function completionTaskStatus(): string
+    {
+        $record = $this->taskStatusRecords()->first(
+            fn (MasterRecord $status): bool => strcasecmp($status->inquiryAutoStatus(), self::AUTO_COMPLETED_STATUS) === 0
+        );
+
+        return (string) ($record?->name ?: self::AUTO_COMPLETED_STATUS);
+    }
+
     public function completeTask(InquiryTask $task, User $actor): InquiryTask
     {
-        return $this->updateTaskStatus($task, self::AUTO_COMPLETED_STATUS, $actor);
+        return $this->updateTaskStatus($task, $this->completionTaskStatus(), $actor);
+    }
+
+    public function setInquiryAttentionReason(Inquiry $inquiry, string $reason, User $actor): Inquiry
+    {
+        abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 403);
+        abort_if($inquiry->result, 422, 'A completed Inquiry cannot be flagged for attention.');
+
+        $reason = trim(strip_tags($reason));
+        if ($reason === '') {
+            throw ValidationException::withMessages(['inquiryAttentionReason' => 'Write why this Inquiry needs attention.']);
+        }
+        if (mb_strlen($reason) > 2000) {
+            throw ValidationException::withMessages(['inquiryAttentionReason' => 'The attention reason may not be greater than 2000 characters.']);
+        }
+
+        return DB::transaction(function () use ($inquiry, $reason, $actor): Inquiry {
+            $locked = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            $locked->update([
+                'needs_attention' => true,
+                'attention_reason' => $reason,
+                'attention_by' => $actor->id,
+                'attention_at' => now(),
+            ]);
+
+            $commentBody = 'Attention requested: '.$reason;
+            $this->activity($locked, $actor, 'inquiry.comment', $commentBody, [
+                'comment' => true,
+                'attention_reason' => true,
+                'attention_scope' => 'inquiry',
+            ]);
+            $this->notifyMentions($locked, null, $reason, $actor);
+            $this->notifyAttentionRecipients($locked, null, $commentBody, $actor);
+
+            return $locked->refresh();
+        });
+    }
+
+    public function clearInquiryAttention(Inquiry $inquiry, User $actor): Inquiry
+    {
+        abort_unless($this->visibleQuery($actor)->whereKey($inquiry->id)->exists(), 403);
+        abort_if($inquiry->result, 422, 'A completed Inquiry cannot be changed.');
+
+        $inquiry->update([
+            'needs_attention' => false,
+            'attention_reason' => null,
+            'attention_by' => null,
+            'attention_at' => null,
+        ]);
+        $this->activity($inquiry, $actor, 'inquiry.attention_cleared', 'Inquiry attention flag cleared.');
+        return $inquiry->refresh();
+    }
+
+    public function setTaskAttentionReason(InquiryTask $task, string $reason, User $actor): InquiryTask
+    {
+        $task->loadMissing('inquiry');
+        abort_unless($this->canEditTask($actor, $task), 403);
+        abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot be edited.');
+        abort_unless($task->needs_attention || $this->taskStatusNeedsAttention((string) $task->status), 422, 'This task status does not require attention.');
+
+        $reason = trim(strip_tags($reason));
+        if ($reason === '') {
+            throw ValidationException::withMessages(['taskAttentionReason' => 'Write the reason why this task requires attention.']);
+        }
+        if (mb_strlen($reason) > 2000) {
+            throw ValidationException::withMessages(['taskAttentionReason' => 'The attention reason may not be greater than 2000 characters.']);
+        }
+
+        return DB::transaction(function () use ($task, $reason, $actor): InquiryTask {
+            $task->update([
+                'needs_attention' => true,
+                'attention_reason' => $reason,
+            ]);
+
+            $commentBody = 'Attention required: '.$reason;
+            InquiryTaskComment::create([
+                'inquiry_task_id' => $task->id,
+                'user_id' => $actor->id,
+                'body' => $commentBody,
+            ]);
+
+            $this->activity(
+                $task->inquiry,
+                $actor,
+                'inquiry.comment',
+                $task->title.' — '.$commentBody,
+                [
+                    'comment' => true,
+                    'inquiry_task_id' => $task->id,
+                    'attention_reason' => true,
+                ],
+            );
+            $this->notifyMentions($task->inquiry, $task, $reason, $actor);
+            $this->notifyAttentionRecipients($task->inquiry, $task, $task->title.' — '.$commentBody, $actor);
+
+            $task->inquiry->touch();
+            $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
+
+            return $task->refresh();
+        });
     }
 
     public function appendTask(Inquiry $inquiry, array $data, User $actor): InquiryTask
@@ -1394,7 +1580,7 @@ class InquiryService
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'sequence' => $lastSequence + 1,
                 'due_date' => ($data['due_date'] ?? null) ?: null,
-                'status' => $this->defaultTaskStatus(),
+                ...$this->defaultTaskStatusPayload(),
                 'started_at' => null,
                 'requires_submission' => (bool) ($data['requires_submission'] ?? false),
                 'submission_label' => blank($data['submission_label'] ?? null) ? null : trim((string) $data['submission_label']),
@@ -1494,10 +1680,7 @@ class InquiryService
                     $task->restore();
                     $task->update($payload);
                 } else {
-                    InquiryTask::create($payload + [
-                        'inquiry_id' => $inquiry->id,
-                        'status' => $this->defaultTaskStatus(),
-                    ]);
+                    InquiryTask::create($payload + ['inquiry_id' => $inquiry->id] + $this->defaultTaskStatusPayload());
                 }
             }
 
@@ -1970,10 +2153,7 @@ class InquiryService
         }
 
         match ($quick) {
-            'attention' => $query->whereRaw("LOWER(inquiry_tasks.status) NOT LIKE 'waiting%'")
-                ->where(fn (Builder $q) => $q
-                    ->where('inquiry_tasks.due_date', '<=', $weekEnd)
-                    ->orWhereHas('inquiry', fn (Builder $inquiry) => $inquiry->whereIn('priority', ['High', 'Urgent', 'Critical']))),
+            'attention' => $query->where('inquiry_tasks.needs_attention', true),
             'overdue' => $query->where('inquiry_tasks.due_date', '<', $todayDate),
             'today' => $query->whereDate('inquiry_tasks.due_date', $todayDate),
             'upcoming' => $query->whereBetween('inquiry_tasks.due_date', [$tomorrow, $weekEnd])->whereRaw("LOWER(inquiry_tasks.status) NOT LIKE 'waiting%'"),
@@ -2001,7 +2181,7 @@ class InquiryService
                 'inquiry.client:id,name,logo_path',
             ])
             ->limit(max(1, min(6, $limit)))
-            ->get(['id', 'inquiry_id', 'assignee_id', 'title', 'status', 'due_date', 'sequence', 'updated_at']);
+            ->get(['id', 'inquiry_id', 'assignee_id', 'title', 'status', 'needs_attention', 'attention_reason', 'due_date', 'sequence', 'updated_at']);
 
         $inquiryIds = $tasks->pluck('inquiry_id')->unique()->values();
         $counts = $inquiryIds->isEmpty() ? collect() : InquiryTask::query()
@@ -2023,7 +2203,7 @@ class InquiryService
             $due = $task->due_date?->format('M j') ?: 'No due date';
             if ($dueDate && $dueDate < $todayDate) { $dueTone = 'overdue'; $due = 'Overdue'; }
             elseif ($dueDate === $todayDate) { $dueTone = 'today'; $due = 'Today'; }
-            $flag = $dueTone === 'overdue' ? 'Overdue' : ($dueTone === 'today' ? 'Due Today' : 'No flag');
+            $flag = $task->needs_attention ? 'Requires attention' : ($dueTone === 'overdue' ? 'Overdue' : ($dueTone === 'today' ? 'Due Today' : 'No flag'));
             $updatedAt = $task->updated_at?->copy()->setTimezone($displayTimezone);
 
             return [
@@ -2034,7 +2214,7 @@ class InquiryService
                 'stage' => 'Inquiry',
                 'health' => (string) ($inquiry->status ?: 'In Progress'),
                 'healthTone' => $this->statusTone((string) $inquiry->status),
-                'healthColor' => app(MasterDataService::class)->displayColorFor('inquiry_status', (string) $inquiry->status),
+                'healthColor' => $this->inquiryStatusColor((string) $inquiry->status, (string) $task->status),
                 'progress' => $total ? (int) round($done / $total * 100) : 0,
                 'taskCount' => 1,
                 'route' => route('inquiries.index', ['open' => $inquiry->id]),
@@ -2054,9 +2234,10 @@ class InquiryService
                     'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',
                     'dueTone' => $dueTone,
                     'status' => (string) $task->status,
-                    'statusColor' => app(MasterDataService::class)->colorFor('task_status', (string) $task->status),
+                    'statusColor' => app(MasterDataService::class)->colorFor('inquiry_task_status', (string) $task->status),
                     'flag' => $flag,
-                    'flagTone' => $flag === 'Overdue' ? 'red' : ($flag === 'Due Today' ? 'amber' : 'green'),
+                    'flagReason' => $task->needs_attention ? (string) ($task->attention_reason ?: '') : '',
+                    'flagTone' => in_array($flag, ['Overdue', 'Requires attention'], true) ? 'red' : ($flag === 'Due Today' ? 'amber' : 'green'),
                     'flagColor' => null,
                     'updated' => $updatedAt?->diffForHumans() ?: '—',
                     'version' => (string) $task->getRawOriginal('updated_at'),
@@ -2084,7 +2265,7 @@ class InquiryService
                     ->whereColumn('earlier_inquiry_tasks.sequence', '<', 'inquiry_tasks.sequence')
                     ->whereNull('earlier_inquiry_tasks.completed_at')->whereNull('earlier_inquiry_tasks.deleted_at');
             });
-        $row = (clone $base)->selectRaw("SUM(CASE WHEN LOWER(status) NOT LIKE 'waiting%' AND (due_date <= ? OR EXISTS (SELECT 1 FROM inquiries i WHERE i.id=inquiry_tasks.inquiry_id AND i.priority IN ('High','Urgent','Critical'))) THEN 1 ELSE 0 END) attention_count", [$weekEnd])
+        $row = (clone $base)->selectRaw('SUM(CASE WHEN needs_attention = 1 THEN 1 ELSE 0 END) attention_count')
             ->selectRaw('SUM(CASE WHEN due_date < ? THEN 1 ELSE 0 END) overdue_count', [$todayDate])
             ->selectRaw('SUM(CASE WHEN due_date = ? THEN 1 ELSE 0 END) today_count', [$todayDate])
             ->selectRaw("SUM(CASE WHEN due_date BETWEEN ? AND ? AND LOWER(status) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) upcoming_count", [$tomorrow, $weekEnd])
@@ -2128,22 +2309,20 @@ class InquiryService
 
     private function normalizeTaskStates(Inquiry $inquiry): void
     {
-        $defaultStatus = $this->defaultTaskStatus();
         $open = $inquiry->tasks()->whereNull('completed_at')->orderBy('sequence')->get();
         foreach ($open as $index => $task) {
             if ($index === 0) {
                 // Preserve a status already chosen on a started task even when
                 // that Master Data value is later deactivated/deleted.
-                $task->update([
-                    'status' => $task->started_at && trim((string) $task->status) !== ''
-                        ? $task->status
-                        : $defaultStatus,
-                ]);
+                $payload = $task->started_at && trim((string) $task->status) !== ''
+                    ? $this->taskStatusPayload((string) $task->status, $task)
+                    : $this->defaultTaskStatusPayload($task);
+                $task->update($payload);
                 continue;
             }
 
             // Future tasks use the workspace's current Master Data default.
-            if (!$task->started_at) $task->update(['status' => $defaultStatus]);
+            if (!$task->started_at) $task->update($this->defaultTaskStatusPayload($task));
         }
 
         $this->syncAutomaticStatus($inquiry);
@@ -2155,26 +2334,45 @@ class InquiryService
         if ($inquiry->result || (string) $inquiry->status === 'Draft') return $inquiry;
 
         $tasks = $inquiry->tasks()
-            ->get(['id', 'status', 'started_at', 'completed_at']);
+            ->orderBy('sequence')
+            ->get(['id', 'status', 'sequence', 'started_at', 'completed_at']);
+
         $total = $tasks->count();
         $completed = $tasks->whereNotNull('completed_at')->count();
-        $hasStarted = $tasks->contains(fn (InquiryTask $task) => $task->started_at !== null || $task->completed_at !== null);
+        $currentTask = $tasks
+            ->whereNull('completed_at')
+            ->sortBy(function (InquiryTask $task): string {
+                $startedBucket = $task->started_at ? '0' : '1';
+                $sequence = $task->started_at ? (999999 - (int) $task->sequence) : (int) $task->sequence;
+                return $startedBucket.str_pad((string) $sequence, 6, '0', STR_PAD_LEFT);
+            })
+            ->first();
 
-        $nextStatus = match (true) {
-            $total > 0 && $completed === $total => self::AUTO_COMPLETED_STATUS,
-            $hasStarted => self::AUTO_IN_PROGRESS_STATUS,
-            default => self::AUTO_READY_STATUS,
-        };
+        if ($total > 0 && $completed === $total) {
+            $lastTask = $tasks->sortByDesc('sequence')->first();
+            $nextStatus = $lastTask
+                ? $this->autoInquiryStatusForTaskStatus((string) $lastTask->status)
+                : self::AUTO_COMPLETED_STATUS;
+            if (strcasecmp($nextStatus, self::AUTO_COMPLETED_STATUS) !== 0) {
+                $nextStatus = self::AUTO_COMPLETED_STATUS;
+            }
+        } elseif ($currentTask) {
+            $nextStatus = $this->autoInquiryStatusForTaskStatus((string) $currentTask->status);
+        } else {
+            $nextStatus = self::AUTO_READY_STATUS;
+        }
 
         $update = ['status' => $nextStatus];
-        if ($nextStatus === self::AUTO_COMPLETED_STATUS) {
+        if ($total > 0 && $completed === $total && strcasecmp($nextStatus, self::AUTO_COMPLETED_STATUS) === 0) {
             $update['completed_at'] = $inquiry->completed_at ?: now();
         } elseif ($inquiry->completed_at && !$inquiry->result) {
             $update['completed_at'] = null;
         }
 
         $statusChanged = (string) $inquiry->status !== $nextStatus;
-        $completedChanged = ($update['completed_at'] ?? null) != $inquiry->completed_at;
+        $completedChanged = array_key_exists('completed_at', $update)
+            && $update['completed_at'] != $inquiry->completed_at;
+
         if ($statusChanged || $completedChanged) {
             $inquiry->update($update);
             if ($statusChanged && $actor) {
@@ -2182,7 +2380,7 @@ class InquiryService
                     $inquiry,
                     $actor,
                     'inquiry.status_auto_changed',
-                    'Inquiry status automatically changed to '.$nextStatus.' based on Taskflow progress.',
+                    'Inquiry status automatically changed to '.$nextStatus.' based on the current Inquiry Task Status.',
                 );
             }
         }
@@ -2216,6 +2414,34 @@ class InquiryService
     {
         if (!$userId) return;
         app(ShellDataService::class)->forget($userId);
+    }
+
+    private function notifyAttentionRecipients(Inquiry $inquiry, ?InquiryTask $task, string $message, User $actor): void
+    {
+        $recipientIds = User::query()
+            ->where('is_active', true)
+            ->where(function ($query) use ($inquiry): void {
+                $query->where('is_super_admin', true)
+                    ->orWhereHas('role', fn ($role) => $role->whereIn('slug', ['super-admin', 'admin', 'administrator']));
+                if ($inquiry->created_by) $query->orWhere('id', (int) $inquiry->created_by);
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->reject(fn ($id) => $id === (int) $actor->id)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($recipientIds === []) return;
+
+        app(NotificationService::class)->notifyInquiryAttentionUsers(
+            $recipientIds,
+            'Attention requested: '.$inquiry->inquiry_number,
+            $message,
+            $inquiry,
+            $task,
+            $actor,
+        );
     }
 
     private function notifyMentions(Inquiry $inquiry, ?InquiryTask $task, string $body, User $actor): void

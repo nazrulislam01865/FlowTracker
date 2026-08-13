@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Inquiry;
 use App\Models\MasterRecord;
 use App\Models\MasterValue;
 use App\Support\MasterColor;
@@ -16,7 +17,7 @@ class MasterDataService
     /** @var array<string,array<string,string>> */
     private array $colorMaps = [];
 
-    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_status', 'task_flag'];
+    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_task_status', 'task_flag'];
 
     public const ACCESS_MODULES = [
         'product' => 'catalog_products',
@@ -42,7 +43,7 @@ class MasterDataService
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
         'task_status' => 'Task Statuses',
-        'inquiry_status' => 'Inquiry Statuses',
+        'inquiry_task_status' => 'Inquiry Task Statuses',
         'task_flag' => 'Task Flags',
     ];
 
@@ -65,7 +66,7 @@ class MasterDataService
         'document_category' => 'DOC',
         'priority' => 'PRI',
         'task_status' => 'TST',
-        'inquiry_status' => 'IST',
+        'inquiry_task_status' => 'IST',
         'task_flag' => 'TFL',
     ];
 
@@ -82,7 +83,7 @@ class MasterDataService
         'document_category' => 'document_categories',
         'priority' => 'priorities',
         'task_status' => 'task_statuses',
-        'inquiry_status' => 'inquiry_statuses',
+        'inquiry_task_status' => 'inquiry_task_statuses',
     ];
 
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
@@ -91,18 +92,64 @@ class MasterDataService
     {
         $status = trim((string) ($filters['status'] ?? ''));
         $parentId = (int) ($filters['parent_id'] ?? 0);
+        $mainCategory = trim((string) ($filters['main_category'] ?? ''));
+        $clientAvailability = trim((string) ($filters['client_availability'] ?? ''));
 
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
             ->ofType($type)
             ->when(in_array($type, ['product', 'state'], true), fn ($q) => $q->with('parent'))
             ->when($type === 'product', fn ($q) => $q->with('creator'))
-            ->when($search, fn ($q) => $q->where(fn ($x) => $x
-                ->where('code', 'like', "%{$search}%")
-                ->orWhere('name', 'like', "%{$search}%")
-                ->orWhere('description', 'like', "%{$search}%")))
+            ->when($search, function ($q) use ($search, $type) {
+                $normalized = trim((string) $search);
+                $productId = null;
+                if ($type === 'product' && preg_match('/^PRD[-\s]*0*(\d+)$/i', $normalized, $matches)) {
+                    $productId = (int) $matches[1];
+                }
+
+                $q->where(function ($x) use ($normalized, $productId) {
+                    $x->where('code', 'like', "%{$normalized}%")
+                        ->orWhere('name', 'like', "%{$normalized}%")
+                        ->orWhere('description', 'like', "%{$normalized}%")
+                        ->orWhere('metadata->reference_code', 'like', "%{$normalized}%");
+                    if ($productId) $x->orWhere('id', $productId);
+                });
+            })
             ->when(in_array($status, ['active', 'inactive'], true), fn ($q) => $q->where('status', $status))
             ->when($type === 'product' && $parentId > 0, fn ($q) => $q->where('parent_id', $parentId))
+            ->when($type === 'product' && $mainCategory !== '', function ($q) use ($mainCategory) {
+                $q->where(function ($match) use ($mainCategory) {
+                    $match->where('metadata->main_category', $mainCategory)
+                        ->orWhere('metadata->excel_main_category', $mainCategory)
+                        ->orWhereHas('parent', function ($parent) use ($mainCategory) {
+                            $parent->where('metadata->excel_main_category', $mainCategory)
+                                ->orWhere(function ($fallback) use ($mainCategory) {
+                                    $fallback->whereNull('metadata')->where('name', $mainCategory);
+                                });
+                        });
+                });
+            })
+            ->when($type === 'product' && in_array($clientAvailability, ['all', 'specific'], true), function ($q) use ($clientAvailability) {
+                if ($clientAvailability === 'specific') {
+                    $q->where(function ($specific) {
+                        $specific->where('metadata->client_availability', 'specific')
+                            ->orWhereNotNull('metadata->client_codes')
+                            ->orWhereNotNull('metadata->client_availability_labels');
+                    });
+                    return;
+                }
+
+                $q->where(function ($all) {
+                    $all->whereNull('metadata->client_codes')
+                        ->whereNull('metadata->client_availability_labels')
+                        ->where(function ($scope) {
+                            $scope->whereNull('metadata->client_availability')
+                                ->orWhere('metadata->client_availability', '')
+                                ->orWhere('metadata->client_availability', 'all')
+                                ->orWhere('metadata->client_availability', 'all clients');
+                        });
+                });
+            })
             ->orderBy('sort_order')->orderBy('name');
     }
 
@@ -238,7 +285,7 @@ class MasterDataService
             throw ValidationException::withMessages(['parentId' => 'Select the country this state belongs to.']);
         }
 
-        return DB::transaction(function () use ($type, $data, $id, $workspaceId, $code, $parentId) {
+        $record = DB::transaction(function () use ($type, $data, $id, $workspaceId, $code, $parentId) {
             $record = $id
                 ? MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id)
                 : new MasterRecord();
@@ -277,6 +324,42 @@ class MasterDataService
             $this->forgetActiveCache($record->type);
             return $record;
         });
+
+        // Inquiry Task Status is the canonical catalogue for Inquiry tasks.
+        // Keep existing task rows synchronized after a Master Data rename or
+        // flag/mapping change, then recalculate the parent Inquiry status.
+        if ($record->type === 'inquiry_task_status'
+            && Schema::hasTable('inquiry_tasks')
+            && Schema::hasColumn('inquiry_tasks', 'inquiry_task_status_id')) {
+            $inquiryIds = DB::table('inquiry_tasks')
+                ->where('inquiry_task_status_id', $record->id)
+                ->whereNull('deleted_at')
+                ->distinct()
+                ->pluck('inquiry_id')
+                ->filter()
+                ->map(fn ($value) => (int) $value)
+                ->values();
+
+            $updates = [
+                'status' => $record->name,
+                'needs_attention' => $record->requiresAttention(),
+            ];
+            if (!$record->requiresAttention()) {
+                $updates['attention_reason'] = null;
+            }
+
+            DB::table('inquiry_tasks')
+                ->where('inquiry_task_status_id', $record->id)
+                ->update($updates);
+
+            foreach ($inquiryIds as $inquiryId) {
+                if ($inquiry = Inquiry::query()->find($inquiryId)) {
+                    app(InquiryService::class)->syncAutomaticStatus($inquiry);
+                }
+            }
+        }
+
+        return $record;
     }
 
     public function setColor(int $id, string $color): MasterRecord
@@ -312,20 +395,19 @@ class MasterDataService
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         $this->assertAction($record->type, 'delete');
 
-        // Inquiry Status is intentionally force-removable from the Master Data UI.
-        // Inquiries store their status label as text, not as a foreign key, and
-        // MasterRecord itself uses SoftDeletes. That means current, historical,
-        // or soft-deleted Inquiries must never block removing a status option.
-        // Delete the mirrored legacy value too so syncLegacy() cannot restore it.
-        if ($record->type === 'inquiry_status') {
+        // Inquiry Task Statuses remain removable because Inquiry tasks keep the
+        // historical text label and the soft-deleted Master Data row remains
+        // resolvable for historical mapping. Delete the legacy mirror too so
+        // syncLegacy() cannot restore the status as active.
+        if ($record->type === 'inquiry_task_status') {
             if (Schema::hasTable('master_values')) {
-                MasterValue::where('group_key', self::LEGACY_GROUPS['inquiry_status'])
+                MasterValue::where('group_key', self::LEGACY_GROUPS['inquiry_task_status'])
                     ->where('code', $record->code)
                     ->delete();
             }
 
             $record->delete();
-            $this->forgetActiveCache('inquiry_status');
+            $this->forgetActiveCache('inquiry_task_status');
             return;
         }
 

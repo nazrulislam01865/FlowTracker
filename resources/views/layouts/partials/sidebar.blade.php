@@ -23,9 +23,12 @@
 
     $catalogueGroups = ['product', 'product_category', 'supplier'];
     $catalogProductView = $user->canModule('catalog_products', 'view');
+    $catalogProductCreate = $user->canModule('catalog_products', 'create');
     $productCategoryView = $user->canModule('product_categories', 'view');
+    $productCategoryCreate = $user->canModule('product_categories', 'create');
     $supplierView = $user->canModule('suppliers', 'view');
     $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
+    $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
 
     $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
     $masterLinks = collect($masterLabels)->except($catalogueGroups)->all();
@@ -109,11 +112,30 @@
             </details>
         @endif
 
-        @if($catalogProductView)
-            <x-ui.nav-link route="master-data" label="Products" icon="products" :params="['group' => 'product']" :active="$catalogueGroupActive && $masterGroup === 'product'" />
-        @endif
-        @if($productCategoryView)
-            <x-ui.nav-link route="master-data" label="Product Categories" icon="categories" :params="['group' => 'product_category']" :active="$catalogueGroupActive && $masterGroup === 'product_category'" />
+        @if($catalogProductView || $catalogProductCreate || $productCategoryView || $productCategoryCreate)
+            <details class="ft-sidebar-group" @if($productMenuActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $productMenuActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                    </span>
+                    <span>Product</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    @if($catalogProductView)
+                        <x-ui.nav-link route="master-data" label="Products" icon="products" child :params="['group' => 'product']" :active="$catalogueGroupActive && $masterGroup === 'product' && !request()->boolean('create')" />
+                    @endif
+                    @if($catalogProductCreate)
+                        <x-ui.nav-link route="master-data" label="Create Product" icon="plus" child :params="['group' => 'product', 'create' => 1]" :active="$catalogueGroupActive && $masterGroup === 'product' && request()->boolean('create')" />
+                    @endif
+                    @if($productCategoryView)
+                        <x-ui.nav-link route="master-data" label="Product Categories" icon="categories" child :params="['group' => 'product_category']" :active="$catalogueGroupActive && $masterGroup === 'product_category' && !request()->boolean('create')" />
+                    @endif
+                    @if($productCategoryCreate)
+                        <x-ui.nav-link route="master-data" label="Create Product Category" icon="plus" child :params="['group' => 'product_category', 'create' => 1]" :active="$catalogueGroupActive && $masterGroup === 'product_category' && request()->boolean('create')" />
+                    @endif
+                </div>
+            </details>
         @endif
         @if($supplierView)
             <x-ui.nav-link route="master-data" label="Suppliers" icon="suppliers" :params="['group' => 'supplier']" :active="$catalogueGroupActive && $masterGroup === 'supplier'" />

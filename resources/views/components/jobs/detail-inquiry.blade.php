@@ -17,6 +17,7 @@
     $selectedClientMatch = $selectedInquiry && (int) $selectedInquiry->client_id === (int) $job->client_id;
     $searchLength = mb_strlen(trim((string) $search));
     $masterData = app(\App\Services\MasterDataService::class);
+    $inquiryService = app(\App\Services\InquiryService::class);
 @endphp
 
 <div class="ft-order-inquiry-link" wire:key="order-inquiry-link-{{ $job->id }}">
@@ -116,7 +117,7 @@
                                         </span>
                                         <span class="ft-oil-result-client"><strong>{{ $inquiry->client?->name ?: 'No client' }}</strong><small>{{ $clientMatch ? 'Client match' : 'Different client' }}</small></span>
                                         @php
-                                            $resultInquiryStatusColor = $masterData->displayColorFor('inquiry_status', (string) $inquiry->status);
+                                            $resultInquiryStatusColor = $inquiryService->inquiryStatusColor((string) $inquiry->status);
                                         @endphp
                                         <span class="ft-oil-result-owner"><strong class="ft-master-color-inline-label" style="{{ \App\Support\MasterColor::style($resultInquiryStatusColor) }}">{{ $inquiry->status }}</strong><small>{{ $eligible ? 'Owner: '.($inquiry->owner?->name ?: 'Unassigned') : ($linkedOrder ? 'Linked to '.$linkedOrder->displayOrderNumber() : 'Not eligible') }}</small></span>
                                     </button>
@@ -163,7 +164,7 @@
                                     <span class="ft-oil-linked-meta">
                                         <span>{{ $linked->client?->name ?: 'No client' }}</span>
                                         @php
-                                            $linkedInquiryStatusColor = $masterData->displayColorFor('inquiry_status', (string) $linked->status);
+                                            $linkedInquiryStatusColor = $inquiryService->inquiryStatusColor((string) $linked->status);
                                         @endphp
                                         <span class="ft-master-color-inline-label" style="{{ \App\Support\MasterColor::style($linkedInquiryStatusColor) }}">{{ $linked->status }}</span>
                                         <span>Owner: {{ $linked->owner?->name ?: 'Unassigned' }}</span>

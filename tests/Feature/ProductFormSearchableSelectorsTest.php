@@ -1,0 +1,26 @@
+<?php
+
+namespace Tests\Feature;
+
+use Tests\TestCase;
+
+class ProductFormSearchableSelectorsTest extends TestCase
+{
+    public function test_product_form_uses_shared_searchable_selectors_and_attachment_actions(): void
+    {
+        $form = file_get_contents(resource_path('views/components/catalog/product-form.blade.php'));
+        $creator = file_get_contents(resource_path('views/components/catalog/category-creator.blade.php'));
+        $upload = file_get_contents(resource_path('views/components/catalog/file-upload.blade.php'));
+        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+
+        $this->assertSame(3, substr_count($form, '<x-ui.select-filter'));
+        $this->assertSame(2, substr_count($creator, '<x-ui.select-filter'));
+        $this->assertStringNotContainsString('<select', $form);
+        $this->assertStringNotContainsString('<select', $creator);
+        $this->assertStringContainsString('Search clients…', $form);
+        $this->assertStringContainsString('Preview', $upload);
+        $this->assertStringContainsString('removeCurrentAction', $upload);
+        $this->assertStringContainsString('public function removeProductCertificate(): void', $component);
+        $this->assertStringContainsString('public function removeProductTemplate(): void', $component);
+    }
+}

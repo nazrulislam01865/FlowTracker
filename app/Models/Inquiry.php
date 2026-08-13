@@ -24,6 +24,8 @@ class Inquiry extends Model
             'target_price' => 'decimal:4',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'needs_attention' => 'boolean',
+            'attention_at' => 'datetime',
         ];
     }
 
