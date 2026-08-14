@@ -1,0 +1,297 @@
+<?php
+
+namespace App\Services;
+
+use App\Models\ClientContact;
+use App\Models\CollectionUpdate;
+use App\Models\FlowJob;
+use App\Models\Invoice;
+use App\Models\OrderCollection;
+use App\Models\Payment;
+use App\Models\User;
+use App\Support\JobDetailPresenter;
+use Illuminate\Support\Carbon;
+use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
+
+class OrderFinanceService
+{
+    public function summary(FlowJob $job): array
+    {
+        $invoices = $job->relationLoaded('invoices') ? $job->invoices : $job->invoices()->with('payments')->get();
+        $payments = $job->relationLoaded('payments') ? $job->payments : $job->payments()->get();
+
+        $counted = $invoices->reject(fn (Invoice $invoice) => in_array($invoice->status, ['draft', 'cancelled'], true));
+        $totalInvoiced = (float) $counted->sum('total');
+        $totalCollected = (float) $payments->sum('amount');
+        $outstanding = max(0, $totalInvoiced - $totalCollected);
+        $overdue = (float) $counted
+            ->filter(fn (Invoice $invoice) => $invoice->due_date?->isBefore(today()) && $invoice->balanceAmount() > 0)
+            ->sum(fn (Invoice $invoice) => $invoice->balanceAmount());
+
+        return [
+            'order_value' => (float) ($job->commercial_value ?? 0),
+            'total_invoiced' => $totalInvoiced,
+            'total_collected' => $totalCollected,
+            'outstanding' => $outstanding,
+            'overdue' => $overdue,
+            'collection_pct' => $totalInvoiced > 0 ? min(100, ($totalCollected / $totalInvoiced) * 100) : 0,
+            'overdue_days' => $this->oldestOverdueDays($counted),
+        ];
+    }
+
+    public function defaultInvoiceItems(FlowJob $job, ?float $targetTotal = null): array
+    {
+        // Use the same product source as Order Overview so the invoice popup
+        // always mirrors the products the user can actually see on the order.
+        // JobDetailPresenter also provides compatibility for older orders that
+        // still store their product in the legacy flow_jobs.product columns.
+        $items = JobDetailPresenter::products($job)
+            ->filter(fn ($item) => filled($item->product_name ?? null))
+            ->values();
+
+        $orderValue = max(0, $targetTotal ?? (float) ($job->commercial_value ?? 0));
+
+        if ($items->isEmpty()) {
+            return [[
+                'description' => (string) ($job->title ?: 'Order'),
+                'quantity' => max(1, (float) ($job->quantity ?: 1)),
+                'unit_price' => $orderValue > 0
+                    ? round($orderValue / max(1, (float) ($job->quantity ?: 1)), 2)
+                    : 0,
+            ]];
+        }
+
+        $totalQty = max(1, (float) $items->sum(fn ($item) => max(0.01, (float) ($item->quantity ?? 1))));
+        $unitPrice = $orderValue > 0 ? round($orderValue / $totalQty, 2) : 0;
+
+        return $items->map(fn ($item) => [
+            'description' => trim((string) $item->product_name),
+            'quantity' => max(0.01, (float) ($item->quantity ?? 1)),
+            'unit_price' => $unitPrice,
+        ])->all();
+    }
+
+    public function createInvoice(
+        FlowJob $job,
+        User $actor,
+        array $payload,
+        array $items,
+        mixed $supportingDocument = null,
+        bool $draft = false,
+    ): Invoice {
+        return DB::transaction(function () use ($job, $actor, $payload, $items, $supportingDocument, $draft): Invoice {
+            $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $sequence = ((int) Invoice::query()->where('flow_job_id', $job->id)->max('sequence')) + 1;
+            $number = $this->invoiceNumber($lockedJob, $sequence);
+
+            $contact = null;
+            if (!empty($payload['billing_contact_id'])) {
+                $contact = ClientContact::query()
+                    ->where('client_id', $lockedJob->client_id)
+                    ->findOrFail((int) $payload['billing_contact_id']);
+            }
+
+            [$subtotal, $normalizedItems] = $this->normalizeInvoiceItems($items);
+            $taxRate = max(0, min(100, (float) ($payload['tax_rate'] ?? 0)));
+            $taxAmount = round($subtotal * ($taxRate / 100), 2);
+            $grossTotal = round($subtotal + $taxAmount, 2);
+            $previouslyInvoiced = (float) Invoice::query()
+                ->where('flow_job_id', $lockedJob->id)
+                ->whereNotIn('status', ['draft', 'cancelled'])
+                ->sum('total');
+            $total = (string) ($payload['type'] ?? '') === 'Final invoice'
+                ? round(max(0, $grossTotal - $previouslyInvoiced), 2)
+                : $grossTotal;
+            abort_if($total <= 0, 422, 'There is no remaining amount to invoice for this order.');
+
+            $invoice = Invoice::create([
+                'flow_job_id' => $lockedJob->id,
+                'sequence' => $sequence,
+                'invoice_number' => $number,
+                'type' => (string) ($payload['type'] ?? 'Final invoice'),
+                'currency' => strtoupper((string) ($payload['currency'] ?? $lockedJob->currency ?? 'USD')),
+                'issue_date' => $payload['issue_date'],
+                'due_date' => $payload['due_date'],
+                'billing_contact_id' => $contact?->id,
+                'billing_contact_name' => $contact?->name ?: ($lockedJob->client?->contact_name ?? null),
+                'billing_contact_email' => $contact?->email ?: ($lockedJob->client?->email ?? null),
+                'purchase_order_reference' => $payload['purchase_order_reference'] ?: null,
+                'notes' => $payload['notes'] ?: null,
+                'subtotal' => $subtotal,
+                'tax_rate' => $taxRate,
+                'tax_amount' => $taxAmount,
+                'previously_invoiced' => $previouslyInvoiced,
+                'total' => $total,
+                'status' => $draft ? 'draft' : 'sent',
+                'sent_at' => $draft ? null : now(),
+                'created_by' => $actor->id,
+            ]);
+
+            foreach ($normalizedItems as $index => $item) {
+                $invoice->items()->create($item + ['sort_order' => $index]);
+            }
+
+            if ($supportingDocument) {
+                $path = $supportingDocument->store('invoices/'.$lockedJob->id, 'local');
+                $invoice->update([
+                    'supporting_document_path' => $path,
+                    'supporting_document_name' => $supportingDocument->getClientOriginalName(),
+                ]);
+            }
+
+            $lockedJob->activities()->create([
+                'user_id' => $actor->id,
+                'event' => $draft ? 'job.invoice_drafted' : 'job.invoice_created',
+                'description' => ($draft ? 'Invoice draft created: ' : 'Invoice created: ').$invoice->invoice_number,
+                'meta' => ['invoice_id' => $invoice->id, 'amount' => $total, 'currency' => $invoice->currency],
+            ]);
+
+            return $invoice->load(['items', 'payments', 'billingContact']);
+        }, 3);
+    }
+
+    public function recordPayment(FlowJob $job, User $actor, array $payload): Payment
+    {
+        return DB::transaction(function () use ($job, $actor, $payload): Payment {
+            $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $invoice = Invoice::query()
+                ->where('flow_job_id', $lockedJob->id)
+                ->with('payments')
+                ->lockForUpdate()
+                ->findOrFail((int) $payload['invoice_id']);
+
+            $amount = round((float) $payload['amount'], 2);
+            abort_if($amount <= 0, 422, 'Payment amount must be greater than zero.');
+            abort_if($amount > $invoice->balanceAmount() + 0.009, 422, 'Payment amount cannot exceed the invoice balance.');
+
+            $sequence = ((int) Payment::query()->where('flow_job_id', $lockedJob->id)->max('sequence')) + 1;
+            $payment = Payment::create([
+                'flow_job_id' => $lockedJob->id,
+                'invoice_id' => $invoice->id,
+                'sequence' => $sequence,
+                'payment_number' => $this->paymentNumber($lockedJob, $sequence),
+                'payment_date' => $payload['payment_date'],
+                'method' => (string) $payload['method'],
+                'amount' => $amount,
+                'reference' => $payload['reference'] ?: null,
+                'notes' => $payload['notes'] ?: null,
+                'recorded_by' => $actor->id,
+            ]);
+
+            $this->refreshInvoiceStatus($invoice->refresh()->load('payments'));
+
+            $lockedJob->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.payment_recorded',
+                'description' => 'Payment recorded: '.$payment->payment_number.' for '.$invoice->invoice_number,
+                'meta' => ['payment_id' => $payment->id, 'invoice_id' => $invoice->id, 'amount' => $amount],
+            ]);
+
+            return $payment->load(['invoice', 'recorder']);
+        }, 3);
+    }
+
+    public function addCollectionUpdate(FlowJob $job, User $actor, array $payload, string $type = 'update'): OrderCollection
+    {
+        return DB::transaction(function () use ($job, $actor, $payload, $type): OrderCollection {
+            $collection = OrderCollection::query()->firstOrCreate(
+                ['flow_job_id' => $job->id],
+                ['collection_owner_id' => $job->owner_id ?: $actor->id]
+            );
+
+            $followUpDate = $payload['follow_up_date'] ?? now()->toDateString();
+            $collection->update([
+                'collection_owner_id' => $payload['collection_owner_id'] ?: $collection->collection_owner_id,
+                'last_follow_up_at' => $followUpDate,
+                'next_follow_up_at' => $payload['next_follow_up_at'] ?: null,
+                'latest_note' => trim((string) $payload['note']),
+            ]);
+
+            CollectionUpdate::create([
+                'flow_job_collection_id' => $collection->id,
+                'actor_id' => $actor->id,
+                'follow_up_date' => $followUpDate,
+                'next_follow_up_at' => $payload['next_follow_up_at'] ?: null,
+                'note' => trim((string) $payload['note']),
+                'type' => $type,
+            ]);
+
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.collection_updated',
+                'description' => $type === 'reminder' ? 'Payment reminder sent.' : 'Collection update added.',
+            ]);
+
+            return $collection->refresh()->load(['owner', 'updates.actor']);
+        }, 3);
+    }
+
+    public function refreshInvoiceStatus(Invoice $invoice): Invoice
+    {
+        if (in_array($invoice->status, ['draft', 'cancelled'], true)) return $invoice;
+
+        $balance = $invoice->balanceAmount();
+        $collected = $invoice->collectedAmount();
+        $status = 'sent';
+        if ($balance <= 0.009) $status = 'paid';
+        elseif ($invoice->due_date?->isBefore(today())) $status = 'overdue';
+        elseif ($collected > 0) $status = 'partial';
+
+        if ($invoice->status !== $status) $invoice->update(['status' => $status]);
+        return $invoice;
+    }
+
+    public function syncStatuses(Collection $invoices): void
+    {
+        $invoices->each(fn (Invoice $invoice) => $this->refreshInvoiceStatus($invoice));
+    }
+
+    public function deleteSupportingDocument(Invoice $invoice): void
+    {
+        if ($invoice->supporting_document_path) Storage::disk('local')->delete($invoice->supporting_document_path);
+    }
+
+    private function normalizeInvoiceItems(array $items): array
+    {
+        $normalized = [];
+        $subtotal = 0.0;
+        foreach ($items as $item) {
+            $description = trim((string) ($item['description'] ?? ''));
+            if ($description === '') continue;
+            $quantity = max(0.01, (float) ($item['quantity'] ?? 0));
+            $unitPrice = max(0, (float) ($item['unit_price'] ?? 0));
+            $amount = round($quantity * $unitPrice, 2);
+            $subtotal += $amount;
+            $normalized[] = [
+                'description' => $description,
+                'quantity' => $quantity,
+                'unit_price' => round($unitPrice, 2),
+                'amount' => $amount,
+            ];
+        }
+        abort_if($normalized === [], 422, 'Add at least one invoice item.');
+        abort_if($subtotal <= 0, 422, 'Invoice total must be greater than zero.');
+        return [round($subtotal, 2), $normalized];
+    }
+
+    private function invoiceNumber(FlowJob $job, int $sequence): string
+    {
+        return sprintf('INV-%05d-%02d', (int) $job->id, $sequence);
+    }
+
+    private function paymentNumber(FlowJob $job, int $sequence): string
+    {
+        return sprintf('PAY-%05d-%02d', (int) $job->id, $sequence);
+    }
+
+    private function oldestOverdueDays(Collection $invoices): int
+    {
+        $oldestDue = $invoices
+            ->filter(fn (Invoice $invoice) => $invoice->due_date?->isBefore(today()) && $invoice->balanceAmount() > 0)
+            ->min(fn (Invoice $invoice) => $invoice->due_date?->timestamp);
+        if (!$oldestDue) return 0;
+        return Carbon::createFromTimestamp($oldestDue)->startOfDay()->diffInDays(today());
+    }
+}

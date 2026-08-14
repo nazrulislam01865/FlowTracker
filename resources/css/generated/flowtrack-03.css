@@ -1,38 +1,4 @@
 
-
-/* 2026-08-07 Job Overview product row alignment correction. */
-.ft-inline-product-table .ft-product-delete-column,
-.ft-inline-product-table .ft-product-delete-cell{
-    width:42px;
-    min-width:42px;
-    text-align:right;
-    padding-left:4px;
-    padding-right:8px;
-}
-.ft-inline-product-table .ft-product-quantity-cell{
-    text-align:left;
-}
-.ft-inline-product-table .ft-product-quantity-cell .ft-readonly-product-value{
-    justify-content:flex-start;
-    margin-left:0;
-    text-align:left;
-}
-.ft-inline-product-table .ft-inline-product-quantity-editor{
-    width:110px;
-    max-width:110px;
-    margin-left:0;
-}
-.ft-inline-product-table .ft-product-quantity-cell .ft-inline-cell-input.quantity{
-    text-align:left;
-}
-.ft-inline-product-table .ft-product-delete-cell .ft-inline-product-delete{
-    margin-left:auto;
-}
-
-/* Task detail reference refinements: compact identity, completion time, flags and workspace-local timestamps. */
-.ft-task-title-line{display:flex;align-items:baseline;gap:9px;min-width:0;flex-wrap:wrap}
-.ft-task-title-line .ft-editable-task-title{margin:0}
-.ft-task-title-phase{color:#60728b;font-size:12px;font-weight:700;white-space:nowrap}
 .ft-friendly-task-properties{grid-template-columns:repeat(7,minmax(0,1fr))}
 .ft-task-completed-property .ft-property-value{font-size:11px;line-height:1.25}
 .ft-task-completed-property .ft-completed-date-time{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
@@ -2316,3 +2282,24 @@ a.ft-new-job-btn:active {
 .ft-inquiry-prototype .ft-inquiry-step-title-inline em{font-size:9.5px}
 .ft-inquiry-prototype .ft-inquiry-create-field>label,.ft-inquiry-prototype .ft-inquiry-create-field>span{font-size:11px}
 .ft-inquiry-prototype .ft-inquiry-create-field input,.ft-inquiry-prototype .ft-inquiry-create-field select{font-size:12px}
+.ft-inquiry-prototype .ft-inquiry-field-help,.ft-inquiry-prototype .ft-inquiry-field-tip{font-size:9.75px}
+.ft-inquiry-prototype .ft-inquiry-source-switch button{font-size:11px}
+.ft-inquiry-prototype .ft-inquiry-source-switch button span{font-size:13px}
+.ft-inquiry-prototype .ft-inquiry-received-control>span{font-size:12px}
+.ft-inquiry-prototype .ft-inquiry-client-selector .ft-remote-filter-button{font-size:12px!important}
+.ft-inquiry-prototype .ft-inquiry-new-client-btn,.ft-inquiry-prototype .ft-inquiry-new-contact-btn{font-size:11px}
+.ft-inquiry-prototype .ft-inquiry-request-details .ft-rich-text-tool{font-size:10.5px}
+.ft-inquiry-prototype .ft-inquiry-request-details .ft-rich-text-editor{font-size:12px;line-height:1.5}
+.ft-inquiry-prototype .ft-inquiry-request-details .ft-rich-text-footer{font-size:9.5px}
+.ft-inquiry-prototype .ft-inquiry-prototype-dropzone .inquiry-dropzone-copy strong{font-size:12px}
+.ft-inquiry-prototype .ft-inquiry-prototype-dropzone .ft-inquiry-drop-or{font-size:10.5px}
+.ft-inquiry-prototype .ft-inquiry-prototype-dropzone .inquiry-dropzone-copy small{font-size:9px}
+.ft-inquiry-prototype .ft-inquiry-prototype-dropzone .inquiry-dropzone-button{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-workflow-copy small{font-size:9.5px}
+.ft-inquiry-prototype .ft-inquiry-workflow-copy strong{font-size:13px}
+.ft-inquiry-prototype .ft-inquiry-workflow-copy>span{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-workflow-selected>a{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-workflow-option strong{font-size:11px}
+.ft-inquiry-prototype .ft-inquiry-workflow-option small{font-size:9.25px}
+.ft-inquiry-prototype .ft-inquiry-workflow-footnote{font-size:9.75px}
+.ft-inquiry-prototype .ft-inquiry-create-actions>span{font-size:10px}

@@ -36,10 +36,41 @@
     'showInquiryUnlinkConfirm'=>false,
     'canManageInquiryLink'=>false,
     'linkedInquiryCanOpen'=>false,
+    'financeSummary'=>null,
+    'financeContacts'=>null,
+    'financeUsers'=>null,
+    'canCreateFinance'=>false,
+    'canEditFinance'=>false,
+    'showCreateInvoiceModal'=>false,
+    'invoiceType'=>'Final invoice',
+    'invoiceCurrency'=>'USD',
+    'invoiceIssueDate'=>'',
+    'invoicePaymentTerms'=>'15',
+    'invoiceDueDate'=>'',
+    'invoiceBillingContactId'=>null,
+    'invoiceLineItems'=>[],
+    'invoicePurchaseOrderReference'=>'',
+    'invoiceNotes'=>'',
+    'invoiceTaxRate'=>'0',
+    'invoiceSupportingDocument'=>null,
+    'invoiceEmailAfterCreation'=>true,
+    'showRecordPaymentModal'=>false,
+    'paymentInvoiceId'=>null,
+    'paymentDate'=>'',
+    'paymentMethod'=>'Bank transfer',
+    'paymentAmount'=>'',
+    'paymentReference'=>'',
+    'paymentNotes'=>'',
+    'showCollectionUpdateModal'=>false,
+    'collectionOwnerId'=>null,
+    'collectionFollowUpDate'=>'',
+    'collectionNextFollowUpDate'=>'',
+    'collectionNote'=>'',
 ])
 @php
     $team = \App\Support\JobDetailPresenter::team($job);
     $tabs = ['overview'=>'Overview','inquiry'=>'Inquiry'];
+    if (app(\App\Services\AccessControlService::class)->can(auth()->user(), 'finance', 'view')) $tabs['finance'] = 'Invoices & Payments';
     $jobPriorityColor = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $job->priority);
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
@@ -103,15 +134,23 @@
         </div>
     </div>
 
-    <nav class="ft-detail-tabs ft-exact-tabs">
-        @foreach($tabs as $key=>$label)
-            <button class="{{ $detailTab===$key ? 'active' : '' }}" wire:click="setDetailTab('{{ $key }}')">
-                {{ $label }}
-                @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
-                @if($key==='inquiry')<span>{{ $job->source_inquiry_id ? 1 : 0 }}</span>@endif
-            </button>
-        @endforeach
-    </nav>
+    <div class="{{ $detailTab==='finance' ? 'ft-finance-tab-action-row' : '' }}">
+        <nav class="ft-detail-tabs ft-exact-tabs">
+            @foreach($tabs as $key=>$label)
+                <button class="{{ $detailTab===$key ? 'active' : '' }}" wire:click="setDetailTab('{{ $key }}')">
+                    {{ $label }}
+                    @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
+                    @if($key==='inquiry')<span>{{ $job->source_inquiry_id ? 1 : 0 }}</span>@endif
+                </button>
+            @endforeach
+        </nav>
+        @if($detailTab==='finance' && $canCreateFinance)
+            <div class="ft-finance-tab-actions">
+                <button type="button" class="ft-finance-btn secondary" wire:click="openRecordPayment">Record Payment</button>
+                <button type="button" class="ft-finance-btn primary" wire:click="openCreateInvoice"><span>＋</span> Create Invoice</button>
+            </div>
+        @endif
+    </div>
 
     @if($detailTab==='overview')
         <x-jobs.detail-overview
@@ -148,6 +187,40 @@
             :show-unlink-confirm="$showInquiryUnlinkConfirm"
             :can-manage="$canManageInquiryLink"
             :linked-inquiry-can-open="$linkedInquiryCanOpen"
+        />
+    @elseif($detailTab==='finance')
+        <x-jobs.finance.detail
+            :job="$job"
+            :summary="$financeSummary"
+            :contacts="$financeContacts ?? collect()"
+            :users="$financeUsers ?? collect()"
+            :can-create="$canCreateFinance"
+            :can-edit="$canEditFinance"
+            :show-create-invoice-modal="$showCreateInvoiceModal"
+            :invoice-type="$invoiceType"
+            :invoice-currency="$invoiceCurrency"
+            :invoice-issue-date="$invoiceIssueDate"
+            :invoice-payment-terms="$invoicePaymentTerms"
+            :invoice-due-date="$invoiceDueDate"
+            :invoice-billing-contact-id="$invoiceBillingContactId"
+            :invoice-line-items="$invoiceLineItems"
+            :invoice-purchase-order-reference="$invoicePurchaseOrderReference"
+            :invoice-notes="$invoiceNotes"
+            :invoice-tax-rate="$invoiceTaxRate"
+            :invoice-supporting-document="$invoiceSupportingDocument"
+            :invoice-email-after-creation="$invoiceEmailAfterCreation"
+            :show-record-payment-modal="$showRecordPaymentModal"
+            :payment-invoice-id="$paymentInvoiceId"
+            :payment-date="$paymentDate"
+            :payment-method="$paymentMethod"
+            :payment-amount="$paymentAmount"
+            :payment-reference="$paymentReference"
+            :payment-notes="$paymentNotes"
+            :show-collection-update-modal="$showCollectionUpdateModal"
+            :collection-owner-id="$collectionOwnerId"
+            :collection-follow-up-date="$collectionFollowUpDate"
+            :collection-next-follow-up-date="$collectionNextFollowUpDate"
+            :collection-note="$collectionNote"
         />
     @endif
 </div>

@@ -175,8 +175,18 @@ class Index extends Component
         }
     }
 
-    public function updatedSearch(): void { $this->resetPage('inquiryPage'); }
-    public function updatedListClient(): void { $this->resetPage('inquiryPage'); }
+    public function updatedSearch(): void
+    {
+        $this->clearMetricFilter();
+        $this->resetPage('inquiryPage');
+    }
+
+    public function updatedListClient(): void
+    {
+        $this->clearMetricFilter();
+        $this->resetPage('inquiryPage');
+    }
+
     public function updatedListStatus(): void
     {
         $allowedStatuses = app(InquiryService::class)->taskStatusFilterOptions();
@@ -186,6 +196,10 @@ class Index extends Component
             'Invalid task status filter.'
         );
 
+        // Summary cards are intentionally exclusive from the toolbar filters.
+        // Search / attention / task status / client / hide-completed may be
+        // combined with each other, but choosing one of them clears a card.
+        $this->clearMetricFilter();
         $this->resetPage('inquiryPage');
     }
 
@@ -198,6 +212,7 @@ class Index extends Component
         if ($raw === '') {
             $this->listClient = '';
             $this->listClientLabel = '';
+            $this->clearMetricFilter();
             $this->resetPage('inquiryPage');
             return;
         }
@@ -211,21 +226,34 @@ class Index extends Component
 
         $this->listClient = (string) $id;
         $this->listClientLabel = (string) ($selected['label'] ?? '');
+        $this->clearMetricFilter();
         $this->resetPage('inquiryPage');
     }
+
     public function updatedHideCompleted(): void
     {
-        // Hide completed and the Completed summary card are mutually exclusive.
-        if ($this->hideCompleted && $this->metricFilter === 'completed') {
-            $this->metricFilter = '';
-        }
+        $this->clearMetricFilter();
         $this->resetPage('inquiryPage');
     }
 
     public function setQuick(string $quick): void
     {
         abort_unless(in_array($quick, ['all', 'attention'], true), 422);
-        $this->quick = $quick;
+        abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
+
+        if ($quick === 'all') {
+            // "All" is the toolbar reset state. It clears every toolbar filter
+            // and any active summary card so the full visible Inquiry scope is
+            // shown again.
+            $this->clearToolbarFilters();
+            $this->metricFilter = '';
+        } else {
+            // Toolbar filters may be combined with each other, but never with a
+            // KPI/summary-card filter.
+            $this->quick = $quick;
+            $this->clearMetricFilter();
+        }
+
         $this->resetPage('inquiryPage');
     }
 
@@ -234,16 +262,29 @@ class Index extends Component
         abort_unless(in_array($metric, ['active', 'completed', 'attention', 'dueToday'], true), 422);
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
 
-        // Clicking the selected summary card again clears only the card filter.
-        $this->metricFilter = $this->metricFilter === $metric ? '' : $metric;
+        $nextMetric = $this->metricFilter === $metric ? '' : $metric;
 
-        // The Completed summary must remain visible even if the user had
-        // previously enabled Hide completed. Keep the controls mutually honest.
-        if ($this->metricFilter === 'completed') {
-            $this->hideCompleted = false;
-        }
-
+        // A summary card is a standalone shortcut. Clear toolbar filters before
+        // activating it so the card result always matches the number printed on
+        // the card and no hidden filter remains applied.
+        $this->clearToolbarFilters();
+        $this->metricFilter = $nextMetric;
         $this->resetPage('inquiryPage');
+    }
+
+    private function clearMetricFilter(): void
+    {
+        $this->metricFilter = '';
+    }
+
+    private function clearToolbarFilters(): void
+    {
+        $this->search = '';
+        $this->quick = 'all';
+        $this->listClient = '';
+        $this->listClientLabel = '';
+        $this->listStatus = '';
+        $this->hideCompleted = false;
     }
 
     public function deleteInquiry(int $id): void

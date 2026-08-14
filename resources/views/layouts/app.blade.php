@@ -45,6 +45,7 @@
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     @if(request()->routeIs('dashboard'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1">@endif
+    @if(request()->routeIs('reports'))<link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260814-3">@endif
     {{-- Inquiry CSS is deliberately loaded for the authenticated shell, not only
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
@@ -57,7 +58,11 @@
     <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
     <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260813-actions-right-1">
     <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260813-22">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260813-add-task-spacing-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260814-inquiry-inline-match-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-page-2">
+    {{-- Bulk Order Import CSS is loaded with the shell because wire:navigate can otherwise
+         paint the page before a body-level stylesheet finishes loading, causing a visible FOUC. --}}
+    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260814-client-workflow-1">
     @livewireStyles
 </head>
 <body>
@@ -66,7 +71,7 @@
     <div id="sidebarShade" class="mobile-sidebar-shade"></div>
     <main class="main">
         @include('layouts.partials.topbar')
-        <div class="content {{ request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : '' }}">
+        <div class="content {{ request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : '' }} {{ request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : '' }}">
             @if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*'))<div class="flash">{{ session('success') }}</div>@endif
             @yield('content')
         </div>

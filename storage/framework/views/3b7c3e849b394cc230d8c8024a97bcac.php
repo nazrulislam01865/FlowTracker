@@ -45,6 +45,7 @@
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('reports')): ?><link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260814-3"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
     <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-23">
     
@@ -53,7 +54,10 @@
     <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
     <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260813-actions-right-1">
     <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260813-22">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260813-add-task-spacing-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260814-inquiry-inline-match-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-page-2">
+    
+    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260814-client-workflow-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
@@ -63,7 +67,7 @@
     <div id="sidebarShade" class="mobile-sidebar-shade"></div>
     <main class="main">
         <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-        <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?>">
+        <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?> <?php echo e(request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : ''); ?>">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>

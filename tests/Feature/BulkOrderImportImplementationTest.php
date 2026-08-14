@@ -17,12 +17,14 @@ class BulkOrderImportImplementationTest extends TestCase
         $controller = file_get_contents(app_path('Http/Controllers/BulkOrderImportController.php'));
         $bulkCss = file_get_contents(public_path('css/flowtrack-bulk-order-import.css'));
         $ordersTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
+        $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+        $bulkJs = file_get_contents(public_path('js/flowtrack-bulk-order-import.js'));
 
         $this->assertStringContainsString('<h1>Import orders</h1>', $view);
         $this->assertStringContainsString('Create many orders safely from an Excel or CSV file.', $view);
         $this->assertStringContainsString('Drop your order file here', $view);
         $this->assertStringContainsString('up to 10,000 rows', $view);
-        $this->assertStringContainsString('If reference already exists *', $view);
+        $this->assertStringContainsString('If reference already exists', $view);
         $this->assertStringContainsString('Skip existing order', $view);
         $this->assertStringContainsString('Update matching order', $view);
         $this->assertStringContainsString('Create a separate order', $view);
@@ -43,8 +45,11 @@ class BulkOrderImportImplementationTest extends TestCase
         $this->assertStringContainsString('Source Row ID was already imported', $service);
         $this->assertStringContainsString('Urgent? must be Yes or No', $service);
         $this->assertStringContainsString('Required delivery date cannot be earlier than received date', $service);
-        $this->assertStringContainsString('Client ID is required so FlowTrack can select the client workflow', $service);
-        $this->assertStringContainsString('resolvePreferredWorkflow', $service);
+        $this->assertStringContainsString('Client is required. Enter a valid Client ID in the file or select a fallback client.', $service);
+        $this->assertStringContainsString('resolveClientOrderWorkflow', $service);
+        $this->assertStringContainsString('Select an Order workflow for this client', $service);
+        $this->assertStringContainsString('availableOrderWorkflowOptions', $service);
+        $this->assertStringNotContainsString('resolvePreferredWorkflow', $service);
         $this->assertStringContainsString('workflowAvailableForClient', $service);
         $this->assertStringContainsString('bulk_order_import_rows', $service);
         $this->assertStringContainsString("'profile' => 'CLIENT_AUTO'", $service);
@@ -52,6 +57,10 @@ class BulkOrderImportImplementationTest extends TestCase
         $this->assertStringContainsString('.steps .step::before', $bulkCss);
         $this->assertStringContainsString('content:none!important', $bulkCss);
         $this->assertStringContainsString('ft-bulk-import-button', $ordersTable);
+        $this->assertStringContainsString('/css/flowtrack-bulk-order-import.css', $layout);
+        $this->assertStringNotContainsString('<link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css', $view);
+        $this->assertStringContainsString('manual_workflows', $bulkJs);
+        $this->assertStringContainsString('ftbi-row-workflow', $bulkJs);
 
         $this->assertStringContainsString('findHeaderRow', $reader);
         $this->assertStringContainsString('header_row', $reader);

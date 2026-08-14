@@ -415,7 +415,7 @@ class JobService
      */
     public function loadVisibleDetailTab(FlowJob $job, User $user, string $tab): FlowJob
     {
-        abort_unless(in_array($tab, ['overview', 'workflow', 'documents', 'inquiry'], true), 422);
+        abort_unless(in_array($tab, ['overview', 'workflow', 'documents', 'inquiry', 'finance'], true), 422);
 
         if ($tab === 'overview') {
             $relations = [
@@ -474,6 +474,26 @@ class JobService
                 'sourceInquiry.client:id,name,logo_path',
                 'sourceInquiry.owner:id,name,profile_image_path',
             ]);
+
+            return $job;
+        }
+
+        if ($tab === 'finance') {
+            abort_unless(app(AccessControlService::class)->can($user, 'finance', 'view'), 403);
+            $job->load([
+                'client.contacts:id,client_id,name,email,is_primary,sort_order',
+                'items:id,flow_job_id,product_name,category_name,quantity,sort_order',
+                'invoices.items',
+                'invoices.payments',
+                'invoices.creator:id,name,profile_image_path',
+                'payments.invoice:id,invoice_number',
+                'payments.recorder:id,name,profile_image_path',
+                'collection.owner:id,name,profile_image_path',
+                'collection.updates.actor:id,name,profile_image_path',
+            ]);
+
+            app(\App\Services\OrderFinanceService::class)->syncStatuses($job->invoices);
+            $job->load(['invoices.items', 'invoices.payments']);
 
             return $job;
         }
@@ -708,7 +728,10 @@ class JobService
 
     public function updateOwner(FlowJob $job, ?int $ownerId, User $actor): FlowJob
     {
-        abort_unless(app(AccessControlService::class)->canAssignJob($actor, $job), 403);
+        // Order ownership is an administrative assignment. A task assignee may
+        // gain visibility/edit access to the Order through their task, but that
+        // must never allow them to replace the Order owner.
+        abort_unless(app(AccessControlService::class)->isAdministrator($actor), 403);
         $job->update(['owner_id' => $ownerId]);
         $this->ensureMembers($job);
         $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.owner_updated', 'description' => 'Order owner updated']);

@@ -21,8 +21,8 @@ use App\Http\Controllers\ProfileImageController;
 use App\Http\Controllers\ProductDocumentController;
 use App\Http\Controllers\ProductImageController;
 use App\Http\Controllers\RichTextImageController;
-// Reports page is intentionally disabled for now.
-// use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\ReportsController;
+use App\Http\Controllers\WorkflowSetupController;
 use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\UserEditController;
 use App\Models\Document;
@@ -120,8 +120,7 @@ Route::middleware('auth')->group(function () {
 
         return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('documents.download');
-    // Reports page is intentionally disabled for now.
-    // Route::get('/reports', ReportsController::class)->middleware('permission:reports.view')->name('reports');
+    Route::get('/inquiry-intelligence', ReportsController::class)->middleware('permission:reports.view')->name('reports');
     Route::get('/notifications', NotificationsController::class)->middleware('permission:notifications.view')->name('notifications');
     Route::get('/notifications/{notification}/open', NotificationOpenController::class)->middleware('permission:notifications.view')->whereNumber('notification')->name('notifications.open');
     Route::get('/notifications/unread-count', function () {
@@ -173,9 +172,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/users/{user}/edit', UserEditController::class)->whereNumber('user')->name('users.edit');
     Route::post('/logout', [AuthController::class, 'destroy'])->name('logout');
 
-    // Workflow Setup page is intentionally muted for now.
-    // The workflow engine remains active for Orders/Inquiries, but no web route
-    // is exposed until the setup page is re-enabled.
+    Route::get('/workflow-setup', [WorkflowSetupController::class, 'index'])->middleware('permission:workflow.view')->name('workflow.setup');
+    Route::get('/workflow-setup/create', [WorkflowSetupController::class, 'create'])->middleware('permission:workflow.create')->name('workflow.create');
+    Route::get('/workflow-setup/{workflow}/edit', [WorkflowSetupController::class, 'edit'])->middleware('permission:workflow.update')->whereNumber('workflow')->name('workflow.edit');
 
     Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->middleware('permission:taskpacks.view')->name('task-pack.setup');
     Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');

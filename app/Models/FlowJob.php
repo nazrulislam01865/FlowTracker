@@ -39,6 +39,9 @@ class FlowJob extends Model
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->where('needs_attention', true)->whereNull('completed_at')->orderBy('id'); }
     public function documents(): HasMany { return $this->hasMany(Document::class); }
     public function items(): HasMany { return $this->hasMany(FlowJobItem::class, 'flow_job_id')->orderBy('sort_order'); }
+    public function invoices(): HasMany { return $this->hasMany(Invoice::class, 'flow_job_id')->orderByDesc('issue_date')->orderByDesc('id'); }
+    public function payments(): HasMany { return $this->hasMany(Payment::class, 'flow_job_id')->orderByDesc('payment_date')->orderByDesc('id'); }
+    public function collection(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderCollection::class, 'flow_job_id'); }
     public function members(): HasMany { return $this->hasMany(FlowJobMember::class, 'flow_job_id'); }
     public function phaseHistories(): HasMany { return $this->hasMany(FlowJobPhaseHistory::class, 'flow_job_id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }

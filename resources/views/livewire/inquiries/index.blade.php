@@ -26,6 +26,11 @@
         $escaped = e((string) $text);
         return preg_replace('/(?<![\pL\pN._-])@([\pL\pN][\pL\pN._-]*)/u', '<span class="mention">@$1</span>', $escaped) ?? $escaped;
     };
+    $inquiryToolbarIsClear = trim((string) $search) === ''
+        && $quick === 'all'
+        && $listStatus === ''
+        && $listClient === ''
+        && ! $hideCompleted;
 @endphp
 
 <div class="ft-inquiry-prototype">
@@ -60,7 +65,7 @@
                 <div class="toolbar">
                     <div class="search"><span>⌕</span><input wire:model.live.debounce.350ms="search" placeholder="Search inquiry, title, client, task or assignee"></div>
                     <div class="filters inquiry-filter-controls">
-                        <button class="chip {{ $quick === 'all' ? 'active' : '' }}" type="button" wire:click="setQuick('all')">All</button>
+                        <button class="chip {{ $metricFilter === '' && $inquiryToolbarIsClear ? 'active' : '' }}" type="button" wire:click="setQuick('all')" aria-pressed="{{ $metricFilter === '' && $inquiryToolbarIsClear ? 'true' : 'false' }}">All</button>
                         <button class="chip ft-inquiry-attention-filter {{ $quick === 'attention' ? 'active' : '' }}" type="button" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}">
                             <span aria-hidden="true">⚠</span> Attention needed
                         </button>

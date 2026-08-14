@@ -1,6 +1,5 @@
 @extends('layouts.app')
 @section('content')
-<link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260810-3">
 <div
     id="ft-bulk-import-page"
     data-validate-url="{{ route('orders.bulk-import.validate') }}"
@@ -81,24 +80,24 @@
                     <span class="ftbi-section-number">2</span>
                     <div>
                         <h2>Import setup</h2>
-                        <p>Each spreadsheet row can belong to a different client.</p>
+                        <p>Each spreadsheet row must resolve to an active client.</p>
                     </div>
                 </div>
 
                 <div class="ftbi-config-fields">
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
-                        <div><strong>Client-based workflow</strong><span>Each row uses its Client ID to select the same default workflow configured in Workflow Setup for normal New Orders.</span></div>
+                        <div><strong>Client-based workflow</strong><span>A client-specific Order workflow is applied automatically. If that client has no specific Order workflow, select an available Order workflow during Review.</span></div>
                     </div>
                     <div class="field">
-                        <label for="client">Fallback Client ID <span class="ftbi-optional">Optional</span></label>
+                        <label for="client">Fallback Client ID <span class="ftbi-optional">For blank Client IDs</span></label>
                         <select id="client">
-                            <option value="">Keep blank values unassigned</option>
+                            <option value="">No fallback client</option>
                             @foreach($clients as $client)
                                 <option value="{{ $client->id }}">{{ $client->code }} · {{ $client->name }}</option>
                             @endforeach
                         </select>
-                        <div class="hint">Only used when that row's Client ID is blank.</div>
+                        <div class="hint">Used only when a row's Client ID is blank. Every imported order must have a client.</div>
                     </div>
                     <div class="field">
                         <label for="supplier">Fallback Supplier ID <span class="ftbi-optional">Optional</span></label>
@@ -152,16 +151,16 @@
             <div class="ftbi-review-config-head">
                 <div>
                     <strong>Import configuration</strong>
-                    <span>Client ID on each row takes priority. Defaults below only fill blank Client/Supplier cells.</span>
+                    <span>Client ID on each row takes priority. Client-specific Order workflows are automatic; rows without one will ask for a workflow below.</span>
                 </div>
-                <div class="ftbi-workflow-badge" id="configBanner">Workflow: <b id="workflowText">Auto-selected by client</b></div>
+                <div class="ftbi-workflow-badge" id="configBanner">Workflow: <b id="workflowText">Resolving client workflows</b></div>
             </div>
 
             <div class="meta">
                 <div class="field">
-                    <label for="reviewClient">Fallback Client ID <span class="ftbi-optional">Optional</span></label>
+                    <label for="reviewClient">Fallback Client ID <span class="ftbi-optional">For blank Client IDs</span></label>
                     <select id="reviewClient">
-                        <option value="">Keep blank values unassigned</option>
+                        <option value="">No fallback client</option>
                         @foreach($clients as $client)
                             <option value="{{ $client->id }}">{{ $client->code }} · {{ $client->name }}</option>
                         @endforeach
@@ -239,5 +238,5 @@
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="/js/flowtrack-bulk-order-import.js?v=20260810-3"></script>
+<script src="/js/flowtrack-bulk-order-import.js?v=20260814-client-workflow-1"></script>
 @endsection

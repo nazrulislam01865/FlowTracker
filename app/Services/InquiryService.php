@@ -214,10 +214,18 @@ class InquiryService
         return (string) ($working ?: $next ?: $default);
     }
 
-    /** Inquiry-list Status filter uses the same Master Data source as task editors. */
+    /**
+     * Inquiry-list Task Status options come only from active Master Data →
+     * Inquiry Task Statuses, in the configured Master Data sequence.
+     */
     public function taskStatusFilterOptions(): Collection
     {
-        return $this->taskStatusOptions();
+        return $this->taskStatusRecords()
+            ->pluck('name')
+            ->map(fn ($name): string => trim((string) $name))
+            ->filter()
+            ->unique(fn (string $name): string => mb_strtolower($name))
+            ->values();
     }
 
     public function defaultInquiryStatus(): string
@@ -435,12 +443,32 @@ class InquiryService
     }
 
     /**
-     * Filter Inquiries by Task Status Master Data. An Inquiry matches when any
-     * of its active taskflow tasks currently has the selected task status.
+     * Filter by the SAME current task whose status is displayed in the Inquiry
+     * list. The selected value must be an active Inquiry Task Status from Master
+     * Data. Matching an arbitrary task in the workflow made rows appear under a
+     * status even when their visible Current Task had a different status.
      */
     private function applyTaskStatusListScope(Builder $query, string $status): Builder
     {
-        return $query->whereHas('tasks', fn (Builder $task) => $task->where('status', $status));
+        $record = $this->taskStatusRecord($status, true);
+        if (!$record) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        // A completed task is no longer returned by currentTaskSubquery(). For a
+        // Master Data status mapped to the automatic Completed state, use the
+        // same completed-Inquiry definition as the list and summary card.
+        if ($this->isCompletionTaskStatus((string) $record->name)) {
+            return $this->applyCompletedListScope($query);
+        }
+
+        $currentTaskStatusSql = $this->currentTaskSubquery('status')->toSql();
+        $canonicalStatus = mb_strtolower(trim((string) $record->name));
+
+        return $query->whereRaw(
+            "LOWER(TRIM(COALESCE(($currentTaskStatusSql), ''))) = ?",
+            [$canonicalStatus]
+        );
     }
 
     /**

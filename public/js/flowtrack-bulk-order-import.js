@@ -5,7 +5,7 @@
 
     const $ = (selector) => root.querySelector(selector);
     const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
-    const state = { token: null, review: null, results: null, loadingTimer: null };
+    const state = { token: null, review: null, results: null, loadingTimer: null, manualWorkflows: {} };
 
     const escapeHtml = (value) => String(value ?? '').replace(/[&<>"']/g, (char) => ({
         '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
@@ -22,6 +22,7 @@
         default_client_id: ($('#reviewCard').classList.contains('hidden') ? $('#client').value : $('#reviewClient').value) || null,
         default_supplier_id: ($('#reviewCard').classList.contains('hidden') ? $('#supplier').value : $('#reviewSupplier').value) || null,
         duplicate_policy: $('#duplicate')?.value || 'skip',
+        manual_workflows: { ...state.manualWorkflows },
     });
 
     const startLoading = (title, text) => {
@@ -99,7 +100,16 @@
             if (normalized.displayFilename) form.append('display_filename', normalized.displayFilename);
             if (normalized.fingerprint) form.append('source_fingerprint', normalized.fingerprint);
             const current = config();
-            Object.entries(current).forEach(([key, value]) => { if (value !== null) form.append(key, value); });
+            Object.entries(current).forEach(([key, value]) => {
+                if (value === null) return;
+                if (key === 'manual_workflows') {
+                    Object.entries(value).forEach(([row, workflowId]) => {
+                        if (workflowId) form.append(`manual_workflows[${row}]`, workflowId);
+                    });
+                    return;
+                }
+                form.append(key, value);
+            });
 
             const response = await fetch(root.dataset.validateUrl, {
                 method: 'POST',
@@ -137,6 +147,28 @@
         }
     };
 
+    const workflowCell = (row) => {
+        if (row.workflow_selection_source === 'client') {
+            return `<div class="ftbi-workflow-auto"><span class="status" style="background:var(--ftbi-blue2);color:var(--ftbi-blue)">${escapeHtml(row.workflow_resolved_label || '—')}</span><small>Client workflow</small></div>`;
+        }
+
+        if (row.workflow_selection_source === 'manual' && !row.workflow_requires_selection) {
+            return `<div class="ftbi-workflow-manual"><select class="ftbi-row-workflow" data-row="${escapeHtml(row.row)}" aria-label="Workflow for row ${escapeHtml(row.row)}">${workflowOptions(row, row.workflow_resolved_id)}</select><small>Selected manually</small></div>`;
+        }
+
+        if (Array.isArray(row.workflow_options) && row.workflow_options.length) {
+            return `<div class="ftbi-workflow-manual"><select class="ftbi-row-workflow needs-selection" data-row="${escapeHtml(row.row)}" aria-label="Select workflow for row ${escapeHtml(row.row)}"><option value="">Select Order workflow…</option>${workflowOptions(row, row.workflow_manual_selected_id)}</select><small>Required because this client has no client-specific Order workflow</small></div>`;
+        }
+
+        return `<span class="status" style="background:var(--ftbi-redbg);color:var(--ftbi-red)">${escapeHtml(row.workflow_resolved_label || 'Not available')}</span>`;
+    };
+
+    const workflowOptions = (row, selectedId = null) => (row.workflow_options || []).map((workflow) => {
+        const selected = Number(selectedId || 0) === Number(workflow.id) ? ' selected' : '';
+        const suffix = workflow.client_specific ? ' · Client' : (workflow.is_default ? ' · Default' : '');
+        return `<option value="${escapeHtml(workflow.id)}"${selected}>${escapeHtml(workflow.name + suffix)}</option>`;
+    }).join('');
+
     const renderReview = (review) => {
         state.review = review;
         $('#uploadCard').classList.add('hidden');
@@ -144,9 +176,14 @@
         $('#reviewCard').classList.remove('hidden');
         $('#reviewClient').value = $('#client').value;
         $('#reviewSupplier').value = $('#supplier').value;
-        $('#workflowText').textContent = 'Auto-selected by client';
+        const manualCount = Number(review.counts.workflow_selection_required || 0);
+        $('#workflowText').textContent = manualCount
+            ? `${manualCount} ${manualCount === 1 ? 'row needs' : 'rows need'} workflow selection`
+            : 'Client workflows resolved';
         $('#fileName').textContent = review.filename;
-        $('#fileMeta').textContent = `${review.counts.total} rows · source fields normalized · workflow resolved automatically`;
+        $('#fileMeta').textContent = manualCount
+            ? `${review.counts.total} rows · client-specific Order workflows applied · ${manualCount} manual ${manualCount === 1 ? 'selection' : 'selections'} needed`
+            : `${review.counts.total} rows · clients validated · Order workflows resolved`; 
         $('#totalPill').textContent = `${review.counts.total} rows`;
         $('#validPill').textContent = `${review.counts.ready} ready`;
         $('#warnPill').textContent = `${review.counts.warnings} warnings`;
@@ -183,7 +220,7 @@
                 <td>${row.urgent === 'Yes' ? '<b style="color:var(--ftbi-red)">Yes</b>' : 'No'}</td>
                 <td>${escapeHtml(row.description || '—')}</td>
                 <td>${escapeHtml(supplier)}<br><span class="sub">${escapeHtml(warehouse)}</span></td>
-                <td><span class="status" style="background:var(--ftbi-blue2);color:var(--ftbi-blue)">${escapeHtml(row.workflow_resolved_label || '—')}</span></td>
+                <td>${workflowCell(row)}</td>
                 <td>${status}</td>
             </tr>`;
         }).join('');
@@ -195,7 +232,7 @@
         if (!nonError) return showError('No valid orders are ready to import.');
 
         setStep(4);
-        startLoading(`Importing ${nonError} ready orders…`, 'Creating valid orders with each client’s configured workflow. Rows with validation errors are left unchanged.');
+        startLoading(`Importing ${nonError} ready orders…`, 'Creating valid orders with each client-specific or manually selected Order workflow. Rows with validation errors are left unchanged.');
         try {
             const response = await fetch(root.dataset.importUrl, {
                 method: 'POST',
@@ -226,6 +263,7 @@
         state.token = null;
         state.review = null;
         state.results = null;
+        state.manualWorkflows = {};
         $('#reviewCard').classList.add('hidden');
         $('#success').classList.remove('show');
         $('#uploadCard').classList.remove('hidden');
@@ -285,6 +323,16 @@
         const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
         return new File([csv], withError ? 'Order-import-with-errors.csv' : 'Supplied-order-export.csv', { type: 'text/csv' });
     };
+
+    $('#rows').addEventListener('change', (event) => {
+        const select = event.target.closest('.ftbi-row-workflow');
+        if (!select) return;
+        const row = String(select.dataset.row || '');
+        if (!row) return;
+        if (select.value) state.manualWorkflows[row] = Number(select.value);
+        else delete state.manualWorkflows[row];
+        revalidate();
+    });
 
     $('#bulkOrderFile').addEventListener('change', (event) => uploadAndValidate(event.target.files?.[0]));
     $('#drop').addEventListener('click', (event) => {

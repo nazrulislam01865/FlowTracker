@@ -11,7 +11,7 @@
     $canEditOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'edit');
     $canCreateOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'create');
     $canDeleteOrderProducts = $canEditJob && $canViewOrderProducts && $accessControl->can(auth()->user(), 'catalog_products', 'delete');
-    $canAssignJob = $accessControl->canAssignJob(auth()->user(), $job);
+    $canChangeJobOwner = $accessControl->isAdministrator(auth()->user());
     $canAddOrderTask = $accessControl->canCreateJobTask(auth()->user(), $job)
         && !$job->completed_at
         && $job->status !== 'Completed'
@@ -238,7 +238,7 @@
                         <x-ui.inline-live-avatar :size="24" />
                         <span x-text="display">{{ $job->owner?->name ?? 'Unassigned' }}</span>
                     </span>
-                    @if($canAssignJob)
+                    @if($canChangeJobOwner)
                         <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit job owner" title="Edit" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
                         <div x-cloak x-show="editing" class="ft-task-inline-assignee-picker">
                             <x-ui.inline-remote-user
@@ -388,7 +388,7 @@
                                     @endif
                                 </div>
                                 <span
-                                    class="ft-task-inline-editor ft-inline-edit-shell"
+                                    class="ft-task-inline-editor ft-inline-edit-shell ft-order-task-assignee-inline"
                                     data-field-label="Assignee"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
@@ -396,36 +396,44 @@
                                     x-on:ft-inline-remote-cancel.stop="cancelEdit()"
                                     x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue), { avatarUrl: String($event.detail?.avatarUrl ?? '') })"
                                 >
-                                    <span x-show="!editing" class="ft-task-inline-display ft-inline-person-live">
-                                        <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="24" /></span>
-                                        <span class="ft-inline-person-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
-                                    </span>
+                                    <div class="ft-order-inline-display-row" x-show="!editing">
+                                        <div class="ft-order-assignee-display">
+                                            <span class="ft-inline-avatar-slot"><x-ui.inline-live-avatar :size="28" /></span>
+                                            <span class="ft-order-assignee-name" x-text="display">{{ $task->assignee?->name ?? 'Unassigned' }}</span>
+                                        </div>
+                                        @if($canAssignTask)
+                                            <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                        @endif
+                                    </div>
                                     @if($canAssignTask)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit assignee" aria-label="Edit task assignee" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
-                                        <div x-cloak x-show="editing" class="ft-task-inline-assignee-picker">
+                                        <div x-cloak x-show="editing" class="ft-order-assignee-picker">
                                             <x-ui.inline-remote-user
                                                 :value="$task->assignee_id ?? ''"
                                                 parent-type="job"
                                                 :parent-id="$job->id"
                                                 :selected-label="$task->assignee?->name ?? 'Unassigned'"
-                                                trigger-class="ft-task-inline-input"
+                                                trigger-class="ft-order-task-inline-input"
                                                 variant="compact"
-                                                :menu-width="300"
+                                                :menu-width="260"
                                             />
                                         </div>
                                         <x-ui.inline-save-state compact />
                                     @endif
                                 </span>
                                 <span
-                                    class="ft-task-inline-editor ft-inline-edit-shell"
+                                    class="ft-task-inline-editor ft-inline-edit-shell ft-order-task-date-inline"
                                     data-field-label="Due date"
                                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j, Y') ?? 'Set due date') })"
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
-                                    <span x-show="!editing" x-text="display" class="ft-task-inline-display {{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date)) && !$task->completed_at ? 'danger-text' : '' }}">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
+                                    <div class="ft-order-inline-display-row" x-show="!editing">
+                                        <span x-text="display" class="ft-order-inline-value {{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date)) && !$task->completed_at ? 'danger-text' : '' }}">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
+                                        @if($canEditTask)
+                                            <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskDue.showPicker ? $refs.taskDue.showPicker() : $refs.taskDue.focus())">✎</button>
+                                        @endif
+                                    </div>
                                     @if($canEditTask)
-                                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.taskDue.showPicker ? $refs.taskDue.showPicker() : $refs.taskDue.focus())">✎</button>
-                                        <input x-ref="taskDue" x-cloak x-show="editing" x-model="draftValue" class="ft-task-inline-input" type="date"
+                                        <input x-ref="taskDue" x-cloak x-show="editing" x-model="draftValue" class="ft-order-task-inline-input" type="date"
                                             x-on:keydown.escape.prevent="cancelEdit()"
                                             x-on:blur="if (editing) cancelEdit()"
                                             x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob({{ $task->id }}, draftValue))">

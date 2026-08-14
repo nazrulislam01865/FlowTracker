@@ -151,29 +151,61 @@ class BulkOrderImportService
             $row['supplier_resolved_id'] = $supplier?->id;
             $row['supplier_resolved_label'] = $supplier ? $supplier->code.' · '.$supplier->name : 'Unassigned';
 
-            // Bulk imports follow the same client-driven Workflow Setup used by
-            // the normal New Order form. A spreadsheet can therefore contain many
-            // clients in the same file and each row independently gets that
-            // client's preferred Workflow. The legacy Workflow column is treated
-            // as informational only so an old IID/NEP value cannot override a
-            // client's current configured default.
-            $resolvedWorkflow = $client ? $this->resolvePreferredWorkflow($templates, (int) $client->id) : null;
+            // A Client is mandatory for Bulk Order Import. If that client has a
+            // client-specific Order workflow in Workflow Setup, FlowTrack selects
+            // it automatically. We deliberately do NOT auto-pick an all-client
+            // workflow: when no client-specific Order workflow exists the user
+            // must choose an available Order workflow in the review table.
+            $row['workflow_resolved_id'] = null;
+            $row['workflow_phase_id'] = null;
+            $row['workflow_resolved_label'] = 'Waiting for client';
+            $row['workflow_selection_source'] = null;
+            $row['workflow_requires_selection'] = false;
+            $row['workflow_manual_selected_id'] = null;
+            $row['workflow_options'] = [];
+            $resolvedWorkflow = null;
+
             if (!$client) {
                 if ($clientValue === '' && !$config['default_client']) {
-                    $errors[] = 'Client ID is required so FlowTrack can select the client workflow';
+                    $errors[] = 'Client is required. Enter a valid Client ID in the file or select a fallback client.';
                 }
-                $row['workflow_resolved_id'] = null;
-                $row['workflow_phase_id'] = null;
-                $row['workflow_resolved_label'] = 'Waiting for client';
-            } elseif (!$resolvedWorkflow) {
-                $errors[] = 'No active workflow is configured for this client';
-                $row['workflow_resolved_id'] = null;
-                $row['workflow_phase_id'] = null;
-                $row['workflow_resolved_label'] = 'Not configured';
             } else {
-                $row['workflow_resolved_id'] = $resolvedWorkflow['workflow']->id;
-                $row['workflow_phase_id'] = $resolvedWorkflow['phase']->id;
-                $row['workflow_resolved_label'] = $resolvedWorkflow['workflow']->name;
+                $resolvedWorkflow = $this->resolveClientOrderWorkflow($templates, (int) $client->id);
+
+                if ($resolvedWorkflow) {
+                    $row['workflow_resolved_id'] = $resolvedWorkflow['workflow']->id;
+                    $row['workflow_phase_id'] = $resolvedWorkflow['phase']->id;
+                    $row['workflow_resolved_label'] = $resolvedWorkflow['workflow']->name;
+                    $row['workflow_selection_source'] = 'client';
+                } else {
+                    $rowNumber = (int) ($row['row'] ?? 0);
+                    $manualWorkflowId = (int) ($config['manual_workflows'][$rowNumber] ?? 0);
+                    $workflowOptions = $this->availableOrderWorkflowOptions($templates, (int) $client->id);
+                    $row['workflow_options'] = $workflowOptions;
+                    $row['workflow_manual_selected_id'] = $manualWorkflowId ?: null;
+
+                    if ($manualWorkflowId) {
+                        $manualWorkflow = $this->resolveManualOrderWorkflow($templates, (int) $client->id, $manualWorkflowId);
+                        if ($manualWorkflow) {
+                            $resolvedWorkflow = $manualWorkflow;
+                            $row['workflow_resolved_id'] = $manualWorkflow['workflow']->id;
+                            $row['workflow_phase_id'] = $manualWorkflow['phase']->id;
+                            $row['workflow_resolved_label'] = $manualWorkflow['workflow']->name;
+                            $row['workflow_selection_source'] = 'manual';
+                        } else {
+                            $errors[] = 'The selected Order workflow is not available for this client';
+                            $row['workflow_resolved_label'] = 'Select workflow';
+                            $row['workflow_requires_selection'] = true;
+                        }
+                    } elseif ($workflowOptions === []) {
+                        $errors[] = 'No active Order workflow is available for this client. Configure one in Workflow Setup before importing.';
+                        $row['workflow_resolved_label'] = 'No workflow available';
+                    } else {
+                        $errors[] = 'Select an Order workflow for this client';
+                        $row['workflow_resolved_label'] = 'Select workflow';
+                        $row['workflow_requires_selection'] = true;
+                    }
+                }
             }
 
             if ($row['ref'] !== '' && ($referenceCounts[$row['ref']] ?? 0) > 1) $warnings[] = 'Duplicate reference in this file';
@@ -213,7 +245,9 @@ class BulkOrderImportService
             }
 
             $row['priority_resolved'] = $row['urgent'] === 'Yes' ? 'Critical' : 'Medium';
-            $row['import_profile_resolved'] = $resolvedWorkflow ? 'CLIENT_AUTO' : null;
+            $row['import_profile_resolved'] = $resolvedWorkflow
+                ? ($row['workflow_selection_source'] === 'manual' ? 'CLIENT_MANUAL' : 'CLIENT_AUTO')
+                : null;
             $row['action'] = $action;
             $row['errors'] = array_values(array_unique($errors));
             $row['warnings'] = array_values(array_unique($warnings));
@@ -229,6 +263,7 @@ class BulkOrderImportService
             'errors' => collect($validated)->where('status', 'error')->count(),
             'importable' => collect($validated)->where('status', '!=', 'error')->where('action', '!=', 'skip')->count(),
             'skippable' => collect($validated)->where('status', '!=', 'error')->where('action', 'skip')->count(),
+            'workflow_selection_required' => collect($validated)->where('workflow_requires_selection', true)->count(),
         ];
 
         return [
@@ -236,7 +271,7 @@ class BulkOrderImportService
             'filename' => $source['filename'],
             'fingerprint' => $source['fingerprint'],
             'header_row' => $source['header_row'],
-            'workflow_label' => 'Client-based workflow',
+            'workflow_label' => 'Client Order workflow',
             'counts' => $counts,
             'rows' => $validated,
         ];
@@ -349,6 +384,13 @@ class BulkOrderImportService
 
     private function createOrder(array $row, User $actor, string $importNumber): FlowJob
     {
+        if (blank($row['client_resolved_id'] ?? null)) {
+            throw new RuntimeException('Client is required before this order can be imported.');
+        }
+        if (blank($row['workflow_resolved_id'] ?? null) || blank($row['workflow_phase_id'] ?? null)) {
+            throw new RuntimeException('An Order workflow must be resolved before this order can be imported.');
+        }
+
         return app(JobService::class)->create([
             'order_number' => $row['ref'],
             'client_id' => $row['client_resolved_id'],
@@ -432,10 +474,17 @@ class BulkOrderImportService
             if (!$defaultSupplier) throw new RuntimeException('The selected default supplier is not available.');
         }
 
+        $manualWorkflows = [];
+        foreach (($config['manual_workflows'] ?? []) as $rowNumber => $workflowId) {
+            if (!is_numeric($rowNumber) || !filled($workflowId) || !is_numeric($workflowId)) continue;
+            $manualWorkflows[(int) $rowNumber] = (int) $workflowId;
+        }
+
         return [
             'duplicate_policy' => $policy,
             'default_client' => $defaultClient,
             'default_supplier' => $defaultSupplier,
+            'manual_workflows' => $manualWorkflows,
         ];
     }
 
@@ -556,38 +605,75 @@ class BulkOrderImportService
             ->get();
     }
 
-    private function resolvePreferredWorkflow(Collection $templates, int $clientId): ?array
+    /**
+     * Resolve only a client-specific Order workflow. Generic all-client Order
+     * workflows are intentionally left for explicit user selection in Bulk Import.
+     *
+     * @return array{workflow:WorkflowTemplate,phase:mixed}|null
+     */
+    private function resolveClientOrderWorkflow(Collection $templates, int $clientId): ?array
     {
-        // Keep this priority identical to Jobs\Index::preferredCreateOrderWorkflowId():
-        // client-specific Inquiry workflow, client-specific Order workflow, then
-        // the normal all-client Order workflow; defaults win within each tier.
-        $workflow = $templates
-            ->filter(fn (WorkflowTemplate $workflow) => $this->workflowAvailableForClient($workflow, $clientId))
+        $workflows = $templates
+            ->filter(fn (WorkflowTemplate $workflow) => $workflow->applies_to === 'orders'
+                && $workflow->client_availability === 'specific'
+                && $workflow->clients->contains('id', $clientId))
             ->sortBy(fn (WorkflowTemplate $workflow) => [
-                $workflow->client_availability === 'specific' && $workflow->applies_to === 'inquiries' ? 0
-                    : ($workflow->client_availability === 'specific' && $workflow->applies_to === 'orders' ? 1 : 2),
+                $workflow->is_default ? 0 : 1,
+                mb_strtolower($workflow->name),
+            ]);
+
+        foreach ($workflows as $workflow) {
+            $phase = $this->startPhase($workflow);
+            if ($phase) return compact('workflow', 'phase');
+        }
+
+        return null;
+    }
+
+    /** @return array{workflow:WorkflowTemplate,phase:mixed}|null */
+    private function resolveManualOrderWorkflow(Collection $templates, int $clientId, int $workflowId): ?array
+    {
+        /** @var WorkflowTemplate|null $workflow */
+        $workflow = $templates->first(fn (WorkflowTemplate $candidate) => (int) $candidate->id === $workflowId);
+        if (!$workflow || !$this->workflowAvailableForClient($workflow, $clientId)) return null;
+
+        $phase = $this->startPhase($workflow);
+        return $phase ? compact('workflow', 'phase') : null;
+    }
+
+    /** @return array<int,array{id:int,name:string,client_specific:bool,is_default:bool}> */
+    private function availableOrderWorkflowOptions(Collection $templates, int $clientId): array
+    {
+        return $templates
+            ->filter(fn (WorkflowTemplate $workflow) => $this->workflowAvailableForClient($workflow, $clientId) && $this->startPhase($workflow))
+            ->sortBy(fn (WorkflowTemplate $workflow) => [
+                $workflow->client_availability === 'specific' ? 0 : 1,
                 $workflow->is_default ? 0 : 1,
                 mb_strtolower($workflow->name),
             ])
-            ->first();
-
-        if (!$workflow) return null;
-
-        $phase = $workflow->phases->first(fn ($phase) => $phase->is_active && $phase->allow_job_start);
-        return $phase ? compact('workflow', 'phase') : null;
+            ->map(fn (WorkflowTemplate $workflow) => [
+                'id' => (int) $workflow->id,
+                'name' => (string) $workflow->name,
+                'client_specific' => $workflow->client_availability === 'specific',
+                'is_default' => (bool) $workflow->is_default,
+            ])
+            ->values()
+            ->all();
     }
 
     private function workflowAvailableForClient(WorkflowTemplate $workflow, ?int $clientId): bool
     {
-        if ($workflow->applies_to === 'orders') {
-            if ($workflow->client_availability === 'all') return true;
-            return $clientId && $workflow->client_availability === 'specific' && $workflow->clients->contains('id', $clientId);
-        }
+        if ($workflow->applies_to !== 'orders') return false;
+        if ($workflow->client_availability === 'all') return true;
 
-        return $workflow->applies_to === 'inquiries'
-            && $clientId
+        return $clientId
             && $workflow->client_availability === 'specific'
             && $workflow->clients->contains('id', $clientId);
+    }
+
+    private function startPhase(WorkflowTemplate $workflow): mixed
+    {
+        return $workflow->phases->first(fn ($phase) => $phase->is_active && $phase->allow_job_start);
     }
 
     /** @return array<string,Collection<int,FlowJob>> */
@@ -642,6 +728,7 @@ class BulkOrderImportService
         return collect($row)->except([
             'errors', 'warnings', 'status', 'existing_job_id',
             'client_resolved_label', 'supplier_resolved_label', 'workflow_resolved_label',
+            'workflow_options', 'workflow_requires_selection', 'workflow_manual_selected_id', 'workflow_selection_source',
         ])->all();
     }
 }

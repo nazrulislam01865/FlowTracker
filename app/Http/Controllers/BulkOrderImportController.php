@@ -32,6 +32,8 @@ class BulkOrderImportController extends Controller
             'duplicate_policy' => ['nullable', 'in:skip,update,separate'],
             'display_filename' => ['nullable', 'string', 'max:255'],
             'source_fingerprint' => ['nullable', 'regex:/^[a-f0-9]{64}$/i'],
+            'manual_workflows' => ['nullable', 'array'],
+            'manual_workflows.*' => ['nullable', 'integer'],
         ]);
 
         try {
@@ -42,7 +44,7 @@ class BulkOrderImportController extends Controller
                 trim((string) $request->input('source_fingerprint', '')) ?: null,
             );
             $review = $service->validateToken($prepared['token'], $request->only([
-                'default_client_id', 'default_supplier_id', 'duplicate_policy',
+                'default_client_id', 'default_supplier_id', 'duplicate_policy', 'manual_workflows',
             ]), $request->user());
 
             return response()->json($review);
@@ -59,6 +61,8 @@ class BulkOrderImportController extends Controller
             'default_client_id' => ['nullable', 'integer'],
             'default_supplier_id' => ['nullable', 'integer'],
             'duplicate_policy' => ['required', 'in:skip,update,separate'],
+            'manual_workflows' => ['nullable', 'array'],
+            'manual_workflows.*' => ['nullable', 'integer'],
         ]);
 
         try {
@@ -76,6 +80,8 @@ class BulkOrderImportController extends Controller
             'default_client_id' => ['nullable', 'integer'],
             'default_supplier_id' => ['nullable', 'integer'],
             'duplicate_policy' => ['required', 'in:skip,update,separate'],
+            'manual_workflows' => ['nullable', 'array'],
+            'manual_workflows.*' => ['nullable', 'integer'],
         ]);
 
         try {

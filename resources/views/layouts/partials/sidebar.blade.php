@@ -47,6 +47,10 @@
             <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />
         @endif
 
+        @if($user->canAccess('reports.view'))
+            <x-ui.nav-link route="reports" label="Inquiry Intelligence" icon="reports" />
+        @endif
+
         @if($inquiryView || $inquiryCreate)
             <details class="ft-sidebar-group" @if($inquiryGroupActive) open @endif>
                 <summary class="ft-sidebar-group-toggle {{ $inquiryGroupActive ? 'is-active' : '' }}">
@@ -81,7 +85,6 @@
                         <x-ui.nav-link route="jobs.index" label="Orders" icon="jobs" child :active="request()->routeIs('jobs.index') && !request()->boolean('create')" />
                     @endif
                     @if($taskView)
-                        <x-ui.nav-link route="all-tasks" label="All Tasks" icon="board" child />
                         <x-ui.nav-link route="my-work" label="My Tasks" icon="work" :badge="$myWork" child />
                     @endif
                     @if($orderCreate)
@@ -147,6 +150,7 @@
 
         <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
+        @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="settings" />@endif
         @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
         @if($masterView)
             <details class="ft-sidebar-group" @if($masterGroupActive) open @endif>

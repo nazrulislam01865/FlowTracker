@@ -9,6 +9,7 @@ use App\Models\Activity;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\FlowJobItem;
+use App\Models\Invoice;
 use App\Models\MasterRecord;
 use App\Models\FlowTaskComment;
 use App\Models\Task;
@@ -21,11 +22,13 @@ use App\Services\DocumentService;
 use App\Services\JobService;
 use App\Services\InquiryService;
 use App\Services\MasterDataService;
+use App\Services\OrderFinanceService;
 use App\Services\ProductImageService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
 use App\Support\BoardLaneResolver;
 use Illuminate\Validation\Rule;
+use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Renderless;
@@ -68,6 +71,35 @@ class Index extends Component
     public ?int $selectedLinkInquiryId = null;
     public bool $showInquiryLinkConfirm = false;
     public bool $showInquiryUnlinkConfirm = false;
+
+    public bool $showCreateInvoiceModal = false;
+    public string $invoiceType = 'Final invoice';
+    public string $invoiceCurrency = 'USD';
+    public string $invoiceIssueDate = '';
+    public string $invoicePaymentTerms = '15';
+    public string $invoiceDueDate = '';
+    public ?int $invoiceBillingContactId = null;
+    public array $invoiceLineItems = [];
+    public string $invoicePurchaseOrderReference = '';
+    public string $invoiceNotes = 'Please include the invoice number with your payment.';
+    public string $invoiceTaxRate = '0';
+    public $invoiceSupportingDocument = null;
+    public bool $invoiceEmailAfterCreation = true;
+
+    public bool $showRecordPaymentModal = false;
+    public ?int $paymentInvoiceId = null;
+    public string $paymentDate = '';
+    public string $paymentMethod = 'Bank transfer';
+    public string $paymentAmount = '';
+    public string $paymentReference = '';
+    public string $paymentNotes = '';
+
+    public bool $showCollectionUpdateModal = false;
+    public ?int $collectionOwnerId = null;
+    public string $collectionFollowUpDate = '';
+    public string $collectionNextFollowUpDate = '';
+    public string $collectionNote = '';
+
     public array $expandedPhaseIds = [];
     public string $jobTaskSearch = '';
     public bool $showCreate = false;
@@ -825,6 +857,7 @@ class Index extends Component
         $this->jobComment = '';
         $this->jobActivityTab = 'all';
         $this->jobActivityPage = 1;
+        $this->closeFinanceModals();
         $this->prepareSelectedJob($id);
     }
 
@@ -850,21 +883,334 @@ class Index extends Component
         $this->showDocumentPicker = false;
         $this->lastJobDocumentUploadId = null;
         $this->lastJobDocumentTaskId = null;
+        $this->closeFinanceModals();
 
         $this->redirectRoute('jobs.index', navigate: true);
     }
 
     public function setDetailTab(string $tab): void
     {
-        // The Order Details Documents tab is temporarily muted. Documents remain
-        // available globally and task-level attachments continue to work from Overview.
-        abort_unless(in_array($tab, ['overview','inquiry'], true), 422);
+        // The Order Details Documents/Workflow tabs remain intentionally muted.
+        // Finance is a separate permission-controlled surface and does not change
+        // any of the existing Overview or Inquiry behaviour.
+        abort_unless(in_array($tab, ['overview','inquiry','finance'], true), 422);
+        if ($tab === 'finance') {
+            abort_unless(app(AccessControlService::class)->can(auth()->user(), 'finance', 'view'), 403);
+        }
         $this->detailTab = $tab;
         if ($tab !== 'overview') {
             $this->cancelAddOrderTask(false);
             $this->resetOverviewTaskResourceUi();
         }
-        $this->resetValidation('inquiryLink');
+        if ($tab !== 'finance') $this->closeFinanceModals();
+        $this->resetValidation(['inquiryLink', 'invoiceForm', 'paymentForm', 'collectionForm']);
+    }
+
+    public function openCreateInvoice(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        abort_unless(app(AccessControlService::class)->can($user, 'finance', 'create'), 403);
+
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        $job->load(['items', 'client.contacts']);
+
+        $this->invoiceType = 'Final invoice';
+        $this->invoiceCurrency = strtoupper((string) ($job->currency ?: 'USD'));
+        $this->invoiceIssueDate = now()->toDateString();
+        $this->invoicePaymentTerms = '15';
+        $this->invoiceDueDate = now()->addDays(15)->toDateString();
+        $this->invoiceBillingContactId = $job->client?->contacts?->firstWhere('is_primary', true)?->id
+            ?: $job->client?->contacts?->first()?->id;
+        $this->invoiceLineItems = app(OrderFinanceService::class)->defaultInvoiceItems($job);
+        $this->invoicePurchaseOrderReference = (string) ($job->order_number ?? '');
+        $this->invoiceNotes = 'Please include the invoice number with your payment.';
+        $this->invoiceTaxRate = '0';
+        $this->invoiceSupportingDocument = null;
+        $this->invoiceEmailAfterCreation = true;
+        $this->showCreateInvoiceModal = true;
+        $this->resetValidation();
+    }
+
+    public function closeCreateInvoice(): void
+    {
+        $this->showCreateInvoiceModal = false;
+        $this->invoiceSupportingDocument = null;
+        $this->resetValidation();
+    }
+
+    public function updatedInvoicePaymentTerms(): void
+    {
+        $this->syncInvoiceDueDate();
+    }
+
+    public function updatedInvoiceIssueDate(): void
+    {
+        $this->syncInvoiceDueDate();
+    }
+
+    public function addInvoiceLineItem(): void
+    {
+        abort_unless($this->showCreateInvoiceModal, 422);
+        $this->invoiceLineItems[] = ['description' => '', 'quantity' => 1, 'unit_price' => 0];
+    }
+
+    public function removeInvoiceLineItem(int $index): void
+    {
+        abort_unless($this->showCreateInvoiceModal, 422);
+        if (count($this->invoiceLineItems) <= 1) return;
+        unset($this->invoiceLineItems[$index]);
+        $this->invoiceLineItems = array_values($this->invoiceLineItems);
+        $this->resetValidation('invoiceLineItems');
+    }
+
+    public function createInvoice(bool $draft = false): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        abort_unless(app(AccessControlService::class)->can($user, 'finance', 'create'), 403);
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        $job->load('client');
+
+        $validated = $this->validate([
+            'invoiceType' => ['required', Rule::in(['Deposit invoice', 'Final invoice', 'Progress invoice'])],
+            'invoiceCurrency' => ['required', 'string', 'size:3'],
+            'invoiceIssueDate' => ['required', 'date'],
+            'invoiceDueDate' => ['required', 'date', 'after_or_equal:invoiceIssueDate'],
+            'invoiceBillingContactId' => ['nullable', 'integer', Rule::exists('client_contacts', 'id')->where('client_id', $job->client_id)],
+            'invoicePurchaseOrderReference' => ['nullable', 'string', 'max:255'],
+            'invoiceNotes' => ['nullable', 'string', 'max:5000'],
+            'invoiceTaxRate' => ['required', 'numeric', 'min:0', 'max:100'],
+            'invoiceLineItems' => ['required', 'array', 'min:1'],
+            'invoiceLineItems.*.description' => ['required', 'string', 'max:255'],
+            'invoiceLineItems.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
+            'invoiceLineItems.*.unit_price' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+            'invoiceSupportingDocument' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,csv,txt'],
+            'invoiceEmailAfterCreation' => ['boolean'],
+        ]);
+
+        try {
+            $invoice = app(OrderFinanceService::class)->createInvoice(
+                $job,
+                $user,
+                [
+                    'type' => $validated['invoiceType'],
+                    'currency' => $validated['invoiceCurrency'],
+                    'issue_date' => $validated['invoiceIssueDate'],
+                    'due_date' => $validated['invoiceDueDate'],
+                    'billing_contact_id' => $validated['invoiceBillingContactId'],
+                    'purchase_order_reference' => $validated['invoicePurchaseOrderReference'] ?? '',
+                    'notes' => $validated['invoiceNotes'] ?? '',
+                    'tax_rate' => $validated['invoiceTaxRate'],
+                ],
+                $validated['invoiceLineItems'],
+                $this->invoiceSupportingDocument,
+                $draft,
+            );
+        } catch (Throwable $e) {
+            $this->addError('invoiceForm', $e->getMessage());
+            return;
+        }
+
+        $mailWarning = null;
+        if (!$draft && $this->invoiceEmailAfterCreation) {
+            if (!$invoice->billing_contact_email) {
+                $mailWarning = ' No billing email was available, so the invoice was not emailed.';
+            } else {
+                try {
+                    $this->emailInvoice($invoice);
+                } catch (Throwable $e) {
+                    $mailWarning = ' The invoice was created, but the email could not be sent.';
+                }
+            }
+        }
+
+        $this->closeCreateInvoice();
+        session()->flash('success', ($draft ? 'Invoice saved as draft.' : 'Invoice created successfully.').($mailWarning ?? ''));
+    }
+
+    public function openRecordPayment(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        abort_unless(app(AccessControlService::class)->can($user, 'finance', 'create'), 403);
+
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        app(JobService::class)->loadVisibleDetailTab($job, $user, 'finance');
+        $invoice = $job->invoices->first(fn ($candidate) => !in_array($candidate->status, ['draft', 'cancelled', 'paid'], true) && $candidate->balanceAmount() > 0);
+
+        $this->paymentInvoiceId = $invoice?->id;
+        $this->paymentDate = now()->toDateString();
+        $this->paymentMethod = 'Bank transfer';
+        $this->paymentAmount = $invoice ? number_format($invoice->balanceAmount(), 2, '.', '') : '';
+        $this->paymentReference = '';
+        $this->paymentNotes = '';
+        $this->showRecordPaymentModal = true;
+        $this->resetValidation();
+    }
+
+    public function updatedPaymentInvoiceId(): void
+    {
+        if (!$this->selectedJobId || !$this->paymentInvoiceId) return;
+        $invoice = Invoice::query()->where('flow_job_id', $this->selectedJobId)->with('payments')->find($this->paymentInvoiceId);
+        if ($invoice) $this->paymentAmount = number_format($invoice->balanceAmount(), 2, '.', '');
+    }
+
+    public function closeRecordPayment(): void
+    {
+        $this->showRecordPaymentModal = false;
+        $this->resetValidation();
+    }
+
+    public function recordPayment(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        abort_unless(app(AccessControlService::class)->can($user, 'finance', 'create'), 403);
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+
+        $validated = $this->validate([
+            'paymentInvoiceId' => ['required', 'integer', Rule::exists('invoices', 'id')->where('flow_job_id', $job->id)],
+            'paymentDate' => ['required', 'date'],
+            'paymentMethod' => ['required', Rule::in(['Bank transfer', 'Credit card', 'Cash', 'Cheque', 'Other'])],
+            'paymentAmount' => ['required', 'numeric', 'gt:0'],
+            'paymentReference' => ['nullable', 'string', 'max:255'],
+            'paymentNotes' => ['nullable', 'string', 'max:3000'],
+        ]);
+
+        try {
+            app(OrderFinanceService::class)->recordPayment($job, $user, [
+                'invoice_id' => $validated['paymentInvoiceId'],
+                'payment_date' => $validated['paymentDate'],
+                'method' => $validated['paymentMethod'],
+                'amount' => $validated['paymentAmount'],
+                'reference' => $validated['paymentReference'] ?? '',
+                'notes' => $validated['paymentNotes'] ?? '',
+            ]);
+            $this->closeRecordPayment();
+            session()->flash('success', 'Payment recorded successfully.');
+        } catch (Throwable $e) {
+            $this->addError('paymentForm', $e->getMessage());
+        }
+    }
+
+    public function openCollectionUpdate(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $job), 403);
+        app(JobService::class)->loadVisibleDetailTab($job, $user, 'finance');
+
+        $this->collectionOwnerId = $job->collection?->collection_owner_id ?: $job->owner_id ?: $user->id;
+        $this->collectionFollowUpDate = now()->toDateString();
+        $this->collectionNextFollowUpDate = $job->collection?->next_follow_up_at?->format('Y-m-d') ?? '';
+        $this->collectionNote = '';
+        $this->showCollectionUpdateModal = true;
+        $this->resetValidation();
+    }
+
+    public function closeCollectionUpdate(): void
+    {
+        $this->showCollectionUpdateModal = false;
+        $this->resetValidation();
+    }
+
+    public function saveCollectionUpdate(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $job), 403);
+
+        $validated = $this->validate([
+            'collectionOwnerId' => ['nullable', 'integer', Rule::exists('users', 'id')->where('is_active', true)],
+            'collectionFollowUpDate' => ['required', 'date'],
+            'collectionNextFollowUpDate' => ['nullable', 'date', 'after_or_equal:collectionFollowUpDate'],
+            'collectionNote' => ['required', 'string', 'max:3000'],
+        ]);
+
+        app(OrderFinanceService::class)->addCollectionUpdate($job, $user, [
+            'collection_owner_id' => $validated['collectionOwnerId'],
+            'follow_up_date' => $validated['collectionFollowUpDate'],
+            'next_follow_up_at' => $validated['collectionNextFollowUpDate'] ?? '',
+            'note' => $validated['collectionNote'],
+        ]);
+
+        $this->closeCollectionUpdate();
+        session()->flash('success', 'Collection update saved.');
+    }
+
+    public function sendPaymentReminder(): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'finance', 422);
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
+        abort_unless(app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $job), 403);
+        app(JobService::class)->loadVisibleDetailTab($job, $user, 'finance');
+
+        $summary = app(OrderFinanceService::class)->summary($job);
+        $invoice = $job->invoices->first(fn ($candidate) => $candidate->status === 'overdue' && $candidate->balanceAmount() > 0)
+            ?: $job->invoices->first(fn ($candidate) => !in_array($candidate->status, ['draft', 'cancelled', 'paid'], true) && $candidate->balanceAmount() > 0);
+        $email = $invoice?->billing_contact_email
+            ?: $job->client?->contacts?->firstWhere('is_primary', true)?->email
+            ?: $job->client?->email;
+
+        if (!$email) {
+            $this->addError('collectionForm', 'No billing email is available for this client.');
+            return;
+        }
+
+        try {
+            Mail::raw(
+                'Payment reminder for '.$job->displayOrderNumber().'. Outstanding balance: '.$job->currency.' '.number_format((float) $summary['outstanding'], 2).'.',
+                fn ($message) => $message->to($email)->subject('Payment reminder · '.$job->displayOrderNumber())
+            );
+            app(OrderFinanceService::class)->addCollectionUpdate($job, $user, [
+                'collection_owner_id' => $job->collection?->collection_owner_id ?: $job->owner_id ?: $user->id,
+                'follow_up_date' => now()->toDateString(),
+                'next_follow_up_at' => $job->collection?->next_follow_up_at?->format('Y-m-d') ?? '',
+                'note' => 'Payment reminder sent to '.$email.'.',
+            ], 'reminder');
+            session()->flash('success', 'Payment reminder sent.');
+        } catch (Throwable $e) {
+            $this->addError('collectionForm', 'The reminder could not be sent: '.$e->getMessage());
+        }
+    }
+
+    private function syncInvoiceDueDate(): void
+    {
+        if (!$this->invoiceIssueDate || !ctype_digit((string) $this->invoicePaymentTerms)) return;
+        try {
+            $this->invoiceDueDate = \Illuminate\Support\Carbon::parse($this->invoiceIssueDate)
+                ->addDays((int) $this->invoicePaymentTerms)
+                ->toDateString();
+        } catch (Throwable) {
+            // Validation will report an invalid date without mutating another field.
+        }
+    }
+
+    private function closeFinanceModals(): void
+    {
+        $this->showCreateInvoiceModal = false;
+        $this->showRecordPaymentModal = false;
+        $this->showCollectionUpdateModal = false;
+        $this->invoiceSupportingDocument = null;
+    }
+
+    private function emailInvoice(Invoice $invoice): void
+    {
+        if (!$invoice->billing_contact_email) return;
+        $job = $invoice->job()->with('client')->first();
+        $subject = 'Invoice '.$invoice->invoice_number.' · '.($job?->displayOrderNumber() ?? 'Order');
+        $html = '<p>Hello '.e($invoice->billing_contact_name ?: 'there').',</p>'
+            .'<p>Invoice <strong>'.e($invoice->invoice_number).'</strong> has been created for '.e($job?->title ?: 'your order').'.</p>'
+            .'<p><strong>Amount:</strong> '.e($invoice->currency).' '.number_format((float) $invoice->total, 2).'<br>'
+            .'<strong>Due date:</strong> '.e($invoice->due_date?->format('M j, Y') ?: '—').'</p>'
+            .'<p>'.nl2br(e((string) ($invoice->notes ?: 'Please include the invoice number with your payment.'))).'</p>';
+
+        Mail::html($html, fn ($message) => $message->to($invoice->billing_contact_email)->subject($subject));
+        $invoice->update(['emailed_at' => now()]);
     }
 
     public function updatedInquirySearch(): void
@@ -2832,7 +3178,7 @@ class Index extends Component
 
     private function jobPageData(User $user): array
     {
-        if (! in_array($this->detailTab, ['overview', 'inquiry'], true)) {
+        if (! in_array($this->detailTab, ['overview', 'inquiry', 'finance'], true)) {
             $this->detailTab = 'overview';
         }
 
@@ -2890,6 +3236,21 @@ class Index extends Component
             }
         }
 
+        $financeSummary = null;
+        $financeContacts = collect();
+        $financeUsers = collect();
+        $canCreateFinance = false;
+        $canEditFinance = false;
+        if ($this->detailTab === 'finance') {
+            $financeSummary = app(OrderFinanceService::class)->summary($selected);
+            $financeContacts = $selected->client?->contacts ?? collect();
+            $canCreateFinance = app(AccessControlService::class)->can($user, 'finance', 'create');
+            $canEditFinance = app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $selected);
+            if ($canEditFinance) {
+                $financeUsers = User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'profile_image_path']);
+            }
+        }
+
         return [
             'selectedJob' => $selected,
             'selectedTask' => null,
@@ -2911,6 +3272,11 @@ class Index extends Component
             'selectedLinkInquiry' => $selectedLinkInquiry,
             'canManageInquiryLink' => $canManageInquiryLink,
             'linkedInquiryCanOpen' => $linkedInquiryCanOpen,
+            'financeSummary' => $financeSummary,
+            'financeContacts' => $financeContacts,
+            'financeUsers' => $financeUsers,
+            'canCreateFinance' => $canCreateFinance,
+            'canEditFinance' => $canEditFinance,
         ];
     }
 
