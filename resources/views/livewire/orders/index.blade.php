@@ -1,6 +1,13 @@
 <x-jobs.table
     :jobs="$jobs"
     :search-filter="$search"
+    :client-filter="$client"
+    :phase-filter="$phase"
+    :owner-filter="$owner"
+    :client-filter-options="$clientFilterOptions"
+    :phase-filter-options="$phaseFilterOptions"
+    :owner-filter-options="$ownerFilterOptions"
     clear-action="clearSearch"
+    clear-filters-action="clearFilters"
     wire:key="orders-list"
 />

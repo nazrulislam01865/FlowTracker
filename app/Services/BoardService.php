@@ -453,11 +453,11 @@ class BoardService
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->whereKey($value))
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($inner) use ($search) {
-                    $inner->where('job_number', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%")
-                        ->orWhere('product', 'like', "%{$search}%")
-                        ->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('tasks', fn ($task) => $task->where('title', 'like', "%{$search}%")->orWhere('task_number', 'like', "%{$search}%"));
+                    $inner->whereLike('job_number', "%{$search}%")
+                        ->orWhereLike('title', "%{$search}%")
+                        ->orWhereLike('product', "%{$search}%")
+                        ->orWhereHas('client', fn ($client) => $client->whereLike('name', "%{$search}%"))
+                        ->orWhereHas('tasks', fn ($task) => $task->whereLike('title', "%{$search}%")->orWhereLike('task_number', "%{$search}%"));
                 });
             })
             ->when($filters['client'] ?? null, fn ($q, $value) => $q->where('client_id', $value))
@@ -516,12 +516,12 @@ class BoardService
         $query
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($inner) use ($search) {
-                    $inner->where('title', 'like', "%{$search}%")
-                        ->orWhere('task_number', 'like', "%{$search}%")
+                    $inner->whereLike('title', "%{$search}%")
+                        ->orWhereLike('task_number', "%{$search}%")
                         ->orWhereHas('job', fn ($job) => $job
-                            ->where('job_number', 'like', "%{$search}%")
-                            ->orWhere('title', 'like', "%{$search}%")
-                            ->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%"))
+                            ->whereLike('job_number', "%{$search}%")
+                            ->orWhereLike('title', "%{$search}%")
+                            ->orWhereHas('client', fn ($client) => $client->whereLike('name', "%{$search}%"))
                         );
                 });
             })

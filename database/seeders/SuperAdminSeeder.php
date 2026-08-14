@@ -38,6 +38,7 @@ class SuperAdminSeeder extends Seeder
                 'email_verified_at' => now(),
             ],
         );
+        $user->roles()->syncWithoutDetaching([$role->id]);
         WorkspaceMembership::updateOrCreate(['workspace_id'=>1,'user_id'=>$user->id], ['role_id'=>$role->id,'department_id'=>$department->id,'job_title'=>'Super Administrator','status'=>'active','joined_at'=>$user->created_at ?: now()]);
     }
 }

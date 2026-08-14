@@ -29,7 +29,8 @@
 
                         <div class="ft-profile-meta-line">
                             @if($position)<span>{{ $position }}</span>@endif
-                            @if($user->role?->name)<span>{{ $user->role->name }}</span>@endif
+                            @php($profileRoles = $user->assignedRoles()->pluck('name'))
+                            @if($profileRoles->isNotEmpty())<span>{{ $profileRoles->join(' · ') }}</span>@endif
                             @if($user->department?->name)<span>{{ $user->department->name }}</span>@endif
                         </div>
 
@@ -122,7 +123,7 @@
 
                 <div class="ft-profile-company-grid ft-profile-company-grid-side">
                     <div class="ft-profile-company-item"><span>Position</span><strong>{{ $position ?: 'Not assigned' }}</strong></div>
-                    <div class="ft-profile-company-item"><span>Role</span><strong>{{ $user->role?->name ?: 'Not assigned' }}</strong></div>
+                    <div class="ft-profile-company-item"><span>Roles</span><strong>{{ $user->assignedRoles()->pluck('name')->join(', ') ?: 'Not assigned' }}</strong></div>
                     <div class="ft-profile-company-item"><span>Department</span><strong>{{ $user->department?->name ?: 'Not assigned' }}</strong></div>
                 </div>
 

@@ -8,8 +8,6 @@ use App\Models\MasterRecord;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
 use App\Support\MasterColor;
-use Illuminate\Pagination\LengthAwarePaginator;
-use Illuminate\Pagination\Paginator;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -89,9 +87,14 @@ class Index extends Component
     public string $categoryLevelFilter = '';
     public string $categoryParentFilter = '';
     public string $categoryStatusFilter = '';
-    public int $categoryPerPage = 10;
+    public int $categoryPerPage = 6;
     public array $expandedMainCategoryIds = [];
     public array $expandedProductCategoryIds = [];
+    public array $categoryProductLimits = [];
+    public array $categorySubcategoryLimits = [];
+
+    private const CATEGORY_PRODUCT_BATCH = 4;
+    private const CATEGORY_SUBCATEGORY_BATCH = 3;
     public ?string $categoryEditorLevel = null;
     public ?int $categoryEditorId = null;
     public ?int $categoryEditorParentId = null;
@@ -141,10 +144,11 @@ class Index extends Component
         $this->expandedMainCategoryIds = [];
         $this->expandedProductCategoryIds = [];
         if ($group === 'product_category') {
-            $taxonomy = app(\App\Services\ProductTaxonomyService::class);
-            $taxonomy->synchronizeLegacyTaxonomy();
-            $this->expandedMainCategoryIds = $taxonomy->mainCategories()->pluck('id')->map(fn ($id) => (int) $id)->all();
-            $this->expandedProductCategoryIds = $taxonomy->productCategories()->pluck('id')->map(fn ($id) => (int) $id)->all();
+            // Keep the hierarchy collapsed initially. Child rows are loaded only
+            // when their parent is expanded, matching the progressive category
+            // loading used by the Product Categories page.
+            $this->categoryProductLimits = [];
+            $this->categorySubcategoryLimits = [];
         }
         $this->parentId = null;
         $this->productCategorySearch = '';
@@ -686,6 +690,9 @@ class Index extends Component
     {
         $this->recordsReady = true;
         $this->clearProductSelection();
+        if ($this->group === 'product_category') {
+            $this->resetCategoryLazyLoading();
+        }
         $this->resetPage('masterPage');
     }
 
@@ -739,40 +746,40 @@ class Index extends Component
 
     public function loadMasterRecords(): void
     {
-        if ($this->group === 'product_category') {
-            $taxonomy = app(\App\Services\ProductTaxonomyService::class);
-            $taxonomy->synchronizeLegacyTaxonomy();
-            if ($this->expandedMainCategoryIds === [] && $this->expandedProductCategoryIds === []) {
-                $this->expandedMainCategoryIds = $taxonomy->mainCategories()->pluck('id')->map(fn ($id) => (int) $id)->all();
-                $this->expandedProductCategoryIds = $taxonomy->productCategories()->pluck('id')->map(fn ($id) => (int) $id)->all();
-            }
-        }
+        // Product Categories intentionally do not synchronize or preload their
+        // complete hierarchy here. Main categories render first; descendants are
+        // requested only after expansion. Taxonomy synchronization still runs on
+        // create/edit operations where it is actually required.
         $this->recordsReady = true;
     }
 
     public function updatedCategoryLevelFilter(): void
     {
         $this->recordsReady = true;
+        $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
 
     public function updatedCategoryParentFilter(): void
     {
         $this->recordsReady = true;
+        $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
 
     public function updatedCategoryStatusFilter(): void
     {
         $this->recordsReady = true;
+        $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
 
     public function updatedCategoryPerPage($value): void
     {
         $value = (int) $value;
-        $this->categoryPerPage = in_array($value, [10, 20, 50, 100], true) ? $value : 10;
+        $this->categoryPerPage = in_array($value, [6, 10, 20, 50], true) ? $value : 6;
         $this->recordsReady = true;
+        $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
 
@@ -783,7 +790,18 @@ class Index extends Component
         $this->categoryParentFilter = '';
         $this->categoryStatusFilter = '';
         $this->recordsReady = true;
+        $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
+    }
+
+    private function resetCategoryLazyLoading(bool $collapse = true): void
+    {
+        $this->categoryProductLimits = [];
+        $this->categorySubcategoryLimits = [];
+        if ($collapse) {
+            $this->expandedMainCategoryIds = [];
+            $this->expandedProductCategoryIds = [];
+        }
     }
 
     public function toggleCategoryExpansion(string $level, int $id): void
@@ -791,10 +809,51 @@ class Index extends Component
         abort_unless($this->group === 'product_category', 404);
         $property = $level === 'main' ? 'expandedMainCategoryIds' : ($level === 'product' ? 'expandedProductCategoryIds' : null);
         abort_unless($property, 404);
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $expectedType = $level === 'main' ? 'product_main_category' : 'product_category';
+        MasterRecord::query()->forWorkspace($workspaceId)->ofType($expectedType)->findOrFail($id);
+
         $values = collect($this->{$property})->map(fn ($value) => (int) $value);
-        $this->{$property} = $values->contains($id)
-            ? $values->reject(fn ($value) => $value === $id)->values()->all()
-            : $values->push($id)->unique()->values()->all();
+        $opening = ! $values->contains($id);
+        $this->{$property} = $opening
+            ? $values->push($id)->unique()->values()->all()
+            : $values->reject(fn ($value) => $value === $id)->values()->all();
+
+        if ($opening && $level === 'main') {
+            $this->categoryProductLimits[$id] = max(self::CATEGORY_PRODUCT_BATCH, (int) ($this->categoryProductLimits[$id] ?? 0));
+        }
+        if ($opening && $level === 'product') {
+            $this->categorySubcategoryLimits[$id] = max(self::CATEGORY_SUBCATEGORY_BATCH, (int) ($this->categorySubcategoryLimits[$id] ?? 0));
+        }
+    }
+
+    public function loadMoreCategoryProducts(int $mainCategoryId): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product_main_category')
+            ->findOrFail($mainCategoryId);
+
+        $this->categoryProductLimits[$mainCategoryId] = max(
+            self::CATEGORY_PRODUCT_BATCH,
+            (int) ($this->categoryProductLimits[$mainCategoryId] ?? self::CATEGORY_PRODUCT_BATCH) + self::CATEGORY_PRODUCT_BATCH
+        );
+    }
+
+    public function loadMoreCategorySubcategories(int $productCategoryId): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('product_category')
+            ->findOrFail($productCategoryId);
+
+        $this->categorySubcategoryLimits[$productCategoryId] = max(
+            self::CATEGORY_SUBCATEGORY_BATCH,
+            (int) ($this->categorySubcategoryLimits[$productCategoryId] ?? self::CATEGORY_SUBCATEGORY_BATCH) + self::CATEGORY_SUBCATEGORY_BATCH
+        );
     }
 
     public function expandAllCategories(): void
@@ -803,13 +862,18 @@ class Index extends Component
         $workspaceId = app(MasterDataService::class)->workspaceId();
         $this->expandedMainCategoryIds = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_main_category')->pluck('id')->map(fn ($id) => (int) $id)->all();
         $this->expandedProductCategoryIds = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->pluck('id')->map(fn ($id) => (int) $id)->all();
+        foreach ($this->expandedMainCategoryIds as $id) {
+            $this->categoryProductLimits[(int) $id] = self::CATEGORY_PRODUCT_BATCH;
+        }
+        foreach ($this->expandedProductCategoryIds as $id) {
+            $this->categorySubcategoryLimits[(int) $id] = self::CATEGORY_SUBCATEGORY_BATCH;
+        }
     }
 
     public function collapseAllCategories(): void
     {
         abort_unless($this->group === 'product_category', 404);
-        $this->expandedMainCategoryIds = [];
-        $this->expandedProductCategoryIds = [];
+        $this->resetCategoryLazyLoading();
     }
 
     public function openCategoryEditor(string $level = 'main', ?int $id = null, ?int $parentId = null, bool $readOnly = false): void
@@ -1998,54 +2062,78 @@ class Index extends Component
         $categoryProductCounts = collect();
         $categoryMainProductCounts = collect();
         $categorySubcategoryProductCounts = collect();
+        $categoryProductChildTotals = collect();
+        $categorySubcategoryChildTotals = collect();
 
         if ($this->group === 'product_category' && $this->recordsReady) {
-            $taxonomy = app(\App\Services\ProductTaxonomyService::class);
-            $categoryMainCategories = $taxonomy->mainCategories();
-            $categoryProductCategories = $taxonomy->productCategories();
-            $categorySubcategories = $taxonomy->subcategories();
+            // Match the category lazy-pagination prototype exactly:
+            // - only Main Categories are page-paginated;
+            // - Product Category rows are queried only after their Main Category opens;
+            // - Subcategory rows are queried only after their Product Category opens;
+            // - child counts are lightweight count/id queries and do not hydrate child rows.
+            $categoryMainCategories = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_main_category')
+                ->orderBy('sort_order')->orderBy('name')
+                ->get(['id', 'code', 'name', 'status', 'sort_order', 'updated_at']);
+
             $categoryCounts = [
                 'main' => $categoryMainCategories->count(),
-                'product' => $categoryProductCategories->count(),
-                'sub' => $categorySubcategories->count(),
+                'product' => (int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->count(),
+                'sub' => (int) MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_subcategory')->count(),
             ];
 
-            $productsForCategoryCounts = MasterRecord::query()
+            $mainIdByName = $categoryMainCategories
+                ->mapWithKeys(fn (MasterRecord $main) => [mb_strtolower(trim((string) $main->name)) => (int) $main->id]);
+            $mainNameById = $categoryMainCategories
+                ->mapWithKeys(fn (MasterRecord $main) => [(int) $main->id => (string) $main->name]);
+
+            $baseProductCategoryQuery = static fn () => MasterRecord::query()
                 ->forWorkspace($workspaceId)
-                ->ofType('product')
-                ->with('parent:id,name,metadata')
-                ->get(['id', 'parent_id', 'metadata']);
-            $categoryProductCounts = $productsForCategoryCounts->groupBy(fn (MasterRecord $product) => (int) ($product->parent_id ?? 0))->map->count();
-            $categoryMainProductCounts = $productsForCategoryCounts
-                ->groupBy(fn (MasterRecord $product) => mb_strtolower($product->productMainCategory()))
-                ->map->count();
-            $categorySubcategoryProductCounts = collect();
-            foreach ($productsForCategoryCounts as $product) {
-                $sub = mb_strtolower(trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category'))));
-                if ($sub === '' || !$product->parent_id) continue;
-                $key = (int) $product->parent_id.'|'.$sub;
-                $categorySubcategoryProductCounts[$key] = ((int) ($categorySubcategoryProductCounts[$key] ?? 0)) + 1;
-            }
+                ->ofType('product_category');
 
-            $categoryProductChildren = $categoryProductCategories
-                ->groupBy(function (MasterRecord $category) use ($taxonomy): int {
-                    return (int) ($taxonomy->mainCategoryFor($category)?->id ?? 0);
+            $applyProductMain = static function ($query, int $mainId, string $mainName) {
+                return $query->where(function ($q) use ($mainId, $mainName) {
+                    $q->where('metadata->main_category_id', $mainId)
+                        ->orWhere('metadata->main_category', $mainName)
+                        ->orWhere('metadata->excel_main_category', $mainName);
                 });
-            $categorySubcategoryChildren = $categorySubcategories->groupBy(fn (MasterRecord $subcategory) => (int) ($subcategory->parent_id ?? 0));
+            };
 
+            $productMainId = static function (MasterRecord $category) use ($mainIdByName): int {
+                $mainId = (int) data_get($category->metadata, 'main_category_id', 0);
+                if ($mainId > 0) return $mainId;
+                $legacyMain = mb_strtolower(trim((string) (
+                    data_get($category->metadata, 'main_category')
+                    ?: data_get($category->metadata, 'excel_main_category')
+                )));
+                return (int) ($mainIdByName[$legacyMain] ?? 0);
+            };
+
+            // The Parent filter is independent from table expansion. Load only
+            // identifiers/names for Product Category options, never table rows.
+            $productParentOptions = $baseProductCategoryQuery()
+                ->orderBy('sort_order')->orderBy('name')
+                ->get(['id', 'name']);
             $categoryParentOptions = $categoryMainCategories->map(fn (MasterRecord $main) => [
                 'value' => 'main:'.$main->id,
                 'label' => $main->name,
                 'meta' => 'Main category',
-            ])->concat($categoryProductCategories->map(function (MasterRecord $category) use ($taxonomy) {
-                return [
-                    'value' => 'product:'.$category->id,
-                    'label' => $category->name,
-                    'meta' => $taxonomy->mainCategoryFor($category)?->name ?: 'Product category',
-                ];
-            }))->values();
+            ])->concat($productParentOptions->map(fn (MasterRecord $category) => [
+                'value' => 'product:'.$category->id,
+                'label' => $category->name,
+                'meta' => 'Product category',
+            ]))->values();
 
-            $searchNeedle = mb_strtolower(trim($this->search));
+            // Only the Subcategory editor needs the complete Product Category
+            // collection. The normal hierarchy list never preloads it.
+            if ($this->categoryEditorLevel === 'sub') {
+                $categoryProductCategories = $baseProductCategoryQuery()
+                    ->orderBy('sort_order')->orderBy('name')
+                    ->get(['id', 'code', 'name', 'status', 'sort_order', 'metadata']);
+            }
+
+            $searchNeedle = trim($this->search);
             $levelFilter = trim($this->categoryLevelFilter);
             $statusFilter = trim($this->categoryStatusFilter);
             [$parentFilterType, $parentFilterId] = str_contains($this->categoryParentFilter, ':')
@@ -2053,50 +2141,286 @@ class Index extends Component
                 : ['', ''];
             $parentFilterId = (int) $parentFilterId;
 
-            $recordMatches = function (MasterRecord $record, string $level, ?int $mainId = null, ?int $productId = null) use ($searchNeedle, $levelFilter, $statusFilter, $parentFilterType, $parentFilterId): bool {
-                if ($levelFilter !== '' && $levelFilter !== $level) return false;
-                if ($statusFilter !== '' && $record->status !== $statusFilter) return false;
-                if ($searchNeedle !== '' && !str_contains(mb_strtolower($record->name.' '.$record->code), $searchNeedle)) return false;
+            $directMainIds = collect();
+            if (in_array($levelFilter, ['', 'main'], true)) {
+                $directMainQuery = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_main_category')
+                    ->when($searchNeedle !== '', fn ($query) => $query->where(function ($q) use ($searchNeedle) {
+                        $q->whereLike('name', '%'.$searchNeedle.'%')
+                            ->orWhereLike('code', '%'.$searchNeedle.'%');
+                    }))
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter));
+
                 if ($parentFilterType === 'main' && $parentFilterId > 0) {
-                    if ($level === 'main') return $record->id === $parentFilterId;
-                    if ($mainId !== $parentFilterId) return false;
+                    $directMainQuery->whereKey($parentFilterId);
+                } elseif ($parentFilterType === 'product' && $parentFilterId > 0) {
+                    $directMainQuery->whereRaw('1 = 0');
                 }
+
+                $directMainIds = $directMainQuery->pluck('id')->map(fn ($id) => (int) $id)->values();
+            }
+
+            $directProductIds = collect();
+            $needDirectProducts = $levelFilter === 'product'
+                || ($levelFilter === '' && ($searchNeedle !== '' || $statusFilter !== '' || $parentFilterType === 'product'));
+            if ($needDirectProducts) {
+                $directProductQuery = $baseProductCategoryQuery()
+                    ->when($searchNeedle !== '', fn ($query) => $query->where(function ($q) use ($searchNeedle) {
+                        $q->whereLike('name', '%'.$searchNeedle.'%')
+                            ->orWhereLike('code', '%'.$searchNeedle.'%');
+                    }))
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter));
+
+                if ($parentFilterType === 'main' && $parentFilterId > 0) {
+                    $mainName = (string) ($mainNameById[$parentFilterId] ?? '');
+                    $applyProductMain($directProductQuery, $parentFilterId, $mainName);
+                } elseif ($parentFilterType === 'product' && $parentFilterId > 0) {
+                    $directProductQuery->whereKey($parentFilterId);
+                }
+
+                $directProductIds = $directProductQuery->pluck('id')->map(fn ($id) => (int) $id)->values();
+            }
+
+            $matchingSubParentIds = collect();
+            $needSubMatches = $levelFilter === 'sub'
+                || ($levelFilter === '' && ($searchNeedle !== '' || $statusFilter !== ''));
+            if ($needSubMatches) {
+                $subMatchQuery = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_subcategory')
+                    ->when($searchNeedle !== '', fn ($query) => $query->where(function ($q) use ($searchNeedle) {
+                        $q->whereLike('name', '%'.$searchNeedle.'%')
+                            ->orWhereLike('code', '%'.$searchNeedle.'%');
+                    }))
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter));
+
                 if ($parentFilterType === 'product' && $parentFilterId > 0) {
-                    if ($level === 'main') return false;
-                    if ($level === 'product') return $record->id === $parentFilterId;
-                    if ($productId !== $parentFilterId) return false;
+                    $subMatchQuery->where('parent_id', $parentFilterId);
+                } elseif ($parentFilterType === 'main' && $parentFilterId > 0) {
+                    $mainName = (string) ($mainNameById[$parentFilterId] ?? '');
+                    $productIdsForMain = $applyProductMain($baseProductCategoryQuery(), $parentFilterId, $mainName)->pluck('id');
+                    $productIdsForMain->isNotEmpty()
+                        ? $subMatchQuery->whereIn('parent_id', $productIdsForMain->all())
+                        : $subMatchQuery->whereRaw('1 = 0');
                 }
-                return true;
+
+                $matchingSubParentIds = $subMatchQuery
+                    ->pluck('parent_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+            }
+
+            // null means all Product Categories are eligible under a visible Main
+            // Category. A Collection means restrict child queries to those IDs.
+            $visibleProductIds = match ($levelFilter) {
+                'main' => collect(),
+                'product' => $directProductIds,
+                'sub' => $matchingSubParentIds,
+                default => ($searchNeedle === '' && $statusFilter === '' && $parentFilterType !== 'product')
+                    ? null
+                    : $directProductIds->concat($matchingSubParentIds)->unique()->values(),
             };
+            if ($levelFilter === '' && $parentFilterType === 'product' && $parentFilterId > 0 && $searchNeedle === '' && $statusFilter === '') {
+                $visibleProductIds = collect([$parentFilterId]);
+            }
 
-            $visibleMainIds = $categoryMainCategories->filter(function (MasterRecord $main) use ($recordMatches, $categoryProductChildren, $categorySubcategoryChildren, $levelFilter): bool {
-                $products = $categoryProductChildren->get((int) $main->id, collect());
-                $mainMatches = $recordMatches($main, 'main', $main->id, null);
-                $productMatches = $products->contains(fn (MasterRecord $category) => $recordMatches($category, 'product', $main->id, $category->id));
-                $subMatches = $products->contains(function (MasterRecord $category) use ($recordMatches, $categorySubcategoryChildren, $main): bool {
-                    return $categorySubcategoryChildren->get((int) $category->id, collect())
-                        ->contains(fn (MasterRecord $sub) => $recordMatches($sub, 'sub', $main->id, $category->id));
-                });
-                return match ($levelFilter) {
-                    'main' => $mainMatches,
-                    'product' => $productMatches,
-                    'sub' => $subMatches,
-                    default => $mainMatches || $productMatches || $subMatches,
+            $mainIdsFromProducts = collect();
+            if ($visibleProductIds instanceof \Illuminate\Support\Collection && $visibleProductIds->isNotEmpty()) {
+                $mainIdsFromProducts = $baseProductCategoryQuery()
+                    ->whereIn('id', $visibleProductIds->all())
+                    ->get(['id', 'metadata'])
+                    ->map(fn (MasterRecord $category) => $productMainId($category))
+                    ->filter()->unique()->values();
+            }
+
+            $noFilters = $levelFilter === '' && $searchNeedle === '' && $statusFilter === '' && $parentFilterType === '';
+            $visibleMainIds = $noFilters
+                ? null
+                : match ($levelFilter) {
+                    'main' => $directMainIds,
+                    'product', 'sub' => $mainIdsFromProducts,
+                    default => $directMainIds->concat($mainIdsFromProducts)->unique()->values(),
                 };
-            })->pluck('id')->map(fn ($id) => (int) $id);
 
-            $filteredMain = $categoryMainCategories->whereIn('id', $visibleMainIds)->values();
-            $page = max(1, Paginator::resolveCurrentPage('masterPage'));
-            $perPage = max(1, $this->categoryPerPage);
-            $categoryMainPage = new LengthAwarePaginator(
-                $filteredMain->forPage($page, $perPage)->values(),
-                $filteredMain->count(),
-                $perPage,
-                $page,
-                ['path' => request()->url(), 'pageName' => 'masterPage']
+            $mainPageQuery = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_main_category')
+                ->orderBy('sort_order')->orderBy('name');
+            if ($visibleMainIds instanceof \Illuminate\Support\Collection) {
+                $visibleMainIds->isNotEmpty()
+                    ? $mainPageQuery->whereIn('id', $visibleMainIds->all())
+                    : $mainPageQuery->whereRaw('1 = 0');
+            }
+
+            $categoryMainPage = $mainPageQuery->paginate(
+                max(1, $this->categoryPerPage),
+                ['id', 'code', 'name', 'status', 'sort_order', 'updated_at'],
+                'masterPage'
             );
-        }
 
+            $pageMainIds = collect($categoryMainPage->items())->pluck('id')->map(fn ($id) => (int) $id)->values();
+
+            // Main Category product totals are available while collapsed without
+            // hydrating Product Category rows. Only child IDs for the six/selected
+            // Main Categories on the current page are used for aggregation.
+            foreach ($categoryMainPage->items() as $main) {
+                $mainId = (int) $main->id;
+                $mainName = (string) $main->name;
+
+                $allCategoryIdsForMain = $applyProductMain($baseProductCategoryQuery(), $mainId, $mainName)
+                    ->pluck('id')->map(fn ($id) => (int) $id)->values();
+                $mainProductCount = 0;
+                if ($allCategoryIdsForMain->isNotEmpty()) {
+                    $mainProductCount += (int) MasterRecord::query()
+                        ->forWorkspace($workspaceId)
+                        ->ofType('product')
+                        ->whereIn('parent_id', $allCategoryIdsForMain->all())
+                        ->count();
+                }
+                $mainProductCount += (int) MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->whereNull('parent_id')
+                    ->where(function ($query) use ($mainName) {
+                        $query->where('metadata->main_category', $mainName)
+                            ->orWhere('metadata->excel_main_category', $mainName);
+                    })
+                    ->count();
+                $categoryMainProductCounts[mb_strtolower($mainName)] = $mainProductCount;
+
+                if ($levelFilter === 'main') {
+                    $categoryProductChildTotals[$mainId] = 0;
+                    continue;
+                }
+
+                $childCountQuery = $applyProductMain($baseProductCategoryQuery(), $mainId, $mainName);
+                if ($visibleProductIds instanceof \Illuminate\Support\Collection) {
+                    $visibleProductIds->isNotEmpty()
+                        ? $childCountQuery->whereIn('id', $visibleProductIds->all())
+                        : $childCountQuery->whereRaw('1 = 0');
+                }
+                $categoryProductChildTotals[$mainId] = (int) $childCountQuery->count();
+            }
+
+            // Product Category rows are the first true lazy level: exactly four
+            // are fetched on expand and four more on each Load more click.
+            $loadedProductIds = collect();
+            $expandedMainIds = collect($this->expandedMainCategoryIds)->map(fn ($id) => (int) $id);
+            foreach ($categoryMainPage->items() as $main) {
+                $mainId = (int) $main->id;
+                if (! $expandedMainIds->contains($mainId) || $levelFilter === 'main') continue;
+
+                $mainName = (string) $main->name;
+                $limit = max(self::CATEGORY_PRODUCT_BATCH, (int) ($this->categoryProductLimits[$mainId] ?? self::CATEGORY_PRODUCT_BATCH));
+                $childQuery = $applyProductMain($baseProductCategoryQuery(), $mainId, $mainName);
+                if ($visibleProductIds instanceof \Illuminate\Support\Collection) {
+                    $visibleProductIds->isNotEmpty()
+                        ? $childQuery->whereIn('id', $visibleProductIds->all())
+                        : $childQuery->whereRaw('1 = 0');
+                }
+
+                $rowsForMain = $childQuery
+                    ->orderBy('sort_order')->orderBy('name')
+                    ->limit($limit)
+                    ->get(['id', 'code', 'name', 'status', 'sort_order', 'metadata', 'updated_at']);
+                $categoryProductChildren[$mainId] = $rowsForMain;
+                $loadedProductIds = $loadedProductIds->concat($rowsForMain->pluck('id')->map(fn ($id) => (int) $id));
+            }
+            $loadedProductIds = $loadedProductIds->unique()->values();
+
+            if ($loadedProductIds->isNotEmpty()) {
+                $categoryProductCounts = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->whereIn('parent_id', $loadedProductIds->all())
+                    ->selectRaw('parent_id, COUNT(*) as aggregate')
+                    ->groupBy('parent_id')
+                    ->pluck('aggregate', 'parent_id')
+                    ->map(fn ($count) => (int) $count);
+            }
+
+            // Child totals for the loaded Product Category rows use grouped count
+            // queries only. No Subcategory row is fetched until the row expands.
+            if ($loadedProductIds->isNotEmpty() && in_array($levelFilter, ['', 'sub'], true)) {
+                $subCountQuery = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_subcategory')
+                    ->whereIn('parent_id', $loadedProductIds->all())
+                    ->when($searchNeedle !== '', fn ($query) => $query->where(function ($q) use ($searchNeedle) {
+                        $q->whereLike('name', '%'.$searchNeedle.'%')
+                            ->orWhereLike('code', '%'.$searchNeedle.'%');
+                    }))
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter));
+                if ($parentFilterType === 'product' && $parentFilterId > 0) {
+                    $subCountQuery->where('parent_id', $parentFilterId);
+                }
+                $categorySubcategoryChildTotals = $subCountQuery
+                    ->selectRaw('parent_id, COUNT(*) as aggregate')
+                    ->groupBy('parent_id')
+                    ->pluck('aggregate', 'parent_id')
+                    ->map(fn ($count) => (int) $count);
+            }
+
+            // Subcategory rows are the second true lazy level: exactly three are
+            // fetched on expand and three more on each Load more click.
+            $expandedProductIds = collect($this->expandedProductCategoryIds)->map(fn ($id) => (int) $id);
+            foreach ($loadedProductIds as $productCategoryId) {
+                $productCategoryId = (int) $productCategoryId;
+                if (! $expandedProductIds->contains($productCategoryId)) continue;
+                if (! in_array($levelFilter, ['', 'sub'], true)) continue;
+                if ($parentFilterType === 'product' && $parentFilterId > 0 && $productCategoryId !== $parentFilterId) continue;
+
+                $limit = max(self::CATEGORY_SUBCATEGORY_BATCH, (int) ($this->categorySubcategoryLimits[$productCategoryId] ?? self::CATEGORY_SUBCATEGORY_BATCH));
+                $subQuery = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_subcategory')
+                    ->where('parent_id', $productCategoryId)
+                    ->when($searchNeedle !== '', fn ($query) => $query->where(function ($q) use ($searchNeedle) {
+                        $q->whereLike('name', '%'.$searchNeedle.'%')
+                            ->orWhereLike('code', '%'.$searchNeedle.'%');
+                    }))
+                    ->when($statusFilter !== '', fn ($query) => $query->where('status', $statusFilter))
+                    ->orderBy('sort_order')->orderBy('name');
+
+                $categorySubcategoryChildren[$productCategoryId] = $subQuery
+                    ->limit($limit)
+                    ->get(['id', 'parent_id', 'code', 'name', 'status', 'sort_order', 'updated_at']);
+            }
+
+            // Product counts for visible Subcategory rows are calculated only
+            // after their Product Category has been expanded.
+            $expandedLoadedIds = $expandedProductIds->intersect($loadedProductIds)->values();
+            if ($expandedLoadedIds->isNotEmpty()) {
+                $visibleSubNamesByProduct = collect($categorySubcategoryChildren)->map(
+                    fn ($subs) => collect($subs)->map(fn (MasterRecord $sub) => mb_strtolower(trim((string) $sub->name)))->flip()
+                );
+                MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product')
+                    ->whereIn('parent_id', $expandedLoadedIds->all())
+                    ->select(['parent_id', 'metadata'])
+                    ->chunk(500, function ($products) use (&$categorySubcategoryProductCounts, $visibleSubNamesByProduct): void {
+                        foreach ($products as $product) {
+                            $parentId = (int) $product->parent_id;
+                            $sub = mb_strtolower(trim((string) (
+                                data_get($product->metadata, 'sub_category')
+                                ?: data_get($product->metadata, 'excel_sub_category')
+                            )));
+                            if ($sub === '' || ! $visibleSubNamesByProduct->get($parentId, collect())->has($sub)) continue;
+                            $key = $parentId.'|'.$sub;
+                            $categorySubcategoryProductCounts[$key] = ((int) ($categorySubcategoryProductCounts[$key] ?? 0)) + 1;
+                        }
+                    });
+            }
+
+            // Only the open Subcategory editor needs the full Subcategory list.
+            if ($this->categoryEditorLevel === 'sub') {
+                $categorySubcategories = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('product_subcategory')
+                    ->orderBy('sort_order')->orderBy('name')
+                    ->get(['id', 'parent_id', 'code', 'name', 'status', 'sort_order']);
+            }
+        }
         $productSelectionCount = $this->group === 'product' ? $this->productSelectionCount() : 0;
         $bulkProductCategories = collect();
         $bulkProductSubcategories = collect();
@@ -2167,6 +2491,8 @@ class Index extends Component
             'categoryProductCounts' => $categoryProductCounts,
             'categoryMainProductCounts' => $categoryMainProductCounts,
             'categorySubcategoryProductCounts' => $categorySubcategoryProductCounts,
+            'categoryProductChildTotals' => $categoryProductChildTotals,
+            'categorySubcategoryChildTotals' => $categorySubcategoryChildTotals,
             'groupCounts' => collect(MasterDataService::LABELS)->mapWithKeys(
                 fn ($label, $type) => [$type => (int) ($summaries->get($type)?->total_count ?? 0)]
             ),

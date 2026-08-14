@@ -9,6 +9,8 @@
     'productCounts' => collect(),
     'mainProductCounts' => collect(),
     'subcategoryProductCounts' => collect(),
+    'productChildTotals' => collect(),
+    'subcategoryChildTotals' => collect(),
     'expandedMainIds' => [],
     'expandedProductIds' => [],
     'canCreate' => false,
@@ -19,7 +21,7 @@
     'levelFilter' => '',
     'parentFilter' => '',
     'statusFilter' => '',
-    'perPage' => 10,
+    'perPage' => 6,
 ])
 @php
     $expandedMain = collect($expandedMainIds)->map(fn($id)=>(int)$id);
@@ -141,13 +143,14 @@
                 @php
                     $mainProducts = collect($productChildren)->get((int)$main->id, collect());
                     $mainIsExpanded = $expandedMain->contains((int)$main->id);
+                    $mainChildTotal = (int)(collect($productChildTotals)->get((int)$main->id, 0));
                     $mainCount = (int)($mainProductCounts[mb_strtolower($main->name)] ?? 0);
                     $mainUpdated = $main->updated_at?->copy()->timezone($displayTimezone);
                 @endphp
                 <div class="ft-category-tree-grid ft-category-row is-main" wire:key="cat-main-{{ $main->id }}">
                     <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $main->name }}"></span>
                     <div class="ft-category-name">
-                        @if($mainProducts->isNotEmpty())
+                        @if($mainChildTotal > 0)
                             <button type="button" class="ft-category-chevron" wire:click="toggleCategoryExpansion('main', {{ $main->id }})" aria-label="{{ $mainIsExpanded ? 'Collapse' : 'Expand' }} {{ $main->name }}">{{ $mainIsExpanded ? '⌄' : '›' }}</button>
                         @else<span class="ft-category-chevron is-placeholder"></span>@endif
                         <span class="ft-category-tag-icon">◇</span><strong>{{ $main->name }}</strong>
@@ -165,17 +168,14 @@
                     @foreach($mainProducts as $category)
                         @php
                             $subs = collect($subcategoryChildren)->get((int)$category->id, collect());
-                            $matchingSubs = $subs->filter(fn($sub)=>$matches($sub,'sub',$main->id,$category->id));
-                            $categoryMatches = $matches($category,'product',$main->id,$category->id);
-                            $showCategory = $levelFilter === 'sub' ? $matchingSubs->isNotEmpty() : ($categoryMatches || ($levelFilter==='' && $matchingSubs->isNotEmpty()));
+                            $subcategoryTotal = (int)(collect($subcategoryChildTotals)->get((int)$category->id, 0));
                             $categoryIsExpanded = $expandedProduct->contains((int)$category->id);
                             $categoryUpdated = $category->updated_at?->copy()->timezone($displayTimezone);
                         @endphp
-                        @if($showCategory)
                             <div class="ft-category-tree-grid ft-category-row" wire:key="cat-product-{{ $category->id }}">
                                 <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $category->name }}"></span>
                                 <div class="ft-category-name is-indent-1">
-                                    @if($subs->isNotEmpty())
+                                    @if($subcategoryTotal > 0)
                                         <button type="button" class="ft-category-chevron" wire:click="toggleCategoryExpansion('product', {{ $category->id }})" aria-label="{{ $categoryIsExpanded ? 'Collapse' : 'Expand' }} {{ $category->name }}">{{ $categoryIsExpanded ? '⌄' : '›' }}</button>
                                     @else<span class="ft-category-chevron is-placeholder"></span>@endif
                                     <strong>{{ $category->name }}</strong>
@@ -191,7 +191,6 @@
 
                             @if($categoryIsExpanded && in_array($levelFilter,['','sub'],true))
                                 @foreach($subs as $sub)
-                                    @continue(!$matches($sub,'sub',$main->id,$category->id))
                                     @php
                                         $subUpdated = $sub->updated_at?->copy()->timezone($displayTimezone);
                                         $subCountKey = $category->id.'|'.mb_strtolower($sub->name);
@@ -208,9 +207,31 @@
                                         <x-catalog.category-action-menu level="sub" :record-id="$sub->id" :is-active="$sub->status==='active'" :can-edit="$canEdit" :can-delete="$canDelete" :can-create="$canCreate" />
                                     </div>
                                 @endforeach
+                                @php
+                                    $loadedSubcategories = $subs->count();
+                                    $subProgress = $subcategoryTotal > 0 ? min(100, (int) round(($loadedSubcategories / $subcategoryTotal) * 100)) : 100;
+                                @endphp
+                                @if($loadedSubcategories < $subcategoryTotal)
+                                    <div class="ft-category-load-row is-sub" wire:key="cat-product-more-{{ $category->id }}">
+                                        <span>Showing {{ number_format($loadedSubcategories) }} of {{ number_format($subcategoryTotal) }} subcategories</span>
+                                        <span class="ft-category-load-progress" aria-hidden="true"><i style="width:{{ $subProgress }}%"></i></span>
+                                        <button type="button" wire:click="loadMoreCategorySubcategories({{ $category->id }})" wire:loading.attr="disabled" wire:target="loadMoreCategorySubcategories({{ $category->id }})">Load 3 more</button>
+                                    </div>
+                                @endif
                             @endif
-                        @endif
                     @endforeach
+
+                    @php
+                        $loadedMainChildren = $mainProducts->count();
+                        $mainProgress = $mainChildTotal > 0 ? min(100, (int) round(($loadedMainChildren / $mainChildTotal) * 100)) : 100;
+                    @endphp
+                    @if($loadedMainChildren < $mainChildTotal)
+                        <div class="ft-category-load-row" wire:key="cat-main-more-{{ $main->id }}">
+                            <span>Showing {{ number_format($loadedMainChildren) }} of {{ number_format($mainChildTotal) }} product categories</span>
+                            <span class="ft-category-load-progress" aria-hidden="true"><i style="width:{{ $mainProgress }}%"></i></span>
+                            <button type="button" wire:click="loadMoreCategoryProducts({{ $main->id }})" wire:loading.attr="disabled" wire:target="loadMoreCategoryProducts({{ $main->id }})">Load 4 more</button>
+                        </div>
+                    @endif
                 @endif
             @empty
                 <div class="ft-category-empty">No categories found.</div>
@@ -229,20 +250,22 @@
                     </span>
                     <label>Rows per page
                         <select wire:model.live="categoryPerPage">
-                            @foreach([10,20,50,100] as $size)<option value="{{ $size }}">{{ $size }}</option>@endforeach
+                            @foreach([6,10,20,50] as $size)<option value="{{ $size }}">{{ $size }}</option>@endforeach
                         </select>
                     </label>
                 </div>
                 <span>Page {{ $mainPage->currentPage() }} of {{ max(1,$mainPage->lastPage()) }}</span>
                 <div class="ft-category-pages">
-                    <button type="button" wire:click="previousPage('masterPage')" @disabled($mainPage->onFirstPage())>Previous</button>
+                    <button type="button" wire:click="setPage(1, 'masterPage')" @disabled($mainPage->onFirstPage()) aria-label="First page">|‹</button>
+                    <button type="button" wire:click="previousPage('masterPage')" @disabled($mainPage->onFirstPage()) aria-label="Previous page">‹</button>
                     @php
                         $start=max(1,$mainPage->currentPage()-1); $end=min($mainPage->lastPage(),$start+3); $start=max(1,$end-3);
                     @endphp
                     @for($page=$start;$page<=$end;$page++)
                         <button type="button" wire:click="setPage({{ $page }}, 'masterPage')" @class(['is-active'=>$page===$mainPage->currentPage()])>{{ $page }}</button>
                     @endfor
-                    <button type="button" wire:click="nextPage('masterPage')" @disabled(!$mainPage->hasMorePages())>Next</button>
+                    <button type="button" wire:click="nextPage('masterPage')" @disabled(!$mainPage->hasMorePages()) aria-label="Next page">›</button>
+                    <button type="button" wire:click="setPage({{ max(1,$mainPage->lastPage()) }}, 'masterPage')" @disabled(!$mainPage->hasMorePages()) aria-label="Last page">›|</button>
                 </div>
             </footer>
         @endif

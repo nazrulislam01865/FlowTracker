@@ -29,6 +29,9 @@ class Index extends Component
     #[Url(as: 'sort', history: true)]
     public string $sort = 'action';
 
+    #[Url(as: 'phase', history: true)]
+    public string $phaseFilter = '';
+
     public array $metrics = [
         'attention' => null,
         'overdue' => null,
@@ -39,10 +42,12 @@ class Index extends Component
     ];
     public bool $metricsLoaded = false;
     public array $statusOptions = [];
+    public array $phaseOptions = [];
     public int $perPage = MyWorkService::JOBS_PER_PAGE;
     public bool $administratorView = false;
-    public bool $hideCompleted = true;
+    public bool $hideCompleted = false;
 
+    private const METRIC_FILTERS = ['attention', 'overdue', 'today', 'upcoming', 'waiting'];
     private const QUICK_FILTERS = ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
     private const SORTS = ['action', 'due', 'job'];
 
@@ -60,10 +65,31 @@ class Index extends Component
         $this->metrics = $service->metrics($user);
         $this->metricsLoaded = true;
         $this->statusOptions = $service->statusOptions();
+        $this->phaseOptions = $service->orderPhaseOptions();
+        if ($this->phaseFilter !== '' && !in_array($this->phaseFilter, $this->phaseOptions, true)) {
+            $this->phaseFilter = '';
+        }
     }
 
     public function updatedSearch(): void
     {
+        $this->clearMetricFilterForToolbar();
+        $this->resetPage('workPage');
+    }
+
+    public function updatedPhaseFilter(): void
+    {
+        $this->clearMetricFilterForToolbar();
+        $this->resetPage('workPage');
+    }
+
+    public function setPhaseFilter(string $phase): void
+    {
+        $phase = trim($phase);
+        abort_unless($phase === '' || in_array($phase, $this->phaseOptions, true), 422);
+
+        $this->clearMetricFilterForToolbar();
+        $this->phaseFilter = $this->phaseFilter === $phase ? '' : $phase;
         $this->resetPage('workPage');
     }
 
@@ -75,13 +101,25 @@ class Index extends Component
 
     public function updatedHideCompleted(): void
     {
+        $this->clearMetricFilterForToolbar();
         $this->resetPage('workPage');
     }
 
     public function setQuick(string $quick): void
     {
-        abort_unless(in_array($quick, self::QUICK_FILTERS, true), 422);
+        abort_unless(in_array($quick, ['all', 'mentions'], true), 422);
         $this->quick = $quick;
+        $this->resetPage('workPage');
+    }
+
+    public function setMetricFilter(string $quick): void
+    {
+        abort_unless(in_array($quick, self::METRIC_FILTERS, true), 422);
+
+        $this->search = '';
+        $this->phaseFilter = '';
+        $this->hideCompleted = false;
+        $this->quick = $this->quick === $quick ? 'all' : $quick;
         $this->resetPage('workPage');
     }
 
@@ -89,6 +127,22 @@ class Index extends Component
     {
         $this->search = '';
         $this->resetPage('workPage');
+    }
+
+    public function clearFilters(): void
+    {
+        $this->search = '';
+        $this->phaseFilter = '';
+        $this->quick = 'all';
+        $this->hideCompleted = false;
+        $this->resetPage('workPage');
+    }
+
+    private function clearMetricFilterForToolbar(): void
+    {
+        if (in_array($this->quick, self::METRIC_FILTERS, true)) {
+            $this->quick = 'all';
+        }
     }
 
     #[Renderless]
@@ -188,6 +242,7 @@ class Index extends Component
             'search' => $this->search,
             'quick' => $this->quick,
             'sort' => $this->sort,
+            'phase' => $this->phaseFilter,
             'hide_completed' => $this->hideCompleted,
         ], $this->perPage, 'workPage');
 

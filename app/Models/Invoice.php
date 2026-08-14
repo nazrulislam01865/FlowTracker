@@ -22,6 +22,7 @@ class Invoice extends Model
             'total' => 'decimal:2',
             'sent_at' => 'datetime',
             'emailed_at' => 'datetime',
+            'pdf_generated_at' => 'datetime',
         ];
     }
 

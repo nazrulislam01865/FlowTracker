@@ -11,6 +11,12 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'priorities'=>collect(),
     'products'=>collect(),
     'categories'=>collect(),
+    'showAddJobProductForm'=>false,
+    'jobProductSearch'=>'',
+    'jobProductSearchResults'=>collect(),
+    'jobProductResultTotal'=>0,
+    'jobProductSelectedProduct'=>null,
+    'jobProductCategory'=>'',
     'availableDocuments'=>collect(),
     'overviewTaskDocumentModalTask'=>null,
     'overviewTaskAvailableDocuments'=>collect(),
@@ -42,13 +48,18 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'financeSummary'=>null,
     'financeContacts'=>null,
     'financeUsers'=>null,
+    'financeInvoiceTypes'=>collect(),
+    'financeCurrencies'=>collect(),
+    'financePaymentTerms'=>collect(),
+    'financePaymentMethods'=>collect(),
+    'financeReceivedAccounts'=>collect(),
     'canCreateFinance'=>false,
     'canEditFinance'=>false,
     'showCreateInvoiceModal'=>false,
     'invoiceType'=>'Final invoice',
     'invoiceCurrency'=>'USD',
     'invoiceIssueDate'=>'',
-    'invoicePaymentTerms'=>'15',
+    'invoicePaymentTerms'=>'Net 15 days',
     'invoiceDueDate'=>'',
     'invoiceBillingContactId'=>null,
     'invoiceLineItems'=>[],
@@ -56,7 +67,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'invoiceNotes'=>'',
     'invoiceTaxRate'=>'0',
     'invoiceSupportingDocument'=>null,
-    'invoiceEmailAfterCreation'=>true,
+    'invoiceEmailAfterCreation'=>false,
     'showRecordPaymentModal'=>false,
     'paymentInvoiceId'=>null,
     'paymentDate'=>'',
@@ -64,6 +75,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'paymentAmount'=>'',
     'paymentReference'=>'',
     'paymentNotes'=>'',
+    'paymentReceipt'=>null,
     'showCollectionUpdateModal'=>false,
     'collectionOwnerId'=>null,
     'collectionFollowUpDate'=>'',
@@ -94,6 +106,12 @@ foreach (array_filter(([
     'priorities'=>collect(),
     'products'=>collect(),
     'categories'=>collect(),
+    'showAddJobProductForm'=>false,
+    'jobProductSearch'=>'',
+    'jobProductSearchResults'=>collect(),
+    'jobProductResultTotal'=>0,
+    'jobProductSelectedProduct'=>null,
+    'jobProductCategory'=>'',
     'availableDocuments'=>collect(),
     'overviewTaskDocumentModalTask'=>null,
     'overviewTaskAvailableDocuments'=>collect(),
@@ -125,13 +143,18 @@ foreach (array_filter(([
     'financeSummary'=>null,
     'financeContacts'=>null,
     'financeUsers'=>null,
+    'financeInvoiceTypes'=>collect(),
+    'financeCurrencies'=>collect(),
+    'financePaymentTerms'=>collect(),
+    'financePaymentMethods'=>collect(),
+    'financeReceivedAccounts'=>collect(),
     'canCreateFinance'=>false,
     'canEditFinance'=>false,
     'showCreateInvoiceModal'=>false,
     'invoiceType'=>'Final invoice',
     'invoiceCurrency'=>'USD',
     'invoiceIssueDate'=>'',
-    'invoicePaymentTerms'=>'15',
+    'invoicePaymentTerms'=>'Net 15 days',
     'invoiceDueDate'=>'',
     'invoiceBillingContactId'=>null,
     'invoiceLineItems'=>[],
@@ -139,7 +162,7 @@ foreach (array_filter(([
     'invoiceNotes'=>'',
     'invoiceTaxRate'=>'0',
     'invoiceSupportingDocument'=>null,
-    'invoiceEmailAfterCreation'=>true,
+    'invoiceEmailAfterCreation'=>false,
     'showRecordPaymentModal'=>false,
     'paymentInvoiceId'=>null,
     'paymentDate'=>'',
@@ -147,6 +170,7 @@ foreach (array_filter(([
     'paymentAmount'=>'',
     'paymentReference'=>'',
     'paymentNotes'=>'',
+    'paymentReceipt'=>null,
     'showCollectionUpdateModal'=>false,
     'collectionOwnerId'=>null,
     'collectionFollowUpDate'=>'',
@@ -315,14 +339,14 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($detailTab==='overview'): ?>
         <?php if (isset($component)) { $__componentOriginaldad3229fa826ba1f935ba3112a62f4a3 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginaldad3229fa826ba1f935ba3112a62f4a3 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.detail-overview','data' => ['job' => $job,'expandedPhaseIds' => $expandedPhaseIds,'taskStatuses' => $taskStatuses,'users' => $users,'mentionUsers' => $mentionUsers,'priorities' => $priorities,'products' => $products,'categories' => $categories,'jobTaskSearch' => $jobTaskSearch,'activityTab' => $activityTab,'activityPage' => $activityPage,'focusComment' => $focusComment,'jobDocumentUploads' => $jobDocumentUploads,'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,'showOverviewTaskDocumentModal' => $showOverviewTaskDocumentModal,'overviewTaskDocumentSource' => $overviewTaskDocumentSource,'overviewTaskDocumentUpload' => $overviewTaskDocumentUpload,'overviewTaskExistingDocumentId' => $overviewTaskExistingDocumentId,'overviewTaskLinkFormTaskId' => $overviewTaskLinkFormTaskId,'showAddOrderTaskForm' => $showAddOrderTaskForm,'newOrderTaskAssigneeId' => $newOrderTaskAssigneeId]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.detail-overview','data' => ['job' => $job,'expandedPhaseIds' => $expandedPhaseIds,'taskStatuses' => $taskStatuses,'users' => $users,'mentionUsers' => $mentionUsers,'priorities' => $priorities,'products' => $products,'categories' => $categories,'showAddJobProductForm' => $showAddJobProductForm,'jobProductSearch' => $jobProductSearch,'jobProductSearchResults' => $jobProductSearchResults,'jobProductResultTotal' => $jobProductResultTotal,'jobProductSelectedProduct' => $jobProductSelectedProduct,'jobProductCategory' => $jobProductCategory,'jobTaskSearch' => $jobTaskSearch,'activityTab' => $activityTab,'activityPage' => $activityPage,'focusComment' => $focusComment,'jobDocumentUploads' => $jobDocumentUploads,'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,'showOverviewTaskDocumentModal' => $showOverviewTaskDocumentModal,'overviewTaskDocumentSource' => $overviewTaskDocumentSource,'overviewTaskDocumentUpload' => $overviewTaskDocumentUpload,'overviewTaskExistingDocumentId' => $overviewTaskExistingDocumentId,'overviewTaskLinkFormTaskId' => $overviewTaskLinkFormTaskId,'showAddOrderTaskForm' => $showAddOrderTaskForm,'newOrderTaskAssigneeId' => $newOrderTaskAssigneeId]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.detail-overview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'expanded-phase-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($expandedPhaseIds),'task-statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskStatuses),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($users),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'priorities' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($priorities),'products' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($products),'categories' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categories),'job-task-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobTaskSearch),'activity-tab' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityTab),'activity-page' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityPage),'focus-comment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($focusComment),'job-document-uploads' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobDocumentUploads),'overview-task-document-modal-task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'overview-task-available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'show-overview-task-document-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showOverviewTaskDocumentModal),'overview-task-document-source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'overview-task-document-upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'overview-task-existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'overview-task-link-form-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskLinkFormTaskId),'show-add-order-task-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showAddOrderTaskForm),'new-order-task-assignee-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($newOrderTaskAssigneeId)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'expanded-phase-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($expandedPhaseIds),'task-statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskStatuses),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($users),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'priorities' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($priorities),'products' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($products),'categories' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categories),'show-add-job-product-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showAddJobProductForm),'job-product-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSearch),'job-product-search-results' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSearchResults),'job-product-result-total' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductResultTotal),'job-product-selected-product' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSelectedProduct),'job-product-category' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductCategory),'job-task-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobTaskSearch),'activity-tab' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityTab),'activity-page' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityPage),'focus-comment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($focusComment),'job-document-uploads' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobDocumentUploads),'overview-task-document-modal-task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'overview-task-available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'show-overview-task-document-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showOverviewTaskDocumentModal),'overview-task-document-source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'overview-task-document-upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'overview-task-existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'overview-task-link-form-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskLinkFormTaskId),'show-add-order-task-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showAddOrderTaskForm),'new-order-task-assignee-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($newOrderTaskAssigneeId)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -361,14 +385,14 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php elseif($detailTab==='finance'): ?>
         <?php if (isset($component)) { $__componentOriginalc5092f9572675e4d09a4c5d853dd912c = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalc5092f9572675e4d09a4c5d853dd912c = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.finance.detail','data' => ['job' => $job,'summary' => $financeSummary,'contacts' => $financeContacts ?? collect(),'users' => $financeUsers ?? collect(),'canCreate' => $canCreateFinance,'canEdit' => $canEditFinance,'showCreateInvoiceModal' => $showCreateInvoiceModal,'invoiceType' => $invoiceType,'invoiceCurrency' => $invoiceCurrency,'invoiceIssueDate' => $invoiceIssueDate,'invoicePaymentTerms' => $invoicePaymentTerms,'invoiceDueDate' => $invoiceDueDate,'invoiceBillingContactId' => $invoiceBillingContactId,'invoiceLineItems' => $invoiceLineItems,'invoicePurchaseOrderReference' => $invoicePurchaseOrderReference,'invoiceNotes' => $invoiceNotes,'invoiceTaxRate' => $invoiceTaxRate,'invoiceSupportingDocument' => $invoiceSupportingDocument,'invoiceEmailAfterCreation' => $invoiceEmailAfterCreation,'showRecordPaymentModal' => $showRecordPaymentModal,'paymentInvoiceId' => $paymentInvoiceId,'paymentDate' => $paymentDate,'paymentMethod' => $paymentMethod,'paymentAmount' => $paymentAmount,'paymentReference' => $paymentReference,'paymentNotes' => $paymentNotes,'showCollectionUpdateModal' => $showCollectionUpdateModal,'collectionOwnerId' => $collectionOwnerId,'collectionFollowUpDate' => $collectionFollowUpDate,'collectionNextFollowUpDate' => $collectionNextFollowUpDate,'collectionNote' => $collectionNote]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.finance.detail','data' => ['job' => $job,'summary' => $financeSummary,'contacts' => $financeContacts ?? collect(),'users' => $financeUsers ?? collect(),'invoiceTypes' => $financeInvoiceTypes ?? collect(),'currencies' => $financeCurrencies ?? collect(),'paymentTerms' => $financePaymentTerms ?? collect(),'paymentMethods' => $financePaymentMethods ?? collect(),'receivedAccounts' => $financeReceivedAccounts ?? collect(),'canCreate' => $canCreateFinance,'canEdit' => $canEditFinance,'showCreateInvoiceModal' => $showCreateInvoiceModal,'invoiceType' => $invoiceType,'invoiceCurrency' => $invoiceCurrency,'invoiceIssueDate' => $invoiceIssueDate,'invoicePaymentTerms' => $invoicePaymentTerms,'invoiceDueDate' => $invoiceDueDate,'invoiceBillingContactId' => $invoiceBillingContactId,'invoiceLineItems' => $invoiceLineItems,'invoicePurchaseOrderReference' => $invoicePurchaseOrderReference,'invoiceNotes' => $invoiceNotes,'invoiceTaxRate' => $invoiceTaxRate,'invoiceSupportingDocument' => $invoiceSupportingDocument,'invoiceEmailAfterCreation' => $invoiceEmailAfterCreation,'showRecordPaymentModal' => $showRecordPaymentModal,'paymentInvoiceId' => $paymentInvoiceId,'paymentDate' => $paymentDate,'paymentMethod' => $paymentMethod,'paymentAmount' => $paymentAmount,'paymentReference' => $paymentReference,'paymentNotes' => $paymentNotes,'paymentReceipt' => $paymentReceipt,'showCollectionUpdateModal' => $showCollectionUpdateModal,'collectionOwnerId' => $collectionOwnerId,'collectionFollowUpDate' => $collectionFollowUpDate,'collectionNextFollowUpDate' => $collectionNextFollowUpDate,'collectionNote' => $collectionNote]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.finance.detail'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'summary' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeSummary),'contacts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeContacts ?? collect()),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeUsers ?? collect()),'can-create' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canCreateFinance),'can-edit' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canEditFinance),'show-create-invoice-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showCreateInvoiceModal),'invoice-type' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceType),'invoice-currency' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceCurrency),'invoice-issue-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceIssueDate),'invoice-payment-terms' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoicePaymentTerms),'invoice-due-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceDueDate),'invoice-billing-contact-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceBillingContactId),'invoice-line-items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceLineItems),'invoice-purchase-order-reference' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoicePurchaseOrderReference),'invoice-notes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceNotes),'invoice-tax-rate' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceTaxRate),'invoice-supporting-document' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceSupportingDocument),'invoice-email-after-creation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceEmailAfterCreation),'show-record-payment-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showRecordPaymentModal),'payment-invoice-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentInvoiceId),'payment-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentDate),'payment-method' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentMethod),'payment-amount' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentAmount),'payment-reference' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentReference),'payment-notes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentNotes),'show-collection-update-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showCollectionUpdateModal),'collection-owner-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionOwnerId),'collection-follow-up-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionFollowUpDate),'collection-next-follow-up-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionNextFollowUpDate),'collection-note' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionNote)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'summary' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeSummary),'contacts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeContacts ?? collect()),'users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeUsers ?? collect()),'invoice-types' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeInvoiceTypes ?? collect()),'currencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeCurrencies ?? collect()),'payment-terms' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financePaymentTerms ?? collect()),'payment-methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financePaymentMethods ?? collect()),'received-accounts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financeReceivedAccounts ?? collect()),'can-create' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canCreateFinance),'can-edit' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canEditFinance),'show-create-invoice-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showCreateInvoiceModal),'invoice-type' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceType),'invoice-currency' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceCurrency),'invoice-issue-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceIssueDate),'invoice-payment-terms' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoicePaymentTerms),'invoice-due-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceDueDate),'invoice-billing-contact-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceBillingContactId),'invoice-line-items' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceLineItems),'invoice-purchase-order-reference' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoicePurchaseOrderReference),'invoice-notes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceNotes),'invoice-tax-rate' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceTaxRate),'invoice-supporting-document' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceSupportingDocument),'invoice-email-after-creation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceEmailAfterCreation),'show-record-payment-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showRecordPaymentModal),'payment-invoice-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentInvoiceId),'payment-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentDate),'payment-method' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentMethod),'payment-amount' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentAmount),'payment-reference' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentReference),'payment-notes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentNotes),'payment-receipt' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($paymentReceipt),'show-collection-update-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showCollectionUpdateModal),'collection-owner-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionOwnerId),'collection-follow-up-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionFollowUpDate),'collection-next-follow-up-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionNextFollowUpDate),'collection-note' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($collectionNote)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

@@ -1,4 +1,4 @@
-@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null])
+@props(['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'showAddJobProductForm'=>false,'jobProductSearch'=>'','jobProductSearchResults'=>collect(),'jobProductResultTotal'=>0,'jobProductSelectedProduct'=>null,'jobProductCategory'=>'','jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null])
 @php
     $productRows = \App\Support\JobDetailPresenter::products($job);
     $completedProductRows = $productRows->filter(fn ($item) => filled($item->product_name ?? null));
@@ -22,7 +22,32 @@
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
     $masterData = app(\App\Services\MasterDataService::class);
-    $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
+    $productionUrgencyIds = collect($job->production_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
+    $shipmentUrgencyIds = collect($job->shipment_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
+    $productionUrgencyNames = $productionUrgencyIds->isEmpty()
+        ? collect()
+        : $masterData->query('production_urgency')->whereIn('id', $productionUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
+    $shipmentUrgencyNames = $shipmentUrgencyIds->isEmpty()
+        ? collect()
+        : $masterData->query('shipment_urgency')->whereIn('id', $shipmentUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
+    $orderProductNames = $completedProductRows->pluck('product_name')->filter()->unique()->values();
+    $orderProductMasters = $orderProductNames->isEmpty()
+        ? collect()
+        : \App\Models\MasterRecord::query()
+            ->where('workspace_id', max(1, (int) config('flowtrack.workspace_id', 1)))
+            ->where('type', 'product')
+            ->whereIn('name', $orderProductNames)
+            ->with('parent')
+            ->get()
+            ->keyBy(fn ($record) => mb_strtolower(trim((string) $record->name)));
+    $orderCurrency = strtoupper((string) ($job->currency ?: 'USD'));
+    $orderCurrencySymbol = match ($orderCurrency) {
+        'USD' => '$',
+        'EUR' => '€',
+        'GBP' => '£',
+        'CNY', 'RMB' => '¥',
+        default => $orderCurrency.' ',
+    };
 @endphp
 <div class="ft-job-overview-section ft-exact-overview">
     <div class="ft-overview-metrics">
@@ -59,132 +84,6 @@
                     <x-ui.inline-save-state />
                 @endif
             </div>
-            @if($canViewOrderProducts)
-            <div class="ft-card-section-head"><b>Products &amp; quantities</b><span>{{ $completedProductRows->count() }} product · {{ number_format($completedProductRows->sum('quantity')) }} total units</span></div>
-            <table class="ft-mini-grid-table ft-inline-product-table">
-                <thead><tr><th>Category</th><th>Product</th><th>Quantity</th><th class="ft-product-delete-column"><span class="sr-only">Action</span></th></tr></thead>
-                <tbody>
-                @foreach($productRows as $item)
-                    @php
-                        $isDraftItem = filled($item->id) && blank($item->product_name);
-                        $categoryNeedsSelection = filled($item->id) && blank($item->category_name);
-                        $productNeedsSelection = filled($item->id) && filled($item->category_name) && blank($item->product_name);
-                        $categoryLabel = $item->category_name ?: 'Select category';
-                        $productLabel = $item->product_name ?: (blank($item->category_name) ? 'Select category first' : 'Select product');
-                        $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
-                    @endphp
-                    <tr wire:key="job-item-{{ $item->id ?? $loop->index }}" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, draftProductReady: @js(filled($item->product_name)) }" @class(['ft-inline-product-draft-row' => $isDraftItem])>
-                        <td data-label="Category">
-                            @if($item->id)
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
-                                    wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($categoryLabel) })"
-                                    x-init="if (@js($canEditOrderProducts && $categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    x-on:click.outside="if (editing && !@js($categoryNeedsSelection)) cancelEdit()"
-                                    x-on:ft-inline-remote-cancel.stop="if (!@js($categoryNeedsSelection)) cancelEdit()"
-                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
-                                >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $categoryLabel }}</span>
-                                    @if($canEditOrderProducts)
-                                        <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
-                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
-                                            <x-ui.inline-remote-catalog
-                                                type="product-categories"
-                                                :value="$item->category_name ?? ''"
-                                                :selected-label="$categoryLabel"
-                                                placeholder="Select category"
-                                                search-label="product category"
-                                                :menu-width="320"
-                                            />
-                                        </div>
-                                        <x-ui.inline-save-state compact />
-                                    @endif
-                                </div>
-                            @else
-                                {{ $item->category_name }}
-                            @endif
-                        </td>
-                        <td data-label="Product">
-                            @if($item->id)
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
-                                    wire:key="{{ $productPickerKey }}"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name ?? ''), display: @js($productLabel) })"
-                                    x-init="if (@js($canEditOrderProducts && $productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    x-on:click.outside="if (editing && !@js($productNeedsSelection)) cancelEdit()"
-                                    x-on:ft-inline-remote-cancel.stop="if (!@js($productNeedsSelection)) cancelEdit()"
-                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'product_name', nextValue)).then((ok) => { productSaving = false; if (ok) { draftProductReady = true; $nextTick(() => setTimeout(() => { const input = $el.closest('tr')?.querySelector('[data-job-item-quantity]'); input?.focus(); input?.select(); }, 0)) } })"
-                                >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display">{{ $productLabel }}</span>
-                                    @if($canEditOrderProducts)
-                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || @js(blank($item->category_name))" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="{{ blank($item->category_name) ? 'Select a category first' : 'Edit product' }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
-                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
-                                            <x-ui.inline-remote-catalog
-                                                type="products"
-                                                :value="$item->product_name ?? ''"
-                                                :selected-label="$productLabel"
-                                                :placeholder="blank($item->category_name) ? 'Select category first' : 'Select product'"
-                                                search-label="product"
-                                                :params="['category' => (string) ($item->category_name ?? '')]"
-                                                :disabled="blank($item->category_name)"
-                                                :menu-width="340"
-                                            />
-                                        </div>
-                                        <x-ui.inline-save-state compact />
-                                    @endif
-                                </div>
-                            @else
-                                {{ $item->product_name }}
-                            @endif
-                        </td>
-                        <td class="ft-product-quantity-cell" data-label="Quantity">
-                            @if($item->id)
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int)$item->quantity)) })"
-                                    @if($canEditOrderProducts && $isDraftItem) x-init="editing = true" @endif
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                >
-                                    <span x-show="!editing" class="ft-inline-field-value" x-text="display">{{ number_format((int)$item->quantity) }}</span>
-                                    @if($canEditOrderProducts)
-                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
-                                        <input x-ref="quantityInput" data-job-item-quantity x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:keydown.enter.prevent="$event.target.blur()"
-                                            x-on:blur="if (editing && !categorySaving && !productSaving && !quantitySaving) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then(async (ok) => { quantitySaving = false; if (ok && @js($isDraftItem)) await $wire.$refresh(); else if (!ok) editing = true }) } else { editing = false; if (@js($isDraftItem) && draftProductReady) $wire.$refresh() } }">
-                                        <x-ui.inline-save-state compact />
-                                    @endif
-                                </div>
-                            @else
-                                {{ number_format((int)$item->quantity) }}
-                            @endif
-                        </td>
-                        <td class="ft-product-delete-cell" data-label="Action">
-                            @if($item->id && $canDeleteOrderProducts)
-                                <button
-                                    type="button"
-                                    class="ft-inline-product-delete"
-                                    title="Remove product"
-                                    aria-label="Remove product"
-                                    wire:click.stop="removeJobItem({{ $item->id }})"
-                                    wire:confirm="Remove this product from the Order?"
-                                    wire:loading.attr="disabled"
-                                    wire:target="removeJobItem({{ $item->id }})"
-                                    :disabled="categorySaving || productSaving || quantitySaving"
-                                >×</button>
-                            @endif
-                        </td>
-                    </tr>
-                @endforeach
-                </tbody>
-            </table>
-            @if($canCreateOrderProducts)
-                <div class="ft-product-actions"><button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addJobItem({{ $job->id }})" wire:loading.attr="disabled" wire:target="addJobItem({{ $job->id }})">＋ Add product</button></div>
-            @endif
-            @endif
         </section>
 
         <aside class="ft-detail-card ft-side-panel ft-planning-panel">
@@ -207,21 +106,28 @@
                     @endif
                 </b>
             </div>
-            <div
-                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="{ ...window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-priority'), label: 'priority', value: @js($job->priority), display: @js($job->priority) }), priorityColor: @js($jobPriorityColor) }"
-                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-            >
-                <span>Priority</span>
-                <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-master-priority-display"><i class="ft-master-color-dot" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}" x-bind:style="priorityColor ? '--ft-master-color:'+priorityColor : ''"></i><span x-text="display">{{ $job->priority }}</span></span>
-                    @if($canEditJob)
-                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit priority" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.prioritySelect.focus())">✎</button>
-                        <select data-master-color-select x-ref="prioritySelect" x-cloak x-show="editing" x-model="draftValue" class="ft-master-color" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="const nextColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateJobPriority({{ $job->id }}, draftValue)).then(ok => { if(ok) priorityColor=nextColor; });">
-                            @foreach($priorities as $priority)<option value="{{ $priority->name }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach
-                        </select>
-                        <x-ui.inline-save-state compact />
-                    @endif
+            <div class="ft-side-row"><span>Reference number</span><b>{{ $job->order_number ?: 'Not set' }}</b></div>
+            @if($job->is_repeat_order)
+                <div class="ft-side-row"><span>Previous reference</span><b>{{ $job->repeat_order_number ?: 'Not set' }}</b></div>
+            @endif
+            <div class="ft-side-row">
+                <span>Production urgency</span>
+                <b>
+                    @forelse($productionUrgencyNames as $urgencyName)
+                        <span class="ft-soft-pill amber">{{ $urgencyName }}</span>
+                    @empty
+                        <span class="ft-planning-empty">None</span>
+                    @endforelse
+                </b>
+            </div>
+            <div class="ft-side-row">
+                <span>Shipment urgency</span>
+                <b>
+                    @forelse($shipmentUrgencyNames as $urgencyName)
+                        <span class="ft-soft-pill blue">{{ $urgencyName }}</span>
+                    @empty
+                        <span class="ft-planning-empty">None</span>
+                    @endforelse
                 </b>
             </div>
             <div
@@ -262,6 +168,343 @@
         </aside>
     </div>
 
+    @if($canViewOrderProducts)
+        <section class="ft-detail-card ft-order-products-card" id="order-products-card">
+            <header class="ft-order-products-head">
+                <div class="ft-order-products-title">
+                    <h2>Products &amp; quantities</h2>
+                    <p class="ft-order-products-summary">{{ $completedProductRows->count() }} {{ \Illuminate\Support\Str::plural('product', $completedProductRows->count()) }} · {{ number_format($completedProductRows->sum('quantity')) }} total units</p>
+                </div>
+            </header>
+
+            <div class="ft-order-products-table-wrap">
+                <table class="ft-order-products-detail-table ft-inline-product-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Quantity</th>
+                            <th>Unit price</th>
+                            <th>Notes</th>
+                            <th>Updated</th>
+                            <th class="ft-order-product-actions-heading">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    @if($productRows->isEmpty())
+                        <tr class="ft-order-product-empty-row"><td colspan="7">No products have been added to this Order yet.</td></tr>
+                    @else
+                    @foreach($productRows as $item)
+                        @php
+                            $isDraftItem = filled($item->id) && blank($item->product_name);
+                            $categoryNeedsSelection = filled($item->id) && blank($item->category_name);
+                            $productNeedsSelection = filled($item->id) && filled($item->category_name) && blank($item->product_name);
+                            $categoryLabel = $item->category_name ?: 'Select category';
+                            $productLabel = $item->product_name ?: (blank($item->category_name) ? 'Select category first' : 'Select product');
+                            $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
+                            $productMaster = $orderProductMasters->get(mb_strtolower(trim((string) ($item->product_name ?? ''))));
+                            $productImageUrl = $productMaster?->productImageUrl();
+                            $productCode = $productMaster?->productDisplayCode();
+                            $productReference = $productMaster?->productReferenceCode();
+                            $classificationParts = collect([
+                                $productMaster?->productMainCategory(),
+                                ...array_filter(array_map('trim', preg_split('/\s*>\s*/', (string) ($productMaster?->productClassificationPath() ?? '')) ?: [])),
+                            ])->filter()->unique()->values();
+                            if ($classificationParts->isEmpty() && filled($item->category_name)) $classificationParts = collect([$item->category_name]);
+                            $categoryDisplay = $classificationParts->implode(' › ') ?: $categoryLabel;
+                            $updatedByName = $item->updatedBy?->name ?: $job->creator?->name ?: 'FlowTrack';
+                            $updatedWhen = $item->updated_at?->diffForHumans() ?: 'just now';
+                            $unitPrice = (float) ($item->unit_price ?? 0);
+                            $unitPriceDisplay = $orderCurrencySymbol.number_format($unitPrice, 2);
+                        @endphp
+                        <tr wire:key="job-product-detail-{{ $item->id ?? $loop->index }}"
+                            x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, priceSaving: false, notesSaving: false, actionOpen: false, draftProductReady: @js(filled($item->product_name)) }"
+                            @class(['ft-order-product-draft-row' => $isDraftItem])>
+                            <td data-label="Product">
+                                <div class="ft-order-product-main-cell">
+                                    <span class="ft-order-product-image">
+                                        @if($productImageUrl)
+                                            <img src="{{ $productImageUrl }}" alt="{{ $item->product_name }}">
+                                        @else
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4z"/><path d="m7 15 3.2-3.4 2.4 2.4 2.2-2.3L18 15"/><circle cx="8.5" cy="9" r="1.2"/></svg>
+                                        @endif
+                                    </span>
+                                    <div class="ft-order-product-copy">
+                                        @if($item->id)
+                                            <div
+                                                class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor ft-order-product-name-editor"
+                                                wire:key="{{ $productPickerKey }}"
+                                                x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-product'), label: 'product', value: @js($item->product_name ?? ''), display: @js($productLabel) })"
+                                                x-init="if (@js($canEditOrderProducts && $productNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                                x-on:click.outside="if (editing && !@js($productNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-cancel.stop="if (!@js($productNeedsSelection)) cancelEdit()"
+                                                x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'product_name', nextValue)).then(async (ok) => { productSaving = false; if (ok) { draftProductReady = true; await $wire.$refresh(); } })"
+                                            >
+                                                <span class="ft-order-product-name" x-show="!editing" x-text="display">{{ $productLabel }}</span>
+                                                @if($canEditOrderProducts)
+                                                    <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || priceSaving || notesSaving || @js(blank($item->category_name))" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="{{ blank($item->category_name) ? 'Select a category first' : 'Edit product' }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                                    <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                        <x-ui.inline-remote-catalog
+                                                            type="products"
+                                                            :value="$item->product_name ?? ''"
+                                                            :selected-label="$productLabel"
+                                                            :placeholder="blank($item->category_name) ? 'Select category first' : 'Select product'"
+                                                            search-label="product"
+                                                            :params="['category' => (string) ($item->category_name ?? '')]"
+                                                            :disabled="blank($item->category_name)"
+                                                            :menu-width="360"
+                                                            :fixed-menu="true"
+                                                        />
+                                                    </div>
+                                                    <x-ui.inline-save-state compact />
+                                                @endif
+                                            </div>
+                                        @else
+                                            <strong class="ft-order-product-name">{{ $item->product_name }}</strong>
+                                        @endif
+                                        <small>
+                                            @if($productCode)
+                                                Product code {{ $productCode }}
+                                            @endif
+                                            @if($productCode && $productReference)
+                                                ·
+                                            @endif
+                                            @if($productReference)
+                                                Ref {{ $productReference }}
+                                            @endif
+                                            @if(!$productCode && !$productReference)
+                                                Order product
+                                            @endif
+                                        </small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td data-label="Category">
+                                @if($item->id)
+                                    <div
+                                        class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor ft-order-product-category-editor"
+                                        wire:key="job-item-{{ $item->id }}-category-{{ md5((string) ($item->category_name ?? '')) }}"
+                                        x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-category'), label: 'product category', value: @js($item->category_name ?? ''), display: @js($categoryDisplay) })"
+                                        x-init="if (@js($canEditOrderProducts && $categoryNeedsSelection)) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                        x-on:click.outside="if (editing && !@js($categoryNeedsSelection)) cancelEdit()"
+                                        x-on:ft-inline-remote-cancel.stop="if (!@js($categoryNeedsSelection)) cancelEdit()"
+                                        x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem({{ $item->id }}, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
+                                    >
+                                        <span class="ft-order-product-category-path" x-show="!editing" x-text="display">{{ $categoryDisplay }}</span>
+                                        @if($canEditOrderProducts)
+                                            <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving || priceSaving || notesSaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                            <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                <x-ui.inline-remote-catalog type="product-categories" :value="$item->category_name ?? ''" :selected-label="$categoryLabel" placeholder="Select category" search-label="product category" :menu-width="340" :fixed-menu="true" />
+                                            </div>
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
+                                @else
+                                    {{ $categoryDisplay }}
+                                @endif
+                            </td>
+                            <td class="ft-order-product-quantity" data-label="Quantity">
+                                @if($item->id)
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-quantity'), label: 'quantity', value: @js((string) $item->quantity), display: @js(number_format((int) $item->quantity).' units') })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-edit-value" x-text="display">{{ number_format((int) $item->quantity) }} units</span>
+                                        @if($canEditOrderProducts)
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || priceSaving || notesSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
+                                            <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-number-input" type="number" min="1"
+                                                x-on:keydown.escape.prevent="cancelEdit()"
+                                                x-on:keydown.enter.prevent="$event.target.blur()"
+                                                x-on:blur="if (editing && !quantitySaving) { const next = positiveInteger(draftValue); quantitySaving = true; commit(next, Number(next).toLocaleString() + ' units', () => $wire.updateJobItem({{ $item->id }}, 'quantity', next)).then((ok) => { quantitySaving = false; if (!ok) editing = true; }) }">
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
+                                @else
+                                    {{ number_format((int) $item->quantity) }} units
+                                @endif
+                            </td>
+                            <td class="ft-order-product-price" data-label="Unit price">
+                                @if($item->id)
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-unit-price'), label: 'unit price', value: @js(number_format($unitPrice, 2, '.', '')), display: @js($unitPriceDisplay) })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-edit-value" x-text="display">{{ $unitPriceDisplay }}</span>
+                                        @if($canEditOrderProducts)
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || quantitySaving || notesSaving" type="button" class="ft-inline-edit-button" title="Edit unit price" aria-label="Edit unit price" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.priceInput.focus(); $refs.priceInput.select(); })">✎</button>
+                                            <div x-cloak x-show="editing" class="ft-order-product-price-input-wrap">
+                                                <span>{{ $orderCurrencySymbol }}</span>
+                                                <input x-ref="priceInput" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-number-input" type="number" min="0" step="0.01"
+                                                    x-on:keydown.escape.prevent="cancelEdit()"
+                                                    x-on:keydown.enter.prevent="$event.target.blur()"
+                                                    x-on:blur="if (editing && !priceSaving) { const raw = Number(draftValue || 0); const next = Number.isFinite(raw) ? Math.max(0, raw).toFixed(2) : '0.00'; priceSaving = true; commit(next, @js($orderCurrencySymbol) + Number(next).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), () => $wire.updateJobItem({{ $item->id }}, 'unit_price', next)).then((ok) => { priceSaving = false; if (!ok) editing = true; }) }">
+                                            </div>
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
+                                @else
+                                    {{ $unitPriceDisplay }}
+                                @endif
+                            </td>
+                            <td class="ft-order-product-notes" data-label="Notes">
+                                @if($item->id)
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: @js('job-item-'.$item->id.'-notes'), label: 'product notes', value: @js($item->notes ?? ''), display: @js($item->notes ?: 'Add notes') })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-note-value" :class="{ 'is-empty': !value }" x-text="display">{{ $item->notes ?: 'Add notes' }}</span>
+                                        @if($canEditOrderProducts)
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || quantitySaving || priceSaving" type="button" class="ft-inline-edit-button" title="Edit notes" aria-label="Edit product notes" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.notesInput.focus(); $refs.notesInput.select(); })">✎</button>
+                                            <input x-ref="notesInput" x-cloak x-show="editing" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-notes-input" type="text" maxlength="2000" placeholder="Product notes"
+                                                x-on:keydown.escape.prevent="cancelEdit()"
+                                                x-on:keydown.enter.prevent="$event.target.blur()"
+                                                x-on:blur="if (editing && !notesSaving) { const next = String(draftValue || '').trim(); notesSaving = true; commit(next, next || 'Add notes', () => $wire.updateJobItem({{ $item->id }}, 'notes', next)).then((ok) => { notesSaving = false; if (!ok) editing = true; }) }">
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
+                                @else
+                                    {{ $item->notes ?: '—' }}
+                                @endif
+                            </td>
+                            <td class="ft-order-product-updated" data-label="Updated">
+                                <strong>{{ $updatedByName }}</strong>
+                                <span>· {{ $updatedWhen }}</span>
+                            </td>
+                            <td class="ft-order-product-actions-cell" data-label="Actions">
+                                @if($item->id && $canDeleteOrderProducts)
+                                    <div class="ft-order-product-row-menu" x-on:click.outside="actionOpen = false">
+                                        <button type="button" class="ft-order-product-kebab" x-on:click.stop="actionOpen = !actionOpen" :aria-expanded="actionOpen.toString()" aria-label="Product actions">⋮</button>
+                                        <div class="ft-order-product-menu-popover" x-cloak x-show="actionOpen" x-transition.opacity>
+                                            <button type="button" wire:click.stop="removeJobItem({{ $item->id }})" wire:confirm="Remove this product from the Order?" wire:loading.attr="disabled" wire:target="removeJobItem({{ $item->id }})" x-on:click="actionOpen = false">Remove product</button>
+                                        </div>
+                                    </div>
+                                @else
+                                    <span class="ft-order-product-action-placeholder">—</span>
+                                @endif
+                            </td>
+                        </tr>
+                    @endforeach
+                    @endif
+                    </tbody>
+                </table>
+            </div>
+
+            @if($showAddJobProductForm && $canCreateOrderProducts)
+                <div class="ft-order-detail-add-product" wire:key="job-detail-add-product-{{ $job->id }}" x-data="{ resultsOpen: true }">
+                    <div class="ft-order-detail-add-product-head">
+                        <div>
+                            <strong>Add product</strong>
+                            <span>Search the Product master, select a product, then enter quantity and unit price.</span>
+                        </div>
+                        <button type="button" class="ft-order-detail-add-product-close" wire:click="closeAddJobProductForm" aria-label="Close add product">×</button>
+                    </div>
+
+                    <div class="ft-order-product-search-label">Search product</div>
+                    <div class="ft-order-product-search-host ft-order-detail-product-search" x-on:click.outside="resultsOpen = false">
+                        <div class="ft-order-product-search-input" :class="resultsOpen ? 'is-open' : ''">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input
+                                type="search"
+                                wire:model.live.debounce.220ms="jobProductSearch"
+                                x-on:focus="resultsOpen = true"
+                                x-on:keydown.escape="resultsOpen = false"
+                                placeholder="Search product name, product code or reference code"
+                                autocomplete="off"
+                                aria-label="Search product"
+                            >
+                            @if(trim((string) $jobProductSearch) !== '')
+                                <span class="ft-order-product-search-tools">
+                                    <button type="button" class="ft-order-product-search-clear" wire:click="$set('jobProductSearch', '')" x-on:click="resultsOpen = true" aria-label="Clear product search">&times;</button>
+                                </span>
+                            @endif
+                        </div>
+
+                        <div class="ft-order-product-results" x-cloak x-show="resultsOpen" x-transition.origin.top>
+                            <div class="ft-order-product-results-head">
+                                <span>Top matches <b>{{ number_format((int) $jobProductResultTotal) }} {{ \Illuminate\Support\Str::plural('result', (int) $jobProductResultTotal) }}</b></span>
+                                @if($jobProductResultTotal > $jobProductSearchResults->count())
+                                    <button type="button" wire:click="showAllJobProductResults">View all results <span>&nearr;</span></button>
+                                @endif
+                            </div>
+                            <div class="ft-order-product-result-list">
+                                @forelse($jobProductSearchResults as $product)
+                                    @php
+                                        $isSelectedForJob = (int) ($jobProductSelectedProduct?->id ?? 0) === (int) $product->id;
+                                        $resultImageUrl = $product->productImageUrl();
+                                        $resultReferenceCode = $product->productReferenceCode();
+                                        $resultDisplayCode = $product->productDisplayCode();
+                                        $resultMainCategory = $product->productMainCategory();
+                                        $resultProductCategory = trim((string) ($product->parent?->name ?? ''));
+                                        $resultSubCategory = trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category') ?: $product->productCatalogSummary()));
+                                        $resultClassification = collect([$resultMainCategory, $resultProductCategory, $resultSubCategory])->filter()->unique()->values();
+                                    @endphp
+                                    <div class="ft-order-product-result {{ $isSelectedForJob ? 'is-selected' : '' }}">
+                                        <span class="ft-order-product-thumb">
+                                            @if($resultImageUrl)
+                                                <img src="{{ $resultImageUrl }}" alt="">
+                                            @else
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                                            @endif
+                                        </span>
+                                        <span class="ft-order-product-result-copy">
+                                            <strong>{{ $product->name }}</strong>
+                                            <span class="ft-order-product-code-line">Product code: {{ $resultDisplayCode }} <i>&bull;</i> Ref: {{ $resultReferenceCode ?: '—' }}</span>
+                                            @if($resultClassification->isNotEmpty())
+                                                <small class="ft-order-product-classification">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                                                    @foreach($resultClassification as $part)<span>{{ $part }}</span>@if(!$loop->last)<i>&rsaquo;</i>@endif @endforeach
+                                                </small>
+                                            @endif
+                                        </span>
+                                        <button type="button" class="ft-order-product-select-button {{ $isSelectedForJob ? 'is-selected' : '' }}" wire:click="selectJobProduct({{ $product->id }})" x-on:click="resultsOpen = false">{{ $isSelectedForJob ? 'Selected' : 'Select' }}</button>
+                                    </div>
+                                @empty
+                                    <div class="ft-order-product-no-results"><strong>No products found</strong><span>Try another product name, product code or reference code.</span></div>
+                                @endforelse
+                            </div>
+                        </div>
+                    </div>
+
+                    @if($jobProductSelectedProduct)
+                        <div class="ft-order-detail-product-fields">
+                            <div class="ft-order-detail-product-field is-product">
+                                <label>Selected product</label>
+                                <div class="ft-order-detail-selected-product">
+                                    @if($jobProductSelectedProduct->productImageUrl())
+                                        <img src="{{ $jobProductSelectedProduct->productImageUrl() }}" alt="">
+                                    @endif
+                                    <span><strong>{{ $jobProductSelectedProduct->name }}</strong><small>{{ $jobProductSelectedProduct->productDisplayCode() }}</small></span>
+                                </div>
+                                @error('jobProductSelectedId')<span class="validation-error">{{ $message }}</span>@enderror
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Product category</label>
+                                <input type="text" value="{{ $jobProductCategory }}" readonly>
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Quantity *</label>
+                                <input type="number" min="1" step="1" wire:model="jobProductQuantity">
+                                @error('jobProductQuantity')<span class="validation-error">{{ $message }}</span>@enderror
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Unit price *</label>
+                                <div class="ft-order-detail-price-field"><span>{{ $orderCurrencySymbol }}</span><input type="number" min="0" step="0.01" wire:model="jobProductUnitPrice"></div>
+                                @error('jobProductUnitPrice')<span class="validation-error">{{ $message }}</span>@enderror
+                            </div>
+                        </div>
+                    @else
+                        @error('jobProductSelectedId')<div class="validation-error ft-order-detail-product-selection-error">{{ $message }}</div>@enderror
+                    @endif
+
+                    <div class="ft-order-detail-add-product-actions">
+                        <button type="button" class="ft-outline-btn" wire:click="closeAddJobProductForm">Cancel</button>
+                        <button type="button" class="ft-new-job-btn" wire:click="saveJobProduct({{ $job->id }})" wire:loading.attr="disabled" wire:target="saveJobProduct({{ $job->id }})" @disabled(!$jobProductSelectedProduct)>Add product</button>
+                    </div>
+                </div>
+            @endif
+
+            <footer class="ft-order-products-footer">
+                <span>Product and quantity changes are recorded in order activity.</span>
+                @if($canCreateOrderProducts && !$showAddJobProductForm)
+                    <button type="button" class="ft-outline-btn ft-order-product-add-another" wire:click="openAddJobProductForm({{ $job->id }})" wire:loading.attr="disabled" wire:target="openAddJobProductForm({{ $job->id }})">＋ Add another product</button>
+                @endif
+            </footer>
+        </section>
+    @endif
+
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         @foreach($job->workflow->phases as $phase)
             <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" disabled aria-disabled="true" title="Workflow page is temporarily disabled">
@@ -270,7 +513,7 @@
         @endforeach
     </section>
 
-    <section class="ft-detail-card ft-phase-table-card ft-overview-task-card">
+    <section class="ft-detail-card ft-phase-table-card ft-overview-task-card" id="order-taskflow">
         <div class="ft-card-row-head ft-task-card-heading">
             <div><h2>All phase tasks</h2><p>{{ $configuredTasks->count() }} tasks across {{ $job->workflow->phases->count() }} phases</p></div>
             <div class="ft-row-actions ft-order-taskflow-controls" aria-label="Order taskflow controls">
@@ -291,11 +534,11 @@
         </div>
         <div class="ft-phase-load-note"><span>◉ All {{ $configuredTasks->count() }} configured and added tasks are loaded</span><span>Task status changes save automatically</span></div>
         @if($showAddOrderTaskForm && $canAddOrderTask)
-            <div class="ft-order-add-task" wire:key="order-add-task-form">
+            <div class="ft-order-add-task" wire:key="order-add-task-form" x-data>
                 <div class="ft-order-add-task-head">
                     <div>
                         <strong>Add taskflow task</strong>
-                        <span>The task will be added to the current phase{{ $job->phase?->name ? ': '.$job->phase->name : '' }}.</span>
+                        <span>Select the workflow phase where this task should be added.</span>
                     </div>
                     <button class="ft-order-add-task-close" type="button" wire:click="cancelAddOrderTask" aria-label="Close add task form">×</button>
                 </div>
@@ -303,6 +546,15 @@
                     <label class="ft-order-add-task-field ft-order-add-task-field-wide">
                         <span>Task name *</span>
                         <input type="text" wire:model="newOrderTaskName" placeholder="Task name" maxlength="255">
+                    </label>
+                    <label class="ft-order-add-task-field ft-order-add-task-phase">
+                        <span>Phase *</span>
+                        <select wire:model="newOrderTaskPhaseId">
+                            <option value="">Select phase</option>
+                            @foreach($job->workflow->phases->sortBy('sequence') as $taskPhaseOption)
+                                <option value="{{ $taskPhaseOption->id }}">{{ $taskPhaseOption->sequence }}. {{ $taskPhaseOption->name }}</option>
+                            @endforeach
+                        </select>
                     </label>
                     @php
                         $newOrderTaskAssignee = $users->firstWhere('id', $newOrderTaskAssigneeId);
@@ -330,17 +582,33 @@
                         <span>Due date</span>
                         <input type="date" wire:model="newOrderTaskDueDate" onclick="this.showPicker && this.showPicker()">
                     </label>
-                    <label class="ft-order-add-task-field ft-order-add-task-field-description">
+                    <div class="ft-order-add-task-field ft-order-add-task-field-description ft-mention-host" wire:ignore>
                         <span>Instructions</span>
-                        <textarea data-rich-text wire:model="newOrderTaskDescription" placeholder="Describe what must be completed for this task or paste screenshots here."></textarea>
-                    </label>
+                        <textarea
+                            x-ref="newOrderTaskDescription"
+                            class="ft-mention-input"
+                            data-rich-text
+                            data-mention-users="{{ $mentionUsers->toJson() }}"
+                            autocomplete="off"
+                            placeholder="Describe what must be completed for this task or paste screenshots here."
+                        ></textarea>
+                    </div>
                 </div>
                 @error('newOrderTaskName')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
+                @error('newOrderTaskDescription')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
+                @error('newOrderTaskPhaseId')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
                 @error('newOrderTaskAssigneeId')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
                 @error('newOrderTaskDueDate')<div class="ft-order-add-task-error">{{ $message }}</div>@enderror
                 <div class="ft-order-add-task-actions">
                     <button class="ft-outline-btn" type="button" wire:click="cancelAddOrderTask">Cancel</button>
-                    <button class="ft-order-add-task-submit" type="button" wire:click="addOrderTask" wire:loading.attr="disabled" wire:target="addOrderTask">
+                    <button
+                        class="ft-order-add-task-submit"
+                        type="button"
+                        data-rich-text-submit
+                        wire:loading.attr="disabled"
+                        wire:target="addOrderTask"
+                        x-on:click="const source = $refs.newOrderTaskDescription; const read = source?.__flowtrackRichTextValueAsync ? source.__flowtrackRichTextValueAsync() : Promise.resolve(String(source?.value || '')); read.then((description) => $wire.addOrderTask(description))"
+                    >
                         <span wire:loading.remove wire:target="addOrderTask">Add Task</span>
                         <span wire:loading wire:target="addOrderTask">Adding…</span>
                     </button>
@@ -609,6 +877,7 @@
         @endforeach
     </section>
 
+    <div id="order-product-history"></div>
     <x-jobs.detail-activity :job="$job" :mention-users="$mentionUsers" compact="true" :activity-tab="$activityTab" :activity-page="$activityPage" :focus-comment="$focusComment" />
 
     @if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask)

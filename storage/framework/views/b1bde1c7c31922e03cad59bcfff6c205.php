@@ -638,7 +638,8 @@
 <?php endif; ?>
             <div class="ft-sidebar-user-copy">
                 <div class="ft-sidebar-user-name"><?php echo e($user->name); ?></div>
-                <div class="ft-sidebar-user-role"><?php echo e($user->role?->name ?? 'User'); ?></div>
+                <?php ($sidebarRoles = $user->assignedRoles()->pluck('name')); ?>
+                <div class="ft-sidebar-user-role"><?php echo e($sidebarRoles->count() > 1 ? $sidebarRoles->first().' +'.($sidebarRoles->count()-1) : ($sidebarRoles->first() ?: 'User')); ?></div>
             </div>
         </div>
         <form method="POST" action="<?php echo e(route('logout')); ?>" class="ft-sidebar-logout-form">

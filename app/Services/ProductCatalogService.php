@@ -132,9 +132,9 @@ class ProductCatalogService
             // intentionally not part of the text search; categories are available
             // exclusively through the separate category filter beside the box.
             ->when($search !== '', fn (Builder $query) => $query->where(function (Builder $match) use ($search): void {
-                $match->where('master_records.name', 'like', '%'.$search.'%')
-                    ->orWhere('master_records.code', 'like', '%'.$search.'%')
-                    ->orWhere('master_records.metadata->reference_code', 'like', '%'.$search.'%');
+                $match->whereLike('master_records.name', '%'.$search.'%')
+                    ->orWhereLike('master_records.code', '%'.$search.'%')
+                    ->orWhereLike('master_records.metadata->reference_code', '%'.$search.'%');
             }));
     }
 }

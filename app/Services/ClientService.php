@@ -58,10 +58,10 @@ class ClientService
                 ->where('clients.is_active', false)
                 ->when($filters['search'] ?? null, function ($q, $search) {
                     $q->where(function ($x) use ($search) {
-                        $x->where('name', 'like', "%{$search}%")
-                            ->orWhere('code', 'like', "%{$search}%")
-                            ->orWhere('email', 'like', "%{$search}%")
-                            ->orWhere('contact_name', 'like', "%{$search}%");
+                        $x->whereLike('name', "%{$search}%")
+                            ->orWhereLike('code', "%{$search}%")
+                            ->orWhereLike('email', "%{$search}%")
+                            ->orWhereLike('contact_name', "%{$search}%");
                     });
                 })
                 ->when($filters['created_by'] ?? null, fn ($q, $v) => $q->where('created_by', $v))
@@ -95,11 +95,11 @@ class ClientService
             ])
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($x) use ($search) {
-                    $x->where('name', 'like', "%{$search}%")
-                        ->orWhere('code', 'like', "%{$search}%")
-                        ->orWhere('country', 'like', "%{$search}%")
-                        ->orWhereHas('accountManager', fn ($u) => $u->where('name', 'like', "%{$search}%"))
-                        ->orWhereHas('jobs', fn ($j) => $j->where('job_number', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%"));
+                    $x->whereLike('name', "%{$search}%")
+                        ->orWhereLike('code', "%{$search}%")
+                        ->orWhereLike('country', "%{$search}%")
+                        ->orWhereHas('accountManager', fn ($u) => $u->whereLike('name', "%{$search}%"))
+                        ->orWhereHas('jobs', fn ($j) => $j->whereLike('job_number', "%{$search}%")->orWhereLike('title', "%{$search}%"));
                 });
             })
             ->when($filters['country'] ?? null, fn ($q, $v) => $q->where('country', $v))

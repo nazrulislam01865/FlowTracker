@@ -181,7 +181,7 @@
             <div class="ft-order-selected-products-title">Selected products ({{ count($rows) }})</div>
             <div class="ft-order-selected-products-table">
                 <div class="ft-order-selected-products-head">
-                    <span>Product</span><span>Quantity</span><span>Notes</span><span>Action</span>
+                    <span>Product</span><span>Quantity</span><span>Unit price <small>(optional)</small></span><span>Notes</span><span>Action</span>
                 </div>
                 @foreach($rows as $index => $item)
                     @php
@@ -191,6 +191,7 @@
                         $itemCategory = (string) ($detail?->parent?->name ?? ($item['category'] ?? ''));
                         $itemName = (string) ($detail?->name ?? ($item['product'] ?? 'Product'));
                         $quantityError = $errors->first("{$rowsProperty}.{$index}.quantity");
+                        $unitPriceError = $errors->first("{$rowsProperty}.{$index}.unit_price");
                         $notesError = $errors->first("{$rowsProperty}.{$index}.notes");
                         $productError = $errors->first("{$rowsProperty}.{$index}.product");
                     @endphp
@@ -213,6 +214,10 @@
                             <input type="number" min="1" max="999999999" wire:model.live.debounce.300ms="{{ $rowsProperty }}.{{ $index }}.quantity" aria-label="Quantity for {{ $itemName }}">
                             <button type="button" wire:click="incrementCreateProductQuantity({{ $index }})" aria-label="Increase quantity">+</button>
                             @if($quantityError)<small class="validation-error">{{ $quantityError }}</small>@endif
+                        </div>
+                        <div class="ft-order-product-unit-price">
+                            <input type="number" min="0" max="999999999999.99" step="0.01" wire:model.blur="{{ $rowsProperty }}.{{ $index }}.unit_price" placeholder="0.00" aria-label="Unit price for {{ $itemName }}">
+                            @if($unitPriceError)<small class="validation-error">{{ $unitPriceError }}</small>@endif
                         </div>
                         <div class="ft-order-product-notes">
                             <input type="text" maxlength="2000" wire:model.blur="{{ $rowsProperty }}.{{ $index }}.notes" placeholder="Optional notes..." aria-label="Notes for {{ $itemName }}">

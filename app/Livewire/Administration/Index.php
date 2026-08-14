@@ -13,6 +13,7 @@ use App\Services\AccessControlService;
 use App\Services\AdminService;
 use App\Services\BrandingService;
 use App\Services\SetupContext;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -32,7 +33,7 @@ class Index extends Component
     public string $email = '';
     public string $password = '';
     public string $passwordConfirmation = '';
-    public ?int $roleId = null;
+    public array $roleIds = [];
     public ?int $departmentId = null;
     public bool $userActive = true;
 
@@ -98,11 +99,11 @@ class Index extends Component
             $this->name = $user->name;
             $this->position = app(AdminService::class)->positionFor($user) ?? '';
             $this->email = $user->email;
-            $this->roleId = $user->role_id;
+            $this->roleIds = $user->assignedRoleIds();
             $this->departmentId = $user->department_id;
             $this->userActive = (bool) $user->is_active;
         } else {
-            $this->reset(['name','position','email','roleId','departmentId']);
+            $this->reset(['name','position','email','roleIds','departmentId']);
             $this->userActive = true;
         }
 
@@ -114,7 +115,7 @@ class Index extends Component
         $this->showUserModal = false;
         $this->editingUserId = null;
         $this->resetValidation();
-        $this->reset(['name','position','email','password','passwordConfirmation','roleId','departmentId']);
+        $this->reset(['name','position','email','password','passwordConfirmation','roleIds','departmentId']);
         $this->userActive = true;
     }
 
@@ -125,7 +126,8 @@ class Index extends Component
             'name' => ['required','string','max:255'],
             'position' => ['nullable','string','max:120'],
             'email' => ['required','email', $editing ? 'unique:users,email,'.$this->editingUserId : 'unique:users,email'],
-            'roleId' => ['required','exists:roles,id'],
+            'roleIds' => ['required','array','min:1'],
+            'roleIds.*' => ['distinct', Rule::exists('roles', 'id')->where('workspace_id', app(SetupContext::class)->workspaceId())],
             'departmentId' => ['nullable','exists:departments,id'],
             'userActive' => ['boolean'],
             'password' => $editing ? ['nullable','string','min:10'] : ['required','string','min:10'],
@@ -139,7 +141,7 @@ class Index extends Component
             'name' => $data['name'],
             'position' => filled(trim((string) ($data['position'] ?? ''))) ? trim($data['position']) : null,
             'email' => $data['email'],
-            'role_id' => $data['roleId'],
+            'role_ids' => array_values($data['roleIds']),
             'department_id' => $data['departmentId'],
             'is_active' => $data['userActive'],
         ];

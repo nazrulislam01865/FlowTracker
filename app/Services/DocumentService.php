@@ -19,11 +19,11 @@ class DocumentService
 
         return $query
             ->when($filters['search'] ?? null, fn ($q, $search) => $q->where(fn ($x) => $x
-                ->where('name', 'like', "%{$search}%")
-                ->orWhere('document_number', 'like', "%{$search}%")
-                ->orWhereHas('job', fn ($j) => $j->where('job_number', 'like', "%{$search}%")->orWhere('title', 'like', "%{$search}%")->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%")))
-                ->orWhereHas('client', fn ($client) => $client->where('name', 'like', "%{$search}%"))
-                ->orWhereHas('task', fn ($t) => $t->where('title', 'like', "%{$search}%"))))
+                ->whereLike('name', "%{$search}%")
+                ->orWhereLike('document_number', "%{$search}%")
+                ->orWhereHas('job', fn ($j) => $j->whereLike('job_number', "%{$search}%")->orWhereLike('title', "%{$search}%")->orWhereHas('client', fn ($client) => $client->whereLike('name', "%{$search}%")))
+                ->orWhereHas('client', fn ($client) => $client->whereLike('name', "%{$search}%"))
+                ->orWhereHas('task', fn ($t) => $t->whereLike('title', "%{$search}%"))))
             ->when($filters['category'] ?? null, fn ($q, $value) => $q->where('category', $value))
             ->when($filters['client'] ?? null, fn ($q, $value) => $q->where('client_id', $value))
             ->when($filters['job'] ?? null, fn ($q, $value) => $q->where('flow_job_id', $value))

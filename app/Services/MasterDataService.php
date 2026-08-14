@@ -38,10 +38,16 @@ class MasterDataService
         'production_unit' => 'Production Units',
         'shipment_method' => 'Shipment Methods',
         'currency' => 'Currencies',
+        'invoice_type' => 'Invoice Types',
+        'payment_term' => 'Payment Terms',
+        'payment_method' => 'Payment Methods',
+        'received_account' => 'Received Accounts',
         'country' => 'Countries',
         'state' => 'States',
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
+        'production_urgency' => 'Production Urgencies',
+        'shipment_urgency' => 'Shipment Urgencies',
         'task_status' => 'Task Statuses',
         'inquiry_task_status' => 'Inquiry Task Statuses',
         'task_flag' => 'Task Flags',
@@ -61,10 +67,16 @@ class MasterDataService
         'production_unit' => 'PUN',
         'shipment_method' => 'SHM',
         'currency' => 'CUR',
+        'invoice_type' => 'IVT',
+        'payment_term' => 'PTR',
+        'payment_method' => 'PMT',
+        'received_account' => 'RCA',
         'country' => 'CTR',
         'state' => 'STA',
         'document_category' => 'DOC',
         'priority' => 'PRI',
+        'production_urgency' => 'PUR',
+        'shipment_urgency' => 'SUR',
         'task_status' => 'TST',
         'inquiry_task_status' => 'IST',
         'task_flag' => 'TFL',
@@ -108,10 +120,10 @@ class MasterDataService
                 }
 
                 $q->where(function ($x) use ($normalized, $productId) {
-                    $x->where('code', 'like', "%{$normalized}%")
-                        ->orWhere('name', 'like', "%{$normalized}%")
-                        ->orWhere('description', 'like', "%{$normalized}%")
-                        ->orWhere('metadata->reference_code', 'like', "%{$normalized}%");
+                    $x->whereLike('code', "%{$normalized}%")
+                        ->orWhereLike('name', "%{$normalized}%")
+                        ->orWhereLike('description', "%{$normalized}%")
+                        ->orWhereLike('metadata->reference_code', "%{$normalized}%");
                     if ($productId) $x->orWhere('id', $productId);
                 });
             })

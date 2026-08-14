@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'showAddJobProductForm'=>false,'jobProductSearch'=>'','jobProductSearchResults'=>collect(),'jobProductResultTotal'=>0,'jobProductSelectedProduct'=>null,'jobProductCategory'=>'','jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job','expandedPhaseIds'=>[],'taskStatuses'=>collect(),'users'=>collect(),'mentionUsers'=>collect(),'priorities'=>collect(),'products'=>collect(),'categories'=>collect(),'showAddJobProductForm'=>false,'jobProductSearch'=>'','jobProductSearchResults'=>collect(),'jobProductResultTotal'=>0,'jobProductSelectedProduct'=>null,'jobProductCategory'=>'','jobTaskSearch'=>'','activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'jobDocumentUploads'=>[],'overviewTaskDocumentModalTask'=>null,'overviewTaskAvailableDocuments'=>collect(),'showOverviewTaskDocumentModal'=>false,'overviewTaskDocumentSource'=>'upload','overviewTaskDocumentUpload'=>null,'overviewTaskExistingDocumentId'=>null,'overviewTaskLinkFormTaskId'=>null,'showAddOrderTaskForm'=>false,'newOrderTaskAssigneeId'=>null]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -50,7 +50,32 @@ unset($__defined_vars, $__key, $__value); ?>
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
     $masterData = app(\App\Services\MasterDataService::class);
-    $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
+    $productionUrgencyIds = collect($job->production_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
+    $shipmentUrgencyIds = collect($job->shipment_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
+    $productionUrgencyNames = $productionUrgencyIds->isEmpty()
+        ? collect()
+        : $masterData->query('production_urgency')->whereIn('id', $productionUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
+    $shipmentUrgencyNames = $shipmentUrgencyIds->isEmpty()
+        ? collect()
+        : $masterData->query('shipment_urgency')->whereIn('id', $shipmentUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
+    $orderProductNames = $completedProductRows->pluck('product_name')->filter()->unique()->values();
+    $orderProductMasters = $orderProductNames->isEmpty()
+        ? collect()
+        : \App\Models\MasterRecord::query()
+            ->where('workspace_id', max(1, (int) config('flowtrack.workspace_id', 1)))
+            ->where('type', 'product')
+            ->whereIn('name', $orderProductNames)
+            ->with('parent')
+            ->get()
+            ->keyBy(fn ($record) => mb_strtolower(trim((string) $record->name)));
+    $orderCurrency = strtoupper((string) ($job->currency ?: 'USD'));
+    $orderCurrencySymbol = match ($orderCurrency) {
+        'USD' => '$',
+        'EUR' => '€',
+        'GBP' => '£',
+        'CNY', 'RMB' => '¥',
+        default => $orderCurrency.' ',
+    };
 ?>
 <div class="ft-job-overview-section ft-exact-overview">
     <div class="ft-overview-metrics">
@@ -129,224 +154,6 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php endif; ?>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canViewOrderProducts): ?>
-            <div class="ft-card-section-head"><b>Products &amp; quantities</b><span><?php echo e($completedProductRows->count()); ?> product · <?php echo e(number_format($completedProductRows->sum('quantity'))); ?> total units</span></div>
-            <table class="ft-mini-grid-table ft-inline-product-table">
-                <thead><tr><th>Category</th><th>Product</th><th>Quantity</th><th class="ft-product-delete-column"><span class="sr-only">Action</span></th></tr></thead>
-                <tbody>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $productRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                    <?php
-                        $isDraftItem = filled($item->id) && blank($item->product_name);
-                        $categoryNeedsSelection = filled($item->id) && blank($item->category_name);
-                        $productNeedsSelection = filled($item->id) && filled($item->category_name) && blank($item->product_name);
-                        $categoryLabel = $item->category_name ?: 'Select category';
-                        $productLabel = $item->product_name ?: (blank($item->category_name) ? 'Select category first' : 'Select product');
-                        $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
-                    ?>
-                    <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-item-'.e($item->id ?? $loop->index).''; ?>wire:key="job-item-<?php echo e($item->id ?? $loop->index); ?>" x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, draftProductReady: <?php echo \Illuminate\Support\Js::from(filled($item->product_name))->toHtml() ?> }" class="<?php echo \Illuminate\Support\Arr::toCssClasses(['ft-inline-product-draft-row' => $isDraftItem]); ?>">
-                        <td data-label="Category">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
-                                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-item-'.e($item->id).'-category-'.e(md5((string) ($item->category_name ?? ''))).''; ?>wire:key="job-item-<?php echo e($item->id); ?>-category-<?php echo e(md5((string) ($item->category_name ?? ''))); ?>"
-                                    x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-category')->toHtml() ?>, label: 'product category', value: <?php echo \Illuminate\Support\Js::from($item->category_name ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($categoryLabel)->toHtml() ?> })"
-                                    x-init="if (<?php echo \Illuminate\Support\Js::from($canEditOrderProducts && $categoryNeedsSelection)->toHtml() ?>) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    x-on:click.outside="if (editing && !<?php echo \Illuminate\Support\Js::from($categoryNeedsSelection)->toHtml() ?>) cancelEdit()"
-                                    x-on:ft-inline-remote-cancel.stop="if (!<?php echo \Illuminate\Support\Js::from($categoryNeedsSelection)->toHtml() ?>) cancelEdit()"
-                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
-                                >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display"><?php echo e($categoryLabel); ?></span>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
-                                        <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
-                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
-                                            <?php if (isset($component)) { $__componentOriginalbe44f191c92266098874e73cf7cdcd43 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalbe44f191c92266098874e73cf7cdcd43 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-catalog','data' => ['type' => 'product-categories','value' => $item->category_name ?? '','selectedLabel' => $categoryLabel,'placeholder' => 'Select category','searchLabel' => 'product category','menuWidth' => 320]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-remote-catalog'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['type' => 'product-categories','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($item->category_name ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categoryLabel),'placeholder' => 'Select category','search-label' => 'product category','menu-width' => 320]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
-<?php $attributes = $__attributesOriginalbe44f191c92266098874e73cf7cdcd43; ?>
-<?php unset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
-<?php $component = $__componentOriginalbe44f191c92266098874e73cf7cdcd43; ?>
-<?php unset($__componentOriginalbe44f191c92266098874e73cf7cdcd43); ?>
-<?php endif; ?>
-                                        </div>
-                                        <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-save-state'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['compact' => true]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                </div>
-                            <?php else: ?>
-                                <?php echo e($item->category_name); ?>
-
-                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        </td>
-                        <td data-label="Product">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor"
-                                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($productPickerKey).''; ?>wire:key="<?php echo e($productPickerKey); ?>"
-                                    x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-product')->toHtml() ?>, label: 'product', value: <?php echo \Illuminate\Support\Js::from($item->product_name ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($productLabel)->toHtml() ?> })"
-                                    x-init="if (<?php echo \Illuminate\Support\Js::from($canEditOrderProducts && $productNeedsSelection)->toHtml() ?>) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                    x-on:click.outside="if (editing && !<?php echo \Illuminate\Support\Js::from($productNeedsSelection)->toHtml() ?>) cancelEdit()"
-                                    x-on:ft-inline-remote-cancel.stop="if (!<?php echo \Illuminate\Support\Js::from($productNeedsSelection)->toHtml() ?>) cancelEdit()"
-                                    x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'product_name', nextValue)).then((ok) => { productSaving = false; if (ok) { draftProductReady = true; $nextTick(() => setTimeout(() => { const input = $el.closest('tr')?.querySelector('[data-job-item-quantity]'); input?.focus(); input?.select(); }, 0)) } })"
-                                >
-                                    <span class="ft-inline-field-value" x-show="!editing" x-text="display"><?php echo e($productLabel); ?></span>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
-                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || <?php echo \Illuminate\Support\Js::from(blank($item->category_name))->toHtml() ?>" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="<?php echo e(blank($item->category_name) ? 'Select a category first' : 'Edit product'); ?>" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
-                                        <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
-                                            <?php if (isset($component)) { $__componentOriginalbe44f191c92266098874e73cf7cdcd43 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalbe44f191c92266098874e73cf7cdcd43 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-catalog','data' => ['type' => 'products','value' => $item->product_name ?? '','selectedLabel' => $productLabel,'placeholder' => blank($item->category_name) ? 'Select category first' : 'Select product','searchLabel' => 'product','params' => ['category' => (string) ($item->category_name ?? '')],'disabled' => blank($item->category_name),'menuWidth' => 340]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-remote-catalog'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['type' => 'products','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($item->product_name ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productLabel),'placeholder' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(blank($item->category_name) ? 'Select category first' : 'Select product'),'search-label' => 'product','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['category' => (string) ($item->category_name ?? '')]),'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(blank($item->category_name)),'menu-width' => 340]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
-<?php $attributes = $__attributesOriginalbe44f191c92266098874e73cf7cdcd43; ?>
-<?php unset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
-<?php $component = $__componentOriginalbe44f191c92266098874e73cf7cdcd43; ?>
-<?php unset($__componentOriginalbe44f191c92266098874e73cf7cdcd43); ?>
-<?php endif; ?>
-                                        </div>
-                                        <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-save-state'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['compact' => true]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                </div>
-                            <?php else: ?>
-                                <?php echo e($item->product_name); ?>
-
-                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        </td>
-                        <td class="ft-product-quantity-cell" data-label="Quantity">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
-                                <div
-                                    class="ft-inline-field-editor ft-inline-edit-shell ft-inline-product-quantity-editor"
-                                    x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-quantity')->toHtml() ?>, label: 'quantity', value: <?php echo \Illuminate\Support\Js::from((string) $item->quantity)->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from(number_format((int)$item->quantity))->toHtml() ?> })"
-                                    <?php if($canEditOrderProducts && $isDraftItem): ?> x-init="editing = true" <?php endif; ?>
-                                    :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-                                >
-                                    <span x-show="!editing" class="ft-inline-field-value" x-text="display"><?php echo e(number_format((int)$item->quantity)); ?></span>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
-                                        <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
-                                        <input x-ref="quantityInput" data-job-item-quantity x-cloak x-show="editing" x-model="draftValue" class="ft-inline-cell-input quantity" type="number" min="1" :disabled="categorySaving || productSaving"
-                                            x-on:keydown.escape.prevent="cancelEdit()"
-                                            x-on:keydown.enter.prevent="$event.target.blur()"
-                                            x-on:blur="if (editing && !categorySaving && !productSaving && !quantitySaving) { const next = positiveInteger(draftValue); if (next !== value) { quantitySaving = true; commit(next, numberLabel(next), () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'quantity', next)).then(async (ok) => { quantitySaving = false; if (ok && <?php echo \Illuminate\Support\Js::from($isDraftItem)->toHtml() ?>) await $wire.$refresh(); else if (!ok) editing = true }) } else { editing = false; if (<?php echo \Illuminate\Support\Js::from($isDraftItem)->toHtml() ?> && draftProductReady) $wire.$refresh() } }">
-                                        <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-save-state'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['compact' => true]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                </div>
-                            <?php else: ?>
-                                <?php echo e(number_format((int)$item->quantity)); ?>
-
-                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        </td>
-                        <td class="ft-product-delete-cell" data-label="Action">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id && $canDeleteOrderProducts): ?>
-                                <button
-                                    type="button"
-                                    class="ft-inline-product-delete"
-                                    title="Remove product"
-                                    aria-label="Remove product"
-                                    wire:click.stop="removeJobItem(<?php echo e($item->id); ?>)"
-                                    wire:confirm="Remove this product from the Order?"
-                                    wire:loading.attr="disabled"
-                                    wire:target="removeJobItem(<?php echo e($item->id); ?>)"
-                                    :disabled="categorySaving || productSaving || quantitySaving"
-                                >×</button>
-                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        </td>
-                    </tr>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                </tbody>
-            </table>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateOrderProducts): ?>
-                <div class="ft-product-actions"><button class="ft-link-blue ft-add-product-inline" type="button" wire:click="addJobItem(<?php echo e($job->id); ?>)" wire:loading.attr="disabled" wire:target="addJobItem(<?php echo e($job->id); ?>)">＋ Add product</button></div>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </section>
 
         <aside class="ft-detail-card ft-side-panel ft-planning-panel">
@@ -390,41 +197,27 @@ unset($__defined_vars, $__key, $__value); ?>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </b>
             </div>
-            <div
-                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
-                x-data="{ ...window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-'.$job->id.'-priority')->toHtml() ?>, label: 'priority', value: <?php echo \Illuminate\Support\Js::from($job->priority)->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($job->priority)->toHtml() ?> }), priorityColor: <?php echo \Illuminate\Support\Js::from($jobPriorityColor)->toHtml() ?> }"
-                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-            >
-                <span>Priority</span>
-                <b class="ft-planning-value">
-                    <span x-show="!editing" class="ft-master-priority-display"><i class="ft-master-color-dot" style="<?php echo e(\App\Support\MasterColor::style($jobPriorityColor)); ?>" x-bind:style="priorityColor ? '--ft-master-color:'+priorityColor : ''"></i><span x-text="display"><?php echo e($job->priority); ?></span></span>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditJob): ?>
-                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit priority" title="Edit" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.prioritySelect.focus())">✎</button>
-                        <select data-master-color-select x-ref="prioritySelect" x-cloak x-show="editing" x-model="draftValue" class="ft-master-color" style="<?php echo e(\App\Support\MasterColor::style($jobPriorityColor)); ?>" x-on:keydown.escape.prevent="cancelEdit()" x-on:blur="if (editing) cancelEdit()" x-on:change="const nextColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateJobPriority(<?php echo e($job->id); ?>, draftValue)).then(ok => { if(ok) priorityColor=nextColor; });">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $priorities; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $priority): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($priority->name); ?>" data-color="<?php echo e($masterData->displayColorFor('priority', $priority->name)); ?>"><?php echo e($priority->name); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                        </select>
-                        <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.inline-save-state'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['compact' => true]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
-<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
-<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
-<?php endif; ?>
+            <div class="ft-side-row"><span>Reference number</span><b><?php echo e($job->order_number ?: 'Not set'); ?></b></div>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($job->is_repeat_order): ?>
+                <div class="ft-side-row"><span>Previous reference</span><b><?php echo e($job->repeat_order_number ?: 'Not set'); ?></b></div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <div class="ft-side-row">
+                <span>Production urgency</span>
+                <b>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $productionUrgencyNames; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $urgencyName): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <span class="ft-soft-pill amber"><?php echo e($urgencyName); ?></span>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                        <span class="ft-planning-empty">None</span>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                </b>
+            </div>
+            <div class="ft-side-row">
+                <span>Shipment urgency</span>
+                <b>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $shipmentUrgencyNames; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $urgencyName): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <span class="ft-soft-pill blue"><?php echo e($urgencyName); ?></span>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                        <span class="ft-planning-empty">None</span>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </b>
             </div>
@@ -519,6 +312,513 @@ unset($__defined_vars, $__key, $__value); ?>
         </aside>
     </div>
 
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canViewOrderProducts): ?>
+        <section class="ft-detail-card ft-order-products-card" id="order-products-card">
+            <header class="ft-order-products-head">
+                <div class="ft-order-products-title">
+                    <h2>Products &amp; quantities</h2>
+                    <p class="ft-order-products-summary"><?php echo e($completedProductRows->count()); ?> <?php echo e(\Illuminate\Support\Str::plural('product', $completedProductRows->count())); ?> · <?php echo e(number_format($completedProductRows->sum('quantity'))); ?> total units</p>
+                </div>
+            </header>
+
+            <div class="ft-order-products-table-wrap">
+                <table class="ft-order-products-detail-table ft-inline-product-table">
+                    <thead>
+                        <tr>
+                            <th>Product</th>
+                            <th>Category</th>
+                            <th>Quantity</th>
+                            <th>Unit price</th>
+                            <th>Notes</th>
+                            <th>Updated</th>
+                            <th class="ft-order-product-actions-heading">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productRows->isEmpty()): ?>
+                        <tr class="ft-order-product-empty-row"><td colspan="7">No products have been added to this Order yet.</td></tr>
+                    <?php else: ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $productRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $item): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <?php
+                            $isDraftItem = filled($item->id) && blank($item->product_name);
+                            $categoryNeedsSelection = filled($item->id) && blank($item->category_name);
+                            $productNeedsSelection = filled($item->id) && filled($item->category_name) && blank($item->product_name);
+                            $categoryLabel = $item->category_name ?: 'Select category';
+                            $productLabel = $item->product_name ?: (blank($item->category_name) ? 'Select category first' : 'Select product');
+                            $productPickerKey = 'job-item-'.$item->id.'-product-'.md5((string) ($item->category_name ?? '').'|'.(string) ($item->product_name ?? ''));
+                            $productMaster = $orderProductMasters->get(mb_strtolower(trim((string) ($item->product_name ?? ''))));
+                            $productImageUrl = $productMaster?->productImageUrl();
+                            $productCode = $productMaster?->productDisplayCode();
+                            $productReference = $productMaster?->productReferenceCode();
+                            $classificationParts = collect([
+                                $productMaster?->productMainCategory(),
+                                ...array_filter(array_map('trim', preg_split('/\s*>\s*/', (string) ($productMaster?->productClassificationPath() ?? '')) ?: [])),
+                            ])->filter()->unique()->values();
+                            if ($classificationParts->isEmpty() && filled($item->category_name)) $classificationParts = collect([$item->category_name]);
+                            $categoryDisplay = $classificationParts->implode(' › ') ?: $categoryLabel;
+                            $updatedByName = $item->updatedBy?->name ?: $job->creator?->name ?: 'FlowTrack';
+                            $updatedWhen = $item->updated_at?->diffForHumans() ?: 'just now';
+                            $unitPrice = (float) ($item->unit_price ?? 0);
+                            $unitPriceDisplay = $orderCurrencySymbol.number_format($unitPrice, 2);
+                        ?>
+                        <tr <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-product-detail-'.e($item->id ?? $loop->index).''; ?>wire:key="job-product-detail-<?php echo e($item->id ?? $loop->index); ?>"
+                            x-data="{ categorySaving: false, productSaving: false, quantitySaving: false, priceSaving: false, notesSaving: false, actionOpen: false, draftProductReady: <?php echo \Illuminate\Support\Js::from(filled($item->product_name))->toHtml() ?> }"
+                            class="<?php echo \Illuminate\Support\Arr::toCssClasses(['ft-order-product-draft-row' => $isDraftItem]); ?>">
+                            <td data-label="Product">
+                                <div class="ft-order-product-main-cell">
+                                    <span class="ft-order-product-image">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productImageUrl): ?>
+                                            <img src="<?php echo e($productImageUrl); ?>" alt="<?php echo e($item->product_name); ?>">
+                                        <?php else: ?>
+                                            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5h16v13H4z"/><path d="m7 15 3.2-3.4 2.4 2.4 2.2-2.3L18 15"/><circle cx="8.5" cy="9" r="1.2"/></svg>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </span>
+                                    <div class="ft-order-product-copy">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
+                                            <div
+                                                class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor ft-order-product-name-editor"
+                                                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = ''.e($productPickerKey).''; ?>wire:key="<?php echo e($productPickerKey); ?>"
+                                                x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-product')->toHtml() ?>, label: 'product', value: <?php echo \Illuminate\Support\Js::from($item->product_name ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($productLabel)->toHtml() ?> })"
+                                                x-init="if (<?php echo \Illuminate\Support\Js::from($canEditOrderProducts && $productNeedsSelection)->toHtml() ?>) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                                x-on:click.outside="if (editing && !<?php echo \Illuminate\Support\Js::from($productNeedsSelection)->toHtml() ?>) cancelEdit()"
+                                                x-on:ft-inline-remote-cancel.stop="if (!<?php echo \Illuminate\Support\Js::from($productNeedsSelection)->toHtml() ?>) cancelEdit()"
+                                                x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select product'); productSaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'product_name', nextValue)).then(async (ok) => { productSaving = false; if (ok) { draftProductReady = true; await $wire.$refresh(); } })"
+                                            >
+                                                <span class="ft-order-product-name" x-show="!editing" x-text="display"><?php echo e($productLabel); ?></span>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
+                                                    <button x-show="!editing" :disabled="status === 'saving' || categorySaving || quantitySaving || priceSaving || notesSaving || <?php echo \Illuminate\Support\Js::from(blank($item->category_name))->toHtml() ?>" type="button" class="ft-inline-edit-button" aria-label="Edit product" title="<?php echo e(blank($item->category_name) ? 'Select a category first' : 'Edit product'); ?>" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                                    <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                        <?php if (isset($component)) { $__componentOriginalbe44f191c92266098874e73cf7cdcd43 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalbe44f191c92266098874e73cf7cdcd43 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-catalog','data' => ['type' => 'products','value' => $item->product_name ?? '','selectedLabel' => $productLabel,'placeholder' => blank($item->category_name) ? 'Select category first' : 'Select product','searchLabel' => 'product','params' => ['category' => (string) ($item->category_name ?? '')],'disabled' => blank($item->category_name),'menuWidth' => 360,'fixedMenu' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-remote-catalog'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['type' => 'products','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($item->product_name ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productLabel),'placeholder' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(blank($item->category_name) ? 'Select category first' : 'Select product'),'search-label' => 'product','params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['category' => (string) ($item->category_name ?? '')]),'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(blank($item->category_name)),'menu-width' => 360,'fixed-menu' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
+<?php $attributes = $__attributesOriginalbe44f191c92266098874e73cf7cdcd43; ?>
+<?php unset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
+<?php $component = $__componentOriginalbe44f191c92266098874e73cf7cdcd43; ?>
+<?php unset($__componentOriginalbe44f191c92266098874e73cf7cdcd43); ?>
+<?php endif; ?>
+                                                    </div>
+                                                    <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </div>
+                                        <?php else: ?>
+                                            <strong class="ft-order-product-name"><?php echo e($item->product_name); ?></strong>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        <small>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCode): ?>
+                                                Product code <?php echo e($productCode); ?>
+
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productCode && $productReference): ?>
+                                                ·
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productReference): ?>
+                                                Ref <?php echo e($productReference); ?>
+
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$productCode && !$productReference): ?>
+                                                Order product
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </small>
+                                    </div>
+                                </div>
+                            </td>
+                            <td data-label="Category">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
+                                    <div
+                                        class="ft-inline-field-editor ft-inline-edit-shell ft-inline-catalog-editor ft-order-product-category-editor"
+                                        <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-item-'.e($item->id).'-category-'.e(md5((string) ($item->category_name ?? ''))).''; ?>wire:key="job-item-<?php echo e($item->id); ?>-category-<?php echo e(md5((string) ($item->category_name ?? ''))); ?>"
+                                        x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-category')->toHtml() ?>, label: 'product category', value: <?php echo \Illuminate\Support\Js::from($item->category_name ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($categoryDisplay)->toHtml() ?> })"
+                                        x-init="if (<?php echo \Illuminate\Support\Js::from($canEditOrderProducts && $categoryNeedsSelection)->toHtml() ?>) { editing = true; $nextTick(() => setTimeout(() => { const picker = $el.querySelector('[data-ft-inline-remote-picker]'); picker?.dispatchEvent(new CustomEvent('ft-inline-remote-open', { detail: { value: value, label: display } })) }, 0)) }"
+                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                        x-on:click.outside="if (editing && !<?php echo \Illuminate\Support\Js::from($categoryNeedsSelection)->toHtml() ?>) cancelEdit()"
+                                        x-on:ft-inline-remote-cancel.stop="if (!<?php echo \Illuminate\Support\Js::from($categoryNeedsSelection)->toHtml() ?>) cancelEdit()"
+                                        x-on:ft-inline-remote-selected.stop="const nextValue = String($event.detail?.value ?? ''); const nextLabel = String($event.detail?.label ?? 'Select category'); const changed = nextValue !== savedValue; categorySaving = true; commit(nextValue, nextLabel, () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'category_name', nextValue)).then(async (ok) => { if (ok && changed) await $wire.$refresh(); categorySaving = false })"
+                                    >
+                                        <span class="ft-order-product-category-path" x-show="!editing" x-text="display"><?php echo e($categoryDisplay); ?></span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
+                                            <button x-show="!editing" :disabled="status === 'saving' || productSaving || quantitySaving || priceSaving || notesSaving" type="button" class="ft-inline-edit-button" aria-label="Edit product category" title="Edit category" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                            <div x-cloak x-show="editing" class="ft-inline-catalog-picker">
+                                                <?php if (isset($component)) { $__componentOriginalbe44f191c92266098874e73cf7cdcd43 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalbe44f191c92266098874e73cf7cdcd43 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-remote-catalog','data' => ['type' => 'product-categories','value' => $item->category_name ?? '','selectedLabel' => $categoryLabel,'placeholder' => 'Select category','searchLabel' => 'product category','menuWidth' => 340,'fixedMenu' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-remote-catalog'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['type' => 'product-categories','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($item->category_name ?? ''),'selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($categoryLabel),'placeholder' => 'Select category','search-label' => 'product category','menu-width' => 340,'fixed-menu' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
+<?php $attributes = $__attributesOriginalbe44f191c92266098874e73cf7cdcd43; ?>
+<?php unset($__attributesOriginalbe44f191c92266098874e73cf7cdcd43); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalbe44f191c92266098874e73cf7cdcd43)): ?>
+<?php $component = $__componentOriginalbe44f191c92266098874e73cf7cdcd43; ?>
+<?php unset($__componentOriginalbe44f191c92266098874e73cf7cdcd43); ?>
+<?php endif; ?>
+                                            </div>
+                                            <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <?php echo e($categoryDisplay); ?>
+
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </td>
+                            <td class="ft-order-product-quantity" data-label="Quantity">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-quantity')->toHtml() ?>, label: 'quantity', value: <?php echo \Illuminate\Support\Js::from((string) $item->quantity)->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from(number_format((int) $item->quantity).' units')->toHtml() ?> })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-edit-value" x-text="display"><?php echo e(number_format((int) $item->quantity)); ?> units</span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || priceSaving || notesSaving" type="button" class="ft-inline-edit-button" title="Edit quantity" aria-label="Edit product quantity" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.quantityInput.focus(); $refs.quantityInput.select(); })">✎</button>
+                                            <input x-ref="quantityInput" x-cloak x-show="editing" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-number-input" type="number" min="1"
+                                                x-on:keydown.escape.prevent="cancelEdit()"
+                                                x-on:keydown.enter.prevent="$event.target.blur()"
+                                                x-on:blur="if (editing && !quantitySaving) { const next = positiveInteger(draftValue); quantitySaving = true; commit(next, Number(next).toLocaleString() + ' units', () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'quantity', next)).then((ok) => { quantitySaving = false; if (!ok) editing = true; }) }">
+                                            <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <?php echo e(number_format((int) $item->quantity)); ?> units
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </td>
+                            <td class="ft-order-product-price" data-label="Unit price">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-unit-price')->toHtml() ?>, label: 'unit price', value: <?php echo \Illuminate\Support\Js::from(number_format($unitPrice, 2, '.', ''))->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($unitPriceDisplay)->toHtml() ?> })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-edit-value" x-text="display"><?php echo e($unitPriceDisplay); ?></span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || quantitySaving || notesSaving" type="button" class="ft-inline-edit-button" title="Edit unit price" aria-label="Edit unit price" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.priceInput.focus(); $refs.priceInput.select(); })">✎</button>
+                                            <div x-cloak x-show="editing" class="ft-order-product-price-input-wrap">
+                                                <span><?php echo e($orderCurrencySymbol); ?></span>
+                                                <input x-ref="priceInput" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-number-input" type="number" min="0" step="0.01"
+                                                    x-on:keydown.escape.prevent="cancelEdit()"
+                                                    x-on:keydown.enter.prevent="$event.target.blur()"
+                                                    x-on:blur="if (editing && !priceSaving) { const raw = Number(draftValue || 0); const next = Number.isFinite(raw) ? Math.max(0, raw).toFixed(2) : '0.00'; priceSaving = true; commit(next, <?php echo \Illuminate\Support\Js::from($orderCurrencySymbol)->toHtml() ?> + Number(next).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2}), () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'unit_price', next)).then((ok) => { priceSaving = false; if (!ok) editing = true; }) }">
+                                            </div>
+                                            <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <?php echo e($unitPriceDisplay); ?>
+
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </td>
+                            <td class="ft-order-product-notes" data-label="Notes">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id): ?>
+                                    <div class="ft-inline-field-editor ft-inline-edit-shell" x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-item-'.$item->id.'-notes')->toHtml() ?>, label: 'product notes', value: <?php echo \Illuminate\Support\Js::from($item->notes ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($item->notes ?: 'Add notes')->toHtml() ?> })" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
+                                        <span x-show="!editing" class="ft-order-product-note-value" :class="{ 'is-empty': !value }" x-text="display"><?php echo e($item->notes ?: 'Add notes'); ?></span>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditOrderProducts): ?>
+                                            <button x-show="!editing" :disabled="status === 'saving' || categorySaving || productSaving || quantitySaving || priceSaving" type="button" class="ft-inline-edit-button" title="Edit notes" aria-label="Edit product notes" x-on:click.stop="if (beginEdit()) $nextTick(() => { $refs.notesInput.focus(); $refs.notesInput.select(); })">✎</button>
+                                            <input x-ref="notesInput" x-cloak x-show="editing" x-model="draftValue" class="ft-order-product-inline-input ft-order-product-notes-input" type="text" maxlength="2000" placeholder="Product notes"
+                                                x-on:keydown.escape.prevent="cancelEdit()"
+                                                x-on:keydown.enter.prevent="$event.target.blur()"
+                                                x-on:blur="if (editing && !notesSaving) { const next = String(draftValue || '').trim(); notesSaving = true; commit(next, next || 'Add notes', () => $wire.updateJobItem(<?php echo e($item->id); ?>, 'notes', next)).then((ok) => { notesSaving = false; if (!ok) editing = true; }) }">
+                                            <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.inline-save-state'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['compact' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $attributes = $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c)): ?>
+<?php $component = $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c; ?>
+<?php unset($__componentOriginal610752b6d86af46dc7d5e0c5ff95106c); ?>
+<?php endif; ?>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </div>
+                                <?php else: ?>
+                                    <?php echo e($item->notes ?: '—'); ?>
+
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </td>
+                            <td class="ft-order-product-updated" data-label="Updated">
+                                <strong><?php echo e($updatedByName); ?></strong>
+                                <span>· <?php echo e($updatedWhen); ?></span>
+                            </td>
+                            <td class="ft-order-product-actions-cell" data-label="Actions">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($item->id && $canDeleteOrderProducts): ?>
+                                    <div class="ft-order-product-row-menu" x-on:click.outside="actionOpen = false">
+                                        <button type="button" class="ft-order-product-kebab" x-on:click.stop="actionOpen = !actionOpen" :aria-expanded="actionOpen.toString()" aria-label="Product actions">⋮</button>
+                                        <div class="ft-order-product-menu-popover" x-cloak x-show="actionOpen" x-transition.opacity>
+                                            <button type="button" wire:click.stop="removeJobItem(<?php echo e($item->id); ?>)" wire:confirm="Remove this product from the Order?" wire:loading.attr="disabled" wire:target="removeJobItem(<?php echo e($item->id); ?>)" x-on:click="actionOpen = false">Remove product</button>
+                                        </div>
+                                    </div>
+                                <?php else: ?>
+                                    <span class="ft-order-product-action-placeholder">—</span>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </td>
+                        </tr>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </tbody>
+                </table>
+            </div>
+
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showAddJobProductForm && $canCreateOrderProducts): ?>
+                <div class="ft-order-detail-add-product" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-detail-add-product-'.e($job->id).''; ?>wire:key="job-detail-add-product-<?php echo e($job->id); ?>" x-data="{ resultsOpen: true }">
+                    <div class="ft-order-detail-add-product-head">
+                        <div>
+                            <strong>Add product</strong>
+                            <span>Search the Product master, select a product, then enter quantity and unit price.</span>
+                        </div>
+                        <button type="button" class="ft-order-detail-add-product-close" wire:click="closeAddJobProductForm" aria-label="Close add product">×</button>
+                    </div>
+
+                    <div class="ft-order-product-search-label">Search product</div>
+                    <div class="ft-order-product-search-host ft-order-detail-product-search" x-on:click.outside="resultsOpen = false">
+                        <div class="ft-order-product-search-input" :class="resultsOpen ? 'is-open' : ''">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+                            <input
+                                type="search"
+                                wire:model.live.debounce.220ms="jobProductSearch"
+                                x-on:focus="resultsOpen = true"
+                                x-on:keydown.escape="resultsOpen = false"
+                                placeholder="Search product name, product code or reference code"
+                                autocomplete="off"
+                                aria-label="Search product"
+                            >
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(trim((string) $jobProductSearch) !== ''): ?>
+                                <span class="ft-order-product-search-tools">
+                                    <button type="button" class="ft-order-product-search-clear" wire:click="$set('jobProductSearch', '')" x-on:click="resultsOpen = true" aria-label="Clear product search">&times;</button>
+                                </span>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <div class="ft-order-product-results" x-cloak x-show="resultsOpen" x-transition.origin.top>
+                            <div class="ft-order-product-results-head">
+                                <span>Top matches <b><?php echo e(number_format((int) $jobProductResultTotal)); ?> <?php echo e(\Illuminate\Support\Str::plural('result', (int) $jobProductResultTotal)); ?></b></span>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($jobProductResultTotal > $jobProductSearchResults->count()): ?>
+                                    <button type="button" wire:click="showAllJobProductResults">View all results <span>&nearr;</span></button>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <div class="ft-order-product-result-list">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $jobProductSearchResults; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $product): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <?php
+                                        $isSelectedForJob = (int) ($jobProductSelectedProduct?->id ?? 0) === (int) $product->id;
+                                        $resultImageUrl = $product->productImageUrl();
+                                        $resultReferenceCode = $product->productReferenceCode();
+                                        $resultDisplayCode = $product->productDisplayCode();
+                                        $resultMainCategory = $product->productMainCategory();
+                                        $resultProductCategory = trim((string) ($product->parent?->name ?? ''));
+                                        $resultSubCategory = trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category') ?: $product->productCatalogSummary()));
+                                        $resultClassification = collect([$resultMainCategory, $resultProductCategory, $resultSubCategory])->filter()->unique()->values();
+                                    ?>
+                                    <div class="ft-order-product-result <?php echo e($isSelectedForJob ? 'is-selected' : ''); ?>">
+                                        <span class="ft-order-product-thumb">
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($resultImageUrl): ?>
+                                                <img src="<?php echo e($resultImageUrl); ?>" alt="">
+                                            <?php else: ?>
+                                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </span>
+                                        <span class="ft-order-product-result-copy">
+                                            <strong><?php echo e($product->name); ?></strong>
+                                            <span class="ft-order-product-code-line">Product code: <?php echo e($resultDisplayCode); ?> <i>&bull;</i> Ref: <?php echo e($resultReferenceCode ?: '—'); ?></span>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($resultClassification->isNotEmpty()): ?>
+                                                <small class="ft-order-product-classification">
+                                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $resultClassification; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $part): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><span><?php echo e($part); ?></span><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$loop->last): ?><i>&rsaquo;</i><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?> <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                                </small>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </span>
+                                        <button type="button" class="ft-order-product-select-button <?php echo e($isSelectedForJob ? 'is-selected' : ''); ?>" wire:click="selectJobProduct(<?php echo e($product->id); ?>)" x-on:click="resultsOpen = false"><?php echo e($isSelectedForJob ? 'Selected' : 'Select'); ?></button>
+                                    </div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    <div class="ft-order-product-no-results"><strong>No products found</strong><span>Try another product name, product code or reference code.</span></div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </div>
+                    </div>
+
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($jobProductSelectedProduct): ?>
+                        <div class="ft-order-detail-product-fields">
+                            <div class="ft-order-detail-product-field is-product">
+                                <label>Selected product</label>
+                                <div class="ft-order-detail-selected-product">
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($jobProductSelectedProduct->productImageUrl()): ?>
+                                        <img src="<?php echo e($jobProductSelectedProduct->productImageUrl()); ?>" alt="">
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    <span><strong><?php echo e($jobProductSelectedProduct->name); ?></strong><small><?php echo e($jobProductSelectedProduct->productDisplayCode()); ?></small></span>
+                                </div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['jobProductSelectedId'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><span class="validation-error"><?php echo e($message); ?></span><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Product category</label>
+                                <input type="text" value="<?php echo e($jobProductCategory); ?>" readonly>
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Quantity *</label>
+                                <input type="number" min="1" step="1" wire:model="jobProductQuantity">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['jobProductQuantity'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><span class="validation-error"><?php echo e($message); ?></span><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                            <div class="ft-order-detail-product-field">
+                                <label>Unit price *</label>
+                                <div class="ft-order-detail-price-field"><span><?php echo e($orderCurrencySymbol); ?></span><input type="number" min="0" step="0.01" wire:model="jobProductUnitPrice"></div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['jobProductUnitPrice'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><span class="validation-error"><?php echo e($message); ?></span><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </div>
+                    <?php else: ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['jobProductSelectedId'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error ft-order-detail-product-selection-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                    <div class="ft-order-detail-add-product-actions">
+                        <button type="button" class="ft-outline-btn" wire:click="closeAddJobProductForm">Cancel</button>
+                        <button type="button" class="ft-new-job-btn" wire:click="saveJobProduct(<?php echo e($job->id); ?>)" wire:loading.attr="disabled" wire:target="saveJobProduct(<?php echo e($job->id); ?>)" <?php if(!$jobProductSelectedProduct): echo 'disabled'; endif; ?>>Add product</button>
+                    </div>
+                </div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+            <footer class="ft-order-products-footer">
+                <span>Product and quantity changes are recorded in order activity.</span>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canCreateOrderProducts && !$showAddJobProductForm): ?>
+                    <button type="button" class="ft-outline-btn ft-order-product-add-another" wire:click="openAddJobProductForm(<?php echo e($job->id); ?>)" wire:loading.attr="disabled" wire:target="openAddJobProductForm(<?php echo e($job->id); ?>)">＋ Add another product</button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </footer>
+        </section>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $job->workflow->phases; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $phase): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
             <button type="button" class="<?php echo e($phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '')); ?>" disabled aria-disabled="true" title="Workflow page is temporarily disabled">
@@ -527,7 +827,7 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
     </section>
 
-    <section class="ft-detail-card ft-phase-table-card ft-overview-task-card">
+    <section class="ft-detail-card ft-phase-table-card ft-overview-task-card" id="order-taskflow">
         <div class="ft-card-row-head ft-task-card-heading">
             <div><h2>All phase tasks</h2><p><?php echo e($configuredTasks->count()); ?> tasks across <?php echo e($job->workflow->phases->count()); ?> phases</p></div>
             <div class="ft-row-actions ft-order-taskflow-controls" aria-label="Order taskflow controls">
@@ -548,11 +848,11 @@ unset($__defined_vars, $__key, $__value); ?>
         </div>
         <div class="ft-phase-load-note"><span>◉ All <?php echo e($configuredTasks->count()); ?> configured and added tasks are loaded</span><span>Task status changes save automatically</span></div>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showAddOrderTaskForm && $canAddOrderTask): ?>
-            <div class="ft-order-add-task" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-add-task-form'; ?>wire:key="order-add-task-form">
+            <div class="ft-order-add-task" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-add-task-form'; ?>wire:key="order-add-task-form" x-data>
                 <div class="ft-order-add-task-head">
                     <div>
                         <strong>Add taskflow task</strong>
-                        <span>The task will be added to the current phase<?php echo e($job->phase?->name ? ': '.$job->phase->name : ''); ?>.</span>
+                        <span>Select the workflow phase where this task should be added.</span>
                     </div>
                     <button class="ft-order-add-task-close" type="button" wire:click="cancelAddOrderTask" aria-label="Close add task form">×</button>
                 </div>
@@ -560,6 +860,15 @@ unset($__defined_vars, $__key, $__value); ?>
                     <label class="ft-order-add-task-field ft-order-add-task-field-wide">
                         <span>Task name *</span>
                         <input type="text" wire:model="newOrderTaskName" placeholder="Task name" maxlength="255">
+                    </label>
+                    <label class="ft-order-add-task-field ft-order-add-task-phase">
+                        <span>Phase *</span>
+                        <select wire:model="newOrderTaskPhaseId">
+                            <option value="">Select phase</option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $job->workflow->phases->sortBy('sequence'); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $taskPhaseOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <option value="<?php echo e($taskPhaseOption->id); ?>"><?php echo e($taskPhaseOption->sequence); ?>. <?php echo e($taskPhaseOption->name); ?></option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                        </select>
                     </label>
                     <?php
                         $newOrderTaskAssignee = $users->firstWhere('id', $newOrderTaskAssigneeId);
@@ -597,12 +906,35 @@ unset($__defined_vars, $__key, $__value); ?>
                         <span>Due date</span>
                         <input type="date" wire:model="newOrderTaskDueDate" onclick="this.showPicker && this.showPicker()">
                     </label>
-                    <label class="ft-order-add-task-field ft-order-add-task-field-description">
+                    <div class="ft-order-add-task-field ft-order-add-task-field-description ft-mention-host" wire:ignore>
                         <span>Instructions</span>
-                        <textarea data-rich-text wire:model="newOrderTaskDescription" placeholder="Describe what must be completed for this task or paste screenshots here."></textarea>
-                    </label>
+                        <textarea
+                            x-ref="newOrderTaskDescription"
+                            class="ft-mention-input"
+                            data-rich-text
+                            data-mention-users="<?php echo e($mentionUsers->toJson()); ?>"
+                            autocomplete="off"
+                            placeholder="Describe what must be completed for this task or paste screenshots here."
+                        ></textarea>
+                    </div>
                 </div>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['newOrderTaskName'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="ft-order-add-task-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['newOrderTaskDescription'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="ft-order-add-task-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['newOrderTaskPhaseId'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -628,7 +960,14 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 <div class="ft-order-add-task-actions">
                     <button class="ft-outline-btn" type="button" wire:click="cancelAddOrderTask">Cancel</button>
-                    <button class="ft-order-add-task-submit" type="button" wire:click="addOrderTask" wire:loading.attr="disabled" wire:target="addOrderTask">
+                    <button
+                        class="ft-order-add-task-submit"
+                        type="button"
+                        data-rich-text-submit
+                        wire:loading.attr="disabled"
+                        wire:target="addOrderTask"
+                        x-on:click="const source = $refs.newOrderTaskDescription; const read = source?.__flowtrackRichTextValueAsync ? source.__flowtrackRichTextValueAsync() : Promise.resolve(String(source?.value || '')); read.then((description) => $wire.addOrderTask(description))"
+                    >
                         <span wire:loading.remove wire:target="addOrderTask">Add Task</span>
                         <span wire:loading wire:target="addOrderTask">Adding…</span>
                     </button>
@@ -1015,6 +1354,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
     </section>
 
+    <div id="order-product-history"></div>
     <?php if (isset($component)) { $__componentOriginal07a0efd5a24a9992f46129ce7eefcae9 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal07a0efd5a24a9992f46129ce7eefcae9 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.detail-activity','data' => ['job' => $job,'mentionUsers' => $mentionUsers,'compact' => 'true','activityTab' => $activityTab,'activityPage' => $activityPage,'focusComment' => $focusComment]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

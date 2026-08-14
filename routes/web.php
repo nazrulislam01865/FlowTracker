@@ -12,6 +12,8 @@ use App\Http\Controllers\DocumentsController;
 use App\Http\Controllers\FilterOptionController;
 use App\Http\Controllers\JobsController;
 use App\Http\Controllers\InquiriesController;
+use App\Http\Controllers\InvoicePdfController;
+use App\Http\Controllers\FinanceAttachmentController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
 use App\Http\Controllers\NotificationsController;
@@ -114,6 +116,12 @@ Route::middleware('auth')->group(function () {
 
         return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('documents.open');
+    Route::get('/invoices/{invoice}/pdf/open', [InvoicePdfController::class, 'open'])->whereNumber('invoice')->name('invoices.pdf.open');
+    Route::get('/invoices/{invoice}/pdf/download', [InvoicePdfController::class, 'download'])->whereNumber('invoice')->name('invoices.pdf.download');
+    Route::get('/invoices/{invoice}/attachment/open', [FinanceAttachmentController::class, 'invoiceOpen'])->whereNumber('invoice')->name('invoices.attachment.open');
+    Route::get('/invoices/{invoice}/attachment/download', [FinanceAttachmentController::class, 'invoiceDownload'])->whereNumber('invoice')->name('invoices.attachment.download');
+    Route::get('/payments/{payment}/receipt/open', [FinanceAttachmentController::class, 'paymentOpen'])->whereNumber('payment')->name('payments.receipt.open');
+    Route::get('/payments/{payment}/receipt/download', [FinanceAttachmentController::class, 'paymentDownload'])->whereNumber('payment')->name('payments.receipt.download');
     Route::get('/documents/{document}/download', function (Document $document) {
         abort_unless(auth()->user()->canModule('documents', 'export'), 403);
         app(\App\Services\AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user())->firstOrFail();

@@ -19,8 +19,12 @@ class FlowJob extends Model
     {
         return [
             'delivery_date' => 'date',
+            'estimated_delivery_date' => 'date',
             'received_date' => 'date',
             'needs_attention' => 'boolean',
+            'is_repeat_order' => 'boolean',
+            'production_urgency_ids' => 'array',
+            'shipment_urgency_ids' => 'array',
             'completed_at' => 'datetime',
             'commercial_value' => 'decimal:2',
         ];

@@ -33,7 +33,7 @@ class AdminUserPositionTest extends TestCase
             ->set('name', 'Amina Rahman')
             ->set('position', 'Senior Production Coordinator')
             ->set('email', 'amina.rahman@example.com')
-            ->set('roleId', $role->id)
+            ->set('roleIds', [(string) $role->id])
             ->set('password', 'password1234')
             ->set('passwordConfirmation', 'password1234')
             ->call('saveUser')

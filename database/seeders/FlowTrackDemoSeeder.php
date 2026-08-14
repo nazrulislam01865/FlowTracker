@@ -94,6 +94,7 @@ class FlowTrackDemoSeeder extends Seeder
                 'name'=>$p[0], 'password'=>Hash::make('password'), 'role_id'=>$roles[$p[2]]->id,
                 'department_id'=>$departments[$p[3]]->id, 'is_active'=>true, 'locale'=>'en', 'email_verified_at'=>now(),
             ]);
+            $u->roles()->syncWithoutDetaching([$u->role_id]);
             WorkspaceMembership::updateOrCreate(['workspace_id'=>1,'user_id'=>$u->id], ['role_id'=>$u->role_id,'department_id'=>$u->department_id,'job_title'=>$roles[$p[2]]->name,'status'=>'active','joined_at'=>$u->created_at ?: now()]);
             return [$p[0] => $u];
         });

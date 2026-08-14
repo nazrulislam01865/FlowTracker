@@ -38,7 +38,7 @@
         'resources/js/app.js',
     ])
     <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260812-taskpack-assignee-1">
-    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260807-2">
+    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260814-multi-role-1">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
@@ -50,16 +50,17 @@
          after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
          keeping this scoped stylesheet warm prevents the first Inquiry visit from
          rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260813-23">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260814-client-row-colors-2">
     {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
          which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260810-3">
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260814-5">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
-    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260813-actions-right-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260813-22">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260814-inquiry-inline-match-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-page-2">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260814-lazy-pagination-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260814-23">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260814-add-task-phase-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-products-detail.css?v=20260814-detail-scope-isolation-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-pdf-1">
     {{-- Bulk Order Import CSS is loaded with the shell because wire:navigate can otherwise
          paint the page before a body-level stylesheet finishes loading, causing a visible FOUC. --}}
     <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260814-client-workflow-1">

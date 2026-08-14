@@ -26,7 +26,7 @@ class Index extends Component
     public string $email = '';
     public string $wechatId = '';
     public string $phone = '';
-    public ?int $roleId = null;
+    public array $roleIds = [];
     public ?int $departmentId = null;
     public string $businessUnit = 'both';
     public string $accountStatus = 'active';
@@ -151,7 +151,8 @@ class Index extends Component
 
         if ($canManageAccess) {
             $rules += [
-                'roleId' => ['required', Rule::exists('roles', 'id')->where('workspace_id', app(SetupContext::class)->workspaceId())],
+                'roleIds' => ['required', 'array', 'min:1'],
+                'roleIds.*' => ['distinct', Rule::exists('roles', 'id')->where('workspace_id', app(SetupContext::class)->workspaceId())],
                 'departmentId' => ['nullable', 'exists:departments,id'],
                 'businessUnit' => ['required', Rule::in(['iid', 'nep', 'both'])],
                 'accountStatus' => ['required', Rule::in(['active', 'inactive', 'suspended'])],
@@ -176,7 +177,7 @@ class Index extends Component
 
         if ($canManageAccess) {
             $payload += [
-                'role_id' => $this->roleId,
+                'role_ids' => array_values($this->roleIds),
                 'department_id' => $this->departmentId,
                 'business_unit' => $this->businessUnit,
                 'account_status' => $this->accountStatus,
@@ -190,6 +191,13 @@ class Index extends Component
         }
 
         $this->reset(['newPassword', 'newPasswordConfirmation', 'profileImage']);
+
+        if ($this->returnToAdministration) {
+            session()->flash('success', 'User updated successfully.');
+            $this->redirectRoute('administration', ['tab' => 'users'], navigate: true);
+            return;
+        }
+
         $this->saveMessage = 'Changes saved just now';
 
         $target = $this->targetUser();
@@ -221,7 +229,7 @@ class Index extends Component
         $this->email = $target->email;
         $this->wechatId = (string) ($target->wechat_id ?? '');
         $this->phone = (string) ($target->phone ?? '');
-        $this->roleId = $target->role_id;
+        $this->roleIds = $target->assignedRoleIds();
         $this->departmentId = $target->department_id;
         $this->businessUnit = $service->businessUnit($target);
         $this->accountStatus = $service->accountStatus($target);
@@ -232,9 +240,9 @@ class Index extends Component
     private function loadAccessOptions(User $target): void
     {
         if (! $this->canManageAccess) {
-            $this->roleOptions = $target->role
-                ? [['id' => $target->role->id, 'name' => $target->role->name]]
-                : [];
+            $this->roleOptions = $target->assignedRoles()
+                ->map(fn (Role $role) => ['id' => $role->id, 'name' => $role->name])
+                ->values()->all();
             $this->departmentOptions = $target->department
                 ? [['id' => $target->department->id, 'name' => $target->department->name]]
                 : [];
@@ -247,8 +255,9 @@ class Index extends Component
             ->where('workspace_id', $workspaceId)
             ->where(function ($query) use ($target) {
                 $query->where('is_active', true);
-                if ($target->role_id) {
-                    $query->orWhere('id', $target->role_id);
+                $assignedRoleIds = $target->assignedRoleIds();
+                if ($assignedRoleIds !== []) {
+                    $query->orWhereIn('id', $assignedRoleIds);
                 }
             })
             ->orderByDesc('is_system')
@@ -301,6 +310,6 @@ class Index extends Component
 
     private function targetUser(): User
     {
-        return User::query()->with(['role:id,name', 'department:id,name'])->findOrFail($this->userId);
+        return User::query()->with(['role:id,name,slug,is_active', 'roles:id,name,slug,is_active', 'department:id,name'])->findOrFail($this->userId);
     }
 }

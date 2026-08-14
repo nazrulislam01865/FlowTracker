@@ -192,15 +192,11 @@
                     <div class="ft-user-editor-section-body">
                         <div class="ft-user-editor-fields">
                             <div class="field">
-                                <label for="ft-edit-role">Role *</label>
-                                <select id="ft-edit-role" wire:model="roleId" @disabled(!$isEditing || !$canManageAccess || $targetIsSuperAdmin)>
-                                    <option value="">Select role</option>
-                                    @foreach($roleOptions as $role)
-                                        <option value="{{ $role['id'] }}">{{ $role['name'] }}</option>
-                                    @endforeach
-                                </select>
-                                <small>{{ $canManageAccess ? 'Permissions come from the selected role and are not edited on this page.' : 'Role permissions are managed by an administrator.' }}</small>
-                                @error('roleId')<div class="validation-error">{{ $message }}</div>@enderror
+                                <label>Roles *</label>
+                                <x-ui.multi-role-select model="roleIds" :options="$roleOptions" :disabled="!$isEditing || !$canManageAccess || $targetIsSuperAdmin" placeholder="Select one or more roles" />
+                                <small>{{ $canManageAccess ? 'Permissions and record scopes are combined from all selected roles.' : 'Role permissions are managed by an administrator.' }}</small>
+                                @error('roleIds')<div class="validation-error">{{ $message }}</div>@enderror
+                                @error('roleIds.*')<div class="validation-error">{{ $message }}</div>@enderror
                             </div>
 
                             <div class="field">
@@ -237,7 +233,7 @@
 
                         <div class="ft-user-editor-permission-note">
                             <span aria-hidden="true">⌑</span>
-                            <span><b>Access remains role-based.</b> Changing a department or business unit does not silently add permissions. Review the role before saving.</span>
+                            <span><b>Access remains role-based.</b> Permissions are combined from every selected role. Department and business unit do not silently add permissions.</span>
                         </div>
 
                         @if(!$canManageAccess)
@@ -269,6 +265,14 @@
                             strengthLabel() {
                                 if (!this.password) return 'Leave blank or use at least 12 characters.';
                                 return ['Use at least 12 characters.', 'Weak', 'Fair', 'Good', 'Strong'][this.strength()];
+                            },
+                            passwordsMismatch() {
+                                const password = typeof this.password === 'string' ? this.password : '';
+                                const confirmation = typeof this.confirmation === 'string' ? this.confirmation : '';
+
+                                // Do not show a mismatch on an untouched edit form. Both fields are optional
+                                // and intentionally start blank so the existing password remains unchanged.
+                                return password.length > 0 && confirmation.length > 0 && password !== confirmation;
                             }
                         }"
                     >
@@ -305,7 +309,7 @@
                                             <button type="button" x-on:click="showConfirmation = !showConfirmation" x-text="showConfirmation ? 'Hide' : 'Show'"></button>
                                         </div>
                                     </div>
-                                    <div class="validation-error" x-show="confirmation && password !== confirmation" x-cloak>Passwords do not match.</div>
+                                    <div class="validation-error" x-show="passwordsMismatch()" x-cloak>Passwords do not match.</div>
                                     @error('newPasswordConfirmation')<div class="validation-error">{{ $message }}</div>@enderror
                                 </div>
                             </div>

@@ -6,10 +6,12 @@ use App\Models\ClientContact;
 use App\Models\CollectionUpdate;
 use App\Models\FlowJob;
 use App\Models\Invoice;
+use App\Models\MasterRecord;
 use App\Models\OrderCollection;
 use App\Models\Payment;
 use App\Models\User;
 use App\Support\JobDetailPresenter;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
@@ -64,12 +66,15 @@ class OrderFinanceService
         }
 
         $totalQty = max(1, (float) $items->sum(fn ($item) => max(0.01, (float) ($item->quantity ?? 1))));
-        $unitPrice = $orderValue > 0 ? round($orderValue / $totalQty, 2) : 0;
+        $fallbackUnitPrice = $orderValue > 0 ? round($orderValue / $totalQty, 2) : 0;
+        $hasLinePricing = $items->contains(fn ($item) => (float) ($item->unit_price ?? 0) > 0);
 
         return $items->map(fn ($item) => [
             'description' => trim((string) $item->product_name),
             'quantity' => max(0.01, (float) ($item->quantity ?? 1)),
-            'unit_price' => $unitPrice,
+            'unit_price' => $hasLinePricing
+                ? round(max(0, (float) ($item->unit_price ?? 0)), 2)
+                : $fallbackUnitPrice,
         ])->all();
     }
 
@@ -101,7 +106,7 @@ class OrderFinanceService
                 ->where('flow_job_id', $lockedJob->id)
                 ->whereNotIn('status', ['draft', 'cancelled'])
                 ->sum('total');
-            $total = (string) ($payload['type'] ?? '') === 'Final invoice'
+            $total = $this->isFinalInvoiceType((string) ($payload['type'] ?? ''))
                 ? round(max(0, $grossTotal - $previouslyInvoiced), 2)
                 : $grossTotal;
             abort_if($total <= 0, 422, 'There is no remaining amount to invoice for this order.');
@@ -135,6 +140,7 @@ class OrderFinanceService
 
             if ($supportingDocument) {
                 $path = $supportingDocument->store('invoices/'.$lockedJob->id, 'local');
+                throw_if(!$path, \RuntimeException::class, 'The supporting document could not be stored. Please try again.');
                 $invoice->update([
                     'supporting_document_path' => $path,
                     'supporting_document_name' => $supportingDocument->getClientOriginalName(),
@@ -148,13 +154,34 @@ class OrderFinanceService
                 'meta' => ['invoice_id' => $invoice->id, 'amount' => $total, 'currency' => $invoice->currency],
             ]);
 
+            $invoice = app(InvoicePdfService::class)->generate($invoice->load(['items', 'payments', 'billingContact']));
+
             return $invoice->load(['items', 'payments', 'billingContact']);
         }, 3);
     }
 
-    public function recordPayment(FlowJob $job, User $actor, array $payload): Payment
+    private function isFinalInvoiceType(string $type): bool
     {
-        return DB::transaction(function () use ($job, $actor, $payload): Payment {
+        $type = trim($type);
+        if ($type === '') return false;
+
+        $record = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('invoice_type')
+            ->active()
+            ->where('name', $type)
+            ->first(['code', 'name', 'metadata']);
+
+        if (!$record) return strcasecmp($type, 'Final invoice') === 0;
+
+        return strtolower(trim((string) data_get($record->metadata, 'invoice_kind'))) === 'final'
+            || str_contains(strtoupper((string) $record->code), 'FINAL')
+            || strcasecmp((string) $record->name, 'Final invoice') === 0;
+    }
+
+    public function recordPayment(FlowJob $job, User $actor, array $payload, ?UploadedFile $receipt = null): Payment
+    {
+        return DB::transaction(function () use ($job, $actor, $payload, $receipt): Payment {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $invoice = Invoice::query()
                 ->where('flow_job_id', $lockedJob->id)
@@ -167,6 +194,14 @@ class OrderFinanceService
             abort_if($amount > $invoice->balanceAmount() + 0.009, 422, 'Payment amount cannot exceed the invoice balance.');
 
             $sequence = ((int) Payment::query()->where('flow_job_id', $lockedJob->id)->max('sequence')) + 1;
+            $receiptPath = null;
+            $receiptName = null;
+            if ($receipt) {
+                $receiptPath = $receipt->store('payments/'.$lockedJob->id, 'local');
+                throw_if(!$receiptPath, \RuntimeException::class, 'The payment receipt could not be stored. Please try again.');
+                $receiptName = $receipt->getClientOriginalName();
+            }
+
             $payment = Payment::create([
                 'flow_job_id' => $lockedJob->id,
                 'invoice_id' => $invoice->id,
@@ -176,11 +211,19 @@ class OrderFinanceService
                 'method' => (string) $payload['method'],
                 'amount' => $amount,
                 'reference' => $payload['reference'] ?: null,
+                'received_account' => $payload['received_account'] ?: null,
+                'receipt_path' => $receiptPath,
+                'receipt_name' => $receiptName,
                 'notes' => $payload['notes'] ?: null,
                 'recorded_by' => $actor->id,
             ]);
 
-            $this->refreshInvoiceStatus($invoice->refresh()->load('payments'));
+            $refreshedInvoice = $invoice->refresh()->load('payments');
+            if (($payload['mark_invoice_paid'] ?? true) || $refreshedInvoice->balanceAmount() > 0.009) {
+                $this->refreshInvoiceStatus($refreshedInvoice);
+            } elseif ($refreshedInvoice->status === 'paid') {
+                $refreshedInvoice->update(['status' => 'sent']);
+            }
 
             $lockedJob->activities()->create([
                 'user_id' => $actor->id,

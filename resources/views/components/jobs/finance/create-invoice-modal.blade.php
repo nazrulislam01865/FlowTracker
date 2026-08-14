@@ -1,11 +1,17 @@
-@props(['job','contacts'=>collect(),'summary'=>[],'invoiceLineItems'=>[],'invoiceTaxRate'=>'0','invoiceCurrency'=>'USD','invoiceType'=>'Final invoice','invoiceSupportingDocument'=>null])
+@props(['job','contacts'=>collect(),'summary'=>[],'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'invoiceLineItems'=>[],'invoiceTaxRate'=>'0','invoiceCurrency'=>'USD','invoiceType'=>'Final invoice','invoiceSupportingDocument'=>null])
 @php
     $subtotal = collect($invoiceLineItems)->sum(fn($item) => max(0, (float)($item['quantity'] ?? 0)) * max(0, (float)($item['unit_price'] ?? 0)));
     $taxRate = max(0, min(100, (float)$invoiceTaxRate));
     $taxAmount = $subtotal * ($taxRate / 100);
     $total = $subtotal + $taxAmount;
     $previouslyInvoiced = (float)($summary['total_invoiced'] ?? 0);
-    $amountToInvoice = $invoiceType === 'Final invoice' ? max(0, $total - $previouslyInvoiced) : $total;
+    $selectedInvoiceType = $invoiceTypes->firstWhere('name', $invoiceType);
+    $isFinalInvoice = $selectedInvoiceType && (
+        strtolower(trim((string)data_get($selectedInvoiceType->metadata, 'invoice_kind'))) === 'final'
+        || str_contains(strtoupper((string)$selectedInvoiceType->code), 'FINAL')
+        || strcasecmp((string)$selectedInvoiceType->name, 'Final invoice') === 0
+    );
+    $amountToInvoice = $isFinalInvoice ? max(0, $total - $previouslyInvoiced) : $total;
     $currencyPrefix = strtoupper($invoiceCurrency) === 'USD' ? '$' : strtoupper($invoiceCurrency).' ';
 @endphp
 <div class="ft-finance-modal-backdrop" wire:key="create-invoice-modal" wire:click.self="closeCreateInvoice">
@@ -18,10 +24,10 @@
         @error('invoiceForm')<div class="ft-finance-form-alert">{{ $message }}</div>@enderror
 
         <div class="ft-invoice-form-grid">
-            <label><span>Invoice type <b>*</b></span><select wire:model.live="invoiceType"><option>Final invoice</option><option>Deposit invoice</option><option>Progress invoice</option></select>@error('invoiceType')<small class="error">{{ $message }}</small>@enderror</label>
-            <label><span>Currency <b>*</b></span><select wire:model.live="invoiceCurrency"><option value="USD">USD</option><option value="EUR">EUR</option><option value="GBP">GBP</option><option value="CNY">CNY</option><option value="HKD">HKD</option></select>@error('invoiceCurrency')<small class="error">{{ $message }}</small>@enderror</label>
+            <label><span>Invoice type <b>*</b></span><select wire:model.live="invoiceType"><option value="">Select invoice type</option>@foreach($invoiceTypes as $option)<option value="{{ $option->name }}">{{ $option->name }}</option>@endforeach</select>@error('invoiceType')<small class="error">{{ $message }}</small>@enderror</label>
+            <label><span>Currency <b>*</b></span><select wire:model.live="invoiceCurrency"><option value="">Select currency</option>@foreach($currencies as $option)@php($currencyCode = strtoupper((string)($option->code ?: $option->name)))<option value="{{ $currencyCode }}">{{ $currencyCode }}@if(trim((string)$option->name) !== $currencyCode) · {{ $option->name }}@endif</option>@endforeach</select>@error('invoiceCurrency')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Issue date <b>*</b></span><input type="date" wire:model.live="invoiceIssueDate">@error('invoiceIssueDate')<small class="error">{{ $message }}</small>@enderror</label>
-            <label><span>Payment terms <b>*</b></span><select wire:model.live="invoicePaymentTerms"><option value="0">Due on receipt</option><option value="7">Net 7 days</option><option value="15">Net 15 days</option><option value="30">Net 30 days</option><option value="45">Net 45 days</option><option value="60">Net 60 days</option></select></label>
+            <label><span>Payment terms <b>*</b></span><select wire:model.live="invoicePaymentTerms"><option value="">Select payment terms</option>@foreach($paymentTerms as $option)<option value="{{ $option->name }}">{{ $option->name }}</option>@endforeach</select>@error('invoicePaymentTerms')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Due date <b>*</b></span><input type="date" wire:model="invoiceDueDate">@error('invoiceDueDate')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Billing contact <b>*</b></span><select wire:model="invoiceBillingContactId"><option value="">{{ $job->client?->contact_name ?: 'Primary client contact' }}</option>@foreach($contacts as $contact)<option value="{{ $contact->id }}">{{ $contact->name }}@if($contact->email) · {{ $contact->email }}@endif</option>@endforeach</select>@error('invoiceBillingContactId')<small class="error">{{ $message }}</small>@enderror</label>
         </div>
@@ -50,9 +56,9 @@
                 <label><span>Purchase order reference</span><input type="text" wire:model="invoicePurchaseOrderReference" placeholder="PO-2026-4481">@error('invoicePurchaseOrderReference')<small class="error">{{ $message }}</small>@enderror</label>
                 <label><span>Notes / payment instructions</span><textarea wire:model="invoiceNotes"></textarea>@error('invoiceNotes')<small class="error">{{ $message }}</small>@enderror</label>
                 <label class="ft-invoice-upload"><span class="ft-paperclip" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M8.5 12.5 14.8 6.2a3.1 3.1 0 1 1 4.4 4.4l-8.1 8.1a5 5 0 0 1-7.1-7.1l8.2-8.2"></path></svg></span><span class="ft-upload-copy">Attach supporting document</span><span class="ft-upload-browse">Browse</span><input type="file" wire:model="invoiceSupportingDocument" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.csv,.txt"></label>
-                @if($invoiceSupportingDocument)<small class="ft-upload-name">{{ $invoiceSupportingDocument->getClientOriginalName() }}</small>@endif
+                <div class="ft-finance-uploading" wire:loading wire:target="invoiceSupportingDocument">Uploading document…</div>
+                <x-jobs.finance.upload-preview :file="$invoiceSupportingDocument" remove-action="clearInvoiceSupportingDocument" title="Supporting document" />
                 @error('invoiceSupportingDocument')<small class="error">{{ $message }}</small>@enderror
-                <label class="ft-invoice-checkbox"><input type="checkbox" wire:model="invoiceEmailAfterCreation"><span>Email invoice to the billing contact after creation</span></label>
             </div>
             <aside class="ft-invoice-summary">
                 <div><span>Subtotal</span><strong>{{ $currencyPrefix }}{{ number_format($subtotal, 2) }}</strong></div>
@@ -65,7 +71,7 @@
 
         <footer class="ft-finance-modal-foot">
             <span>Invoice number will be generated automatically.</span>
-            <div><button type="button" class="secondary" wire:click="createInvoice(true)" wire:loading.attr="disabled" wire:target="createInvoice">Save as draft</button><button type="button" class="primary" wire:click="createInvoice(false)" wire:loading.attr="disabled" wire:target="createInvoice">Create &amp; send</button></div>
+            <div><button type="button" class="secondary" wire:click="createInvoice(true)" wire:loading.attr="disabled" wire:target="createInvoice">Save as draft</button><button type="button" class="primary" wire:click="createInvoice(false)" wire:loading.attr="disabled" wire:target="createInvoice">Create</button></div>
         </footer>
     </section>
 </div>

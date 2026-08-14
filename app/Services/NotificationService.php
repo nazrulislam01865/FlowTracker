@@ -707,6 +707,7 @@ class NotificationService
             ->where('is_active', true)
             ->where(function ($q) {
                 $q->where('is_super_admin', true)
+                    ->orWhereHas('roles', fn ($r) => $r->where('is_active', true)->whereIn('slug', ['super-admin','admin','administrator']))
                     ->orWhereHas('role', fn ($r) => $r->whereIn('slug', ['super-admin','admin','administrator']));
             })
             ->pluck('id');

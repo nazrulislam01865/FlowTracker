@@ -1093,11 +1093,11 @@ class Index extends Component
                     $search = trim($this->clientOrderSearch);
                     $legacy = preg_replace('/^ORDER-/i', 'JOB-', $search) ?: $search;
                     $query->where(function ($match) use ($search, $legacy) {
-                        $match->where('job_number', 'like', "%{$search}%")
-                            ->orWhere('job_number', 'like', "%{$legacy}%")
-                            ->orWhere('order_number', 'like', "%{$search}%")
-                            ->orWhere('title', 'like', "%{$search}%")
-                            ->orWhere('product', 'like', "%{$search}%");
+                        $match->whereLike('job_number', "%{$search}%")
+                            ->orWhereLike('job_number', "%{$legacy}%")
+                            ->orWhereLike('order_number', "%{$search}%")
+                            ->orWhereLike('title', "%{$search}%")
+                            ->orWhereLike('product', "%{$search}%");
                     });
                 })
                 ->when($this->clientOrderStatus !== '', fn ($query) => $query->where('status', $this->clientOrderStatus))

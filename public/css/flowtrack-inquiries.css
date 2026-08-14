@@ -4094,3 +4094,15 @@ body > .ft-mention-menu{z-index:1705}
     text-align:left;
   }
 }
+
+/* 2026-08-14: Client-specific table row tones.
+   IID rows use a subtle light green; NEP rows use a subtle light blue. */
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-iid,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-iid:nth-child(odd),
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-iid:nth-child(even){background:#eef9f1!important}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-nep,
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-nep:nth-child(odd),
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-nep:nth-child(even){background:#eef6ff!important}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-iid:hover{background:#e5f5ea!important}
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-list-body>.row.ft-client-row-nep:hover{background:#e4f0ff!important}
+

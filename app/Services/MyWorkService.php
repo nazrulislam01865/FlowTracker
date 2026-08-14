@@ -21,12 +21,12 @@ class MyWorkService
     {
         $access = app(AccessControlService::class);
         $quick = (string) ($filters['quick'] ?? 'all');
-        $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
+        $hideCompleted = (bool) ($filters['hide_completed'] ?? false);
         $showCompleted = !$hideCompleted && $quick === 'all';
 
-        // Completed work is hidden by default in every My Work list. It can be
-        // revealed only from the explicit All view by turning off Hide completed.
-        // Action/date/mention views always stay open-task-only.
+        // Completed work is visible by default in the neutral My Work view.
+        // Action/date/mention views remain open-task-only; Hide completed can be
+        // enabled explicitly from the toolbar when the user wants a tighter list.
         $baseTasks = $this->personalTaskQuery(
             $user,
             $filters,
@@ -139,7 +139,7 @@ class MyWorkService
                 'number' => (string) $job->displayOrderNumber(),
                 'title' => (string) $job->title,
                 'client' => (string) ($job->getAttribute('my_work_client_name') ?: 'No client'),
-                'stage' => (string) ($job->getAttribute('my_work_phase_short_name') ?: $job->getAttribute('my_work_phase_name') ?: 'No phase'),
+                'stage' => (string) ($job->getAttribute('my_work_phase_name') ?: $job->getAttribute('my_work_phase_short_name') ?: 'No phase'),
                 'health' => (string) ($job->health ?: 'On Track'),
                 'healthTone' => $this->tone((string) ($job->health ?: 'On Track')),
                 'progress' => max(0, min(100, (int) $job->progress)),
@@ -173,8 +173,11 @@ class MyWorkService
         $administrator = $access->isAdministrator($user);
 
         if (!$administrator) {
-            $scope = $access->scope($user, 'tasks');
-            if (!$access->can($user, 'tasks', 'view') || $scope === 'none' || ($scope === 'department' && !$user->department_id)) {
+            $scopes = $access->scopes($user, 'tasks');
+            $usableScopes = array_values(array_diff($scopes, ['none']));
+            if (!$access->can($user, 'tasks', 'view')
+                || $usableScopes === []
+                || ($usableScopes === ['department'] && !$user->department_id)) {
                 return $this->emptyMetrics();
             }
         }
@@ -262,6 +265,48 @@ class MyWorkService
         ];
     }
 
+
+    /** @return list<string> */
+    public function orderPhaseOptions(): array
+    {
+        return DB::table('workflow_phases as my_work_filter_phases')
+            ->join('workflow_templates as my_work_filter_workflows', 'my_work_filter_workflows.id', '=', 'my_work_filter_phases.workflow_template_id')
+            ->where('my_work_filter_workflows.applies_to', 'orders')
+            ->where('my_work_filter_workflows.is_active', true)
+            ->where('my_work_filter_phases.is_active', true)
+            ->whereNotNull('my_work_filter_phases.name')
+            ->where('my_work_filter_phases.name', '!=', '')
+            ->orderBy('my_work_filter_phases.sequence')
+            ->orderBy('my_work_filter_phases.name')
+            ->get(['my_work_filter_phases.name', 'my_work_filter_phases.sequence'])
+            ->map(fn ($phase) => trim((string) $phase->name))
+            ->filter()
+            ->unique(fn ($name) => mb_strtolower($name))
+            ->values()
+            ->all();
+    }
+
+    /** @return list<int> */
+    private function orderPhaseSourceIdsForName(string $phaseName): array
+    {
+        $normalizedPhase = mb_strtolower(trim($phaseName));
+        if ($normalizedPhase === '') return [];
+
+        return DB::table('workflow_phases as my_work_source_phases')
+            ->join('workflow_templates as my_work_source_workflows', 'my_work_source_workflows.id', '=', 'my_work_source_phases.workflow_template_id')
+            ->where('my_work_source_workflows.applies_to', 'orders')
+            ->where('my_work_source_workflows.is_active', true)
+            ->where('my_work_source_phases.is_active', true)
+            ->whereRaw('LOWER(TRIM(my_work_source_phases.name)) = ?', [$normalizedPhase])
+            ->selectRaw('COALESCE(my_work_source_phases.source_workflow_phase_id, my_work_source_phases.id) AS source_phase_id')
+            ->pluck('source_phase_id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+    }
+
     /** @return list<string> */
     public function statusOptions(): array
     {
@@ -342,25 +387,43 @@ class MyWorkService
                 // it must never fan out into title/client/assignee contains
                 // searches. Keep this tiny-input path index-friendly.
                 $query->where(function (Builder $inner) use ($prefix) {
-                    $inner->where('tasks.task_number', 'like', $prefix)
+                    $inner->whereLike('tasks.task_number', $prefix)
                         ->orWhereHas('job', fn (Builder $job) => $job
-                            ->where('job_number', 'like', $prefix)
-                            ->orWhere('order_number', 'like', $prefix));
+                            ->whereLike('job_number', $prefix)
+                            ->orWhereLike('order_number', $prefix));
                 });
             } else {
                 $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference) {
-                    $inner->where('tasks.task_number', 'like', $looksLikeReference ? $prefix : $like)
-                        ->orWhere('tasks.title', 'like', $like)
-                        ->orWhere('tasks.attention_reason', 'like', $like)
-                        ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->where('name', 'like', $like))
-                        ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
+                    $inner->whereLike('tasks.task_number', $looksLikeReference ? $prefix : $like)
+                        ->orWhereLike('tasks.title', $like)
+                        ->orWhereLike('tasks.attention_reason', $like)
+                        ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->whereLike('name', $like))
+                        ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like))
                         ->orWhereHas('job', fn (Builder $job) => $job
-                            ->where('job_number', 'like', $looksLikeReference ? $prefix : $like)
-                            ->orWhere('order_number', 'like', $looksLikeReference ? $prefix : $like)
-                            ->orWhere('title', 'like', $like)
-                            ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like)));
+                            ->whereLike('job_number', $looksLikeReference ? $prefix : $like)
+                            ->orWhereLike('order_number', $looksLikeReference ? $prefix : $like)
+                            ->orWhereLike('title', $like)
+                            ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like)));
                 });
             }
+        }
+
+        $phase = trim((string) ($filters['phase'] ?? ''));
+        if ($phase !== '') {
+            $normalizedPhase = mb_strtolower($phase);
+            $sourcePhaseIds = $this->orderPhaseSourceIdsForName($phase);
+
+            $query->whereHas('phase', function (Builder $phaseQuery) use ($normalizedPhase, $sourcePhaseIds): void {
+                $phaseQuery->where(function (Builder $phaseMatch) use ($normalizedPhase, $sourcePhaseIds): void {
+                    $phaseMatch->whereRaw('LOWER(TRIM(workflow_phases.name)) = ?', [$normalizedPhase]);
+
+                    if ($sourcePhaseIds !== []) {
+                        $phaseMatch
+                            ->orWhereIn('workflow_phases.source_workflow_phase_id', $sourcePhaseIds)
+                            ->orWhereIn('workflow_phases.id', $sourcePhaseIds);
+                    }
+                });
+            });
         }
 
         $this->applyQuickFilter($query, $user, (string) ($filters['quick'] ?? 'all'));
@@ -485,7 +548,7 @@ class MyWorkService
             'id' => (int) $task->id,
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
-            'phase' => (string) ($task->getAttribute('my_work_phase_short_name') ?: $task->getAttribute('my_work_phase_name') ?: 'No phase'),
+            'phase' => (string) ($task->getAttribute('my_work_phase_name') ?: $task->getAttribute('my_work_phase_short_name') ?: 'No phase'),
             'assignee' => (string) ($task->getAttribute('my_work_assignee_name') ?: 'Unassigned'),
             'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : null,
             'assigneeAvatar' => ($task->assignee_id && $task->getAttribute('my_work_assignee_profile_image_path'))

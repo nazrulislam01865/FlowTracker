@@ -338,7 +338,7 @@ class Index extends Component
     {
         $this->authorizeCreateInquiryProducts();
         abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
-        $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1];
+        $this->createProductRows[] = ['category' => '', 'product' => '', 'quantity' => 1, 'unit_price' => ''];
     }
 
     public function removeCreateProductRow(int $index): void
@@ -399,6 +399,7 @@ class Index extends Component
                 'category' => $productCategory,
                 'product' => (string) $product->name,
                 'quantity' => 1000,
+                'unit_price' => '',
                 'notes' => '',
             ];
         }
@@ -1076,12 +1077,13 @@ class Index extends Component
                 'category' => (string) ($item->category ?? ''),
                 'product' => (string) $item->item_name,
                 'quantity' => max(1, (int) round((float) $item->quantity)),
+                'unit_price' => $item->unit_price !== null ? (string) $item->unit_price : '',
             ])
             ->values()
             ->all();
 
         if ($this->inquiryProductRows === []) {
-            $this->inquiryProductRows = [['id' => null, 'category' => '', 'product' => '', 'quantity' => 1]];
+            $this->inquiryProductRows = [['id' => null, 'category' => '', 'product' => '', 'quantity' => 1, 'unit_price' => '']];
         }
 
         $this->inquiryCategoryFilterOptions = app(\App\Services\FilterOptionService::class)
@@ -1103,7 +1105,7 @@ class Index extends Component
     {
         abort_unless($this->editingInquiryProducts, 422);
         abort_if(count($this->inquiryProductRows) >= 25, 422, 'An Inquiry can contain up to 25 product rows.');
-        $this->inquiryProductRows[] = ['id' => null, 'category' => '', 'product' => '', 'quantity' => 1];
+        $this->inquiryProductRows[] = ['id' => null, 'category' => '', 'product' => '', 'quantity' => 1, 'unit_price' => ''];
     }
 
     public function removeInquiryProductRow(int $index): void
@@ -1169,6 +1171,7 @@ class Index extends Component
             'inquiryProductRows.*.category' => ['required', 'string', 'max:255'],
             'inquiryProductRows.*.product' => ['required', 'string', 'max:255'],
             'inquiryProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'inquiryProductRows.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
         ]);
 
         $options = app(\App\Services\FilterOptionService::class);
@@ -1196,6 +1199,7 @@ class Index extends Component
             'category' => trim((string) $row['category']),
             'name' => trim((string) $row['product']),
             'quantity' => (int) $row['quantity'],
+            'unit_price' => filled($row['unit_price'] ?? null) ? round((float) $row['unit_price'], 2) : null,
             'unit' => 'pcs',
         ], $data['inquiryProductRows']), auth()->user());
 
@@ -2122,7 +2126,7 @@ class Index extends Component
                 ->forWorkspace($workspaceId)
                 ->ofType('product_category')
                 ->active()
-                ->when($categorySearch !== '', fn ($query) => $query->where('name', 'like', '%'.$categorySearch.'%'))
+                ->when($categorySearch !== '', fn ($query) => $query->whereLike('name', '%'.$categorySearch.'%'))
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->limit(6)
@@ -2147,7 +2151,7 @@ class Index extends Component
                         ->ofType('product_category')
                         ->active()
                         ->where(function ($query) use ($tokens) {
-                            foreach ($tokens as $token) $query->orWhere('name', 'like', '%'.$token.'%');
+                            foreach ($tokens as $token) $query->orWhereLike('name', '%'.$token.'%');
                         })
                         ->when($newProductCategoryMatches->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $newProductCategoryMatches->pluck('id')))
                         ->orderBy('name')
@@ -2172,7 +2176,7 @@ class Index extends Component
                     ->ofType('product')
                     ->active()
                     ->with('parent:id,name,status')
-                    ->where('name', 'like', '%'.$nameSearch.'%')
+                    ->whereLike('name', '%'.$nameSearch.'%')
                     ->when($duplicateProduct, fn ($query) => $query->whereKeyNot($duplicateProduct->id))
                     ->orderBy('name')
                     ->limit(3)
@@ -2344,6 +2348,7 @@ class Index extends Component
                 'category' => trim((string) ($row['category'] ?? '')),
                 'product' => trim((string) ($row['product'] ?? '')),
                 'quantity' => $row['quantity'] ?? 1,
+                'unit_price' => $row['unit_price'] ?? '',
                 'notes' => trim((string) ($row['notes'] ?? '')),
             ])
             ->filter(fn (array $row): bool => $row['product_id'] > 0 || $row['category'] !== '' || $row['product'] !== '')
@@ -2375,6 +2380,7 @@ class Index extends Component
             'createProductRows.*.category' => ['required', 'string', 'max:255'],
             'createProductRows.*.product' => ['required', 'string', 'max:255'],
             'createProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'createProductRows.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'createProductRows.*.notes' => ['nullable', 'string', 'max:2000'],
             'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
         ]);
@@ -2486,6 +2492,7 @@ class Index extends Component
                 'category' => trim((string) $row['category']),
                 'name' => trim((string) $row['product']),
                 'quantity' => (int) $row['quantity'],
+                'unit_price' => filled($row['unit_price'] ?? null) ? round((float) $row['unit_price'], 2) : null,
                 'unit' => 'pcs',
                 'notes' => trim((string) ($row['notes'] ?? '')),
             ], $data['createProductRows']),

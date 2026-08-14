@@ -33,8 +33,7 @@ class AdminService
         $workspaceId = $this->workspaceId();
 
         return User::with([
-                'role',
-                'department',
+                'role', 'roles', 'department',
                 'workspaceMemberships' => fn ($q) => $q
                     ->where('workspace_id', $workspaceId)
                     ->select(['id', 'workspace_id', 'user_id', 'job_title']),
@@ -70,60 +69,68 @@ class AdminService
     {
         $actor = auth()->user();
         $this->assertAdministrator($actor);
-        $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
+        $roles = $this->resolveRoles($data['role_ids'] ?? [$data['role_id'] ?? null]);
+        $primaryRole = $roles->first();
         $position = $this->normalizePosition($data['position'] ?? null);
-        unset($data['position']);
-        $data['role_id'] = $role->id;
+        unset($data['position'], $data['role_ids']);
+        $data['role_id'] = $primaryRole->id;
         $userDefaults = ['password' => Hash::make($data['password']), 'is_active' => true, 'locale' => 'en'];
         if (Schema::hasColumn('users', 'account_status')) $userDefaults['account_status'] = 'active';
-        $user = User::create(array_merge($data, $userDefaults));
-        $this->syncMembership($user, ['job_title' => $position]);
-        $this->audit($user, 'access.user_created', 'User created and assigned to role '.$user->role?->name, $actor);
-        $user->load('role');
+
+        $user = DB::transaction(function () use ($data, $userDefaults, $roles, $position) {
+            $user = User::create(array_merge($data, $userDefaults));
+            $user->roles()->sync($roles->pluck('id')->all());
+            $this->syncMembership($user, ['job_title' => $position]);
+            return $user;
+        });
+
+        $this->audit($user, 'access.user_created', 'User created with roles '.$roles->pluck('name')->join(', '), $actor);
+        $user->load(['role', 'roles']);
         app(NotificationService::class)->backfillAdministratorMentions($user);
         return $user;
     }
-
 
     public function updateUser(User $user, array $data, User $actor): User
     {
         $this->assertAdministrator($actor);
         $wasAdministrator = app(AccessControlService::class)->isAdministrator($user);
-        $role = Role::where('workspace_id', $this->workspaceId())->findOrFail((int) $data['role_id']);
+        $roles = $this->resolveRoles($data['role_ids'] ?? [$data['role_id'] ?? null]);
         $position = $this->normalizePosition($data['position'] ?? null);
-
         $isActive = (bool) ($data['is_active'] ?? true);
+
+        $currentRoleIds = $user->assignedRoleIds();
+        if ($user->isSuperAdmin()) {
+            $roles = Role::query()->whereIn('id', $currentRoleIds)->get();
+            $isActive = true;
+        }
+        $primaryRole = $roles->firstWhere('id', $user->role_id) ?: $roles->first();
+
         $changes = [
             'name' => trim($data['name']),
             'email' => trim($data['email']),
-            'role_id' => $role->id,
+            'role_id' => $primaryRole?->id,
             'department_id' => $data['department_id'] ?: null,
             'is_active' => $isActive,
         ];
         if (Schema::hasColumn('users', 'account_status')) $changes['account_status'] = $isActive ? 'active' : 'inactive';
         if (!empty($data['password'])) $changes['password'] = Hash::make($data['password']);
 
-        // Do not allow an administrator account to accidentally remove the last protected
-        // Super Admin identity. Password/name/email edits are still allowed.
-        if ($user->isSuperAdmin()) {
-            $changes['role_id'] = $user->role_id;
-            $changes['is_active'] = true;
-            if (Schema::hasColumn('users', 'account_status')) $changes['account_status'] = 'active';
-        }
-
         $passwordChanged = array_key_exists('password', $changes);
-        $user->update($changes);
-        $this->syncMembership($user, ['job_title' => $position]);
+        DB::transaction(function () use ($user, $changes, $roles, $position): void {
+            $user->update($changes);
+            $user->roles()->sync($roles->pluck('id')->all());
+            $this->syncMembership($user, ['job_title' => $position]);
+        });
 
         if ($passwordChanged && Schema::hasTable('sessions')) {
             DB::table('sessions')->where('user_id', $user->id)->delete();
         }
 
-        $this->audit($user, 'access.user_updated', 'Updated user '.$user->name.($passwordChanged ? ' and changed password' : ''), $actor);
-        $fresh = $user->refresh()->load('role');
+        $this->audit($user, 'access.user_updated', 'Updated user '.$user->name.'; roles: '.$roles->pluck('name')->join(', ').($passwordChanged ? '; password changed' : ''), $actor);
+        $fresh = $user->refresh()->load(['role','roles']);
         app(DashboardService::class)->forget($fresh);
         app(ShellDataService::class)->forget((int) $fresh->id);
-        app(AccessControlService::class)->forgetRole((int) $role->id);
+        foreach ($roles as $role) app(AccessControlService::class)->forgetRole((int) $role->id);
         app(WorkspaceRefreshService::class)->touch('role-access');
         if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
             app(NotificationService::class)->backfillAdministratorMentions($fresh);
@@ -285,18 +292,34 @@ class AdminService
 
     public function assignRole(User $user, Role $role, User $actor): void
     {
+        $this->syncUserRoles($user, [$role->id], $actor);
+    }
+
+    public function syncUserRoles(User $user, array $roleIds, User $actor): void
+    {
         $this->assertAdministrator($actor);
         $wasAdministrator = app(AccessControlService::class)->isAdministrator($user);
-        $this->assertRoleWorkspace($role);
-        abort_if($user->isSuperAdmin() && $role->slug !== 'super-admin', 422, 'A Super Admin cannot be downgraded here.');
-        $old = $user->role?->name ?: 'No role';
-        $user->update(['role_id' => $role->id]);
-        $this->syncMembership($user);
-        $this->audit($user, 'access.role_assigned', 'Role changed from '.$old.' to '.$role->name, $actor, ['old' => $old, 'new' => $role->name]);
-        $fresh = $user->refresh()->load('role');
+        $roles = $this->resolveRoles($roleIds);
+
+        if ($user->isSuperAdmin()) {
+            abort_unless($roles->contains(fn (Role $role) => $role->slug === 'super-admin'), 422, 'A Super Admin cannot be downgraded here.');
+        }
+
+        $oldNames = $user->assignedRoles()->pluck('name')->all();
+        $primaryRole = $roles->firstWhere('id', $user->role_id) ?: $roles->first();
+
+        DB::transaction(function () use ($user, $roles, $primaryRole): void {
+            $user->update(['role_id' => $primaryRole->id]);
+            $user->roles()->sync($roles->pluck('id')->all());
+            $this->syncMembership($user);
+        });
+
+        $newNames = $roles->pluck('name')->all();
+        $this->audit($user, 'access.roles_assigned', 'Roles changed from '.implode(', ', $oldNames).' to '.implode(', ', $newNames), $actor, ['old' => $oldNames, 'new' => $newNames]);
+        $fresh = $user->refresh()->load(['role','roles']);
         app(DashboardService::class)->forget($fresh);
         app(ShellDataService::class)->forget((int) $fresh->id);
-        app(AccessControlService::class)->forgetRole((int) $role->id);
+        foreach ($roles as $role) app(AccessControlService::class)->forgetRole((int) $role->id);
         app(WorkspaceRefreshService::class)->touch('role-access');
         if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
             app(NotificationService::class)->backfillAdministratorMentions($fresh);
@@ -357,6 +380,27 @@ class AdminService
         $r->update(['is_active' => !$r->is_active]);
     }
 
+
+    private function resolveRoles(array $roleIds)
+    {
+        $ids = collect($roleIds)
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        abort_if($ids->isEmpty(), 422, 'Select at least one role.');
+
+        $roles = Role::query()
+            ->where('workspace_id', $this->workspaceId())
+            ->whereIn('id', $ids)
+            ->get()
+            ->keyBy('id');
+
+        abort_unless($roles->count() === $ids->count(), 422, 'One or more selected roles are invalid for this workspace.');
+
+        return $ids->map(fn ($id) => $roles->get($id))->values();
+    }
 
     private function workspaceId(): int
     {

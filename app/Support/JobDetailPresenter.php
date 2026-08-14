@@ -93,9 +93,11 @@ final class JobDetailPresenter
                 ?: $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            $received = self::documentsForTask($job, $task)->filter(fn ($document) =>
-                strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
-            )->count();
+            // A required document is fulfilled by any real Document linked to
+            // this exact task. task_id is the authoritative relationship; the
+            // category label is presentation metadata and may differ on legacy
+            // uploads that were stored as generic task attachments.
+            $received = self::documentsForTask($job, $task)->count();
 
             $requirements->push((object) [
                 'phase' => $phase,
@@ -123,9 +125,11 @@ final class JobDetailPresenter
             $name = $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            $received = self::documentsForTask($job, $task)->filter(fn ($document) =>
-                strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
-            )->count();
+            // A required document is fulfilled by any real Document linked to
+            // this exact task. task_id is the authoritative relationship; the
+            // category label is presentation metadata and may differ on legacy
+            // uploads that were stored as generic task attachments.
+            $received = self::documentsForTask($job, $task)->count();
 
             $requirements->push((object) [
                 'phase' => $phase,

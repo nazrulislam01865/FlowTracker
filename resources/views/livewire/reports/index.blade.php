@@ -239,30 +239,6 @@
             <article class="ii-card ii-metricdef"><b>Coaching, not punishment</b><p>Use low scores to diagnose training, workload, supplier or process issues before judging performance.</p></article>
         </div>
 
-        <div class="ii-sect"><div><h2>Developer implementation guide</h2><p>Data model, formulas and deterministic rules used by this report</p></div><small>FlowTrack implementation</small></div>
-        <div class="ii-devnote"><b>Core principle: use stored events, then calculate metrics</b><p>The report reads inquiry/task timestamps, due dates, task evidence, task reopen activities, structured inquiry items and linked orders. Calculated scores remain derived rather than manually editable.</p></div>
-
-        <div class="ii-sect"><div><h2>1. Required event fields</h2><p>Source data used for reliable calculations</p></div></div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Entity</th><th>Required fields</th><th>Purpose / rule</th></tr></thead><tbody>
-            <tr><td><b>Inquiry task</b></td><td><span class="ii-codekey">inquiry_id</span> <span class="ii-codekey">assignee_id</span> <span class="ii-codekey">status</span> <span class="ii-codekey">due_date</span></td><td>Stable ownership, workload and SLA basis.</td></tr>
-            <tr><td><b>Time events</b></td><td><span class="ii-codekey">started_at</span> <span class="ii-codekey">created_at</span> <span class="ii-codekey">completed_at</span></td><td>Use started_at when present; otherwise assignment/create time is the fallback.</td></tr>
-            <tr><td><b>Completion quality</b></td><td><span class="ii-codekey">inquiry.task_reopened</span> activity with <span class="ii-codekey">inquiry_task_id</span></td><td>Determines first-pass quality and reopen rate.</td></tr>
-            <tr><td><b>Task evidence</b></td><td><span class="ii-codekey">requires_submission</span> plus inquiry task documents</td><td>Determines file compliance for completed evidence-required tasks.</td></tr>
-            <tr><td><b>Product lines</b></td><td><span class="ii-codekey">category</span> <span class="ii-codekey">item_name</span> <span class="ii-codekey">quantity</span></td><td>Drives product coverage, category demand and quantity metrics.</td></tr>
-            <tr><td><b>Order conversion</b></td><td><span class="ii-codekey">converted_job_id</span> or <span class="ii-codekey">source_inquiry_id</span></td><td>Counts inquiry-to-order conversion without inventing a separate offer entity.</td></tr>
-        </tbody></table></article>
-
-        <div class="ii-sect"><div><h2>2. Calculation formulas</h2><p>Calculated on each report refresh from the selected dataset</p></div></div>
-        <div class="ii-guidegrid">
-            <article class="ii-card ii-guidecard"><h3>Task cycle hours</h3><div class="ii-formula">cycle_hours = (completed_at − COALESCE(started_at, created_at)) / 3600</div><p>The fallback keeps older task records reportable while preserving the preferred actual-start timestamp.</p></article>
-            <article class="ii-card ii-guidecard"><h3>Speed score</h3><div class="ii-formula">speed = MIN(100, team_median_cycle / employee_avg_cycle × 100)</div><p>Speed is capped at 100 so very short tasks cannot dominate the total score.</p></article>
-            <article class="ii-card ii-guidecard"><h3>Productivity score</h3><div class="ii-formula">productivity = MIN(100, completed_tasks / team_median_completed × 100)</div><p>Used only as one component; it does not replace quality or on-time delivery.</p></article>
-            <article class="ii-card ii-guidecard"><h3>On-time score</h3><div class="ii-formula">on_time_pct = completed_by_due_date / completed_tasks_with_due_date × 100</div><p>Tasks without due dates are excluded from the due-date denominator.</p></article>
-            <article class="ii-card ii-guidecard"><h3>First-pass quality</h3><div class="ii-formula">quality = 100 − (unique_reopened_completed_tasks / completed_tasks × 100)</div><p>Reopen activity is counted once per task in the selected report dataset.</p></article>
-            <article class="ii-card ii-guidecard"><h3>Workload reliability</h3><div class="ii-formula">reliability = 100 − (overdue_open_tasks / open_tasks × 100)</div><p>When an assignee has no open tasks, reliability is 100.</p></article>
-            <article class="ii-card ii-guidecard"><h3>Composite efficiency</h3><div class="ii-formula ii-green">efficiency = 0.30×speed + 0.25×on_time + 0.20×productivity + 0.15×quality + 0.10×reliability</div><p>Displayed score is rounded; components are calculated before rounding.</p></article>
-            <article class="ii-card ii-guidecard"><h3>Inquiry-to-order conversion</h3><div class="ii-formula ii-green">conversion_pct = linked_orders / completed_inquiries × 100</div><p>Attribution uses the inquiry owner when available, then the latest task assignee as fallback.</p></article>
-        </div>
     </section>
 
     <section class="ii-panel {{ $activeTab === 'products' ? 'active' : '' }}" @if($activeTab !== 'products') hidden @endif>

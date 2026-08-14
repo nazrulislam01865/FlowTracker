@@ -182,8 +182,8 @@ class Form extends Component
                 ->where('is_active', true)
                 ->when($selectedIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $selectedIds))
                 ->when(strlen($search) >= 1, fn ($query) => $query->where(function ($match) use ($search): void {
-                    $match->where('name', 'like', '%'.$search.'%')
-                        ->orWhere('code', 'like', $search.'%');
+                    $match->whereLike('name', '%'.$search.'%')
+                        ->orWhereLike('code', $search.'%');
                 }))
                 ->orderBy('name')
                 ->limit(20)

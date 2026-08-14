@@ -10,56 +10,63 @@
             <h1>My Work</h1>
             <p>Your assigned tasks, grouped by Order and ranked by what needs action first.</p>
         </div>
-        <a class="row-action" style="width:auto;padding:0 10px" href="{{ route('all-tasks') }}" wire:navigate>All Tasks</a>
     </div>
 
 
     <section class="work-view" aria-busy="false">
         <div class="metrics" aria-label="Personal work summary">
-            <button type="button" class="metric amber {{ $quick === 'attention' ? 'active' : '' }}" wire:click="setQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention ?? '—'">{{ $metrics['attention'] ?? '—' }}</strong></span><i>⚑</i></button>
-            <button type="button" class="metric red {{ $quick === 'overdue' ? 'active' : '' }}" wire:click="setQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue ?? '—'">{{ $metrics['overdue'] ?? '—' }}</strong></span><i>!</i></button>
-            <button type="button" class="metric amber {{ $quick === 'today' ? 'active' : '' }}" wire:click="setQuick('today')"><span><small>Due today</small><strong x-text="metrics.today ?? '—'">{{ $metrics['today'] ?? '—' }}</strong></span><i>◷</i></button>
-            <button type="button" class="metric {{ $quick === 'upcoming' ? 'active' : '' }}" wire:click="setQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming ?? '—'">{{ $metrics['upcoming'] ?? '—' }}</strong></span><i>→</i></button>
-            <button type="button" class="metric {{ $quick === 'waiting' ? 'active' : '' }}" wire:click="setQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting ?? '—'">{{ $metrics['waiting'] ?? '—' }}</strong></span><i>⌛</i></button>
+            <button type="button" class="metric amber {{ $quick === 'attention' ? 'active' : '' }}" wire:click="setMetricFilter('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention ?? '—'">{{ $metrics['attention'] ?? '—' }}</strong></span><i>⚑</i></button>
+            <button type="button" class="metric red {{ $quick === 'overdue' ? 'active' : '' }}" wire:click="setMetricFilter('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue ?? '—'">{{ $metrics['overdue'] ?? '—' }}</strong></span><i>!</i></button>
+            <button type="button" class="metric amber {{ $quick === 'today' ? 'active' : '' }}" wire:click="setMetricFilter('today')"><span><small>Due today</small><strong x-text="metrics.today ?? '—'">{{ $metrics['today'] ?? '—' }}</strong></span><i>◷</i></button>
+            <button type="button" class="metric {{ $quick === 'upcoming' ? 'active' : '' }}" wire:click="setMetricFilter('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming ?? '—'">{{ $metrics['upcoming'] ?? '—' }}</strong></span><i>→</i></button>
+            <button type="button" class="metric {{ $quick === 'waiting' ? 'active' : '' }}" wire:click="setMetricFilter('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting ?? '—'">{{ $metrics['waiting'] ?? '—' }}</strong></span><i>⌛</i></button>
         </div>
 
         <div class="toolbar">
-            <label class="search-wrap">
-                <span class="search-icon">⌕</span>
-                <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search my work">
-                @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
-            </label>
-            <div class="quick-filters">
-                <button type="button" class="chip {{ $quick === 'attention' ? 'active' : '' }}" wire:click="setQuick('attention')">Needs action</button>
-                <button type="button" class="chip {{ $quick === 'all' ? 'active' : '' }}" wire:click="setQuick('all')">All my tasks</button>
-                <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('mentions')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
+            <div class="toolbar-primary">
+                <label class="search-wrap">
+                    <span class="search-icon">⌕</span>
+                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search my work">
+                    @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
+                </label>
+                <div class="phase-filters" aria-label="Filter by Order workflow phase">
+                    @foreach($phaseOptions as $phaseOption)
+                        <button
+                            type="button"
+                            class="phase-toggle {{ $phaseFilter === $phaseOption ? 'active' : '' }}"
+                            wire:click="setPhaseFilter({{ \Illuminate\Support\Js::from($phaseOption) }})"
+                            aria-pressed="{{ $phaseFilter === $phaseOption ? 'true' : 'false' }}"
+                            title="{{ $phaseOption }}"
+                        >
+                            <span class="phase-check" aria-hidden="true">✓</span>
+                            <span>{{ $phaseOption }}</span>
+                        </button>
+                    @endforeach
+                </div>
             </div>
-            <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
-                <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
-                <span class="completed-check" aria-hidden="true">✓</span>
-                <span>Hide completed</span>
-            </label>
-            <select class="sort" wire:model.live="sort" aria-label="Sort work">
-                <option value="action">Sort: Action priority</option>
-                <option value="due">Sort: Due soon</option>
-                <option value="job">Sort: Order number</option>
-            </select>
+            <div class="toolbar-secondary">
+                <div class="quick-filters">
+                    <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('{{ $quick === 'mentions' ? 'all' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
+                </div>
+                <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
+                    <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
+                    <span class="completed-check" aria-hidden="true">✓</span>
+                    <span>Hide completed</span>
+                </label>
+                <select class="sort" wire:model.live="sort" aria-label="Sort work">
+                    <option value="action">Sort: Action priority</option>
+                    <option value="due">Sort: Due soon</option>
+                    <option value="job">Sort: Order number</option>
+                </select>
+                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $quick === 'all' && !$hideCompleted)>Clear filters</button>
+            </div>
         </div>
 
         <div class="load-state">
-            <span>
-                @if($searchNeedsMoreCharacters)
-                    Type 3 characters to search broadly. Order and task reference prefixes can be searched sooner.
-                @elseif($workPaginator->total())
-                    Showing {{ $workGroups->count() }} of {{ $workPaginator->total() }} matching Orders · {{ $visibleTaskCount }} visible tasks
-                @else
-                    Showing personal work only
-                @endif
-            </span>
+            <span></span>
             <span class="load-actions">
                 <span class="loading-copy">
-                    <span wire:loading.remove wire:target="search,quick,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
-                    <span wire:loading.delay.long wire:target="search,quick,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+                    <span wire:loading.delay.long wire:target="search,phaseFilter,quick,sort,hideCompleted,setMetricFilter,setPhaseFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Updating tasks…</span>
                 </span>
                 <span class="group-controls" aria-label="Order group controls">
                     <button type="button" class="group-control" x-on:click="groupsExpanded = true" title="Expand all Orders" aria-label="Expand all Orders">
@@ -72,12 +79,13 @@
             </span>
         </div>
 
-        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
 
-        <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,sort,hideCompleted,setQuick,clearSearch,gotoPage,previousPage,nextPage">
-            <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
+        <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage">
+            <div class="task-table-scroll">
+                <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
-            <div>
+                <div>
                 @foreach($workGroups as $group)
                     <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: true }" x-effect="open = groupsExpanded">
                         <header class="order-head">
@@ -166,6 +174,7 @@
                 @if($workGroups->isEmpty())
                     <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
                 @endif
+                </div>
             </div>
 
             <footer class="footer">

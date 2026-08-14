@@ -101,3 +101,49 @@
 /* Product Categories: keep collapse/expand controls pinned to the right */
 .ft-category-subbar.ft-category-subbar-actions-only{display:flex!important;justify-content:flex-end!important;width:100%!important;}
 .ft-category-subbar.ft-category-subbar-actions-only .ft-category-expand-controls{margin-left:auto!important;justify-content:flex-end!important;}
+
+/* 2026-08-14: progressive hierarchy loading.
+   Keep the existing category table unchanged; these rows only expose how many
+   descendants have been loaded and request the next server-side batch. */
+.ft-category-load-row{
+  display:flex;
+  align-items:center;
+  gap:12px;
+  min-width:1040px;
+  min-height:42px;
+  padding:6px 42px 6px 82px;
+  border-top:1px solid #e3e9f0;
+  background:#fbfcfe;
+  color:#61708a;
+  font-size:11px;
+}
+.ft-category-load-row.is-sub{padding-left:108px;background:#fff}
+.ft-category-load-progress{
+  width:110px;
+  height:5px;
+  flex:0 0 110px;
+  overflow:hidden;
+  border-radius:999px;
+  background:#e8edf3;
+}
+.ft-category-load-progress>i{
+  display:block;
+  height:100%;
+  border-radius:inherit;
+  background:#007d70;
+}
+.ft-category-load-row button{
+  min-height:28px;
+  padding:0 10px;
+  border:1px solid #c7d3df;
+  border-radius:6px;
+  background:#fff;
+  color:#007d70;
+  font-size:11px;
+  font-weight:700;
+}
+.ft-category-load-row button:hover{border-color:#007d70;background:#edf9f7}
+.ft-category-load-row button:disabled{opacity:.55;cursor:wait}
+@media(max-width:720px){
+  .ft-category-load-row,.ft-category-load-row.is-sub{padding-left:18px;flex-wrap:wrap}
+}

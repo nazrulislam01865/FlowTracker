@@ -15,8 +15,11 @@ class MyWorkPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('Due today', $view);
         $this->assertStringContainsString('Upcoming', $view);
         $this->assertStringContainsString('Waiting', $view);
-        $this->assertStringContainsString('Needs action', $view);
-        $this->assertStringContainsString('All my tasks', $view);
+        $this->assertStringNotContainsString('>All Tasks</a>', $view);
+        $this->assertStringContainsString('class="phase-filters"', $view);
+        $this->assertStringContainsString('class="phase-toggle', $view);
+        $this->assertStringNotContainsString('<option value="">All phases</option>', $view);
+        $this->assertStringContainsString('Clear filters', $view);
         $this->assertStringNotContainsString('Prototype only', $view);
         $this->assertStringContainsString('Mentions (', $view);
         $this->assertStringContainsString('Sort: Action priority', $view);

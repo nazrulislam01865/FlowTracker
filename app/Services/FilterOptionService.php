@@ -38,7 +38,7 @@ class FilterOptionService
             'countries' => $this->countries($user, $context, $search, $limit),
             'job-statuses' => $this->jobStatuses($user, $search, $limit),
             'job-healths' => $this->jobHealths($user, $search, $limit),
-            'phases' => $this->phases($search, $limit),
+            'phases' => $this->phases($context, $search, $limit),
             default => collect(),
         };
 
@@ -56,7 +56,7 @@ class FilterOptionService
                 'countries' => $this->countryByName($user, $context, (string) $selectedId),
                 'job-statuses' => $this->jobStatusByName($user, (string) $selectedId),
                 'job-healths' => $this->jobHealthByName($user, (string) $selectedId),
-                'phases' => $this->phaseById($selectedId),
+                'phases' => $this->phaseById($context, $selectedId),
                 default => null,
             };
             if ($selected) $items->prepend($selected);
@@ -72,8 +72,8 @@ class FilterOptionService
         return $query
             ->where('is_active', true)
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('name', 'like', $search.'%')
-                ->orWhere('code', 'like', $search.'%')))
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
             ->when(strlen($search) < 2, fn ($q) => $q->orderByDesc('updated_at'))
             ->orderBy('name')
             ->limit($limit)
@@ -122,8 +122,8 @@ class FilterOptionService
 
         return $query
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('job_number', 'like', $search.'%')
-                ->orWhere('title', 'like', '%'.$search.'%')))
+                ->whereLike('job_number', $search.'%')
+                ->orWhereLike('title', '%'.$search.'%')))
             ->with('client:id,name,logo_path')
             ->orderByDesc('updated_at')
             ->limit($limit)
@@ -151,7 +151,7 @@ class FilterOptionService
     {
         return $this->visibleUsers($user, $context, $constraints)
             ->with('department:id,name')
-            ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
+            ->when(strlen($search) >= 2, fn ($q) => $q->whereLike('name', $search.'%'))
             ->orderBy('name')
             ->limit($limit)
             ->get(['id', 'department_id', 'name', 'profile_image_path'])
@@ -188,8 +188,8 @@ class FilterOptionService
             ->ofType('product_category')
             ->active()
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('name', 'like', $search.'%')
-                ->orWhere('code', 'like', $search.'%')))
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->limit($limit)
@@ -251,14 +251,14 @@ class FilterOptionService
                         $legacy->whereNull('parent_id')
                             ->where(function ($description) use ($category) {
                                 $description->where('description', $category)
-                                    ->orWhere('description', 'like', $category.' ·%');
+                                    ->orWhereLike('description', $category.' ·%');
                             });
                     });
                 });
             })
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('name', 'like', $search.'%')
-                ->orWhere('code', 'like', $search.'%')))
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->limit($limit)
@@ -299,7 +299,7 @@ class FilterOptionService
                         $legacy->whereNull('parent_id')
                             ->where(function ($description) use ($category) {
                                 $description->where('description', $category)
-                                    ->orWhere('description', 'like', $category.' ·%');
+                                    ->orWhereLike('description', $category.' ·%');
                             });
                     });
                 });
@@ -370,7 +370,7 @@ class FilterOptionService
                 fn ($query) => $query->where('applies_to', 'orders')->availableForOrderCreation($clientId),
                 fn ($query) => $query->when($appliesTo, fn ($scope) => $scope->availableFor($appliesTo, $clientId)),
             )
-            ->when(strlen($search) >= 2, fn ($q) => $q->where('name', 'like', $search.'%'))
+            ->when(strlen($search) >= 2, fn ($q) => $q->whereLike('name', $search.'%'))
             ->withCount(['phases' => fn ($q) => $q->where('is_active', true)])
             ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
             ->when($context !== 'create-job', fn ($query) => $query->orderByRaw("CASE WHEN applies_to = 'inquiries' THEN 0 ELSE 1 END"))
@@ -420,8 +420,8 @@ class FilterOptionService
             ->ofType($type)
             ->active()
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('name', 'like', $search.'%')
-                ->orWhere('code', 'like', $search.'%')))
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->limit($limit)
@@ -459,7 +459,7 @@ class FilterOptionService
             ->where('is_active', $active)
             ->whereNotNull('country')
             ->where('country', '!=', '')
-            ->when(strlen($search) >= 2, fn ($q) => $q->where('country', 'like', $search.'%'))
+            ->when(strlen($search) >= 2, fn ($q) => $q->whereLike('country', $search.'%'))
             ->distinct()
             ->orderBy('country')
             ->limit($limit)
@@ -484,7 +484,7 @@ class FilterOptionService
         return app(JobService::class)->visibleQuery($user)
             ->whereNotNull('status')
             ->where('status', '!=', '')
-            ->when(strlen($search) >= 2, fn ($q) => $q->where('status', 'like', $search.'%'))
+            ->when(strlen($search) >= 2, fn ($q) => $q->whereLike('status', $search.'%'))
             ->distinct()
             ->orderBy('status')
             ->limit($limit)
@@ -504,7 +504,7 @@ class FilterOptionService
         return app(JobService::class)->visibleQuery($user)
             ->whereNotNull('health')
             ->where('health', '!=', '')
-            ->when(strlen($search) >= 2, fn ($q) => $q->where('health', 'like', $search.'%'))
+            ->when(strlen($search) >= 2, fn ($q) => $q->whereLike('health', $search.'%'))
             ->distinct()
             ->orderBy('health')
             ->limit($limit)
@@ -519,7 +519,7 @@ class FilterOptionService
         return $exists ? ['id' => $health, 'label' => $health, 'meta' => ''] : null;
     }
 
-    private function phases(string $search, int $limit): Collection
+    private function phases(string $context, string $search, int $limit): Collection
     {
         $workspaceId = app(SetupContext::class)->workspaceId();
 
@@ -528,11 +528,12 @@ class FilterOptionService
             ->where('is_active', true)
             ->whereHas('workflowTemplate', fn ($workflow) => $workflow
                 ->where('workspace_id', $workspaceId)
-                ->where('is_active', true))
+                ->where('is_active', true)
+                ->when($context === 'order-list', fn ($query) => $query->where('applies_to', 'orders')))
             ->with('workflowTemplate:id,name')
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
-                ->where('name', 'like', $search.'%')
-                ->orWhere('short_name', 'like', $search.'%')))
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('short_name', $search.'%')))
             ->orderBy('sequence')
             ->orderBy('name')
             ->limit($limit)
@@ -544,7 +545,7 @@ class FilterOptionService
             ]);
     }
 
-    private function phaseById(int|string $id): ?array
+    private function phaseById(string $context, int|string $id): ?array
     {
         if (!is_numeric($id)) return null;
         $workspaceId = app(SetupContext::class)->workspaceId();
@@ -553,7 +554,8 @@ class FilterOptionService
             ->where('is_active', true)
             ->whereHas('workflowTemplate', fn ($workflow) => $workflow
                 ->where('workspace_id', $workspaceId)
-                ->where('is_active', true))
+                ->where('is_active', true)
+                ->when($context === 'order-list', fn ($query) => $query->where('applies_to', 'orders')))
             ->with('workflowTemplate:id,name')
             ->find((int) $id, ['id', 'workflow_template_id', 'name']);
 
@@ -631,6 +633,37 @@ class FilterOptionService
             return User::query()
                 ->where('is_active', true)
                 ->whereIn('id', $assigneeIds);
+        }
+
+        if ($context === 'order-list') {
+            $visibleOrderIds = app(JobService::class)
+                ->visibleQuery($user)
+                ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                ->select('flow_jobs.id');
+
+            $assigneeIds = app(TaskService::class)
+                ->visibleQuery($user)
+                ->whereNotNull('tasks.assignee_id')
+                ->whereIn('tasks.flow_job_id', $visibleOrderIds)
+                ->select('tasks.assignee_id')
+                ->distinct();
+
+            return User::query()
+                ->where('is_active', true)
+                ->whereIn('id', $assigneeIds);
+        }
+
+        if ($context === 'order-list-owner') {
+            $ownerIds = app(JobService::class)
+                ->visibleQuery($user)
+                ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                ->whereNotNull('flow_jobs.owner_id')
+                ->select('flow_jobs.owner_id')
+                ->distinct();
+
+            return User::query()
+                ->where('is_active', true)
+                ->whereIn('id', $ownerIds);
         }
 
         $access = app(AccessControlService::class);

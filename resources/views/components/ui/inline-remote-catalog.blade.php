@@ -9,6 +9,7 @@
     'disabled' => false,
     'triggerClass' => 'ft-inline-cell-input product',
     'menuWidth' => 320,
+    'fixedMenu' => false,
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
@@ -28,6 +29,7 @@
         params: @js($params),
         disabled: @js((bool) $disabled),
         menuWidth: @js((int) $menuWidth),
+        fixedMenu: @js((bool) $fixedMenu),
     })"
     x-on:ft-inline-remote-open.stop="sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? @js($placeholder))); openMenu()"
     x-on:keydown.escape.window="if (open) { close(); $dispatch('ft-inline-remote-cancel') }"

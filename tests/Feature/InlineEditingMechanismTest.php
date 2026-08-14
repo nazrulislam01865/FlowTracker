@@ -68,7 +68,6 @@ class InlineEditingMechanismTest extends TestCase
             resource_path('views/components/jobs/task-detail.blade.php'),
             resource_path('views/components/board/task-card.blade.php'),
             resource_path('views/components/board/job-card.blade.php'),
-            resource_path('views/livewire/administration/index.blade.php'),
         ];
 
         foreach ($views as $view) {
@@ -77,6 +76,13 @@ class InlineEditingMechanismTest extends TestCase
             $this->assertStringContainsString('inline-save-state', $source, $view);
             $this->assertDoesNotMatchRegularExpression('/wire:change=\"update(?:Job|Task|Selected)/', $source, $view);
         }
+
+        // Administration still uses the shared optimistic runtime for the role matrix,
+        // but user role assignment is now an explicit multi-role edit rather than a
+        // single inline role select. The matrix has its own save summary.
+        $administration = file_get_contents(resource_path('views/livewire/administration/index.blade.php'));
+        $this->assertStringContainsString('FlowTrackInlineEdit', $administration);
+        $this->assertStringContainsString('ft-matrix-save-summary', $administration);
     }
 
     public function test_inline_runtime_supports_optimistic_save_rollback_and_retry(): void

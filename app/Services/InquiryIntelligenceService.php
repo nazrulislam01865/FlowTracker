@@ -32,13 +32,13 @@ class InquiryIntelligenceService
         if ($search !== '') {
             $like = '%'.$search.'%';
             $query->where(function (Builder $match) use ($like): void {
-                $match->where('inquiry_number', 'like', $like)
-                    ->orWhere('reference_number', 'like', $like)
-                    ->orWhere('subject', 'like', $like)
-                    ->orWhere('requirement_notes', 'like', $like)
-                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
-                    ->orWhereHas('items', fn (Builder $item) => $item->where('item_name', 'like', $like)->orWhere('category', 'like', $like))
-                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like));
+                $match->whereLike('inquiry_number', $like)
+                    ->orWhereLike('reference_number', $like)
+                    ->orWhereLike('subject', $like)
+                    ->orWhereLike('requirement_notes', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like))
+                    ->orWhereHas('items', fn (Builder $item) => $item->whereLike('item_name', $like)->orWhereLike('category', $like))
+                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like));
             });
         }
 

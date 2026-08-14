@@ -18,11 +18,12 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('<h1>Orders</h1><p>Fast access to every active and completed order</p>', $view);
         $this->assertStringContainsString('Created by / on', $view);
         $this->assertStringContainsString('<span>Order</span><span>Inquiry</span><span>Client / Products</span>', $view);
-        $this->assertStringContainsString('Order stage', $view);
+        $this->assertStringContainsString('<span>Phase</span>', $view);
+        $this->assertStringContainsString('$phaseName = $job->phase?->name', $view);
         $this->assertStringContainsString('Owner / Delivery', $view);
         $this->assertStringContainsString('Search order, inquiry, client, product, creator or owner', $view);
         $this->assertStringContainsString('wire:model.live.debounce.700ms="search"', $view);
-        $this->assertStringContainsString('results update after 700 ms', $view);
+        $this->assertStringNotContainsString('results update after 700 ms', $view);
         $this->assertStringNotContainsString('wire:model.live.debounce.350ms="search"', $view);
         $this->assertStringContainsString('+ New Order', $view);
         $this->assertStringNotContainsString('ft-job-bulk-bar', $view);

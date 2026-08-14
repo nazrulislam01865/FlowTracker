@@ -1,21 +1,4 @@
 
-.ft-friendly-task-properties{grid-template-columns:repeat(7,minmax(0,1fr))}
-.ft-task-completed-property .ft-property-value{font-size:11px;line-height:1.25}
-.ft-task-completed-property .ft-completed-date-time{display:flex;flex-direction:column;align-items:flex-start;gap:2px;min-width:0}
-.ft-task-completed-property .ft-completed-time{display:block;color:#60728b;font-size:10px;font-weight:700;line-height:1.2;white-space:nowrap}
-.ft-task-flag-row{grid-template-columns:135px minmax(0,1fr)!important;align-items:center}
-.ft-task-flag-select{width:100%;min-width:0;height:34px;border:1px solid #d8e2ee;border-radius:7px;background:#fff;padding:0 30px 0 9px;color:#172b47;font:inherit;font-weight:750;outline:0}
-.ft-task-flag-select:focus{border-color:#78a0f2;box-shadow:0 0 0 2px rgba(36,99,235,.08)}
-.ft-task-flag-select.is-flagged{color:#b42318;background:#fff8f7}
-.ft-task-flag-help{display:block;margin-top:7px;color:#6b7d94;font-size:10px;line-height:1.4}
-.ft-job-context-card .ft-open-job{display:flex;justify-content:flex-start;padding-left:0;margin-left:0;text-align:left}
-.ft-workspace-settings-card{max-width:900px}
-.ft-workspace-setting-row{display:grid;grid-template-columns:minmax(240px,1fr) minmax(260px,360px) auto;align-items:center;gap:14px;padding:16px 0}
-.ft-workspace-setting-row>div b,.ft-workspace-setting-row>div span{display:block}
-.ft-workspace-setting-row>div span{margin-top:4px;color:#65778f;font-size:11px;line-height:1.45}
-.ft-workspace-setting-row select{height:40px;border:1px solid #d7e1ed;border-radius:8px;background:#fff;padding:0 10px;color:#172b47}
-@media(max-width:1300px){.ft-friendly-task-properties{grid-template-columns:repeat(3,minmax(0,1fr))}.ft-friendly-task-properties .ft-task-property:nth-child(3n){border-right:0}}
-@media(max-width:800px){.ft-friendly-task-properties{grid-template-columns:1fr}.ft-friendly-task-properties .ft-task-property{border-right:0}.ft-workspace-setting-row{grid-template-columns:1fr}.ft-task-title-phase{white-space:normal}}
 
 
 /* 2026-08-07 Task Details inline-edit UX: match the compact Job Details phase-assignee pattern.
@@ -2303,3 +2286,27 @@ a.ft-new-job-btn:active {
 .ft-inquiry-prototype .ft-inquiry-workflow-option small{font-size:9.25px}
 .ft-inquiry-prototype .ft-inquiry-workflow-footnote{font-size:9.75px}
 .ft-inquiry-prototype .ft-inquiry-create-actions>span{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-create-actions .secondary,.ft-inquiry-prototype .ft-inquiry-create-actions .primary{font-size:10.5px}
+.ft-inquiry-prototype .ft-inquiry-create-actions kbd{font-size:9.5px}
+.ft-inquiry-prototype .ft-inquiry-quick-client-modal>header p{font-size:11px}
+.ft-inquiry-prototype .ft-inquiry-modal-field>span{font-size:11px}
+.ft-inquiry-prototype .ft-inquiry-modal-field input{font-size:11.5px}
+.ft-inquiry-prototype .ft-inquiry-modal-field>small:not(.field-error){font-size:9.5px}
+.ft-inquiry-prototype .ft-inquiry-modal-subhead strong{font-size:11.5px}
+.ft-inquiry-prototype .ft-inquiry-modal-subhead span{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-contact-checkbox{font-size:10.5px}
+.ft-inquiry-prototype .ft-inquiry-client-info{font-size:10px}
+.ft-inquiry-prototype .ft-inquiry-quick-client-modal>footer>span{font-size:9.5px}
+.ft-inquiry-prototype .ft-inquiry-quick-client-modal>footer .secondary,.ft-inquiry-prototype .ft-inquiry-quick-client-modal>footer .primary{font-size:10.5px}
+
+/* Create Inquiry selected attachment previews. */
+.ft-inquiry-prototype .ft-inquiry-selected-files{margin-top:12px;padding:13px 14px;border:1px solid #d9e3ef;border-radius:10px;background:#fff}
+.ft-inquiry-prototype .inquiry-selected-files-title{display:flex;align-items:center;gap:8px;margin-bottom:10px;color:#263750;font-size:12px;font-weight:800}
+.ft-inquiry-prototype .inquiry-selected-files-title span{display:inline-grid;min-width:24px;height:24px;place-items:center;padding:0 7px;border-radius:999px;background:#edf3ff;color:#1767e8;font-size:11px;font-weight:800}
+.ft-inquiry-prototype .ft-inquiry-selected-file-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:10px}
+.ft-inquiry-prototype .ft-inquiry-selected-file-card{display:grid;grid-template-columns:92px minmax(0,1fr);align-items:center;gap:11px;min-width:0;padding:8px;border:1px solid #dfe7f1;border-radius:9px;background:#f9fbfd}
+.ft-inquiry-prototype .ft-inquiry-selected-file-preview{position:relative;display:block;width:92px;height:72px;overflow:hidden;border:1px solid #d6e0ec;border-radius:7px;background:#eef3f8;text-decoration:none}
+.ft-inquiry-prototype .ft-inquiry-selected-file-preview img{display:block;width:100%;height:100%;object-fit:cover}
+.ft-inquiry-prototype .ft-inquiry-selected-file-preview span{position:absolute;right:5px;bottom:5px;padding:3px 5px;border-radius:5px;background:rgba(10,25,46,.78);color:#fff;font-size:8px;font-weight:800;opacity:0;transform:translateY(2px);transition:opacity .15s ease,transform .15s ease}
+.ft-inquiry-prototype .ft-inquiry-selected-file-preview:hover span,.ft-inquiry-prototype .ft-inquiry-selected-file-preview:focus-visible span{opacity:1;transform:none}
+.ft-inquiry-prototype .ft-inquiry-selected-file-preview:focus-visible{outline:2px solid #1767e8;outline-offset:2px}

@@ -319,16 +319,16 @@ class BoardTaskPackService
             $looksLikeReference = preg_match('/^(JOB|TSK|TASK|ORD)[-0-9]/i', $search) === 1;
 
             $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference): void {
-                $inner->where('tasks.task_number', 'like', $looksLikeReference ? $prefix : $like)
-                    ->orWhere('tasks.title', 'like', $like)
-                    ->orWhere('tasks.attention_reason', 'like', $like)
-                    ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->where('name', 'like', $like))
-                    ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
+                $inner->whereLike('tasks.task_number', $looksLikeReference ? $prefix : $like)
+                    ->orWhereLike('tasks.title', $like)
+                    ->orWhereLike('tasks.attention_reason', $like)
+                    ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->whereLike('name', $like))
+                    ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like))
                     ->orWhereHas('job', fn (Builder $job) => $job
-                        ->where('job_number', 'like', $looksLikeReference ? $prefix : $like)
-                        ->orWhere('order_number', 'like', $looksLikeReference ? $prefix : $like)
-                        ->orWhere('title', 'like', $like)
-                        ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like)));
+                        ->whereLike('job_number', $looksLikeReference ? $prefix : $like)
+                        ->orWhereLike('order_number', $looksLikeReference ? $prefix : $like)
+                        ->orWhereLike('title', $like)
+                        ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like)));
             });
         }
 
@@ -529,26 +529,23 @@ class BoardTaskPackService
         if ($access->isAdministrator($user) || $parentCreatedByUser) return true;
         if (!$access->can($user, 'tasks', 'edit')) return false;
 
-        $scope = $access->scope($user, 'tasks');
+        $scopes = $access->scopes($user, 'tasks');
         $isOwnTask = (int) ($task->assignee_id ?: 0) === (int) $user->id;
 
-        if ($scope === 'all_records') {
+        if (in_array('all_records', $scopes, true)) {
             return $access->canEditAll($user, 'tasks')
                 || ($isOwnTask && $access->canEditOwn($user, 'tasks'));
         }
 
-        if ($scope === 'department') {
+        if (in_array('department', $scopes, true)) {
             $sameDepartment = $user->department_id
                 && (int) ($task->assignee?->department_id ?: 0) === (int) $user->department_id;
 
-            if (!$sameDepartment) return false;
-
-            return $access->canEditAll($user, 'tasks')
-                || ($isOwnTask && $access->canEditOwn($user, 'tasks'));
+            if ($sameDepartment && $access->canEditAll($user, 'tasks')) return true;
         }
 
-        // Assigned/own task scopes stay assignee-strict even though the Board
-        // intentionally provides read-only context for the other Job tasks.
+        // Assigned/own task scopes stay assignee-strict even when another role
+        // contributes a department scope.
         return $isOwnTask && ($access->canEditOwn($user, 'tasks') || $access->canEditAll($user, 'tasks'));
     }
 

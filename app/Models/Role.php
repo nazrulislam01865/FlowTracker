@@ -20,7 +20,16 @@ class Role extends Model
     }
 
     public function permissions(): BelongsToMany { return $this->belongsToMany(Permission::class); }
-    public function users(): HasMany { return $this->hasMany(User::class); }
+
+    /** Users assigned this role through the multi-role pivot. */
+    public function users(): BelongsToMany
+    {
+        return $this->belongsToMany(User::class, 'user_roles', 'role_id', 'user_id')->withTimestamps();
+    }
+
+    /** Legacy primary-role relationship retained for compatibility/auditing. */
+    public function primaryUsers(): HasMany { return $this->hasMany(User::class, 'role_id'); }
+
     public function moduleAccess(): HasMany { return $this->hasMany(RoleModuleAccess::class); }
     public function memberships(): HasMany { return $this->hasMany(WorkspaceMembership::class); }
 }

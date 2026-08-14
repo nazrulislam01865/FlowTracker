@@ -120,7 +120,14 @@
                     </div>
                     <div class="inquiry-list-body">
                         @forelse($inquiryRows as $row)
-                            <article class="row" wire:key="inquiry-list-{{ $row['id'] }}">
+                            @php
+                                $clientCode = strtoupper(trim((string) ($row['clientCode'] ?? '')));
+                                $clientName = strtoupper(trim((string) ($row['client'] ?? '')));
+                                $clientRowTone = ($clientCode === 'IID' || preg_match('/\bIID\b/i', $clientName))
+                                    ? 'iid'
+                                    : (($clientCode === 'NEP' || preg_match('/\bNEP\b/i', $clientName)) ? 'nep' : '');
+                            @endphp
+                            <article class="row {{ $clientRowTone ? 'ft-client-row-'.$clientRowTone : '' }}" wire:key="inquiry-list-{{ $row['id'] }}">
                                 <div class="cell ft-inquiry-list-identity" data-label="Inquiry">
                                     <span class="ft-copyable-id-wrap ft-inquiry-list-code-wrap">
                                         <a class="id" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" wire:navigate>{{ $row['number'] }}</a>

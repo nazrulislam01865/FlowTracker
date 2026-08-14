@@ -245,29 +245,8 @@ class InquiryService
 
     public function visibleQuery(User $user): Builder
     {
-        $access = app(AccessControlService::class);
         $query = Inquiry::query()->where('workspace_id', $this->workspaceId());
-
-        if (!$access->can($user, 'inquiries', 'view')) return $query->whereRaw('1 = 0');
-
-        return match ($access->scope($user, 'inquiries')) {
-            'all_records' => $query,
-            'none' => $query->where('created_by', $user->id),
-            'own_records' => $query->where(fn (Builder $scope) => $scope
-                ->where('created_by', $user->id)
-                ->orWhere('owner_id', $user->id)),
-            'department' => $query->where(function (Builder $scope) use ($user): void {
-                $scope->where('created_by', $user->id);
-                if ($user->department_id) {
-                    $scope->orWhereHas('owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
-                        ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
-                }
-            }),
-            default => $query->where(fn (Builder $scope) => $scope
-                ->where('created_by', $user->id)
-                ->orWhere('owner_id', $user->id)
-                ->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id))),
-        };
+        return app(AccessControlService::class)->applyInquiryScope($query, $user);
     }
 
     public function canEdit(User $user, Inquiry $inquiry): bool
@@ -326,16 +305,16 @@ class InquiryService
             ->when($search !== '', function (Builder $q) use ($search): void {
                 $q->where(function (Builder $match) use ($search): void {
                     $like = '%'.$search.'%';
-                    $match->where('inquiry_number', 'like', $like)
-                        ->orWhere('subject', 'like', $like)
-                        ->orWhere('reference_number', 'like', $like)
-                        ->orWhere('client_contact', 'like', $like)
-                        ->orWhereHas('creator', fn (Builder $creator) => $creator->where('name', 'like', $like))
-                        ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
-                        ->orWhereHas('items', fn (Builder $item) => $item->where('item_name', 'like', $like)->orWhere('category', 'like', $like))
+                    $match->whereLike('inquiry_number', $like)
+                        ->orWhereLike('subject', $like)
+                        ->orWhereLike('reference_number', $like)
+                        ->orWhereLike('client_contact', $like)
+                        ->orWhereHas('creator', fn (Builder $creator) => $creator->whereLike('name', $like))
+                        ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like))
+                        ->orWhereHas('items', fn (Builder $item) => $item->whereLike('item_name', $like)->orWhereLike('category', $like))
                         ->orWhereHas('tasks', fn (Builder $task) => $task
-                            ->where('title', 'like', $like)
-                            ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like)));
+                            ->whereLike('title', $like)
+                            ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like)));
                 });
             });
 
@@ -383,7 +362,7 @@ class InquiryService
             ->selectSub($currentTaskAttentionReason, 'current_task_attention_reason')
             ->selectSub($currentTaskSequence, 'current_task_sequence')
             ->selectSub($firstItem, 'first_item_name')
-            ->with(['client:id,name,logo_path', 'owner:id,name,profile_image_path', 'creator:id,name,profile_image_path', 'convertedJob:id,job_number,order_number'])
+            ->with(['client:id,code,name,logo_path', 'owner:id,name,profile_image_path', 'creator:id,name,profile_image_path', 'convertedJob:id,job_number,order_number'])
             ->withCount([
                 'tasks',
                 'tasks as completed_tasks_count' => fn (Builder $task) => $task->whereNotNull('completed_at'),
@@ -601,6 +580,7 @@ class InquiryService
                 'title' => (string) $inquiry->subject,
                 'titlePreview' => Str::words((string) $inquiry->subject, 12, '...'),
                 'client' => (string) ($inquiry->client?->name ?: 'No client'),
+                'clientCode' => (string) ($inquiry->client?->code ?: ''),
                 'clientLogoUrl' => $inquiry->client?->logoUrl(),
                 'clientContact' => (string) ($inquiry->client_contact ?: ''),
                 'item' => blank($inquiry->first_item_name) ? null : (string) $inquiry->first_item_name,
@@ -737,6 +717,7 @@ class InquiryService
                     'category' => ($item['category'] ?? null) ?: null,
                     'item_name' => trim((string) $item['name']),
                     'quantity' => $item['quantity'],
+                    'unit_price' => filled($item['unit_price'] ?? null) ? round((float) $item['unit_price'], 2) : null,
                     'unit' => ($item['unit'] ?? null) ?: 'pcs',
                     'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
                     'sort_order' => $index,
@@ -1010,6 +991,7 @@ class InquiryService
                     'category' => blank($item['category'] ?? null) ? null : trim((string) $item['category']),
                     'item_name' => trim((string) $item['name']),
                     'quantity' => max(1, (int) ($item['quantity'] ?? 1)),
+                    'unit_price' => filled($item['unit_price'] ?? null) ? round((float) $item['unit_price'], 2) : null,
                     'unit' => ($item['unit'] ?? null) ?: 'pcs',
                     'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
                     'sort_order' => $index,
@@ -2083,6 +2065,7 @@ class InquiryService
                     'product' => $item->item_name,
                     'category' => $item->category,
                     'quantity' => max(1, (int) round((float) $item->quantity)),
+                    'unit_price' => $item->unit_price !== null ? round((float) $item->unit_price, 2) : 0,
                 ])->all(),
                 'priority' => $inquiry->priority,
                 'client_id' => $inquiry->client_id,
@@ -2172,12 +2155,12 @@ class InquiryService
         if ($search !== '' && mb_strlen($search) >= 2) {
             $like = '%'.$search.'%';
             $query->where(fn (Builder $match) => $match
-                ->where('inquiry_tasks.title', 'like', $like)
-                ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->where('name', 'like', $like))
+                ->whereLike('inquiry_tasks.title', $like)
+                ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like))
                 ->orWhereHas('inquiry', fn (Builder $inquiry) => $inquiry
-                    ->where('inquiry_number', 'like', $like)
-                    ->orWhere('subject', 'like', $like)
-                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))));
+                    ->whereLike('inquiry_number', $like)
+                    ->orWhereLike('subject', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like))));
         }
 
         match ($quick) {
@@ -2450,6 +2433,7 @@ class InquiryService
             ->where('is_active', true)
             ->where(function ($query) use ($inquiry): void {
                 $query->where('is_super_admin', true)
+                    ->orWhereHas('roles', fn ($role) => $role->where('is_active', true)->whereIn('slug', ['super-admin', 'admin', 'administrator']))
                     ->orWhereHas('role', fn ($role) => $role->whereIn('slug', ['super-admin', 'admin', 'administrator']));
                 if ($inquiry->created_by) $query->orWhere('id', (int) $inquiry->created_by);
             })

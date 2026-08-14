@@ -400,6 +400,8 @@
                 :product-counts="$categoryProductCounts"
                 :main-product-counts="$categoryMainProductCounts"
                 :subcategory-product-counts="$categorySubcategoryProductCounts"
+                :product-child-totals="$categoryProductChildTotals"
+                :subcategory-child-totals="$categorySubcategoryChildTotals"
                 :expanded-main-ids="$expandedMainCategoryIds"
                 :expanded-product-ids="$expandedProductCategoryIds"
                 :can-create="$canCreateMaster"

@@ -48,6 +48,7 @@ class Index extends Component
     public string $health = '';
     public string $client = '';
     public string $owner = '';
+    public string $assignee = '';
     public string $delivery = '';
     public string $invoice = '';
     public string $priorityFilter = '';
@@ -73,10 +74,10 @@ class Index extends Component
     public bool $showInquiryUnlinkConfirm = false;
 
     public bool $showCreateInvoiceModal = false;
-    public string $invoiceType = 'Final invoice';
-    public string $invoiceCurrency = 'USD';
+    public string $invoiceType = '';
+    public string $invoiceCurrency = '';
     public string $invoiceIssueDate = '';
-    public string $invoicePaymentTerms = '15';
+    public string $invoicePaymentTerms = '';
     public string $invoiceDueDate = '';
     public ?int $invoiceBillingContactId = null;
     public array $invoiceLineItems = [];
@@ -84,15 +85,18 @@ class Index extends Component
     public string $invoiceNotes = 'Please include the invoice number with your payment.';
     public string $invoiceTaxRate = '0';
     public $invoiceSupportingDocument = null;
-    public bool $invoiceEmailAfterCreation = true;
+    public bool $invoiceEmailAfterCreation = false;
 
     public bool $showRecordPaymentModal = false;
     public ?int $paymentInvoiceId = null;
     public string $paymentDate = '';
-    public string $paymentMethod = 'Bank transfer';
+    public string $paymentMethod = '';
     public string $paymentAmount = '';
     public string $paymentReference = '';
+    public string $paymentReceivedAccount = '';
+    public $paymentReceipt = null;
     public string $paymentNotes = '';
+    public bool $paymentMarkInvoicePaid = true;
 
     public bool $showCollectionUpdateModal = false;
     public ?int $collectionOwnerId = null;
@@ -110,19 +114,34 @@ class Index extends Component
 
     public string $jobTitle = '';
     public string $referenceNumber = '';
+    public bool $isRepeatedOrder = false;
+    public string $repeatedOrderNumber = '';
     public string $priority = 'Medium';
+    public array $productionUrgencyIds = [];
+    public array $shipmentUrgencyIds = [];
     public ?int $clientId = null;
     public ?int $workflowId = null;
     public ?int $workflowPhaseId = null;
     public ?int $ownerId = null;
     public ?int $coordinatorId = null;
     public string $deliveryDate = '';
+    public string $estimatedDeliveryDate = '';
     public string $description = '';
     public array $jobItems = [];
     public string $createProductSearch = '';
     public string $createProductCategoryFilter = '';
     public bool $createProductShowAllResults = false;
     public bool $showCreateOrderProductModal = false;
+
+    // Order Details > Add another product flow. Kept separate from Create Order
+    // state so opening the detail picker never mutates the create-order draft.
+    public bool $showAddJobProductForm = false;
+    public string $jobProductSearch = '';
+    public bool $jobProductShowAllResults = false;
+    public ?int $jobProductSelectedId = null;
+    public string $jobProductCategory = '';
+    public string $jobProductQuantity = '1';
+    public string $jobProductUnitPrice = '0.00';
     public string $newProductCode = '';
     public ?int $newProductCategoryId = null;
     public string $newProductCategorySearch = '';
@@ -167,6 +186,7 @@ class Index extends Component
     public bool $showAddOrderTaskForm = false;
     public string $newOrderTaskName = '';
     public string $newOrderTaskDescription = '';
+    public ?int $newOrderTaskPhaseId = null;
     public ?int $newOrderTaskAssigneeId = null;
     public string $newOrderTaskDueDate = '';
 
@@ -217,6 +237,17 @@ class Index extends Component
     public function updatedWorkflowId(): void
     {
         if ($this->showCreate) $this->setDefaultStartPhase();
+    }
+
+    public function updatedIsRepeatedOrder(bool $value): void
+    {
+        if ($value) {
+            $this->resetValidation('repeatedOrderNumber');
+            return;
+        }
+
+        $this->repeatedOrderNumber = '';
+        $this->resetValidation('repeatedOrderNumber');
     }
 
     public function setCreateSelector(string $property, mixed $value): void
@@ -365,6 +396,7 @@ class Index extends Component
                 'category' => $productCategory,
                 'product' => (string) $product->name,
                 'quantity' => 1000,
+                'unit_price' => '',
                 'notes' => '',
             ];
         }
@@ -689,10 +721,12 @@ class Index extends Component
         }
     }
     public function updatedSearch(): void { $this->resetJobSelection(); }
+    public function clearSearch(): void { $this->search = ''; $this->resetJobSelection(); }
     public function updatedPhase(): void { $this->resetJobSelection(); }
     public function updatedHealth(): void { $this->resetJobSelection(); }
     public function updatedClient(): void { $this->resetJobSelection(); }
     public function updatedOwner(): void { $this->resetJobSelection(); }
+    public function updatedAssignee(): void { $this->resetJobSelection(); }
     public function updatedDelivery(): void { $this->resetJobSelection(); }
     public function updatedInvoice(): void { $this->resetJobSelection(); }
     public function updatedPriorityFilter(): void { $this->resetJobSelection(); }
@@ -701,14 +735,14 @@ class Index extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search','phase','health','client','owner','delivery','invoice','priorityFilter','jobStatusFilter']);
+        $this->reset(['search','phase','health','client','owner','assignee','delivery','invoice','priorityFilter','jobStatusFilter']);
         $this->sort = 'updated_desc';
         $this->resetJobSelection();
     }
 
     public function clearFilter(string $filter): void
     {
-        $allowed = ['search','phase','health','client','owner','delivery','invoice','priorityFilter','jobStatusFilter'];
+        $allowed = ['search','phase','health','client','owner','assignee','delivery','invoice','priorityFilter','jobStatusFilter'];
         abort_unless(in_array($filter, $allowed, true), 422);
         $this->{$filter} = '';
         $this->resetJobSelection();
@@ -915,11 +949,17 @@ class Index extends Component
         $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
         $job->load(['items', 'client.contacts']);
 
-        $this->invoiceType = 'Final invoice';
-        $this->invoiceCurrency = strtoupper((string) ($job->currency ?: 'USD'));
+        $master = app(MasterDataService::class);
+        $invoiceTypes = $master->active('invoice_type');
+        $currencies = $master->active('currency');
+        $paymentTerms = $master->active('payment_term');
+
+        $this->invoiceType = (string) ($invoiceTypes->firstWhere('name', 'Final invoice')?->name ?: $invoiceTypes->first()?->name ?: '');
+        $jobCurrency = strtoupper((string) ($job->currency ?: 'USD'));
+        $this->invoiceCurrency = (string) ($currencies->first(fn ($currency) => strtoupper((string) $currency->code) === $jobCurrency)?->code ?: $currencies->first()?->code ?: '');
         $this->invoiceIssueDate = now()->toDateString();
-        $this->invoicePaymentTerms = '15';
-        $this->invoiceDueDate = now()->addDays(15)->toDateString();
+        $this->invoicePaymentTerms = (string) ($paymentTerms->firstWhere('name', 'Net 15 days')?->name ?: $paymentTerms->first()?->name ?: '');
+        $this->syncInvoiceDueDate();
         $this->invoiceBillingContactId = $job->client?->contacts?->firstWhere('is_primary', true)?->id
             ?: $job->client?->contacts?->first()?->id;
         $this->invoiceLineItems = app(OrderFinanceService::class)->defaultInvoiceItems($job);
@@ -927,7 +967,7 @@ class Index extends Component
         $this->invoiceNotes = 'Please include the invoice number with your payment.';
         $this->invoiceTaxRate = '0';
         $this->invoiceSupportingDocument = null;
-        $this->invoiceEmailAfterCreation = true;
+        $this->invoiceEmailAfterCreation = false;
         $this->showCreateInvoiceModal = true;
         $this->resetValidation();
     }
@@ -937,6 +977,12 @@ class Index extends Component
         $this->showCreateInvoiceModal = false;
         $this->invoiceSupportingDocument = null;
         $this->resetValidation();
+    }
+
+    public function clearInvoiceSupportingDocument(): void
+    {
+        $this->invoiceSupportingDocument = null;
+        $this->resetValidation('invoiceSupportingDocument');
     }
 
     public function updatedInvoicePaymentTerms(): void
@@ -973,8 +1019,9 @@ class Index extends Component
         $job->load('client');
 
         $validated = $this->validate([
-            'invoiceType' => ['required', Rule::in(['Deposit invoice', 'Final invoice', 'Progress invoice'])],
-            'invoiceCurrency' => ['required', 'string', 'size:3'],
+            'invoiceType' => ['required', Rule::in($this->financeMasterNames('invoice_type'))],
+            'invoiceCurrency' => ['required', Rule::in($this->financeCurrencyCodes())],
+            'invoicePaymentTerms' => ['required', Rule::in($this->financeMasterNames('payment_term'))],
             'invoiceIssueDate' => ['required', 'date'],
             'invoiceDueDate' => ['required', 'date', 'after_or_equal:invoiceIssueDate'],
             'invoiceBillingContactId' => ['nullable', 'integer', Rule::exists('client_contacts', 'id')->where('client_id', $job->client_id)],
@@ -986,7 +1033,6 @@ class Index extends Component
             'invoiceLineItems.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'invoiceLineItems.*.unit_price' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
             'invoiceSupportingDocument' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,csv,txt'],
-            'invoiceEmailAfterCreation' => ['boolean'],
         ]);
 
         try {
@@ -1012,21 +1058,8 @@ class Index extends Component
             return;
         }
 
-        $mailWarning = null;
-        if (!$draft && $this->invoiceEmailAfterCreation) {
-            if (!$invoice->billing_contact_email) {
-                $mailWarning = ' No billing email was available, so the invoice was not emailed.';
-            } else {
-                try {
-                    $this->emailInvoice($invoice);
-                } catch (Throwable $e) {
-                    $mailWarning = ' The invoice was created, but the email could not be sent.';
-                }
-            }
-        }
-
         $this->closeCreateInvoice();
-        session()->flash('success', ($draft ? 'Invoice saved as draft.' : 'Invoice created successfully.').($mailWarning ?? ''));
+        session()->flash('success', $draft ? 'Invoice saved as draft.' : 'Invoice created successfully.');
     }
 
     public function openRecordPayment(): void
@@ -1039,12 +1072,20 @@ class Index extends Component
         app(JobService::class)->loadVisibleDetailTab($job, $user, 'finance');
         $invoice = $job->invoices->first(fn ($candidate) => !in_array($candidate->status, ['draft', 'cancelled', 'paid'], true) && $candidate->balanceAmount() > 0);
 
+        $master = app(MasterDataService::class);
+        $paymentMethods = $master->active('payment_method');
+        $receivedAccounts = $master->active('received_account');
+        $preferredAccount = ($invoice?->currency ?: 'USD').' Operating Account';
+
         $this->paymentInvoiceId = $invoice?->id;
         $this->paymentDate = now()->toDateString();
-        $this->paymentMethod = 'Bank transfer';
+        $this->paymentMethod = (string) ($paymentMethods->firstWhere('name', 'Bank transfer')?->name ?: $paymentMethods->first()?->name ?: '');
         $this->paymentAmount = $invoice ? number_format($invoice->balanceAmount(), 2, '.', '') : '';
         $this->paymentReference = '';
+        $this->paymentReceivedAccount = (string) ($receivedAccounts->firstWhere('name', $preferredAccount)?->name ?: $receivedAccounts->first()?->name ?: '');
+        $this->paymentReceipt = null;
         $this->paymentNotes = '';
+        $this->paymentMarkInvoicePaid = true;
         $this->showRecordPaymentModal = true;
         $this->resetValidation();
     }
@@ -1053,13 +1094,25 @@ class Index extends Component
     {
         if (!$this->selectedJobId || !$this->paymentInvoiceId) return;
         $invoice = Invoice::query()->where('flow_job_id', $this->selectedJobId)->with('payments')->find($this->paymentInvoiceId);
-        if ($invoice) $this->paymentAmount = number_format($invoice->balanceAmount(), 2, '.', '');
+        if ($invoice) {
+            $this->paymentAmount = number_format($invoice->balanceAmount(), 2, '.', '');
+            $receivedAccounts = app(MasterDataService::class)->active('received_account');
+            $preferredAccount = ($invoice->currency ?: 'USD').' Operating Account';
+            $this->paymentReceivedAccount = (string) ($receivedAccounts->firstWhere('name', $preferredAccount)?->name ?: $receivedAccounts->first()?->name ?: '');
+        }
     }
 
     public function closeRecordPayment(): void
     {
         $this->showRecordPaymentModal = false;
+        $this->paymentReceipt = null;
         $this->resetValidation();
+    }
+
+    public function clearPaymentReceipt(): void
+    {
+        $this->paymentReceipt = null;
+        $this->resetValidation('paymentReceipt');
     }
 
     public function recordPayment(): void
@@ -1072,10 +1125,13 @@ class Index extends Component
         $validated = $this->validate([
             'paymentInvoiceId' => ['required', 'integer', Rule::exists('invoices', 'id')->where('flow_job_id', $job->id)],
             'paymentDate' => ['required', 'date'],
-            'paymentMethod' => ['required', Rule::in(['Bank transfer', 'Credit card', 'Cash', 'Cheque', 'Other'])],
+            'paymentMethod' => ['required', Rule::in($this->financeMasterNames('payment_method'))],
             'paymentAmount' => ['required', 'numeric', 'gt:0'],
             'paymentReference' => ['nullable', 'string', 'max:255'],
+            'paymentReceivedAccount' => ['nullable', Rule::in($this->financeMasterNames('received_account'))],
+            'paymentReceipt' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,csv,txt'],
             'paymentNotes' => ['nullable', 'string', 'max:3000'],
+            'paymentMarkInvoicePaid' => ['boolean'],
         ]);
 
         try {
@@ -1085,8 +1141,10 @@ class Index extends Component
                 'method' => $validated['paymentMethod'],
                 'amount' => $validated['paymentAmount'],
                 'reference' => $validated['paymentReference'] ?? '',
+                'received_account' => $validated['paymentReceivedAccount'] ?? '',
                 'notes' => $validated['paymentNotes'] ?? '',
-            ]);
+                'mark_invoice_paid' => (bool) ($validated['paymentMarkInvoicePaid'] ?? true),
+            ], $this->paymentReceipt);
             $this->closeRecordPayment();
             session()->flash('success', 'Payment recorded successfully.');
         } catch (Throwable $e) {
@@ -1180,14 +1238,56 @@ class Index extends Component
 
     private function syncInvoiceDueDate(): void
     {
-        if (!$this->invoiceIssueDate || !ctype_digit((string) $this->invoicePaymentTerms)) return;
+        if (!$this->invoiceIssueDate || trim($this->invoicePaymentTerms) === '') return;
+
+        $days = $this->paymentTermDays($this->invoicePaymentTerms);
+        if ($days === null) return;
+
         try {
             $this->invoiceDueDate = \Illuminate\Support\Carbon::parse($this->invoiceIssueDate)
-                ->addDays((int) $this->invoicePaymentTerms)
+                ->addDays($days)
                 ->toDateString();
         } catch (Throwable) {
             // Validation will report an invalid date without mutating another field.
         }
+    }
+
+    /** @return array<int,string> */
+    private function financeMasterNames(string $type): array
+    {
+        return app(MasterDataService::class)->active($type)
+            ->pluck('name')
+            ->map(fn ($value) => trim((string) $value))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int,string> */
+    private function financeCurrencyCodes(): array
+    {
+        return app(MasterDataService::class)->active('currency')
+            ->map(fn ($currency) => strtoupper(trim((string) ($currency->code ?: $currency->name))))
+            ->filter()
+            ->values()
+            ->all();
+    }
+
+    private function paymentTermDays(string $value): ?int
+    {
+        $value = trim($value);
+        if ($value === '') return null;
+
+        $record = app(MasterDataService::class)->active('payment_term')
+            ->first(fn ($term) => trim((string) $term->name) === $value || trim((string) $term->code) === $value);
+        if (!$record) return null;
+
+        $configured = data_get($record->metadata, 'days');
+        if (is_numeric($configured)) return max(0, (int) $configured);
+        if (preg_match('/(\d+)/', (string) $record->name, $matches)) return max(0, (int) $matches[1]);
+        if (str_contains(strtolower((string) $record->name), 'receipt')) return 0;
+
+        return null;
     }
 
     private function closeFinanceModals(): void
@@ -1357,22 +1457,44 @@ class Index extends Component
         $data = $this->validate([
             'jobTitle' => ['required','string','max:255'],
             'referenceNumber' => ['nullable','string','max:255'],
-            'priority' => ['required','string','max:30'],
+            'isRepeatedOrder' => ['boolean'],
+            'repeatedOrderNumber' => [Rule::requiredIf($this->isRepeatedOrder), 'nullable', 'string', 'max:255'],
+            'productionUrgencyIds' => ['array'],
+            'productionUrgencyIds.*' => [
+                'integer',
+                Rule::exists('master_records', 'id')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'production_urgency')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'shipmentUrgencyIds' => ['array'],
+            'shipmentUrgencyIds.*' => [
+                'integer',
+                Rule::exists('master_records', 'id')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'shipment_urgency')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
             'clientId' => ['required','exists:clients,id'],
             'workflowId' => ['required','exists:workflows,id'],
             'workflowPhaseId' => ['required','exists:workflow_phases,id'],
             'ownerId' => ['required','exists:users,id'],
             'coordinatorId' => ['nullable','exists:users,id'],
-            'deliveryDate' => ['required','date'],
+            'deliveryDate' => ['nullable','date'],
+            'estimatedDeliveryDate' => ['nullable','date'],
             'description' => ['nullable','string'],
             'jobItems' => ['required','array','min:1','max:25'],
             'jobItems.*.product_id' => ['required','integer'],
             'jobItems.*.category' => ['required','string','max:255'],
             'jobItems.*.product' => ['required','string','max:255'],
             'jobItems.*.quantity' => ['required','integer','min:1','max:999999999'],
+            'jobItems.*.unit_price' => ['nullable','numeric','min:0','max:999999999999.99'],
             'jobItems.*.notes' => ['nullable','string','max:2000'],
             'jobAttachments.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
         ], [
+            'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
             'jobItems.required' => 'Select at least one product for this Order.',
             'jobItems.min' => 'Select at least one product for this Order.',
         ]);
@@ -1430,18 +1552,25 @@ class Index extends Component
         $first = collect($data['jobItems'])->first();
         $job = app(JobService::class)->create([
             'order_number' => $data['referenceNumber'],
+            'is_repeat_order' => (bool) $data['isRepeatedOrder'],
+            'repeat_order_number' => $data['isRepeatedOrder'] ? trim((string) $data['repeatedOrderNumber']) : null,
             'title' => $data['jobTitle'],
             'product' => $first['product'] ?? null,
             'category' => $first['category'] ?? null,
             'quantity' => collect($data['jobItems'])->sum('quantity'),
             'items' => $data['jobItems'],
-            'priority' => $data['priority'],
+            // Keep the legacy Order priority stable for existing health/sort logic.
+            // Create Order now captures production/shipment urgency separately.
+            'priority' => 'Medium',
+            'production_urgency_ids' => array_values(array_map('intval', $data['productionUrgencyIds'] ?? [])),
+            'shipment_urgency_ids' => array_values(array_map('intval', $data['shipmentUrgencyIds'] ?? [])),
             'client_id' => $data['clientId'],
             'workflow_id' => $data['workflowId'],
             'workflow_phase_id' => $data['workflowPhaseId'],
             'owner_id' => $data['ownerId'],
             'coordinator_id' => $data['coordinatorId'] ?: $data['ownerId'],
-            'delivery_date' => $data['deliveryDate'],
+            'delivery_date' => $data['deliveryDate'] ?: null,
+            'estimated_delivery_date' => $data['estimatedDeliveryDate'] ?: null,
             'description' => $data['description'],
             'draft' => $draft,
         ], auth()->user());
@@ -1554,6 +1683,8 @@ class Index extends Component
             'category_name' => 'product category',
             'product_name' => 'product',
             'quantity' => 'quantity',
+            'unit_price' => 'unit price',
+            'notes' => 'product notes',
             default => 'product detail',
         };
 
@@ -1579,6 +1710,126 @@ class Index extends Component
 
             app(JobService::class)->updateItem($job, $item, $field, $value, $user);
         });
+    }
+
+    public function openAddJobProductForm(int $jobId): void
+    {
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisible($user, $jobId);
+        abort_unless(
+            app(AccessControlService::class)->canEditVisibleJob($user, $job)
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'view')
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $this->resetValidation([
+            'jobProductSelectedId', 'jobProductCategory', 'jobProductQuantity', 'jobProductUnitPrice',
+        ]);
+        $this->jobProductSearch = '';
+        $this->jobProductShowAllResults = false;
+        $this->jobProductSelectedId = null;
+        $this->jobProductCategory = '';
+        $this->jobProductQuantity = '1';
+        $this->jobProductUnitPrice = '0.00';
+        $this->showAddJobProductForm = true;
+    }
+
+    public function closeAddJobProductForm(): void
+    {
+        $this->showAddJobProductForm = false;
+        $this->jobProductSearch = '';
+        $this->jobProductShowAllResults = false;
+        $this->jobProductSelectedId = null;
+        $this->jobProductCategory = '';
+        $this->jobProductQuantity = '1';
+        $this->jobProductUnitPrice = '0.00';
+        $this->resetValidation([
+            'jobProductSelectedId', 'jobProductCategory', 'jobProductQuantity', 'jobProductUnitPrice',
+        ]);
+    }
+
+    public function showAllJobProductResults(): void
+    {
+        abort_unless($this->showAddJobProductForm, 422);
+        $this->jobProductShowAllResults = true;
+    }
+
+    public function selectJobProduct(int $productId): void
+    {
+        abort_unless($this->showAddJobProductForm && $this->selectedJobId, 422);
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisible($user, $this->selectedJobId);
+        abort_unless(
+            app(AccessControlService::class)->canEditVisibleJob($user, $job)
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'view')
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
+        $category = trim((string) ($product->parent?->name ?? ''));
+        if ($category === '') {
+            $legacy = trim((string) $product->description);
+            $category = trim(explode(' ·', $legacy, 2)[0]);
+        }
+
+        $this->jobProductSelectedId = (int) $product->id;
+        $this->jobProductCategory = $category !== '' ? $category : 'Uncategorized';
+        $this->jobProductSearch = (string) $product->name;
+        $this->resetValidation(['jobProductSelectedId', 'jobProductCategory']);
+    }
+
+    public function saveJobProduct(int $jobId): void
+    {
+        abort_unless($this->showAddJobProductForm, 422);
+        $user = auth()->user();
+        $job = app(JobService::class)->findVisible($user, $jobId);
+        abort_unless((int) $this->selectedJobId === (int) $job->id, 422);
+        abort_unless(
+            app(AccessControlService::class)->canEditVisibleJob($user, $job)
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'view')
+            && app(AccessControlService::class)->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $data = $this->validate([
+            'jobProductSelectedId' => ['required', 'integer'],
+            'jobProductQuantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'jobProductUnitPrice' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
+        ], [
+            'jobProductSelectedId.required' => 'Select a product first.',
+            'jobProductQuantity.required' => 'Enter a quantity.',
+            'jobProductUnitPrice.required' => 'Enter a unit price.',
+        ]);
+
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail((int) $data['jobProductSelectedId']);
+        $category = trim((string) ($product->parent?->name ?? ''));
+        if ($category === '') {
+            $legacy = trim((string) $product->description);
+            $category = trim(explode(' ·', $legacy, 2)[0]);
+        }
+        $category = $category !== '' ? $category : 'Uncategorized';
+
+        $alreadyAdded = $job->items()
+            ->whereRaw('LOWER(product_name) = ?', [mb_strtolower((string) $product->name)])
+            ->exists();
+        if ($alreadyAdded) {
+            $this->addError('jobProductSelectedId', 'This product is already added to the Order.');
+            return;
+        }
+
+        app(JobService::class)->addItem(
+            $job,
+            $category,
+            (string) $product->name,
+            (int) $data['jobProductQuantity'],
+            $user,
+            (float) $data['jobProductUnitPrice'],
+        );
+
+        $this->closeAddJobProductForm();
     }
 
     public function addJobItem(int $jobId): void
@@ -1817,12 +2068,14 @@ class Index extends Component
 
         $this->newOrderTaskName = '';
         $this->newOrderTaskDescription = '';
+        $this->newOrderTaskPhaseId = null;
         $this->newOrderTaskAssigneeId = $user->id;
         $this->newOrderTaskDueDate = app(WorkspaceSettingsService::class)->localToday()->addDays(3)->toDateString();
         $this->showAddOrderTaskForm = true;
         $this->resetValidation([
             'newOrderTaskName',
             'newOrderTaskDescription',
+            'newOrderTaskPhaseId',
             'newOrderTaskAssigneeId',
             'newOrderTaskDueDate',
         ]);
@@ -1833,21 +2086,31 @@ class Index extends Component
         $this->showAddOrderTaskForm = false;
         $this->newOrderTaskName = '';
         $this->newOrderTaskDescription = '';
+        $this->newOrderTaskPhaseId = null;
         $this->newOrderTaskAssigneeId = null;
         $this->newOrderTaskDueDate = '';
         if ($resetValidation) {
             $this->resetValidation([
                 'newOrderTaskName',
                 'newOrderTaskDescription',
+                'newOrderTaskPhaseId',
                 'newOrderTaskAssigneeId',
                 'newOrderTaskDueDate',
             ]);
         }
     }
 
-    public function addOrderTask(): void
+    public function addOrderTask(?string $description = null): void
     {
         abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+
+        // The rich-text editor is intentionally isolated from Livewire DOM morphs
+        // so typing, formatting, paste and screenshot insertion remain stable in
+        // the dynamically opened Add Task form. Accept its canonical value at
+        // submit time, then run the normal server-side validation/persistence.
+        if ($description !== null) {
+            $this->newOrderTaskDescription = $description;
+        }
 
         $user = auth()->user();
         $job = app(JobService::class)->findVisibleBase($user, $this->selectedJobId);
@@ -1856,6 +2119,7 @@ class Index extends Component
         $data = $this->validate([
             'newOrderTaskName' => ['required', 'string', 'max:255'],
             'newOrderTaskDescription' => ['nullable', 'string', 'max:60000'],
+            'newOrderTaskPhaseId' => ['required', 'integer', 'exists:workflow_phases,id'],
             'newOrderTaskAssigneeId' => ['nullable', 'integer', 'exists:users,id'],
             'newOrderTaskDueDate' => ['nullable', 'date'],
         ]);
@@ -1868,11 +2132,12 @@ class Index extends Component
         app(JobService::class)->appendTask($job, [
             'title' => $data['newOrderTaskName'],
             'description' => $data['newOrderTaskDescription'] ?? null,
+            'workflow_phase_id' => (int) $data['newOrderTaskPhaseId'],
             'assignee_id' => $data['newOrderTaskAssigneeId'] ?? null,
             'due_date' => $data['newOrderTaskDueDate'] ?? null,
         ], $user);
 
-        $phaseId = (int) ($job->workflow_phase_id ?: 0);
+        $phaseId = (int) $data['newOrderTaskPhaseId'];
         if ($phaseId > 0) {
             $this->expandedPhaseIds = array_values(array_unique([
                 ...array_map('intval', $this->expandedPhaseIds),
@@ -2822,8 +3087,6 @@ class Index extends Component
     private function initializeCreateForm(?int $requestedClientId = null): void
     {
         $this->resetCreateForm();
-        $this->deliveryDate = app(WorkspaceSettingsService::class)->localNow()->addMonth()->format('Y-m-d');
-
         $clientQuery = app(ClientService::class)
             ->referenceQuery(auth()->user(), 'create-job')
             ->where('is_active', true);
@@ -2841,13 +3104,18 @@ class Index extends Component
         $this->reset([
             'jobTitle',
             'referenceNumber',
+            'isRepeatedOrder',
+            'repeatedOrderNumber',
             'priority',
+            'productionUrgencyIds',
+            'shipmentUrgencyIds',
             'clientId',
             'workflowId',
             'workflowPhaseId',
             'ownerId',
             'coordinatorId',
             'deliveryDate',
+            'estimatedDeliveryDate',
             'description',
             'jobItems',
             'createProductSearch',
@@ -3032,7 +3300,7 @@ class Index extends Component
                 ->forWorkspace($workspaceId)
                 ->ofType('product_category')
                 ->active()
-                ->when($categorySearch !== '', fn ($query) => $query->where('name', 'like', '%'.$categorySearch.'%'))
+                ->when($categorySearch !== '', fn ($query) => $query->whereLike('name', '%'.$categorySearch.'%'))
                 ->orderBy('sort_order')
                 ->orderBy('name')
                 ->limit(6)
@@ -3057,7 +3325,7 @@ class Index extends Component
                         ->ofType('product_category')
                         ->active()
                         ->where(function ($query) use ($tokens) {
-                            foreach ($tokens as $token) $query->orWhere('name', 'like', '%'.$token.'%');
+                            foreach ($tokens as $token) $query->orWhereLike('name', '%'.$token.'%');
                         })
                         ->when($newProductCategoryMatches->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $newProductCategoryMatches->pluck('id')))
                         ->orderBy('name')
@@ -3082,7 +3350,7 @@ class Index extends Component
                     ->ofType('product')
                     ->active()
                     ->with('parent:id,name,status')
-                    ->where('name', 'like', '%'.$nameSearch.'%')
+                    ->whereLike('name', '%'.$nameSearch.'%')
                     ->when($duplicateProduct, fn ($query) => $query->whereKeyNot($duplicateProduct->id))
                     ->orderBy('name')
                     ->limit(3)
@@ -3105,6 +3373,8 @@ class Index extends Component
             'workflows' => $workflows,
             'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
+            'productionUrgencies' => $this->createAssignmentReady ? $master->active('production_urgency') : collect(),
+            'shipmentUrgencies' => $this->createAssignmentReady ? $master->active('shipment_urgency') : collect(),
             'categoryFilterOptions' => $this->createCatalogReady && $canUseOrderProductSelector && $canViewProductCategories
                 ? $options->options($user, 'product-categories', 'create-job', '', null, 6)
                 : collect(),
@@ -3239,15 +3509,39 @@ class Index extends Component
         $financeSummary = null;
         $financeContacts = collect();
         $financeUsers = collect();
+        $financeInvoiceTypes = collect();
+        $financeCurrencies = collect();
+        $financePaymentTerms = collect();
+        $financePaymentMethods = collect();
+        $financeReceivedAccounts = collect();
         $canCreateFinance = false;
         $canEditFinance = false;
         if ($this->detailTab === 'finance') {
             $financeSummary = app(OrderFinanceService::class)->summary($selected);
             $financeContacts = $selected->client?->contacts ?? collect();
+            $financeInvoiceTypes = $master->active('invoice_type');
+            $financeCurrencies = $master->active('currency');
+            $financePaymentTerms = $master->active('payment_term');
+            $financePaymentMethods = $master->active('payment_method');
+            $financeReceivedAccounts = $master->active('received_account');
             $canCreateFinance = app(AccessControlService::class)->can($user, 'finance', 'create');
             $canEditFinance = app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $selected);
             if ($canEditFinance) {
                 $financeUsers = User::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'profile_image_path']);
+            }
+        }
+
+        $jobProductSearchResults = collect();
+        $jobProductResultTotal = 0;
+        $jobProductSelectedProduct = null;
+        if ($this->detailTab === 'overview' && $this->showAddJobProductForm) {
+            $catalog = app(\App\Services\ProductCatalogService::class);
+            $productSearch = trim($this->jobProductSearch);
+            $jobProductResultTotal = $catalog->orderSearchCount($productSearch, null);
+            $resultLimit = $this->jobProductShowAllResults || $jobProductResultTotal <= 20 ? 20 : 3;
+            $jobProductSearchResults = $catalog->searchForOrderCreation($productSearch, null, $resultLimit);
+            if ($this->jobProductSelectedId) {
+                $jobProductSelectedProduct = $catalog->selectedProducts([$this->jobProductSelectedId])->first();
             }
         }
 
@@ -3275,8 +3569,16 @@ class Index extends Component
             'financeSummary' => $financeSummary,
             'financeContacts' => $financeContacts,
             'financeUsers' => $financeUsers,
+            'financeInvoiceTypes' => $financeInvoiceTypes,
+            'financeCurrencies' => $financeCurrencies,
+            'financePaymentTerms' => $financePaymentTerms,
+            'financePaymentMethods' => $financePaymentMethods,
+            'financeReceivedAccounts' => $financeReceivedAccounts,
             'canCreateFinance' => $canCreateFinance,
             'canEditFinance' => $canEditFinance,
+            'jobProductSearchResults' => $jobProductSearchResults,
+            'jobProductResultTotal' => $jobProductResultTotal,
+            'jobProductSelectedProduct' => $jobProductSelectedProduct,
         ];
     }
 
@@ -3291,12 +3593,24 @@ class Index extends Component
             $this->search,
             $this->perPage,
             $this->client !== '' ? (int) $this->client : null,
+            $this->phase !== '' ? (int) $this->phase : null,
+            $this->assignee !== '' ? (int) $this->assignee : null,
         );
+        $options = app(\App\Services\FilterOptionService::class);
 
         return [
             'selectedJob' => null,
             'selectedTask' => null,
             'jobs' => $jobs,
+            'clientFilterOptions' => $this->client !== ''
+                ? $options->options($user, 'clients', 'jobs', '', (int) $this->client, 5)
+                : collect(),
+            'phaseFilterOptions' => $this->phase !== ''
+                ? $options->options($user, 'phases', 'order-list', '', (int) $this->phase, 5)
+                : collect(),
+            'assigneeFilterOptions' => $this->assignee !== ''
+                ? $options->options($user, 'users', 'order-list', '', (int) $this->assignee, 5)
+                : collect(),
         ];
     }
 
@@ -3332,6 +3646,7 @@ class Index extends Component
             'health' => $this->health,
             'client' => $this->client,
             'owner' => $this->owner,
+            'assignee' => $this->assignee,
             'delivery' => $this->delivery,
             'invoice' => $this->invoice,
             'priority' => $this->priorityFilter,

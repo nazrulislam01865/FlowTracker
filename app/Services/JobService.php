@@ -56,11 +56,11 @@ class JobService
             ->when($quick === 'invoice', fn ($q) => $q->where(fn ($x) => $x->where('commercial_value', '<=', 0)->orWhereHas('phase', fn ($p) => $p->where('short_name', 'Invoice'))))
             ->when($filters['search'] ?? null, function ($q, $search) {
                 $q->where(function ($x) use ($search) {
-                    $x->where('job_number', 'like', "%{$search}%")
-                        ->orWhere('order_number', 'like', "%{$search}%")
-                        ->orWhere('title', 'like', "%{$search}%")
-                        ->orWhere('product', 'like', "%{$search}%")
-                        ->orWhereHas('client', fn ($c) => $c->where('name', 'like', "%{$search}%"));
+                    $x->whereLike('job_number', "%{$search}%")
+                        ->orWhereLike('order_number', "%{$search}%")
+                        ->orWhereLike('title', "%{$search}%")
+                        ->orWhereLike('product', "%{$search}%")
+                        ->orWhereHas('client', fn ($c) => $c->whereLike('name', "%{$search}%"));
                 });
             })
             ->when($filters['phase'] ?? null, fn ($q, $v) => $q->where(function ($phaseQuery) use ($v) {
@@ -72,6 +72,11 @@ class JobService
             ->when($filters['health'] ?? null, fn ($q, $v) => $q->where('health', $v))
             ->when($filters['client'] ?? null, fn ($q, $v) => $q->where('client_id', $v))
             ->when($filters['owner'] ?? null, fn ($q, $v) => $q->where('owner_id', $v))
+            ->when($filters['assignee'] ?? null, function ($q, $v) use ($user) {
+                $q->whereHas('tasks', function ($tasks) use ($user, $v) {
+                    app(AccessControlService::class)->applyTaskScope($tasks, $user)->where('tasks.assignee_id', $v);
+                });
+            })
             ->when($filters['priority'] ?? null, fn ($q, $v) => $q->where('priority', $v))
             ->when($filters['status'] ?? null, fn ($q, $v) => $q->where('status', $v))
             ->when(($filters['delivery'] ?? null) === 'week', fn ($q) => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->addDays(7)]))
@@ -110,7 +115,7 @@ class JobService
                 'flow_jobs.needs_attention', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
             ])
             ->with([
-                'client:id,name,logo_path',
+                'client:id,code,name,logo_path',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -136,7 +141,15 @@ class JobService
      * each row. Completed Orders remain visible; cancelled/inactive records do
      * not appear in the operational Orders list.
      */
-    public function paginateOrders(User $user, string $search = '', int $perPage = 25, ?int $clientId = null): LengthAwarePaginator
+    public function paginateOrders(
+        User $user,
+        string $search = '',
+        int $perPage = 25,
+        ?int $clientId = null,
+        ?int $phaseId = null,
+        ?int $assigneeId = null,
+        ?int $ownerId = null,
+    ): LengthAwarePaginator
     {
         $search = trim($search);
         $searchLength = mb_strlen($search);
@@ -155,7 +168,22 @@ class JobService
 
         $query = $this->visibleQuery($user)
             ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES)
-            ->when($clientId, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId));
+            ->when($clientId, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+            ->when($phaseId, fn (Builder $query) => $query->where(function (Builder $phaseQuery) use ($phaseId): void {
+                $phaseQuery->where('flow_jobs.source_workflow_phase_id', $phaseId)
+                    ->orWhere(function (Builder $legacy) use ($phaseId): void {
+                        $legacy->whereNull('flow_jobs.source_workflow_phase_id')
+                            ->where('flow_jobs.workflow_phase_id', $phaseId);
+                    });
+            }))
+            ->when($assigneeId, function (Builder $query) use ($user, $assigneeId): void {
+                $query->whereHas('tasks', function (Builder $tasks) use ($user, $assigneeId): void {
+                    app(AccessControlService::class)
+                        ->applyTaskScope($tasks, $user)
+                        ->where('tasks.assignee_id', $assigneeId);
+                });
+            })
+            ->when($ownerId, fn (Builder $query) => $query->where('flow_jobs.owner_id', $ownerId));
 
         foreach ($tokens as $token) {
             $token = (string) $token;
@@ -165,21 +193,21 @@ class JobService
             $legacyLike = $looksLikeReference ? $legacyToken.'%' : '%'.$legacyToken.'%';
 
             $query->where(function (Builder $match) use ($like, $legacyLike) {
-                $match->where('flow_jobs.job_number', 'like', $like)
-                    ->orWhere('flow_jobs.job_number', 'like', $legacyLike)
-                    ->orWhere('flow_jobs.order_number', 'like', $like)
-                    ->orWhere('flow_jobs.title', 'like', $like)
-                    ->orWhere('flow_jobs.product', 'like', $like)
-                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
-                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('name', 'like', $like))
+                $match->whereLike('flow_jobs.job_number', $like)
+                    ->orWhereLike('flow_jobs.job_number', $legacyLike)
+                    ->orWhereLike('flow_jobs.order_number', $like)
+                    ->orWhereLike('flow_jobs.title', $like)
+                    ->orWhereLike('flow_jobs.product', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like))
+                    ->orWhereHas('owner', fn (Builder $owner) => $owner->whereLike('name', $like))
                     ->orWhereHas('items', fn (Builder $item) => $item
-                        ->where('product_name', 'like', $like)
-                        ->orWhere('category_name', 'like', $like))
+                        ->whereLike('product_name', $like)
+                        ->orWhereLike('category_name', $like))
                     ->orWhereHas('sourceInquiry', fn (Builder $inquiry) => $inquiry
-                        ->where('inquiry_number', 'like', $like)
-                        ->orWhere('reference_number', 'like', $like)
-                        ->orWhere('subject', 'like', $like))
-                    ->orWhereHas('createdActivity.user', fn (Builder $creator) => $creator->where('name', 'like', $like));
+                        ->whereLike('inquiry_number', $like)
+                        ->orWhereLike('reference_number', $like)
+                        ->orWhereLike('subject', $like))
+                    ->orWhereHas('createdActivity.user', fn (Builder $creator) => $creator->whereLike('name', $like));
             });
         }
 
@@ -189,7 +217,7 @@ class JobService
             ->orderByDesc('flow_jobs.id')
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.order_number',
-                'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.source_inquiry_id',
+                'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.source_inquiry_id',
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority',
                 'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention',
@@ -300,16 +328,16 @@ class JobService
         foreach ($tokens as $token) {
             $like = '%'.str_replace(['%', '_'], ['\\%', '\\_'], (string) $token).'%';
             $query->where(function (Builder $match) use ($like): void {
-                $match->where('inquiries.inquiry_number', 'like', $like)
-                    ->orWhere('inquiries.reference_number', 'like', $like)
-                    ->orWhere('inquiries.subject', 'like', $like)
-                    ->orWhere('inquiries.requirement_notes', 'like', $like)
-                    ->orWhereHas('client', fn (Builder $client) => $client->where('name', 'like', $like))
-                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('name', 'like', $like))
+                $match->whereLike('inquiries.inquiry_number', $like)
+                    ->orWhereLike('inquiries.reference_number', $like)
+                    ->orWhereLike('inquiries.subject', $like)
+                    ->orWhereLike('inquiries.requirement_notes', $like)
+                    ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like))
+                    ->orWhereHas('owner', fn (Builder $owner) => $owner->whereLike('name', $like))
                     ->orWhereHas('items', fn (Builder $item) => $item
-                        ->where('item_name', 'like', $like)
-                        ->orWhere('category', 'like', $like)
-                        ->orWhere('notes', 'like', $like));
+                        ->whereLike('item_name', $like)
+                        ->orWhereLike('category', $like)
+                        ->orWhereLike('notes', $like));
             });
         }
 
@@ -438,7 +466,7 @@ class JobService
             ];
 
             if (app(AccessControlService::class)->can($user, 'catalog_products', 'view')) {
-                $relations[] = 'items';
+                $relations[] = 'items.updatedBy:id,name,profile_image_path';
             }
 
             $job->load($relations);
@@ -607,6 +635,10 @@ class JobService
             $job = FlowJob::create([
                 'job_number' => 'ORDER-'.app(WorkspaceSettingsService::class)->localNow()->format('Y').'-'.str_pad((string) $next, 5, '0', STR_PAD_LEFT),
                 'order_number' => blank($data['order_number'] ?? null) ? null : trim((string) $data['order_number']),
+                'is_repeat_order' => (bool) ($data['is_repeat_order'] ?? false),
+                'repeat_order_number' => (bool) ($data['is_repeat_order'] ?? false) && filled($data['repeat_order_number'] ?? null)
+                    ? trim((string) $data['repeat_order_number'])
+                    : null,
                 'client_id' => $clientId,
                 'workflow_id' => $workflow->id,
                 'source_workflow_id' => $workflow->id,
@@ -621,6 +653,7 @@ class JobService
                 'category' => $data['category'] ?? null,
                 'quantity' => $data['quantity'] ?? 0,
                 'delivery_date' => $data['delivery_date'] ?? null,
+                'estimated_delivery_date' => $data['estimated_delivery_date'] ?? null,
                 'received_date' => $data['received_date'] ?? null,
                 'supplier_id' => $data['supplier_id'] ?? null,
                 'warehouse' => blank($data['warehouse'] ?? null) ? null : trim((string) $data['warehouse']),
@@ -629,6 +662,8 @@ class JobService
                 'import_profile' => blank($data['import_profile'] ?? null) ? null : trim((string) $data['import_profile']),
                 'bulk_import_id' => blank($data['bulk_import_id'] ?? null) ? null : trim((string) $data['bulk_import_id']),
                 'priority' => $data['priority'] ?? 'Medium',
+                'production_urgency_ids' => array_values(array_map('intval', (array) ($data['production_urgency_ids'] ?? []))),
+                'shipment_urgency_ids' => array_values(array_map('intval', (array) ($data['shipment_urgency_ids'] ?? []))),
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'status' => $draft ? 'Draft' : 'New',
                 'health' => 'On Track',
@@ -648,7 +683,9 @@ class JobService
                     'product_name' => $item['product'] ?? null,
                     'category_name' => $item['category'] ?? null,
                     'quantity' => (int) ($item['quantity'] ?? 1),
+                    'unit_price' => round(max(0, (float) ($item['unit_price'] ?? 0)), 2),
                     'notes' => blank($item['notes'] ?? null) ? null : trim((string) $item['notes']),
+                    'updated_by' => $actor->id,
                     'sort_order' => $sort,
                 ]);
             }
@@ -928,19 +965,27 @@ class JobService
         abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
         $this->assertEditable($job, $actor);
         abort_unless((int) $item->flow_job_id === (int) $job->id, 404);
-        abort_unless(in_array($field, ['category_name', 'product_name', 'quantity'], true), 422, 'This Job item field cannot be edited inline.');
+        abort_unless(in_array($field, ['category_name', 'product_name', 'quantity', 'unit_price', 'notes'], true), 422, 'This Job item field cannot be edited inline.');
 
         $wasDraft = blank($item->product_name);
         $originalCategory = (string) ($item->category_name ?? '');
 
         if ($field === 'quantity') {
             $value = max(1, (int) $value);
+        } elseif ($field === 'unit_price') {
+            abort_unless(is_numeric($value), 422, 'Unit price must be a number.');
+            $value = round(max(0, (float) $value), 2);
+            abort_if($value > 999999999999.99, 422, 'Unit price is outside the allowed range.');
+        } elseif ($field === 'notes') {
+            $value = trim((string) $value);
+            abort_if(mb_strlen($value) > 2000, 422, 'Product notes may not exceed 2000 characters.');
+            $value = $value === '' ? null : $value;
         } else {
             $value = trim((string) $value);
             abort_if($value === '', 422, $field === 'category_name' ? 'Product category is required.' : 'Product name is required.');
         }
 
-        $item->update([$field => $value]);
+        $item->update([$field => $value, 'updated_by' => $actor->id]);
 
         // Category and product are a dependent pair. A real category change
         // always clears the previous product so the user explicitly chooses a
@@ -978,7 +1023,7 @@ class JobService
         return $item;
     }
 
-    public function addItem(FlowJob $job, string $category, string $product, int $quantity, User $actor): FlowJobItem
+    public function addItem(FlowJob $job, string $category, string $product, int $quantity, User $actor, float $unitPrice = 0): FlowJobItem
     {
         abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'create'), 403);
         $this->assertEditable($job, $actor);
@@ -994,6 +1039,8 @@ class JobService
                 'category_name' => $job->category,
                 'product_name' => $job->product,
                 'quantity' => max(1, (int) $job->quantity),
+                'unit_price' => 0,
+                'updated_by' => $actor->id,
                 'sort_order' => 0,
             ]);
         }
@@ -1003,6 +1050,8 @@ class JobService
             'category_name' => $category !== '' ? $category : null,
             'product_name' => $product !== '' ? $product : null,
             'quantity' => max(1, $quantity),
+            'unit_price' => max(0, $unitPrice),
+            'updated_by' => $actor->id,
             'sort_order' => ((int) $job->items()->max('sort_order')) + 1,
         ]);
 
@@ -1086,8 +1135,11 @@ class JobService
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $lockedJob->loadMissing('phase', 'workflow.phases');
 
-            $phaseId = (int) ($lockedJob->workflow_phase_id ?: ($lockedJob->phase?->id ?? 0));
-            abort_unless($phaseId > 0, 422, 'The Order does not have an active workflow phase.');
+            $phaseId = (int) ($data['workflow_phase_id'] ?? 0);
+            abort_unless($phaseId > 0, 422, 'Select a workflow phase for this task.');
+
+            $workflowPhaseIds = $lockedJob->workflow?->phases?->pluck('id')->map(fn ($id) => (int) $id) ?? collect();
+            abort_unless($workflowPhaseIds->contains($phaseId), 422, 'The selected phase does not belong to this Order workflow.');
 
             $nextNumber = max(301, (int) Task::withTrashed()->max('id') + 301);
             do {

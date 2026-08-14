@@ -1,7 +1,9 @@
 @props([
-    'job','summary'=>[],'contacts'=>collect(),'users'=>collect(),'canCreate'=>false,'canEdit'=>false,
-    'showCreateInvoiceModal'=>false,'invoiceType'=>'Final invoice','invoiceCurrency'=>'USD','invoiceIssueDate'=>'','invoicePaymentTerms'=>'15','invoiceDueDate'=>'','invoiceBillingContactId'=>null,'invoiceLineItems'=>[],'invoicePurchaseOrderReference'=>'','invoiceNotes'=>'','invoiceTaxRate'=>'0','invoiceSupportingDocument'=>null,'invoiceEmailAfterCreation'=>true,
-    'showRecordPaymentModal'=>false,'paymentInvoiceId'=>null,'paymentDate'=>'','paymentMethod'=>'Bank transfer','paymentAmount'=>'','paymentReference'=>'','paymentNotes'=>'',
+    'job','summary'=>[],'contacts'=>collect(),'users'=>collect(),
+    'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'paymentMethods'=>collect(),'receivedAccounts'=>collect(),
+    'canCreate'=>false,'canEdit'=>false,
+    'showCreateInvoiceModal'=>false,'invoiceType'=>'Final invoice','invoiceCurrency'=>'USD','invoiceIssueDate'=>'','invoicePaymentTerms'=>'Net 15 days','invoiceDueDate'=>'','invoiceBillingContactId'=>null,'invoiceLineItems'=>[],'invoicePurchaseOrderReference'=>'','invoiceNotes'=>'','invoiceTaxRate'=>'0','invoiceSupportingDocument'=>null,'invoiceEmailAfterCreation'=>false,
+    'showRecordPaymentModal'=>false,'paymentInvoiceId'=>null,'paymentDate'=>'','paymentMethod'=>'Bank transfer','paymentAmount'=>'','paymentReference'=>'','paymentNotes'=>'','paymentReceipt'=>null,
     'showCollectionUpdateModal'=>false,'collectionOwnerId'=>null,'collectionFollowUpDate'=>'','collectionNextFollowUpDate'=>'','collectionNote'=>'',
 ])
 @php
@@ -58,6 +60,24 @@
                         <td><x-jobs.finance.status :status="$invoice->status" /></td>
                         <td><button type="button" class="ft-finance-kebab" aria-label="Invoice actions">•••</button></td>
                     </tr>
+                    @if($invoice->pdf_path)
+                        <x-jobs.finance.attachment-row
+                            :colspan="9"
+                            :name="$invoice->pdf_name ?: $invoice->invoice_number.'.pdf'"
+                            :meta="'Generated invoice · '.($invoice->creator?->name ?: 'System').' · '.($invoice->pdf_generated_at ? \App\Support\UserLocalTime::format($invoice->pdf_generated_at, 'M j, Y, g:i A') : \App\Support\UserLocalTime::format($invoice->created_at, 'M j, Y, g:i A'))"
+                            :open-url="route('invoices.pdf.open', $invoice)"
+                            :download-url="route('invoices.pdf.download', $invoice)"
+                        />
+                    @endif
+                    @if($invoice->supporting_document_path)
+                        <x-jobs.finance.attachment-row
+                            :colspan="9"
+                            :name="$invoice->supporting_document_name ?: basename($invoice->supporting_document_path)"
+                            :meta="'Invoice supporting document · '.($invoice->creator?->name ?: 'System').' · '.\App\Support\UserLocalTime::format($invoice->created_at, 'M j, Y, g:i A')"
+                            :open-url="route('invoices.attachment.open', $invoice)"
+                            :download-url="route('invoices.attachment.download', $invoice)"
+                        />
+                    @endif
                 @empty
                     <tr><td colspan="9"><div class="ft-finance-empty"><strong>No invoices yet</strong><span>Create the first invoice for this order when billing is ready.</span>@if($canCreate)<button type="button" wire:click="openCreateInvoice">Create invoice</button>@endif</div></td></tr>
                 @endforelse
@@ -75,6 +95,15 @@
                     <tbody>
                     @forelse($job->payments as $payment)
                         <tr><td><strong class="ft-finance-link">{{ $payment->payment_number }}</strong></td><td>{{ \App\Support\UserLocalTime::format($payment->payment_date, 'M j, Y') }}</td><td>{{ $payment->method }}</td><td>{{ $money($payment->amount, $payment->invoice?->currency ?: $currency) }}</td><td><strong class="ft-finance-link">{{ $payment->invoice?->invoice_number ?: '—' }}</strong></td><td>{{ $payment->recorder?->name ?: 'System' }}</td></tr>
+                        @if($payment->receipt_path)
+                            <x-jobs.finance.attachment-row
+                                :colspan="6"
+                                :name="$payment->receipt_name ?: basename($payment->receipt_path)"
+                                :meta="'Payment receipt / bank advice · '.($payment->recorder?->name ?: 'System').' · '.\App\Support\UserLocalTime::format($payment->created_at, 'M j, Y, g:i A')"
+                                :open-url="route('payments.receipt.open', $payment)"
+                                :download-url="route('payments.receipt.download', $payment)"
+                            />
+                        @endif
                     @empty
                         <tr><td colspan="6"><div class="ft-finance-empty compact"><span>No payments have been recorded for this order.</span></div></td></tr>
                     @endforelse
@@ -102,12 +131,20 @@
     @if($showCreateInvoiceModal)
         <x-jobs.finance.create-invoice-modal
             :job="$job" :contacts="$contacts" :summary="$summary"
+            :invoice-types="$invoiceTypes" :currencies="$currencies" :payment-terms="$paymentTerms"
             :invoice-line-items="$invoiceLineItems" :invoice-tax-rate="$invoiceTaxRate" :invoice-currency="$invoiceCurrency" :invoice-type="$invoiceType"
             :invoice-supporting-document="$invoiceSupportingDocument"
         />
     @endif
     @if($showRecordPaymentModal)
-        <x-jobs.finance.payment-modal :job="$job" />
+        <x-jobs.finance.payment-modal
+            :job="$job"
+            :payment-methods="$paymentMethods"
+            :received-accounts="$receivedAccounts"
+            :payment-invoice-id="$paymentInvoiceId"
+            :payment-amount="$paymentAmount"
+            :payment-receipt="$paymentReceipt"
+        />
     @endif
     @if($showCollectionUpdateModal)
         <x-jobs.finance.collection-update-modal :users="$users" />

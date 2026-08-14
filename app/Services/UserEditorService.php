@@ -41,6 +41,7 @@ class UserEditorService
         abort_unless($this->canEdit($actor, $target), 403);
 
         $canManageAccess = $this->canManageAccess($actor);
+        $wasAdministrator = app(AccessControlService::class)->isAdministrator($target);
         $oldStatus = $this->accountStatus($target);
         $passwordChanged = filled($data['password'] ?? null);
         $signOutSessions = (bool) ($data['sign_out_sessions'] ?? true);
@@ -54,9 +55,12 @@ class UserEditorService
             ];
 
             if ($canManageAccess) {
-                $role = Role::query()
-                    ->where('workspace_id', $this->workspaceId())
-                    ->findOrFail((int) $data['role_id']);
+                $roleIds = collect($data['role_ids'] ?? [$data['role_id'] ?? null])->filter()->map(fn ($id) => (int) $id)->unique()->values();
+                abort_if($roleIds->isEmpty(), 422, 'Select at least one role.');
+                $roles = Role::query()->where('workspace_id', $this->workspaceId())->whereIn('id', $roleIds)->get()->keyBy('id');
+                abort_unless($roles->count() === $roleIds->count(), 422, 'One or more selected roles are invalid.');
+                $selectedRoles = $roleIds->map(fn ($id) => $roles->get($id))->values();
+                $primaryRole = $selectedRoles->firstWhere('id', $target->role_id) ?: $selectedRoles->first();
 
                 $departmentId = filled($data['department_id'] ?? null) ? (int) $data['department_id'] : null;
                 if ($departmentId) {
@@ -68,11 +72,12 @@ class UserEditorService
 
                 if ($target->isSuperAdmin()) {
                     $changes['role_id'] = $target->role_id;
+                    $selectedRoles = $target->assignedRoles();
                     $changes['is_active'] = true;
                     $changes['account_status'] = 'active';
                 } else {
                     abort_if($target->id === $actor->id && $status !== 'active', 422, 'You cannot deactivate or suspend your own signed-in account.');
-                    $changes['role_id'] = $role->id;
+                    $changes['role_id'] = $primaryRole->id;
                     $changes['department_id'] = $departmentId;
                     $changes['account_status'] = $status;
                     $changes['is_active'] = $status === 'active';
@@ -84,7 +89,10 @@ class UserEditorService
             }
 
             $target->update($changes);
-            $target->refresh();
+            if ($canManageAccess) {
+                $target->roles()->sync($selectedRoles->pluck('id')->all());
+            }
+            $target->refresh()->loadMissing(['role', 'roles']);
 
             $membership = WorkspaceMembership::query()->firstOrNew([
                 'workspace_id' => $this->workspaceId(),
@@ -128,7 +136,16 @@ class UserEditorService
             ]);
         });
 
-        return $target->refresh()->loadMissing(['role', 'department']);
+        app(AccessControlService::class)->forgetRole((int) ($target->role_id ?: 0));
+        $fresh = $target->refresh()->loadMissing(['role', 'roles', 'department']);
+        app(DashboardService::class)->forget($fresh);
+        app(ShellDataService::class)->forget((int) $fresh->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
+        if (! $wasAdministrator && app(AccessControlService::class)->isAdministrator($fresh)) {
+            app(NotificationService::class)->backfillAdministratorMentions($fresh);
+        }
+
+        return $fresh;
     }
 
     public function updateProfileImage(User $target, UploadedFile $image, User $actor): User

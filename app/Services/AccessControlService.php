@@ -5,14 +5,18 @@ namespace App\Services;
 use App\Models\FlowJob;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
+use App\Models\Role;
 use App\Models\RoleModuleAccess;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Relations\Relation;
+use Illuminate\Support\Collection;
 
 class AccessControlService
 {
     private array $accessCache = [];
+    private array $accessRowsCache = [];
+    private array $activeRolesCache = [];
     public const ACTIONS = ['view','create','edit_own','edit_all','delete','assign','link','export','manage'];
 
     /** Modules that are actually implemented and enforced by FlowTrack today. */
@@ -145,7 +149,10 @@ class AccessControlService
 
     public function isAdministrator(User $user): bool
     {
-        return $user->is_super_admin || in_array($user->role?->slug, ['super-admin','admin','administrator'], true);
+        if ($user->is_super_admin) return true;
+
+        return $this->activeRoles($user)
+            ->contains(fn (Role $role) => in_array($role->slug, ['super-admin','admin','administrator'], true));
     }
 
     public function can(User $user, string $module, string $action = 'view'): bool
@@ -153,7 +160,6 @@ class AccessControlService
         if (!$user->is_active) return false;
         if ($this->isAdministrator($user)) return true;
         if (!isset(self::MODULES[$module]) || !self::supportsAction($module, $action)) return false;
-        if (!$user->role || $user->role->is_active === false) return false;
 
         $access = $this->access($user, $module);
         if (!$access) return false;
@@ -190,20 +196,58 @@ class AccessControlService
             if (isset(self::MODULES[$module])) return $this->can($user, $module, $action);
         }
 
-        return $user->role?->permissions()->where('slug', $permission)->exists() ?? false;
+        $roleIds = $this->activeRoles($user)->pluck('id')->map(fn ($id) => (int) $id)->all();
+        if ($roleIds === []) return false;
+
+        return Role::query()
+            ->whereIn('id', $roleIds)
+            ->whereHas('permissions', fn ($query) => $query->where('slug', $permission))
+            ->exists();
     }
 
-    public function scope(User $user, string $module): string
+    /**
+     * Return all effective record scopes contributed by active assigned roles
+     * that grant access to the module. Multiple role scopes are combined as a
+     * union by the query-scoping methods below.
+     *
+     * @return list<string>
+     */
+    public function scopes(User $user, string $module): array
     {
-        if (!$user->is_active) return 'none';
-        if ($this->isAdministrator($user)) return 'all_records';
+        if (!$user->is_active) return ['none'];
+        if ($this->isAdministrator($user)) return ['all_records'];
 
-        $access = $this->access($user, $module);
         if (self::isUniversalRecordModule($module) || self::isParentRecordModule($module)) {
-            return $access && !empty($access->actions) ? 'all_records' : 'none';
+            return $this->can($user, $module, 'view') ? ['all_records'] : ['none'];
         }
 
-        return $access?->record_scope ?: ($user->role?->default_scope ?: 'none');
+        $scopes = $this->accessRows($user, $module)
+            // Record visibility must come only from roles that actually grant
+            // View/Manage for this module. A second role that grants only Create,
+            // Assign, Export, etc. must never widen another role's visible scope.
+            ->filter(fn (RoleModuleAccess $row) => $this->rowGrantsView($row))
+            ->pluck('record_scope')
+            ->map(fn ($scope) => (string) ($scope ?: 'none'))
+            ->map(fn ($scope) => $scope === 'selected_clients' ? 'assigned_jobs' : $scope)
+            ->filter(fn ($scope) => in_array($scope, ['none','own_records','assigned_jobs','department','all_records'], true))
+            ->unique()
+            ->values()
+            ->all();
+
+        return $scopes !== [] ? $scopes : ['none'];
+    }
+
+    /**
+     * Backwards-compatible single-scope summary for UI/legacy callers. Core
+     * visibility queries use scopes() so mixed role scopes remain a true union.
+     */
+    public function scope(User $user, string $module): string
+    {
+        $scopes = $this->scopes($user, $module);
+        foreach (['all_records','department','assigned_jobs','own_records','none'] as $scope) {
+            if (in_array($scope, $scopes, true)) return $scope;
+        }
+        return 'none';
     }
 
     public static function isUniversalRecordModule(string $module): bool
@@ -259,7 +303,7 @@ class AccessControlService
     {
         $query = $this->eloquentBuilder($query);
         if (!$this->can($user, $module, 'view')) return $query->whereRaw('1 = 0');
-        return $this->constrainJobs($query, $user, $this->scope($user, $module));
+        return $this->constrainJobs($query, $user, $this->scopes($user, $module));
     }
 
     public function applyTaskScope(Builder|Relation $query, User $user): Builder
@@ -268,7 +312,35 @@ class AccessControlService
         if (!$this->can($user, 'tasks', 'view')) {
             return $query->whereHas('job', fn ($job) => $job->where('created_by', $user->id));
         }
-        return $this->constrainTasks($query, $user, $this->scope($user, 'tasks'));
+        return $this->constrainTasks($query, $user, $this->scopes($user, 'tasks'));
+    }
+
+    public function applyInquiryScope(Builder|Relation $query, User $user): Builder
+    {
+        $query = $this->eloquentBuilder($query);
+        if (!$this->can($user, 'inquiries', 'view')) return $query->whereRaw('1 = 0');
+
+        $scopes = $this->normalizeScopes($this->scopes($user, 'inquiries'));
+        if (in_array('all_records', $scopes, true)) return $query;
+
+        return $query->where(function (Builder $scopeQuery) use ($user, $scopes): void {
+            // Creators retain visibility under every non-admin record scope.
+            $scopeQuery->where('created_by', $user->id);
+
+            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
+                $scopeQuery->orWhere('owner_id', $user->id);
+            }
+
+            if (in_array('assigned_jobs', $scopes, true)) {
+                $scopeQuery->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id));
+            }
+
+            if (in_array('department', $scopes, true) && $user->department_id) {
+                $scopeQuery
+                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
+                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
+            }
+        });
     }
 
     public function applyClientScope(Builder|Relation $query, User $user): Builder
@@ -288,13 +360,13 @@ class AccessControlService
     {
         $query = $this->eloquentBuilder($query);
         if (!$this->can($user, 'documents', 'view')) return $query->whereRaw('1 = 0');
-        $scope = $this->scope($user, 'documents');
-        if ($scope === 'all_records') return $query;
-        if ($scope === 'none') return $query->whereRaw('1 = 0');
+        $scopes = $this->scopes($user, 'documents');
+        if (in_array('all_records', $scopes, true)) return $query;
+        if ($this->normalizeScopes($scopes) === ['none']) return $query->whereRaw('1 = 0');
 
-        return $query->where(function ($q) use ($user, $scope) {
-            $q->whereHas('task', fn ($tasks) => $this->constrainTasks($tasks, $user, $scope))
-                ->orWhereHas('job', fn ($jobs) => $this->constrainJobs($jobs, $user, $scope));
+        return $query->where(function ($q) use ($user, $scopes) {
+            $q->whereHas('task', fn ($tasks) => $this->constrainTasks($tasks, $user, $scopes))
+                ->orWhereHas('job', fn ($jobs) => $this->constrainJobs($jobs, $user, $scopes));
         });
     }
 
@@ -309,29 +381,23 @@ class AccessControlService
         );
 
         // The creator of an Inquiry always keeps access to its complete taskflow.
-        // The standalone Tasks module can still be hidden by the role matrix; this
-        // exception exists so the creator never sees a partial Inquiry they created.
         if (!$this->can($user, 'tasks', 'view')) {
             return $query->whereHas('inquiry', fn ($inquiry) => $inquiry->where('created_by', $user->id));
         }
 
-        $scope = $this->scope($user, 'tasks');
-        if ($scope === 'all_records') return $query;
-        if ($scope === 'none') {
-            return $query->whereHas('inquiry', fn ($inquiry) => $inquiry->where('created_by', $user->id));
-        }
-        if ($scope === 'department') {
-            return $query->where(function ($scopeQuery) use ($user) {
-                $scopeQuery->whereHas('inquiry', fn ($inquiry) => $inquiry->where('created_by', $user->id));
-                if ($user->department_id) {
-                    $scopeQuery->orWhereHas('assignee', fn ($assignee) => $assignee->where('department_id', $user->department_id));
-                }
-            });
-        }
+        $scopes = $this->normalizeScopes($this->scopes($user, 'tasks'));
+        if (in_array('all_records', $scopes, true)) return $query;
 
-        return $query->where(function ($scopeQuery) use ($user) {
-            $scopeQuery->where('inquiry_tasks.assignee_id', $user->id)
-                ->orWhereHas('inquiry', fn ($inquiry) => $inquiry->where('created_by', $user->id));
+        return $query->where(function ($scopeQuery) use ($user, $scopes): void {
+            $scopeQuery->whereHas('inquiry', fn ($inquiry) => $inquiry->where('created_by', $user->id));
+
+            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
+                $scopeQuery->orWhere('inquiry_tasks.assignee_id', $user->id);
+            }
+
+            if (in_array('department', $scopes, true) && $user->department_id) {
+                $scopeQuery->orWhereHas('assignee', fn ($assignee) => $assignee->where('department_id', $user->department_id));
+            }
         });
     }
 
@@ -404,8 +470,8 @@ class AccessControlService
         if ($this->isAdministrator($user) || $this->isJobCreator($user, $job)) return true;
         if (!$this->can($user, 'jobs', 'edit')) return false;
 
-        $scope = $this->scope($user, 'jobs');
-        if (!$this->jobWithinScope($job, $user, $scope)) return false;
+        $scopes = $this->scopes($user, 'jobs');
+        if (!$this->jobWithinScope($job, $user, $scopes)) return false;
         if ($this->canEditAll($user, 'jobs')) return true;
 
         return (int) ($job->owner_id ?? 0) === (int) $user->id
@@ -439,8 +505,8 @@ class AccessControlService
         if ($this->isAdministrator($user) || $this->isTaskParentCreator($user, $task)) return true;
         if (!$this->can($user, 'tasks', 'edit')) return false;
 
-        $scope = $this->scope($user, 'tasks');
-        if (!$this->taskWithinScope($task, $user, $scope)) return false;
+        $scopes = $this->scopes($user, 'tasks');
+        if (!$this->taskWithinScope($task, $user, $scopes)) return false;
         if ($this->canEditAll($user, 'tasks')) return true;
         return (int) ($task->assignee_id ?? 0) === (int) $user->id;
     }
@@ -459,7 +525,7 @@ class AccessControlService
     {
         if ($this->isAdministrator($user) || $this->isJobCreator($user, $job)) return true;
         if (!$this->can($user, 'jobs', 'assign')) return false;
-        return $this->jobWithinScope($job, $user, $this->scope($user, 'jobs'));
+        return $this->jobWithinScope($job, $user, $this->scopes($user, 'jobs'));
     }
 
     /** Assignment authorization for a Job already loaded through visibleQuery(). */
@@ -478,7 +544,7 @@ class AccessControlService
     {
         if ($this->isAdministrator($user) || $this->isJobCreator($user, $job)) return true;
         if (!$this->can($user, 'jobs', 'edit')) return false;
-        if (!$this->jobWithinScope($job, $user, $this->scope($user, 'jobs'))) return false;
+        if (!$this->jobWithinScope($job, $user, $this->scopes($user, 'jobs'))) return false;
 
         return $this->canEditJob($user, $job);
     }
@@ -499,7 +565,7 @@ class AccessControlService
         if ($this->isAdministrator($user) || $this->isTaskParentCreator($user, $task)) return true;
         if (!$this->can($user, 'tasks', 'assign')) return false;
 
-        return $this->taskWithinScope($task, $user, $this->scope($user, 'tasks'));
+        return $this->taskWithinScope($task, $user, $this->scopes($user, 'tasks'));
     }
 
     /**
@@ -512,73 +578,79 @@ class AccessControlService
         return $query instanceof Relation ? $query->getQuery() : $query;
     }
 
-    private function constrainJobs(Builder $query, User $user, string $scope): Builder
+    /** @param string|list<string> $scopes */
+    private function constrainJobs(Builder $query, User $user, string|array $scopes): Builder
     {
-        if ($scope === 'all_records') return $query;
-        if ($scope === 'none') return $query->where('created_by', $user->id);
+        $scopes = $this->normalizeScopes($scopes);
+        if (in_array('all_records', $scopes, true)) return $query;
 
-        if ($scope === 'department') {
-            return $query->where(function ($q) use ($user) {
-                $q->where('created_by', $user->id);
-                if ($user->department_id) {
-                    $q->orWhereHas('owner', fn ($u) => $u->where('department_id', $user->department_id))
-                        ->orWhereHas('coordinator', fn ($u) => $u->where('department_id', $user->department_id))
-                        ->orWhereHas('members.user', fn ($u) => $u->where('department_id', $user->department_id))
-                        ->orWhereHas('tasks.assignee', fn ($u) => $u->where('department_id', $user->department_id));
-                }
-            });
-        }
+        return $query->where(function (Builder $scopeQuery) use ($user, $scopes): void {
+            // Preserve FlowTrack's creator visibility for every non-admin scope.
+            $scopeQuery->where('created_by', $user->id);
 
-        if ($scope === 'own_records') {
-            return $query->where(fn ($q) => $q->where('created_by', $user->id)
-                ->orWhere('owner_id', $user->id)
-                ->orWhere('coordinator_id', $user->id));
-        }
+            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
+                $scopeQuery->orWhere('owner_id', $user->id)
+                    ->orWhere('coordinator_id', $user->id);
+            }
 
-        return $query->where(function ($q) use ($user) {
-            $q->where('created_by', $user->id)
-                ->orWhere('owner_id', $user->id)
-                ->orWhere('coordinator_id', $user->id)
-                ->orWhereHas('members', fn ($m) => $m->where('user_id', $user->id))
-                ->orWhereHas('tasks', fn ($t) => $t->where('assignee_id', $user->id));
+            if (in_array('assigned_jobs', $scopes, true)) {
+                $scopeQuery
+                    ->orWhereHas('members', fn ($members) => $members->where('user_id', $user->id))
+                    ->orWhereHas('tasks', fn ($tasks) => $tasks->where('assignee_id', $user->id));
+            }
+
+            if (in_array('department', $scopes, true) && $user->department_id) {
+                $scopeQuery
+                    ->orWhereHas('owner', fn ($assigned) => $assigned->where('department_id', $user->department_id))
+                    ->orWhereHas('coordinator', fn ($assigned) => $assigned->where('department_id', $user->department_id))
+                    ->orWhereHas('members.user', fn ($assigned) => $assigned->where('department_id', $user->department_id))
+                    ->orWhereHas('tasks.assignee', fn ($assigned) => $assigned->where('department_id', $user->department_id));
+            }
         });
     }
 
-    private function constrainTasks(Builder $query, User $user, string $scope): Builder
+    /** @param string|list<string> $scopes */
+    private function constrainTasks(Builder $query, User $user, string|array $scopes): Builder
     {
-        if ($scope === 'all_records') return $query;
-        if ($scope === 'none') {
-            return $query->whereHas('job', fn ($job) => $job->where('created_by', $user->id));
-        }
-        if ($scope === 'department') {
-            return $query->where(function ($scopeQuery) use ($user) {
-                $scopeQuery->whereHas('job', fn ($job) => $job->where('created_by', $user->id));
-                if ($user->department_id) {
-                    $scopeQuery->orWhereHas('assignee', fn ($u) => $u->where('department_id', $user->department_id));
-                }
-            });
-        }
+        $scopes = $this->normalizeScopes($scopes);
+        if (in_array('all_records', $scopes, true)) return $query;
 
-        // Assigned/own task screens stay assignee-strict except that the creator
-        // of the parent Order always sees every task generated for that Order.
-        return $query->where(function ($scopeQuery) use ($user) {
-            $scopeQuery->where('tasks.assignee_id', $user->id)
-                ->orWhereHas('job', fn ($job) => $job->where('created_by', $user->id));
+        return $query->where(function (Builder $scopeQuery) use ($user, $scopes): void {
+            $scopeQuery->whereHas('job', fn ($job) => $job->where('created_by', $user->id));
+
+            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
+                $scopeQuery->orWhere('tasks.assignee_id', $user->id);
+            }
+
+            if (in_array('department', $scopes, true) && $user->department_id) {
+                $scopeQuery->orWhereHas('assignee', fn ($assigned) => $assigned->where('department_id', $user->department_id));
+            }
         });
     }
 
-    private function jobWithinScope(object $job, User $user, string $scope): bool
+    /** @param string|list<string> $scopes */
+    private function jobWithinScope(object $job, User $user, string|array $scopes): bool
     {
-        if ($scope === 'all_records') return true;
-        if ($scope === 'none' || empty($job->id)) return false;
-        return $this->constrainJobs(\App\Models\FlowJob::query()->whereKey($job->id), $user, $scope)->exists();
+        if (empty($job->id)) return false;
+        return $this->constrainJobs(\App\Models\FlowJob::query()->whereKey($job->id), $user, $scopes)->exists();
     }
 
-    private function taskWithinScope(object $task, User $user, string $scope): bool
+    /** @param string|list<string> $scopes */
+    private function taskWithinScope(object $task, User $user, string|array $scopes): bool
     {
-        if ($scope === 'all_records') return true;
-        if ($scope === 'none' || empty($task->id)) return false;
-        return $this->constrainTasks(\App\Models\Task::query()->whereKey($task->id), $user, $scope)->exists();
+        if (empty($task->id)) return false;
+        return $this->constrainTasks(\App\Models\Task::query()->whereKey($task->id), $user, $scopes)->exists();
+    }
+
+    /** @param string|list<string> $scopes @return list<string> */
+    private function normalizeScopes(string|array $scopes): array
+    {
+        $scopes = array_values(array_unique(array_map(
+            fn ($scope) => (string) ($scope === 'selected_clients' ? 'assigned_jobs' : $scope),
+            (array) $scopes,
+        )));
+        $scopes = array_values(array_filter($scopes, fn ($scope) => in_array($scope, ['none','own_records','assigned_jobs','department','all_records'], true)));
+        return $scopes !== [] ? $scopes : ['none'];
     }
 
     private function isJobMember(object $job, User $user): bool
@@ -589,22 +661,93 @@ class AccessControlService
 
     public function forgetRole(int $roleId): void
     {
-        $prefix = $roleId.':';
-        foreach (array_keys($this->accessCache) as $key) {
-            if (str_starts_with($key, $prefix)) unset($this->accessCache[$key]);
-        }
+        // Access can be composed from several roles, so a role update may affect
+        // many user cache keys. Clearing the small request-local caches is safer
+        // than trying to invalidate only one primary-role prefix.
+        $this->accessCache = [];
+        $this->accessRowsCache = [];
+        $this->activeRolesCache = [];
     }
 
     public function access(User $user, string $module): ?RoleModuleAccess
     {
-        if (!$user->role_id) return null;
-        $key = $user->role_id.':'.$module;
+        $roles = $this->activeRoles($user);
+        if ($roles->isEmpty()) return null;
+
+        $roleIds = $roles->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        $key = $user->id.':'.implode(',', $roleIds).':'.$module;
+
         if (!array_key_exists($key, $this->accessCache)) {
-            $this->accessCache[$key] = RoleModuleAccess::query()
-                ->where('role_id', $user->role_id)
-                ->where('module_code', $module)
-                ->first();
+            $rows = $this->accessRows($user, $module);
+            $actions = $rows
+                ->flatMap(fn (RoleModuleAccess $row) => $row->actions ?: [])
+                ->filter(fn ($action) => in_array($action, self::supportedActions($module), true))
+                ->unique()
+                ->values()
+                ->all();
+
+            if ($actions === []) {
+                $this->accessCache[$key] = null;
+            } else {
+                $effective = new RoleModuleAccess();
+                $effective->module_code = $module;
+                $effective->actions = $actions;
+                $effective->record_scope = $this->scopeFromRows($rows, $module);
+                $this->accessCache[$key] = $effective;
+            }
         }
+
         return $this->accessCache[$key];
     }
+
+    private function activeRoles(User $user): Collection
+    {
+        $key = (int) $user->id;
+        if (!array_key_exists($key, $this->activeRolesCache)) {
+            $roles = $user->assignedRoles(true);
+            $this->activeRolesCache[$key] = $roles->values();
+        }
+        return $this->activeRolesCache[$key];
+    }
+
+    private function accessRows(User $user, string $module): Collection
+    {
+        $roleIds = $this->activeRoles($user)->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+        if ($roleIds === []) return collect();
+
+        $key = implode(',', $roleIds).':'.$module;
+        if (!array_key_exists($key, $this->accessRowsCache)) {
+            $this->accessRowsCache[$key] = RoleModuleAccess::query()
+                ->whereIn('role_id', $roleIds)
+                ->where('module_code', $module)
+                ->get();
+        }
+        return $this->accessRowsCache[$key];
+    }
+
+
+    private function rowGrantsView(RoleModuleAccess $row): bool
+    {
+        $actions = $row->actions ?: [];
+        return in_array('view', $actions, true) || in_array('manage', $actions, true);
+    }
+
+    private function scopeFromRows(Collection $rows, string $module): string
+    {
+        if (self::isUniversalRecordModule($module) || self::isParentRecordModule($module)) {
+            return $rows->contains(fn (RoleModuleAccess $row) => count($row->actions ?: []) > 0) ? 'all_records' : 'none';
+        }
+
+        $scopes = $rows
+            ->filter(fn (RoleModuleAccess $row) => count($row->actions ?: []) > 0)
+            ->pluck('record_scope')
+            ->map(fn ($scope) => (string) ($scope ?: 'none'))
+            ->all();
+
+        foreach (['all_records','department','assigned_jobs','own_records','none'] as $scope) {
+            if (in_array($scope, $scopes, true)) return $scope;
+        }
+        return 'none';
+    }
+
 }

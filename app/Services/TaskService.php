@@ -24,7 +24,7 @@ class TaskService
     {
         return $this->visibleQuery($user)
             ->with(['job.client', 'assignee', 'phase'])
-            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($x) => $x->where('title', 'like', "%{$s}%")->orWhereHas('job', fn ($j) => $j->where('job_number', 'like', "%{$s}%"))))
+            ->when($filters['search'] ?? null, fn ($q, $s) => $q->where(fn ($x) => $x->whereLike('title', "%{$s}%")->orWhereHas('job', fn ($j) => $j->whereLike('job_number', "%{$s}%"))))
             ->when($filters['status'] ?? null, fn ($q, $s) => $q->where('status', $s))
             ->when($filters['assignee'] ?? null, fn ($q, $a) => $q->where('assignee_id', $a))
             ->whereNull('completed_at')
@@ -389,19 +389,26 @@ class TaskService
 
     private function ensureCompletionRequirements(Task $task): void
     {
-        $task->loadMissing(['documents','documentCategory','setupTemplate.documentCategory']);
+        $task->loadMissing(['documentCategory','setupTemplate.documentCategory']);
         $hasRequiredDocument = (bool) ($task->setupTemplate?->document_category_id ?: $task->document_category_id);
-        if ($hasRequiredDocument) {
-            $name = $task->setupTemplate?->documentCategory?->name ?: $task->documentCategory?->name ?: 'required document';
-            $hasMatchingDocument = $task->documents->contains(fn ($document) =>
-                strcasecmp(trim((string) $document->category), trim((string) $name)) === 0
-            );
-            if (!$hasMatchingDocument) {
-                throw ValidationException::withMessages([
-                    'taskCompletion' => 'Upload or link '.$name.' before completing this task.',
-                ]);
-            }
-        }
+        if (! $hasRequiredDocument) return;
+
+        // The requirement belongs to the task itself. Once a real Document row is
+        // linked to this task, the required-file gate is satisfied regardless of
+        // the document's legacy/category label. Older uploads may have been saved
+        // as "Task attachment" while newer uploads inherit the Task Pack category;
+        // both are valid evidence because task_id is the authoritative link. Use a
+        // fresh exists() query so a previously-loaded empty relation can never make
+        // an upload appear missing during the next inline status update.
+        if ($task->documents()->exists()) return;
+
+        $name = $task->setupTemplate?->documentCategory?->name
+            ?: $task->documentCategory?->name
+            ?: 'required document';
+
+        throw ValidationException::withMessages([
+            'taskCompletion' => 'Upload or link '.$name.' before completing this task.',
+        ]);
     }
 
     private function syncChecklistProgress(Task $task): void

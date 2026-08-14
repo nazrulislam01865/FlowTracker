@@ -185,7 +185,7 @@
 }
 .ft-exact-job-detail .ft-order-add-task-grid{
     display:grid;
-    grid-template-columns:minmax(0,1fr) minmax(220px,280px) minmax(220px,280px);
+    grid-template-columns:minmax(280px,1fr) minmax(180px,220px) minmax(220px,270px) minmax(190px,230px);
     gap:8px;
     align-items:end;
 }

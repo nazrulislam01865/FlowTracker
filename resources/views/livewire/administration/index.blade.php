@@ -199,12 +199,12 @@
                 </table>
                 </div>
             </div>
-            <div class="ft-access-info">Every permission cell is selectable by an administrator. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. <b>Workflow Setup, Task Pack Setup, Products, Product Categories, Suppliers and the remaining Master Data</b> support separate View/Create/Edit/Delete permissions plus Manage for full control. <b>Clients are shared workspace reference data</b>, so users with Client View can see all active clients while Orders, Inquiries, Tasks and Documents keep their own selected scopes. <b>Products</b> controls the shared Product catalogue and the Product search/select/create options used on Create Inquiry and Create Order. <b>Product Categories</b> independently controls category visibility and category creation in those Product controls. <b>Products</b> is also the authority for Product rows on existing Inquiry/Order records; there is no separate Product Lines permission. The user must still have access to and edit rights for the parent Inquiry/Order before changing its Product rows. <b>Finance permissions inherit the parent record scope</b>.</div>
+            <div class="ft-access-info">Every permission cell is selectable by an administrator. Users may hold multiple roles; effective actions and record visibility are the union of their active assigned roles. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. <b>Workflow Setup, Task Pack Setup, Products, Product Categories, Suppliers and the remaining Master Data</b> support separate View/Create/Edit/Delete permissions plus Manage for full control. <b>Clients are shared workspace reference data</b>, so users with Client View can see all active clients while Orders, Inquiries, Tasks and Documents keep their own selected scopes. <b>Products</b> controls the shared Product catalogue and the Product search/select/create options used on Create Inquiry and Create Order. <b>Product Categories</b> independently controls category visibility and category creation in those Product controls. <b>Products</b> is also the authority for Product rows on existing Inquiry/Order records; there is no separate Product Lines permission. The user must still have access to and edit rights for the parent Inquiry/Order before changing its Product rows. <b>Finance permissions inherit the parent record scope</b>.</div>
             </div>
         @endif
     @elseif($tab==='users')
         <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><button class="primary" wire:click="openUser">＋ Add User</button></div>
-        <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Role</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
+        <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Roles</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
         @foreach($users as $u)
             @php
                 $adminUserStatus = in_array((string) ($u->account_status ?? ''), ['active','inactive','suspended'], true)
@@ -212,17 +212,11 @@
                     : ($u->is_active ? 'active' : 'inactive');
                 $adminUserStatusClass = $adminUserStatus === 'active' ? 'b-green' : ($adminUserStatus === 'suspended' ? 'b-amber' : 'b-gray');
             @endphp
-            <tr
-                wire:key="admin-user-{{ $u->id }}"
-                x-data="{ ...window.FlowTrackInlineEdit({ key: @js('admin-user-'.$u->id.'-role'), label: 'user role', value: @js((string)($u->role_id ?? '')), display: @js($u->role?->name ?? 'No role') }), roleScopes: @js($roles->mapWithKeys(fn($role) => [(string)$role->id => ($role->default_scope ?: 'none')])->all()) }"
-            >
+            <tr wire:key="admin-user-{{ $u->id }}">
                 <td><div class="person"><x-ui.avatar :user="$u" :name="$u->name"/><div><b>{{ $u->name }}</b>@if($u->workspaceMemberships->first()?->job_title)<div class="small muted">{{ $u->workspaceMemberships->first()->job_title }}</div>@endif<div class="small muted">{{ $u->email }}</div></div></div></td>
                 <td>{{ $u->department?->name ?? '—' }}</td>
-                <td class="ft-inline-edit-shell" :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
-                    <select x-model="draftValue" :disabled="status === 'saving'" x-on:change="commit($event.target.value, selectedLabel($event), () => $wire.assignRole({{ $u->id }}, Number(draftValue)))" @disabled($u->isSuperAdmin())>@foreach($roles->where('is_active',true) as $role)<option value="{{ $role->id }}">{{ $role->name }}</option>@endforeach</select>
-                    @unless($u->isSuperAdmin())<x-ui.inline-save-state compact />@endunless
-                </td>
-                <td><span class="tag" x-text="String(roleScopes[value] || 'none').replaceAll('_',' ')">{{ str_replace('_',' ',$u->role?->default_scope ?? 'none') }}</span></td>
+                <td><div class="ft-user-role-chips">@forelse($u->assignedRoles() as $assignedRole)<span class="tag">{{ $assignedRole->name }}</span>@empty<span class="muted">No role</span>@endforelse</div></td>
+                <td>@php($roleScopes = $u->assignedRoles()->pluck('default_scope')->filter()->unique()->values())<span class="tag">{{ $roleScopes->count() > 1 ? 'Combined scopes' : str_replace('_',' ',$roleScopes->first() ?: 'none') }}</span></td>
                 <td>{{ $u->open_tasks_count }}</td>
                 <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $adminUserStatusClass }}">{{ ucfirst($adminUserStatus) }}</span></button></td>
                 <td data-label="Actions"><div class="ft-user-row-actions"><a class="ghost ft-user-edit-link" href="{{ route('users.edit', ['user' => $u->id, 'from' => 'administration']) }}" wire:navigate>Edit</a><button type="button" class="ft-user-delete-btn" wire:click="deleteUser({{ $u->id }})" wire:confirm="Delete {{ addslashes($u->name) }}? Existing Job/Task history will be preserved, but this user account will be removed." @disabled($u->isSuperAdmin() || $u->id === auth()->id())>Delete</button></div></td>
@@ -238,7 +232,7 @@
             <section class="card ft-access-panel"><div class="section-head"><div><h3>Security controls</h3><div class="small muted">Workspace access-control policy flags stored in Master Data.</div></div></div>
                 @foreach($securitySettings as $setting)<div class="ft-security-row"><div><b>{{ $setting['label'] }}</b><span>Administrative access policy</span></div><label class="ft-switch"><input type="checkbox" wire:click="toggleSecurity('{{ $setting['code'] }}')" @checked($setting['enabled'])><i></i></label></div>@endforeach
             </section>
-            <section class="card ft-access-panel"><div class="section-head"><div><h3>Access policy</h3></div></div><div class="ft-control-note"><b>Administrator/Super Admin</b><span>Unrestricted application access. These roles can configure all permissions.</span></div><div class="ft-control-note"><b>All other roles</b><span>Must pass both the action permission and record-scope check on every page and update.</span></div><div class="ft-control-note"><b>Assignments</b><span>Task assignees see their assigned tasks; associated Job visibility follows from those assignments.</span></div></section>
+            <section class="card ft-access-panel"><div class="section-head"><div><h3>Access policy</h3></div></div><div class="ft-control-note"><b>Administrator/Super Admin</b><span>Unrestricted application access. These roles can configure all permissions.</span></div><div class="ft-control-note"><b>All other roles</b><span>Users can hold multiple roles. FlowTrack combines granted actions and the allowed record scopes from all active assigned roles.</span></div><div class="ft-control-note"><b>Assignments</b><span>Task assignees see their assigned tasks; associated Job visibility follows from those assignments.</span></div></section>
         </div>
     @elseif($tab==='settings')
         <section class="card ft-access-panel ft-workspace-settings-card">
@@ -291,16 +285,11 @@
                     </div>
 
                     <div class="field">
-                        <label>Role *</label>
-                        <select wire:model="roleId" @disabled($editingUserId && optional($users->firstWhere('id', $editingUserId))->isSuperAdmin())>
-                            <option value="">Select role</option>
-                            @foreach($roles->where('is_active', true) as $r)
-                                <option value="{{ $r->id }}">{{ $r->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('roleId')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
+                        <label>Roles *</label>
+                        <x-ui.multi-role-select model="roleIds" :options="$roles->filter(fn($r) => $r->is_active || in_array((string) $r->id, array_map('strval', $roleIds), true))->map(fn($r) => ['id' => $r->id, 'name' => $r->name])->values()->all()" :disabled="$editingUserId && optional($users->firstWhere('id', $editingUserId))->isSuperAdmin()" placeholder="Select one or more roles" />
+                        <div class="small muted">Effective permissions are combined from all selected roles.</div>
+                        @error('roleIds')<div class="validation-error">{{ $message }}</div>@enderror
+                        @error('roleIds.*')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
 
                     <div class="field">
