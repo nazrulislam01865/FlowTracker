@@ -212,8 +212,15 @@ class OrderTaskFlagService
         if (!$job) return null;
 
         if ($job->completed_at || in_array(mb_strtolower(trim((string) $job->status)), ['completed', 'cancelled', 'canceled', 'inactive'], true)) {
-            if ($job->order_flag_id || $job->needs_attention) {
-                $job->update(['order_flag_id' => null, 'needs_attention' => false]);
+            if ($job->order_flag_id || $job->needs_attention || (bool) ($job->attention_requested ?? false)) {
+                $job->update([
+                    'order_flag_id' => null,
+                    'needs_attention' => false,
+                    'attention_requested' => false,
+                    'attention_reason' => null,
+                    'attention_by' => null,
+                    'attention_at' => null,
+                ]);
             }
             return $job->refresh();
         }

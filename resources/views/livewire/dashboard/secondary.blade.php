@@ -27,6 +27,7 @@
         return ['No flag', 'green', null];
     };
     $jobFlag = static function ($job) use ($masterData, $taskFlagService): array {
+        if ((bool) ($job->attention_requested ?? false)) return ['Requires attention', 'red', null];
         $label = $taskFlagService->labelForOrder($job);
         if ($label) return [$label, 'amber', $masterData->displayColorFor('order_flag', $label)];
         return ['No flag', 'green', null];

@@ -422,3 +422,21 @@
 .ft-order-overview-notes{margin-top:12px;padding-top:12px;border-top:1px solid #e5eaf1;color:#263954;font-size:12px;line-height:1.5}
 .ft-order-overview-notes small{display:block;margin-bottom:5px;color:#738198;font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase}
 .ft-order-overview-notes>div{overflow-wrap:anywhere}
+
+/* 2026-08-15: Order header manual attention request mirrors Inquiry Details.
+   This is intentionally separate from the automatic Order Flag master-data value. */
+.ft-exact-job-detail .ft-order-header-attention-action{gap:6px}
+.ft-exact-job-detail .ft-order-header-attention-action>span:first-child{color:#6d7d94;font-weight:600}
+.ft-exact-job-detail .ft-order-header-attention-button{
+    display:inline-grid;place-items:center;width:24px;height:24px;min-width:24px;padding:0;
+    border:1px solid #ccd8e7;border-radius:6px;background:#fff;color:#60748f;cursor:pointer;
+    transition:border-color .15s ease,background .15s ease,color .15s ease,box-shadow .15s ease;
+}
+.ft-exact-job-detail .ft-order-header-attention-button svg{width:14px;height:14px;stroke:currentColor;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
+.ft-exact-job-detail .ft-order-header-attention-button:hover{border-color:#8ca5c5;background:#f7faff;color:#264d7f}
+.ft-exact-job-detail .ft-order-header-attention-button.is-flagged{border-color:#f1b6b1;background:#fff3f2;color:#c53a32}
+.ft-exact-job-detail .ft-order-header-attention-button:disabled{opacity:.5;cursor:not-allowed}
+.ft-exact-job-detail .ft-order-header-attention-label{max-width:150px;overflow:hidden;text-overflow:ellipsis;color:#c53a32!important;font-size:11px;font-weight:700!important;white-space:nowrap}
+@media(max-width:720px){
+    .ft-exact-job-detail .ft-order-header-attention-action{flex-basis:100%;margin-top:1px}
+}

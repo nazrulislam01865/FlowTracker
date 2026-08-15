@@ -270,7 +270,12 @@
                                                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.55" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
                                                 @endif
                                             </div>
-                                            <strong>{{ $r->name }}</strong>
+                                            <a
+                                                class="ft-product-name-link"
+                                                href="{{ route('master-data', ['group' => 'product', 'open' => $r->id]) }}"
+                                                wire:navigate
+                                                title="Open {{ $r->name }} details"
+                                            >{{ $r->name }}</a>
                                         </div>
                                     </td>
                                     <td>

@@ -791,3 +791,14 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
     .ft-phase-toggle{grid-template-columns:18px 20px minmax(120px,1fr) auto 55px 24px!important}
     .ft-phase-toggle small{font-size:8px!important}
 }
+@media(max-width:520px){
+    .ft-exact-jobs-list .ft-job-filter-grid{grid-template-columns:1fr}
+    .ft-exact-jobs-list .ft-job-filter-grid .ft-job-list-search{grid-column:auto}
+    .ft-list-head .ft-list-actions{width:100%;display:grid;grid-template-columns:1fr 1fr}
+    .ft-list-head .ft-list-actions .ft-new-job-btn{grid-column:1/-1}
+    .ft-overview-task-card .ft-row-actions{grid-template-columns:1fr}
+    .ft-overview-task-card .ft-row-actions .ft-inline-search{grid-column:auto}
+    .ft-inline-planning-row{grid-template-columns:1fr!important;gap:4px}
+    .ft-phase-toggle{grid-template-columns:18px 20px minmax(100px,1fr) 24px!important;min-height:44px;height:auto!important;padding:6px 8px!important}
+    .ft-phase-toggle small,.ft-phase-toggle em{display:none}
+}

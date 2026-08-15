@@ -95,11 +95,22 @@
                         </div>
 
                         <div class="ft-admin-field">
-                            <label>Default department</label>
-                            <select wire:model="tasks.{{ $index }}.default_department_id">
-                                <option value="">No department default</option>
-                                @foreach($departments as $department)<option value="{{ $department->id }}">{{ $department->name }}</option>@endforeach
-                            </select>
+                            <x-ui.remote-filter
+                                class="ft-taskpack-assignee-filter"
+                                label="Default department"
+                                property="tasks.{{ $index }}.default_department_id"
+                                type="department-records"
+                                context="task-pack-setup"
+                                action="setTaskPackDepartment"
+                                :value="$task['default_department_id'] ?? ''"
+                                placeholder="No department default"
+                                :selected-label="$task['default_department_label'] ?? 'No department default'"
+                                :initial-options="$departmentFilterOptions"
+                                :menu-width="320"
+                                :fixed-menu="true"
+                                wire:key="task-pack-department-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_department_id'] ?? 'none' }}"
+                            />
+                            @error("tasks.$index.default_department_id")<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
 
                         <div class="ft-admin-field">
@@ -111,12 +122,23 @@
                         </div>
 
                         <div class="ft-admin-field">
-                            <label>Required document</label>
-                            <select wire:model="tasks.{{ $index }}.document_category_id">
-                                <option value="">No task-specific file</option>
-                                @foreach($documentCategories as $category)<option value="{{ $category->id }}">{{ $category->name }}</option>@endforeach
-                            </select>
+                            <x-ui.remote-filter
+                                class="ft-taskpack-assignee-filter"
+                                label="Required document"
+                                property="tasks.{{ $index }}.document_category_id"
+                                type="document-category-records"
+                                context="task-pack-setup"
+                                action="setTaskPackDocumentCategory"
+                                :value="$task['document_category_id'] ?? ''"
+                                placeholder="No task-specific file"
+                                :selected-label="$task['document_category_label'] ?? 'No task-specific file'"
+                                :initial-options="$documentFilterOptions"
+                                :menu-width="320"
+                                :fixed-menu="true"
+                                wire:key="task-pack-document-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['document_category_id'] ?? 'none' }}"
+                            />
                             <small>The file must be attached to the Job before this task can be completed.</small>
+                            @error("tasks.$index.document_category_id")<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
 
                         @else

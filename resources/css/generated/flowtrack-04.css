@@ -1,15 +1,4 @@
 
-.ft-workflow-choice-icon svg{width:23px;height:23px}
-.ft-workflow-choice-copy{min-width:0;display:block}
-.ft-workflow-choice-copy strong{display:block;font-size:11.7px;line-height:1.2;font-weight:800;color:#0d1d35;margin:0 0 3px}
-.ft-workflow-choice-copy small{display:block;font-size:9.4px;line-height:1.28;color:#526781}
-.ft-workflow-client-choice{grid-template-columns:25px minmax(0,1fr);min-height:55px;padding-left:11px}
-.ft-workflow-client-availability{margin-top:1px}
-.ft-workflow-client-field{gap:5px;margin-top:2px}
-.ft-workflow-client-picker{position:relative;z-index:4}
-.ft-workflow-client-picker-control{min-height:35px;width:100%;border:1px solid #d4e0ed;border-radius:7px;background:#fff;display:flex;align-items:center;gap:5px;flex-wrap:wrap;padding:3px 37px 3px 7px;position:relative;cursor:text}
-.ft-workflow-client-picker.is-open .ft-workflow-client-picker-control{border-color:#78a4f4;box-shadow:0 0 0 2px rgba(37,99,235,.06)}
-.ft-workflow-client-chip{height:26px;display:inline-flex;align-items:center;gap:5px;padding:0 7px 0 9px;border:1px solid #ced9e7;border-radius:6px;background:#f4f7fb;color:#21344d;font-size:9.6px;font-weight:650;white-space:nowrap}
 .ft-workflow-client-chip button{border:0;background:transparent;color:#41546c;width:14px;height:20px;padding:0;display:grid;place-items:center;font-size:15px;line-height:1}
 .ft-workflow-client-picker input{border:0!important;box-shadow:none!important;outline:0!important;min-width:145px;flex:1 1 180px;min-height:26px!important;height:26px;padding:0 3px!important;font-size:10px!important;background:transparent!important}
 .ft-workflow-client-chevron{position:absolute;right:5px;top:50%;transform:translateY(-50%);width:28px;height:28px;border:0;background:transparent;color:#18304d;display:grid;place-items:center;border-radius:5px}
@@ -1699,6 +1688,31 @@ body:has(.ft-client-prototype-page) .content{max-width:none;margin:0;padding:17p
     .ft-company-grid .field.full{grid-column:auto}
     .ft-company-actions{bottom:8px}
     .ft-company-actions .primary{width:100%}
+}
+
+/* Company Setup: view-first administration flow (2026-08-15). */
+.ft-company-head-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex:0 0 auto}
+.ft-company-edit-button{min-width:154px}
+.ft-company-head-cancel{min-width:84px}
+.ft-company-view-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px 16px}
+.ft-company-view-grid.single{grid-template-columns:1fr}
+.ft-company-view-item{min-width:0;padding:12px 13px;border:1px solid #e3eaf3;border-radius:8px;background:#fbfdff}
+.ft-company-view-item.full{grid-column:1 / -1}
+.ft-company-view-item span{display:block;margin-bottom:5px;color:#718198;font-size:10px;font-weight:750;line-height:1.35;letter-spacing:.01em}
+.ft-company-view-item strong{display:block;color:#1b334f;font-size:12px;font-weight:700;line-height:1.5;overflow-wrap:anywhere}
+.ft-company-view-item strong.multiline{white-space:pre-line;font-weight:600}
+.ft-company-actions{gap:9px}
+.ft-company-actions .secondary{min-width:94px}
+@media(max-width:760px){
+    .ft-company-setup-head{gap:12px}
+    .ft-company-head-actions{width:100%;justify-content:flex-start;flex-wrap:wrap}
+    .ft-company-edit-button{width:100%;min-width:0}
+    .ft-company-head-cancel{width:auto;min-width:84px}
+    .ft-company-view-grid{grid-template-columns:1fr;gap:10px}
+    .ft-company-view-item.full{grid-column:auto}
+    .ft-company-view-item{padding:11px 12px}
+    .ft-company-actions{display:grid;grid-template-columns:1fr 1fr}
+    .ft-company-actions .primary,.ft-company-actions .secondary{width:100%;min-width:0}
 }
 
 .ft-board-load-more {

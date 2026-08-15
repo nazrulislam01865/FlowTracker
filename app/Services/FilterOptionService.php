@@ -35,6 +35,8 @@ class FilterOptionService
             'priorities' => $this->masterOptions('priority', $search, $limit),
             'task-statuses' => $this->masterOptions('order_task_status', $search, $limit),
             'document-categories' => $this->masterOptions('document_category', $search, $limit),
+            'document-category-records' => $this->masterRecordOptions('document_category', $search, $limit),
+            'department-records' => $this->masterRecordOptions('department', $search, $limit),
             'countries' => $this->countries($user, $context, $search, $limit),
             'job-statuses' => $this->jobStatuses($user, $search, $limit),
             'job-healths' => $this->jobHealths($user, $search, $limit),
@@ -53,6 +55,8 @@ class FilterOptionService
                 'priorities' => $this->masterByName('priority', (string) $selectedId),
                 'task-statuses' => $this->masterByName('order_task_status', (string) $selectedId),
                 'document-categories' => $this->masterByName('document_category', (string) $selectedId),
+                'document-category-records' => $this->masterRecordById('document_category', $selectedId),
+                'department-records' => $this->masterRecordById('department', $selectedId),
                 'countries' => $this->countryByName($user, $context, (string) $selectedId),
                 'job-statuses' => $this->jobStatusByName($user, (string) $selectedId),
                 'job-healths' => $this->jobHealthByName($user, (string) $selectedId),
@@ -433,6 +437,26 @@ class FilterOptionService
             ]);
     }
 
+    private function masterRecordOptions(string $type, string $search, int $limit): Collection
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType($type)
+            ->active()
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'code'])
+            ->map(fn (MasterRecord $record) => [
+                'id' => (string) $record->id,
+                'label' => (string) $record->name,
+                'meta' => '',
+            ]);
+    }
+
     private function masterByName(string $type, string $name): ?array
     {
         if ($name === '') return null;
@@ -446,6 +470,23 @@ class FilterOptionService
 
         return $record ? [
             'id' => (string) $record->name,
+            'label' => (string) $record->name,
+            'meta' => '',
+        ] : null;
+    }
+
+    private function masterRecordById(string $type, int|string $id): ?array
+    {
+        if (!is_numeric($id)) return null;
+
+        $record = MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType($type)
+            ->active()
+            ->find((int) $id, ['id', 'name', 'code']);
+
+        return $record ? [
+            'id' => (string) $record->id,
             'label' => (string) $record->name,
             'meta' => '',
         ] : null;

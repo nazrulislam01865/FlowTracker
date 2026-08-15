@@ -409,11 +409,14 @@
                     $productNames = $productRows->pluck('product_name')->filter()->values();
                     $health = $job->completed_at ? 'Completed' : ($job->health ?: 'On Track');
                     $phaseName = $job->phase?->name ?? $job->status ?? '—';
-                    // Order health and Order flag are deliberately independent. The
-                    // flag is persisted in flow_jobs.order_flag_id and comes only from the
-                    // dedicated Order Flag master data through unfinished Order tasks.
-                    $flag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
-                    $flagColor = $flag ? $masterData->displayColorFor('order_flag', $flag) : null;
+                    // The automatic Order Flag remains stored independently in
+                    // flow_jobs.order_flag_id. A manual attention request is also stored
+                    // independently and only takes display precedence in the list.
+                    $automaticFlag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
+                    $manualAttention = (bool) ($job->attention_requested ?? false);
+                    $flag = $manualAttention ? 'Requires attention' : $automaticFlag;
+                    $flagColor = !$manualAttention && $automaticFlag ? $masterData->displayColorFor('order_flag', $automaticFlag) : null;
+                    $flagReason = $manualAttention ? trim((string) ($job->attention_reason ?? '')) : '';
                     $deliveryOverdue = $job->delivery_date && !$job->completed_at && \App\Support\UserLocalTime::isDatePast($job->delivery_date);
                     $clientCode = strtoupper(trim((string) ($job->client?->code ?? '')));
                     $clientName = strtoupper(trim((string) ($job->client?->name ?? '')));
@@ -448,7 +451,7 @@
                     </div>
                     <div class="ft-cell ft-stage-cell" data-label="Phase"><span class="ft-pill {{ $tone($phaseName) }}" title="{{ $phaseName }}">{{ $phaseName }}</span></div>
                     <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill {{ $tone($health) }}">{{ $health }}</span></div>
-                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $flagColor ? 'ft-master-color' : $tone($flag) }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
+                    <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $flagColor ? 'ft-master-color' : $tone($flag) }}" style="{{ \App\Support\MasterColor::style($flagColor) }}" @if($flagReason) title="{{ $flagReason }}" @endif>{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
                     <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">
                         <div class="ft-owner">
                             <span class="ft-order-avatar">@if($ownerImage)<img src="{{ $ownerImage }}" alt="" loading="lazy" decoding="async">@else{{ $ownerInitials ?: 'FT' }}@endif</span>

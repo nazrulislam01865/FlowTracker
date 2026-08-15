@@ -22,6 +22,8 @@ class FlowJob extends Model
             'estimated_delivery_date' => 'date',
             'received_date' => 'date',
             'needs_attention' => 'boolean',
+            'attention_requested' => 'boolean',
+            'attention_at' => 'datetime',
             'is_repeat_order' => 'boolean',
             'production_urgency_ids' => 'array',
             'shipment_urgency_ids' => 'array',
@@ -39,6 +41,7 @@ class FlowJob extends Model
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
     public function coordinator(): BelongsTo { return $this->belongsTo(User::class, 'coordinator_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function attentionRequester(): BelongsTo { return $this->belongsTo(User::class, 'attention_by'); }
     public function orderFlag(): BelongsTo { return $this->belongsTo(MasterRecord::class, 'order_flag_id'); }
     public function tasks(): HasMany { return $this->hasMany(Task::class); }
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->whereNotNull('order_task_flag_id')->whereNull('completed_at')->orderBy('id'); }

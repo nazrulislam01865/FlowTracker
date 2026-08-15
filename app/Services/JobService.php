@@ -23,6 +23,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Validation\ValidationException;
 
 class JobService
 {
@@ -50,7 +51,7 @@ class JobService
             ->when($quick !== 'completed', fn ($q) => $q->whereNull('completed_at'))
             ->when($quick !== 'completed' && empty($filters['status']), fn ($q) => $q->whereNotIn('status', self::INACTIVE_STATUSES))
             ->when($quick === 'completed', fn ($q) => $q->whereNotNull('completed_at'))
-            ->when($quick === 'attention', fn ($q) => $q->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])))
+            ->when($quick === 'attention', fn ($q) => $q->where(fn ($x) => $x->where('attention_requested', true)->orWhere('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])))
             ->when($quick === 'due_week', fn ($q) => $q->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->addDays(7)]))
             ->when($quick === 'waiting', fn ($q) => $q->whereHas('tasks', fn ($t) => $t->where('status', 'like', 'Waiting%')->whereNull('completed_at')))
             ->when($quick === 'invoice', fn ($q) => $q->where(fn ($x) => $x->where('commercial_value', '<=', 0)->orWhereHas('phase', fn ($p) => $p->where('short_name', 'Invoice'))))
@@ -115,7 +116,7 @@ class JobService
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity', 'flow_jobs.next_action',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
                 'flow_jobs.delivery_date', 'flow_jobs.commercial_value', 'flow_jobs.currency',
-                'flow_jobs.needs_attention', 'flow_jobs.order_flag_id', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
+                'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
             ])
             ->with([
                 'client:id,code,name,logo_path',
@@ -225,7 +226,7 @@ class JobService
                 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.source_inquiry_id',
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority',
-                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention', 'flow_jobs.order_flag_id',
+                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id',
                 'flow_jobs.completed_at', 'flow_jobs.created_at',
             ])
             ->with([
@@ -261,7 +262,7 @@ class JobService
         $row = $this->visibleQuery($user)
             ->reorder()
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) then 1 else 0 end) as active_count", $inactive)
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.needs_attention = 1 or flow_jobs.health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_count", $inactive)
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_count", $inactive)
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and flow_jobs.delivery_date between ? and ? then 1 else 0 end) as week_count", [...$inactive, $today, $weekEnd])
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status like 'Waiting%' and tasks.completed_at is null and tasks.deleted_at is null) then 1 else 0 end) as waiting_count", $inactive)
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.commercial_value <= 0 or exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and workflow_phases.short_name = 'Invoice')) then 1 else 0 end) as invoice_count", $inactive)
@@ -762,6 +763,113 @@ class JobService
         });
     }
 
+    public function setOrderAttentionReason(FlowJob $job, string $reason, User $actor): FlowJob
+    {
+        abort_unless($this->visibleQuery($actor)->whereKey($job->id)->exists(), 403);
+        abort_if($job->completed_at || in_array((string) $job->status, self::INACTIVE_STATUSES, true), 422, 'A completed or inactive Order cannot be flagged for attention.');
+
+        $reason = trim(strip_tags($reason));
+        if ($reason === '') {
+            throw ValidationException::withMessages(['orderAttentionReason' => 'Write why this Order needs attention.']);
+        }
+        if (mb_strlen($reason) > 2000) {
+            throw ValidationException::withMessages(['orderAttentionReason' => 'The attention reason may not be greater than 2000 characters.']);
+        }
+
+        $updated = DB::transaction(function () use ($job, $reason, $actor): FlowJob {
+            $locked = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            abort_if($locked->completed_at || in_array((string) $locked->status, self::INACTIVE_STATUSES, true), 422, 'A completed or inactive Order cannot be flagged for attention.');
+
+            $locked->update([
+                'attention_requested' => true,
+                'attention_reason' => $reason,
+                'attention_by' => $actor->id,
+                'attention_at' => now(),
+            ]);
+
+            $commentBody = 'Attention requested: '.$reason;
+            $mentionIds = app(MentionService::class)->userIdsFromText($reason);
+            $locked->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.comment',
+                'description' => $commentBody,
+                'meta' => [
+                    'body' => $commentBody,
+                    'comment' => true,
+                    'attention_reason' => true,
+                    'attention_scope' => 'order',
+                    'mention_user_ids' => $mentionIds,
+                ],
+            ]);
+
+            $recipientIds = User::query()
+                ->where('is_active', true)
+                ->where(function ($query) use ($locked): void {
+                    $query->where('is_super_admin', true)
+                        ->orWhereHas('roles', fn ($role) => $role->where('is_active', true)->whereIn('slug', ['super-admin', 'admin', 'administrator']))
+                        ->orWhereHas('role', fn ($role) => $role->whereIn('slug', ['super-admin', 'admin', 'administrator']));
+                    if ($locked->created_by) $query->orWhere('id', (int) $locked->created_by);
+                })
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->reject(fn ($id) => $id === (int) $actor->id)
+                ->unique()
+                ->values()
+                ->all();
+
+            app(NotificationService::class)->notifyOrderAttentionUsers(
+                $recipientIds,
+                'Attention requested: '.$locked->displayOrderNumber(),
+                $commentBody,
+                $locked,
+                $actor,
+            );
+
+            if ($mentionIds !== []) {
+                app(NotificationService::class)->notifyMentionedUsers(
+                    $mentionIds,
+                    $actor->name.' mentioned you in '.$locked->displayOrderNumber(),
+                    $commentBody,
+                    $locked,
+                    null,
+                    $actor,
+                );
+            }
+
+            return $locked->refresh();
+        });
+
+        app(DashboardService::class)->forget($actor);
+        app(ReportService::class)->forget($actor->id);
+        app(ShellDataService::class)->forget($actor->id);
+
+        return $updated;
+    }
+
+    public function clearOrderAttention(FlowJob $job, User $actor): FlowJob
+    {
+        abort_unless($this->visibleQuery($actor)->whereKey($job->id)->exists(), 403);
+        abort_if($job->completed_at || in_array((string) $job->status, self::INACTIVE_STATUSES, true), 422, 'A completed or inactive Order cannot be changed.');
+
+        $job->update([
+            'attention_requested' => false,
+            'attention_reason' => null,
+            'attention_by' => null,
+            'attention_at' => null,
+        ]);
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.attention_cleared',
+            'description' => 'Order attention flag cleared.',
+        ]);
+
+        app(DashboardService::class)->forget($actor);
+        app(ReportService::class)->forget($actor->id);
+        app(ShellDataService::class)->forget($actor->id);
+
+        return $job->refresh();
+    }
+
     public function updateDeliveryDate(FlowJob $job, ?string $deliveryDate, User $actor): FlowJob
     {
         $this->assertEditable($job, $actor);
@@ -861,7 +969,13 @@ class JobService
     {
         $this->assertStatusEditable($job, $actor);
         $old = $job->status;
-        $job->update(['status' => 'Inactive']);
+        $job->update([
+            'status' => 'Inactive',
+            'attention_requested' => false,
+            'attention_reason' => null,
+            'attention_by' => null,
+            'attention_at' => null,
+        ]);
         $job->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.deactivated',
@@ -884,7 +998,15 @@ class JobService
                 'needs_attention' => false,
                 'attention_reason' => null,
             ]);
-            $job->update(['status' => 'Cancelled', 'order_flag_id' => null, 'needs_attention' => false]);
+            $job->update([
+                'status' => 'Cancelled',
+                'order_flag_id' => null,
+                'needs_attention' => false,
+                'attention_requested' => false,
+                'attention_reason' => null,
+                'attention_by' => null,
+                'attention_at' => null,
+            ]);
             $job->activities()->create([
                 'user_id' => $actor->id,
                 'event' => 'job.cancelled',
@@ -1330,7 +1452,19 @@ class JobService
                 ->update(['status' => 'completed', 'completed_at' => now()]);
 
             if (!$next) {
-                $job->update(['status' => 'Completed', 'health' => 'Completed', 'progress' => 100, 'next_action' => null, 'order_flag_id' => null, 'needs_attention' => false, 'completed_at' => now()]);
+                $job->update([
+                    'status' => 'Completed',
+                    'health' => 'Completed',
+                    'progress' => 100,
+                    'next_action' => null,
+                    'order_flag_id' => null,
+                    'needs_attention' => false,
+                    'attention_requested' => false,
+                    'attention_reason' => null,
+                    'attention_by' => null,
+                    'attention_at' => null,
+                    'completed_at' => now(),
+                ]);
                 $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.completed', 'description' => 'Workflow completed']);
                 $jobId = $job->id;
                 DB::afterCommit(function () use ($jobId, $actor) {
@@ -1349,6 +1483,10 @@ class JobService
                 'next_action' => $next->entry_condition ?: $next->entry_rule,
                 'order_flag_id' => $isCompletedPhase ? null : $job->order_flag_id,
                 'needs_attention' => $isCompletedPhase ? false : $job->needs_attention,
+                'attention_requested' => $isCompletedPhase ? false : $job->attention_requested,
+                'attention_reason' => $isCompletedPhase ? null : $job->attention_reason,
+                'attention_by' => $isCompletedPhase ? null : $job->attention_by,
+                'attention_at' => $isCompletedPhase ? null : $job->attention_at,
                 'completed_at' => $isCompletedPhase ? now() : null,
             ]);
 

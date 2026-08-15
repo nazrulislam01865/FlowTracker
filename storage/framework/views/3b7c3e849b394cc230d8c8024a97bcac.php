@@ -45,17 +45,18 @@
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('reports')): ?><link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260814-3"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    
+    <link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260815-fouc-1">
     
     <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260815-mobile-order-density-3">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260815-mobile-personal-1">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260815-all-master-mobile-cards-1">
-    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-hard-delete-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260815-product-name-details-link-1">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-column-width-1">
     <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260815-inquiry-section-numbering-1">
     <link rel="stylesheet" href="/css/flowtrack-create-order.css?v=20260815-single-urgency-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260815-bulk-notes-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260815-order-attention-1">
     <link rel="stylesheet" href="/css/flowtrack-task-detail-attachments.css?v=20260815-compact-doc-rows-1">
     <link rel="stylesheet" href="/css/flowtrack-order-products-detail.css?v=20260814-detail-scope-isolation-1">
     <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-pdf-1">

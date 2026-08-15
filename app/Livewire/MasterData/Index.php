@@ -46,6 +46,8 @@ class Index extends Component
     public bool $recordsReady = false;
     public bool $showModal = false;
     public bool $showProductView = false;
+
+    #[Url(as: 'open', history: true)]
     public ?int $viewProductId = null;
     public ?int $editId = null;
     public string $code = '';
@@ -126,7 +128,14 @@ class Index extends Component
         // directly to the standalone Add Product form instead of opening a
         // second inline product-creation modal.
         if ($this->group === 'product' && request()->boolean('create')) {
+            $this->viewProductId = null;
+            $this->showProductView = false;
             $this->open();
+        } elseif ($this->group === 'product' && ($openProductId = request()->integer('open'))) {
+            // Keep Product details addressable from the catalogue list so product-name
+            // links behave like the Order/Inquiry detail links and survive refresh/navigation.
+            $this->viewProductId = $openProductId;
+            $this->showProductView = true;
         }
 
         // Sidebar shortcut: open the standalone Product Category creator directly

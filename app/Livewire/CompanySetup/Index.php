@@ -7,6 +7,8 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    public bool $isEditing = false;
+
     public string $legalName = '';
     public string $tradingName = '';
     public string $registrationNumber = '';
@@ -30,32 +32,27 @@ class Index extends Component
 
     public function mount(): void
     {
-        $profile = app(CompanyProfileService::class)->current();
+        $this->loadProfile();
+    }
 
-        $this->legalName = $profile['legal_name'] ?? '';
-        $this->tradingName = $profile['trading_name'] ?? '';
-        $this->registrationNumber = $profile['registration_number'] ?? '';
-        $this->taxNumber = $profile['tax_number'] ?? '';
-        $this->billingEmail = $profile['billing_email'] ?? '';
-        $this->phone = $profile['phone'] ?? '';
-        $this->website = $profile['website'] ?? '';
-        $this->addressLine1 = $profile['address_line_1'] ?? '';
-        $this->addressLine2 = $profile['address_line_2'] ?? '';
-        $this->city = $profile['city'] ?? '';
-        $this->stateRegion = $profile['state_region'] ?? '';
-        $this->postalCode = $profile['postal_code'] ?? '';
-        $this->country = $profile['country'] ?? '';
-        $this->bankName = $profile['bank_name'] ?? '';
-        $this->bankAccountName = $profile['bank_account_name'] ?? '';
-        $this->bankAccountNumber = $profile['bank_account_number'] ?? '';
-        $this->bankIban = $profile['bank_iban'] ?? '';
-        $this->bankSwift = $profile['bank_swift'] ?? '';
-        $this->paymentInstructions = $profile['payment_instructions'] ?? '';
-        $this->invoiceFooter = $profile['invoice_footer'] ?? '';
+    public function beginEditing(): void
+    {
+        $this->loadProfile();
+        $this->resetValidation();
+        $this->isEditing = true;
+    }
+
+    public function cancelEditing(): void
+    {
+        $this->loadProfile();
+        $this->resetValidation();
+        $this->isEditing = false;
     }
 
     public function save(): void
     {
+        abort_unless($this->isEditing, 403);
+
         $data = $this->validate([
             'legalName' => ['required', 'string', 'max:180'],
             'tradingName' => ['nullable', 'string', 'max:180'],
@@ -102,7 +99,37 @@ class Index extends Component
             'invoice_footer' => $data['invoiceFooter'] ?? '',
         ], auth()->user());
 
+        $this->loadProfile();
+        $this->resetValidation();
+        $this->isEditing = false;
+
         session()->flash('success', 'Company details saved. New invoices will use these details automatically.');
+    }
+
+    private function loadProfile(): void
+    {
+        $profile = app(CompanyProfileService::class)->current();
+
+        $this->legalName = $profile['legal_name'] ?? '';
+        $this->tradingName = $profile['trading_name'] ?? '';
+        $this->registrationNumber = $profile['registration_number'] ?? '';
+        $this->taxNumber = $profile['tax_number'] ?? '';
+        $this->billingEmail = $profile['billing_email'] ?? '';
+        $this->phone = $profile['phone'] ?? '';
+        $this->website = $profile['website'] ?? '';
+        $this->addressLine1 = $profile['address_line_1'] ?? '';
+        $this->addressLine2 = $profile['address_line_2'] ?? '';
+        $this->city = $profile['city'] ?? '';
+        $this->stateRegion = $profile['state_region'] ?? '';
+        $this->postalCode = $profile['postal_code'] ?? '';
+        $this->country = $profile['country'] ?? '';
+        $this->bankName = $profile['bank_name'] ?? '';
+        $this->bankAccountName = $profile['bank_account_name'] ?? '';
+        $this->bankAccountNumber = $profile['bank_account_number'] ?? '';
+        $this->bankIban = $profile['bank_iban'] ?? '';
+        $this->bankSwift = $profile['bank_swift'] ?? '';
+        $this->paymentInstructions = $profile['payment_instructions'] ?? '';
+        $this->invoiceFooter = $profile['invoice_footer'] ?? '';
     }
 
     public function render()

@@ -169,6 +169,8 @@ class Index extends Component
     public string $jobComment = '';
     public string $jobActivityTab = 'all';
     public int $jobActivityPage = 1;
+    public bool $showOrderAttentionModal = false;
+    public string $orderAttentionReason = '';
     public int $activityPerPage = 30;
     public array $taskDocumentUploads = [];
     /** Per-task temporary uploads used by the compact Order Overview taskflow. */
@@ -891,6 +893,7 @@ class Index extends Component
         $this->jobComment = '';
         $this->jobActivityTab = 'all';
         $this->jobActivityPage = 1;
+        $this->closeOrderAttentionReason();
         $this->closeFinanceModals();
         $this->prepareSelectedJob($id);
     }
@@ -917,6 +920,7 @@ class Index extends Component
         $this->showDocumentPicker = false;
         $this->lastJobDocumentUploadId = null;
         $this->lastJobDocumentTaskId = null;
+        $this->closeOrderAttentionReason();
         $this->closeFinanceModals();
 
         $this->redirectRoute('jobs.index', navigate: true);
@@ -2787,6 +2791,52 @@ class Index extends Component
         app(TaskService::class)->deleteChecklistItem($task, $item, auth()->user());
     }
 
+    public function openOrderAttentionReason(): void
+    {
+        abort_unless($this->selectedJobId, 422);
+        $job = app(JobService::class)->findVisibleBase(auth()->user(), $this->selectedJobId);
+        abort_if($job->completed_at || in_array((string) $job->status, JobService::INACTIVE_STATUSES, true), 422, 'A completed or inactive Order cannot be flagged for attention.');
+
+        $this->resetValidation('orderAttentionReason');
+        $this->orderAttentionReason = (string) ($job->attention_reason ?: '');
+        $this->showOrderAttentionModal = true;
+    }
+
+    public function closeOrderAttentionReason(): void
+    {
+        $this->showOrderAttentionModal = false;
+        $this->orderAttentionReason = '';
+        $this->resetValidation('orderAttentionReason');
+    }
+
+    public function saveOrderAttentionReason(): void
+    {
+        $this->validate([
+            'orderAttentionReason' => ['required', 'string', 'max:2000'],
+        ], [
+            'orderAttentionReason.required' => 'Write why this Order needs attention.',
+        ]);
+
+        abort_unless($this->selectedJobId, 422);
+        $service = app(JobService::class);
+        $job = $service->findVisibleBase(auth()->user(), $this->selectedJobId);
+        $service->setOrderAttentionReason($job, $this->orderAttentionReason, auth()->user());
+        $this->closeOrderAttentionReason();
+        $this->jobActivityPage = 1;
+        session()->flash('success', 'Attention request saved and added to Order comments.');
+    }
+
+    public function clearOrderAttention(): void
+    {
+        abort_unless($this->selectedJobId, 422);
+        $service = app(JobService::class);
+        $job = $service->findVisibleBase(auth()->user(), $this->selectedJobId);
+        $service->clearOrderAttention($job, auth()->user());
+        $this->closeOrderAttentionReason();
+        $this->jobActivityPage = 1;
+        session()->flash('success', 'Order attention flag cleared.');
+    }
+
     public function setJobActivityTab(string $tab): void
     {
         abort_unless(in_array($tab, ['all','comments','history'], true), 422);
@@ -3612,9 +3662,7 @@ class Index extends Component
             'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,
             'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,
             'healthOptions' => collect(),
-            'mentionUsers' => $this->detailTab === 'overview'
-                ? app(\App\Services\MentionService::class)->optionsForJob($selected, $user)
-                : collect(),
+            'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),
             'inquiryResults' => $inquiryResults,
             'selectedLinkInquiry' => $selectedLinkInquiry,
             'canManageInquiryLink' => $canManageInquiryLink,

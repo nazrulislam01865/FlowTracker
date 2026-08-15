@@ -88,7 +88,7 @@ class ClientService
             ->withCount([
                 'jobs as total_jobs_count' => fn ($q) => $access->applyJobScope($q, $user),
                 'jobs as active_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES), $user),
-                'jobs as attention_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user),
+                'jobs as attention_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user),
                 'tasks as open_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at'), $user),
                 'tasks as overdue_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where('tasks.due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()), $user),
                 'tasks as blocked_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where(fn ($x) => $x->where('tasks.status', 'Blocked')->orWhere('tasks.needs_attention', true)), $user),
@@ -314,7 +314,7 @@ class ClientService
             ->whereNull('completed_at')->count();
 
         $health = 'On Track';
-        if ($active->contains(fn ($job) => $job->needs_attention || in_array($job->health, ['Needs Attention','Blocked','Delayed'], true))) $health = 'Needs Attention';
+        if ($active->contains(fn ($job) => (bool) ($job->attention_requested ?? false) || $job->needs_attention || in_array($job->health, ['Needs Attention','Blocked','Delayed'], true))) $health = 'Needs Attention';
         elseif ($overdue > 0 || $active->contains(fn ($job) => $job->health === 'At Risk')) $health = 'At Risk';
 
         return compact('client','jobs','tasks','active','overdue','openTasks','health');

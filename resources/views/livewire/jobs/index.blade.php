@@ -108,6 +108,8 @@
             :activity-tab="$jobActivityTab"
             :activity-page="$jobActivityPage"
             :focus-comment="$focusComment"
+            :show-order-attention-modal="$showOrderAttentionModal"
+            :order-attention-reason="$orderAttentionReason"
             :job-document-uploads="$jobDocumentUploads"
             :job-required-document-upload="$jobRequiredDocumentUpload"
             :job-document-task-id="$jobDocumentTaskId"

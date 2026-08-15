@@ -70,9 +70,9 @@ class DashboardService
     public function attentionJobs(User $user): Collection
     {
         return app(JobService::class)->activeQuery($user)
-            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention'])
+            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested'])
             ->with(['client:id,name,logo_path', 'phase:id,short_name'])
-            ->where(fn ($query) => $query->where('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']))
+            ->where(fn ($query) => $query->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']))
             ->latest('flow_jobs.id')
             ->limit(6)
             ->get();
@@ -103,7 +103,7 @@ class DashboardService
 
             $jobRow = (clone $jobs)
                 ->selectRaw('count(*) as active_jobs')
-                ->selectRaw("sum(case when flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 1 else 0 end) as attention_jobs")
+                ->selectRaw("sum(case when flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 1 else 0 end) as attention_jobs")
                 ->selectRaw("sum(case when exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and (lower(workflow_phases.name) like '%ship%' or lower(workflow_phases.short_name) like '%ship%')) then 1 else 0 end) as shipping_jobs")
                 ->first();
 
@@ -402,7 +402,7 @@ class DashboardService
     public function ongoingJobs(User $user): Collection
     {
         return app(JobService::class)->activeQuery($user)
-            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.updated_at'])
+            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.updated_at'])
             ->with([
                 'client:id,name,logo_path',
                 'phase:id,name,short_name',
@@ -452,7 +452,7 @@ class DashboardService
                 'jobs as at_risk_jobs_count' => fn ($jobs) => $access->applyJobScope(
                     $jobs->whereNull('flow_jobs.completed_at')
                         ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
-                        ->where(fn ($query) => $query->where('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])),
+                        ->where(fn ($query) => $query->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])),
                     $user
                 ),
                 'tasks as open_tasks_count' => fn ($tasks) => $access->applyTaskScope($tasks->whereNull('tasks.completed_at'), $user),

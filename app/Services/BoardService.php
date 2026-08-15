@@ -32,7 +32,7 @@ class BoardService
                 'flow_jobs.source_workflow_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
                 'flow_jobs.title', 'flow_jobs.quantity', 'flow_jobs.commercial_value', 'flow_jobs.currency',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
-                'flow_jobs.delivery_date', 'flow_jobs.next_action', 'flow_jobs.needs_attention',
+                'flow_jobs.delivery_date', 'flow_jobs.next_action', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested',
                 'flow_jobs.completed_at', 'flow_jobs.created_at', 'flow_jobs.updated_at',
             ])
             ->addSelect([

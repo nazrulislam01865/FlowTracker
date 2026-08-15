@@ -85,7 +85,7 @@ Route::middleware('auth')->group(function () {
     })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
-    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|countries|job-statuses|job-healths|phases')->name('filter-options.index');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|countries|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
     Route::get('/orders/bulk-import', [BulkOrderImportController::class, 'index'])->middleware('permission:jobs.create')->name('orders.bulk-import');

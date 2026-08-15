@@ -4,6 +4,7 @@ namespace App\Livewire\TaskPackSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 
+use App\Models\MasterRecord;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Services\FilterOptionService;
@@ -30,7 +31,11 @@ class Form extends Component
             $pack = TaskPack::query()
                 ->where('workspace_id', app(TaskPackService::class)->workspaceId())
                 ->where('is_snapshot', false)
-                ->with('items.defaultAssignee:id,name')
+                ->with([
+                    'items.defaultAssignee:id,name',
+                    'items.defaultDepartment:id,name',
+                    'items.documentCategory:id,name',
+                ])
                 ->findOrFail($taskPackId);
 
             $this->packCode = (string) $pack->code;
@@ -44,8 +49,10 @@ class Form extends Component
                 'default_assignee_id' => $item->default_assignee_id,
                 'default_assignee_label' => (string) ($item->defaultAssignee?->name ?: 'Unassigned'),
                 'default_department_id' => $item->default_department_id,
+                'default_department_label' => (string) ($item->defaultDepartment?->name ?: 'No department default'),
                 'priority_id' => $item->priority_id,
                 'document_category_id' => $item->document_category_id,
+                'document_category_label' => (string) ($item->documentCategory?->name ?: 'No task-specific file'),
                 'due_offset_days' => (int) $item->due_offset_days,
                 'is_required' => (bool) $item->is_required,
             ])->values()->all();
@@ -91,6 +98,64 @@ class Form extends Component
         $this->tasks[$index]['default_assignee_id'] = (int) $assignee->id;
         $this->tasks[$index]['default_assignee_label'] = (string) $assignee->name;
         $this->resetValidation("tasks.$index.default_assignee_id");
+    }
+
+    public function setTaskPackDepartment(string $property, mixed $value): void
+    {
+        abort_unless(auth()->user()?->canModule('taskpacks', $this->taskPackId ? 'edit' : 'create'), 403);
+        abort_unless(preg_match('/^tasks\.(\d+)\.default_department_id$/', $property, $matches) === 1, 422);
+
+        $index = (int) $matches[1];
+        abort_unless(array_key_exists($index, $this->tasks), 422);
+
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            $this->tasks[$index]['default_department_id'] = null;
+            $this->tasks[$index]['default_department_label'] = 'No department default';
+            $this->resetValidation("tasks.$index.default_department_id");
+            return;
+        }
+
+        abort_unless(ctype_digit($raw), 422);
+
+        $department = MasterRecord::query()
+            ->where('workspace_id', app(TaskPackService::class)->workspaceId())
+            ->where('type', 'department')
+            ->where('status', 'active')
+            ->findOrFail((int) $raw);
+
+        $this->tasks[$index]['default_department_id'] = (int) $department->id;
+        $this->tasks[$index]['default_department_label'] = (string) $department->name;
+        $this->resetValidation("tasks.$index.default_department_id");
+    }
+
+    public function setTaskPackDocumentCategory(string $property, mixed $value): void
+    {
+        abort_unless(auth()->user()?->canModule('taskpacks', $this->taskPackId ? 'edit' : 'create'), 403);
+        abort_unless(preg_match('/^tasks\.(\d+)\.document_category_id$/', $property, $matches) === 1, 422);
+
+        $index = (int) $matches[1];
+        abort_unless(array_key_exists($index, $this->tasks), 422);
+
+        $raw = trim((string) ($value ?? ''));
+        if ($raw === '') {
+            $this->tasks[$index]['document_category_id'] = null;
+            $this->tasks[$index]['document_category_label'] = 'No task-specific file';
+            $this->resetValidation("tasks.$index.document_category_id");
+            return;
+        }
+
+        abort_unless(ctype_digit($raw), 422);
+
+        $documentCategory = MasterRecord::query()
+            ->where('workspace_id', app(TaskPackService::class)->workspaceId())
+            ->where('type', 'document_category')
+            ->where('status', 'active')
+            ->findOrFail((int) $raw);
+
+        $this->tasks[$index]['document_category_id'] = (int) $documentCategory->id;
+        $this->tasks[$index]['document_category_label'] = (string) $documentCategory->name;
+        $this->resetValidation("tasks.$index.document_category_id");
     }
 
     public function removeTask(int $index): void
@@ -175,8 +240,10 @@ class Form extends Component
             'default_assignee_id' => null,
             'default_assignee_label' => 'Unassigned',
             'default_department_id' => null,
+            'default_department_label' => 'No department default',
             'priority_id' => null,
             'document_category_id' => null,
+            'document_category_label' => 'No task-specific file',
             'due_offset_days' => 1,
             'is_required' => true,
         ];
@@ -191,11 +258,19 @@ class Form extends Component
             ? app(FilterOptionService::class)->options($user, 'users', 'task-pack-setup', '', null, 5)
             : collect();
 
+        $departmentFilterOptions = $this->optionsReady
+            ? app(FilterOptionService::class)->options($user, 'department-records', 'task-pack-setup', '', null, 5)
+            : collect();
+
+        $documentFilterOptions = $this->optionsReady
+            ? app(FilterOptionService::class)->options($user, 'document-category-records', 'task-pack-setup', '', null, 5)
+            : collect();
+
         return view('livewire.task-pack-setup.form', [
             'assigneeFilterOptions' => $assigneeFilterOptions,
-            'departments' => $this->optionsReady ? $master->active('department') : collect(),
+            'departmentFilterOptions' => $departmentFilterOptions,
+            'documentFilterOptions' => $documentFilterOptions,
             'priorities' => $this->optionsReady ? $master->active('priority') : collect(),
-            'documentCategories' => $this->optionsReady ? $master->active('document_category') : collect(),
             'canDeleteTaskPack' => (bool) ($user?->canModule('taskpacks', 'delete')),
         ]);
     }

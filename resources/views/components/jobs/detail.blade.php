@@ -29,6 +29,8 @@
     'activityTab'=>'all',
     'activityPage'=>1,
     'focusComment'=>null,
+    'showOrderAttentionModal'=>false,
+    'orderAttentionReason'=>'',
     'jobDocumentUploads'=>[],
     'jobRequiredDocumentUpload'=>null,
     'jobDocumentTaskId'=>null,
@@ -87,6 +89,9 @@
     $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
     $jobFlag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
     $jobFlagColor = $jobFlag ? $masterData->displayColorFor('order_flag', $jobFlag) : null;
+    $manualAttention = (bool) ($job->attention_requested ?? false);
+    $manualAttentionReason = trim((string) ($job->attention_reason ?? ''));
+    $orderAttentionLocked = (bool) $job->completed_at || in_array((string) $job->status, \App\Services\JobService::INACTIVE_STATUSES, true);
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
     <div class="ft-detail-toolbar ft-exact-job-header">
@@ -133,6 +138,14 @@
                 <span class="ft-order-header-meta-item">
                     <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span>
                     <span>Created <strong>{{ $job->created_at ? \App\Support\UserLocalTime::format($job->created_at, 'M j, Y') : '—' }}@if($job->created_at) at {{ \App\Support\UserLocalTime::format($job->created_at, 'g:i A') }}@endif</strong></span>
+                </span>
+                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
+                <span class="ft-order-header-meta-item ft-order-header-attention-action" title="{{ $manualAttentionReason ?: 'Request attention from the Order creator and administrators' }}">
+                    <span>Action:</span>
+                    <button type="button" class="ft-order-header-attention-button {{ $manualAttention ? 'is-flagged' : '' }}" wire:click="openOrderAttentionReason" @disabled($orderAttentionLocked) aria-label="Request attention" title="{{ $manualAttention ? 'View or update attention request' : 'Request attention' }}">
+                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V4"></path><path d="M7 5h10l-2 4 2 4H7"></path></svg>
+                    </button>
+                    @if($manualAttention)<strong class="ft-order-header-attention-label">Requires attention</strong>@endif
                 </span>
             </div>
             <div class="ft-exact-job-meta ft-order-status-row" aria-label="Order status">
@@ -250,5 +263,36 @@
             :collection-next-follow-up-date="$collectionNextFollowUpDate"
             :collection-note="$collectionNote"
         />
+    @endif
+
+
+    @if($showOrderAttentionModal)
+        <div class="ft-inquiry-attention-modal-backdrop" wire:key="order-attention-modal" wire:click.self="closeOrderAttentionReason">
+            <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="order-attention-modal-title">
+                <header class="ft-inquiry-attention-modal-head">
+                    <div>
+                        <h2 id="order-attention-modal-title">Request attention</h2>
+                        <p>{{ $job->displayOrderNumber() }} · Admin, Super Admin and the Order creator will be notified.</p>
+                    </div>
+                    <button type="button" class="ft-inquiry-attention-modal-close" wire:click="closeOrderAttentionReason" aria-label="Close">×</button>
+                </header>
+                <div class="ft-inquiry-attention-modal-body ft-mention-host">
+                    <label for="order-attention-reason">Reason for flag *</label>
+                    <textarea id="order-attention-reason" class="ft-mention-input" wire:model="orderAttentionReason" rows="5" maxlength="2000" autocomplete="off" data-mention-users="{{ json_encode(collect($mentionUsers)->values()->all(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES) }}" placeholder="Explain what needs attention. Type @ to mention a user..."></textarea>
+                    @error('orderAttentionReason')<p class="ft-inquiry-attention-modal-error">{{ $message }}</p>@enderror
+                    <p class="ft-inquiry-attention-modal-help">The reason is added to Order comments. Use <b>@</b> to mention specific users in addition to the automatic Admin/Super Admin/creator notification.</p>
+                </div>
+                <footer class="ft-inquiry-attention-modal-actions">
+                    @if($manualAttention)<button type="button" class="ft-inquiry-attention-clear" wire:click="clearOrderAttention" wire:loading.attr="disabled" wire:target="clearOrderAttention">Clear flag</button>@else<span></span>@endif
+                    <div>
+                        <button type="button" class="secondary" wire:click="closeOrderAttentionReason">Cancel</button>
+                        <button type="button" class="primary" wire:click="saveOrderAttentionReason" wire:loading.attr="disabled" wire:target="saveOrderAttentionReason">
+                            <span wire:loading.remove wire:target="saveOrderAttentionReason">Request attention</span>
+                            <span wire:loading wire:target="saveOrderAttentionReason">Saving...</span>
+                        </button>
+                    </div>
+                </footer>
+            </section>
+        </div>
     @endif
 </div>

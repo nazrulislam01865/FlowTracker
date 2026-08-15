@@ -224,6 +224,27 @@ class NotificationService
         $this->fanOutAfterCommit($ids, $title, $message, $type, $job->id, null, $actor?->id);
     }
 
+    public function notifyOrderAttentionUsers(
+        array $recipientIds,
+        string $title,
+        string $message,
+        FlowJob $job,
+        ?User $actor = null,
+    ): void {
+        $ids = collect($recipientIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
+        if ($ids === []) return;
+
+        $this->fanOutAfterCommit(
+            $ids,
+            $title,
+            $message,
+            'risk',
+            (int) $job->id,
+            null,
+            $actor?->id ? (int) $actor->id : null,
+        );
+    }
+
     public function notifyTaskParticipants(
         Task $task,
         string $title,
