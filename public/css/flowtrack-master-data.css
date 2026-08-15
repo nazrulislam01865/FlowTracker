@@ -795,3 +795,506 @@ html:has(.ft-product-create-modal),body:has(.ft-product-create-modal){overflow:h
   }
   .ft-master-page:has(.ft-product-list-head) .ft-product-pagination-left{gap:14px}
 }
+
+/* 2026-08-15: Product List filters reuse the same searchable dropdown UX as
+   the Order List filter bar. The shared x-ui.select-filter component keeps the
+   interaction consistent while using the already-loaded Product filter data. */
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter{
+  position:relative;
+  min-width:0;
+  height:36px;
+  margin:0!important;
+  align-self:center;
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter>.ft-remote-filter-button{
+  width:100%;
+  height:36px;
+  min-height:36px;
+  padding:0 28px 0 11px;
+  border:1px solid #cfdae9;
+  border-radius:8px;
+  background:#fff;
+  color:#42526a;
+  font-size:12px;
+  font-weight:600;
+  line-height:1;
+  box-shadow:none;
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter>.ft-remote-filter-button:hover,
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter>.ft-remote-filter-button[aria-expanded="true"]{
+  border-color:#7ba2f3;
+  box-shadow:0 0 0 3px rgba(36,99,235,.10);
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter .ft-filter-chevron{
+  color:#60718a;
+  font-size:12px;
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter>.ft-remote-filter-menu{
+  font-size:11px;
+  border-color:#d8e1ed;
+  border-radius:10px;
+  box-shadow:0 16px 36px rgba(28,45,66,.16);
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter .ft-remote-filter-search{
+  min-height:38px;
+  border-color:#cfd9e6;
+  border-radius:8px;
+  font-size:11px;
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter .ft-remote-filter-search:focus{
+  border-color:#1767e8;
+  outline:0;
+  box-shadow:0 0 0 2px rgba(23,103,232,.10);
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter .ft-remote-filter-option{
+  min-height:34px;
+  padding:8px 9px;
+  border-radius:7px;
+  font-size:11px;
+}
+.ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter .ft-remote-filter-message{
+  font-size:10px;
+  line-height:1.35;
+}
+
+@media(max-width:680px){
+  .ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter,
+  .ft-master-page:has(.ft-product-list-head) .ft-product-filter-card>.ft-product-list-filter>.ft-remote-filter-button{
+    width:100%;
+    height:38px;
+    min-height:38px;
+  }
+}
+
+/* Supplier list: compact, readable mobile cards. The generic Master Data table
+   remains unchanged for every other master-data group. */
+@media(max-width:760px){
+  .ft-master-supplier-card{
+    overflow:visible;
+    border-radius:14px;
+    background:#fff;
+  }
+  .ft-master-supplier-card .ft-master-generic-toolbar{
+    min-height:0;
+    padding:10px;
+  }
+  .ft-master-supplier-card .ft-master-generic-toolbar .ft-master-search-box{
+    width:100%;
+    height:40px;
+  }
+  .ft-master-supplier-card .ft-master-search-box input{
+    height:40px;
+    border-radius:9px;
+    font-size:12px;
+  }
+  .ft-master-supplier-card .ft-master-product-count{
+    min-height:38px;
+    padding:0 11px;
+    font-size:10.5px;
+  }
+  .ft-master-supplier-card .ft-master-generic-table-wrap{
+    padding:8px;
+    overflow:visible;
+  }
+  .ft-master-supplier-table{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .ft-master-supplier-table thead{display:none!important}
+  .ft-master-supplier-table tbody{
+    display:grid!important;
+    gap:8px!important;
+  }
+  .ft-master-supplier-table tbody tr{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-areas:
+      "code status"
+      "name name"
+      "description description"
+      "sort actions"!important;
+    gap:10px 12px;
+    padding:12px!important;
+    overflow:visible!important;
+    border:1px solid #dbe4ef!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    box-shadow:0 1px 2px rgba(15,35,65,.025);
+  }
+  .ft-master-supplier-table tbody tr:hover{background:#fff!important}
+  .ft-master-supplier-table td{
+    display:block!important;
+    width:auto!important;
+    min-width:0!important;
+    height:auto!important;
+    padding:0!important;
+    border:0!important;
+    color:#25364f;
+    font-size:11.5px!important;
+    line-height:1.35;
+  }
+  .ft-master-supplier-table td::before{
+    display:block!important;
+    margin:0 0 4px!important;
+    color:#71829a!important;
+    font-size:8.5px!important;
+    font-weight:800!important;
+    letter-spacing:.07em!important;
+    line-height:1!important;
+    text-transform:uppercase!important;
+  }
+  .ft-master-supplier-table td:nth-child(1){grid-area:sort;align-self:end}
+  .ft-master-supplier-table td:nth-child(2){grid-area:code}
+  .ft-master-supplier-table td:nth-child(3){grid-area:name}
+  .ft-master-supplier-table td:nth-child(4){grid-area:description}
+  .ft-master-supplier-table td:nth-child(5){grid-area:status;justify-self:end;text-align:right}
+  .ft-master-supplier-table td:nth-child(6){grid-area:actions;justify-self:end;align-self:end}
+
+  .ft-master-supplier-table td:nth-child(2) .ft-master-product-code{
+    display:inline-block;
+    max-width:100%;
+    overflow:hidden;
+    color:#155ce9;
+    font-size:13px;
+    font-weight:800;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .ft-master-supplier-table td:nth-child(3){
+    color:#10213b;
+    font-size:14px!important;
+    font-weight:760;
+  }
+  .ft-master-supplier-table td:nth-child(4){
+    color:#60718a;
+    font-size:10.75px!important;
+    overflow-wrap:anywhere;
+  }
+  .ft-master-supplier-table td:nth-child(5)::before{text-align:right}
+  .ft-master-supplier-table td:nth-child(5) .badge{
+    width:auto!important;
+    min-width:0!important;
+    min-height:24px;
+    margin:0!important;
+    padding:4px 9px!important;
+    justify-content:center;
+    border-radius:999px;
+    font-size:9.5px!important;
+    line-height:1!important;
+  }
+  .ft-master-supplier-table .row-actions{
+    display:flex!important;
+    width:auto!important;
+    align-items:center;
+    justify-content:flex-end;
+    gap:6px;
+  }
+  .ft-master-supplier-table .row-actions .mini-btn{
+    width:auto!important;
+    min-width:58px!important;
+    min-height:30px;
+    padding:0 10px!important;
+    border-radius:7px;
+    font-size:9.5px!important;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .ft-master-supplier-card .ft-master-pagination{
+    gap:8px;
+    padding:9px 10px!important;
+    font-size:10px;
+  }
+}
+
+@media(max-width:500px){
+  .ft-master-supplier-card .ft-master-generic-table-wrap{padding:6px}
+  .ft-master-supplier-table tbody tr{
+    grid-template-columns:minmax(0,1fr) auto!important;
+    grid-template-areas:
+      "code status"
+      "name name"
+      "description description"
+      "sort actions"!important;
+    gap:9px 10px;
+    padding:11px!important;
+  }
+  .ft-master-supplier-table .row-actions{
+    display:flex!important;
+    grid-template-columns:none!important;
+    flex-wrap:wrap;
+  }
+  .ft-master-supplier-table .row-actions .mini-btn{
+    width:auto!important;
+    min-width:54px!important;
+    min-height:29px;
+    padding-inline:9px!important;
+    font-size:9px!important;
+  }
+  .ft-master-supplier-table td:nth-child(3){font-size:13.5px!important}
+}
+
+/* ==========================================================================\n   All Master Data lists: supplier-style mobile cards — 2026-08-15\n   Every generic Master Data group shares the same compact mobile treatment.\n   Product and Product Category keep their purpose-built catalogue layouts.\n   ========================================================================== */
+@media(max-width:760px){
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-breadcrumb{
+    margin-bottom:8px;
+    font-size:9.5px;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-page-head{
+    gap:10px;
+    margin-bottom:12px;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-page-head h1{
+    margin-bottom:4px;
+    font-size:22px;
+    line-height:1.15;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-page-head p{
+    max-width:680px;
+    font-size:10.5px;
+    line-height:1.4;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-add-button{
+    min-height:34px;
+    padding-inline:12px;
+    font-size:10px;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-single-stat{
+    width:100%;
+    max-width:none;
+    min-height:54px;
+    margin-bottom:10px;
+    padding:8px 10px;
+    border-radius:10px;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-stat-icon{
+    width:34px;
+    height:34px;
+    flex-basis:34px;
+  }
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-stat-icon svg{width:17px;height:17px}
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-stat-copy span{font-size:9px}
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-stat-copy strong{font-size:17px}
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-single-stat>small{font-size:8.5px}
+
+  .ft-master-generic-card{
+    overflow:visible!important;
+    border-radius:14px;
+    background:#fff;
+  }
+  .ft-master-generic-card .ft-master-generic-toolbar{
+    min-height:0;
+    padding:10px;
+  }
+  .ft-master-generic-card .ft-master-generic-toolbar .ft-master-search-box{
+    width:100%;
+    height:40px;
+  }
+  .ft-master-generic-card .ft-master-search-box input{
+    width:100%;
+    height:40px;
+    border-radius:9px;
+    padding-left:38px;
+    font-size:12px;
+  }
+  .ft-master-generic-card .ft-master-product-count{
+    min-height:38px;
+    padding:0 11px;
+    font-size:10.5px;
+  }
+  .ft-master-generic-card .ft-master-generic-table-wrap{
+    padding:8px;
+    overflow:visible!important;
+  }
+  .ft-master-generic-table{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+  }
+  .ft-master-generic-table thead{display:none!important}
+  .ft-master-generic-table tbody{
+    display:grid!important;
+    gap:8px!important;
+  }
+  .ft-master-generic-table tbody tr:not(.ft-master-empty-row){
+    display:flex!important;
+    width:100%!important;
+    min-width:0!important;
+    flex-wrap:wrap;
+    align-items:flex-end;
+    gap:10px 12px;
+    padding:12px!important;
+    overflow:visible!important;
+    border:1px solid #dbe4ef!important;
+    border-radius:12px!important;
+    background:#fff!important;
+    box-shadow:0 1px 2px rgba(15,35,65,.025);
+  }
+  .ft-master-generic-table tbody tr:not(.ft-master-empty-row):hover{background:#fff!important}
+  .ft-master-generic-table tbody tr:not(.ft-master-empty-row)>td{
+    display:block!important;
+    width:auto!important;
+    min-width:0!important;
+    height:auto!important;
+    padding:0!important;
+    border:0!important;
+    color:#25364f;
+    font-size:11.5px!important;
+    line-height:1.35;
+  }
+  .ft-master-generic-table tbody tr:not(.ft-master-empty-row)>td::before{
+    content:attr(data-label)!important;
+    display:block!important;
+    margin:0 0 4px!important;
+    color:#71829a!important;
+    font-size:8.5px!important;
+    font-weight:800!important;
+    letter-spacing:.07em!important;
+    line-height:1!important;
+    text-transform:uppercase!important;
+  }
+
+  /* Flex ordering keeps the same hierarchy even when a group has optional columns. */
+  .ft-master-generic-table .ft-master-mobile-code{order:1;flex:1 1 58%}
+  .ft-master-generic-table .ft-master-mobile-status{order:2;flex:0 0 auto;text-align:right}
+  .ft-master-generic-table .ft-master-mobile-name{order:3;flex:1 1 100%}
+  .ft-master-generic-table .ft-master-mobile-auto-status{order:4;flex:1 1 42%}
+  .ft-master-generic-table .ft-master-mobile-flag{order:5;flex:1 1 42%}
+  .ft-master-generic-table .ft-master-mobile-parent{order:6;flex:1 1 100%}
+  .ft-master-generic-table .ft-master-mobile-description{order:7;flex:1 1 100%}
+  .ft-master-generic-table .ft-master-mobile-color{order:8;flex:1 1 100%}
+  .ft-master-generic-table .ft-master-mobile-sort{order:9;flex:0 1 88px}
+  .ft-master-generic-table .ft-master-mobile-actions{order:10;flex:1 1 220px}
+
+  .ft-master-generic-table .ft-master-mobile-code .ft-master-product-code{
+    display:inline-block;
+    max-width:100%;
+    overflow:hidden;
+    color:#155ce9;
+    font-size:13px;
+    font-weight:800;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .ft-master-generic-table .ft-master-mobile-name{
+    color:#10213b!important;
+    font-size:14px!important;
+    font-weight:760!important;
+    overflow-wrap:anywhere;
+  }
+  .ft-master-generic-table .ft-master-mobile-description,
+  .ft-master-generic-table .ft-master-mobile-parent{
+    color:#60718a!important;
+    font-size:10.75px!important;
+    overflow-wrap:anywhere;
+  }
+  .ft-master-generic-table .ft-master-mobile-auto-status strong{color:#25364f;font-size:11px}
+  .ft-master-generic-table .ft-master-mobile-status::before{text-align:right}
+  .ft-master-generic-table .ft-master-mobile-status .badge{
+    display:inline-flex!important;
+    width:auto!important;
+    min-width:0!important;
+    min-height:24px;
+    margin:0!important;
+    padding:4px 9px!important;
+    align-items:center;
+    justify-content:center;
+    border-radius:999px;
+    font-size:9.5px!important;
+    line-height:1!important;
+  }
+  .ft-master-generic-table .ft-master-mobile-color .ft-master-color-chip{
+    width:auto;
+    max-width:100%;
+    min-height:30px;
+  }
+  .ft-master-generic-table .ft-master-mobile-color .ft-master-color-chip span{
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+  }
+  .ft-master-generic-table .ft-master-mobile-actions::before{text-align:right}
+  .ft-master-generic-table .ft-master-mobile-actions .row-actions{
+    display:flex!important;
+    width:100%!important;
+    align-items:center;
+    justify-content:flex-end;
+    gap:6px;
+    flex-wrap:wrap;
+  }
+  .ft-master-generic-table .ft-master-mobile-actions .row-actions .mini-btn{
+    width:auto!important;
+    min-width:54px!important;
+    min-height:30px;
+    padding:0 9px!important;
+    border-radius:7px;
+    font-size:9px!important;
+    font-weight:700;
+    white-space:nowrap;
+  }
+  .ft-master-generic-table .ft-master-mobile-actions .row-actions .mini-btn:last-of-type{
+    color:#b42318;
+  }
+
+  .ft-master-generic-table .ft-master-empty-row{
+    display:block!important;
+    width:100%!important;
+    border:1px solid #dbe4ef!important;
+    border-radius:12px!important;
+    overflow:hidden!important;
+    background:#fff!important;
+  }
+  .ft-master-generic-table .ft-master-empty-row td{
+    display:block!important;
+    width:100%!important;
+    padding:0!important;
+    border:0!important;
+  }
+  .ft-master-generic-table .ft-master-empty-row td::before{display:none!important;content:none!important}
+  .ft-master-generic-table .ft-master-empty-row .empty-state{padding:24px 12px;font-size:11px}
+
+  .ft-master-generic-card .ft-master-pagination{
+    gap:8px;
+    padding:9px 10px!important;
+    font-size:10px;
+  }
+  .ft-master-generic-card .ft-master-pagination .ft-page-actions{
+    display:grid!important;
+    width:100%!important;
+    grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+    gap:6px;
+    align-items:center;
+  }
+  .ft-master-generic-card .ft-master-pagination .ft-page-actions button{
+    width:100%;
+    min-width:0;
+    height:32px;
+    padding-inline:8px;
+    font-size:9.5px;
+  }
+  .ft-master-generic-card .ft-master-pagination .ft-page-actions span{
+    white-space:nowrap;
+    text-align:center;
+    font-size:9.5px;
+  }
+}
+
+@media(max-width:520px){
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-page-head{flex-direction:column}
+  .ft-master-page:has(.ft-master-generic-card) .ft-master-add-button{width:100%;margin:0}
+  .ft-master-generic-card .ft-master-generic-table-wrap{padding:6px}
+  .ft-master-generic-table tbody tr:not(.ft-master-empty-row){
+    gap:9px 10px;
+    padding:11px!important;
+  }
+  .ft-master-generic-table .ft-master-mobile-name{font-size:13.5px!important}
+  .ft-master-generic-table .ft-master-mobile-actions{flex-basis:100%}
+  .ft-master-generic-table .ft-master-mobile-actions::before{text-align:left}
+  .ft-master-generic-table .ft-master-mobile-actions .row-actions{justify-content:flex-start}
+  .ft-master-generic-table .ft-master-mobile-actions .row-actions .mini-btn{
+    min-width:52px!important;
+    min-height:29px;
+    padding-inline:8px!important;
+    font-size:8.75px!important;
+  }
+}

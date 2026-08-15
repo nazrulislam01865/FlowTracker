@@ -7,15 +7,15 @@
 
     <div class="page-head">
         <div>
-            <h1>My Work</h1>
-            <p>Your assigned tasks, grouped by Order and ranked by what needs action first.</p>
+            <h1>My Tasks</h1>
+            <p>{{ $administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.' }}</p>
         </div>
     </div>
 
 
     <section class="work-view" aria-busy="false">
         <div class="metrics" aria-label="Personal work summary">
-            <button type="button" class="metric amber {{ $quick === 'attention' ? 'active' : '' }}" wire:click="setMetricFilter('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention ?? '—'">{{ $metrics['attention'] ?? '—' }}</strong></span><i>⚑</i></button>
+            <button type="button" class="metric {{ $quick === 'my_tasks' ? 'active' : '' }}" wire:click="setMetricFilter('my_tasks')"><span><small>My Tasks</small><strong x-text="metrics.my_tasks ?? '—'">{{ $metrics['my_tasks'] ?? '—' }}</strong></span><i>✓</i></button>
             <button type="button" class="metric red {{ $quick === 'overdue' ? 'active' : '' }}" wire:click="setMetricFilter('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue ?? '—'">{{ $metrics['overdue'] ?? '—' }}</strong></span><i>!</i></button>
             <button type="button" class="metric amber {{ $quick === 'today' ? 'active' : '' }}" wire:click="setMetricFilter('today')"><span><small>Due today</small><strong x-text="metrics.today ?? '—'">{{ $metrics['today'] ?? '—' }}</strong></span><i>◷</i></button>
             <button type="button" class="metric {{ $quick === 'upcoming' ? 'active' : '' }}" wire:click="setMetricFilter('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming ?? '—'">{{ $metrics['upcoming'] ?? '—' }}</strong></span><i>→</i></button>
@@ -26,7 +26,7 @@
             <div class="toolbar-primary">
                 <label class="search-wrap">
                     <span class="search-icon">⌕</span>
-                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search my work">
+                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search tasks, Orders, clients or flags" aria-label="Search my work">
                     @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
                 </label>
                 <div class="phase-filters" aria-label="Filter by Order workflow phase">
@@ -46,7 +46,7 @@
             </div>
             <div class="toolbar-secondary">
                 <div class="quick-filters">
-                    <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('{{ $quick === 'mentions' ? 'all' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
+                    <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('{{ $quick === 'mentions' ? 'my_tasks' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
                 </div>
                 <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
                     <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
@@ -58,7 +58,7 @@
                     <option value="due">Sort: Due soon</option>
                     <option value="job">Sort: Order number</option>
                 </select>
-                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $quick === 'all' && !$hideCompleted)>Clear filters</button>
+                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $quick === 'my_tasks' && !$hideCompleted)>Clear filters</button>
             </div>
         </div>
 
@@ -81,7 +81,7 @@
 
         <div class="work-progress" wire:loading.delay.long.flex wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
 
-        <section class="list-shell" aria-label="My tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage">
+        <section class="list-shell" aria-label="My Tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage">
             <div class="task-table-scroll">
                 <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
@@ -158,13 +158,13 @@
                                     </span>
                                     <span class="status-wrap" data-label="Status">
                                         <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                            @if(!in_array($task['status'], $statusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
-                                            @foreach($statusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                            @if(!in_array($task['status'], $statusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
+                                            @foreach($statusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                                         </select>
                                     </span>
                                     <span class="flag {{ $task['flagColor'] ? 'ft-master-color' : $task['flagTone'] }}" style="{{ \App\Support\MasterColor::style($task['flagColor']) }}" data-label="Flag">{{ $task['flag'] }}</span>
                                     <span class="updated" data-label="Updated">{{ $task['updated'] }}</span>
-                                    <a class="row-action" href="{{ $task['route'] }}" wire:navigate>Open</a>
+                                    <a class="row-action" href="{{ $task['route'] }}" wire:navigate><span class="row-action-desktop">Open</span><span class="row-action-mobile">Details</span><span class="row-action-arrow" aria-hidden="true">→</span></a>
                                 </div>
                             @endforeach
                         </div>

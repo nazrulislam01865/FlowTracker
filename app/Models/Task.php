@@ -44,6 +44,16 @@ class Task extends Model
         return $this->belongsTo(MasterRecord::class, 'task_flag_id');
     }
 
+    public function orderTaskStatus(): BelongsTo
+    {
+        return $this->belongsTo(MasterRecord::class, 'order_task_status_id');
+    }
+
+    public function orderTaskFlag(): BelongsTo
+    {
+        return $this->belongsTo(MasterRecord::class, 'order_task_flag_id');
+    }
+
     public function template(): BelongsTo
     {
         return $this->belongsTo(TaskPackTask::class, 'task_pack_task_id');

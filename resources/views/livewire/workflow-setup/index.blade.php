@@ -8,7 +8,7 @@
     <div class="ft-admin-page-head">
         <div>
             <h1>Workflow Setup</h1>
-            <p>Define phase sequence, allowed starting stages, Task Packs, documents and skip rules</p>
+            <p>Define phase sequence, Task Packs and the rules that control each stage</p>
         </div>
         <div class="ft-admin-head-actions">
             @if($canCreateWorkflow && $selected)
@@ -60,8 +60,8 @@
                 </div>
 
                 <div class="ft-workflow-rule-note">
-                    <b>Starting-stage rule</b>
-                    <p>Only phases marked “Allow Job Start” appear in the New Job form. Earlier phases are recorded as skipped, completed outside the system, or migrated.</p>
+                    <b>Automatic phase controls</b>
+                    <p>Active phases automatically use the standard Job-start, skip and auto-move settings. Task Pack requirements remain the gate for phase completion.</p>
                 </div>
 
                 <div class="ft-workflow-table-wrap">
@@ -71,11 +71,8 @@
                                 <th>#</th>
                                 <th>Phase</th>
                                 <th>Task Pack</th>
-                                <th>Allow Job<br>Start</th>
-                                <th>Can<br>Skip</th>
-                                <th>Auto Move</th>
-                                <th>Required<br>Document</th>
                                 <th>Entry / Exit</th>
+                                <th>Status</th>
                                 <th>Actions</th>
                             </tr>
                         </thead>
@@ -97,15 +94,8 @@
                                         <span>Stage {{ $phase->sequence }}</span>
                                     </td>
                                     <td>{{ $phase->taskPack?->name ?? 'No Task Pack' }}</td>
-                                    <td>
-                                        <label class="ft-table-check"><input type="checkbox" @checked($phase->allow_job_start) disabled><span>{{ $phase->allow_job_start ? 'Allowed' : 'Not allowed' }}</span></label>
-                                    </td>
-                                    <td>
-                                        <label class="ft-table-check"><input type="checkbox" @checked($phase->is_skippable) disabled><span>{{ $phase->is_skippable ? 'Yes' : 'No' }}</span></label>
-                                    </td>
-                                    <td><span class="ft-auto-pill {{ $phase->auto_advance_on_ready ? 'automatic' : '' }}">{{ $phase->auto_advance_on_ready ? 'Automatic' : 'Manual' }}</span></td>
-                                    <td>{{ $phase->documentCategory?->name ?? '—' }}</td>
                                     <td class="ft-entry-exit"><div><b>In:</b> {{ $phase->entry_condition ?: '—' }}</div><div><b>Out:</b> {{ $phase->exit_condition ?: '—' }}</div></td>
+                                    <td><span class="ft-auto-pill {{ $phase->is_active ? 'automatic' : '' }}">{{ $phase->is_active ? 'Active' : 'Inactive' }}</span></td>
                                     <td>
                                         <div class="ft-row-action-buttons">
                                             @if($canEditWorkflow)<button type="button" wire:click="openPhase({{ $phase->id }})">Edit</button>@endif
@@ -115,7 +105,7 @@
                                     </td>
                                 </tr>
                             @empty
-                                <tr><td colspan="9" class="ft-workflow-empty-row">No phases configured. Add the first phase to this workflow.</td></tr>
+                                <tr><td colspan="6" class="ft-workflow-empty-row">No phases configured. Add the first phase to this workflow.</td></tr>
                             @endforelse
                         </tbody>
                     </table>
@@ -237,20 +227,13 @@
                         <input type="text" wire:model="shortName" placeholder="New">
                         @error('shortName')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
-                    <div class="ft-admin-field">
-                        <label>Task Pack</label>
-                        <select wire:model="taskPackId">
-                            <option value="">No Task Pack</option>
-                            @foreach($taskPacks as $taskPack)<option value="{{ $taskPack->id }}">{{ $taskPack->name }}</option>@endforeach
-                        </select>
-                    </div>
-                    <div class="ft-admin-field">
-                        <label>Required document</label>
-                        <select wire:model="documentCategoryId">
-                            <option value="">None</option>
-                            @foreach($documentCategories as $category)<option value="{{ $category->id }}">{{ $category->name }}</option>@endforeach
-                        </select>
-                    </div>
+                </div>
+                <div class="ft-admin-field">
+                    <label>Task Pack</label>
+                    <select wire:model="taskPackId">
+                        <option value="">No Task Pack</option>
+                        @foreach($taskPacks as $taskPack)<option value="{{ $taskPack->id }}">{{ $taskPack->name }}</option>@endforeach
+                    </select>
                 </div>
                 <div class="ft-admin-field">
                     <label>Entry rule</label>
@@ -262,9 +245,6 @@
                 </div>
 
                 <div class="ft-phase-checks">
-                    <label><input type="checkbox" wire:model="allowJobStart"><span>Allow users to create a Job starting from this phase</span></label>
-                    <label><input type="checkbox" wire:model="isSkippable"><span>Allow this phase to be skipped during normal progression</span></label>
-                    <label><input type="checkbox" wire:model="autoAdvanceOnReady"><span>Automatically move the Job when all task, document and blocker gates are ready</span></label>
                     <label><input type="checkbox" wire:model="phaseActive"><span>Phase active</span></label>
                 </div>
             </div>

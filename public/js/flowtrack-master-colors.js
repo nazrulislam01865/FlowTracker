@@ -30,12 +30,19 @@
     document.addEventListener('change', event => {
         if (event.target?.matches?.('select[data-master-color-select]')) applySelect(event.target);
     }, true);
+    document.addEventListener('focusin', () => requestAnimationFrame(() => applyAll(document)), true);
     document.addEventListener('DOMContentLoaded', () => applyAll(document), { once:true });
     document.addEventListener('livewire:navigated', () => applyAll(document));
     document.addEventListener('livewire:init', () => {
         applyAll(document);
         if (window.Livewire?.hook) {
-            Livewire.hook('morph.updated', ({ el }) => applyAll(el || document));
+            Livewire.hook('morph.updated', ({ el }) => {
+                applyAll(el || document);
+                // A morph can replace a sibling select while the hook root points at
+                // another field. Re-apply across the document on the next frame so
+                // master-data colors remain stable after any Create Inquiry update.
+                requestAnimationFrame(() => applyAll(document));
+            });
         }
     }, { once:true });
 

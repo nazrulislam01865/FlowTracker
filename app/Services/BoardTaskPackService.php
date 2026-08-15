@@ -162,13 +162,13 @@ class BoardTaskPackService
         $tasks->select([
                 'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.progress',
-                'tasks.due_date', 'tasks.needs_attention', 'tasks.task_flag_id', 'tasks.attention_reason',
+                'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason',
                 'tasks.completed_at', 'tasks.updated_at',
             ])
             ->with([
                 'phase:id,name,short_name,sequence',
                 'assignee:id,name,department_id,profile_image_path',
-                'attentionFlag:id,name,status,sort_order',
+                'orderTaskFlag:id,type,name,color,status,sort_order,metadata',
             ]);
 
         $this->orderTasks($tasks, (string) ($filters['sort'] ?? 'action'), $today);
@@ -287,7 +287,7 @@ class BoardTaskPackService
     public function statusOptions(): array
     {
         return app(MasterDataService::class)
-            ->active('task_status')
+            ->active('order_task_status')
             ->pluck('name')
             ->map(fn ($status) => trim((string) $status))
             ->filter()
@@ -478,20 +478,14 @@ class BoardTaskPackService
         }
 
         $flag = 'No flag';
-        if (!$completed && $task->needs_attention) {
-            $flag = app(TaskFlagService::class)->labelForTask($task) ?: 'Management attention';
-        } elseif (!$completed && $dueTone === 'overdue') {
-            $flag = 'Overdue';
-        } elseif (!$completed && $dueTone === 'today') {
-            $flag = 'Due Today';
-        } elseif (!$completed && strcasecmp((string) $task->priority, 'Critical') === 0) {
-            $flag = 'Critical';
+        if (!$completed) {
+            $flag = app(TaskFlagService::class)->labelForTask($task) ?: 'No flag';
         }
 
         $updatedAt = $task->updated_at?->copy()->setTimezone($displayTimezone);
         $master = app(MasterDataService::class);
-        $statusColor = $master->colorFor('task_status', (string) $task->status);
-        $flagColor = (!$completed && $task->needs_attention) ? $master->colorFor('task_flag', $flag) : null;
+        $statusColor = $master->colorFor('order_task_status', (string) $task->status);
+        $flagColor = (!$completed && $flag !== 'No flag') ? $master->colorFor('order_task_flag', $flag) : null;
 
         return [
             'id' => (int) $task->id,

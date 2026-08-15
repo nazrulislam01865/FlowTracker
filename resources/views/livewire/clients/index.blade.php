@@ -60,6 +60,9 @@
     $activeJobs = $detail['active'] ?? collect();
     $attentionTasks = $detail['tasks'] ?? collect();
     $selectedHealth = $detail['health'] ?? 'On Track';
+    $clientListFieldFilterActive = collect([$search, $country, $manager, $jobHealth, $outstanding, $archivedDate, $createdBy])
+        ->contains(fn ($value) => trim((string) $value) !== '');
+    $clientAnyFilterActive = $clientListFieldFilterActive || (!$showArchived && $quick !== 'all');
 @endphp
 <div class="ft-clients-reference">
     <div class="ft-clients-page-head">
@@ -83,7 +86,7 @@
         <section class="ft-clients-main">
             @if(!$showArchived)
             <div class="ft-clients-metrics">
-                <button type="button" wire:click="setQuick('all')" class="ft-client-metric {{ $quick==='all'?'is-active':'' }}">
+                <button type="button" wire:click="setQuick('all')" class="ft-client-metric {{ $quick==='all' && !$clientListFieldFilterActive ? 'is-active' : '' }}">
                     <span class="ft-client-metric-icon ft-client-metric-blue">♙</span><span><small>Total clients</small><b>{{ number_format($summary['clients']) }}</b></span>
                 </button>
                 <button type="button" wire:click="setQuick('active_jobs')" class="ft-client-metric {{ $quick==='active_jobs'?'is-active':'' }}">
@@ -115,6 +118,7 @@
                             ])"
                         />
                         <x-ui.remote-filter label="Created by" property="createdBy" type="users" context="clients" :value="$createdBy" placeholder="Anyone" :initial-options="$createdByFilterOptions" />
+                        <button type="button" class="ft-client-clear-filter" wire:click="clearFilters" @disabled(! $clientAnyFilterActive)>× Clear filter</button>
                     </div>
                     @php
                         $chips = collect();
@@ -125,7 +129,6 @@
                     @if($chips->isNotEmpty())
                         <div class="ft-list-active-row">
                             <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
-                            <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
                         </div>
                     @endif
                 </div>
@@ -137,6 +140,7 @@
                         <x-ui.remote-filter label="Country" property="country" type="countries" context="clients" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
                         <x-ui.select-filter label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />
                         <x-ui.select-filter label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
+                        <button type="button" class="ft-client-clear-filter" wire:click="clearFilters" @disabled(! $clientAnyFilterActive)>× Clear filter</button>
                     </div>
                     @php
                         $chips = collect();
@@ -146,10 +150,9 @@
                         if($jobHealth) $chips->push(['key'=>'jobHealth','label'=>'Health: '.$jobHealth]);
                         if($outstanding) $chips->push(['key'=>'outstanding','label'=>'Outstanding: '.(['positive'=>'Has balance','high'=>'$10,000+','zero'=>'No balance'][$outstanding] ?? $outstanding)]);
                     @endphp
-                    @if($chips->isNotEmpty() || $quick !== 'all')
+                    @if($chips->isNotEmpty())
                         <div class="ft-list-active-row">
                             <div class="ft-list-filter-chips">@foreach($chips as $chip)<span class="ft-list-filter-chip">{{ $chip['label'] }}<button type="button" wire:click="clearFilter('{{ $chip['key'] }}')">×</button></span>@endforeach</div>
-                            <button type="button" class="ft-list-clear-all" wire:click="clearFilters">Clear all filters</button>
                         </div>
                     @endif
                 </div>

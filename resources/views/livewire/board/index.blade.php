@@ -415,8 +415,8 @@ body{background:#f3f6fb;color:#172033}
                                     </span>
                                     <time class="due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
                                     <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
-                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
-                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
+                                        @if(!in_array($task['status'], $taskPackStatusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
+                                        @foreach($taskPackStatusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                                     </select>
                                     <span class="flag {{ $task['flagColor'] ? 'ft-master-color' : $task['flagTone'] }}" style="{{ \App\Support\MasterColor::style($task['flagColor']) }}">{{ $task['flag'] }}</span>
                                     <span class="updated">{{ $task['updated'] }}</span>

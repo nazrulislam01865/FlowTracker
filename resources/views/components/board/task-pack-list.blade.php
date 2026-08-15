@@ -106,10 +106,10 @@
                                 aria-label="Status for {{ $task['title'] }}"
                             >
                                 @if(!in_array($task['status'], $statusOptions, true))
-                                    <option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>
+                                    <option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>
                                 @endif
                                 @foreach($statusOptions as $statusOption)
-                                    <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>
+                                    <option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>
                                 @endforeach
                             </select>
 

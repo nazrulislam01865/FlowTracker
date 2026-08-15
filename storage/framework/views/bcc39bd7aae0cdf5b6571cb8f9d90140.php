@@ -31,6 +31,7 @@
         && $listStatus === ''
         && $listClient === ''
         && ! $hideCompleted;
+    $inquiryAnyFilterActive = $metricFilter !== '' || ! $inquiryToolbarIsClear;
 ?>
 
 <div class="ft-inquiry-prototype">
@@ -105,6 +106,15 @@
                             <span class="completed-check" aria-hidden="true">✓</span>
                             <span>Hide completed</span>
                         </label>
+                        <button
+                            class="chip ft-inquiry-clear-filter"
+                            type="button"
+                            wire:click="clearFilters"
+                            <?php if(! $inquiryAnyFilterActive): echo 'disabled'; endif; ?>
+                            aria-label="Clear active inquiry filter"
+                        >
+                            <span aria-hidden="true">×</span> Clear filter
+                        </button>
                     </div>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
@@ -245,7 +255,7 @@
                                     <span class="sub"><?php echo e($row['updatedTime']); ?></span>
                                 </div>
                                 <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
-                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="<?php echo e(route('inquiries.index', ['open' => $row['id']])); ?>" aria-label="View <?php echo e($row['number']); ?>" wire:navigate>View<span aria-hidden="true">→</span></a></div>
+                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="<?php echo e(route('inquiries.index', ['open' => $row['id']])); ?>" aria-label="View details for <?php echo e($row['number']); ?>" wire:navigate><span class="ft-inquiry-view-label-desktop">View</span><span class="ft-inquiry-view-label-mobile">Details</span><span aria-hidden="true">→</span></a></div>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canModule('inquiries', 'delete')): ?>
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
                                         <button
@@ -476,9 +486,20 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             </div>
                         </div>
 
+                        <?php
+                            $createPriorityColor = optional($createPriorityOptions->first(
+                                fn ($priority) => (string) $priority->name === (string) $createPriority
+                            ))->color;
+                        ?>
                         <div class="ft-inquiry-create-field ft-inquiry-create-field-full">
                             <label>Priority *</label>
-                            <select data-master-color-select wire:model="createPriority" aria-label="Inquiry priority">
+                            <select
+                                data-master-color-select
+                                wire:model="createPriority"
+                                class="<?php echo e($createPriorityColor ? 'ft-master-color' : ''); ?>"
+                                style="<?php echo e(\App\Support\MasterColor::style($createPriorityColor)); ?>"
+                                aria-label="Inquiry priority"
+                            >
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $createPriorityOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $priority): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                     <option value="<?php echo e($priority->name); ?>" data-color="<?php echo e($priority->color); ?>"><?php echo e($priority->name); ?></option>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>

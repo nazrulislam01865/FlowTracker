@@ -22,7 +22,7 @@ class CatalogueRoleMatrixPermissionTest extends TestCase
             $this->assertSame('Catalogue', AccessControlService::MODULES[$module]['group']);
             $this->assertSame(AccessControlService::ACTIONS, AccessControlService::supportedActions($module));
             $this->assertTrue(AccessControlService::isUniversalRecordModule($module));
-            $this->assertFalse(AccessControlService::supportsScope($module));
+            $this->assertTrue(AccessControlService::supportsScope($module));
         }
     }
 

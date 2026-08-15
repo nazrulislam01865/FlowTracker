@@ -4,6 +4,7 @@ use Illuminate\Foundation\Inspiring;
 use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Schedule;
 
 Artisan::command('inspire', function () {
     $this->comment(Inspiring::quote());
@@ -22,6 +23,18 @@ Artisan::command('flowtrack:sync-legacy', function (): int {
     $this->info('Legacy synchronization completed.');
     return 0;
 })->purpose('Run legacy compatibility synchronization explicitly outside web requests');
+
+Artisan::command('flowtrack:sync-order-flags', function (): int {
+    $count = app(\App\Services\OrderTaskFlagService::class)->syncDueTransitions(true);
+    $this->info('Order task/order flags synchronized for '.$count.' due-date transition(s).');
+
+    return 0;
+})->purpose('Persist automatic overdue Order Task Flags and parent Order Flags');
+
+// Due-date flags must change even when nobody edits the task. The normal web
+// paths also run a five-minute bounded sync, while the scheduler guarantees the
+// persisted values are refreshed independently of page traffic.
+Schedule::command('flowtrack:sync-order-flags')->hourly()->withoutOverlapping();
 
 Artisan::command('flowtrack:performance:explain {--user=1 : User ID used for assignee/member query plans}', function (): int {
     $userId = max(1, (int) $this->option('user'));
@@ -77,7 +90,7 @@ Artisan::command('flowtrack:performance:explain {--user=1 : User ID used for ass
         'Active Master Data ordering' => [
             'master_records',
             "select id from master_records where workspace_id = ? and type = ? and status = ? and deleted_at is null order by sort_order, name",
-            [1, 'task_status', 'active'],
+            [1, 'order_task_status', 'active'],
         ],
         'Workflow phase ordering' => [
             'workflow_phases',

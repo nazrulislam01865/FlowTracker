@@ -31,7 +31,9 @@
     $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
 
     $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
-    $masterLinks = collect($masterLabels)->except($catalogueGroups)->all();
+    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, 'task_status', 'task_flag'])->all();
+    $administrator = app(\App\Services\AccessControlService::class)->isAdministrator($user);
+    $settingsGroupActive = request()->routeIs('company.setup', 'administration');
 ?>
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="<?php echo e(route('dashboard')); ?>" wire:navigate aria-label="Open Dashboard">
@@ -588,16 +590,26 @@
                 </div>
             </details>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(app(\App\Services\AccessControlService::class)->isAdministrator($user)): ?><?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($administrator): ?>
+            <details class="ft-sidebar-group" <?php if($settingsGroupActive): ?> open <?php endif; ?>>
+                <summary class="ft-sidebar-group-toggle <?php echo e($settingsGroupActive ? 'is-active' : ''); ?>">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .34 1.88l.06.06-2.83 2.83-.06-.06A1.7 1.7 0 0 0 15 19.4a1.7 1.7 0 0 0-1 .6 1.7 1.7 0 0 0-.4 1.1V21H9.6v-.09A1.7 1.7 0 0 0 8.5 19.4a1.7 1.7 0 0 0-1.88.34l-.06.06-2.83-2.83.06-.06A1.7 1.7 0 0 0 4.1 15a1.7 1.7 0 0 0-.6-1 1.7 1.7 0 0 0-1.1-.4H2.3V9.6h.09A1.7 1.7 0 0 0 4.1 8.5a1.7 1.7 0 0 0-.34-1.88l-.06-.06 2.83-2.83.06.06A1.7 1.7 0 0 0 8.5 4.1a1.7 1.7 0 0 0 1-.6 1.7 1.7 0 0 0 .4-1.1V2.3h4v.09A1.7 1.7 0 0 0 15 4.1a1.7 1.7 0 0 0 1.88-.34l.06-.06 2.83 2.83-.06.06A1.7 1.7 0 0 0 19.4 8.5c.2.38.51.7.9.9.3.14.63.21.97.2h.09v4h-.09a1.7 1.7 0 0 0-1.87 1.4Z"/></svg>
+                    </span>
+                    <span>Settings</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'administration','label' => 'Roles & Access','icon' => 'settings']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'company.setup','label' => 'Company Setup','icon' => 'dot','child' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.nav-link'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['route' => 'administration','label' => 'Roles & Access','icon' => 'settings']); ?>
+<?php $component->withAttributes(['route' => 'company.setup','label' => 'Company Setup','icon' => 'dot','child' => true]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -609,7 +621,76 @@
 <?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
-<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+<?php endif; ?>
+                    <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'administration','label' => 'Roles & Access','icon' => 'dot','child' => true,'active' => request()->routeIs('administration') && !in_array((string) request()->query('tab'), ['settings','branding'], true)]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'administration','label' => 'Roles & Access','icon' => 'dot','child' => true,'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('administration') && !in_array((string) request()->query('tab'), ['settings','branding'], true))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                    <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'administration','label' => 'System Settings','icon' => 'dot','child' => true,'params' => ['tab' => 'settings'],'active' => request()->routeIs('administration') && request()->query('tab') === 'settings']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'administration','label' => 'System Settings','icon' => 'dot','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['tab' => 'settings']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('administration') && request()->query('tab') === 'settings')]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                    <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'administration','label' => 'Branding','icon' => 'dot','child' => true,'params' => ['tab' => 'branding'],'active' => request()->routeIs('administration') && request()->query('tab') === 'branding']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'administration','label' => 'Branding','icon' => 'dot','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['tab' => 'branding']),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(request()->routeIs('administration') && request()->query('tab') === 'branding')]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                </div>
+            </details>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </nav>
 
     <div class="sidebar-footer">

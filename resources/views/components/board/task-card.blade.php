@@ -6,14 +6,14 @@
     $checkDone = (int) ($task->completed_checklist_items_count ?? ($task->relationLoaded('checklistItems') ? $task->checklistItems->where('is_completed', true)->count() : 0));
     $documentCount = (int) ($task->documents_count ?? ($task->relationLoaded('documents') ? $task->documents->count() : 0));
     $commentCount = (int) ($task->comments_count ?? ($task->relationLoaded('comments') ? $task->comments->count() : 0));
-    $taskFlagLabel = $task->needs_attention ? (app(\App\Services\TaskFlagService::class)->labelForTask($task) ?: 'Management attention') : null;
+    $taskFlagLabel = app(\App\Services\OrderTaskFlagService::class)->labelForTask($task);
     $masterData = app(\App\Services\MasterDataService::class);
-    $taskFlagColor = $taskFlagLabel ? $masterData->colorFor('task_flag', $taskFlagLabel) : null;
+    $taskFlagColor = $taskFlagLabel ? $masterData->colorFor('order_task_flag', $taskFlagLabel) : null;
     $taskPriorityColor = $masterData->displayColorFor('priority', (string) $task->priority);
 @endphp
 <article {{ $attributes->class(['ft-task-board-card']) }}>
     <div class="ft-task-board-top">
-        <div class="ft-task-card-badges"><span class="ft-priority-pill {{ $taskPriorityColor ? 'ft-master-color' : strtolower($task->priority) }}" style="{{ \App\Support\MasterColor::style($taskPriorityColor) }}">{{ $task->priority }}</span>@if($task->needs_attention)<span class="ft-attention-pill {{ $taskFlagColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($taskFlagColor) }}">⚑ {{ $taskFlagLabel }}</span>@endif</div>
+        <div class="ft-task-card-badges"><span class="ft-priority-pill {{ $taskPriorityColor ? 'ft-master-color' : strtolower($task->priority) }}" style="{{ \App\Support\MasterColor::style($taskPriorityColor) }}">{{ $task->priority }}</span>@if($taskFlagLabel)<span class="ft-attention-pill {{ $taskFlagColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($taskFlagColor) }}">⚑ {{ $taskFlagLabel }}</span>@endif</div>
         <div class="ft-task-board-top-right">
             @if($overdueDays > 0)<span class="ft-overdue-pill">Overdue · {{ $overdueDays }}d</span>@endif
             <a class="ft-card-kebab" href="{{ route('jobs.index', ['open'=>$task->flow_job_id, 'task'=>$task->id]) }}" wire:navigate aria-label="Open task">

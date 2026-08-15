@@ -3,10 +3,13 @@
     @php
         $hasParent = in_array($group, ['product', 'state'], true);
         $hasColor = in_array($group, \App\Services\MasterDataService::COLOR_TYPES, true);
-        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0);
+        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0);
         $colorUsageLabel = match ($group) {
-            'task_status' => 'task status',
-            'task_flag' => 'task flag',
+            'task_status' => 'legacy task status',
+            'task_flag' => 'legacy task flag',
+            'order_task_status' => 'order task status',
+            'order_task_flag' => 'order task flag',
+            'order_flag' => 'order flag',
             'priority' => 'priority',
             'inquiry_task_status' => 'inquiry task status',
             default => 'master data',
@@ -24,9 +27,12 @@
             'document_category' => 'document category',
             'production_unit' => 'production unit',
             'shipment_method' => 'shipment method',
-            'task_status' => 'task status',
+            'task_status' => 'legacy task status',
             'inquiry_task_status' => 'inquiry task status',
-            'task_flag' => 'task flag',
+            'task_flag' => 'legacy task flag',
+            'order_task_status' => 'order task status',
+            'order_task_flag' => 'order task flag',
+            'order_flag' => 'order flag',
             default => strtolower(\Illuminate\Support\Str::singular($pageTitle)),
         };
         $displayTimezone = app(\App\Services\WorkspaceSettingsService::class)->displayTimezone();
@@ -42,9 +48,12 @@
             'state' => 'Maintain states and their parent countries.',
             'document_category' => 'Maintain document categories used across uploads and workflows.',
             'priority' => 'Maintain priority levels and the colours used throughout FlowTrack.',
-            'task_status' => 'Maintain task statuses and the colours used throughout task views.',
+            'task_status' => 'Legacy task statuses retained for compatibility. New Order tasks use Order Task Statuses.',
             'inquiry_task_status' => 'Maintain Inquiry task statuses, their automatic Inquiry status mapping, attention flag rule and display colours.',
-            'task_flag' => 'Maintain task attention flags and their display colours.',
+            'task_flag' => 'Legacy task flags retained for compatibility. New Order task flags are separate.',
+            'order_task_status' => 'Maintain Order task statuses and choose which Order Task Flag each status applies automatically.',
+            'order_task_flag' => 'Maintain Order task flags and map each one to the Order Flag that should appear on the parent Order.',
+            'order_flag' => 'Maintain the separate Order-level flags shown on Order lists and details.',
             default => 'Maintain values used throughout FlowTrack.',
         };
         $productImagePreview = null;
@@ -113,31 +122,80 @@
                     <input wire:model.live.debounce.300ms="search" type="search" placeholder="Search product name, product code or reference code" aria-label="Search products">
                 </label>
 
-                <x-catalog.filter-select model="productMainCategory" label="Main category">
-                    <option value="">Main category</option>
-                    @foreach($productMainCategoryFilterOptions as $mainCategory)
-                        <option value="{{ $mainCategory->name }}">{{ $mainCategory->name }}</option>
-                    @endforeach
-                </x-catalog.filter-select>
+                @php
+                    $productMainCategoryListOptions = collect($productMainCategoryFilterOptions)->map(fn ($mainCategory) => [
+                        'id' => (string) $mainCategory->name,
+                        'label' => (string) $mainCategory->name,
+                        'meta' => (string) ($mainCategory->code ?? ''),
+                    ])->values();
+                    $productCategoryListOptions = collect($productCategories)->map(fn ($category) => [
+                        'id' => (string) $category->id,
+                        'label' => (string) $category->name,
+                        'meta' => (string) ($category->code ?? ''),
+                    ])->values();
+                    $productClientAvailabilityListOptions = collect([
+                        ['id' => 'all', 'label' => 'All clients'],
+                        ['id' => 'specific', 'label' => 'Specific clients'],
+                    ]);
+                    $productStatusListOptions = collect([
+                        ['id' => 'active', 'label' => 'Active'],
+                        ['id' => 'inactive', 'label' => 'Inactive'],
+                    ]);
+                @endphp
 
-                <x-catalog.filter-select model="productCategory" label="Product category">
-                    <option value="">Product category</option>
-                    @foreach($productCategories as $category)
-                        <option value="{{ $category->id }}">{{ $category->name }}</option>
-                    @endforeach
-                </x-catalog.filter-select>
+                <x-ui.select-filter
+                    class="ft-product-list-filter"
+                    label="Main category"
+                    property="productMainCategory"
+                    :value="$productMainCategory"
+                    placeholder="All main categories"
+                    :options="$productMainCategoryListOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="300"
+                    search-placeholder="Search main category…"
+                    footer-message="Options shown instantly. Type to search."
+                />
 
-                <x-catalog.filter-select model="productClientAvailability" label="Client availability">
-                    <option value="">Client availability</option>
-                    <option value="all">All clients</option>
-                    <option value="specific">Specific clients</option>
-                </x-catalog.filter-select>
+                <x-ui.select-filter
+                    class="ft-product-list-filter"
+                    label="Product category"
+                    property="productCategory"
+                    :value="$productCategory"
+                    placeholder="All product categories"
+                    :options="$productCategoryListOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="300"
+                    search-placeholder="Search product category…"
+                    footer-message="Options shown instantly. Type to search."
+                />
 
-                <x-catalog.filter-select model="productStatus" label="Status">
-                    <option value="">Status</option>
-                    <option value="active">Active</option>
-                    <option value="inactive">Inactive</option>
-                </x-catalog.filter-select>
+                <x-ui.select-filter
+                    class="ft-product-list-filter"
+                    label="Client availability"
+                    property="productClientAvailability"
+                    :value="$productClientAvailability"
+                    placeholder="All client availability"
+                    :options="$productClientAvailabilityListOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="280"
+                    search-placeholder="Search client availability…"
+                />
+
+                <x-ui.select-filter
+                    class="ft-product-list-filter"
+                    label="Status"
+                    property="productStatus"
+                    :value="$productStatus"
+                    placeholder="All statuses"
+                    :options="$productStatusListOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="240"
+                    search-placeholder="Search status…"
+                />
 
                 <button type="button" class="ft-product-clear" wire:click="clearProductFilters">Clear</button>
             </div>
@@ -413,7 +471,13 @@
                 :parent-filter="$categoryParentFilter"
                 :status-filter="$categoryStatusFilter"
                 :per-page="$categoryPerPage"
+                :selected-category-keys="$selectedCategoryKeys"
+                :selection-count="$categorySelectionCount"
             />
+
+            @if($showCategoryDeleteConfirm)
+                <x-catalog.category-delete-modal :preview="$categoryDeletePreview" />
+            @endif
         @endif
     @else
         <div class="ft-master-breadcrumb" aria-label="Breadcrumb">
@@ -447,7 +511,7 @@
             <small>{{ number_format($selectedActive) }} active</small>
         </div>
 
-        <section class="ft-master-generic-card">
+        <section @class(['ft-master-generic-card', 'ft-master-supplier-card' => $group === 'supplier'])>
             <div class="ft-master-generic-toolbar">
                 <label class="ft-master-search-box">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
@@ -467,13 +531,15 @@
                 @include('livewire.shared.table-rows-placeholder', ['columns' => $columnCount, 'rows' => 8])
             @else
                 <div class="table-wrap ft-master-generic-table-wrap" wire:key="master-records-{{ $group }}">
-                    <table class="master-table ft-master-generic-table">
+                    <table @class(['master-table', 'ft-master-generic-table', 'ft-master-supplier-table' => $group === 'supplier'])>
                         <thead>
                             <tr>
-                                <th>Order</th>
+                                <th>Sort order</th>
                                 <th>Code</th>
                                 <th>Name</th>
                                 @if($group === 'inquiry_task_status')<th>Inquiry status auto</th><th>Flag</th>@endif
+                                @if($group === 'order_task_status')<th>Automatic task flag</th>@endif
+                                @if($group === 'order_task_flag')<th>Order flag</th>@endif
                                 @if($hasParent)<th>{{ $group === 'state' ? 'Country' : 'Product Category' }}</th>@endif
                                 <th>Description / Use</th>
                                 @if($hasColor)<th>Color</th>@endif
@@ -484,12 +550,12 @@
                         <tbody>
                         @forelse($rows as $r)
                             <tr>
-                                <td data-label="Order">{{ $r->sort_order }}</td>
-                                <td data-label="Code"><strong class="ft-master-product-code">{{ $r->code }}</strong></td>
-                                <td data-label="Name">{{ $r->name }}</td>
+                                <td class="ft-master-mobile-sort" data-label="Sort order">{{ $r->sort_order }}</td>
+                                <td class="ft-master-mobile-code" data-label="Code"><strong class="ft-master-product-code">{{ $r->code }}</strong></td>
+                                <td class="ft-master-mobile-name" data-label="Name">{{ $r->name }}</td>
                                 @if($group === 'inquiry_task_status')
-                                    <td data-label="Inquiry status auto"><strong>{{ $r->inquiryAutoStatus() }}</strong></td>
-                                    <td data-label="Flag">
+                                    <td class="ft-master-mobile-auto-status" data-label="Inquiry status auto"><strong>{{ $r->inquiryAutoStatus() }}</strong></td>
+                                    <td class="ft-master-mobile-flag" data-label="Flag">
                                         @if($r->requiresAttention())
                                             <span class="ft-inquiry-status-rule-flag is-attention">Requires attention</span>
                                         @else
@@ -497,13 +563,29 @@
                                         @endif
                                     </td>
                                 @endif
-                                @if($hasParent)<td data-label="{{ $group === 'state' ? 'Country' : 'Product Category' }}">{{ $r->parent?->name ?? '—' }}</td>@endif
-                                <td data-label="Description / Use">{{ $r->description ?: '—' }}</td>
+                                @if($group === 'order_task_status')
+                                    @php $mappedTaskFlag = $orderTaskFlagOptions->firstWhere('id', $r->orderTaskFlagId()); @endphp
+                                    <td class="ft-master-mobile-flag" data-label="Automatic task flag">
+                                        @if($mappedTaskFlag)
+                                            <span class="ft-inquiry-status-rule-flag is-attention" style="{{ \App\Support\MasterColor::style($mappedTaskFlag->color) }}">{{ $mappedTaskFlag->name }}</span>
+                                        @else
+                                            <span class="ft-inquiry-status-rule-flag">No flag</span>
+                                        @endif
+                                    </td>
+                                @endif
+                                @if($group === 'order_task_flag')
+                                    @php $mappedOrderFlag = $orderFlagOptions->firstWhere('id', $r->orderFlagId()); @endphp
+                                    <td class="ft-master-mobile-flag" data-label="Order flag">
+                                        <strong>{{ $mappedOrderFlag?->name ?? 'Not mapped' }}</strong>
+                                    </td>
+                                @endif
+                                @if($hasParent)<td class="ft-master-mobile-parent" data-label="{{ $group === 'state' ? 'Country' : 'Product Category' }}">{{ $r->parent?->name ?? '—' }}</td>@endif
+                                <td class="ft-master-mobile-description" data-label="Description / Use">{{ $r->description ?: '—' }}</td>
                                 @if($hasColor)
                                     @php
                                         $rowColor = \App\Support\MasterColor::normalize($r->color) ?: \App\Support\MasterColor::defaultFor($group, $r->name);
                                     @endphp
-                                    <td data-label="Color">
+                                    <td class="ft-master-mobile-color" data-label="Color">
                                         <label class="ft-master-color-chip" style="{{ \App\Support\MasterColor::style($rowColor) }}" title="Choose color for {{ $r->name }}">
                                             <input
                                                 class="ft-master-inline-color"
@@ -518,8 +600,8 @@
                                         </label>
                                     </td>
                                 @endif
-                                <td data-label="Status"><x-ui.badge :label="$r->status === 'active' ? 'Active' : 'Inactive'" /></td>
-                                <td data-label="Actions">
+                                <td class="ft-master-mobile-status" data-label="Status"><x-ui.badge :label="$r->status === 'active' ? 'Active' : 'Inactive'" /></td>
+                                <td class="ft-master-mobile-actions" data-label="Actions">
                                     <div class="row-actions">
                                         @if($canEditMaster)
                                             <button class="mini-btn" wire:click="open({{ $r->id }})">Edit</button>
@@ -535,7 +617,7 @@
                                 </td>
                             </tr>
                         @empty
-                            <tr><td colspan="{{ $columnCount }}"><div class="empty-state">No records found.</div></td></tr>
+                            <tr class="ft-master-empty-row"><td colspan="{{ $columnCount }}"><div class="empty-state">No records found.</div></td></tr>
                         @endforelse
                         </tbody>
                     </table>
@@ -600,6 +682,34 @@
                             </select>
                             <small class="small muted">When enabled, the task shows an Attention required link and asks for a reason.</small>
                             @error('requiresAttention')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                    @endif
+
+                    @if($group === 'order_task_status')
+                        <div class="field">
+                            <label>Automatic Order Task Flag</label>
+                            <select wire:model="orderTaskFlagId">
+                                <option value="">No flag</option>
+                                @foreach($orderTaskFlagOptions as $flag)
+                                    <option value="{{ $flag->id }}">{{ $flag->name }}</option>
+                                @endforeach
+                            </select>
+                            <small class="small muted">When a task uses this status, this flag is applied automatically. An overdue due date overrides this mapping with the system Overdue flag.</small>
+                            @error('orderTaskFlagId')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                    @endif
+
+                    @if($group === 'order_task_flag')
+                        <div class="field">
+                            <label>Parent Order Flag *</label>
+                            <select wire:model="orderFlagId">
+                                <option value="">Select order flag</option>
+                                @foreach($orderFlagOptions as $flag)
+                                    <option value="{{ $flag->id }}">{{ $flag->name }}</option>
+                                @endforeach
+                            </select>
+                            <small class="small muted">When this task flag is active, the mapped Order Flag is stored on the parent Order.</small>
+                            @error('orderFlagId')<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
                     @endif
 

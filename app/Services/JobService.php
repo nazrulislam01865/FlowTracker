@@ -89,6 +89,8 @@ class JobService
 
     public function filteredIds(User $user, array $filters): Collection
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
+
         return $this->filteredQuery($user, $filters)
             ->reorder('id')
             ->pluck('id')
@@ -98,6 +100,7 @@ class JobService
 
     public function paginate(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
         $query = $this->filteredQuery($user, $filters)->reorder();
         match ($filters['sort'] ?? 'updated_desc') {
             'due_asc' => $query->orderByRaw('delivery_date is null, delivery_date asc')->orderByDesc('id'),
@@ -112,10 +115,11 @@ class JobService
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity', 'flow_jobs.next_action',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
                 'flow_jobs.delivery_date', 'flow_jobs.commercial_value', 'flow_jobs.currency',
-                'flow_jobs.needs_attention', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
+                'flow_jobs.needs_attention', 'flow_jobs.order_flag_id', 'flow_jobs.completed_at', 'flow_jobs.updated_at',
             ])
             ->with([
                 'client:id,code,name,logo_path',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -151,6 +155,7 @@ class JobService
         ?int $ownerId = null,
     ): LengthAwarePaginator
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
         $search = trim($search);
         $searchLength = mb_strlen($search);
 
@@ -220,11 +225,12 @@ class JobService
                 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.source_inquiry_id',
                 'flow_jobs.title', 'flow_jobs.product', 'flow_jobs.quantity',
                 'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority',
-                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention',
+                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.needs_attention', 'flow_jobs.order_flag_id',
                 'flow_jobs.completed_at', 'flow_jobs.created_at',
             ])
             ->with([
                 'client:id,name,logo_path',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'sourceInquiry:id,inquiry_number,reference_number',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
@@ -239,14 +245,15 @@ class JobService
                 'createdActivity.user:id,name,profile_image_path',
                 'flaggedTasks' => fn ($taskQuery) => app(AccessControlService::class)
                     ->applyTaskScope($taskQuery, $user)
-                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.needs_attention', 'tasks.task_flag_id', 'tasks.attention_reason'])
-                    ->with('attentionFlag:id,name,status,sort_order'),
+                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.status', 'tasks.due_date', 'tasks.completed_at', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason'])
+                    ->with('orderTaskFlag:id,type,name,color,status,sort_order,metadata'),
             ])
             ->paginate(max(1, min($perPage, 50)));
     }
 
     public function summaryCounts(User $user): array
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
         $today = app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d');
         $weekEnd = app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)->format('Y-m-d');
         $inactive = self::INACTIVE_STATUSES;
@@ -278,9 +285,12 @@ class JobService
      */
     public function findVisibleBase(User $user, int $id): FlowJob
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
+
         return $this->visibleQuery($user)
             ->with([
                 'client:id,name,logo_path',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'phase:id,name,short_name,sequence',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
@@ -587,8 +597,10 @@ class JobService
 
     public function findVisible(User $user, int $id): FlowJob
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
+
         return $this->visibleQuery($user)->with([
-            'client',
+            'client','orderFlag',
             'workflow.phases.taskPack.items.defaultAssignee',
             'workflow.phases.taskPack.items.defaultDepartment',
             'workflow.phases.taskPack.items.priority',
@@ -597,7 +609,7 @@ class JobService
             'phase.documentCategory',
             'startedFromPhase','owner','coordinator','items','members.user',
             'phaseHistories.phase','phaseHistories.actor',
-            'tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user)->with(['assignee','phase','template','documentCategory','setupTemplate.documentCategory','checklistItems','comments.user','documents']),
+            'tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user)->with(['assignee','phase','orderTaskStatus','orderTaskFlag','template','documentCategory','setupTemplate.documentCategory','checklistItems','comments.user','documents']),
             'documents.uploader','activities.user',
         ])->findOrFail($id);
     }
@@ -665,6 +677,7 @@ class JobService
                 'production_urgency_ids' => array_values(array_map('intval', (array) ($data['production_urgency_ids'] ?? []))),
                 'shipment_urgency_ids' => array_values(array_map('intval', (array) ($data['shipment_urgency_ids'] ?? []))),
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
+                'notes' => blank($data['notes'] ?? null) ? null : trim((string) $data['notes']),
                 'status' => $draft ? 'Draft' : 'New',
                 'health' => 'On Track',
                 'progress' => 0,
@@ -763,6 +776,44 @@ class JobService
         return $job->refresh();
     }
 
+    public function updateUrgencies(FlowJob $job, string $field, array $urgencyIds, User $actor): FlowJob
+    {
+        $this->assertEditable($job, $actor);
+
+        $config = match ($field) {
+            'production_urgency_ids' => ['event' => 'job.production_urgency_updated', 'label' => 'Production urgency'],
+            'shipment_urgency_ids' => ['event' => 'job.shipment_urgency_updated', 'label' => 'Shipment urgency'],
+            default => null,
+        };
+
+        abort_unless($config, 422, 'That urgency field cannot be updated.');
+
+        $urgencyIds = collect($urgencyIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values()
+            ->all();
+
+        abort_if(count($urgencyIds) > 1, 422, $config['label'].' accepts only one selection.');
+
+        $job->update([$field => $urgencyIds]);
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => $config['event'],
+            'description' => $config['label'].' updated',
+        ]);
+        app(NotificationService::class)->notifyJobParticipants(
+            $job->refresh(),
+            'Order '.$config['label'].' updated',
+            $job->displayOrderNumber().' · '.$config['label'].' updated',
+            'update',
+            $actor,
+        );
+
+        return $job->refresh();
+    }
+
     public function updateOwner(FlowJob $job, ?int $ownerId, User $actor): FlowJob
     {
         // Order ownership is an administrative assignment. A task assignee may
@@ -824,8 +875,16 @@ class JobService
     {
         $this->assertStatusEditable($job, $actor);
         DB::transaction(function () use ($job, $actor) {
-            $job->tasks()->whereNull('completed_at')->update(['status' => 'Cancelled']);
-            $job->update(['status' => 'Cancelled']);
+            $cancelStatus = app(OrderTaskFlagService::class)->cancelledStatus();
+            $cancelStatusId = app(OrderTaskFlagService::class)->statusRecord($cancelStatus, false)?->id;
+            $job->tasks()->whereNull('completed_at')->update([
+                'status' => $cancelStatus,
+                'order_task_status_id' => $cancelStatusId,
+                'order_task_flag_id' => null,
+                'needs_attention' => false,
+                'attention_reason' => null,
+            ]);
+            $job->update(['status' => 'Cancelled', 'order_flag_id' => null, 'needs_attention' => false]);
             $job->activities()->create([
                 'user_id' => $actor->id,
                 'event' => 'job.cancelled',
@@ -1148,6 +1207,9 @@ class JobService
             } while (Task::withTrashed()->where('task_number', $taskNumber)->exists());
 
             $isDraft = $lockedJob->status === 'Draft';
+            $orderTaskRules = app(OrderTaskFlagService::class);
+            $initialStatus = $isDraft ? $orderTaskRules->notStartedStatus() : $orderTaskRules->readyStatus();
+            $initialStatusId = $orderTaskRules->statusRecord($initialStatus, false)?->id;
             $assigneeId = filled($data['assignee_id'] ?? null) ? (int) $data['assignee_id'] : null;
             $task = Task::create([
                 'task_number' => $taskNumber,
@@ -1158,12 +1220,15 @@ class JobService
                 'setup_assignee_id' => null,
                 'title' => trim((string) $data['title']),
                 'description' => blank($data['description'] ?? null) ? null : trim((string) $data['description']),
-                'status' => $isDraft ? 'Not Started' : 'Ready',
+                'status' => $initialStatus,
+                'order_task_status_id' => $initialStatusId,
                 'priority' => $lockedJob->priority ?: 'Medium',
                 'progress' => 0,
                 'start_date' => $isDraft ? null : app(WorkspaceSettingsService::class)->localToday(),
                 'due_date' => blank($data['due_date'] ?? null) ? null : $data['due_date'],
             ]);
+
+            $task = $orderTaskRules->syncTask($task);
 
             FlowTaskComment::create([
                 'flow_task_id' => $task->id,
@@ -1265,7 +1330,7 @@ class JobService
                 ->update(['status' => 'completed', 'completed_at' => now()]);
 
             if (!$next) {
-                $job->update(['status' => 'Completed', 'health' => 'Completed', 'progress' => 100, 'next_action' => null, 'completed_at' => now()]);
+                $job->update(['status' => 'Completed', 'health' => 'Completed', 'progress' => 100, 'next_action' => null, 'order_flag_id' => null, 'needs_attention' => false, 'completed_at' => now()]);
                 $job->activities()->create(['user_id' => $actor->id, 'event' => 'job.completed', 'description' => 'Workflow completed']);
                 $jobId = $job->id;
                 DB::afterCommit(function () use ($jobId, $actor) {
@@ -1282,6 +1347,8 @@ class JobService
                 'status' => $isCompletedPhase ? 'Completed' : 'In Progress',
                 'health' => $isCompletedPhase ? 'Completed' : 'On Track',
                 'next_action' => $next->entry_condition ?: $next->entry_rule,
+                'order_flag_id' => $isCompletedPhase ? null : $job->order_flag_id,
+                'needs_attention' => $isCompletedPhase ? false : $job->needs_attention,
                 'completed_at' => $isCompletedPhase ? now() : null,
             ]);
 
@@ -1347,6 +1414,11 @@ class JobService
         $isCurrent = !$isDraft && ((int) $phase->id === (int) $job->workflow_phase_id || $activate);
         $isPast = !$isDraft && (int) $phase->sequence < $currentSequence;
 
+        $orderTaskRules = app(OrderTaskFlagService::class);
+        $notStartedStatus = $orderTaskRules->notStartedStatus();
+        $readyStatus = $orderTaskRules->readyStatus();
+        $completedStatus = $orderTaskRules->completedStatus();
+
         foreach ($phase->taskPack->items as $template) {
             $assignee = $template->defaultAssignee;
             if (!$assignee && $template->defaultDepartment) {
@@ -1364,7 +1436,8 @@ class JobService
                 if ($job->delivery_date && $dueDate->gt($job->delivery_date)) $dueDate = $job->delivery_date->copy();
             }
 
-            $defaultStatus = $isPast ? 'Completed' : ($isCurrent ? 'Ready' : 'Not Started');
+            $defaultStatus = $isPast ? $completedStatus : ($isCurrent ? $readyStatus : $notStartedStatus);
+            $defaultStatusId = $orderTaskRules->statusRecord($defaultStatus, false)?->id;
             $task = Task::firstOrCreate([
                 'flow_job_id' => $job->id,
                 'workflow_phase_id' => $phase->id,
@@ -1378,6 +1451,7 @@ class JobService
                 'title' => $template->title,
                 'description' => $template->description,
                 'status' => $defaultStatus,
+                'order_task_status_id' => $defaultStatusId,
                 'priority' => $priority,
                 'progress' => $isPast ? 100 : 0,
                 'start_date' => $isPast || $isCurrent ? app(WorkspaceSettingsService::class)->localToday() : null,
@@ -1387,9 +1461,10 @@ class JobService
 
             $becameActive = $task->wasRecentlyCreated && $isCurrent;
             $changes = [];
-            if ($isCurrent && $task->status === 'Not Started') {
+            if ($isCurrent && \App\Support\BoardLaneResolver::isNotStarted((string) $task->status)) {
                 $becameActive = true;
-                $changes['status'] = 'Ready';
+                $changes['status'] = $readyStatus;
+                $changes['order_task_status_id'] = $orderTaskRules->statusRecord($readyStatus, false)?->id;
                 $changes['due_date'] = $task->due_date ?: $dueDate;
             }
             // Task Pack assignment is the source of truth for generated tasks.
@@ -1419,6 +1494,7 @@ class JobService
             if (!$task->description && $template->description) $changes['description'] = $template->description;
             if ($isCurrent && !$task->start_date) $changes['start_date'] = app(WorkspaceSettingsService::class)->localToday();
             if ($changes) $task->update($changes);
+            $task = $orderTaskRules->syncTask($task->refresh());
 
             FlowTaskComment::firstOrCreate(['flow_task_id' => $task->id, 'body' => 'Task created from the configured phase Task Pack.'], ['user_id' => $job->coordinator_id]);
             if ($task->assignee_id) {

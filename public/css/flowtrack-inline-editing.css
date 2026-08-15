@@ -208,3 +208,73 @@
 .ft-role-matrix .ft-scope-select:disabled{cursor:wait;opacity:.72}
 @media(max-width:700px){.ft-matrix-role-info{align-items:flex-start;flex-direction:column}.ft-matrix-save-summary{justify-content:flex-start;min-width:0}}
 @media(prefers-reduced-motion:reduce){.ft-matrix-save-spinner,.ft-matrix-cell-spinner{animation:none}}
+
+/* 2026-08-15 Order overview: inline urgency editor + owner alignment */
+.ft-exact-job-detail .ft-inline-urgency-row{position:relative}
+.ft-exact-job-detail .ft-inline-urgency-row .ft-urgency-value,
+.ft-exact-job-detail .ft-planning-owner-row .ft-planning-value{
+    justify-content:flex-start!important;
+    text-align:left!important;
+}
+.ft-exact-job-detail .ft-planning-owner-row .ft-planning-person-value{
+    display:inline-flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:8px;
+    min-width:0;
+    margin:0;
+}
+.ft-exact-job-detail .ft-planning-owner-row .ft-inline-edit-button{flex:0 0 auto;margin-left:2px}
+.ft-exact-job-detail .ft-planning-urgency-display{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    flex-wrap:wrap;
+    gap:5px;
+    min-width:0;
+}
+.ft-exact-job-detail .ft-inline-urgency-editor{
+    width:min(320px,100%);
+    min-width:0;
+    padding:8px;
+    border:1px solid #cfdbea;
+    border-radius:8px;
+    background:#fff;
+    box-shadow:0 8px 22px rgba(18,41,72,.08);
+}
+.ft-exact-job-detail .ft-inline-urgency-select{
+    display:block;
+    width:100%;
+    min-height:34px;
+    padding:6px 30px 6px 10px;
+    border:1px solid #cfdbea;
+    border-radius:7px;
+    background:#fff;
+    color:#263d5d;
+    font:inherit;
+    font-size:10px;
+    font-weight:650;
+    line-height:1.2;
+    cursor:pointer;
+    outline:none;
+}
+.ft-exact-job-detail .ft-inline-urgency-select:hover{border-color:#b9cbe0}
+.ft-exact-job-detail .ft-inline-urgency-select:focus{border-color:#1767e8;box-shadow:0 0 0 3px rgba(23,103,232,.10)}
+.ft-exact-job-detail .ft-inline-urgency-empty{display:block;margin-top:6px}
+.ft-exact-job-detail .ft-inline-urgency-actions{display:flex;justify-content:flex-end;gap:6px;margin-top:8px}
+.ft-exact-job-detail .ft-inline-urgency-actions button{
+    min-height:27px;
+    padding:0 9px;
+    border:1px solid #d6e0ec;
+    border-radius:6px;
+    background:#fff;
+    color:#31445f;
+    font-size:9.5px;
+    font-weight:700;
+}
+.ft-exact-job-detail .ft-inline-urgency-actions .ft-inline-urgency-save{border-color:#1767e8;background:#1767e8;color:#fff}
+.ft-exact-job-detail .ft-inline-urgency-actions button:disabled{opacity:.55;cursor:default}
+@media(max-width:760px){
+    .ft-exact-job-detail .ft-inline-urgency-editor{width:100%}
+    .ft-exact-job-detail .ft-planning-owner-row .ft-planning-value{width:100%;justify-content:flex-start!important}
+}

@@ -251,6 +251,7 @@ class ProductExcelImportService
             }
 
             $metadata = (array) ($product->metadata ?? []);
+            unset($metadata['taxonomy_unassigned']);
             $metadata = array_merge($metadata, [
                 'excel_main_category' => $this->nullable($row['main_category']),
                 'excel_category' => $this->nullable($row['category']),

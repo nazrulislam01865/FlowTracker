@@ -31,7 +31,7 @@
         </div>
         <div class="step" data-step="2">
             <span class="n">2</span>
-            <div><strong>Configure</strong><span>Apply import defaults</span></div>
+            <div><strong>Validate</strong><span>Check IDs &amp; rules</span></div>
         </div>
         <div class="step" data-step="3">
             <span class="n">3</span>
@@ -79,41 +79,29 @@
                 <div class="ftbi-section-heading compact">
                     <span class="ftbi-section-number">2</span>
                     <div>
-                        <h2>Import setup</h2>
-                        <p>Each spreadsheet row must resolve to an active client.</p>
+                        <h2>Template rules</h2>
+                        <p>Only Client ID and Order Title are mandatory.</p>
                     </div>
                 </div>
 
                 <div class="ftbi-config-fields">
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
-                        <div><strong>Client-based workflow</strong><span>A client-specific Order workflow is applied automatically. If that client has no specific Order workflow, select an available Order workflow during Review.</span></div>
+                        <div><strong>Client-based workflow</strong><span>FlowTrack resolves the Order workflow from the mandatory Client ID. If that client has no client-specific Order workflow, you can choose an available Order workflow during Review.</span></div>
                     </div>
-                    <div class="field">
-                        <label for="client">Fallback Client ID <span class="ftbi-optional">For blank Client IDs</span></label>
-                        <select id="client">
-                            <option value="">No fallback client</option>
-                            @foreach($clients as $client)
-                                <option value="{{ $client->id }}">{{ $client->code }} · {{ $client->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="hint">Used only when a row's Client ID is blank. Every imported order must have a client.</div>
+                    <div class="ftbi-client-workflow-note">
+                        <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
+                        <div><strong>Optional Product</strong><span>Product ID may be blank. When Product ID is supplied, FlowTrack validates it against active Products and uses Product Quantity, defaulting to 1 when quantity is blank.</span></div>
                     </div>
-                    <div class="field">
-                        <label for="supplier">Fallback Supplier ID <span class="ftbi-optional">Optional</span></label>
-                        <select id="supplier">
-                            <option value="">Keep blank values unassigned</option>
-                            @foreach($suppliers as $supplier)
-                                <option value="{{ $supplier->id }}">{{ $supplier->code }} · {{ $supplier->name }}</option>
-                            @endforeach
-                        </select>
-                        <div class="hint">Only used when that row's Supplier ID is blank.</div>
+                    <div class="ftbi-client-workflow-note">
+                        <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
+                        <div><strong>Urgency values</strong><span>Production Urgency and Shipment Urgent accept Normal, Urgent or Super Urgent. Blank is treated as Normal.</span></div>
                     </div>
                 </div>
 
                 <details class="ftbi-source-help">
-                    <summary>What is Source Row ID?</summary>
-                    <p>It is an optional stable identifier from the source system. FlowTrack uses it to prevent the same source row being created twice during re-import and to trace import results.</p>
+                    <summary>Which fields are required?</summary>
+                    <p><b>Client ID *</b> and <b>Order Title *</b> are mandatory. Repeat Order No. becomes required only when Repeat Order? is Yes. All remaining template columns are optional.</p>
                 </details>
 
                 <details class="ftbi-test-tools">
@@ -137,51 +125,12 @@
                 </div>
             </div>
             <div class="ftbi-review-actions">
-                <button class="btn" type="button" id="changeFile">Change file</button>
+                <button class="btn ftbi-compact-action" type="button" id="changeFile">Change file</button>
                 <div class="pills" aria-label="Validation summary">
                     <span class="pill" id="totalPill">0 rows</span>
                     <span class="pill ok" id="validPill">0 ready</span>
                     <span class="pill warn" id="warnPill">0 warnings</span>
                     <span class="pill err" id="errorPill">0 errors</span>
-                </div>
-            </div>
-        </div>
-
-        <div class="ftbi-review-config">
-            <div class="ftbi-review-config-head">
-                <div>
-                    <strong>Import configuration</strong>
-                    <span>Client ID on each row takes priority. Client-specific Order workflows are automatic; rows without one will ask for a workflow below.</span>
-                </div>
-                <div class="ftbi-workflow-badge" id="configBanner">Workflow: <b id="workflowText">Resolving client workflows</b></div>
-            </div>
-
-            <div class="meta">
-                <div class="field">
-                    <label for="reviewClient">Fallback Client ID <span class="ftbi-optional">For blank Client IDs</span></label>
-                    <select id="reviewClient">
-                        <option value="">No fallback client</option>
-                        @foreach($clients as $client)
-                            <option value="{{ $client->id }}">{{ $client->code }} · {{ $client->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="field">
-                    <label for="reviewSupplier">Fallback Supplier ID <span class="ftbi-optional">Optional</span></label>
-                    <select id="reviewSupplier">
-                        <option value="">Keep blank values unassigned</option>
-                        @foreach($suppliers as $supplier)
-                            <option value="{{ $supplier->id }}">{{ $supplier->code }} · {{ $supplier->name }}</option>
-                        @endforeach
-                    </select>
-                </div>
-                <div class="field">
-                    <label for="duplicate">If reference already exists <span class="ftbi-required">*</span></label>
-                    <select id="duplicate">
-                        <option value="skip">Skip existing order</option>
-                        <option value="update">Update matching order</option>
-                        <option value="separate">Create a separate order</option>
-                    </select>
                 </div>
             </div>
         </div>
@@ -196,14 +145,17 @@
 
         <div class="tablewrap">
             <table>
-                <thead><tr><th>Row</th><th>Reference order</th><th>Client ID</th><th>Received</th><th>Urgent</th><th>Order description</th><th>Supplier / warehouse</th><th>Workflow</th><th>Validation</th></tr></thead>
+                <thead><tr><th>Row</th><th>Order</th><th>Client</th><th>Repeat</th><th>Product / Qty</th><th>Delivery</th><th>Urgency</th><th>Workflow</th><th>Validation</th></tr></thead>
                 <tbody id="rows"></tbody>
             </table>
         </div>
 
         <div class="footerbar">
-            <div class="checks"><span>✓ Dates normalized</span><span>✓ Text safely preserved</span><span>✓ No master data created silently</span></div>
-            <button class="btn primary ftbi-import-btn" type="button" id="importBtn">Import ready orders</button>
+            <div class="checks"><span>✓ Client &amp; Product IDs validated</span><span>✓ Dates normalized</span><span>✓ Urgency mapped from Master Data</span></div>
+            <div class="ftbi-footer-actions">
+                <a class="btn ftbi-compact-action ftbi-cancel-btn" href="{{ route('orders.bulk-import') }}">Cancel</a>
+                <button class="btn primary ftbi-import-btn ftbi-compact-action" type="button" id="importBtn">Import ready orders</button>
+            </div>
         </div>
     </section>
 
@@ -230,7 +182,7 @@
                 <span class="ftbi-loader-mark" aria-hidden="true"></span>
                 <div>
                     <b id="loadTitle">Validating rows…</b>
-                    <div class="sub" id="loadText">Checking references, dates, clients and workflows. No orders have been created yet.</div>
+                    <div class="sub" id="loadText">Checking clients, products, repeat-order rules, dates, urgencies and workflows. No orders have been created yet.</div>
                 </div>
             </div>
             <div class="bar"><i id="progress"></i></div>
@@ -238,5 +190,5 @@
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="/js/flowtrack-bulk-order-import.js?v=20260814-client-workflow-1"></script>
+<script src="/js/flowtrack-bulk-order-import.js?v=20260815-review-compact-1"></script>
 @endsection

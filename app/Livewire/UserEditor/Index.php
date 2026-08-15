@@ -233,6 +233,12 @@ class Index extends Component
         $this->departmentId = $target->department_id;
         $this->businessUnit = $service->businessUnit($target);
         $this->accountStatus = $service->accountStatus($target);
+
+        // Password fields are never hydrated from an existing user and must not survive
+        // Livewire navigation/re-entry into the editor.
+        $this->newPassword = '';
+        $this->newPasswordConfirmation = '';
+
         $this->targetIsSuperAdmin = $target->isSuperAdmin();
         $this->profileImageUrl = $this->profileUrl($target);
     }

@@ -24,7 +24,7 @@ class WorkflowService
     {
         return WorkflowTemplate::query()
             ->where('workspace_id', $this->workspaceId())
-            ->with(['phases.taskPack','phases.documentCategory'])
+            ->with(['phases.taskPack'])
             ->orderByDesc('is_default')->orderBy('name')->get();
     }
 
@@ -357,7 +357,13 @@ class WorkflowService
                 ->where('is_snapshot', false)
                 ->findOrFail((int) $data['task_pack_id']);
         }
-        $document = !empty($data['document_category_id']) ? MasterRecord::find($data['document_category_id']) : null;
+        // Required documents now belong to Task Pack items. The phase form no
+        // longer edits this legacy field, so preserve an existing value during
+        // edits (and copies) rather than silently deleting old setup data.
+        $documentCategoryId = array_key_exists('document_category_id', $data)
+            ? ($data['document_category_id'] ?: null)
+            : ($phase?->document_category_id ?: null);
+        $document = $documentCategoryId ? MasterRecord::find($documentCategoryId) : null;
 
         // The phase modal does not expose sequence while editing. Preserve the
         // existing position for edits and append new phases to the end. This
@@ -371,20 +377,23 @@ class WorkflowService
         $payload = [
             'workflow_template_id' => $workflow->id,
             'task_pack_id' => $data['task_pack_id'] ?? null,
-            'document_category_id' => $data['document_category_id'] ?? null,
+            'document_category_id' => $documentCategoryId,
             'name' => trim($data['name']),
             'short_name' => trim($data['short_name']),
             'sequence' => (int) $data['sequence'],
-            'allow_job_start' => (bool) ($data['allow_job_start'] ?? false),
-            'is_skippable' => (bool) ($data['is_skippable'] ?? false),
+            // These controls are automatic in FlowTrack now. Keeping the values
+            // enforced in the service also protects imports/copies/API callers
+            // from accidentally creating a phase with different behavior.
+            'allow_job_start' => true,
+            'is_skippable' => true,
             'requires_approval' => (bool) ($data['requires_approval'] ?? false),
-            'auto_advance_on_ready' => (bool) ($data['auto_advance_on_ready'] ?? false),
+            'auto_advance_on_ready' => true,
             'is_active' => (bool) ($data['is_active'] ?? true),
             'entry_condition' => blank($data['entry_condition'] ?? null) ? null : trim($data['entry_condition']),
             'exit_condition' => blank($data['exit_condition'] ?? null) ? null : trim($data['exit_condition']),
         ];
         if (Schema::hasColumn('workflow_phases', 'workflow_id')) $payload['workflow_id'] = $workflow->id;
-        if (Schema::hasColumn('workflow_phases', 'can_skip')) $payload['can_skip'] = (bool) ($data['is_skippable'] ?? false);
+        if (Schema::hasColumn('workflow_phases', 'can_skip')) $payload['can_skip'] = true;
         if (Schema::hasColumn('workflow_phases', 'required_document')) $payload['required_document'] = $document?->name;
         if (Schema::hasColumn('workflow_phases', 'entry_rule')) $payload['entry_rule'] = blank($data['entry_condition'] ?? null) ? null : trim($data['entry_condition']);
         if (Schema::hasColumn('workflow_phases', 'exit_rule')) $payload['exit_rule'] = blank($data['exit_condition'] ?? null) ? null : trim($data['exit_condition']);

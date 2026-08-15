@@ -241,11 +241,21 @@ class SpreadsheetRowReader
     {
         foreach (array_slice($matrix, 0, 30, true) as $index => $row) {
             $keys = array_map(fn ($value) => $this->normalizeHeader((string) $value), $row);
-            $score = 0;
-            foreach (['referenceorderno', 'ordertitle', 'receiveddate', 'orderdescription'] as $required) {
-                if (in_array($required, $keys, true)) $score++;
+
+            // Refined Bulk Order template: only Client ID and Order Title are
+            // mandatory. A valid file may therefore contain just those two
+            // columns, so header detection must not depend on optional fields.
+            if (in_array('clientid', $keys, true) && in_array('ordertitle', $keys, true)) {
+                return (int) $index;
             }
-            if ($score >= 3 && in_array('referenceorderno', $keys, true)) return (int) $index;
+
+            // Keep older exports readable while users transition to the new
+            // template. Validation no longer requires these legacy fields.
+            $legacyScore = 0;
+            foreach (['referenceorderno', 'ordertitle', 'receiveddate', 'orderdescription'] as $legacy) {
+                if (in_array($legacy, $keys, true)) $legacyScore++;
+            }
+            if ($legacyScore >= 3 && in_array('referenceorderno', $keys, true)) return (int) $index;
         }
         return null;
     }

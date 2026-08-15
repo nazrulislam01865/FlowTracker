@@ -6,8 +6,8 @@
         editorEmail: $wire.entangle('email'),
         editorStatus: $wire.entangle('accountStatus')
     }"
-    x-on:input.capture="if ({{ $isEditing ? 'true' : 'false' }}) dirty = true"
-    x-on:change.capture="if ({{ $isEditing ? 'true' : 'false' }}) dirty = true"
+    x-on:input.capture="if ({{ $isEditing ? 'true' : 'false' }}) { const isPasswordField = $event.target?.matches?.('[data-user-password-field]'); if (!isPasswordField) dirty = true }"
+    x-on:change.capture="if ({{ $isEditing ? 'true' : 'false' }}) { const isPasswordField = $event.target?.matches?.('[data-user-password-field]'); if (!isPasswordField) dirty = true }"
     x-on:user-editor-generated-password.window="dirty = true"
     x-on:user-editor-saved.window="dirty = false"
     x-on:user-editor-editing-enabled.window="dirty = false"
@@ -200,13 +200,104 @@
                             </div>
 
                             <div class="field">
-                                <label for="ft-edit-department">Department *</label>
-                                <select id="ft-edit-department" wire:model="departmentId" @disabled(!$isEditing || !$canManageAccess)>
-                                    <option value="">No department</option>
-                                    @foreach($departmentOptions as $department)
-                                        <option value="{{ $department['id'] }}">{{ $department['name'] }}</option>
-                                    @endforeach
-                                </select>
+                                <label>Department *</label>
+                                @php
+                                    $selectedDepartment = collect($departmentOptions)->first(
+                                        fn ($department) => (string) ($department['id'] ?? '') === (string) ($departmentId ?? '')
+                                    );
+                                    $selectedDepartmentLabel = $selectedDepartment['name'] ?? 'No department';
+                                    $departmentPickerDisabled = !$isEditing || !$canManageAccess;
+                                @endphp
+                                <div
+                                    class="ft-user-editor-department-picker {{ $departmentPickerDisabled ? 'is-disabled' : '' }}"
+                                    wire:key="user-editor-department-{{ $departmentId ?? 'none' }}-{{ $departmentPickerDisabled ? 'disabled' : 'enabled' }}"
+                                    x-data="{
+                                        open: false,
+                                        query: '',
+                                        selectedValue: @js((string) ($departmentId ?? '')),
+                                        selectedLabel: @js($selectedDepartmentLabel),
+                                        options: @js(array_values($departmentOptions)),
+                                        get filteredOptions() {
+                                            const q = this.query.trim().toLowerCase();
+                                            if (!q) return this.options;
+                                            return this.options.filter((item) => String(item.name || '').toLowerCase().includes(q));
+                                        },
+                                        openMenu() {
+                                            if (@js($departmentPickerDisabled)) return;
+                                            this.open = true;
+                                            this.$nextTick(() => this.$refs.search?.focus());
+                                        },
+                                        closeMenu() {
+                                            this.open = false;
+                                            this.query = '';
+                                        },
+                                        choose(item) {
+                                            this.selectedValue = String(item.id);
+                                            this.selectedLabel = String(item.name);
+                                            this.closeMenu();
+                                            dirty = true;
+                                            $wire.$set('departmentId', Number(item.id));
+                                        },
+                                        clearSelection() {
+                                            this.selectedValue = '';
+                                            this.selectedLabel = 'No department';
+                                            this.closeMenu();
+                                            dirty = true;
+                                            $wire.$set('departmentId', null);
+                                        }
+                                    }"
+                                    x-on:keydown.escape.window="if (open) closeMenu()"
+                                >
+                                    <button
+                                        type="button"
+                                        class="ft-user-editor-department-trigger ft-inline-remote-user-trigger"
+                                        x-on:click.stop="open ? closeMenu() : openMenu()"
+                                        :aria-expanded="open.toString()"
+                                        aria-haspopup="listbox"
+                                        @disabled($departmentPickerDisabled)
+                                    >
+                                        <span x-text="selectedLabel">{{ $selectedDepartmentLabel }}</span>
+                                        <span class="ft-filter-chevron" aria-hidden="true">⌄</span>
+                                    </button>
+
+                                    <div
+                                        class="ft-remote-filter-menu ft-user-editor-department-menu"
+                                        x-cloak
+                                        x-show="open"
+                                        x-on:click.outside="closeMenu()"
+                                    >
+                                        <input
+                                            x-ref="search"
+                                            class="ft-remote-filter-search"
+                                            type="search"
+                                            x-model="query"
+                                            placeholder="Search department…"
+                                            autocomplete="off"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="ft-remote-filter-option ft-remote-filter-clear"
+                                            x-show="selectedValue !== ''"
+                                            x-on:click="clearSelection()"
+                                        >
+                                            <span>No department</span><small>Clear</small>
+                                        </button>
+                                        <div class="ft-remote-filter-list" role="listbox">
+                                            <template x-for="department in filteredOptions" :key="department.id">
+                                                <button
+                                                    type="button"
+                                                    class="ft-remote-filter-option"
+                                                    :aria-selected="String(department.id) === selectedValue"
+                                                    x-on:click="choose(department)"
+                                                >
+                                                    <span x-text="department.name"></span>
+                                                    <small x-text="String(department.id) === selectedValue ? 'Selected' : ''"></small>
+                                                </button>
+                                            </template>
+                                            <div class="ft-remote-filter-message" x-show="filteredOptions.length === 0">No matching departments</div>
+                                        </div>
+                                    </div>
+                                </div>
                                 @error('departmentId')<div class="validation-error">{{ $message }}</div>@enderror
                             </div>
 
@@ -248,12 +339,35 @@
                     <section
                         class="card ft-user-editor-card"
                         x-data="{
-                            password: $wire.entangle('newPassword'),
-                            confirmation: $wire.entangle('newPasswordConfirmation'),
+                            // Keep password fields local until the user intentionally interacts with them.
+                            // This prevents browser/password-manager autofill from changing Livewire state
+                            // or showing a false password mismatch when an existing user is opened.
+                            password: '',
+                            confirmation: '',
+                            passwordFocused: false,
+                            confirmationFocused: false,
+                            passwordTouched: false,
+                            confirmationTouched: false,
                             showPassword: false,
                             showConfirmation: false,
+                            syncPassword(value) {
+                                this.password = value;
+                                if (this.passwordTouched || this.passwordFocused) {
+                                    this.passwordTouched = true;
+                                    $wire.$set('newPassword', value);
+                                    dirty = true;
+                                }
+                            },
+                            syncConfirmation(value) {
+                                this.confirmation = value;
+                                if (this.confirmationTouched || this.confirmationFocused) {
+                                    this.confirmationTouched = true;
+                                    $wire.$set('newPasswordConfirmation', value);
+                                    dirty = true;
+                                }
+                            },
                             strength() {
-                                const p = this.password || '';
+                                const p = this.passwordTouched ? (this.password || '') : '';
                                 if (!p) return 0;
                                 let level = 0;
                                 if (p.length >= 8) level++;
@@ -263,18 +377,11 @@
                                 return level;
                             },
                             strengthLabel() {
-                                if (!this.password) return 'Leave blank or use at least 12 characters.';
+                                if (!this.passwordTouched || !this.password) return 'Leave blank or use at least 12 characters.';
                                 return ['Use at least 12 characters.', 'Weak', 'Fair', 'Good', 'Strong'][this.strength()];
-                            },
-                            passwordsMismatch() {
-                                const password = typeof this.password === 'string' ? this.password : '';
-                                const confirmation = typeof this.confirmation === 'string' ? this.confirmation : '';
-
-                                // Do not show a mismatch on an untouched edit form. Both fields are optional
-                                // and intentionally start blank so the existing password remains unchanged.
-                                return password.length > 0 && confirmation.length > 0 && password !== confirmation;
                             }
                         }"
+                        x-on:user-editor-generated-password.window="password = $wire.newPassword; confirmation = $wire.newPasswordConfirmation; passwordTouched = true; confirmationTouched = true; dirty = true"
                     >
                         <header class="ft-user-editor-section-head">
                             <div>
@@ -290,9 +397,9 @@
                                 <div class="field">
                                     <label for="ft-edit-password">New password <span>Optional</span></label>
                                     <div class="ft-user-editor-password-wrap">
-                                        <input id="ft-edit-password" x-model="password" :type="showPassword ? 'text' : 'password'" autocomplete="new-password">
+                                        <input id="ft-edit-password" data-user-password-field x-model="password" x-on:focus="passwordFocused = true" x-on:blur="passwordFocused = false" x-on:keydown="passwordTouched = true" x-on:paste="passwordTouched = true" x-on:input.stop="syncPassword($event.target.value)" :type="showPassword ? 'text' : 'password'" autocomplete="new-password" data-1p-ignore data-lpignore="true">
                                         <div class="ft-user-editor-password-tools">
-                                            <button type="button" wire:click="generatePassword" x-on:click="dirty = true">Generate</button>
+                                            <button type="button" wire:click="generatePassword" x-on:click="passwordTouched = false; confirmationTouched = false; dirty = true">Generate</button>
                                             <button type="button" x-on:click="showPassword = !showPassword" x-text="showPassword ? 'Hide' : 'Show'"></button>
                                         </div>
                                     </div>
@@ -304,12 +411,13 @@
                                 <div class="field">
                                     <label for="ft-edit-password-confirmation">Confirm new password <span>Optional</span></label>
                                     <div class="ft-user-editor-password-wrap">
-                                        <input id="ft-edit-password-confirmation" x-model="confirmation" :type="showConfirmation ? 'text' : 'password'" autocomplete="new-password">
+                                        <input id="ft-edit-password-confirmation" data-user-password-field x-model="confirmation" x-on:focus="confirmationFocused = true" x-on:blur="confirmationFocused = false" x-on:keydown="confirmationTouched = true" x-on:paste="confirmationTouched = true" x-on:input.stop="syncConfirmation($event.target.value)" :type="showConfirmation ? 'text' : 'password'" autocomplete="new-password" data-1p-ignore data-lpignore="true">
                                         <div class="ft-user-editor-password-tools">
                                             <button type="button" x-on:click="showConfirmation = !showConfirmation" x-text="showConfirmation ? 'Hide' : 'Show'"></button>
                                         </div>
                                     </div>
-                                    <div class="validation-error" x-show="passwordsMismatch()" x-cloak>Passwords do not match.</div>
+                                    {{-- Password mismatch is intentionally server-validated only.
+                                         Browser/password-manager autofill must never create a false warning on page load. --}}
                                     @error('newPasswordConfirmation')<div class="validation-error">{{ $message }}</div>@enderror
                                 </div>
                             </div>

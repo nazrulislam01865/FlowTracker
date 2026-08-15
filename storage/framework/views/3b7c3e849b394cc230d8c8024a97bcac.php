@@ -15,7 +15,7 @@
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <title><?php echo e(($title ?? null) ? $title.' — ' : ''); ?>STEP PROMO</title>
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp')); ?>">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260811-role-matrix-save-ux-1">
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260815-order-urgency-dropdown-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260810-inquiry-start-datetime-1"></script>
     <script src="/js/flowtrack-list-filters.js?v=20260813-product-search-select-1"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
@@ -37,8 +37,8 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ]); ?>
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260812-taskpack-assignee-1">
-    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260814-multi-role-1">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260815-client-single-filter-1">
+    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260815-user-assignment-refine-1">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
@@ -47,18 +47,20 @@
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('reports')): ?><link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260814-3"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260814-client-row-colors-2">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260815-mobile-order-density-3">
     
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260814-5">
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260815-mobile-personal-1">
     <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260813-footer-single-row-1">
-    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260814-lazy-pagination-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260814-23">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260814-add-task-phase-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260815-all-master-mobile-cards-1">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-hard-delete-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260815-inquiry-section-numbering-1">
+    <link rel="stylesheet" href="/css/flowtrack-create-order.css?v=20260815-single-urgency-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260815-bulk-notes-1">
+    <link rel="stylesheet" href="/css/flowtrack-task-detail-attachments.css?v=20260815-compact-doc-rows-1">
     <link rel="stylesheet" href="/css/flowtrack-order-products-detail.css?v=20260814-detail-scope-isolation-1">
     <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-pdf-1">
     
-    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260814-client-workflow-1">
+    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
@@ -69,7 +71,7 @@
     <main class="main">
         <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
         <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?> <?php echo e(request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : ''); ?>">
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','profile','inquiries.*','company.setup')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>
     </main>
@@ -79,7 +81,7 @@
 
     <script src="/js/flowtrack-reverb-client.js?v=20260812-1"></script>
     <script src="/js/flowtrack-workspace-refresh.js?v=20260812-reverb-1"></script>
-    <script src="/js/flowtrack-master-colors.js?v=20260811-1"></script>
+    <script src="/js/flowtrack-master-colors.js?v=20260815-priority-persist-1"></script>
 <script src="/js/flowtrack-attachment-auto-upload.js?v=20260811-2"></script>
 <script src="/js/flowtrack-client-validation-focus.js?v=20260811-1"></script>
 <script>

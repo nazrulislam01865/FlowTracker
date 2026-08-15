@@ -7,6 +7,7 @@ use App\Http\Controllers\BulkOrderImportController;
 use App\Http\Controllers\BrandingAssetController;
 use App\Http\Controllers\ClientsController;
 use App\Http\Controllers\ClientLogoController;
+use App\Http\Controllers\CompanySetupController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\DocumentsController;
 use App\Http\Controllers\FilterOptionController;
@@ -188,5 +189,6 @@ Route::middleware('auth')->group(function () {
     Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');
     Route::get('/task-pack-setup/{taskPack}/edit', [TaskPackSetupController::class, 'edit'])->middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit');
     Route::get('/master-data', MasterDataController::class)->name('master-data');
+    Route::get('/company-setup', CompanySetupController::class)->middleware('super.admin')->name('company.setup');
     Route::get('/administration', AdministrationController::class)->middleware('super.admin')->name('administration');
 });

@@ -37,7 +37,7 @@
                 @foreach($laneStatuses as $laneStatus)
                     @php
                         $laneTasks = $jobTasks->filter(fn($task) => \App\Support\BoardLaneResolver::taskStatusMatches($task->status, $laneStatus));
-                        $laneColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $laneStatus);
+                        $laneColor = app(\App\Services\MasterDataService::class)->colorFor('order_task_status', (string) $laneStatus);
                     @endphp
                     <div
                         class="ft-task-job-status-cell {{ $laneTasks->isEmpty() ? 'is-empty' : 'has-tasks' }}"

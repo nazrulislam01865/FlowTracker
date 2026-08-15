@@ -23,6 +23,9 @@ class Invoice extends Model
             'sent_at' => 'datetime',
             'emailed_at' => 'datetime',
             'pdf_generated_at' => 'datetime',
+            'company_snapshot' => 'array',
+            'client_snapshot' => 'array',
+            'pdf_layout_version' => 'integer',
         ];
     }
 

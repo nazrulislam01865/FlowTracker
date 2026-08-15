@@ -22,14 +22,23 @@
     $requiredDocuments = \App\Support\JobDetailPresenter::requiredDocuments($job);
     $configuredTasks = $job->workflow->phases->flatMap(fn($phase) => \App\Support\JobDetailPresenter::phaseTasks($job,$phase))->values();
     $masterData = app(\App\Services\MasterDataService::class);
-    $productionUrgencyIds = collect($job->production_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
-    $shipmentUrgencyIds = collect($job->shipment_urgency_ids ?? [])->map(fn ($id) => (int) $id)->filter()->values();
-    $productionUrgencyNames = $productionUrgencyIds->isEmpty()
-        ? collect()
-        : $masterData->query('production_urgency')->whereIn('id', $productionUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
-    $shipmentUrgencyNames = $shipmentUrgencyIds->isEmpty()
-        ? collect()
-        : $masterData->query('shipment_urgency')->whereIn('id', $shipmentUrgencyIds)->orderBy('sort_order')->orderBy('name')->pluck('name');
+    // Urgency is a single-choice field. Legacy rows may still contain more than
+    // one id from the old checkbox UI, so the overview intentionally uses the
+    // first stored value and every edit writes back at most one id.
+    $productionUrgencyId = collect($job->production_urgency_ids ?? [])->map(fn ($id) => (int) $id)->first(fn ($id) => $id > 0);
+    $shipmentUrgencyId = collect($job->shipment_urgency_ids ?? [])->map(fn ($id) => (int) $id)->first(fn ($id) => $id > 0);
+    $productionUrgencyName = $productionUrgencyId
+        ? (string) ($masterData->query('production_urgency')->whereKey($productionUrgencyId)->value('name') ?? '')
+        : '';
+    $shipmentUrgencyName = $shipmentUrgencyId
+        ? (string) ($masterData->query('shipment_urgency')->whereKey($shipmentUrgencyId)->value('name') ?? '')
+        : '';
+    $productionUrgencyOptions = $masterData->active('production_urgency')
+        ->map(fn ($urgency) => ['id' => (int) $urgency->id, 'name' => (string) $urgency->name])
+        ->values();
+    $shipmentUrgencyOptions = $masterData->active('shipment_urgency')
+        ->map(fn ($urgency) => ['id' => (int) $urgency->id, 'name' => (string) $urgency->name])
+        ->values();
     $orderProductNames = $completedProductRows->pluck('product_name')->filter()->unique()->values();
     $orderProductMasters = $orderProductNames->isEmpty()
         ? collect()
@@ -84,6 +93,12 @@
                     <x-ui.inline-save-state />
                 @endif
             </div>
+            @if(filled($job->notes))
+                <div class="ft-order-overview-notes">
+                    <small>Notes</small>
+                    <div><x-ui.mention-text :text="$job->notes" /></div>
+                </div>
+            @endif
         </section>
 
         <aside class="ft-detail-card ft-side-panel ft-planning-panel">
@@ -110,28 +125,120 @@
             @if($job->is_repeat_order)
                 <div class="ft-side-row"><span>Previous reference</span><b>{{ $job->repeat_order_number ?: 'Not set' }}</b></div>
             @endif
-            <div class="ft-side-row">
+            <div
+                class="ft-side-row ft-inline-planning-row ft-inline-urgency-row ft-inline-edit-shell"
+                x-data="{
+                    ...window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-production-urgency'), label: 'production urgency', value: @js($productionUrgencyId ? (string) $productionUrgencyId : ''), display: @js($productionUrgencyName ?: 'None') }),
+                    options: @js($productionUrgencyOptions),
+                    selectedId: @js($productionUrgencyId ? (string) $productionUrgencyId : ''),
+                    savedId: @js($productionUrgencyId ? (string) $productionUrgencyId : ''),
+                    openUrgency() {
+                        if (!this.beginEdit()) return;
+                        this.selectedId = this.savedId;
+                        this.$nextTick(() => this.$refs.urgencySelect?.focus());
+                    },
+                    cancelUrgency() { this.selectedId = this.savedId; this.cancelEdit(); },
+                    async saveUrgency() {
+                        const id = Number(this.selectedId || 0);
+                        const ids = id > 0 ? [id] : [];
+                        const label = this.options.find(option => Number(option.id) === id)?.name || 'None';
+                        const ok = await this.commit(id > 0 ? String(id) : '', label, () => $wire.updateJobUrgencies({{ $job->id }}, 'production', ids));
+                        if (ok) this.savedId = id > 0 ? String(id) : '';
+                        else this.selectedId = this.savedId;
+                    }
+                }"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                x-on:click.outside="if (editing) cancelUrgency()"
+            >
                 <span>Production urgency</span>
-                <b>
-                    @forelse($productionUrgencyNames as $urgencyName)
-                        <span class="ft-soft-pill amber">{{ $urgencyName }}</span>
-                    @empty
-                        <span class="ft-planning-empty">None</span>
-                    @endforelse
-                </b>
-            </div>
-            <div class="ft-side-row">
-                <span>Shipment urgency</span>
-                <b>
-                    @forelse($shipmentUrgencyNames as $urgencyName)
-                        <span class="ft-soft-pill blue">{{ $urgencyName }}</span>
-                    @empty
-                        <span class="ft-planning-empty">None</span>
-                    @endforelse
+                <b class="ft-planning-value ft-urgency-value">
+                    <span x-show="!editing" class="ft-planning-urgency-display">
+                        <span x-show="display === 'None'" class="ft-planning-empty">None</span>
+                        <span x-show="display !== 'None'" class="ft-soft-pill amber" x-text="display">{{ $productionUrgencyName ?: 'None' }}</span>
+                    </span>
+                    @if($canEditJob)
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit production urgency" title="Edit" x-on:click.stop="openUrgency()">✎</button>
+                        <div x-cloak x-show="editing" class="ft-inline-urgency-editor">
+                            <select
+                                x-ref="urgencySelect"
+                                x-model="selectedId"
+                                class="ft-inline-urgency-select"
+                                aria-label="Select production urgency"
+                                x-on:keydown.escape.prevent.stop="cancelUrgency()"
+                            >
+                                <option value="">None</option>
+                                <template x-for="option in options" :key="option.id">
+                                    <option :value="String(option.id)" x-text="option.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="options.length === 0" class="ft-planning-empty ft-inline-urgency-empty">No active urgency options</span>
+                            <div class="ft-inline-urgency-actions">
+                                <button type="button" class="ft-inline-urgency-cancel" x-on:click.stop="cancelUrgency()">Cancel</button>
+                                <button type="button" class="ft-inline-urgency-save" :disabled="status === 'saving'" x-on:click.stop="saveUrgency()">Save</button>
+                            </div>
+                        </div>
+                        <x-ui.inline-save-state compact />
+                    @endif
                 </b>
             </div>
             <div
-                class="ft-side-row ft-inline-planning-row ft-inline-edit-shell"
+                class="ft-side-row ft-inline-planning-row ft-inline-urgency-row ft-inline-edit-shell"
+                x-data="{
+                    ...window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-shipment-urgency'), label: 'shipment urgency', value: @js($shipmentUrgencyId ? (string) $shipmentUrgencyId : ''), display: @js($shipmentUrgencyName ?: 'None') }),
+                    options: @js($shipmentUrgencyOptions),
+                    selectedId: @js($shipmentUrgencyId ? (string) $shipmentUrgencyId : ''),
+                    savedId: @js($shipmentUrgencyId ? (string) $shipmentUrgencyId : ''),
+                    openUrgency() {
+                        if (!this.beginEdit()) return;
+                        this.selectedId = this.savedId;
+                        this.$nextTick(() => this.$refs.urgencySelect?.focus());
+                    },
+                    cancelUrgency() { this.selectedId = this.savedId; this.cancelEdit(); },
+                    async saveUrgency() {
+                        const id = Number(this.selectedId || 0);
+                        const ids = id > 0 ? [id] : [];
+                        const label = this.options.find(option => Number(option.id) === id)?.name || 'None';
+                        const ok = await this.commit(id > 0 ? String(id) : '', label, () => $wire.updateJobUrgencies({{ $job->id }}, 'shipment', ids));
+                        if (ok) this.savedId = id > 0 ? String(id) : '';
+                        else this.selectedId = this.savedId;
+                    }
+                }"
+                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                x-on:click.outside="if (editing) cancelUrgency()"
+            >
+                <span>Shipment urgency</span>
+                <b class="ft-planning-value ft-urgency-value">
+                    <span x-show="!editing" class="ft-planning-urgency-display">
+                        <span x-show="display === 'None'" class="ft-planning-empty">None</span>
+                        <span x-show="display !== 'None'" class="ft-soft-pill blue" x-text="display">{{ $shipmentUrgencyName ?: 'None' }}</span>
+                    </span>
+                    @if($canEditJob)
+                        <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button" aria-label="Edit shipment urgency" title="Edit" x-on:click.stop="openUrgency()">✎</button>
+                        <div x-cloak x-show="editing" class="ft-inline-urgency-editor">
+                            <select
+                                x-ref="urgencySelect"
+                                x-model="selectedId"
+                                class="ft-inline-urgency-select"
+                                aria-label="Select shipment urgency"
+                                x-on:keydown.escape.prevent.stop="cancelUrgency()"
+                            >
+                                <option value="">None</option>
+                                <template x-for="option in options" :key="option.id">
+                                    <option :value="String(option.id)" x-text="option.name"></option>
+                                </template>
+                            </select>
+                            <span x-show="options.length === 0" class="ft-planning-empty ft-inline-urgency-empty">No active urgency options</span>
+                            <div class="ft-inline-urgency-actions">
+                                <button type="button" class="ft-inline-urgency-cancel" x-on:click.stop="cancelUrgency()">Cancel</button>
+                                <button type="button" class="ft-inline-urgency-save" :disabled="status === 'saving'" x-on:click.stop="saveUrgency()">Save</button>
+                            </div>
+                        </div>
+                        <x-ui.inline-save-state compact />
+                    @endif
+                </b>
+            </div>
+            <div
+                class="ft-side-row ft-inline-planning-row ft-planning-owner-row ft-inline-edit-shell"
                 x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-owner'), label: 'Order owner', value: @js($job->owner_id ?? ''), display: @js($job->owner?->name ?? 'Unassigned'), avatarUrl: @js($job->owner?->profileImageUrl() ?? '') })"
                 :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                 x-on:click.outside="if (editing) cancelEdit()"
@@ -715,12 +822,12 @@
                                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                 >
                                     @php
-                                        $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('task_status', (string) $task->status);
+                                        $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('order_task_status', (string) $task->status);
                                     @endphp
                                     <select data-master-color-select class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" style="{{ \App\Support\MasterColor::style($taskStatusColor) }}" x-model="draftValue"
                                         x-on:change="window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue))"
                                         :disabled="status === 'saving'" @disabled(!$canEditTask)>
-                                        @foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('task_status', $status) }}">{{ $status }}</option>@endforeach
+                                        @foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $status) }}">{{ $status }}</option>@endforeach
                                     </select>
                                     @if($canEditTask)<x-ui.inline-save-state compact />@endif
                                 </span>

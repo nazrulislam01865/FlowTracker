@@ -199,7 +199,7 @@ class Index extends Component
             abort_unless($actor->canAccess('tasks.update'), 403);
 
             $allowed = app(MasterDataService::class)
-                ->active('task_status')
+                ->active('order_task_status')
                 ->pluck('name')
                 ->map(fn ($value) => trim((string) $value))
                 ->filter()

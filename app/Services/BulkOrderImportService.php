@@ -20,38 +20,26 @@ use Throwable;
 class BulkOrderImportService
 {
     private const ALIASES = [
-        'ref' => ['referenceorderno', 'orderno', 'referenceorder'],
         'client_id' => ['clientid', 'clientcode'],
+        'ref' => ['referenceorderno', 'referenceorder', 'orderno'],
+        'is_repeat' => ['repeatorderyesno', 'repeatorder', 'isrepeatorder', 'repeatedorder'],
+        'repeat_order_no' => ['repeatorderno', 'repeatordernumber', 'previousreferencenumber'],
         'title' => ['ordertitle'],
-        'received' => ['receiveddate'],
-        'urgent' => ['urgentorderornot', 'urgent'],
         'description' => ['orderdescription', 'description'],
-        'supplier_id' => ['supplierid', 'suppliercode', 'supplier'],
-        'warehouse' => ['warehouse'],
-        'workflow' => ['workflow'],
-        'delivery' => ['requireddeliverydate', 'deliverydate'],
-        'supplier_instruction' => ['supplierinstruction', 'scmail'],
-        'source_id' => ['sourcerowid', 'sourceid'],
+        'product_id' => ['productid', 'productcode', 'sku'],
+        'product_quantity' => ['productquantity', 'quantity', 'qty'],
+        'customer_delivery' => ['customerrequesteddeliverydate', 'customerrequireddeliverydate', 'requireddeliverydate', 'deliverydate'],
+        'estimated_delivery' => ['estimateddeliverydate'],
+        'production_urgency' => ['productionurgency', 'orderproductionurgency'],
+        'shipment_urgency' => ['shipmenturgency', 'shipmenturgent', 'ordershipmenturgency'],
+        'notes' => ['notes', 'ordernotes'],
     ];
 
     public function uploadOptions(User $actor): array
     {
         abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'create'), 403);
 
-        $clients = app(ClientService::class)->visibleQuery($actor)
-            ->where('is_active', true)
-            ->orderBy('name')
-            ->get(['id', 'code', 'name']);
-
-        $suppliers = MasterRecord::query()
-            ->forWorkspace(app(SetupContext::class)->workspaceId())
-            ->ofType('supplier')
-            ->active()
-            ->orderBy('sort_order')
-            ->orderBy('name')
-            ->get(['id', 'code', 'name']);
-
-        return compact('clients', 'suppliers');
+        return [];
     }
 
     public function prepareUpload(UploadedFile $file, User $actor, ?string $displayFilename = null, ?string $sourceFingerprint = null): array
@@ -91,85 +79,114 @@ class BulkOrderImportService
         $config = $this->normalizeConfig($config, $actor);
         $rows = collect($source['rows'])->map(fn (array $row) => $this->mapRow($row))->values();
 
-        $referenceCounts = $rows->pluck('ref')->filter()->countBy();
-        $sourceIdCounts = $rows->pluck('source_id')->filter()->countBy();
-
+        $referenceCounts = $rows->pluck('ref')->map(fn ($value) => trim((string) $value))->filter()->countBy();
         $clientMaps = $this->clientMaps($actor);
-        $supplierMaps = $this->supplierMaps();
+        $productMaps = $this->productMaps();
+        $productionUrgencyMap = $this->urgencyMap('production_urgency');
+        $shipmentUrgencyMap = $this->urgencyMap('shipment_urgency');
         $templates = $this->workflowTemplates();
-        $existingByReference = $this->existingJobsByReferences($rows->pluck('ref')->filter()->unique()->all());
-        $existingBySourceId = $this->existingJobsBySourceIds($rows->pluck('source_id')->filter()->unique()->all());
+        $existingByReference = $this->existingJobsByReferences($rows->pluck('ref')->map(fn ($value) => trim((string) $value))->filter()->unique()->all());
 
-        $validated = $rows->map(function (array $row) use ($actor, $config, $referenceCounts, $sourceIdCounts, $clientMaps, $supplierMaps, $templates, $existingByReference, $existingBySourceId): array {
+        $validated = $rows->map(function (array $row) use ($actor, $config, $referenceCounts, $clientMaps, $productMaps, $productionUrgencyMap, $shipmentUrgencyMap, $templates, $existingByReference): array {
             $errors = [];
             $warnings = [];
             $action = 'create';
 
-            $row['ref'] = trim((string) ($row['ref'] ?? ''));
-            $row['title'] = trim((string) ($row['title'] ?? ''));
-            $row['description'] = trim((string) ($row['description'] ?? ''));
-            $row['warehouse'] = trim((string) ($row['warehouse'] ?? ''));
-            $row['supplier_instruction'] = trim((string) ($row['supplier_instruction'] ?? ''));
-            $row['source_id'] = trim((string) ($row['source_id'] ?? ''));
-            $urgentRaw = trim((string) ($row['urgent'] ?? ''));
-            if ($urgentRaw === '') {
-                $errors[] = 'Urgent? is required';
-                $row['urgent'] = 'No';
-            } elseif (!$this->isAcceptedBoolean($urgentRaw)) {
-                $errors[] = 'Urgent? must be Yes or No';
-                $row['urgent'] = 'No';
+            foreach (['client_id', 'ref', 'is_repeat', 'repeat_order_no', 'title', 'description', 'product_id', 'product_quantity', 'customer_delivery', 'estimated_delivery', 'production_urgency', 'shipment_urgency', 'notes'] as $field) {
+                $row[$field] = trim((string) ($row[$field] ?? ''));
+            }
+
+            if ($row['client_id'] === '') $errors[] = 'Client ID is required';
+            if ($row['title'] === '') $errors[] = 'Order Title is required';
+            if (mb_strlen($row['title']) > 255) $errors[] = 'Order Title must be 255 characters or fewer';
+            if (mb_strlen($row['ref']) > 255) $errors[] = 'Reference Order No. must be 255 characters or fewer';
+            if (mb_strlen($row['repeat_order_no']) > 255) $errors[] = 'Repeat Order No. must be 255 characters or fewer';
+            if (mb_strlen($row['description']) > 10000) $errors[] = 'Order Description is too long';
+            if (mb_strlen($row['notes']) > 10000) $errors[] = 'Notes must be 10,000 characters or fewer';
+
+            $repeatRaw = $row['is_repeat'];
+            if ($repeatRaw === '') {
+                $row['is_repeat'] = 'No';
+                $row['is_repeat_resolved'] = false;
+            } elseif (!$this->isAcceptedBoolean($repeatRaw)) {
+                $errors[] = 'Repeat Order? must be Yes or No';
+                $row['is_repeat_resolved'] = false;
             } else {
-                $row['urgent'] = $this->normalizeBoolean($urgentRaw) ? 'Yes' : 'No';
+                $row['is_repeat_resolved'] = $this->normalizeBoolean($repeatRaw);
+                $row['is_repeat'] = $row['is_repeat_resolved'] ? 'Yes' : 'No';
+            }
+            if ($row['is_repeat_resolved'] && $row['repeat_order_no'] === '') {
+                $errors[] = 'Repeat Order No. is required when Repeat Order? is Yes';
+            }
+            if (!$row['is_repeat_resolved'] && $row['repeat_order_no'] !== '') {
+                $warnings[] = 'Repeat Order No. is ignored because Repeat Order? is No';
             }
 
-            if ($row['ref'] === '') $errors[] = 'Reference order is required';
-            if ($row['title'] === '') $errors[] = 'Order title is required';
-            if (mb_strlen($row['title']) > 255) $errors[] = 'Order title must be 255 characters or fewer';
-            if ($row['description'] === '') $errors[] = 'Order description is required';
-            if (mb_strlen($row['description']) > 10000) $errors[] = 'Order description is too long';
-            if ($row['source_id'] !== '' && mb_strlen($row['source_id']) > 191) $errors[] = 'Source Row ID must be 191 characters or fewer';
-
-            $row['received_normalized'] = $this->normalizeDate($row['received'] ?? null);
-            if (!$row['received_normalized']) $errors[] = 'Invalid received date';
-            $row['delivery_normalized'] = blank($row['delivery'] ?? null) ? null : $this->normalizeDate($row['delivery']);
-            if (filled($row['delivery'] ?? null) && !$row['delivery_normalized']) {
-                $errors[] = 'Invalid required delivery date';
-            } elseif ($row['delivery_normalized'] && $row['received_normalized'] && $row['delivery_normalized'] < $row['received_normalized']) {
-                $errors[] = 'Required delivery date cannot be earlier than received date';
-            }
-
-            $clientValue = trim((string) ($row['client_id'] ?? ''));
-            $client = $clientValue !== '' ? $this->lookupClient($clientValue, $clientMaps) : ($config['default_client'] ?? null);
-            if ($clientValue !== '' && !$client) $errors[] = 'Client ID does not match an active visible client';
+            $client = $row['client_id'] !== '' ? $this->lookupClient($row['client_id'], $clientMaps) : null;
+            if ($row['client_id'] !== '' && !$client) $errors[] = 'Client ID does not match an active visible client';
             $row['client_resolved_id'] = $client?->id;
-            $row['client_resolved_label'] = $client ? $client->code.' · '.$client->name : 'Unassigned';
+            $row['client_resolved_label'] = $client ? $client->code.' · '.$client->name : 'Unresolved';
 
-            $supplierValue = trim((string) ($row['supplier_id'] ?? ''));
-            $supplier = $supplierValue !== '' ? $this->lookupSupplier($supplierValue, $supplierMaps) : ($config['default_supplier'] ?? null);
-            if ($supplierValue !== '' && !$supplier) $errors[] = 'Supplier ID does not match an active Supplier in Master Data';
-            if (!$supplier) $warnings[] = 'Supplier ID will remain unassigned';
-            $row['supplier_resolved_id'] = $supplier?->id;
-            $row['supplier_resolved_label'] = $supplier ? $supplier->code.' · '.$supplier->name : 'Unassigned';
+            $row['product_resolved_id'] = null;
+            $row['product_resolved_name'] = null;
+            $row['product_resolved_category'] = null;
+            $row['product_quantity_resolved'] = 0;
+            if ($row['product_id'] !== '') {
+                $product = $this->lookupProduct($row['product_id'], $productMaps);
+                if (!$product || !$product->parent || $product->parent->status !== 'active') {
+                    $errors[] = 'Product ID does not match an active Product with an active Product Category';
+                } else {
+                    $row['product_resolved_id'] = (int) $product->id;
+                    $row['product_resolved_name'] = (string) $product->name;
+                    $row['product_resolved_category'] = (string) $product->parent->name;
+                }
+            }
 
-            // A Client is mandatory for Bulk Order Import. If that client has a
-            // client-specific Order workflow in Workflow Setup, FlowTrack selects
-            // it automatically. We deliberately do NOT auto-pick an all-client
-            // workflow: when no client-specific Order workflow exists the user
-            // must choose an available Order workflow in the review table.
+            if ($row['product_quantity'] !== '') {
+                $quantity = filter_var($row['product_quantity'], FILTER_VALIDATE_INT);
+                if ($quantity === false || $quantity < 1 || $quantity > 999999999) {
+                    $errors[] = 'Product Quantity must be a whole number between 1 and 999999999';
+                } elseif ($row['product_id'] === '') {
+                    $errors[] = 'Product ID is required when Product Quantity is provided';
+                } else {
+                    $row['product_quantity_resolved'] = (int) $quantity;
+                }
+            } elseif ($row['product_id'] !== '') {
+                $row['product_quantity_resolved'] = 1;
+            }
+
+            $row['customer_delivery_normalized'] = $row['customer_delivery'] === '' ? null : $this->normalizeDate($row['customer_delivery']);
+            if ($row['customer_delivery'] !== '' && !$row['customer_delivery_normalized']) {
+                $errors[] = 'Invalid Customer Requested Delivery Date';
+            }
+            $row['estimated_delivery_normalized'] = $row['estimated_delivery'] === '' ? null : $this->normalizeDate($row['estimated_delivery']);
+            if ($row['estimated_delivery'] !== '' && !$row['estimated_delivery_normalized']) {
+                $errors[] = 'Invalid Estimated Delivery Date';
+            }
+
+            $production = $this->resolveUrgency($row['production_urgency'], $productionUrgencyMap);
+            if ($production['error']) $errors[] = 'Production Urgency '.$production['error'];
+            $row['production_urgency_resolved'] = $production['label'];
+            $row['production_urgency_ids'] = $production['id'] ? [$production['id']] : [];
+
+            $shipment = $this->resolveUrgency($row['shipment_urgency'], $shipmentUrgencyMap);
+            if ($shipment['error']) $errors[] = 'Shipment Urgent '.$shipment['error'];
+            $row['shipment_urgency_resolved'] = $shipment['label'];
+            $row['shipment_urgency_ids'] = $shipment['id'] ? [$shipment['id']] : [];
+
+            // Client ID is mandatory. Client-specific Order workflows are applied
+            // automatically; when a client has no specific workflow the review
+            // step asks the user to choose one of the valid Order workflows.
             $row['workflow_resolved_id'] = null;
             $row['workflow_phase_id'] = null;
-            $row['workflow_resolved_label'] = 'Waiting for client';
+            $row['workflow_resolved_label'] = $client ? 'Resolving workflow' : 'Waiting for client';
             $row['workflow_selection_source'] = null;
             $row['workflow_requires_selection'] = false;
             $row['workflow_manual_selected_id'] = null;
             $row['workflow_options'] = [];
             $resolvedWorkflow = null;
 
-            if (!$client) {
-                if ($clientValue === '' && !$config['default_client']) {
-                    $errors[] = 'Client is required. Enter a valid Client ID in the file or select a fallback client.';
-                }
-            } else {
+            if ($client) {
                 $resolvedWorkflow = $this->resolveClientOrderWorkflow($templates, (int) $client->id);
 
                 if ($resolvedWorkflow) {
@@ -208,23 +225,10 @@ class BulkOrderImportService
                 }
             }
 
-            if ($row['ref'] !== '' && ($referenceCounts[$row['ref']] ?? 0) > 1) $warnings[] = 'Duplicate reference in this file';
-            if ($row['source_id'] !== '' && ($sourceIdCounts[$row['source_id']] ?? 0) > 1) $errors[] = 'Duplicate Source Row ID in this file';
-
-            $sourceExisting = $row['source_id'] !== '' ? ($existingBySourceId[$row['source_id']] ?? null) : null;
+            if ($row['ref'] !== '' && ($referenceCounts[$row['ref']] ?? 0) > 1) $warnings[] = 'Duplicate Reference Order No. in this file';
             $referenceExisting = $row['ref'] !== '' ? ($existingByReference[$row['ref']] ?? collect()) : collect();
 
-            if ($sourceExisting) {
-                if ($config['duplicate_policy'] === 'update' && $this->canUpdateExisting($actor, $sourceExisting)) {
-                    $action = 'update';
-                    $row['existing_job_id'] = $sourceExisting->id;
-                    $warnings[] = 'Source Row ID already exists; the matching order will be updated';
-                } else {
-                    $action = 'skip';
-                    $row['existing_job_id'] = $sourceExisting->id;
-                    $warnings[] = 'Source Row ID was already imported; this row will be skipped';
-                }
-            } elseif ($referenceExisting->isNotEmpty()) {
+            if ($referenceExisting->isNotEmpty()) {
                 if ($config['duplicate_policy'] === 'skip') {
                     $action = 'skip';
                     $row['existing_job_id'] = $referenceExisting->first()->id;
@@ -244,7 +248,9 @@ class BulkOrderImportService
                 }
             }
 
-            $row['priority_resolved'] = $row['urgent'] === 'Yes' ? 'Critical' : 'Medium';
+            // Legacy priority remains stable. Production and shipment urgency are
+            // stored in their dedicated master-data backed fields.
+            $row['priority_resolved'] = 'Medium';
             $row['import_profile_resolved'] = $resolvedWorkflow
                 ? ($row['workflow_selection_source'] === 'manual' ? 'CLIENT_MANUAL' : 'CLIENT_AUTO')
                 : null;
@@ -289,8 +295,8 @@ class BulkOrderImportService
             'import_number' => 'PENDING-'.Str::uuid(),
             'user_id' => $actor->id,
             'profile' => 'CLIENT_AUTO',
-            'default_client_id' => $config['default_client']?->id,
-            'default_supplier_id' => $config['default_supplier']?->id,
+            'default_client_id' => null,
+            'default_supplier_id' => null,
             'duplicate_policy' => $config['duplicate_policy'],
             'original_filename' => $source['filename'],
             'file_fingerprint' => $source['fingerprint'],
@@ -345,7 +351,7 @@ class BulkOrderImportService
             DB::table('bulk_order_import_rows')->insert([
                 'bulk_order_import_id' => $importId,
                 'source_row_number' => (int) ($row['row'] ?? 0),
-                'source_row_id' => blank($row['source_id'] ?? null) ? null : $row['source_id'],
+                'source_row_id' => null,
                 'reference_order_no' => blank($row['ref'] ?? null) ? null : $row['ref'],
                 'flow_job_id' => $jobId,
                 'status' => $status,
@@ -385,32 +391,49 @@ class BulkOrderImportService
     private function createOrder(array $row, User $actor, string $importNumber): FlowJob
     {
         if (blank($row['client_resolved_id'] ?? null)) {
-            throw new RuntimeException('Client is required before this order can be imported.');
+            throw new RuntimeException('Client ID is required before this order can be imported.');
         }
         if (blank($row['workflow_resolved_id'] ?? null) || blank($row['workflow_phase_id'] ?? null)) {
             throw new RuntimeException('An Order workflow must be resolved before this order can be imported.');
         }
 
+        $items = [];
+        if (filled($row['product_resolved_id'] ?? null)) {
+            $items[] = [
+                'product_id' => (int) $row['product_resolved_id'],
+                'product' => $row['product_resolved_name'],
+                'category' => $row['product_resolved_category'],
+                'quantity' => max(1, (int) ($row['product_quantity_resolved'] ?? 1)),
+                'notes' => null,
+            ];
+        }
+
         return app(JobService::class)->create([
-            'order_number' => $row['ref'],
+            'order_number' => blank($row['ref']) ? null : $row['ref'],
+            'is_repeat_order' => (bool) ($row['is_repeat_resolved'] ?? false),
+            'repeat_order_number' => ($row['is_repeat_resolved'] ?? false) ? $row['repeat_order_no'] : null,
             'client_id' => $row['client_resolved_id'],
             'workflow_id' => $row['workflow_resolved_id'],
             'workflow_phase_id' => $row['workflow_phase_id'],
             'owner_id' => $actor->id,
             'coordinator_id' => $actor->id,
             'title' => $row['title'],
-            'product' => null,
-            'category' => null,
-            'quantity' => 0,
-            'items' => [],
-            'delivery_date' => $row['delivery_normalized'],
+            'product' => $row['product_resolved_name'] ?? null,
+            'category' => $row['product_resolved_category'] ?? null,
+            'quantity' => (int) ($row['product_quantity_resolved'] ?? 0),
+            'items' => $items,
+            'delivery_date' => $row['customer_delivery_normalized'],
+            'estimated_delivery_date' => $row['estimated_delivery_normalized'],
             'priority' => $row['priority_resolved'],
-            'description' => $row['description'],
-            'received_date' => $row['received_normalized'],
-            'supplier_id' => $row['supplier_resolved_id'],
-            'warehouse' => blank($row['warehouse']) ? null : $row['warehouse'],
-            'supplier_instruction' => blank($row['supplier_instruction']) ? null : $row['supplier_instruction'],
-            'source_row_id' => blank($row['source_id']) ? null : $row['source_id'],
+            'production_urgency_ids' => $row['production_urgency_ids'],
+            'shipment_urgency_ids' => $row['shipment_urgency_ids'],
+            'description' => blank($row['description']) ? null : $row['description'],
+            'notes' => blank($row['notes']) ? null : $row['notes'],
+            'received_date' => null,
+            'supplier_id' => null,
+            'warehouse' => null,
+            'supplier_instruction' => null,
+            'source_row_id' => null,
             'import_profile' => $row['import_profile_resolved'] ?? null,
             'bulk_import_id' => $importNumber,
             'draft' => false,
@@ -424,20 +447,37 @@ class BulkOrderImportService
 
         DB::transaction(function () use ($job, $row, $actor, $importNumber): void {
             $job->update([
-                'order_number' => $row['ref'],
+                'order_number' => blank($row['ref']) ? null : $row['ref'],
+                'is_repeat_order' => (bool) ($row['is_repeat_resolved'] ?? false),
+                'repeat_order_number' => ($row['is_repeat_resolved'] ?? false) ? $row['repeat_order_no'] : null,
                 'client_id' => $row['client_resolved_id'],
                 'title' => $row['title'],
+                'product' => $row['product_resolved_name'] ?? null,
+                'category' => $row['product_resolved_category'] ?? null,
+                'quantity' => (int) ($row['product_quantity_resolved'] ?? 0),
                 'priority' => $row['priority_resolved'],
-                'delivery_date' => $row['delivery_normalized'],
+                'production_urgency_ids' => $row['production_urgency_ids'],
+                'shipment_urgency_ids' => $row['shipment_urgency_ids'],
+                'delivery_date' => $row['customer_delivery_normalized'],
+                'estimated_delivery_date' => $row['estimated_delivery_normalized'],
                 'description' => app(RichTextService::class)->normalize($row['description'], 10000, 'description'),
-                'received_date' => $row['received_normalized'],
-                'supplier_id' => $row['supplier_resolved_id'],
-                'warehouse' => blank($row['warehouse']) ? null : $row['warehouse'],
-                'supplier_instruction' => blank($row['supplier_instruction']) ? null : $row['supplier_instruction'],
-                'source_row_id' => blank($row['source_id']) ? $job->source_row_id : $row['source_id'],
+                'notes' => blank($row['notes']) ? null : trim((string) $row['notes']),
                 'import_profile' => $row['import_profile_resolved'] ?? null,
                 'bulk_import_id' => $importNumber,
             ]);
+
+            $job->items()->delete();
+            if (filled($row['product_resolved_id'] ?? null)) {
+                $job->items()->create([
+                    'product_name' => $row['product_resolved_name'],
+                    'category_name' => $row['product_resolved_category'],
+                    'quantity' => max(1, (int) ($row['product_quantity_resolved'] ?? 1)),
+                    'unit_price' => 0,
+                    'notes' => null,
+                    'updated_by' => $actor->id,
+                    'sort_order' => 0,
+                ]);
+            }
 
             $job->activities()->create([
                 'user_id' => $actor->id,
@@ -454,26 +494,6 @@ class BulkOrderImportService
         $policy = strtolower(trim((string) ($config['duplicate_policy'] ?? 'skip')));
         if (!in_array($policy, ['skip', 'update', 'separate'], true)) throw new RuntimeException('Invalid duplicate reference policy.');
 
-        $defaultClient = null;
-        if (filled($config['default_client_id'] ?? null)) {
-            $defaultClient = app(ClientService::class)->visibleQuery($actor)
-                ->where('is_active', true)
-                ->whereKey((int) $config['default_client_id'])
-                ->first();
-            if (!$defaultClient) throw new RuntimeException('The selected default client is not available.');
-        }
-
-        $defaultSupplier = null;
-        if (filled($config['default_supplier_id'] ?? null)) {
-            $defaultSupplier = MasterRecord::query()
-                ->forWorkspace(app(SetupContext::class)->workspaceId())
-                ->ofType('supplier')
-                ->active()
-                ->whereKey((int) $config['default_supplier_id'])
-                ->first();
-            if (!$defaultSupplier) throw new RuntimeException('The selected default supplier is not available.');
-        }
-
         $manualWorkflows = [];
         foreach (($config['manual_workflows'] ?? []) as $rowNumber => $workflowId) {
             if (!is_numeric($rowNumber) || !filled($workflowId) || !is_numeric($workflowId)) continue;
@@ -482,8 +502,6 @@ class BulkOrderImportService
 
         return [
             'duplicate_policy' => $policy,
-            'default_client' => $defaultClient,
-            'default_supplier' => $defaultSupplier,
             'manual_workflows' => $manualWorkflows,
         ];
     }
@@ -568,29 +586,69 @@ class BulkOrderImportService
         return $maps['by_name'][mb_strtolower($value)] ?? null;
     }
 
-    /** @return array{by_id:array<int,MasterRecord>,by_code:array<string,MasterRecord>,by_name:array<string,MasterRecord>} */
-    private function supplierMaps(): array
+    /** @return array{by_id:array<int,MasterRecord>,by_code:array<string,MasterRecord>,by_display:array<string,MasterRecord>,by_reference:array<string,MasterRecord>} */
+    private function productMaps(): array
     {
-        $suppliers = MasterRecord::query()
-            ->forWorkspace(app(SetupContext::class)->workspaceId())
-            ->ofType('supplier')
-            ->active()
-            ->get(['id', 'code', 'name']);
+        $products = app(ProductCatalogService::class)->activeProductsQuery()
+            ->with('parent:id,type,name,status')
+            ->get(['id', 'type', 'parent_id', 'code', 'name', 'metadata', 'status']);
+
+        $byReference = [];
+        foreach ($products as $product) {
+            $reference = strtoupper(trim($product->productReferenceCode()));
+            if ($reference !== '') $byReference[$reference] = $product;
+        }
+
         return [
-            'by_id' => $suppliers->keyBy('id')->all(),
-            'by_code' => $suppliers->keyBy(fn ($supplier) => strtoupper(trim((string) $supplier->code)))->all(),
-            'by_name' => $suppliers->keyBy(fn ($supplier) => mb_strtolower(trim((string) $supplier->name)))->all(),
+            'by_id' => $products->keyBy('id')->all(),
+            'by_code' => $products->filter(fn ($product) => filled($product->code))->keyBy(fn ($product) => strtoupper(trim((string) $product->code)))->all(),
+            'by_display' => $products->keyBy(fn ($product) => strtoupper($product->productDisplayCode()))->all(),
+            'by_reference' => $byReference,
         ];
     }
 
-    private function lookupSupplier(string $value, array $maps): ?MasterRecord
+    private function lookupProduct(string $value, array $maps): ?MasterRecord
     {
+        $value = trim($value);
+        if ($value === '') return null;
         if (ctype_digit($value) && isset($maps['by_id'][(int) $value])) return $maps['by_id'][(int) $value];
-        $code = strtoupper($value);
-        if (isset($maps['by_code'][$code])) return $maps['by_code'][$code];
-        $prefixed = str_starts_with($code, 'SUP-') ? $code : 'SUP-'.$code;
-        if (isset($maps['by_code'][$prefixed])) return $maps['by_code'][$prefixed];
-        return $maps['by_name'][mb_strtolower($value)] ?? null;
+
+        $key = strtoupper($value);
+        return $maps['by_display'][$key]
+            ?? $maps['by_code'][$key]
+            ?? $maps['by_reference'][$key]
+            ?? null;
+    }
+
+    /** @return array<string,MasterRecord> */
+    private function urgencyMap(string $type): array
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType($type)
+            ->active()
+            ->get(['id', 'code', 'name'])
+            ->keyBy(fn (MasterRecord $record) => mb_strtolower(trim((string) $record->name)))
+            ->all();
+    }
+
+    /** @return array{label:string,id:?int,error:?string} */
+    private function resolveUrgency(string $value, array $map): array
+    {
+        $normalized = mb_strtolower(trim(preg_replace('/\s+/', ' ', str_replace(['-', '_'], ' ', $value)) ?? $value));
+        if ($normalized === '' || $normalized === 'normal') return ['label' => 'Normal', 'id' => null, 'error' => null];
+
+        $labels = ['urgent' => 'Urgent', 'super urgent' => 'Super Urgent'];
+        if (!isset($labels[$normalized])) {
+            return ['label' => trim($value), 'id' => null, 'error' => 'must be Normal, Urgent or Super Urgent'];
+        }
+
+        $record = $map[$normalized] ?? null;
+        if (!$record) {
+            return ['label' => $labels[$normalized], 'id' => null, 'error' => $labels[$normalized].' is not active in Master Data'];
+        }
+
+        return ['label' => $labels[$normalized], 'id' => (int) $record->id, 'error' => null];
     }
 
     private function workflowTemplates(): Collection
@@ -727,7 +785,7 @@ class BulkOrderImportService
     {
         return collect($row)->except([
             'errors', 'warnings', 'status', 'existing_job_id',
-            'client_resolved_label', 'supplier_resolved_label', 'workflow_resolved_label',
+            'client_resolved_label', 'workflow_resolved_label',
             'workflow_options', 'workflow_requires_selection', 'workflow_manual_selected_id', 'workflow_selection_source',
         ])->all();
     }

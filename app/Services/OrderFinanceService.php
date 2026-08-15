@@ -6,7 +6,6 @@ use App\Models\ClientContact;
 use App\Models\CollectionUpdate;
 use App\Models\FlowJob;
 use App\Models\Invoice;
-use App\Models\MasterRecord;
 use App\Models\OrderCollection;
 use App\Models\Payment;
 use App\Models\User;
@@ -88,6 +87,7 @@ class OrderFinanceService
     ): Invoice {
         return DB::transaction(function () use ($job, $actor, $payload, $items, $supportingDocument, $draft): Invoice {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $lockedJob->loadMissing('client');
             $sequence = ((int) Invoice::query()->where('flow_job_id', $job->id)->max('sequence')) + 1;
             $number = $this->invoiceNumber($lockedJob, $sequence);
 
@@ -102,14 +102,10 @@ class OrderFinanceService
             $taxRate = max(0, min(100, (float) ($payload['tax_rate'] ?? 0)));
             $taxAmount = round($subtotal * ($taxRate / 100), 2);
             $grossTotal = round($subtotal + $taxAmount, 2);
-            $previouslyInvoiced = (float) Invoice::query()
-                ->where('flow_job_id', $lockedJob->id)
-                ->whereNotIn('status', ['draft', 'cancelled'])
-                ->sum('total');
-            $total = $this->isFinalInvoiceType((string) ($payload['type'] ?? ''))
-                ? round(max(0, $grossTotal - $previouslyInvoiced), 2)
-                : $grossTotal;
-            abort_if($total <= 0, 422, 'There is no remaining amount to invoice for this order.');
+            // Every invoice is its own financial document. Earlier invoices for the
+            // same order and recorded payments must never reduce this invoice total.
+            $total = $grossTotal;
+            abort_if($total <= 0, 422, 'The invoice total must be greater than zero.');
 
             $invoice = Invoice::create([
                 'flow_job_id' => $lockedJob->id,
@@ -124,10 +120,12 @@ class OrderFinanceService
                 'billing_contact_email' => $contact?->email ?: ($lockedJob->client?->email ?? null),
                 'purchase_order_reference' => $payload['purchase_order_reference'] ?: null,
                 'notes' => $payload['notes'] ?: null,
+                'company_snapshot' => app(CompanyProfileService::class)->invoiceSnapshot(),
+                'client_snapshot' => app(ClientInvoiceProfileService::class)->invoiceSnapshot($lockedJob->client),
                 'subtotal' => $subtotal,
                 'tax_rate' => $taxRate,
                 'tax_amount' => $taxAmount,
-                'previously_invoiced' => $previouslyInvoiced,
+                'previously_invoiced' => 0, // Legacy compatibility only; never used in totals.
                 'total' => $total,
                 'status' => $draft ? 'draft' : 'sent',
                 'sent_at' => $draft ? null : now(),
@@ -158,25 +156,6 @@ class OrderFinanceService
 
             return $invoice->load(['items', 'payments', 'billingContact']);
         }, 3);
-    }
-
-    private function isFinalInvoiceType(string $type): bool
-    {
-        $type = trim($type);
-        if ($type === '') return false;
-
-        $record = MasterRecord::query()
-            ->forWorkspace(app(MasterDataService::class)->workspaceId())
-            ->ofType('invoice_type')
-            ->active()
-            ->where('name', $type)
-            ->first(['code', 'name', 'metadata']);
-
-        if (!$record) return strcasecmp($type, 'Final invoice') === 0;
-
-        return strtolower(trim((string) data_get($record->metadata, 'invoice_kind'))) === 'final'
-            || str_contains(strtoupper((string) $record->code), 'FINAL')
-            || strcasecmp((string) $record->name, 'Final invoice') === 0;
     }
 
     public function recordPayment(FlowJob $job, User $actor, array $payload, ?UploadedFile $receipt = null): Payment

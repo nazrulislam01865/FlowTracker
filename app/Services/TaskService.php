@@ -102,7 +102,7 @@ class TaskService
         $task->update(['due_date' => $new]);
         $this->record($task, $actor, 'task.due_date_updated', $this->changeDescription('Due date', $old, $new));
 
-        return $task->refresh();
+        return app(OrderTaskFlagService::class)->syncTask($task->refresh());
     }
 
     public function updateDetailField(Task $task, string $field, mixed $value, User $actor): Task
@@ -176,6 +176,7 @@ class TaskService
             'mention_text' => $field === 'description' ? (string) $new : null,
         ]);
 
+        $task = app(OrderTaskFlagService::class)->syncTask($task->refresh());
         $this->refreshJobState($task, $actor);
         return $task->refresh();
     }
@@ -185,59 +186,33 @@ class TaskService
         $assignmentChanged = array_key_exists('assignee_id', $data) && (int) ($data['assignee_id'] ?: 0) !== (int) ($task->assignee_id ?: 0);
         if ($assignmentChanged) abort_unless(app(AccessControlService::class)->canAssignTask($actor, $task), 403);
         $this->assertEditable($task, $actor);
+
         $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
         $assigneeId = array_key_exists('assignee_id', $data) ? ($data['assignee_id'] ?: null) : $task->assignee_id;
-        $reasonWasProvided = array_key_exists('attention_reason', $data);
-        $originalReason = trim((string) ($task->attention_reason ?? ''));
-        $reason = trim((string) ($data['attention_reason'] ?? $originalReason));
-        $status = (string) ($data['status'] ?? $task->status);
-        $needsAttention = (bool) ($data['needs_attention'] ?? $task->needs_attention);
-        $taskFlagId = $task->task_flag_id;
+        $status = trim((string) ($data['status'] ?? $task->status));
+        abort_if($status === '', 422, 'Task status is required.');
 
-        // Task attention is backed by Master Data. Keep the foreign key as the
-        // source of truth so a Task Flag rename is reflected everywhere instead
-        // of leaving stale free-text labels on My Work / Orders / All Tasks.
-        if ($needsAttention) {
-            $flagService = app(TaskFlagService::class);
-            $assignedFlag = $taskFlagId ? $task->attentionFlag()->first() : null;
-            $callerChangedFlag = $reasonWasProvided
-                && $reason !== ''
-                && strcasecmp($reason, $originalReason) !== 0
-                && (!$assignedFlag || strcasecmp($reason, trim((string) $assignedFlag->name)) !== 0);
-
-            if ($assignedFlag && !$callerChangedFlag) {
-                // A stale Livewire form can still contain the pre-rename text.
-                // Do not let that overwrite the Master Data relationship.
-                $reason = trim((string) $assignedFlag->name);
-                $taskFlagId = $assignedFlag->id;
-            } else {
-                $resolvedFlag = $reason !== '' ? $flagService->requireActive($reason) : $flagService->defaultActive();
-                if ($resolvedFlag) {
-                    $taskFlagId = $resolvedFlag->id;
-                    $reason = trim((string) $resolvedFlag->name);
-                } elseif ($reason === '') {
-                    // Compatibility fallback for an installation where Task
-                    // Flags have not been seeded yet.
-                    $taskFlagId = null;
-                    $reason = 'Management attention';
-                }
-            }
-        } else {
-            $taskFlagId = null;
-            $reason = '';
-        }
+        $statusRecord = app(OrderTaskFlagService::class)->statusRecord($status, false);
+        if ($statusRecord) $status = (string) $statusRecord->name;
 
         if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
 
-        $task->update([
+        $updates = [
             'status' => $status,
+            'order_task_status_id' => $statusRecord?->id,
             'assignee_id' => $assigneeId,
             'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : (int) ($data['progress'] ?? $task->progress)),
-            'needs_attention' => $needsAttention,
-            'task_flag_id' => $taskFlagId,
-            'attention_reason' => $reason !== '' ? $reason : null,
             'completed_at' => BoardLaneResolver::isCompleted($status) ? ($task->completed_at ?: now()) : null,
-        ]);
+        ];
+
+        // attention_reason is an explanation only. The flag itself is never
+        // chosen manually; it is derived from Order Task Status / due date.
+        if (array_key_exists('attention_reason', $data)) {
+            $reason = trim((string) $data['attention_reason']);
+            $updates['attention_reason'] = $reason !== '' ? $reason : null;
+        }
+
+        $task->update($updates);
 
         if ($assigneeId) {
             FlowJobMember::firstOrCreate(
@@ -246,7 +221,8 @@ class TaskService
             );
         }
 
-        $after = $task->fresh()->only(['status','assignee_id','progress','needs_attention','attention_reason']);
+        $task = app(OrderTaskFlagService::class)->syncTask($task->refresh());
+        $after = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
         $changes = [];
         foreach ($after as $key => $value) {
             if (($before[$key] ?? null) != $value) $changes[$key] = ['old' => $before[$key] ?? null, 'new' => $value];
@@ -261,7 +237,7 @@ class TaskService
                     $change['new'] = User::find($change['new'])?->name ?? 'Unassigned';
                 }
                 if ($key === 'needs_attention') {
-                    $label = 'Management attention';
+                    $label = 'Automatic flag';
                     $change['old'] = $change['old'] ? 'Flagged' : 'Not flagged';
                     $change['new'] = $change['new'] ? 'Flagged' : 'Not flagged';
                 }
@@ -270,7 +246,6 @@ class TaskService
             $this->record($task, $actor, 'task.updated', implode(' · ', $parts), ['changes' => $changes]);
         }
 
-        $this->syncJobAttention($task);
         $this->refreshJobState($task, $actor);
 
         return $task->refresh();
@@ -332,52 +307,14 @@ class TaskService
     {
         $this->assertEditable($task, $actor);
 
-        $flag = trim((string) $flag);
-        $flagService = app(TaskFlagService::class);
-        $task->loadMissing('attentionFlag:id,name,status,sort_order');
-        $oldFlag = $flagService->labelForTask($task);
-
-        // If the task already carries a legacy/inactive value, selecting that
-        // same value is a no-op. Any new assignment must come from active
-        // Master Data so list pages cannot drift away from the configured flags.
-        if ($flag !== '' && $task->task_flag_id && $oldFlag !== null && strcasecmp($oldFlag, $flag) === 0) {
-            return $task->refresh();
-        }
-
-        $masterFlag = $flag !== '' ? $flagService->requireActive($flag) : null;
-        $newFlag = $masterFlag?->name;
-
-        if ($oldFlag === $newFlag) return $task->refresh();
-
-        $task->update([
-            'needs_attention' => $masterFlag !== null,
-            'task_flag_id' => $masterFlag?->id,
-            'attention_reason' => $newFlag,
-        ]);
-
-        $this->record(
-            $task,
-            $actor,
-            'task.attention_updated',
-            $this->changeDescription('Task flag', $oldFlag ?: 'Not flagged', $newFlag ?: 'Not flagged'),
-            ['old_flag' => $oldFlag, 'new_flag' => $newFlag],
-        );
-
-        $this->syncJobAttention($task);
-
-        return $task->refresh();
+        // Order Task Flags are automatic. Keep this compatibility method so
+        // stale Livewire requests cannot corrupt the new status-driven mapping.
+        return app(OrderTaskFlagService::class)->syncTask($task->refresh());
     }
 
     public function syncJobAttention(Task $task): void
     {
-        $job = $task->job()->first();
-        if (!$job) return;
-        $hasFlaggedTask = $job->tasks()->where('needs_attention', true)->exists();
-        if ($hasFlaggedTask && !$job->needs_attention) {
-            $job->update(['needs_attention' => true]);
-        } elseif (!$hasFlaggedTask && $job->needs_attention) {
-            $job->update(['needs_attention' => false]);
-        }
+        app(OrderTaskFlagService::class)->syncJob($task->job()->first());
     }
 
 

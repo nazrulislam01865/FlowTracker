@@ -177,13 +177,25 @@ class Index extends Component
 
     public function updatedSearch(): void
     {
-        $this->clearMetricFilter();
+        // Inquiry list filters are mutually exclusive. Typing a search becomes
+        // the only active filter and clears every other filter/card shortcut.
+        if (trim($this->search) !== '') {
+            $this->clearListFiltersExcept('search');
+        } else {
+            $this->clearMetricFilter();
+        }
+
         $this->resetPage('inquiryPage');
     }
 
     public function updatedListClient(): void
     {
-        $this->clearMetricFilter();
+        if ($this->listClient !== '') {
+            $this->clearListFiltersExcept('client');
+        } else {
+            $this->clearMetricFilter();
+        }
+
         $this->resetPage('inquiryPage');
     }
 
@@ -196,10 +208,12 @@ class Index extends Component
             'Invalid task status filter.'
         );
 
-        // Summary cards are intentionally exclusive from the toolbar filters.
-        // Search / attention / task status / client / hide-completed may be
-        // combined with each other, but choosing one of them clears a card.
-        $this->clearMetricFilter();
+        if ($this->listStatus !== '') {
+            $this->clearListFiltersExcept('status');
+        } else {
+            $this->clearMetricFilter();
+        }
+
         $this->resetPage('inquiryPage');
     }
 
@@ -224,15 +238,21 @@ class Index extends Component
             ->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
         abort_unless($selected, 422, 'That client is no longer available.');
 
+        // Client becomes the only active Inquiry list filter.
+        $this->clearListFiltersExcept('client');
         $this->listClient = (string) $id;
         $this->listClientLabel = (string) ($selected['label'] ?? '');
-        $this->clearMetricFilter();
         $this->resetPage('inquiryPage');
     }
 
     public function updatedHideCompleted(): void
     {
-        $this->clearMetricFilter();
+        if ($this->hideCompleted) {
+            $this->clearListFiltersExcept('hideCompleted');
+        } else {
+            $this->clearMetricFilter();
+        }
+
         $this->resetPage('inquiryPage');
     }
 
@@ -242,16 +262,12 @@ class Index extends Component
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
 
         if ($quick === 'all') {
-            // "All" is the toolbar reset state. It clears every toolbar filter
-            // and any active summary card so the full visible Inquiry scope is
-            // shown again.
             $this->clearToolbarFilters();
             $this->metricFilter = '';
         } else {
-            // Toolbar filters may be combined with each other, but never with a
-            // KPI/summary-card filter.
+            // Attention becomes the only active Inquiry list filter.
+            $this->clearListFiltersExcept('quick');
             $this->quick = $quick;
-            $this->clearMetricFilter();
         }
 
         $this->resetPage('inquiryPage');
@@ -264,16 +280,46 @@ class Index extends Component
 
         $nextMetric = $this->metricFilter === $metric ? '' : $metric;
 
-        // A summary card is a standalone shortcut. Clear toolbar filters before
-        // activating it so the card result always matches the number printed on
-        // the card and no hidden filter remains applied.
+        // Summary cards are also exclusive filters. Selecting one clears the
+        // search and every toolbar filter so the card count always matches.
         $this->clearToolbarFilters();
         $this->metricFilter = $nextMetric;
         $this->resetPage('inquiryPage');
     }
 
+    public function clearFilters(): void
+    {
+        abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
+
+        $this->clearToolbarFilters();
+        $this->metricFilter = '';
+        $this->resetPage('inquiryPage');
+    }
+
     private function clearMetricFilter(): void
     {
+        $this->metricFilter = '';
+    }
+
+    private function clearListFiltersExcept(string $except): void
+    {
+        if ($except !== 'search') {
+            $this->search = '';
+        }
+        if ($except !== 'quick') {
+            $this->quick = 'all';
+        }
+        if ($except !== 'client') {
+            $this->listClient = '';
+            $this->listClientLabel = '';
+        }
+        if ($except !== 'status') {
+            $this->listStatus = '';
+        }
+        if ($except !== 'hideCompleted') {
+            $this->hideCompleted = false;
+        }
+
         $this->metricFilter = '';
     }
 

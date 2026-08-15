@@ -1,0 +1,76 @@
+/* Task Details attachments: use the same compact document rows as Order Taskflow. */
+.ft-exact-task-detail .ft-attachment-card{overflow:hidden}
+.ft-exact-task-detail .ft-task-attachment-list{
+    margin-top:10px;
+    overflow:hidden;
+    border:1px solid #e3e9f0;
+    border-radius:8px;
+    background:#fff;
+}
+.ft-exact-task-detail .ft-task-detail-document-row{
+    min-height:42px;
+    grid-template-columns:32px minmax(0,1fr) auto;
+    gap:9px;
+    padding:6px 8px;
+    border-top:1px solid #e8edf3;
+    background:#fff;
+}
+.ft-exact-task-detail .ft-task-detail-document-row:first-child{border-top:0}
+.ft-exact-task-detail .ft-task-detail-document-row:hover{background:#fbfdff}
+.ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-copy b{
+    color:#132640;
+    font-size:9.5px;
+    font-weight:750;
+}
+.ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-copy small{
+    margin-top:2px;
+    color:#718197;
+    font-size:7.75px;
+    line-height:1.35;
+}
+.ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-actions{gap:12px}
+.ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-actions a{
+    font-size:8.5px;
+    font-weight:750;
+}
+.ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-actions button{
+    width:25px;
+    height:25px;
+    margin:0;
+    border:1px solid #f0b3b0;
+    border-radius:6px;
+    background:#fff;
+    color:#d52f27;
+    font-size:15px;
+    line-height:1;
+}
+.ft-exact-task-detail .ft-upload-note{
+    margin:9px 0 0;
+    color:#667a93;
+    font-size:8.5px;
+    line-height:1.45;
+}
+@media(max-width:700px){
+    .ft-exact-task-detail .ft-task-detail-document-row{
+        grid-template-columns:30px minmax(0,1fr);
+        gap:7px 8px;
+        align-items:start;
+        padding:8px;
+    }
+    .ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-copy b,
+    .ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-copy small,
+    .ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-note{
+        max-width:100%;
+        white-space:normal;
+        overflow-wrap:anywhere;
+        word-break:break-word;
+    }
+    .ft-exact-task-detail .ft-task-detail-document-row .ft-order-task-file-actions{
+        grid-column:2;
+        width:100%;
+        justify-content:flex-start;
+        flex-wrap:wrap;
+        gap:10px;
+        white-space:normal;
+    }
+}

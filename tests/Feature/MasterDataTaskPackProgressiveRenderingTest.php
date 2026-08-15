@@ -51,13 +51,19 @@ class MasterDataTaskPackProgressiveRenderingTest extends TestCase
         $this->assertStringNotContainsString('wire:model="tasks.{{ $index }}.default_assignee_id"', $view);
     }
 
-    public function test_workflow_only_loads_shared_phase_options_when_its_modal_is_open(): void
+    public function test_workflow_only_loads_task_pack_options_when_its_phase_modal_is_open(): void
     {
         $component = file_get_contents(app_path('Livewire/WorkflowSetup/Index.php'));
+        $view = file_get_contents(resource_path('views/livewire/workflow-setup/index.blade.php'));
 
         $this->assertStringContainsString("'taskPacks' => \$this->showPhaseModal", $component);
-        $this->assertStringContainsString("'documentCategories' => \$this->showPhaseModal", $component);
-        $this->assertStringContainsString("active('document_category')", $component);
+        $this->assertStringNotContainsString("'documentCategories' => \$this->showPhaseModal", $component);
+        $this->assertStringNotContainsString("active('document_category')", $component);
         $this->assertStringNotContainsString('MasterRecord::', $component);
+        $this->assertStringNotContainsString('Required document', $view);
+        $this->assertStringNotContainsString('wire:model="allowJobStart"', $view);
+        $this->assertStringNotContainsString('wire:model="isSkippable"', $view);
+        $this->assertStringNotContainsString('wire:model="autoAdvanceOnReady"', $view);
+        $this->assertStringContainsString('wire:model="phaseActive"', $view);
     }
 }

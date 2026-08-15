@@ -136,7 +136,163 @@
                 .ft-orders-prototype .ft-list-footer>nav.ft-page-buttons>.ft-page-button{min-height:36px;font-size:9px}
                 .ft-orders-prototype .ft-page-number{width:32px;min-width:32px;height:36px}
             }
-            @media(prefers-reduced-motion:reduce){.ft-orders-prototype *,.ft-orders-prototype *::before,.ft-orders-prototype *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
+
+
+            /* 2026-08-15: final phone card refinement. Keep the mobile Order list
+               compact, predictable and consistent with the Inquiry card hierarchy. */
+            .ft-orders-prototype .ft-view-label-mobile,.ft-orders-prototype .ft-view-arrow{display:none}
+            @media(max-width:680px){
+                .ft-orders-prototype .ft-order-table-scroll{overflow:visible}
+                .ft-orders-prototype .ft-job-list{
+                    display:grid;
+                    gap:8px;
+                    padding:8px;
+                    background:#f8fafc;
+                }
+                .ft-orders-prototype .ft-job-row,
+                .ft-orders-prototype .ft-job-row.ft-client-row-iid,
+                .ft-orders-prototype .ft-job-row.ft-client-row-nep{
+                    position:relative;
+                    display:grid;
+                    grid-template-columns:repeat(6,minmax(0,1fr));
+                    grid-template-areas:
+                        "identity identity identity identity identity identity"
+                        "created created created inquiry inquiry inquiry"
+                        "brief brief brief brief brief brief"
+                        "stage stage health health flag flag"
+                        "owner owner owner owner owner owner"
+                        "progress progress progress progress progress progress"
+                        "view view view view view view";
+                    width:100%;
+                    min-width:0;
+                    min-height:0;
+                    margin:0;
+                    padding:12px;
+                    gap:10px 8px;
+                    overflow:visible;
+                    border:1px solid #dce5ef;
+                    border-radius:14px;
+                    box-shadow:none;
+                    content-visibility:visible;
+                    contain-intrinsic-size:auto;
+                }
+                .ft-orders-prototype .ft-job-row:last-child{border-bottom:1px solid #dce5ef}
+                .ft-orders-prototype .ft-job-row .ft-cell{min-width:0}
+                .ft-orders-prototype .ft-job-row .ft-cell::before{
+                    margin:0 0 4px;
+                    color:#7d8ca2;
+                    font-size:7.4px;
+                    font-weight:800;
+                    letter-spacing:.075em;
+                    line-height:1;
+                }
+                .ft-orders-prototype .ft-identity{grid-area:identity;padding-right:42px}
+                .ft-orders-prototype .ft-created-cell{grid-area:created}
+                .ft-orders-prototype .ft-inquiry-cell{grid-area:inquiry}
+                .ft-orders-prototype .ft-brief{
+                    grid-area:brief;
+                    padding:9px 10px;
+                    border:1px solid rgba(207,218,233,.82);
+                    border-radius:10px;
+                    background:rgba(255,255,255,.66);
+                }
+                .ft-orders-prototype .ft-stage-cell{grid-area:stage}
+                .ft-orders-prototype .ft-health-cell{grid-area:health}
+                .ft-orders-prototype .ft-flag-cell{grid-area:flag}
+                .ft-orders-prototype .ft-owner-cell{
+                    grid-area:owner;
+                    padding-top:9px;
+                    border-top:1px solid rgba(219,227,237,.92);
+                }
+                .ft-orders-prototype .ft-progress-cell{
+                    grid-area:progress;
+                    width:100%;
+                    max-width:none;
+                    justify-self:stretch;
+                    gap:8px;
+                    padding-top:1px;
+                }
+                .ft-orders-prototype .ft-progress-track{width:auto;max-width:none;flex:1;height:5px}
+                .ft-orders-prototype .ft-row-actions{
+                    position:absolute;
+                    grid-area:auto;
+                    top:10px;
+                    right:10px;
+                    z-index:4;
+                    display:flex;
+                    width:32px;
+                    height:32px;
+                    align-items:center;
+                    justify-content:center;
+                }
+                .ft-orders-prototype .ft-row-actions::before{display:none!important}
+                .ft-orders-prototype .ft-row-action-trigger{
+                    width:32px;
+                    height:32px;
+                    border:1px solid #dbe3ed;
+                    border-radius:9px;
+                    background:rgba(255,255,255,.9);
+                    color:#31445f;
+                    font-size:16px;
+                    box-shadow:none;
+                }
+                .ft-orders-prototype .ft-view{
+                    position:static;
+                    grid-area:view;
+                    display:inline-flex;
+                    width:auto;
+                    height:auto;
+                    min-height:25px;
+                    justify-self:end;
+                    align-items:center;
+                    justify-content:center;
+                    gap:3px;
+                    padding:5px 8px;
+                    border:1px solid #ccdcfb;
+                    border-radius:7px;
+                    background:#f4f7ff;
+                    color:#155ce9;
+                    font-size:8.5px;
+                    font-weight:650;
+                    line-height:1;
+                    text-decoration:none;
+                    box-shadow:none;
+                }
+                .ft-orders-prototype .ft-view:hover{background:#eaf1ff;border-color:#bdd2fa}
+                .ft-orders-prototype .ft-view:focus-visible{outline:2px solid rgba(21,92,233,.17);outline-offset:2px}
+                .ft-orders-prototype .ft-view-label-desktop{display:none}
+                .ft-orders-prototype .ft-view-label-mobile,.ft-orders-prototype .ft-view-arrow{display:inline}
+                .ft-orders-prototype .ft-view-arrow{font-size:10px;font-weight:600;line-height:1}
+                .ft-orders-prototype .ft-id{font-size:12.5px;font-weight:800;line-height:1.18}
+                .ft-orders-prototype .ft-sub{margin-top:2px;font-size:9.3px;line-height:1.25}
+                .ft-orders-prototype .ft-created-name,.ft-orders-prototype .ft-client,.ft-orders-prototype .ft-owner-name{font-size:10.5px;line-height:1.25}
+                .ft-orders-prototype .ft-created-on,.ft-orders-prototype .ft-product,.ft-orders-prototype .ft-product-detail,.ft-orders-prototype .ft-due,.ft-orders-prototype .ft-progress,.ft-orders-prototype .ft-standard-empty{font-size:9px;line-height:1.3}
+                .ft-orders-prototype .ft-product-detail{margin-top:2px}
+                .ft-orders-prototype .ft-job-client-logo-line{gap:6px}
+                .ft-orders-prototype .ft-pill{max-width:100%;padding:4px 6px;border-radius:8px;font-size:8.2px;font-weight:750;line-height:1.15}
+                .ft-orders-prototype .ft-stage-cell,.ft-orders-prototype .ft-health-cell,.ft-orders-prototype .ft-flag-cell{min-width:0;align-self:start}
+                .ft-orders-prototype .ft-stage-cell .ft-pill,.ft-orders-prototype .ft-health-cell .ft-pill,.ft-orders-prototype .ft-flag-cell .ft-pill{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+                .ft-orders-prototype .ft-owner{gap:7px}
+                .ft-orders-prototype .ft-order-avatar{width:28px;height:28px;flex-basis:28px;font-size:9px}
+            }
+            @media(max-width:430px){
+                .ft-orders-prototype .ft-job-list{gap:7px;padding:6px 4px}
+                .ft-orders-prototype .ft-job-row,
+                .ft-orders-prototype .ft-job-row.ft-client-row-iid,
+                .ft-orders-prototype .ft-job-row.ft-client-row-nep{padding:11px 10px;gap:9px 7px;border-radius:13px}
+                .ft-orders-prototype .ft-identity{padding-right:39px}
+                .ft-orders-prototype .ft-row-actions{top:9px;right:9px;width:30px;height:30px}
+                .ft-orders-prototype .ft-row-action-trigger{width:30px;height:30px;border-radius:8px;font-size:15px}
+                .ft-orders-prototype .ft-brief{padding:8px 9px}
+                .ft-orders-prototype .ft-view{min-height:23px;padding:4px 7px;font-size:8px}
+                .ft-orders-prototype .ft-view-arrow{font-size:9.5px}
+                .ft-orders-prototype .ft-id{font-size:12px}
+                .ft-orders-prototype .ft-created-name,.ft-orders-prototype .ft-client,.ft-orders-prototype .ft-owner-name{font-size:10px}
+                .ft-orders-prototype .ft-created-on,.ft-orders-prototype .ft-product,.ft-orders-prototype .ft-product-detail,.ft-orders-prototype .ft-due,.ft-orders-prototype .ft-progress,.ft-orders-prototype .ft-standard-empty{font-size:8.7px}
+                .ft-orders-prototype .ft-pill{font-size:7.9px;padding:3.5px 5.5px}
+            }
+
+                        @media(prefers-reduced-motion:reduce){.ft-orders-prototype *,.ft-orders-prototype *::before,.ft-orders-prototype *::after{scroll-behavior:auto!important;animation:none!important;transition:none!important}}
 
             /* Client-specific row tones: IID = light green, NEP = light blue. */
             .ft-orders-prototype .ft-job-row.ft-client-row-iid,
@@ -251,15 +407,13 @@
                         : collect([(object)['product_name'=>$job->product ?: 'Product','quantity'=>(int)$job->quantity]]);
                     $totalUnits = (int) $productRows->sum(fn($item)=>(int)($item->quantity ?? 0));
                     $productNames = $productRows->pluck('product_name')->filter()->values();
-                    $health = $job->completed_at ? 'Completed' : ($job->needs_attention ? 'Needs Attention' : ($job->health ?: 'On Track'));
+                    $health = $job->completed_at ? 'Completed' : ($job->health ?: 'On Track');
                     $phaseName = $job->phase?->name ?? $job->status ?? '—';
-                    // Order flags are sourced only from Task Flag Master Data through
-                    // unfinished flagged tasks. Order priority is intentionally separate and
-                    // must never be used as a fallback value in the Flag column.
-                    $flag = $job->needs_attention
-                        ? app(\App\Services\TaskFlagService::class)->labelForOrder($job)
-                        : null;
-                    $flagColor = $flag ? $masterData->displayColorFor('task_flag', $flag) : null;
+                    // Order health and Order flag are deliberately independent. The
+                    // flag is persisted in flow_jobs.order_flag_id and comes only from the
+                    // dedicated Order Flag master data through unfinished Order tasks.
+                    $flag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
+                    $flagColor = $flag ? $masterData->displayColorFor('order_flag', $flag) : null;
                     $deliveryOverdue = $job->delivery_date && !$job->completed_at && \App\Support\UserLocalTime::isDatePast($job->delivery_date);
                     $clientCode = strtoupper(trim((string) ($job->client?->code ?? '')));
                     $clientName = strtoupper(trim((string) ($job->client?->name ?? '')));
@@ -302,7 +456,7 @@
                         </div>
                     </div>
                     <div class="ft-cell ft-progress ft-progress-cell" data-label="Progress"><span class="ft-progress-track"><span class="ft-progress-fill" style="width:{{ max(0,min(100,(int)$job->progress)) }}%"></span></span><span>{{ (int)$job->progress }}%</span></div>
-                    <a class="ft-view" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate aria-label="View {{ $job->displayOrderNumber() }}">View</a>
+                    <a class="ft-view" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate aria-label="View details for {{ $job->displayOrderNumber() }}"><span class="ft-view-label-desktop">View</span><span class="ft-view-label-mobile">Details</span><span class="ft-view-arrow" aria-hidden="true">→</span></a>
                     @if(auth()->user()->canModule('jobs', 'delete'))
                         <div class="ft-row-actions" data-label="Actions" x-data="{ open: false }">
                             <button
@@ -342,8 +496,6 @@
                                 </button>
                             </div>
                         </div>
-                    @else
-                        <span aria-hidden="true"></span>
                     @endif
                 </article>
             @empty

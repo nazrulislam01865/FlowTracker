@@ -22,6 +22,8 @@
     'parentFilter' => '',
     'statusFilter' => '',
     'perPage' => 6,
+    'selectedCategoryKeys' => [],
+    'selectionCount' => 0,
 ])
 @php
     $expandedMain = collect($expandedMainIds)->map(fn($id)=>(int)$id);
@@ -39,6 +41,18 @@
         ['id'=>'inactive','label'=>'Inactive'],
     ]);
     $parentSelectOptions = collect($parentOptions)->map(fn($item)=>['id'=>$item['value'],'label'=>$item['label'],'meta'=>$item['meta']]);
+    $selectedCategoryKeySet = collect($selectedCategoryKeys)->map(fn($key)=>(string)$key);
+    $visibleCategoryKeys = collect($mainPage?->items() ?? [])->map(fn($main)=>'main:'.$main->id);
+    foreach(collect($productChildren) as $children){
+        foreach(collect($children) as $category){
+            $visibleCategoryKeys->push('product:'.$category->id);
+            foreach(collect($subcategoryChildren)->get((int)$category->id, collect()) as $sub){
+                $visibleCategoryKeys->push('sub:'.$sub->id);
+            }
+        }
+    }
+    $visibleCategoryKeys = $visibleCategoryKeys->unique()->values();
+    $allVisibleCategoriesSelected = $visibleCategoryKeys->isNotEmpty() && $visibleCategoryKeys->every(fn($key)=>$selectedCategoryKeySet->contains($key));
     $matches = function($record,string $level,?int $mainId=null,?int $productId=null) use($searchNeedle,$levelFilter,$parentType,$parentId,$statusFilter){
         if($levelFilter!=='' && $levelFilter!==$level) return false;
         if($statusFilter!=='' && $record->status!==$statusFilter) return false;
@@ -115,6 +129,14 @@
         <button type="button" class="ft-category-clear" wire:click="clearCategoryFilters">Clear</button>
     </section>
 
+    @if($selectionCount > 0)
+        <x-catalog.category-bulk-actions
+            :count="$selectionCount"
+            :can-edit="$canEdit"
+            :can-delete="$canDelete"
+        />
+    @endif
+
     <div class="ft-category-subbar ft-category-subbar-actions-only">
         <div class="ft-category-expand-controls">
             <button type="button" class="ft-category-expand-btn" wire:click="collapseAllCategories" title="Collapse all" aria-label="Collapse all categories">
@@ -135,7 +157,7 @@
     <section class="ft-category-card">
         <div class="ft-category-table-scroll">
             <div class="ft-category-tree-grid ft-category-tree-grid-head">
-                <span class="ft-category-check"><input type="checkbox" aria-label="Select all visible categories" x-data x-on:change="document.querySelectorAll('.ft-category-row-check').forEach(c=>c.checked=$event.target.checked)"></span>
+                <span class="ft-category-check"><input type="checkbox" aria-label="Select all visible categories" @checked($allVisibleCategoriesSelected) x-on:change="$wire.toggleCategoryPageSelection(@js($visibleCategoryKeys->all()), $event.target.checked)"></span>
                 <span>Category</span><span>Code</span><span>Level</span><span>Parent</span><span>Products</span><span>Status</span><span>Updated</span><span></span>
             </div>
 
@@ -147,8 +169,8 @@
                     $mainCount = (int)($mainProductCounts[mb_strtolower($main->name)] ?? 0);
                     $mainUpdated = $main->updated_at?->copy()->timezone($displayTimezone);
                 @endphp
-                <div class="ft-category-tree-grid ft-category-row is-main" wire:key="cat-main-{{ $main->id }}">
-                    <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $main->name }}"></span>
+                <div @class(['ft-category-tree-grid ft-category-row is-main', 'is-selected' => $selectedCategoryKeySet->contains('main:'.$main->id)]) wire:key="cat-main-{{ $main->id }}">
+                    <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $main->name }}" @checked($selectedCategoryKeySet->contains('main:'.$main->id)) wire:change="toggleCategorySelection('main', {{ $main->id }})"></span>
                     <div class="ft-category-name">
                         @if($mainChildTotal > 0)
                             <button type="button" class="ft-category-chevron" wire:click="toggleCategoryExpansion('main', {{ $main->id }})" aria-label="{{ $mainIsExpanded ? 'Collapse' : 'Expand' }} {{ $main->name }}">{{ $mainIsExpanded ? '⌄' : '›' }}</button>
@@ -172,8 +194,8 @@
                             $categoryIsExpanded = $expandedProduct->contains((int)$category->id);
                             $categoryUpdated = $category->updated_at?->copy()->timezone($displayTimezone);
                         @endphp
-                            <div class="ft-category-tree-grid ft-category-row" wire:key="cat-product-{{ $category->id }}">
-                                <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $category->name }}"></span>
+                            <div @class(['ft-category-tree-grid ft-category-row', 'is-selected' => $selectedCategoryKeySet->contains('product:'.$category->id)]) wire:key="cat-product-{{ $category->id }}">
+                                <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $category->name }}" @checked($selectedCategoryKeySet->contains('product:'.$category->id)) wire:change="toggleCategorySelection('product', {{ $category->id }})"></span>
                                 <div class="ft-category-name is-indent-1">
                                     @if($subcategoryTotal > 0)
                                         <button type="button" class="ft-category-chevron" wire:click="toggleCategoryExpansion('product', {{ $category->id }})" aria-label="{{ $categoryIsExpanded ? 'Collapse' : 'Expand' }} {{ $category->name }}">{{ $categoryIsExpanded ? '⌄' : '›' }}</button>
@@ -195,8 +217,8 @@
                                         $subUpdated = $sub->updated_at?->copy()->timezone($displayTimezone);
                                         $subCountKey = $category->id.'|'.mb_strtolower($sub->name);
                                     @endphp
-                                    <div class="ft-category-tree-grid ft-category-row" wire:key="cat-sub-{{ $sub->id }}">
-                                        <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $sub->name }}"></span>
+                                    <div @class(['ft-category-tree-grid ft-category-row', 'is-selected' => $selectedCategoryKeySet->contains('sub:'.$sub->id)]) wire:key="cat-sub-{{ $sub->id }}">
+                                        <span class="ft-category-check"><input class="ft-category-row-check" type="checkbox" aria-label="Select {{ $sub->name }}" @checked($selectedCategoryKeySet->contains('sub:'.$sub->id)) wire:change="toggleCategorySelection('sub', {{ $sub->id }})"></span>
                                         <div class="ft-category-name is-indent-2"><span class="ft-category-chevron is-placeholder"></span><span>{{ $sub->name }}</span></div>
                                         <span>{{ $sub->code }}</span>
                                         <span><b class="ft-category-level">Subcategory</b></span>

@@ -62,7 +62,7 @@
     <div class="ft-grid">
         <section class="ft-panel" id="inquiries">
             <div class="ft-panel-head">
-                <div><h2 class="ft-panel-title">Open enquiries</h2><div class="ft-panel-note">Pre-job opportunities, ownership, quotation progress and follow-up flags</div></div>
+                <div><h2 class="ft-panel-title">Open enquiries</h2><div class="ft-panel-note">Pre-order opportunities, ownership, quotation progress and follow-up flags</div></div>
                 <a class="ft-link" href="{{ route('inquiries.index') }}" wire:navigate>View all enquiries</a>
             </div>
             <div class="ft-table-wrap">
@@ -108,11 +108,11 @@
         <livewire:dashboard.tagged-comments lazy />
 
         <section class="ft-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current job health and task distribution based on task flags</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Operational health</h2><div class="ft-panel-note">Current order health and task distribution based on task flags</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-analytics">
                 <div class="ft-health">
                     <div class="ft-health-content">
-                        <div class="ft-donut" style="background:conic-gradient(#2eb67d 0 {{ $operationalHealth['healthyPct'] }}%, #f2b84b {{ $operationalHealth['healthyPct'] }}% {{ $operationalHealth['riskStart'] }}%, #ed5b5b {{ $operationalHealth['riskStart'] }}% 100%)"><div class="ft-donut-value">{{ $operationalHealth['totalJobs'] }}<small>active jobs</small></div></div>
+                        <div class="ft-donut" style="background:conic-gradient(#2eb67d 0 {{ $operationalHealth['healthyPct'] }}%, #f2b84b {{ $operationalHealth['healthyPct'] }}% {{ $operationalHealth['riskStart'] }}%, #ed5b5b {{ $operationalHealth['riskStart'] }}% 100%)"><div class="ft-donut-value">{{ $operationalHealth['totalJobs'] }}<small>active orders</small></div></div>
                         <div class="ft-health-list">
                             <div class="ft-health-row"><span><i></i>Healthy</span><b>{{ $operationalHealth['healthy'] }}</b></div>
                             <div class="ft-health-row"><span><i></i>Watch</span><b>{{ $operationalHealth['watch'] }}</b></div>

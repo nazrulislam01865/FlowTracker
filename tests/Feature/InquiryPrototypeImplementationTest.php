@@ -168,7 +168,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('public function linkExistingDocumentToTask', $service);
         $this->assertStringContainsString('class="inquiry-list-table"', $view);
         $this->assertStringContainsString('ft-inquiry-created-by', $view);
-        $this->assertStringContainsString('View <span aria-hidden="true">→</span>', $view);
+        $this->assertStringContainsString('ft-inquiry-view-label-mobile">Details</span>', $view);
         $this->assertStringContainsString('min-width:1420px', $css);
         $this->assertStringNotContainsString('<span class="sub">Assignee</span>', $view);
         $this->assertStringNotContainsString('<span class="sub">Due date</span>', $view);
@@ -184,6 +184,22 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("public const AUTO_IN_PROGRESS_STATUS = 'In Progress';", $service);
         $this->assertStringContainsString("public const AUTO_COMPLETED_STATUS = 'Completed';", $service);
         $this->assertStringContainsString('public function syncAutomaticStatus(Inquiry $inquiry', $service);
+    }
+
+    public function test_inquiry_list_mobile_card_keeps_the_approved_prototype_fields_only(): void
+    {
+        $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
+        $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
+
+        $this->assertStringContainsString('2026-08-15: Final lightweight mobile Inquiry list authority.', $css);
+        $this->assertStringContainsString('"status status priority priority view view"', $css);
+        $this->assertStringContainsString('.ft-inquiry-list-task-status-cell,', $css);
+        $this->assertStringContainsString('.ft-inquiry-list-flag-cell,', $css);
+        $this->assertStringContainsString('.ft-inquiry-list-updated-cell{', $css);
+        $this->assertStringContainsString('display:none!important;', $css);
+        $this->assertStringContainsString('ft-inquiry-view-label-mobile">Details</span>', $view);
+        $this->assertStringContainsString('flowtrack-inquiries.css?v=20260815-mobile-order-density-1', $layout);
     }
 
     public function test_inquiry_hide_completed_uses_actual_taskflow_completion(): void

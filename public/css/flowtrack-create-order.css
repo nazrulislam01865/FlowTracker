@@ -1,0 +1,11 @@
+/* Create Order single-select urgency controls.
+   Kept outside the Vite bundle so deployments with prebuilt assets receive the fix immediately. */
+.ft-create-job-page .ft-create-urgency-check input[type="radio"]{
+    width:17px!important;
+    height:17px!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    flex:0 0 17px;
+    accent-color:#1767e8;
+}

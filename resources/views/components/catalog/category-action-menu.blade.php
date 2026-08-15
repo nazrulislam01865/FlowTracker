@@ -39,7 +39,7 @@
             <button type="button" role="menuitem" x-bind:disabled="busy" x-on:click="busy=true; $refs.menu.hidePopover(); $wire.toggleCategoryStatus('{{ $level }}', {{ $recordId }}).finally(()=>busy=false)">{{ $isActive ? 'Deactivate' : 'Activate' }}</button>
         @endif
         @if($canDelete)
-            <button type="button" role="menuitem" class="is-danger" x-bind:disabled="busy" x-on:click="if(!confirm('Delete this category?')) return; busy=true; $refs.menu.hidePopover(); $wire.deleteCategory('{{ $level }}', {{ $recordId }}).finally(()=>busy=false)">Delete category</button>
+            <button type="button" role="menuitem" class="is-danger" x-bind:disabled="busy" x-on:click="busy=true; $refs.menu.hidePopover(); $wire.deleteCategory('{{ $level }}', {{ $recordId }}).finally(()=>busy=false)">Delete permanently</button>
         @endif
     </div>
 </div>

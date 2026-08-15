@@ -956,7 +956,8 @@ class Index extends Component
 
         $this->invoiceType = (string) ($invoiceTypes->firstWhere('name', 'Final invoice')?->name ?: $invoiceTypes->first()?->name ?: '');
         $jobCurrency = strtoupper((string) ($job->currency ?: 'USD'));
-        $this->invoiceCurrency = (string) ($currencies->first(fn ($currency) => strtoupper((string) $currency->code) === $jobCurrency)?->code ?: $currencies->first()?->code ?: '');
+        $currencyValues = $currencies->mapWithKeys(fn (MasterRecord $currency) => [$currency->id => $master->currencyValue($currency)]);
+        $this->invoiceCurrency = (string) ($currencyValues->first(fn ($value) => $value === $jobCurrency) ?: $currencyValues->filter()->first() ?: '');
         $this->invoiceIssueDate = now()->toDateString();
         $this->invoicePaymentTerms = (string) ($paymentTerms->firstWhere('name', 'Net 15 days')?->name ?: $paymentTerms->first()?->name ?: '');
         $this->syncInvoiceDueDate();
@@ -1266,9 +1267,12 @@ class Index extends Component
     /** @return array<int,string> */
     private function financeCurrencyCodes(): array
     {
-        return app(MasterDataService::class)->active('currency')
-            ->map(fn ($currency) => strtoupper(trim((string) ($currency->code ?: $currency->name))))
-            ->filter()
+        $master = app(MasterDataService::class);
+
+        return $master->active('currency')
+            ->map(fn (MasterRecord $currency) => $master->currencyValue($currency))
+            ->filter(fn ($value) => (bool) preg_match('/^[A-Z]{3}$/', (string) $value))
+            ->unique()
             ->values()
             ->all();
     }
@@ -1442,6 +1446,18 @@ class Index extends Component
 
     public function collapseAllJobPhases(): void { $this->expandedPhaseIds = []; }
 
+    public function selectCreateProductionUrgency(int $urgencyId): void
+    {
+        $this->productionUrgencyIds = [$urgencyId];
+        $this->resetErrorBag('productionUrgencyIds');
+    }
+
+    public function selectCreateShipmentUrgency(int $urgencyId): void
+    {
+        $this->shipmentUrgencyIds = [$urgencyId];
+        $this->resetErrorBag('shipmentUrgencyIds');
+    }
+
     public function createJob(): void { $this->persistJob(false); }
     public function saveDraft(): void { $this->persistJob(true); }
 
@@ -1459,7 +1475,7 @@ class Index extends Component
             'referenceNumber' => ['nullable','string','max:255'],
             'isRepeatedOrder' => ['boolean'],
             'repeatedOrderNumber' => [Rule::requiredIf($this->isRepeatedOrder), 'nullable', 'string', 'max:255'],
-            'productionUrgencyIds' => ['array'],
+            'productionUrgencyIds' => ['array', 'max:1'],
             'productionUrgencyIds.*' => [
                 'integer',
                 Rule::exists('master_records', 'id')->where(fn ($query) => $query
@@ -1468,7 +1484,7 @@ class Index extends Component
                     ->where('status', 'active')
                     ->whereNull('deleted_at')),
             ],
-            'shipmentUrgencyIds' => ['array'],
+            'shipmentUrgencyIds' => ['array', 'max:1'],
             'shipmentUrgencyIds.*' => [
                 'integer',
                 Rule::exists('master_records', 'id')->where(fn ($query) => $query
@@ -1589,6 +1605,43 @@ class Index extends Component
         $this->detailTab = 'overview';
         $this->prepareSelectedJob($job->id);
         session()->flash('success', $draft ? 'Order draft saved.' : 'Order created and all configured Workflow Task Packs were loaded.');
+    }
+
+    #[Renderless]
+    public function updateJobUrgencies(int $jobId, string $type, array $ids): array
+    {
+        $config = match ($type) {
+            'production' => ['masterType' => 'production_urgency', 'field' => 'production_urgency_ids', 'label' => 'production urgency'],
+            'shipment' => ['masterType' => 'shipment_urgency', 'field' => 'shipment_urgency_ids', 'label' => 'shipment urgency'],
+            default => null,
+        };
+
+        if (!$config) {
+            return ['ok' => false, 'message' => 'That urgency field is not available.'];
+        }
+
+        return $this->persistInlineEdit($config['label'], function () use ($jobId, $ids, $config) {
+            $ids = collect($ids)->map(fn ($id) => (int) $id)->filter(fn ($id) => $id > 0)->unique()->values()->all();
+            abort_if(count($ids) > 1, 422, 'Select only one '.$config['label'].'.');
+            $workspaceId = app(MasterDataService::class)->workspaceId();
+
+            if ($ids) {
+                $validIds = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType($config['masterType'])
+                    ->active()
+                    ->whereIn('id', $ids)
+                    ->pluck('id')
+                    ->map(fn ($id) => (int) $id)
+                    ->all();
+
+                abort_if(count($validIds) !== count($ids), 422, 'One or more selected urgency options are no longer available.');
+                $ids = $validIds;
+            }
+
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateUrgencies($job, $config['field'], $ids, auth()->user());
+        });
     }
 
     #[Renderless]
@@ -2894,7 +2947,7 @@ class Index extends Component
         $flag = trim($flag);
 
         if ($flag !== '') {
-            $allowed = app(MasterDataService::class)->active('task_flag')->pluck('name')->map(fn ($name) => trim((string) $name));
+            $allowed = app(MasterDataService::class)->active('order_task_flag')->pluck('name')->map(fn ($name) => trim((string) $name));
             $currentLegacyFlag = $task->needs_attention ? trim((string) $task->attention_reason) : '';
             abort_unless($allowed->contains($flag) || ($currentLegacyFlag !== '' && $currentLegacyFlag === $flag), 422, 'Select a valid Task Flag.');
         }
@@ -2907,7 +2960,7 @@ class Index extends Component
     public function toggleTaskAttention(): void
     {
         if (!$this->selectedTaskId) return;
-        $task = app(TaskService::class)->visibleQuery(auth()->user())->with('attentionFlag:id,name,status,sort_order')->findOrFail($this->selectedTaskId);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())->with('orderTaskFlag:id,type,name,color,status,sort_order,metadata')->findOrFail($this->selectedTaskId);
         $flag = $task->needs_attention
             ? null
             : (app(\App\Services\TaskFlagService::class)->defaultActive()?->name ?: 'Management attention');
@@ -2924,14 +2977,12 @@ class Index extends Component
             'taskStatus' => ['required','string','max:50'],
             'taskAssigneeId' => ['nullable','exists:users,id'],
             'taskProgress' => ['required','integer','between:0,100'],
-            'taskAttention' => ['boolean'],
-            'taskAttentionReason' => [Rule::requiredIf($this->taskAttention || $this->taskStatus === 'Blocked'),'nullable','string','max:1000'],
+            'taskAttentionReason' => ['nullable','string','max:1000'],
         ]);
         app(TaskService::class)->update($task, [
             'status' => $this->taskStatus,
             'assignee_id' => $this->taskAssigneeId,
             'progress' => $this->taskProgress,
-            'needs_attention' => $this->taskAttention,
             'attention_reason' => $this->taskAttentionReason,
         ], auth()->user());
         if (trim($this->taskComment) !== '') app(TaskService::class)->addComment($task, $this->taskComment, auth()->user());
@@ -3414,15 +3465,17 @@ class Index extends Component
 
     private function taskPageData(User $user): array
     {
+        app(\App\Services\OrderTaskFlagService::class)->syncDueTransitions();
         $master = app(MasterDataService::class);
         $task = app(TaskService::class)->visibleQuery($user)->with([
             'job.client:id,name,logo_path',
+            'job.orderFlag:id,type,name,color,status,sort_order,metadata',
             'job.tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.title'])
                 ->orderBy('tasks.id'),
-            'assignee', 'phase', 'attentionFlag:id,name,status,sort_order', 'documentCategory', 'setupTemplate.documentCategory',
-            'checklistItems', 'comments.user', 'documents', 'activities.user',
+            'assignee', 'phase', 'orderTaskStatus:id,type,name,color,status,sort_order,metadata', 'orderTaskFlag:id,type,name,color,status,sort_order,metadata', 'documentCategory', 'setupTemplate.documentCategory',
+            'checklistItems', 'comments.user', 'documents.uploader:id,name', 'activities.user',
         ])->findOrFail($this->selectedTaskId);
 
         $availableDocuments = $this->showTaskDocumentPicker
@@ -3439,7 +3492,7 @@ class Index extends Component
             'selectedTask' => $task,
             'taskStatuses' => $this->taskStatusOptions($master),
             'priorities' => $master->active('priority'),
-            'taskFlags' => $master->active('task_flag'),
+            'taskFlags' => $master->active('order_task_flag'),
             'displayTimezone' => app(WorkspaceSettingsService::class)->displayTimezone(),
             'availableDocuments' => $availableDocuments,
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForTask($task, $user),
@@ -3629,7 +3682,7 @@ class Index extends Component
     private function taskStatusOptions(MasterDataService $master)
     {
         return collect(BoardLaneResolver::taskStatuses(
-            $master->active('task_status')->pluck('name')
+            $master->active('order_task_status')->pluck('name')
         ));
     }
 

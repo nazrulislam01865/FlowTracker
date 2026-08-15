@@ -1,20 +1,4 @@
 
-@media(max-width:760px){
-    .ft-exact-jobs-list .ft-job-filter-grid{grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;padding:9px}
-    .ft-exact-jobs-list .ft-job-filter-grid .ft-job-list-search{grid-column:1/-1}
-    .ft-exact-jobs-list .ft-job-filter-grid .filter-more,.ft-exact-jobs-list .ft-job-filter-grid .ft-clear-link{width:100%;justify-content:center;border:1px solid #d8e2ee;border-radius:8px;background:#fff}
-    .ft-job-more-filter-grid{grid-template-columns:1fr;padding:0 9px 9px}
-    .ft-list-view-tabs{padding-bottom:3px}
-    .ft-inline-planning-row{grid-template-columns:100px minmax(0,1fr)!important}
-    .ft-overview-task-card .ft-row-actions{display:grid;grid-template-columns:1fr 1fr;gap:7px}
-    .ft-overview-task-card .ft-row-actions .ft-inline-search{grid-column:1/-1;width:100%}
-    .ft-phase-task-columns{display:none}
-    .ft-editable-task-line{grid-template-columns:34px minmax(0,1fr)!important;padding:10px!important;gap:7px!important}
-    .ft-editable-task-line>*:nth-child(n+3){grid-column:2}
-    .ft-inline-task-status{width:100%;min-width:0}
-    .ft-phase-toggle{grid-template-columns:18px 20px minmax(120px,1fr) auto 55px 24px!important}
-    .ft-phase-toggle small{font-size:8px!important}
-}
 @media(max-width:520px){
     .ft-exact-jobs-list .ft-job-filter-grid{grid-template-columns:1fr}
     .ft-exact-jobs-list .ft-job-filter-grid .ft-job-list-search{grid-column:auto}
@@ -1815,3 +1799,98 @@ body:has(.ft-client-preview-backdrop){
 .ft-workspace-setting-row select{height:40px;border:1px solid #d7e1ed;border-radius:8px;background:#fff;padding:0 10px;color:#172b47}
 @media(max-width:1300px){.ft-friendly-task-properties{grid-template-columns:repeat(3,minmax(0,1fr))}.ft-friendly-task-properties .ft-task-property:nth-child(3n){border-right:0}}
 @media(max-width:800px){.ft-friendly-task-properties{grid-template-columns:1fr}.ft-friendly-task-properties .ft-task-property{border-right:0}.ft-workspace-setting-row{grid-template-columns:1fr}.ft-task-title-phase{white-space:normal}}
+
+
+/* 2026-08-07 Task Details inline-edit UX: match the compact Job Details phase-assignee pattern.
+   Editors replace the displayed value inside the property cell instead of opening a nested card/popover. */
+/* Keep task/inquiry property rows below the sticky shell header while scrolling.
+   The property grid still owns a local stacking context for inline editors, but
+   it must never tie the shell topbar z-index (20), otherwise later DOM content
+   can paint over the header. */
+.ft-exact-task-detail .ft-friendly-task-properties{overflow:visible!important;z-index:5}
+.ft-exact-task-detail .ft-friendly-task-properties .ft-task-property{overflow:visible!important;z-index:auto}
+.ft-exact-task-detail .ft-friendly-task-properties .ft-task-property:focus-within{z-index:80}
+.ft-exact-task-detail .ft-task-property-inline-editor{
+    display:flex;
+    align-items:center;
+    width:100%;
+    min-width:0;
+    min-height:34px;
+    gap:6px;
+    position:relative;
+    overflow:visible;
+}
+.ft-exact-task-detail .ft-task-property-inline-input{
+    width:100%;
+    min-width:0;
+    max-width:190px;
+    height:31px;
+    box-sizing:border-box;
+    border:1px solid #9fbff5;
+    border-radius:7px;
+    background:#fff;
+    color:#0b1d36;
+    padding:0 8px;
+    outline:0;
+    font:inherit;
+    font-size:10px;
+    font-weight:600;
+    box-shadow:none;
+}
+.ft-exact-task-detail .ft-task-property-inline-input:focus{
+    border-color:#4f8cf7;
+    box-shadow:0 0 0 2px rgba(23,103,232,.08);
+}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user{width:100%;max-width:190px;position:relative;z-index:90}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-trigger{
+    width:100%;
+    min-width:0;
+    max-width:190px;
+    height:31px;
+    border:1px solid #9fbff5;
+    border-radius:7px;
+    background:#fff;
+    color:#0b1d36;
+    padding:0 8px;
+    font:inherit;
+    font-size:10px;
+    font-weight:600;
+    box-shadow:none;
+}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-menu{
+    z-index:1500!important;
+    width:300px!important;
+    min-width:260px!important;
+    max-width:min(300px,calc(100vw - 24px))!important;
+    padding:8px!important;
+}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-search{
+    display:block!important;
+    width:100%!important;
+    min-width:0!important;
+    height:40px!important;
+    min-height:40px!important;
+    margin:0 0 7px!important;
+    font-size:11px!important;
+}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-list{
+    display:grid!important;
+    grid-template-columns:minmax(0,1fr)!important;
+    gap:2px!important;
+    width:100%!important;
+    min-width:0!important;
+    max-height:220px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+}
+.ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-option{
+    display:flex!important;
+    align-items:center!important;
+    justify-content:space-between!important;
+    gap:10px!important;
+    width:100%!important;
+    min-width:0!important;
+    padding:8px 9px!important;
+    font-size:11px!important;
+    text-align:left!important;
+}

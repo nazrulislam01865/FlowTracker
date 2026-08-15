@@ -27,8 +27,6 @@ class BulkOrderImportController extends Controller
         abort_unless($request->user()->canAccess('jobs.create'), 403);
         $request->validate([
             'file' => ['required', 'file', 'max:20480', 'mimes:xlsx,xls,csv'],
-            'default_client_id' => ['nullable', 'integer'],
-            'default_supplier_id' => ['nullable', 'integer'],
             'duplicate_policy' => ['nullable', 'in:skip,update,separate'],
             'display_filename' => ['nullable', 'string', 'max:255'],
             'source_fingerprint' => ['nullable', 'regex:/^[a-f0-9]{64}$/i'],
@@ -44,7 +42,7 @@ class BulkOrderImportController extends Controller
                 trim((string) $request->input('source_fingerprint', '')) ?: null,
             );
             $review = $service->validateToken($prepared['token'], $request->only([
-                'default_client_id', 'default_supplier_id', 'duplicate_policy', 'manual_workflows',
+                'duplicate_policy', 'manual_workflows',
             ]), $request->user());
 
             return response()->json($review);
@@ -58,8 +56,6 @@ class BulkOrderImportController extends Controller
         abort_unless($request->user()->canAccess('jobs.create'), 403);
         $data = $request->validate([
             'token' => ['required', 'uuid'],
-            'default_client_id' => ['nullable', 'integer'],
-            'default_supplier_id' => ['nullable', 'integer'],
             'duplicate_policy' => ['required', 'in:skip,update,separate'],
             'manual_workflows' => ['nullable', 'array'],
             'manual_workflows.*' => ['nullable', 'integer'],
@@ -77,8 +73,6 @@ class BulkOrderImportController extends Controller
         abort_unless($request->user()->canAccess('jobs.create'), 403);
         $data = $request->validate([
             'token' => ['required', 'uuid'],
-            'default_client_id' => ['nullable', 'integer'],
-            'default_supplier_id' => ['nullable', 'integer'],
             'duplicate_policy' => ['required', 'in:skip,update,separate'],
             'manual_workflows' => ['nullable', 'array'],
             'manual_workflows.*' => ['nullable', 'integer'],
@@ -97,7 +91,10 @@ class BulkOrderImportController extends Controller
     public function template(): BinaryFileResponse
     {
         abort_unless(auth()->user()->canAccess('jobs.create'), 403);
-        $path = storage_path('app/templates/FlowTrack_Bulk_Order_Import_Template_v2.xlsx');
+        $trackedTemplate = resource_path('templates/FlowTrack_Bulk_Order_Import_Template_v2.xlsx');
+        $storageTemplate = storage_path('app/templates/FlowTrack_Bulk_Order_Import_Template_v2.xlsx');
+        $path = is_file($trackedTemplate) ? $trackedTemplate : $storageTemplate;
+
         abort_unless(is_file($path), 404);
 
         return response()->download($path, 'FlowTrack_Bulk_Order_Import_Template_v2.xlsx', [

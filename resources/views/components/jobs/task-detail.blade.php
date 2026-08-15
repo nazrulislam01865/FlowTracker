@@ -33,11 +33,12 @@
     $effectiveStartDate = $task->start_date ?: \App\Support\UserLocalTime::localize($task->created_at);
     $completedOn = $task->completed_at?->copy()->timezone($displayTimezone);
     $masterData = app(\App\Services\MasterDataService::class);
-    $currentStatusColor = $masterData->colorFor('task_status', (string) $task->status);
+    $currentStatusColor = $masterData->colorFor('order_task_status', (string) $task->status);
     $currentPriorityColor = $masterData->displayColorFor('priority', (string) $task->priority);
-    $currentTaskFlag = $task->needs_attention ? (app(\App\Services\TaskFlagService::class)->labelForTask($task) ?: 'Management attention') : '';
-    $currentTaskFlagColor = $currentTaskFlag !== '' ? $masterData->colorFor('task_flag', $currentTaskFlag) : null;
-    $taskFlagNames = $taskFlags->pluck('name')->map(fn($name)=>trim((string)$name))->filter()->values();
+    $currentTaskFlag = app(\App\Services\OrderTaskFlagService::class)->labelForTask($task) ?: '';
+    $currentTaskFlagColor = $currentTaskFlag !== '' ? $masterData->colorFor('order_task_flag', $currentTaskFlag) : null;
+    $currentOrderFlag = $job ? (app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job) ?: '') : '';
+    $currentOrderFlagColor = $currentOrderFlag !== '' ? $masterData->colorFor('order_flag', $currentOrderFlag) : null;
     $commentEvents = $task->comments->map(fn($comment)=>(object)[
         'id'=>(int)$comment->id,'kind'=>'comment','event'=>'task.comment','user'=>$comment->user,'body'=>$comment->body,'created_at'=>$comment->created_at,
     ]);
@@ -58,7 +59,7 @@
     <div class="ft-detail-toolbar task-toolbar ft-exact-task-header">
         <div class="ft-task-heading-copy">
             <div class="ft-detail-breadcrumb ft-id-breadcrumb">
-                <a href="{{ route('my-work') }}" wire:navigate>My Work</a>
+                <a href="{{ route('my-work') }}" wire:navigate>My Tasks</a>
                 @if($job)
                     <span>/</span><a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
                 @endif
@@ -128,7 +129,7 @@
                     <small>Status</small>
                     <div x-show="!editing" class="ft-task-property-display"><span class="status-dot {{ $currentStatusColor ? 'ft-master-color-dot' : 'blue' }}" style="{{ \App\Support\MasterColor::style($currentStatusColor) }}" x-bind:style="statusColor ? '--ft-master-color:'+statusColor : ''"></span><b class="ft-property-value" x-text="display">{{ $task->status }}</b>@if($canEditTask)<button type="button" :disabled="status === 'saving'" title="Edit status" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.status?.showPicker ? $refs.status.showPicker() : $refs.status?.focus())">✎</button>@endif</div>
                     @if($canEditTask)
-                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select data-master-color-select x-ref="status" x-model="draftValue" class="ft-task-property-inline-input {{ $currentStatusColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($currentStatusColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="statusColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('status', draftValue))">@foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ $masterData->colorFor('task_status', $status) }}">{{ $status }}</option>@endforeach</select></div>
+                        <div x-cloak x-show="editing" class="ft-task-property-inline-editor"><select data-master-color-select x-ref="status" x-model="draftValue" class="ft-task-property-inline-input {{ $currentStatusColor ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($currentStatusColor) }}" x-on:keydown.escape.prevent="cancelEdit()" x-on:change="statusColor=String($event.target.selectedOptions[0]?.dataset?.color || ''); window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateSelectedTaskField('status', draftValue))">@foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ $masterData->colorFor('order_task_status', $status) }}">{{ $status }}</option>@endforeach</select></div>
                         <x-ui.inline-save-state compact />
                     @endif
                 </div>
@@ -237,7 +238,27 @@
                     </div>
                     @error('taskExistingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
                 @endif
-                @foreach($task->documents->sortByDesc('created_at') as $doc)<div class="ft-attachment-row"><span class="ft-file-type">{{ strtoupper(pathinfo($doc->name,PATHINFO_EXTENSION) ?: 'FILE') }}</span><b>{{ $doc->name }}</b><small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small><a class="ft-link-blue" href="{{ route('documents.open',$doc) }}" target="_blank" rel="noopener">Open</a>@if(auth()->user()->canModule('documents','export'))<a class="ft-link-blue" href="{{ route('documents.download',$doc) }}">Download</a>@endif @if($canDeleteDocument)<button type="button" class="ft-doc-delete-button" wire:click="deleteSelectedTaskDocument({{ $doc->id }})" wire:confirm="Delete this document link?">×</button>@endif</div>@endforeach
+                @if($task->documents->isNotEmpty())
+                    <div class="ft-task-attachment-list" aria-label="Task attachments">
+                        @foreach($task->documents->sortByDesc('created_at') as $doc)
+                            <div class="ft-order-task-document-row ft-task-detail-document-row" wire:key="task-detail-document-{{ $doc->id }}">
+                                <span class="ft-order-task-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                                <div class="ft-order-task-file-copy">
+                                    <b title="{{ $doc->name }}">{{ $doc->name }}</b>
+                                    @if($doc->note)<span class="ft-order-task-file-note">{{ $doc->note }}</span>@endif
+                                    <small>{{ $doc->category ?: 'Task attachment' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
+                                </div>
+                                <div class="ft-order-task-file-actions">
+                                    <a href="{{ route('documents.open', $doc) }}" target="_blank" rel="noopener">Open</a>
+                                    @if(auth()->user()->canModule('documents','export'))<a href="{{ route('documents.download', $doc) }}">Download</a>@endif
+                                    @if($canDeleteDocument)
+                                        <button type="button" wire:click="deleteSelectedTaskDocument({{ $doc->id }})" wire:loading.attr="disabled" wire:target="deleteSelectedTaskDocument({{ $doc->id }})" wire:confirm="Delete this document link?" title="Remove attachment" aria-label="Remove {{ $doc->name }}">×</button>
+                                    @endif
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
                 <p class="ft-upload-note">Every file uploaded here is linked to this task and appears in Order Documents. A required document is counted only when this Task Pack task defines that document type.</p>
             </section>
 
@@ -290,27 +311,16 @@
                 <h2>Management attention</h2>
                 <div class="ft-attention-row"><span>Required evidence</span><b><span class="{{ $taskDocumentName ? 'ft-red-doc-icon' : '' }}">▯</span> {{ $taskDocumentName ?: 'No required evidence' }}</b></div>
                 <div class="ft-attention-row ft-task-flag-row">
-                    <span>Attention</span>
-                    @if($canEditTask)
-                        <select data-master-color-select class="ft-task-flag-select {{ $currentTaskFlagColor ? 'ft-master-color' : ($task->needs_attention ? 'is-flagged' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }}" wire:change="setTaskFlag($event.target.value)" onchange="window.FlowTrackMasterColor?.applySelect(this)">
-                            <option value="" data-color="" @selected($currentTaskFlag==='')>Not flagged</option>
-                            @if($currentTaskFlag!=='' && !$taskFlagNames->contains($currentTaskFlag))
-                                <option value="{{ $currentTaskFlag }}" data-color="{{ $masterData->colorFor('task_flag', $currentTaskFlag) }}" selected>{{ $currentTaskFlag }}</option>
-                            @endif
-                            @foreach($taskFlags as $flag)
-                                <option value="{{ $flag->name }}" data-color="{{ $masterData->colorFor('task_flag', $flag->name) }}" @selected($currentTaskFlag===$flag->name)>{{ $flag->name }}</option>
-                            @endforeach
-                        </select>
-                    @else
-                        <b class="{{ $currentTaskFlagColor ? 'ft-master-color' : ($task->needs_attention ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="ft-red-flag">⚑</span> {{ $currentTaskFlag ?: 'Not flagged' }}</b>
-                    @endif
+                    <span>Automatic flag</span>
+                    <b class="{{ $currentTaskFlagColor ? 'ft-master-color' : ($currentTaskFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="{{ $currentTaskFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentTaskFlag ?: 'No flag' }}</b>
                 </div>
-                @if($canEditTask && $taskFlags->isEmpty() && $currentTaskFlag==='')
-                    <small class="ft-task-flag-help">Add Task Flags in Master Data to make them available here.</small>
+                <small class="ft-task-flag-help">Driven automatically by Order Task Status Master Data. Overdue overrides the status mapping after the due date passes.</small>
+                @if($currentTaskFlag && filled($task->attention_reason))
+                    <div class="ft-attention-row"><span>Flag reason</span><b>{{ $task->attention_reason }}</b></div>
                 @endif
             </section>
 
-            <section class="ft-detail-card ft-job-context-card"><h2>Order context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Order health</span><b class="{{ $job?->needs_attention ? 'danger-text' : '' }}"><span class="{{ $job?->needs_attention ? 'ft-red-dot' : '' }}"></span>{{ $job?->needs_attention ? 'Needs Attention' : $job?->health }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Order progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open order details ↗</button></section>
+            <section class="ft-detail-card ft-job-context-card"><h2>Order context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Order health</span><b>{{ $job?->health ?: 'On Track' }}</b></div><div><span>Order flag</span><b class="{{ $currentOrderFlagColor ? 'ft-master-color' : ($currentOrderFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentOrderFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="{{ $currentOrderFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentOrderFlag ?: 'No flag' }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Order progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open order details ↗</button></section>
 
         </aside>
     </div>

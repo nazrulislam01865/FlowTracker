@@ -378,10 +378,11 @@ class DashboardService
 
     public function attentionTasks(User $user): Collection
     {
+        app(OrderTaskFlagService::class)->syncDueTransitions();
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
         return $this->activeTaskQuery($user)
-            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason'])
+            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason'])
             ->with([
                 'job:id,job_number,title,client_id',
                 'job.client:id,name,logo_path',
@@ -401,12 +402,13 @@ class DashboardService
     public function ongoingJobs(User $user): Collection
     {
         return app(JobService::class)->activeQuery($user)
-            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.progress', 'flow_jobs.updated_at'])
+            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.updated_at'])
             ->with([
                 'client:id,name,logo_path',
                 'phase:id,name,short_name',
-                'flaggedTasks:id,flow_job_id,task_flag_id,needs_attention,attention_reason,completed_at',
-                'flaggedTasks.attentionFlag:id,name,status,sort_order,color',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
+                'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
+                'flaggedTasks.orderTaskFlag:id,type,name,status,sort_order,color,metadata',
             ])
             ->orderByDesc('flow_jobs.updated_at')
             ->limit(4)

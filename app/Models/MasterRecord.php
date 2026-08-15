@@ -61,6 +61,27 @@ class MasterRecord extends Model
     }
 
 
+
+    public function orderTaskFlagId(): ?int
+    {
+        if ($this->type !== 'order_task_status') return null;
+        $id = (int) data_get($this->metadata, 'order_task_flag_id', 0);
+        return $id > 0 ? $id : null;
+    }
+
+    public function orderFlagId(): ?int
+    {
+        if ($this->type !== 'order_task_flag') return null;
+        $id = (int) data_get($this->metadata, 'order_flag_id', 0);
+        return $id > 0 ? $id : null;
+    }
+
+    public function systemKey(): ?string
+    {
+        $key = trim((string) data_get($this->metadata, 'system_key'));
+        return $key !== '' ? $key : null;
+    }
+
     public function productDisplayCode(): string
     {
         if ($this->type !== 'product') return trim((string) $this->code);

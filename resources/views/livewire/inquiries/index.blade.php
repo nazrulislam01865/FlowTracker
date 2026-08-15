@@ -31,6 +31,7 @@
         && $listStatus === ''
         && $listClient === ''
         && ! $hideCompleted;
+    $inquiryAnyFilterActive = $metricFilter !== '' || ! $inquiryToolbarIsClear;
 @endphp
 
 <div class="ft-inquiry-prototype">
@@ -98,6 +99,15 @@
                             <span class="completed-check" aria-hidden="true">✓</span>
                             <span>Hide completed</span>
                         </label>
+                        <button
+                            class="chip ft-inquiry-clear-filter"
+                            type="button"
+                            wire:click="clearFilters"
+                            @disabled(! $inquiryAnyFilterActive)
+                            aria-label="Clear active inquiry filter"
+                        >
+                            <span aria-hidden="true">×</span> Clear filter
+                        </button>
                     </div>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
@@ -201,7 +211,7 @@
                                     <span class="sub">{{ $row['updatedTime'] }}</span>
                                 </div>
                                 <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
-                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View {{ $row['number'] }}" wire:navigate>View<span aria-hidden="true">→</span></a></div>
+                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View details for {{ $row['number'] }}" wire:navigate><span class="ft-inquiry-view-label-desktop">View</span><span class="ft-inquiry-view-label-mobile">Details</span><span aria-hidden="true">→</span></a></div>
                                 @if(auth()->user()->canModule('inquiries', 'delete'))
                                     <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
                                         <button
@@ -379,9 +389,20 @@
                             </div>
                         </div>
 
+                        @php
+                            $createPriorityColor = optional($createPriorityOptions->first(
+                                fn ($priority) => (string) $priority->name === (string) $createPriority
+                            ))->color;
+                        @endphp
                         <div class="ft-inquiry-create-field ft-inquiry-create-field-full">
                             <label>Priority *</label>
-                            <select data-master-color-select wire:model="createPriority" aria-label="Inquiry priority">
+                            <select
+                                data-master-color-select
+                                wire:model="createPriority"
+                                class="{{ $createPriorityColor ? 'ft-master-color' : '' }}"
+                                style="{{ \App\Support\MasterColor::style($createPriorityColor) }}"
+                                aria-label="Inquiry priority"
+                            >
                                 @forelse($createPriorityOptions as $priority)
                                     <option value="{{ $priority->name }}" data-color="{{ $priority->color }}">{{ $priority->name }}</option>
                                 @empty

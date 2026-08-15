@@ -108,11 +108,11 @@ class MyWorkService
             ->whereIn('tasks.flow_job_id', $jobIds)
             ->leftJoin('workflow_phases as my_work_task_phases', 'my_work_task_phases.id', '=', 'tasks.workflow_phase_id')
             ->leftJoin('users as my_work_assignees', 'my_work_assignees.id', '=', 'tasks.assignee_id')
-            ->leftJoin('master_records as my_work_task_flags', 'my_work_task_flags.id', '=', 'tasks.task_flag_id')
+            ->leftJoin('master_records as my_work_task_flags', 'my_work_task_flags.id', '=', 'tasks.order_task_flag_id')
             ->select([
                 'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority',
-                'tasks.due_date', 'tasks.needs_attention', 'tasks.task_flag_id', 'tasks.attention_reason',
+                'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason',
                 'tasks.completed_at', 'tasks.updated_at',
                 'my_work_task_phases.name as my_work_phase_name',
                 'my_work_task_phases.short_name as my_work_phase_short_name',
@@ -218,14 +218,29 @@ class MyWorkService
             ->whereNotIn('my_work_metric_jobs.status', JobService::INACTIVE_STATUSES)
             ->where('my_work_metric_clients.is_active', true);
 
-        // Normal-user My Work is intentionally assignee-strict regardless of
-        // the broader task module scope. Administrators see all visible open
-        // tasks in active Jobs. This matches personalTaskQuery().
+        // My Tasks follows FlowTrack role scope:
+        // - Admin / Super Admin: see every visible Order task.
+        // - Other users: see tasks assigned to them plus tasks belonging to Orders
+        //   they created. The underlying task permission scope is still respected.
         if (!$administrator) {
-            $query->where('tasks.assignee_id', $user->id);
+            $scopes = $access->scopes($user, 'tasks');
+            $canSeeAssigned = $access->can($user, 'tasks', 'view') && (
+                in_array('all_records', $scopes, true)
+                || in_array('own_records', $scopes, true)
+                || in_array('assigned_jobs', $scopes, true)
+                || (in_array('department', $scopes, true) && (bool) $user->department_id)
+            );
+
+            $query->where(function ($personal) use ($user, $canSeeAssigned): void {
+                $personal->where('my_work_metric_jobs.created_by', $user->id);
+                if ($canSeeAssigned) {
+                    $personal->orWhere('tasks.assignee_id', $user->id);
+                }
+            });
         }
 
         $row = $query
+            ->selectRaw('COUNT(tasks.id) AS my_tasks_count')
             ->selectRaw(
                 "SUM(CASE WHEN tasks.needs_attention = 1
                     OR (LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'
@@ -244,6 +259,7 @@ class MyWorkService
             ->first();
 
         return [
+            'my_tasks' => (int) ($row?->my_tasks_count ?? 0),
             'attention' => (int) ($row?->attention_count ?? 0),
             'overdue' => (int) ($row?->overdue_count ?? 0),
             'today' => (int) ($row?->today_count ?? 0),
@@ -256,6 +272,7 @@ class MyWorkService
     private function emptyMetrics(): array
     {
         return [
+            'my_tasks' => 0,
             'attention' => 0,
             'overdue' => 0,
             'today' => 0,
@@ -311,7 +328,7 @@ class MyWorkService
     public function statusOptions(): array
     {
         return app(MasterDataService::class)
-            ->active('task_status')
+            ->active('order_task_status')
             ->pluck('name')
             ->map(fn ($status) => trim((string) $status))
             ->filter()
@@ -328,10 +345,10 @@ class MyWorkService
     }
 
     /**
-     * Count the same open task scope used by the My Work list. Administrators
-     * see every visible open task from active Jobs; normal users see only
-     * tasks assigned directly to them. Keeping this in one service prevents
-     * the sidebar badge and page results from drifting apart.
+     * Count the same open task scope used by My Tasks. Administrators see all
+     * visible tasks; other users see tasks assigned to them plus tasks from
+     * Orders they created. Keeping this in one service prevents the sidebar
+     * badge and page results from drifting apart.
      */
     public function openTaskCount(User $user): int
     {
@@ -361,13 +378,17 @@ class MyWorkService
                 }
             });
 
-        // My Work scope is intentionally role-sensitive:
-        // - administrators: all visible tasks belonging to active Jobs
-        // - normal users: only tasks explicitly assigned to that user
-        // Mentions remain a filter inside that allowed scope; they never make
-        // an unassigned task appear in a normal user's My Work list.
+        // Keep administrator visibility broad. For non-admin users, My Tasks is
+        // intentionally limited to their own operational responsibility: tasks
+        // assigned to them or any task under an Order they created. Because the
+        // base query comes from TaskService::visibleQuery(), the role matrix and
+        // record-scope rules still remain authoritative.
         if (!$access->isAdministrator($user)) {
-            $query->where('tasks.assignee_id', $user->id);
+            $query->where(function (Builder $personal) use ($user): void {
+                $personal
+                    ->where('tasks.assignee_id', $user->id)
+                    ->orWhereHas('job', fn (Builder $job) => $job->where('created_by', $user->id));
+            });
         }
 
         if ($includeOpenConstraint) {
@@ -529,20 +550,14 @@ class MyWorkService
         }
 
         $flag = 'No flag';
-        if (!$completed && $task->needs_attention) {
-            $flag = app(TaskFlagService::class)->labelForTask($task) ?: 'Management attention';
-        } elseif (!$completed && $dueTone === 'overdue') {
-            $flag = 'Overdue';
-        } elseif (!$completed && $dueTone === 'today') {
-            $flag = 'Due Today';
-        } elseif (!$completed && strcasecmp((string) $task->priority, 'Critical') === 0) {
-            $flag = 'Critical';
+        if (!$completed) {
+            $flag = app(TaskFlagService::class)->labelForTask($task) ?: 'No flag';
         }
 
         $updatedAt = $task->updated_at?->copy()->setTimezone($displayTimezone);
         $master = app(MasterDataService::class);
-        $statusColor = $master->colorFor('task_status', (string) $task->status);
-        $flagColor = (!$completed && $task->needs_attention) ? $master->colorFor('task_flag', $flag) : null;
+        $statusColor = $master->colorFor('order_task_status', (string) $task->status);
+        $flagColor = (!$completed && $flag !== 'No flag') ? $master->colorFor('order_task_flag', $flag) : null;
 
         return [
             'id' => (int) $task->id,

@@ -33,11 +33,7 @@ class Index extends Component
     public string $phaseName = '';
     public string $shortName = '';
     public ?int $taskPackId = null;
-    public ?int $documentCategoryId = null;
-    public bool $allowJobStart = false;
-    public bool $isSkippable = false;
     public bool $requiresApproval = false;
-    public bool $autoAdvanceOnReady = false;
     public bool $phaseActive = true;
     public string $entryCondition = '';
     public string $exitCondition = '';
@@ -165,13 +161,13 @@ class Index extends Component
         $this->resetValidation(); $this->showPhaseModal=true; $this->editPhaseId=$id;
         if($id){
             $p=WorkflowPhase::where('workflow_template_id',$this->selectedWorkflowId)->findOrFail($id);
-            $this->phaseName=$p->name; $this->shortName=$p->short_name; $this->taskPackId=$p->task_pack_id; $this->documentCategoryId=$p->document_category_id;
-            $this->allowJobStart=(bool)$p->allow_job_start; $this->isSkippable=(bool)$p->is_skippable; $this->requiresApproval=(bool)$p->requires_approval; $this->autoAdvanceOnReady=(bool)$p->auto_advance_on_ready; $this->phaseActive=(bool)$p->is_active;
+            $this->phaseName=$p->name; $this->shortName=$p->short_name; $this->taskPackId=$p->task_pack_id;
+            $this->requiresApproval=(bool)$p->requires_approval; $this->phaseActive=(bool)$p->is_active;
             $this->entryCondition=(string)$p->entry_condition; $this->exitCondition=(string)$p->exit_condition;
         }else{
-            $this->reset(['phaseName','shortName','taskPackId','documentCategoryId']);
+            $this->reset(['phaseName','shortName','taskPackId']);
             $this->entryCondition='Previous phase complete'; $this->exitCondition='Required work complete';
-            $this->allowJobStart=true; $this->isSkippable=false; $this->requiresApproval=false; $this->autoAdvanceOnReady=false; $this->phaseActive=true;
+            $this->requiresApproval=false; $this->phaseActive=true;
         }
     }
 
@@ -180,13 +176,13 @@ class Index extends Component
     public function savePhase():void
     {
         $data=$this->validate([
-            'phaseName'=>['required','string','max:255'], 'shortName'=>['required','string','max:50'], 'taskPackId'=>['nullable','exists:task_packs,id'], 'documentCategoryId'=>['nullable','exists:master_records,id'],
-            'entryCondition'=>['nullable','string','max:255'], 'exitCondition'=>['nullable','string','max:255'], 'allowJobStart'=>['boolean'], 'isSkippable'=>['boolean'], 'requiresApproval'=>['boolean'], 'autoAdvanceOnReady'=>['boolean'], 'phaseActive'=>['boolean'],
+            'phaseName'=>['required','string','max:255'], 'shortName'=>['required','string','max:50'], 'taskPackId'=>['nullable','exists:task_packs,id'],
+            'entryCondition'=>['nullable','string','max:255'], 'exitCondition'=>['nullable','string','max:255'], 'requiresApproval'=>['boolean'], 'phaseActive'=>['boolean'],
         ]);
         $workflow=WorkflowTemplate::findOrFail($this->selectedWorkflowId);
         app(WorkflowService::class)->savePhase($workflow,[
-            'name'=>$data['phaseName'],'short_name'=>$data['shortName'],'task_pack_id'=>$data['taskPackId'],'document_category_id'=>$data['documentCategoryId'],
-            'allow_job_start'=>$data['allowJobStart'],'is_skippable'=>$data['isSkippable'],'requires_approval'=>$data['requiresApproval'],'auto_advance_on_ready'=>$data['autoAdvanceOnReady'],'is_active'=>$data['phaseActive'],
+            'name'=>$data['phaseName'],'short_name'=>$data['shortName'],'task_pack_id'=>$data['taskPackId'],
+            'requires_approval'=>$data['requiresApproval'],'is_active'=>$data['phaseActive'],
             'entry_condition'=>$data['entryCondition'],'exit_condition'=>$data['exitCondition'],
         ],$this->editPhaseId?WorkflowPhase::find($this->editPhaseId):null);
         $this->showPhaseModal=false; session()->flash('success','Workflow phase saved.');
@@ -229,9 +225,6 @@ class Index extends Component
             'taskPacks' => $this->showPhaseModal
                 ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
                 : collect(),
-            'documentCategories' => $this->showPhaseModal
-                ? app(MasterDataService::class)->active('document_category')
-                : collect(),
         ];
     }
 
@@ -245,7 +238,6 @@ class Index extends Component
             'allowedStartingStages' => 0,
             'automaticTransitions' => 0,
             'taskPacks' => collect(),
-            'documentCategories' => collect(),
         ];
     }
 }

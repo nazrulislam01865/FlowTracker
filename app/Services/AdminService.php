@@ -47,10 +47,11 @@ class AdminService
     {
         return Role::query()
             ->where('workspace_id', $this->workspaceId())
-            ->withCount('users')
+            ->select(['id', 'workspace_id', 'name', 'slug', 'code', 'description', 'default_scope', 'is_system', 'is_active'])
+            ->withCount(['users', 'primaryUsers', 'memberships'])
             ->orderByDesc('is_system')
             ->orderBy('name')
-            ->get(['id', 'workspace_id', 'name', 'slug', 'code', 'description', 'default_scope', 'is_system', 'is_active']);
+            ->get();
     }
 
     public function roleOptions()
@@ -205,6 +206,112 @@ class AdminService
         return $role->refresh();
     }
 
+    /**
+     * Permanently delete a role while preserving every affected user account.
+     * The deleted role is removed from the multi-role pivot, the legacy primary
+     * role and workspace membership. If the user has another role in this
+     * workspace, that role becomes the compatibility primary/membership role;
+     * otherwise those compatibility references are left null.
+     */
+    public function deleteRole(Role $role, User $actor): int
+    {
+        $this->assertAdministrator($actor);
+        $this->assertRoleWorkspace($role);
+
+        $workspaceId = $this->workspaceId();
+        $roleId = (int) $role->id;
+        $roleName = (string) $role->name;
+
+        $affectedUserIds = collect()
+            ->merge(Schema::hasTable('user_roles')
+                ? DB::table('user_roles')->where('role_id', $roleId)->pluck('user_id')
+                : collect())
+            ->merge(Schema::hasTable('users') && Schema::hasColumn('users', 'role_id')
+                ? DB::table('users')->where('role_id', $roleId)->pluck('id')
+                : collect())
+            ->merge(Schema::hasTable('workspace_memberships') && Schema::hasColumn('workspace_memberships', 'role_id')
+                ? DB::table('workspace_memberships')->where('workspace_id', $workspaceId)->where('role_id', $roleId)->pluck('user_id')
+                : collect())
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->unique()
+            ->values();
+
+        DB::transaction(function () use ($role, $actor, $workspaceId, $roleId, $roleName, $affectedUserIds): void {
+            // Keep the audit event even though the Role row itself is about to be
+            // permanently removed. Activity subjects are intentionally polymorphic
+            // IDs without a destructive FK.
+            $this->audit(
+                $role,
+                'access.role_deleted',
+                'Permanently deleted role '.$roleName,
+                $actor,
+                ['affected_users' => $affectedUserIds->count()],
+            );
+
+            foreach ($affectedUserIds as $userId) {
+                $replacementRoleId = null;
+
+                if (Schema::hasTable('user_roles')) {
+                    $replacementRoleId = DB::table('user_roles')
+                        ->join('roles', 'roles.id', '=', 'user_roles.role_id')
+                        ->where('user_roles.user_id', $userId)
+                        ->where('user_roles.role_id', '!=', $roleId)
+                        ->where('roles.workspace_id', $workspaceId)
+                        ->orderByDesc('roles.is_active')
+                        ->orderBy('roles.id')
+                        ->value('roles.id');
+
+                    DB::table('user_roles')
+                        ->where('user_id', $userId)
+                        ->where('role_id', $roleId)
+                        ->delete();
+                }
+
+                // Older integrations may have a valid legacy primary role that
+                // has not yet been mirrored into user_roles. Preserve it rather
+                // than blanking the workspace membership unnecessarily.
+                if ($replacementRoleId === null && Schema::hasTable('users') && Schema::hasColumn('users', 'role_id')) {
+                    $replacementRoleId = DB::table('users')
+                        ->join('roles', 'roles.id', '=', 'users.role_id')
+                        ->where('users.id', $userId)
+                        ->where('users.role_id', '!=', $roleId)
+                        ->where('roles.workspace_id', $workspaceId)
+                        ->value('roles.id');
+                }
+
+                if (Schema::hasTable('users') && Schema::hasColumn('users', 'role_id')) {
+                    DB::table('users')
+                        ->where('id', $userId)
+                        ->where('role_id', $roleId)
+                        ->update(['role_id' => $replacementRoleId]);
+                }
+
+                if (Schema::hasTable('workspace_memberships') && Schema::hasColumn('workspace_memberships', 'role_id')) {
+                    DB::table('workspace_memberships')
+                        ->where('workspace_id', $workspaceId)
+                        ->where('user_id', $userId)
+                        ->where('role_id', $roleId)
+                        ->update(['role_id' => $replacementRoleId]);
+                }
+            }
+
+            // Role does not use SoftDeletes. delete() therefore removes it
+            // permanently; module permissions and legacy permission pivots cascade.
+            $role->delete();
+        });
+
+        $actor->unsetRelation('role');
+        $actor->unsetRelation('roles');
+        $actor->unsetRelation('workspaceMemberships');
+        $actor->refresh();
+
+        app(AccessControlService::class)->forgetRole($roleId);
+        app(WorkspaceRefreshService::class)->touch('role-access');
+
+        return $affectedUserIds->count();
+    }
+
     public function toggleMatrixAction(Role $role, string $module, string $action, User $actor): void
     {
         $this->assertAdministrator($actor);
@@ -248,10 +355,8 @@ class AdminService
         }
         $storedActions = $actions->filter(fn ($value) => in_array($value, $supported, true))->unique()->values()->all();
 
-        $recordScope = $row->record_scope;
-        if (AccessControlService::isUniversalRecordModule($module) || AccessControlService::isParentRecordModule($module)) {
-            $recordScope = $storedActions ? 'all_records' : 'none';
-        } elseif ($storedActions && $recordScope === 'none') {
+        $recordScope = (string) ($row->record_scope ?: 'none');
+        if ($storedActions && $recordScope === 'none') {
             $recordScope = ($role->default_scope && $role->default_scope !== 'none')
                 ? $role->default_scope
                 : 'assigned_jobs';
@@ -279,7 +384,7 @@ class AdminService
         $this->assertRoleWorkspace($role);
         abort_if(in_array($role->slug, ['super-admin','admin','administrator'], true), 422, 'Administrator scope is always all records.');
         abort_unless(isset(AccessControlService::MODULES[$module]) && AccessControlService::supportsScope($module), 422, 'This module does not use record scope.');
-        abort_unless(in_array($scope, ['none','own_records','assigned_jobs','department','all_records'], true), 422, 'Unsupported record scope.');
+        abort_unless(in_array($scope, AccessControlService::RECORD_SCOPES, true), 422, 'Unsupported record scope.');
         $row = RoleModuleAccess::firstOrCreate(['role_id' => $role->id, 'module_code' => $module], ['actions' => [], 'record_scope' => 'none']);
         $row->update([
             'record_scope' => $scope,

@@ -42,8 +42,19 @@
                     <div class="ft-role-card-top"><div class="ft-role-symbol">{{ collect(explode(' ',$role->name))->map(fn($w)=>strtoupper(substr($w,0,1)))->take(2)->implode('') }}</div><span class="badge {{ $role->is_active?'b-green':'b-gray' }}">{{ $role->is_active?'Active':'Inactive' }}</span></div>
                     <h3>{{ $role->name }}</h3><div class="small muted">{{ $role->code ?: strtoupper($role->slug) }}</div>
                     <p>{{ $role->description ?: 'Reusable FlowTrack role with module and action permissions.' }}</p>
-                    <div class="ft-role-meta"><span>{{ (int) ($role->users_count ?? 0) }} users</span><span>{{ str_replace('_',' ',$role->default_scope) }}</span></div>
-                    <div class="ft-role-buttons"><button class="ghost" wire:click="openRole({{ $role->id }})" @disabled(in_array($role->slug,['super-admin','admin','administrator'],true))>Details</button><button class="secondary" wire:click="selectRole({{ $role->id }})">Permissions</button></div>
+                    <div class="ft-role-meta"><span>{{ max((int) ($role->users_count ?? 0), (int) ($role->primary_users_count ?? 0), (int) ($role->memberships_count ?? 0)) }} users</span><span>{{ str_replace('_',' ',$role->default_scope) }}</span></div>
+                    <div class="ft-role-buttons">
+                        <button class="ghost" wire:click="openRole({{ $role->id }})" @disabled(in_array($role->slug,['super-admin','admin','administrator'],true))>Details</button>
+                        <button class="secondary" wire:click="selectRole({{ $role->id }})">Permissions</button>
+                        <button
+                            type="button"
+                            class="danger-btn ft-role-delete-btn"
+                            wire:click="deleteRole({{ $role->id }})"
+                            wire:loading.attr="disabled"
+                            wire:target="deleteRole({{ $role->id }})"
+                            wire:confirm="Permanently delete {{ addslashes($role->name) }}? This role will be deleted from FlowTrack and removed from {{ max((int) ($role->users_count ?? 0), (int) ($role->primary_users_count ?? 0), (int) ($role->memberships_count ?? 0)) }} assigned user(s). Users are NOT deleted. If a user has another role, that role stays assigned. This cannot be undone."
+                        >Delete</button>
+                    </div>
                 </article>
             @endforeach
         </div>
@@ -152,13 +163,10 @@
                                 </td>
                             @endforeach
                             @php
-                                $universalScope = \App\Services\AccessControlService::isUniversalRecordModule($code);
-                                $parentRecordScope = \App\Services\AccessControlService::isParentRecordModule($code);
                                 $scopeSupported = \App\Services\AccessControlService::supportsScope($code);
-                                $scopeLocked = !$scopeSupported || $universalScope || $parentRecordScope || in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
-                            @endphp
-                            @php
-                                $effectiveScope = !$scopeSupported ? 'all_records' : ($scopeLocked ? 'all_records' : ($access?->record_scope ?? 'none'));
+                                $administratorRole = in_array($selectedRole->slug, ['super-admin', 'admin', 'administrator'], true);
+                                $scopeLocked = !$scopeSupported || $administratorRole;
+                                $effectiveScope = $administratorRole ? 'all_records' : ($access?->record_scope ?? 'none');
                             @endphp
                             <td
                                 data-label="Record scope"
@@ -180,11 +188,15 @@
                                         });
                                     "
                                     @disabled($scopeLocked)>
-                                    @if(!$scopeSupported || $universalScope)
-                                        <option value="all_records">{{ $parentRecordScope ? 'Parent record access' : ('All records'.($universalScope ? ' (shared)' : '')) }}</option>
-                                    @else
-                                        @foreach(['none'=>'None','own_records'=>'Own records','assigned_jobs'=>'Assigned / related','department'=>'Department','all_records'=>'All records'] as $value=>$label)<option value="{{ $value }}">{{ $label }}</option>@endforeach
-                                    @endif
+                                    @foreach([
+                                        'none' => 'None',
+                                        'own_records' => 'Own records',
+                                        'assigned_jobs' => 'Assigned / related',
+                                        'department' => 'Department',
+                                        'all_records' => 'All records',
+                                    ] as $value => $label)
+                                        <option value="{{ $value }}">{{ $label }}</option>
+                                    @endforeach
                                 </select>
                                 @unless($scopeLocked)
                                     <span class="ft-matrix-scope-feedback" aria-hidden="true">
@@ -199,7 +211,7 @@
                 </table>
                 </div>
             </div>
-            <div class="ft-access-info">Every permission cell is selectable by an administrator. Users may hold multiple roles; effective actions and record visibility are the union of their active assigned roles. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. <b>Workflow Setup, Task Pack Setup, Products, Product Categories, Suppliers and the remaining Master Data</b> support separate View/Create/Edit/Delete permissions plus Manage for full control. <b>Clients are shared workspace reference data</b>, so users with Client View can see all active clients while Orders, Inquiries, Tasks and Documents keep their own selected scopes. <b>Products</b> controls the shared Product catalogue and the Product search/select/create options used on Create Inquiry and Create Order. <b>Product Categories</b> independently controls category visibility and category creation in those Product controls. <b>Products</b> is also the authority for Product rows on existing Inquiry/Order records; there is no separate Product Lines permission. The user must still have access to and edit rights for the parent Inquiry/Order before changing its Product rows. <b>Finance permissions inherit the parent record scope</b>.</div>
+            <div class="ft-access-info">Every permission cell is selectable by an administrator. Users may hold multiple roles; effective actions and record visibility are the union of their active assigned roles. Changes save automatically; the status beside the selected role confirms when the matrix is saved. The saved matrix is the authoritative role capability set; FlowTrack enforces the relevant module/action wherever that operation is available. <b>View</b> controls visibility; enabling another record action automatically enables View. <b>Edit Own</b> means the record owner/coordinator for Orders, owner for Inquiries, and assignee for Tasks. <b>Edit All</b> applies to every record inside the selected scope. Every module now uses the same configurable scope choices: <b>None, Own records, Assigned / related, Department, and All records</b>. Operational record modules (Inquiries, Orders, Tasks and Documents) enforce those scopes directly. Shared reference/setup modules keep their existing workspace-safe visibility rules, while Finance continues to inherit parent Inquiry/Order access. Administrator and Super Admin roles remain unrestricted by design.</div>
             </div>
         @endif
     @elseif($tab==='users')
@@ -215,7 +227,8 @@
             <tr wire:key="admin-user-{{ $u->id }}">
                 <td><div class="person"><x-ui.avatar :user="$u" :name="$u->name"/><div><b>{{ $u->name }}</b>@if($u->workspaceMemberships->first()?->job_title)<div class="small muted">{{ $u->workspaceMemberships->first()->job_title }}</div>@endif<div class="small muted">{{ $u->email }}</div></div></div></td>
                 <td>{{ $u->department?->name ?? '—' }}</td>
-                <td><div class="ft-user-role-chips">@forelse($u->assignedRoles() as $assignedRole)<span class="tag">{{ $assignedRole->name }}</span>@empty<span class="muted">No role</span>@endforelse</div></td>
+                @php($assignedRoleNames = $u->assignedRoles()->pluck('name')->filter()->values())
+                <td><span class="ft-user-role-list {{ $assignedRoleNames->isEmpty() ? 'muted' : '' }}">{{ $assignedRoleNames->isNotEmpty() ? $assignedRoleNames->join(', ') : 'No role' }}</span></td>
                 <td>@php($roleScopes = $u->assignedRoles()->pluck('default_scope')->filter()->unique()->values())<span class="tag">{{ $roleScopes->count() > 1 ? 'Combined scopes' : str_replace('_',' ',$roleScopes->first() ?: 'none') }}</span></td>
                 <td>{{ $u->open_tasks_count }}</td>
                 <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $adminUserStatusClass }}">{{ ucfirst($adminUserStatus) }}</span></button></td>
@@ -235,15 +248,26 @@
             <section class="card ft-access-panel"><div class="section-head"><div><h3>Access policy</h3></div></div><div class="ft-control-note"><b>Administrator/Super Admin</b><span>Unrestricted application access. These roles can configure all permissions.</span></div><div class="ft-control-note"><b>All other roles</b><span>Users can hold multiple roles. FlowTrack combines granted actions and the allowed record scopes from all active assigned roles.</span></div><div class="ft-control-note"><b>Assignments</b><span>Task assignees see their assigned tasks; associated Job visibility follows from those assignments.</span></div></section>
         </div>
     @elseif($tab==='settings')
-        <section class="card ft-access-panel ft-workspace-settings-card">
-            <div class="section-head">
-                <div><h3>Local time</h3><div class="small muted">FlowTrack automatically uses each signed-in user's current device/browser time zone.</div></div>
-            </div>
-            <div class="ft-workspace-setting-row ft-auto-timezone-row">
-                <div><b>Automatic local time</b><span>No manual selection is required. If the user's device time zone changes, FlowTrack updates it for that session automatically. Database timestamps remain unchanged.</span></div>
-                <div class="ft-access-info"><b>{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}</b><span>{{ app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('M j, Y · g:i A') }}</span></div>
-            </div>
-        </section>
+        <div class="ft-access-grid-2 ft-system-settings-grid">
+            <section class="card ft-access-panel ft-workspace-settings-card">
+                <div class="section-head">
+                    <div><h3>Company & invoice identity</h3><div class="small muted">Legal company, address, tax, contact and payment details used on newly generated invoices.</div></div>
+                </div>
+                <div class="ft-workspace-setting-row">
+                    <div><b>Company Setup</b><span>Keep invoice issuer details in one location instead of entering company information on every invoice.</span></div>
+                    <a href="{{ route('company.setup') }}" wire:navigate class="secondary">Open Company Setup</a>
+                </div>
+            </section>
+            <section class="card ft-access-panel ft-workspace-settings-card">
+                <div class="section-head">
+                    <div><h3>Local time</h3><div class="small muted">FlowTrack automatically uses each signed-in user's current device/browser time zone.</div></div>
+                </div>
+                <div class="ft-workspace-setting-row ft-auto-timezone-row">
+                    <div><b>Automatic local time</b><span>No manual selection is required. If the user's device time zone changes, FlowTrack updates it for that session automatically. Database timestamps remain unchanged.</span></div>
+                    <div class="ft-access-info"><b>{{ app(\App\Services\WorkspaceSettingsService::class)->displayTimezone() }}</b><span>{{ app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('M j, Y · g:i A') }}</span></div>
+                </div>
+            </section>
+        </div>
     @endif
 
     @if($tab === 'branding')

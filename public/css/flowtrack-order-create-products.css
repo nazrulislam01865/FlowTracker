@@ -1437,3 +1437,67 @@
         width: 100%;
     }
 }
+
+
+/* 2026-08-15 Create Inquiry mobile polish:
+   make Create Product match the full-width Add Product action on phones. */
+@media(max-width:640px) {
+    .ft-inquiry-prototype .ft-order-product-top-actions {
+        width: 100%;
+        justify-content: stretch;
+    }
+
+    .ft-inquiry-prototype .ft-order-product-top-actions > .ft-order-product-action-link {
+        width: 100%;
+        min-width: 0;
+        height: 29px;
+        padding: 0 12px;
+        border: 1px solid #d4dde9;
+        border-radius: 6px;
+        background: #fff;
+        color: #34455d;
+        font-size: 10px;
+        font-weight: 650;
+        justify-content: center;
+    }
+
+    .ft-inquiry-prototype .ft-order-product-top-actions > .ft-order-product-action-link > span {
+        font-size: 11px;
+    }
+}
+
+/* Create Inquiry: keep the Products & quantities step badge consistent with
+   Inquiry details, Attachments, and What happens next. This is intentionally
+   scoped so the shared Create Order product section keeps its existing badge. */
+.ft-inquiry-prototype .ft-inquiry-create-v3 .ft-order-products-title > span {
+    display: grid;
+    width: 24px;
+    height: 24px;
+    flex: 0 0 24px;
+    place-items: center;
+    border-radius: 7px;
+    background: #edf3ff;
+    color: #2463eb;
+    font-size: 10px;
+    font-weight: 800;
+    line-height: 1;
+}
+
+.ft-inquiry-prototype .ft-inquiry-create-v3 .ft-order-products-title {
+    gap: 8px;
+}
+
+.ft-inquiry-prototype .ft-inquiry-create-v3 .ft-order-products-title h2 {
+    font-size: 13px;
+    line-height: 1.2;
+}
+
+@media (min-width: 901px) {
+    .ft-inquiry-prototype .ft-inquiry-create-v3 .ft-order-products-title > span {
+        width: 24px;
+        height: 24px;
+        flex-basis: 24px;
+        border-radius: 7px;
+        font-size: 10px;
+    }
+}

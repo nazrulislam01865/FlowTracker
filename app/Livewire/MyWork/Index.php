@@ -24,7 +24,7 @@ class Index extends Component
     public string $search = '';
 
     #[Url(as: 'filter', history: true)]
-    public string $quick = 'all';
+    public string $quick = 'my_tasks';
 
     #[Url(as: 'sort', history: true)]
     public string $sort = 'action';
@@ -33,6 +33,7 @@ class Index extends Component
     public string $phaseFilter = '';
 
     public array $metrics = [
+        'my_tasks' => null,
         'attention' => null,
         'overdue' => null,
         'today' => null,
@@ -47,13 +48,13 @@ class Index extends Component
     public bool $administratorView = false;
     public bool $hideCompleted = false;
 
-    private const METRIC_FILTERS = ['attention', 'overdue', 'today', 'upcoming', 'waiting'];
-    private const QUICK_FILTERS = ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
+    private const METRIC_FILTERS = ['my_tasks', 'overdue', 'today', 'upcoming', 'waiting'];
+    private const QUICK_FILTERS = ['my_tasks', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
     private const SORTS = ['action', 'due', 'job'];
 
     public function mount(): void
     {
-        if (!in_array($this->quick, self::QUICK_FILTERS, true)) $this->quick = 'attention';
+        if (!in_array($this->quick, self::QUICK_FILTERS, true)) $this->quick = 'my_tasks';
         if (!in_array($this->sort, self::SORTS, true)) $this->sort = 'action';
 
         $user = auth()->user();
@@ -107,7 +108,7 @@ class Index extends Component
 
     public function setQuick(string $quick): void
     {
-        abort_unless(in_array($quick, ['all', 'mentions'], true), 422);
+        abort_unless(in_array($quick, ['my_tasks', 'mentions'], true), 422);
         $this->quick = $quick;
         $this->resetPage('workPage');
     }
@@ -119,7 +120,9 @@ class Index extends Component
         $this->search = '';
         $this->phaseFilter = '';
         $this->hideCompleted = false;
-        $this->quick = $this->quick === $quick ? 'all' : $quick;
+        // My Tasks is the canonical personal scope, so clicking the card keeps
+        // that scope active instead of toggling to the completed-inclusive neutral view.
+        $this->quick = $quick === 'my_tasks' ? 'my_tasks' : ($this->quick === $quick ? 'my_tasks' : $quick);
         $this->resetPage('workPage');
     }
 
@@ -133,15 +136,15 @@ class Index extends Component
     {
         $this->search = '';
         $this->phaseFilter = '';
-        $this->quick = 'all';
+        $this->quick = 'my_tasks';
         $this->hideCompleted = false;
         $this->resetPage('workPage');
     }
 
     private function clearMetricFilterForToolbar(): void
     {
-        if (in_array($this->quick, self::METRIC_FILTERS, true)) {
-            $this->quick = 'all';
+        if (in_array($this->quick, self::METRIC_FILTERS, true) && $this->quick !== 'my_tasks') {
+            $this->quick = 'my_tasks';
         }
     }
 
@@ -226,6 +229,7 @@ class Index extends Component
         $this->metricsLoaded = true;
         $this->dispatch(
             'my-work-metrics',
+            my_tasks: $this->metrics['my_tasks'] ?? 0,
             attention: $this->metrics['attention'] ?? 0,
             overdue: $this->metrics['overdue'] ?? 0,
             today: $this->metrics['today'] ?? 0,

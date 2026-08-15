@@ -19,6 +19,8 @@ class AccessControlService
     private array $activeRolesCache = [];
     public const ACTIONS = ['view','create','edit_own','edit_all','delete','assign','link','export','manage'];
 
+    public const RECORD_SCOPES = ['none','own_records','assigned_jobs','department','all_records'];
+
     /** Modules that are actually implemented and enforced by FlowTrack today. */
     public const MODULES = [
         'dashboard' => ['name' => 'Dashboard', 'group' => 'General'],
@@ -88,7 +90,11 @@ class AccessControlService
 
     public static function supportsScope(string $module): bool
     {
-        return in_array($module, self::SCOPED_MODULES, true);
+        // Every matrix row exposes the same record-scope choices. Operational
+        // record modules enforce the selected scope directly; shared/setup and
+        // parent-scoped modules retain their existing safe visibility semantics
+        // while still storing the administrator's selected scope consistently.
+        return isset(self::MODULES[$module]);
     }
 
     private const LEGACY = [

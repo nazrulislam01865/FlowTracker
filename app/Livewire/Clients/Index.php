@@ -97,13 +97,40 @@ class Index extends Component
         if ($this->showCreate) $this->resetCreateForm();
     }
 
-    public function updatedSearch(): void { $this->resetPage(); }
-    public function updatedCountry(): void { $this->resetPage(); }
-    public function updatedManager(): void { $this->resetPage(); }
-    public function updatedJobHealth(): void { $this->resetPage(); }
-    public function updatedOutstanding(): void { $this->resetPage(); }
-    public function updatedArchivedDate(): void { $this->resetPage(); }
-    public function updatedCreatedBy(): void { $this->resetPage(); }
+    public function updatedSearch(): void
+    {
+        $this->activateSingleListFilter('search');
+    }
+
+    public function updatedCountry(): void
+    {
+        $this->activateSingleListFilter('country');
+    }
+
+    public function updatedManager(): void
+    {
+        $this->activateSingleListFilter('manager');
+    }
+
+    public function updatedJobHealth(): void
+    {
+        $this->activateSingleListFilter('jobHealth');
+    }
+
+    public function updatedOutstanding(): void
+    {
+        $this->activateSingleListFilter('outstanding');
+    }
+
+    public function updatedArchivedDate(): void
+    {
+        $this->activateSingleListFilter('archivedDate');
+    }
+
+    public function updatedCreatedBy(): void
+    {
+        $this->activateSingleListFilter('createdBy');
+    }
     public function updatedPerPage(): void { $this->resetPage(); }
     public function updatedClientOrderSearch(): void { $this->resetPage('clientOrdersPage'); }
     public function updatedClientOrderStatus(): void { $this->resetPage('clientOrdersPage'); }
@@ -150,6 +177,11 @@ class Index extends Component
     public function setQuick(string $quick): void
     {
         abort_unless(in_array($quick, ['all','active_jobs','attention','outstanding'], true), 422);
+
+        // Summary cards and list filters are mutually exclusive. Selecting any
+        // card clears the filter bar first; Total clients therefore acts as a
+        // clean "show all" state.
+        $this->clearClientListFilterValues();
         $this->quick = $quick;
         $this->resetPage();
     }
@@ -157,6 +189,7 @@ class Index extends Component
     public function showActiveClients(): void
     {
         $this->showArchived = false;
+        $this->clearClientListFilterValues();
         $this->quick = 'all';
         $this->actionMenuClientId = null;
         $this->closePermanentDeleteClient();
@@ -166,6 +199,7 @@ class Index extends Component
     public function showArchivedClients(): void
     {
         $this->showArchived = true;
+        $this->clearClientListFilterValues();
         $this->quick = 'all';
         $this->actionMenuClientId = null;
         $this->closePermanentDeleteClient();
@@ -174,9 +208,33 @@ class Index extends Component
 
     public function clearFilters(): void
     {
-        $this->reset(['search','country','manager','jobHealth','outstanding','archivedDate','createdBy']);
+        $this->clearClientListFilterValues();
         $this->quick = 'all';
         $this->resetPage();
+    }
+
+    private function activateSingleListFilter(string $activeFilter): void
+    {
+        $allowed = ['search','country','manager','jobHealth','outstanding','archivedDate','createdBy'];
+        abort_unless(in_array($activeFilter, $allowed, true), 422);
+
+        $value = $this->{$activeFilter};
+        $hasValue = is_string($value) ? trim($value) !== '' : !empty($value);
+
+        if ($hasValue) {
+            $this->clearClientListFilterValues($activeFilter);
+            $this->quick = 'all';
+        }
+
+        $this->resetPage();
+    }
+
+    private function clearClientListFilterValues(?string $except = null): void
+    {
+        foreach (['search','country','manager','jobHealth','outstanding','archivedDate','createdBy'] as $filter) {
+            if ($filter === $except) continue;
+            $this->{$filter} = '';
+        }
     }
 
     public function clearFilter(string $filter): void

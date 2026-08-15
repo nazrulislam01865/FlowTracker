@@ -25,7 +25,7 @@ final class MasterColor
     {
         $name = strtolower(trim((string) $name));
 
-        if ($type === 'task_flag') {
+        if (in_array($type, ['task_flag', 'order_task_flag', 'order_flag'], true)) {
             return match (true) {
                 str_contains($name, 'block') => '#DC2626',
                 str_contains($name, 'revision') => '#EA580C',
@@ -35,7 +35,7 @@ final class MasterColor
             };
         }
 
-        if (in_array($type, ['task_status', 'inquiry_task_status'], true)) {
+        if (in_array($type, ['task_status', 'inquiry_task_status', 'order_task_status'], true)) {
             return match (true) {
                 str_contains($name, 'complete'), str_contains($name, 'done') => '#16A34A',
                 str_contains($name, 'cancel') => '#DC2626',

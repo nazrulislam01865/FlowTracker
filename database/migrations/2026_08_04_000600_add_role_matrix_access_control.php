@@ -110,7 +110,7 @@ return new class extends Migration
                 $table->id();
                 $table->unsignedBigInteger('workspace_id')->default(1);
                 $table->foreignId('user_id')->constrained('users')->cascadeOnDelete();
-                $table->foreignId('role_id')->constrained('roles')->restrictOnDelete();
+                $table->foreignId('role_id')->nullable()->constrained('roles')->nullOnDelete();
                 $table->foreignId('department_id')->nullable()->constrained('departments')->nullOnDelete();
                 $table->string('job_title')->nullable();
                 $table->string('status', 20)->default('active');

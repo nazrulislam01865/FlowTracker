@@ -6,14 +6,15 @@ use Tests\TestCase;
 
 class BulkOrderImportImplementationTest extends TestCase
 {
-    public function test_bulk_order_import_keeps_the_supplied_prototype_contract_and_real_backend_hooks(): void
+    public function test_bulk_order_import_matches_the_refined_template_and_backend_contract(): void
     {
         $view = file_get_contents(resource_path('views/pages/bulk-order-import.blade.php'));
         $routes = file_get_contents(base_path('routes/web.php'));
         $service = file_get_contents(app_path('Services/BulkOrderImportService.php'));
         $reader = file_get_contents(app_path('Services/SpreadsheetRowReader.php'));
         $jobService = file_get_contents(app_path('Services/JobService.php'));
-        $migration = file_get_contents(database_path('migrations/2026_08_10_200000_add_bulk_order_import_support.php'));
+        $baseMigration = file_get_contents(database_path('migrations/2026_08_10_200000_add_bulk_order_import_support.php'));
+        $refinedMigration = file_get_contents(database_path('migrations/2026_08_15_051500_refine_bulk_order_import_fields.php'));
         $controller = file_get_contents(app_path('Http/Controllers/BulkOrderImportController.php'));
         $bulkCss = file_get_contents(public_path('css/flowtrack-bulk-order-import.css'));
         $ordersTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
@@ -21,59 +22,72 @@ class BulkOrderImportImplementationTest extends TestCase
         $bulkJs = file_get_contents(public_path('js/flowtrack-bulk-order-import.js'));
 
         $this->assertStringContainsString('<h1>Import orders</h1>', $view);
-        $this->assertStringContainsString('Create many orders safely from an Excel or CSV file.', $view);
-        $this->assertStringContainsString('Drop your order file here', $view);
-        $this->assertStringContainsString('up to 10,000 rows', $view);
-        $this->assertStringContainsString('If reference already exists', $view);
-        $this->assertStringContainsString('Skip existing order', $view);
-        $this->assertStringContainsString('Update matching order', $view);
-        $this->assertStringContainsString('Create a separate order', $view);
-        $this->assertStringContainsString('No master data created silently', $view);
-        $this->assertStringContainsString('Client-based workflow', $view);
-        $this->assertStringContainsString('Fallback Client ID', $view);
-        $this->assertStringNotContainsString('Import profile', $view);
-        $this->assertStringContainsString('Audit log and source fingerprint saved.', $view);
+        $this->assertStringContainsString('Only Client ID and Order Title are mandatory.', $view);
+        $this->assertStringContainsString('Repeat Order No. becomes required only when Repeat Order? is Yes.', $view);
+        $this->assertStringContainsString('Product ID may be blank.', $view);
+        $this->assertStringContainsString('Normal, Urgent or Super Urgent', $view);
+        $this->assertStringContainsString('If Reference Order No. already exists', $view);
+        $this->assertStringContainsString('Client &amp; Product IDs validated', $view);
+        $this->assertStringNotContainsString('Fallback Client ID', $view);
+        $this->assertStringNotContainsString('Fallback Supplier ID', $view);
+        $this->assertStringNotContainsString('What is Source Row ID?', $view);
 
         $this->assertStringContainsString("Route::get('/orders/bulk-import'", $routes);
         $this->assertStringContainsString("Route::post('/orders/bulk-import/validate'", $routes);
         $this->assertStringContainsString("Route::post('/orders/bulk-import/import'", $routes);
         $this->assertStringContainsString("name('orders.bulk-import.template')", $routes);
 
-        $this->assertStringContainsString("'referenceorderno'", $service);
-        $this->assertStringContainsString("'sourcerowid'", $service);
-        $this->assertStringContainsString("'Critical'", $service);
-        $this->assertStringContainsString('Source Row ID was already imported', $service);
-        $this->assertStringContainsString('Urgent? must be Yes or No', $service);
-        $this->assertStringContainsString('Required delivery date cannot be earlier than received date', $service);
-        $this->assertStringContainsString('Client is required. Enter a valid Client ID in the file or select a fallback client.', $service);
+        $this->assertStringContainsString("'client_id' => ['clientid', 'clientcode']", $service);
+        $this->assertStringContainsString("'is_repeat' => ['repeatorderyesno'", $service);
+        $this->assertStringContainsString("'product_id' => ['productid'", $service);
+        $this->assertStringContainsString("'estimated_delivery' => ['estimateddeliverydate']", $service);
+        $this->assertStringContainsString("'production_urgency' => ['productionurgency'", $service);
+        $this->assertStringContainsString("'shipment_urgency' => ['shipmenturgency'", $service);
+        $this->assertStringContainsString("'notes' => ['notes', 'ordernotes']", $service);
+        $this->assertStringContainsString('Client ID is required', $service);
+        $this->assertStringContainsString('Order Title is required', $service);
+        $this->assertStringContainsString('Repeat Order? must be Yes or No', $service);
+        $this->assertStringContainsString('Repeat Order No. is required when Repeat Order? is Yes', $service);
+        $this->assertStringContainsString('Product ID does not match an active Product', $service);
+        $this->assertStringContainsString('Product Quantity must be a whole number', $service);
+        $this->assertStringContainsString('Invalid Customer Requested Delivery Date', $service);
+        $this->assertStringContainsString('Invalid Estimated Delivery Date', $service);
+        $this->assertStringContainsString('resolveUrgency', $service);
+        $this->assertStringContainsString("'notes' => blank(\$row['notes']) ? null : \$row['notes']", $service);
         $this->assertStringContainsString('resolveClientOrderWorkflow', $service);
         $this->assertStringContainsString('Select an Order workflow for this client', $service);
-        $this->assertStringContainsString('availableOrderWorkflowOptions', $service);
-        $this->assertStringNotContainsString('resolvePreferredWorkflow', $service);
         $this->assertStringContainsString('workflowAvailableForClient', $service);
         $this->assertStringContainsString('bulk_order_import_rows', $service);
         $this->assertStringContainsString("'profile' => 'CLIENT_AUTO'", $service);
-        $this->assertStringNotContainsString("'profile' => ['required', 'in:IID,NEP']", $controller);
+        $this->assertStringNotContainsString('Urgent? is required', $service);
+        $this->assertStringNotContainsString('Order description is required', $service);
+        $this->assertStringNotContainsString('Invalid received date', $service);
+
+        $this->assertStringNotContainsString("'default_client_id' => ['nullable', 'integer']", $controller);
+        $this->assertStringNotContainsString("'default_supplier_id' => ['nullable', 'integer']", $controller);
         $this->assertStringContainsString('.steps .step::before', $bulkCss);
         $this->assertStringContainsString('content:none!important', $bulkCss);
         $this->assertStringContainsString('ft-bulk-import-button', $ordersTable);
         $this->assertStringContainsString('/css/flowtrack-bulk-order-import.css', $layout);
-        $this->assertStringNotContainsString('<link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css', $view);
         $this->assertStringContainsString('manual_workflows', $bulkJs);
-        $this->assertStringContainsString('ftbi-row-workflow', $bulkJs);
+        $this->assertStringContainsString('Client ID *', $bulkJs);
+        $this->assertStringContainsString('Production Urgency', $bulkJs);
+        $this->assertStringContainsString('Shipment Urgent', $bulkJs);
 
-        $this->assertStringContainsString('findHeaderRow', $reader);
-        $this->assertStringContainsString('header_row', $reader);
+        $this->assertStringContainsString("in_array('clientid', \$keys, true)", $reader);
+        $this->assertStringContainsString("in_array('ordertitle', \$keys, true)", $reader);
         $this->assertStringContainsString('legacy binary .xls', $reader);
 
-        $this->assertStringContainsString("'order_number' => blank(\$data['order_number']", $jobService);
-        $this->assertStringContainsString("'received_date' => \$data['received_date']", $jobService);
-        $this->assertStringContainsString("'source_row_id' => blank(\$data['source_row_id']", $jobService);
+        $this->assertStringContainsString("'is_repeat_order' => (bool) (\$data['is_repeat_order'] ?? false)", $jobService);
+        $this->assertStringContainsString("'estimated_delivery_date' => \$data['estimated_delivery_date'] ?? null", $jobService);
+        $this->assertStringContainsString("'production_urgency_ids'", $jobService);
+        $this->assertStringContainsString("'shipment_urgency_ids'", $jobService);
+        $this->assertStringContainsString("'notes' => blank(\$data['notes'] ?? null)", $jobService);
 
-        $this->assertStringContainsString("dropUnique(['order_number'])", $migration);
-        $this->assertStringContainsString("unique('source_row_id'", $migration);
-        $this->assertStringContainsString("Schema::create('bulk_order_imports'", $migration);
-        $this->assertStringContainsString("Schema::create('bulk_order_import_rows'", $migration);
+        $this->assertStringContainsString("Schema::create('bulk_order_imports'", $baseMigration);
+        $this->assertStringContainsString("Schema::create('bulk_order_import_rows'", $baseMigration);
+        $this->assertStringContainsString("Schema::hasColumn('flow_jobs', 'notes')", $refinedMigration);
+        $this->assertStringContainsString("'name' => 'Super Urgent'", $refinedMigration);
         $this->assertFileExists(storage_path('app/templates/FlowTrack_Bulk_Order_Import_Template_v2.xlsx'));
     }
 }

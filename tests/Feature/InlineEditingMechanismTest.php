@@ -14,6 +14,7 @@ class InlineEditingMechanismTest extends TestCase
         $administration = file_get_contents(app_path('Livewire/Administration/Index.php'));
 
         foreach ([
+            'updateJobUrgencies',
             'updateJobOwner',
             'updateJobCoordinator',
             'updateJobDeliveryDate',
@@ -83,6 +84,28 @@ class InlineEditingMechanismTest extends TestCase
         $administration = file_get_contents(resource_path('views/livewire/administration/index.blade.php'));
         $this->assertStringContainsString('FlowTrackInlineEdit', $administration);
         $this->assertStringContainsString('ft-matrix-save-summary', $administration);
+    }
+
+    public function test_order_overview_urgencies_are_inline_editable_and_owner_alignment_is_scoped(): void
+    {
+        $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
+        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
+        $service = file_get_contents(app_path('Services/JobService.php'));
+        $css = file_get_contents(public_path('css/flowtrack-inline-editing.css'));
+
+        $this->assertStringContainsString("updateJobUrgencies({{ $job->id }}, 'production'", $overview);
+        $this->assertStringContainsString("updateJobUrgencies({{ $job->id }}, 'shipment'", $overview);
+        $this->assertStringContainsString('ft-inline-urgency-editor', $overview);
+        $this->assertStringContainsString('ft-inline-urgency-select', $overview);
+        $this->assertStringContainsString('x-model="selectedId"', $overview);
+        $this->assertStringNotContainsString('ft-inline-urgency-option', $overview);
+        $this->assertStringNotContainsString('toggleUrgency(', $overview);
+        $this->assertStringContainsString('Select only one ', $jobs);
+        $this->assertStringContainsString('accepts only one selection', $service);
+        $this->assertStringContainsString('public function updateJobUrgencies', $jobs);
+        $this->assertStringContainsString('public function updateUrgencies', $service);
+        $this->assertStringContainsString('.ft-planning-owner-row .ft-planning-value', $css);
+        $this->assertStringContainsString('justify-content:flex-start!important', $css);
     }
 
     public function test_inline_runtime_supports_optimistic_save_rollback_and_retry(): void

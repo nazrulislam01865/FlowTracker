@@ -202,6 +202,35 @@ class Index extends Component
         $this->showRoleModal = false;
     }
 
+    public function deleteRole(int $roleId): void
+    {
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $role = Role::query()->where('workspace_id', $workspaceId)->findOrFail($roleId);
+        $roleName = $role->name;
+
+        $affectedUsers = app(AdminService::class)->deleteRole($role, auth()->user());
+
+        if ((int) $this->selectedRoleId === $roleId) {
+            $this->selectedRoleId = Role::query()
+                ->where('workspace_id', $workspaceId)
+                ->orderByDesc('is_system')
+                ->orderBy('name')
+                ->value('id');
+        }
+
+        if ((int) $this->editingRoleId === $roleId) {
+            $this->closeRole();
+            $this->editingRoleId = null;
+        }
+
+        session()->flash(
+            'success',
+            $roleName.' was permanently deleted. '.($affectedUsers === 1
+                ? '1 user role assignment was removed.'
+                : $affectedUsers.' user role assignments were removed.'),
+        );
+    }
+
     public function toggleMatrixAction(int $roleId, string $module, string $action): void
     {
         app(AdminService::class)->toggleMatrixAction(Role::findOrFail($roleId), $module, $action, auth()->user());

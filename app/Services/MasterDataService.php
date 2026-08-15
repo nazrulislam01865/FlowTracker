@@ -17,7 +17,7 @@ class MasterDataService
     /** @var array<string,array<string,string>> */
     private array $colorMaps = [];
 
-    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_task_status', 'task_flag'];
+    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
 
     public const ACCESS_MODULES = [
         'product' => 'catalog_products',
@@ -48,9 +48,12 @@ class MasterDataService
         'priority' => 'Priorities',
         'production_urgency' => 'Production Urgencies',
         'shipment_urgency' => 'Shipment Urgencies',
-        'task_status' => 'Task Statuses',
+        'task_status' => 'Legacy Task Statuses',
         'inquiry_task_status' => 'Inquiry Task Statuses',
-        'task_flag' => 'Task Flags',
+        'task_flag' => 'Legacy Task Flags',
+        'order_task_status' => 'Order Task Statuses',
+        'order_task_flag' => 'Order Task Flags',
+        'order_flag' => 'Order Flags',
     ];
 
     /**
@@ -80,6 +83,9 @@ class MasterDataService
         'task_status' => 'TST',
         'inquiry_task_status' => 'IST',
         'task_flag' => 'TFL',
+        'order_task_status' => 'OTS',
+        'order_task_flag' => 'OTF',
+        'order_flag' => 'ORF',
     ];
 
     private const LEGACY_GROUPS = [
@@ -96,9 +102,39 @@ class MasterDataService
         'priority' => 'priorities',
         'task_status' => 'task_statuses',
         'inquiry_task_status' => 'inquiry_task_statuses',
+        'order_task_status' => 'order_task_statuses',
+        'task_flag' => 'task_flags',
+        'order_task_flag' => 'order_task_flags',
+        'order_flag' => 'order_flags',
     ];
 
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
+
+    /**
+     * Return the business currency value represented by a Currency master row.
+     *
+     * Master Data codes such as CUR-001 are internal record identifiers and must
+     * never leak into orders/invoices as the currency itself. Prefer an explicit
+     * ISO value from metadata, then a 3-letter name (for records named USD/EUR),
+     * and finally a legacy 3-letter code.
+     */
+    public function currencyValue(MasterRecord $currency): string
+    {
+        $candidates = [
+            data_get($currency->metadata, 'currency_code'),
+            data_get($currency->metadata, 'iso_code'),
+            data_get($currency->metadata, 'iso'),
+            $currency->name,
+            $currency->code,
+        ];
+
+        foreach ($candidates as $candidate) {
+            $value = strtoupper(trim((string) $candidate));
+            if (preg_match('/^[A-Z]{3}$/', $value)) return $value;
+        }
+
+        return '';
+    }
 
     public function query(string $type, string $search = '', array $filters = [])
     {
@@ -297,6 +333,21 @@ class MasterDataService
             throw ValidationException::withMessages(['parentId' => 'Select the country this state belongs to.']);
         }
 
+        if ($type === 'order_task_status' && filled(data_get($data, 'metadata.order_task_flag_id'))) {
+            $mappedFlag = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('order_task_flag')
+                ->whereKey((int) data_get($data, 'metadata.order_task_flag_id'))
+                ->whereNull('deleted_at')
+                ->first();
+
+            if ($mappedFlag?->systemKey() === 'overdue') {
+                throw ValidationException::withMessages([
+                    'orderTaskFlagId' => 'Overdue is automatic from the due date and cannot be assigned to an Order Task Status.',
+                ]);
+            }
+        }
+
         $record = DB::transaction(function () use ($type, $data, $id, $workspaceId, $code, $parentId) {
             $record = $id
                 ? MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id)
@@ -371,6 +422,44 @@ class MasterDataService
             }
         }
 
+
+
+        // Order task statuses and flags are independent from Inquiry master data.
+        // Any mapping/name/color change must immediately recalculate affected
+        // Order tasks and their persisted parent Order flag.
+        if (in_array($record->type, ['order_task_status', 'order_task_flag', 'order_flag'], true)
+            && Schema::hasTable('tasks')) {
+            $taskIds = collect();
+
+            if ($record->type === 'order_task_status' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'order_task_status_id')) {
+                $taskIds = DB::table('tasks')
+                    ->where('order_task_status_id', $record->id)
+                    ->whereNull('deleted_at')
+                    ->pluck('id');
+                DB::table('tasks')->where('order_task_status_id', $record->id)->update(['status' => $record->name]);
+            } elseif ($record->type === 'order_task_flag' && Schema::hasColumn('tasks', 'order_task_flag_id')) {
+                $taskIds = DB::table('tasks')
+                    ->where('order_task_flag_id', $record->id)
+                    ->whereNull('deleted_at')
+                    ->pluck('id');
+            } elseif ($record->type === 'order_flag' && Schema::hasColumn('flow_jobs', 'order_flag_id')) {
+                DB::table('flow_jobs')
+                    ->where('order_flag_id', $record->id)
+                    ->whereNull('deleted_at')
+                    ->pluck('id')
+                    ->each(function ($jobId): void {
+                        if ($job = \App\Models\FlowJob::query()->find($jobId)) {
+                            app(OrderTaskFlagService::class)->syncJob($job);
+                        }
+                    });
+            }
+
+            $taskIds->each(function ($taskId): void {
+                if ($task = \App\Models\Task::query()->find($taskId)) {
+                    app(OrderTaskFlagService::class)->syncTask($task);
+                }
+            });
+        }
         return $record;
     }
 
@@ -396,9 +485,29 @@ class MasterDataService
     {
         $record = MasterRecord::query()->forWorkspace($this->workspaceId())->findOrFail($id);
         $this->assertAction($record->type, 'edit');
+        if (in_array($record->type, ['order_task_flag', 'order_flag'], true)
+            && data_get($record->metadata, 'system_key') === 'overdue'
+            && $record->status === 'active') {
+            throw ValidationException::withMessages(['record' => 'The automatic Overdue flag must remain active.']);
+        }
+        if ($record->status === 'active' && $record->type === 'order_task_flag'
+            && DB::table('master_records')->where('type', 'order_task_status')->whereNull('deleted_at')->where('metadata->order_task_flag_id', $record->id)->exists()) {
+            throw ValidationException::withMessages(['record' => 'This Order Task Flag is mapped to an Order Task Status. Remove that mapping before deactivating it.']);
+        }
+        if ($record->status === 'active' && $record->type === 'order_flag'
+            && DB::table('master_records')->where('type', 'order_task_flag')->whereNull('deleted_at')->where('metadata->order_flag_id', $record->id)->exists()) {
+            throw ValidationException::withMessages(['record' => 'This Order Flag is mapped to an Order Task Flag. Remove that mapping before deactivating it.']);
+        }
         $record->update(['status' => $record->status === 'active' ? 'inactive' : 'active']);
         $this->mirrorLegacy($record);
         $this->forgetActiveCache($record->type);
+
+        if (in_array($record->type, ['order_task_status', 'order_task_flag', 'order_flag'], true)
+            && Schema::hasTable('tasks')
+            && Schema::hasColumn('tasks', 'order_task_flag_id')) {
+            app(OrderTaskFlagService::class)->syncOpenTasks();
+        }
+
         return $record;
     }
 
@@ -432,6 +541,31 @@ class MasterDataService
         }
         if ($record->type === 'task_flag' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'task_flag_id') && DB::table('tasks')->where('task_flag_id', $record->id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This Task Flag is already assigned to one or more tasks and cannot be deleted. Deactivate it instead.']);
+        }
+        if ($record->type === 'order_task_status' && Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'order_task_status_id') && DB::table('tasks')->where('order_task_status_id', $record->id)->exists()) {
+            throw ValidationException::withMessages(['record' => 'This Order Task Status is already used by tasks and cannot be deleted. Deactivate it instead.']);
+        }
+        if ($record->type === 'order_task_flag') {
+            if (data_get($record->metadata, 'system_key') === 'overdue') {
+                throw ValidationException::withMessages(['record' => 'The automatic Overdue Order Task Flag is a system flag and cannot be deleted.']);
+            }
+            if (Schema::hasTable('tasks') && Schema::hasColumn('tasks', 'order_task_flag_id') && DB::table('tasks')->where('order_task_flag_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Order Task Flag is already used by tasks and cannot be deleted. Deactivate it instead.']);
+            }
+            if (DB::table('master_records')->where('type', 'order_task_status')->whereNull('deleted_at')->where('metadata->order_task_flag_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Order Task Flag is mapped to an Order Task Status. Remove that mapping first.']);
+            }
+        }
+        if ($record->type === 'order_flag') {
+            if (data_get($record->metadata, 'system_key') === 'overdue') {
+                throw ValidationException::withMessages(['record' => 'The automatic Overdue Order Flag is a system flag and cannot be deleted.']);
+            }
+            if (Schema::hasTable('flow_jobs') && Schema::hasColumn('flow_jobs', 'order_flag_id') && DB::table('flow_jobs')->where('order_flag_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Order Flag is already used by orders and cannot be deleted. Deactivate it instead.']);
+            }
+            if (DB::table('master_records')->where('type', 'order_task_flag')->whereNull('deleted_at')->where('metadata->order_flag_id', $record->id)->exists()) {
+                throw ValidationException::withMessages(['record' => 'This Order Flag is mapped to an Order Task Flag. Remove that mapping first.']);
+            }
         }
         if ($record->type === 'product' && data_get($record->metadata, 'product_image_path')) {
             app(ProductImageService::class)->remove($record);
@@ -516,7 +650,8 @@ class MasterDataService
         // Their description begins with the Product Category name, e.g.
         // "Backpacks & Bags · Custom". Link only when that prefix exactly
         // matches a real category in this workspace; otherwise leave it alone.
-        foreach (MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->whereNull('parent_id')->get(['id', 'description']) as $product) {
+        foreach (MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->whereNull('parent_id')->get(['id', 'description', 'metadata']) as $product) {
+            if (filter_var(data_get($product->metadata, 'taxonomy_unassigned', false), FILTER_VALIDATE_BOOL)) continue;
             $categoryName = trim(explode(' ·', trim((string) $product->description), 2)[0]);
             if ($categoryName === '') continue;
 

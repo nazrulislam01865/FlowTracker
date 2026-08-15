@@ -7,6 +7,7 @@ use App\Models\Client;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
+use App\Services\ProductCategoryDeletionService;
 use App\Support\MasterColor;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Validation\Rule;
@@ -67,6 +68,8 @@ class Index extends Component
     public string $metadataJson = '';
     public string $autoInquiryStatus = 'To do';
     public bool $requiresAttention = false;
+    public ?int $orderTaskFlagId = null;
+    public ?int $orderFlagId = null;
     public $productImage = null;
     public ?string $existingProductImageUrl = null;
     public bool $removeProductImage = false;
@@ -92,6 +95,14 @@ class Index extends Component
     public array $expandedProductCategoryIds = [];
     public array $categoryProductLimits = [];
     public array $categorySubcategoryLimits = [];
+
+    // Product-category bulk selection. Keys use level:id so hierarchy levels can be mixed safely.
+    public array $selectedCategoryKeys = [];
+
+    // Destructive category deletion is always previewed before execution.
+    public bool $showCategoryDeleteConfirm = false;
+    public array $categoryDeletePreview = [];
+    public array $categoryDeleteTargetKeys = [];
 
     private const CATEGORY_PRODUCT_BATCH = 4;
     private const CATEGORY_SUBCATEGORY_BATCH = 3;
@@ -154,6 +165,8 @@ class Index extends Component
         $this->productCategorySearch = '';
         $this->newProductCategoryName = '';
         $this->clearProductSelection();
+        $this->clearCategorySelection();
+        $this->closeCategoryDeleteConfirmation();
         $this->resetPage('masterPage');
         $this->resetValidation();
     }
@@ -217,6 +230,12 @@ class Index extends Component
                 $this->autoInquiryStatus = 'To do';
                 $this->requiresAttention = false;
             }
+            $this->orderTaskFlagId = $this->group === 'order_task_status'
+                ? ((int) ($metadata['order_task_flag_id'] ?? 0) ?: null)
+                : null;
+            $this->orderFlagId = $this->group === 'order_task_flag'
+                ? ((int) ($metadata['order_flag_id'] ?? 0) ?: null)
+                : null;
             unset($metadata['product_image_path']);
             $this->metadataJson = $metadata ? json_encode($metadata, JSON_PRETTY_PRINT | JSON_UNESCAPED_SLASHES) : '';
             return;
@@ -237,6 +256,8 @@ class Index extends Component
         $this->status = 'active';
         $this->autoInquiryStatus = 'To do';
         $this->requiresAttention = false;
+        $this->orderTaskFlagId = null;
+        $this->orderFlagId = null;
         $this->sortOrder = (int) MasterRecord::where('workspace_id', $service->workspaceId())->where('type', $this->group)->max('sort_order') + 1;
     }
 
@@ -691,6 +712,7 @@ class Index extends Component
         $this->recordsReady = true;
         $this->clearProductSelection();
         if ($this->group === 'product_category') {
+            $this->clearCategorySelection();
             $this->resetCategoryLazyLoading();
         }
         $this->resetPage('masterPage');
@@ -756,6 +778,7 @@ class Index extends Component
     public function updatedCategoryLevelFilter(): void
     {
         $this->recordsReady = true;
+        $this->clearCategorySelection();
         $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
@@ -763,6 +786,7 @@ class Index extends Component
     public function updatedCategoryParentFilter(): void
     {
         $this->recordsReady = true;
+        $this->clearCategorySelection();
         $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
@@ -770,6 +794,7 @@ class Index extends Component
     public function updatedCategoryStatusFilter(): void
     {
         $this->recordsReady = true;
+        $this->clearCategorySelection();
         $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
@@ -790,6 +815,7 @@ class Index extends Component
         $this->categoryParentFilter = '';
         $this->categoryStatusFilter = '';
         $this->recordsReady = true;
+        $this->clearCategorySelection();
         $this->resetCategoryLazyLoading();
         $this->resetPage('masterPage');
     }
@@ -874,6 +900,218 @@ class Index extends Component
     {
         abort_unless($this->group === 'product_category', 404);
         $this->resetCategoryLazyLoading();
+    }
+
+
+    private function categoryTypeForLevel(string $level): string
+    {
+        return match ($level) {
+            'main' => 'product_main_category',
+            'product' => 'product_category',
+            'sub' => 'product_subcategory',
+            default => abort(404),
+        };
+    }
+
+    private function normalizeCategorySelectionKey(string $key): ?array
+    {
+        if (! preg_match('/^(main|product|sub):(\d+)$/', trim($key), $matches)) return null;
+        return [$matches[1], (int) $matches[2]];
+    }
+
+    public function toggleCategorySelection(string $level, int $id): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $type = $this->categoryTypeForLevel($level);
+        MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())->ofType($type)->findOrFail($id);
+
+        $key = $level.':'.$id;
+        $selected = collect($this->selectedCategoryKeys)->map(fn ($value) => (string) $value);
+        $this->selectedCategoryKeys = $selected->contains($key)
+            ? $selected->reject(fn ($value) => $value === $key)->values()->all()
+            : $selected->push($key)->unique()->values()->all();
+    }
+
+    public function toggleCategoryPageSelection(array $keys, bool $checked): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $parsedKeys = collect($keys)
+            ->map(fn ($key) => $this->normalizeCategorySelectionKey((string) $key))
+            ->filter()
+            ->groupBy(fn ($pair) => $pair[0]);
+        $validKeys = collect();
+        foreach (['main', 'product', 'sub'] as $level) {
+            $ids = collect($parsedKeys->get($level, collect()))->pluck(1)->map(fn ($id) => (int) $id)->unique()->values();
+            if ($ids->isEmpty()) continue;
+            MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType($this->categoryTypeForLevel($level))
+                ->whereIn('id', $ids->all())
+                ->pluck('id')
+                ->each(fn ($id) => $validKeys->push($level.':'.(int) $id));
+        }
+        $validKeys = $validKeys->unique()->values();
+
+        if ($validKeys->isEmpty()) return;
+        $selected = collect($this->selectedCategoryKeys)->map(fn ($value) => (string) $value);
+        $this->selectedCategoryKeys = $checked
+            ? $selected->concat($validKeys)->unique()->values()->all()
+            : $selected->reject(fn ($value) => $validKeys->contains($value))->values()->all();
+    }
+
+    public function clearCategorySelection(): void
+    {
+        $this->selectedCategoryKeys = [];
+    }
+
+    private function selectedCategoryRecords(): \Illuminate\Support\Collection
+    {
+        if ($this->group !== 'product_category') return collect();
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $grouped = collect($this->selectedCategoryKeys)
+            ->map(fn ($key) => $this->normalizeCategorySelectionKey((string) $key))
+            ->filter()
+            ->groupBy(fn ($pair) => $pair[0]);
+
+        return collect(['main', 'product', 'sub'])->flatMap(function (string $level) use ($grouped, $workspaceId) {
+            $ids = collect($grouped->get($level, collect()))->pluck(1)->map(fn ($id) => (int) $id)->unique()->values();
+            if ($ids->isEmpty()) return collect();
+            return MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType($this->categoryTypeForLevel($level))
+                ->whereIn('id', $ids->all())
+                ->get()
+                ->map(fn (MasterRecord $record) => ['level' => $level, 'record' => $record]);
+        })->values();
+    }
+
+    public function bulkSetCategoryStatus(string $status): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $this->authorizeGroupAction('edit');
+        abort_unless(in_array($status, ['active', 'inactive'], true), 422);
+        $selected = $this->selectedCategoryRecords();
+        if ($selected->isEmpty()) return;
+
+        foreach ($selected as $item) {
+            $record = $item['record'];
+            if ($record->status === $status) continue;
+            $record->status = $status;
+            $record->save();
+        }
+
+        $count = $selected->count();
+        $this->clearCategorySelection();
+        $this->recordsReady = true;
+        session()->flash('success', number_format($count).' '.strtolower(\Illuminate\Support\Str::plural('category', $count)).' set to '.$status.'.');
+    }
+
+    public function exportSelectedCategories()
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $this->authorizeGroupAction('view');
+        $selected = $this->selectedCategoryRecords();
+        if ($selected->isEmpty()) return null;
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $filename = 'flowtrack-product-categories-'.now()->format('Ymd-His').'.csv';
+
+        return response()->streamDownload(function () use ($selected, $workspaceId): void {
+            $out = fopen('php://output', 'w');
+            fwrite($out, "\xEF\xBB\xBF");
+            fputcsv($out, ['Category', 'Code', 'Level', 'Parent', 'Status', 'Updated']);
+            foreach ($selected as $item) {
+                $record = $item['record'];
+                $level = $item['level'];
+                $parent = '—';
+                if ($level === 'product') {
+                    $mainId = (int) data_get($record->metadata, 'main_category_id', 0);
+                    $parent = $mainId > 0
+                        ? (string) (MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_main_category')->whereKey($mainId)->value('name') ?: '—')
+                        : (string) (data_get($record->metadata, 'main_category') ?: data_get($record->metadata, 'excel_main_category') ?: '—');
+                } elseif ($level === 'sub') {
+                    $parent = (string) (MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->whereKey($record->parent_id)->value('name') ?: '—');
+                }
+                fputcsv($out, [
+                    $record->name,
+                    $record->code,
+                    match ($level) { 'main' => 'Main category', 'product' => 'Product category', default => 'Subcategory' },
+                    $parent,
+                    ucfirst((string) $record->status),
+                    optional($record->updated_at)->toDateTimeString(),
+                ]);
+            }
+            fclose($out);
+        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    public function openCategoryDeleteConfirmation(?string $level = null, ?int $id = null): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $this->authorizeGroupAction('delete');
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        app(\App\Services\ProductTaxonomyService::class)->synchronizeLegacyTaxonomy();
+
+        if ($level !== null && $id !== null) {
+            $type = $this->categoryTypeForLevel($level);
+            MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id);
+            $keys = [$level.':'.$id];
+        } else {
+            $keys = collect($this->selectedCategoryKeys)->map(fn ($key) => (string) $key)->unique()->values()->all();
+        }
+
+        if ($keys === []) return;
+
+        $preview = app(ProductCategoryDeletionService::class)->preview($workspaceId, $keys);
+        if (($preview['total_categories'] ?? 0) < 1) {
+            $this->addError('record', 'The selected categories no longer exist. Refresh the page and try again.');
+            return;
+        }
+
+        $this->categoryDeleteTargetKeys = $keys;
+        $this->categoryDeletePreview = $preview;
+        $this->showCategoryDeleteConfirm = true;
+    }
+
+    public function closeCategoryDeleteConfirmation(): void
+    {
+        $this->showCategoryDeleteConfirm = false;
+        $this->categoryDeletePreview = [];
+        $this->categoryDeleteTargetKeys = [];
+    }
+
+    /**
+     * Backward-compatible bulk entry point. Deletion never happens without the impact modal.
+     */
+    public function bulkDeleteCategories(): void
+    {
+        $this->openCategoryDeleteConfirmation();
+    }
+
+    public function confirmCategoryHardDelete(): void
+    {
+        abort_unless($this->group === 'product_category', 404);
+        $this->authorizeGroupAction('delete');
+        if ($this->categoryDeleteTargetKeys === []) return;
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $result = app(ProductCategoryDeletionService::class)->hardDelete($workspaceId, $this->categoryDeleteTargetKeys);
+
+        $deletedCategories = (int) ($result['total_categories'] ?? 0);
+        $unassignedProducts = (int) ($result['products'] ?? 0);
+
+        $this->closeCategoryDeleteConfirmation();
+        $this->clearCategorySelection();
+        $this->resetCategoryLazyLoading();
+        $this->recordsReady = true;
+        $this->resetPage('masterPage');
+
+        session()->flash(
+            'success',
+            number_format($deletedCategories).' '.strtolower(\Illuminate\Support\Str::plural('category', $deletedCategories)).' permanently deleted'
+            .($unassignedProducts > 0 ? ' and '.number_format($unassignedProducts).' '.strtolower(\Illuminate\Support\Str::plural('product', $unassignedProducts)).' unassigned.' : '.')
+        );
     }
 
     public function openCategoryEditor(string $level = 'main', ?int $id = null, ?int $parentId = null, bool $readOnly = false): void
@@ -1107,35 +1345,7 @@ class Index extends Component
 
     public function deleteCategory(string $level, int $id): void
     {
-        abort_unless($this->group === 'product_category', 404);
-        $this->authorizeGroupAction('delete');
-        $workspaceId = app(MasterDataService::class)->workspaceId();
-        $type = match ($level) { 'main' => 'product_main_category', 'product' => 'product_category', 'sub' => 'product_subcategory', default => abort(404) };
-        $record = MasterRecord::query()->forWorkspace($workspaceId)->ofType($type)->findOrFail($id);
-
-        $inUse = false;
-        if ($level === 'main') {
-            $needle = mb_strtolower($record->name);
-            $inUse = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_category')->get()
-                ->contains(fn (MasterRecord $category) => (int) data_get($category->metadata, 'main_category_id', 0) === $record->id
-                    || mb_strtolower(trim((string) (data_get($category->metadata, 'main_category') ?: data_get($category->metadata, 'excel_main_category')))) === $needle);
-        } elseif ($level === 'product') {
-            $inUse = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->where('parent_id', $record->id)->exists()
-                || MasterRecord::query()->forWorkspace($workspaceId)->ofType('product_subcategory')->where('parent_id', $record->id)->exists();
-        } else {
-            $needle = mb_strtolower($record->name);
-            $inUse = MasterRecord::query()->forWorkspace($workspaceId)->ofType('product')->where('parent_id', $record->parent_id)->get(['metadata'])
-                ->contains(fn (MasterRecord $product) => mb_strtolower(trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category')))) === $needle);
-        }
-
-        if ($inUse) {
-            $this->addError('record', 'This category is currently in use. Reassign or remove its products/child categories before deleting it.');
-            return;
-        }
-
-        $record->delete();
-        $this->recordsReady = true;
-        session()->flash('success', 'Category deleted.');
+        $this->openCategoryDeleteConfirmation($level, $id);
     }
 
     public function updatedProductImage(): void
@@ -1259,6 +1469,12 @@ class Index extends Component
                 ? ['required', Rule::in(['To do', 'In Progress', 'Completed', 'Cancelled', '__task_status__'])]
                 : ['nullable'],
             'requiresAttention' => $this->group === 'inquiry_task_status' ? ['boolean'] : ['nullable'],
+            'orderTaskFlagId' => $this->group === 'order_task_status'
+                ? ['nullable', 'integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q->where('workspace_id', $workspaceId)->where('type', 'order_task_flag')->where('status', 'active')->whereNull('deleted_at'))]
+                : ['nullable'],
+            'orderFlagId' => $this->group === 'order_task_flag'
+                ? ['required', 'integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q->where('workspace_id', $workspaceId)->where('type', 'order_flag')->where('status', 'active')->whereNull('deleted_at'))]
+                : ['nullable'],
             'productImage' => $this->group === 'product'
                 ? ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120']
                 : ['nullable'],
@@ -1313,12 +1529,27 @@ class Index extends Component
             $metadata['requires_attention'] = (bool) $data['requiresAttention'];
         }
 
+        if ($this->group === 'order_task_status') {
+            $metadata ??= [];
+            if ($data['orderTaskFlagId']) {
+                $metadata['order_task_flag_id'] = (int) $data['orderTaskFlagId'];
+            } else {
+                unset($metadata['order_task_flag_id']);
+            }
+        }
+
+        if ($this->group === 'order_task_flag') {
+            $metadata ??= [];
+            $metadata['order_flag_id'] = (int) $data['orderFlagId'];
+        }
+
         if ($this->group === 'product') {
             $metadata ??= [];
             $metadata['reference_code'] = trim((string) $data['productReferenceCode']);
             $metadata['main_category'] = trim((string) $data['productFormMainCategory']);
             $metadata['product_size'] = trim((string) $data['productSize']) ?: null;
             $metadata['sub_category'] = trim((string) $data['productSubcategory']) ?: null;
+            unset($metadata['taxonomy_unassigned']);
             $metadata['test_certificate_number'] = trim((string) $data['productTestCertificateNumber']) ?: null;
             $metadata['client_availability'] = $data['productClientAvailabilityMode'];
             if ($data['productClientAvailabilityMode'] === 'specific') {
@@ -1659,6 +1890,7 @@ class Index extends Component
                 $metadata = (array) ($product->metadata ?? []);
                 $metadata['main_category'] = $main;
                 $metadata['excel_main_category'] = $main;
+                unset($metadata['taxonomy_unassigned']);
                 if ($subcategory !== '') {
                     $metadata['sub_category'] = $subcategory;
                     $metadata['excel_sub_category'] = $subcategory;
@@ -2422,6 +2654,7 @@ class Index extends Component
             }
         }
         $productSelectionCount = $this->group === 'product' ? $this->productSelectionCount() : 0;
+        $categorySelectionCount = $this->group === 'product_category' ? count($this->selectedCategoryKeys) : 0;
         $bulkProductCategories = collect();
         $bulkProductSubcategories = collect();
         if ($this->group === 'product' && $this->bulkProductPanel === 'category') {
@@ -2461,6 +2694,15 @@ class Index extends Component
             }
         }
 
+        $orderTaskFlagOptions = $this->group === 'order_task_status'
+            ? $service->active('order_task_flag')
+                ->reject(fn (MasterRecord $flag) => $flag->systemKey() === 'overdue')
+                ->values()
+            : collect();
+        $orderFlagOptions = $this->group === 'order_task_flag'
+            ? $service->active('order_flag')
+            : collect();
+
         return view('livewire.master-data.index', [
             'labels' => MasterDataService::LABELS,
             'rows' => $rows,
@@ -2478,6 +2720,7 @@ class Index extends Component
             'viewProduct' => $viewProduct,
             'editProduct' => $editProduct,
             'productSelectionCount' => $productSelectionCount,
+            'categorySelectionCount' => $categorySelectionCount,
             'bulkProductCategories' => $bulkProductCategories,
             'bulkProductSubcategories' => $bulkProductSubcategories,
             'categoryMainPage' => $categoryMainPage,
@@ -2500,6 +2743,8 @@ class Index extends Component
             'active' => (int) $summaries->sum('active_count'),
             'selectedTotal' => (int) ($selected?->total_count ?? 0),
             'selectedActive' => (int) ($selected?->active_count ?? 0),
+            'orderTaskFlagOptions' => $orderTaskFlagOptions,
+            'orderFlagOptions' => $orderFlagOptions,
         ]);
     }
 }

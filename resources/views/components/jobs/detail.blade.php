@@ -83,7 +83,10 @@
     $team = \App\Support\JobDetailPresenter::team($job);
     $tabs = ['overview'=>'Overview','inquiry'=>'Inquiry'];
     if (app(\App\Services\AccessControlService::class)->can(auth()->user(), 'finance', 'view')) $tabs['finance'] = 'Invoices & Payments';
-    $jobPriorityColor = app(\App\Services\MasterDataService::class)->displayColorFor('priority', (string) $job->priority);
+    $masterData = app(\App\Services\MasterDataService::class);
+    $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
+    $jobFlag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
+    $jobFlagColor = $jobFlag ? $masterData->displayColorFor('order_flag', $jobFlag) : null;
 @endphp
 <div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
     <div class="ft-detail-toolbar ft-exact-job-header">
@@ -134,6 +137,7 @@
             </div>
             <div class="ft-exact-job-meta ft-order-status-row" aria-label="Order status">
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
+                @if($jobFlag)<span class="ft-soft-pill {{ $jobFlagColor ? 'ft-master-color' : 'amber' }}" style="{{ \App\Support\MasterColor::style($jobFlagColor) }}">⚑ {{ $jobFlag }}</span>@endif
                 <span class="ft-soft-pill {{ $jobPriorityColor ? 'ft-master-color' : 'red' }}" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}">{{ $job->priority }}</span>
                 <span class="ft-soft-pill purple">{{ $job->phase?->name ?? $job->status }}</span>
             </div>

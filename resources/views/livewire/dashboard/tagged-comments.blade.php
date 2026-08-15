@@ -14,6 +14,17 @@
                 $route = app(\App\Services\NotificationService::class)->urlFor($mention);
                 $actor = $mention->actor;
                 $actorName = $actor?->name;
+                $orderTerminology = static function (?string $value): string {
+                    return preg_replace_callback('/\bjobs?\b/i', static function (array $match): string {
+                        return match ($match[0]) {
+                            'Jobs' => 'Orders',
+                            'jobs' => 'orders',
+                            'JOB' => 'ORDER',
+                            'JOBS' => 'ORDERS',
+                            default => ctype_upper($match[0][0] ?? '') ? 'Order' : 'order',
+                        };
+                    }, (string) $value) ?: (string) $value;
+                };
 
                 // Legacy mention rows created before actor_id existed still keep
                 // the actor's name in the title. Use it as a safe initials fallback
@@ -32,7 +43,7 @@
             @endphp
             <a class="ft-mention {{ $mention->read_at ? '' : 'unread' }}" href="{{ $route }}" wire:key="dashboard-mention-{{ $mention->id }}">
                 <x-ui.avatar class="ft-avatar" :user="$actor" :name="$actorName" :size="29" />
-                <span><strong class="ft-mention-copy">{{ $mention->title }}: <strong>“{{ $messagePreview }}”</strong></strong><span class="ft-mention-meta">{{ $contextLabel }}</span></span>
+                <span><strong class="ft-mention-copy">{{ $orderTerminology($mention->title) }}: <strong>“{{ $messagePreview }}”</strong></strong><span class="ft-mention-meta">{{ $contextLabel }}</span></span>
                 <time class="ft-mention-time">{{ $mention->created_at?->diffForHumans() }}</time>
             </a>
         @empty

@@ -8,18 +8,23 @@ use App\Models\Task;
 use Illuminate\Support\Collection;
 use Illuminate\Validation\ValidationException;
 
+/**
+ * Backwards-compatible facade for Order task flags.
+ *
+ * Order statuses, task flags and parent Order flags now live in three separate
+ * Master Data catalogues. New code should prefer OrderTaskFlagService directly.
+ */
 class TaskFlagService
 {
     public function activeFlags(): Collection
     {
-        return app(MasterDataService::class)->active('task_flag');
+        return app(OrderTaskFlagService::class)->activeTaskFlags();
     }
 
     public function resolveActive(?string $value): ?MasterRecord
     {
         $value = trim((string) $value);
         if ($value === '') return null;
-
         $normalized = mb_strtolower($value);
 
         return $this->activeFlags()->first(function (MasterRecord $flag) use ($normalized): bool {
@@ -36,7 +41,7 @@ class TaskFlagService
         $flag = $this->resolveActive($value);
         if (!$flag) {
             throw ValidationException::withMessages([
-                'taskFlag' => 'Select an active Task Flag from Master Data.',
+                'taskFlag' => 'Select an active Order Task Flag from Master Data.',
             ]);
         }
 
@@ -45,60 +50,28 @@ class TaskFlagService
 
     public function defaultActive(): ?MasterRecord
     {
-        $flags = $this->activeFlags();
-
-        return $flags->first(fn (MasterRecord $flag) => strcasecmp(trim((string) $flag->name), 'Management attention') === 0)
-            ?? $flags->first();
+        return $this->activeFlags()->first(
+            fn (MasterRecord $flag) => strcasecmp((string) data_get($flag->metadata, 'system_key'), 'requires_attention') === 0
+        ) ?? $this->activeFlags()->first();
     }
 
     public function labelForTask(Task $task): ?string
     {
-        if (!$task->needs_attention) return null;
-
-        $joinedName = trim((string) $task->getAttribute('task_flag_name'));
-        if ($joinedName !== '') return $joinedName;
-
-        if ($task->relationLoaded('attentionFlag') && $task->attentionFlag) {
-            $name = trim((string) $task->attentionFlag->name);
-            if ($name !== '') return $name;
-        }
-
-        $legacy = trim((string) $task->attention_reason);
-        if ($legacy !== '') return $legacy;
-
-        return $this->defaultActive()?->name ?: 'Management attention';
+        return app(OrderTaskFlagService::class)->labelForTask($task);
     }
-
 
     public function colorForTask(Task $task): ?string
     {
-        return app(MasterDataService::class)->colorFor('task_flag', $this->labelForTask($task));
+        return app(OrderTaskFlagService::class)->colorForTask($task);
     }
 
     public function colorForOrder(FlowJob $job): ?string
     {
-        return app(MasterDataService::class)->colorFor('task_flag', $this->labelForOrder($job));
+        return app(OrderTaskFlagService::class)->colorForOrder($job);
     }
+
     public function labelForOrder(FlowJob $job): ?string
     {
-        if (!$job->needs_attention) return null;
-
-        $tasks = $job->relationLoaded('flaggedTasks')
-            ? $job->flaggedTasks
-            : $job->flaggedTasks()->with('attentionFlag:id,name,status,sort_order')->get();
-
-        $labels = $tasks
-            ->sortBy(fn (Task $task) => sprintf(
-                '%010d-%010d',
-                (int) ($task->attentionFlag?->sort_order ?? PHP_INT_MAX),
-                (int) $task->id,
-            ))
-            ->map(fn (Task $task) => $this->labelForTask($task))
-            ->filter()
-            ->values();
-
-        if ($labels->isNotEmpty()) return (string) $labels->first();
-
-        return $this->defaultActive()?->name ?: 'Management attention';
+        return app(OrderTaskFlagService::class)->labelForOrder($job);
     }
 }

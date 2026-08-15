@@ -77,10 +77,16 @@
                 <div class="ft-create-urgency-grid">
                     <div class="ft-create-field ft-create-urgency-field">
                         <b>Select order production urgency</b>
-                        <div class="ft-create-urgency-control" role="group" aria-label="Select order production urgency">
+                        <div class="ft-create-urgency-control" role="radiogroup" aria-label="Select order production urgency">
                             @forelse($productionUrgencies as $urgency)
                                 <label class="ft-create-urgency-check" wire:key="production-urgency-{{ $urgency->id }}">
-                                    <input type="checkbox" value="{{ $urgency->id }}" wire:model="productionUrgencyIds">
+                                    <input
+                                        type="radio"
+                                        name="create-production-urgency"
+                                        value="{{ $urgency->id }}"
+                                        @checked((int) ($productionUrgencyIds[0] ?? 0) === (int) $urgency->id)
+                                        wire:click="selectCreateProductionUrgency({{ $urgency->id }})"
+                                    >
                                     <span>{{ $urgency->name }}</span>
                                 </label>
                             @empty
@@ -92,10 +98,16 @@
                     </div>
                     <div class="ft-create-field ft-create-urgency-field">
                         <b>Select order shipment urgency</b>
-                        <div class="ft-create-urgency-control" role="group" aria-label="Select order shipment urgency">
+                        <div class="ft-create-urgency-control" role="radiogroup" aria-label="Select order shipment urgency">
                             @forelse($shipmentUrgencies as $urgency)
                                 <label class="ft-create-urgency-check" wire:key="shipment-urgency-{{ $urgency->id }}">
-                                    <input type="checkbox" value="{{ $urgency->id }}" wire:model="shipmentUrgencyIds">
+                                    <input
+                                        type="radio"
+                                        name="create-shipment-urgency"
+                                        value="{{ $urgency->id }}"
+                                        @checked((int) ($shipmentUrgencyIds[0] ?? 0) === (int) $urgency->id)
+                                        wire:click="selectCreateShipmentUrgency({{ $urgency->id }})"
+                                    >
                                     <span>{{ $urgency->name }}</span>
                                 </label>
                             @empty

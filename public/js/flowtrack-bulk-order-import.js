@@ -19,8 +19,6 @@
     };
 
     const config = () => ({
-        default_client_id: ($('#reviewCard').classList.contains('hidden') ? $('#client').value : $('#reviewClient').value) || null,
-        default_supplier_id: ($('#reviewCard').classList.contains('hidden') ? $('#supplier').value : $('#reviewSupplier').value) || null,
         duplicate_policy: $('#duplicate')?.value || 'skip',
         manual_workflows: { ...state.manualWorkflows },
     });
@@ -92,7 +90,7 @@
         if (file.size > 20 * 1024 * 1024) return showError('File exceeds the 20 MB limit.');
 
         setStep(2);
-        startLoading(`Preparing ${file.name}…`, 'Reading the file, applying your import defaults and validating each order. Nothing has been created yet.');
+        startLoading(`Preparing ${file.name}…`, 'Reading the file and validating client, product, repeat-order, date, urgency and workflow values. Nothing has been created yet.');
         try {
             const normalized = await browserNormalizeExcel(file);
             const form = new FormData();
@@ -131,7 +129,7 @@
     const revalidate = async () => {
         if (!state.token) return;
         const current = config();
-        startLoading('Revalidating rows…', 'Applying the new defaults and duplicate policy. No orders have been changed yet.');
+        startLoading('Revalidating rows…', 'Applying the workflow selection. No orders have been changed yet.');
         try {
             const response = await fetch(root.dataset.revalidateUrl, {
                 method: 'POST',
@@ -174,12 +172,7 @@
         $('#uploadCard').classList.add('hidden');
         $('#success').classList.remove('show');
         $('#reviewCard').classList.remove('hidden');
-        $('#reviewClient').value = $('#client').value;
-        $('#reviewSupplier').value = $('#supplier').value;
         const manualCount = Number(review.counts.workflow_selection_required || 0);
-        $('#workflowText').textContent = manualCount
-            ? `${manualCount} ${manualCount === 1 ? 'row needs' : 'rows need'} workflow selection`
-            : 'Client workflows resolved';
         $('#fileName').textContent = review.filename;
         $('#fileMeta').textContent = manualCount
             ? `${review.counts.total} rows · client-specific Order workflows applied · ${manualCount} manual ${manualCount === 1 ? 'selection' : 'selections'} needed`
@@ -210,18 +203,24 @@
                 : row.warnings.length
                     ? '<span class="status" style="background:var(--ftbi-amberbg);color:var(--ftbi-amber)">Review</span>'
                     : '<span class="status" style="background:var(--ftbi-greenbg);color:var(--ftbi-green)">Ready</span>';
-            const supplier = row.supplier_resolved_label || 'Unassigned';
-            const warehouse = row.warehouse || '—';
+            const repeat = row.is_repeat === 'Yes'
+                ? `Yes${row.repeat_order_no ? ` · ${escapeHtml(row.repeat_order_no)}` : ''}`
+                : 'No';
+            const product = row.product_resolved_name
+                ? `<b>${escapeHtml(row.product_resolved_name)}</b><br><span class="sub">${escapeHtml(row.product_id || '')} · Qty ${escapeHtml(row.product_quantity_resolved || 1)}</span>`
+                : '<span class="sub">No product</span>';
+            const delivery = `<b>${escapeHtml(row.customer_delivery_normalized || '—')}</b><br><span class="sub">Estimated: ${escapeHtml(row.estimated_delivery_normalized || '—')}</span>`;
+            const urgency = `<b>Production: ${escapeHtml(row.production_urgency_resolved || 'Normal')}</b><br><span class="sub">Shipment: ${escapeHtml(row.shipment_urgency_resolved || 'Normal')}</span>`;
             return `<tr class="${rowClass}">
                 <td>${escapeHtml(row.row)}</td>
-                <td><b>${escapeHtml(row.ref || '—')}</b><br><span class="sub">${escapeHtml(row.title || '—')}</span>${issue}</td>
-                <td>${escapeHtml(row.client_resolved_label || 'Unassigned')}</td>
-                <td>${escapeHtml(row.received_normalized || row.received || '—')}</td>
-                <td>${row.urgent === 'Yes' ? '<b style="color:var(--ftbi-red)">Yes</b>' : 'No'}</td>
-                <td>${escapeHtml(row.description || '—')}</td>
-                <td>${escapeHtml(supplier)}<br><span class="sub">${escapeHtml(warehouse)}</span></td>
+                <td><b>${escapeHtml(row.title || '—')}</b><br><span class="sub">Ref: ${escapeHtml(row.ref || '—')}</span></td>
+                <td>${escapeHtml(row.client_resolved_label || 'Unresolved')}</td>
+                <td>${repeat}</td>
+                <td>${product}</td>
+                <td>${delivery}</td>
+                <td>${urgency}</td>
                 <td>${workflowCell(row)}</td>
-                <td>${status}</td>
+                <td>${status}${issue}</td>
             </tr>`;
         }).join('');
     };
@@ -312,16 +311,13 @@
 
     const demoRows = (withError = false) => {
         const rows = [
-            ['FO-329070', '', 'FO-329070 · P', '2026-07-31', 'No', '2,100 units · Material P. Client requests revised imprint and proof.', 'M', 'M', 'Auto-detect', '', 'Client wants to update the imprint and requests a revised proof.', 'SRC-FO-329070'],
-            ['FO-330074', '', 'FO-330074 · PD', '2026-08-06', 'Yes', '1,000 units · Material PD. Approved to proceed; ship date required.', 'M', 'M', 'Auto-detect', '', 'Approved, proceed and confirm ship date.', 'SRC-FO-330074'],
-            ['FO-329649', '', 'FO-329649 · BRD01', '2026-08-05', 'No', '1 unit · Material BRD01. Sample image required before shipment.', 'SUP-GO', '孟，G-O', 'IID', '', 'Proceed to production and provide estimated ship date.', 'SRC-FO-329649-A'],
-            ['FO-329649', '', 'FO-329649 · BRD01', '2026-08-05', 'No', '1 unit · Material BRD01. Duplicate source communication.', 'SUP-GO', '孟，G-O', 'IID', '', 'Provide a sample image before shipment.', 'SRC-FO-329649-B'],
-            ['FO-300533', '', 'FO-300533 · NWPL01', '2026-07-02', 'No', '175 units · Material NWPL01-Full-Color-Tr. Tracking requested.', 'M', 'M', 'NEP', '', 'Provide tracking number.', 'SRC-FO-300533'],
+            ['CL-011', 'REF-10001', 'No', '', 'Sample merchandise order', 'Conference merchandise for August event.', '', '', '2026-08-25', '2026-08-23', 'Normal', 'Urgent', 'Confirm packing before dispatch.'],
+            ['CL-014', 'REF-10002', 'Yes', 'REF-09940', 'Repeat lanyard order', 'Repeat the previous approved design.', '', '', '2026-08-28', '2026-08-26', 'Super Urgent', 'Normal', 'Keep colors identical to prior order.'],
         ];
-        if (withError) rows.push(['', '', '', '2026-08-40', 'No', '', '', '', 'Auto-detect', '', 'This row intentionally demonstrates validation.', 'SRC-ERROR-01']);
-        const header = ['Reference Order No.', 'Client ID', 'Order Title', 'Received Date', 'Urgent?', 'Order Description', 'Supplier ID', 'Warehouse', 'Workflow', 'Required Delivery Date', 'Supplier Instruction', 'Source Row ID'];
+        if (withError) rows.push(['', '', 'Yes', '', '', '', '', 'abc', '2026-08-40', '', 'Extreme', '', 'This row intentionally demonstrates validation.']);
+        const header = ['Client ID *', 'Reference Order No.', 'Repeat Order? Yes / No', 'Repeat Order No.', 'Order Title *', 'Order Description', 'Product ID', 'Product Quantity', 'Customer Requested Delivery Date', 'Estimated Delivery Date', 'Production Urgency', 'Shipment Urgent', 'Notes'];
         const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
-        return new File([csv], withError ? 'Order-import-with-errors.csv' : 'Supplied-order-export.csv', { type: 'text/csv' });
+        return new File([csv], withError ? 'Order-import-with-errors.csv' : 'FlowTrack-bulk-order-sample.csv', { type: 'text/csv' });
     };
 
     $('#rows').addEventListener('change', (event) => {
@@ -356,9 +352,6 @@
     $('#changeFile').addEventListener('click', resetImport);
     $('#demo').addEventListener('click', () => uploadAndValidate(demoRows(false)));
     $('#errorDemo').addEventListener('click', () => uploadAndValidate(demoRows(true)));
-    $('#reviewClient').addEventListener('change', () => { $('#client').value = $('#reviewClient').value; revalidate(); });
-    $('#reviewSupplier').addEventListener('change', () => { $('#supplier').value = $('#reviewSupplier').value; revalidate(); });
-    $('#duplicate').addEventListener('change', revalidate);
     $('#importBtn').addEventListener('click', importOrders);
     $('#exportErrors').addEventListener('click', exportIssues);
     $('#downloadResults').addEventListener('click', exportResults);

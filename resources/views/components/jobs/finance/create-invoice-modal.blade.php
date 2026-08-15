@@ -3,16 +3,51 @@
     $subtotal = collect($invoiceLineItems)->sum(fn($item) => max(0, (float)($item['quantity'] ?? 0)) * max(0, (float)($item['unit_price'] ?? 0)));
     $taxRate = max(0, min(100, (float)$invoiceTaxRate));
     $taxAmount = $subtotal * ($taxRate / 100);
+    // The current invoice total is based only on its own line items and tax.
+    // Payments are handled separately through Record Payment.
     $total = $subtotal + $taxAmount;
-    $previouslyInvoiced = (float)($summary['total_invoiced'] ?? 0);
-    $selectedInvoiceType = $invoiceTypes->firstWhere('name', $invoiceType);
-    $isFinalInvoice = $selectedInvoiceType && (
-        strtolower(trim((string)data_get($selectedInvoiceType->metadata, 'invoice_kind'))) === 'final'
-        || str_contains(strtoupper((string)$selectedInvoiceType->code), 'FINAL')
-        || strcasecmp((string)$selectedInvoiceType->name, 'Final invoice') === 0
-    );
-    $amountToInvoice = $isFinalInvoice ? max(0, $total - $previouslyInvoiced) : $total;
-    $currencyPrefix = strtoupper($invoiceCurrency) === 'USD' ? '$' : strtoupper($invoiceCurrency).' ';
+    $currencyValue = strtoupper(trim((string) $invoiceCurrency));
+    $currencyPrefix = match ($currencyValue) {
+        'USD' => '$',
+        'EUR' => '€',
+        'GBP' => '£',
+        'CNY', 'RMB' => '¥',
+        'BDT' => '৳',
+        'JPY' => '¥',
+        'KRW' => '₩',
+        'INR' => '₹',
+        'CAD' => 'C$',
+        'AUD' => 'A$',
+        default => $currencyValue !== '' ? $currencyValue.' ' : '',
+    };
+
+    $currencyMaster = app(\App\Services\MasterDataService::class);
+    $invoiceCurrencies = collect($currencies)
+        ->map(function ($option) use ($currencyMaster) {
+            $value = $currencyMaster->currencyValue($option);
+            return [
+                'value' => $value,
+                'label' => trim((string) ($option->name ?? '')) ?: $value,
+            ];
+        })
+        ->filter(fn ($option) => $option['value'] !== '')
+        ->unique('value')
+        ->values();
+
+    // One dropdown option per real client contact. The legacy client contact is
+    // shown only when there are no structured contacts, avoiding duplicate rows
+    // for the same person.
+    $billingContacts = collect($contacts)
+        ->filter(fn ($contact) => !empty($contact->id))
+        ->unique(function ($contact) {
+            $email = strtolower(trim((string) ($contact->email ?? '')));
+            if ($email !== '') return 'email:'.$email;
+            return 'contact:'.strtolower(trim((string) ($contact->name ?? ''))).'|'.trim((string) ($contact->phone ?? ''));
+        })
+        ->values();
+    $billingContactNameCounts = $billingContacts
+        ->groupBy(fn ($contact) => strtolower(trim((string) ($contact->name ?? ''))))
+        ->map->count();
 @endphp
 <div class="ft-finance-modal-backdrop" wire:key="create-invoice-modal" wire:click.self="closeCreateInvoice">
     <section class="ft-finance-modal ft-create-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="createInvoiceTitle">
@@ -25,11 +60,26 @@
 
         <div class="ft-invoice-form-grid">
             <label><span>Invoice type <b>*</b></span><select wire:model.live="invoiceType"><option value="">Select invoice type</option>@foreach($invoiceTypes as $option)<option value="{{ $option->name }}">{{ $option->name }}</option>@endforeach</select>@error('invoiceType')<small class="error">{{ $message }}</small>@enderror</label>
-            <label><span>Currency <b>*</b></span><select wire:model.live="invoiceCurrency"><option value="">Select currency</option>@foreach($currencies as $option)@php($currencyCode = strtoupper((string)($option->code ?: $option->name)))<option value="{{ $currencyCode }}">{{ $currencyCode }}@if(trim((string)$option->name) !== $currencyCode) · {{ $option->name }}@endif</option>@endforeach</select>@error('invoiceCurrency')<small class="error">{{ $message }}</small>@enderror</label>
+            <label><span>Currency <b>*</b></span><select wire:model.live="invoiceCurrency"><option value="">Select currency</option>@foreach($invoiceCurrencies as $option)<option value="{{ $option['value'] }}">{{ $option['label'] }}</option>@endforeach</select>@error('invoiceCurrency')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Issue date <b>*</b></span><input type="date" wire:model.live="invoiceIssueDate">@error('invoiceIssueDate')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Payment terms <b>*</b></span><select wire:model.live="invoicePaymentTerms"><option value="">Select payment terms</option>@foreach($paymentTerms as $option)<option value="{{ $option->name }}">{{ $option->name }}</option>@endforeach</select>@error('invoicePaymentTerms')<small class="error">{{ $message }}</small>@enderror</label>
             <label><span>Due date <b>*</b></span><input type="date" wire:model="invoiceDueDate">@error('invoiceDueDate')<small class="error">{{ $message }}</small>@enderror</label>
-            <label><span>Billing contact <b>*</b></span><select wire:model="invoiceBillingContactId"><option value="">{{ $job->client?->contact_name ?: 'Primary client contact' }}</option>@foreach($contacts as $contact)<option value="{{ $contact->id }}">{{ $contact->name }}@if($contact->email) · {{ $contact->email }}@endif</option>@endforeach</select>@error('invoiceBillingContactId')<small class="error">{{ $message }}</small>@enderror</label>
+            <label><span>Billing contact <b>*</b></span><select wire:model="invoiceBillingContactId">
+                @if($billingContacts->isNotEmpty())
+                    <option value="">Select billing contact</option>
+                    @foreach($billingContacts as $contact)
+                        @php
+                            $contactName = trim((string) ($contact->name ?? '')) ?: trim((string) ($contact->email ?? '')) ?: 'Contact';
+                            $sameNameCount = (int) ($billingContactNameCounts[strtolower(trim((string) ($contact->name ?? '')))] ?? 0);
+                            $contactLabel = $contactName;
+                            if ($sameNameCount > 1 && trim((string) ($contact->email ?? '')) !== '') $contactLabel .= ' · '.trim((string) $contact->email);
+                        @endphp
+                        <option value="{{ $contact->id }}">{{ $contactLabel }}</option>
+                    @endforeach
+                @else
+                    <option value="">{{ $job->client?->contact_name ?: $job->client?->email ?: 'Primary client contact' }}</option>
+                @endif
+            </select>@error('invoiceBillingContactId')<small class="error">{{ $message }}</small>@enderror</label>
         </div>
 
         <section class="ft-invoice-items-box">
@@ -63,9 +113,7 @@
             <aside class="ft-invoice-summary">
                 <div><span>Subtotal</span><strong>{{ $currencyPrefix }}{{ number_format($subtotal, 2) }}</strong></div>
                 <div><span>Tax {{ number_format($taxRate, $taxRate == floor($taxRate) ? 0 : 2) }}%</span><strong>{{ $currencyPrefix }}{{ number_format($taxAmount, 2) }}</strong></div>
-                <div class="total"><span>Total</span><strong>{{ $currencyPrefix }}{{ number_format($total, 2) }}</strong></div>
-                <div><span>Previously invoiced</span><strong>{{ $currencyPrefix }}{{ number_format($previouslyInvoiced, 2) }}</strong></div>
-                <div class="amount"><span>Amount to invoice</span><strong>{{ $currencyPrefix }}{{ number_format($amountToInvoice, 2) }}</strong></div>
+                <div class="total amount"><span>Total</span><strong>{{ $currencyPrefix }}{{ number_format($total, 2) }}</strong></div>
             </aside>
         </div>
 

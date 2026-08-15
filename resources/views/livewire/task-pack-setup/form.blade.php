@@ -47,7 +47,6 @@
 
             <div class="ft-sequence-title-row">
                 <div><h2>Task sequence</h2><p>Tasks are created in this order when the phase becomes active.</p></div>
-                <button type="button" class="ft-add-soft" wire:click="addTask">＋ Add Task</button>
             </div>
 
             @error('tasks')<div class="validation-error">{{ $message }}</div>@enderror
@@ -133,6 +132,10 @@
                         </label>
                     </section>
                 @endforeach
+            </div>
+
+            <div class="ft-task-sequence-add-row">
+                <button type="button" class="ft-add-soft" wire:click="addTask">＋ Add Task</button>
             </div>
         </div>
 

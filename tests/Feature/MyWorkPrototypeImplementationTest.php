@@ -10,7 +10,8 @@ class MyWorkPrototypeImplementationTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
-        $this->assertStringContainsString('Needs my action', $view);
+        $this->assertStringContainsString('My Tasks', $view);
+        $this->assertStringNotContainsString('Needs my action', $view);
         $this->assertStringContainsString('Overdue', $view);
         $this->assertStringContainsString('Due today', $view);
         $this->assertStringContainsString('Upcoming', $view);
