@@ -115,6 +115,7 @@ class PermanentJobDeleteService
         // comments and checklist items. Using the query builder bypasses the
         // SoftDeletes scope and permanently removes both live and trashed Jobs.
         DB::table('flow_jobs')->whereIn('id', $jobIds)->delete();
+        app(WorkspaceRefreshService::class)->touch('FlowJob:force-deleted');
 
         $snapshotWorkflowIds = collect($snapshot['snapshot_workflow_ids'] ?? [])->map(fn ($id) => (int) $id)->filter()->values();
         if ($snapshotWorkflowIds->isNotEmpty()) {

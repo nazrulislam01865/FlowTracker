@@ -2,13 +2,20 @@
 
 namespace App\Services;
 
+use App\Models\Activity;
 use App\Models\Client;
+use App\Models\Department;
 use App\Models\FlowJob;
 use App\Models\FlowNotification;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
+use App\Models\MasterRecord;
 use App\Models\Task;
+use App\Models\TaskPackItem;
 use App\Models\User;
+use App\Models\WorkflowPhase;
+use App\Models\WorkflowTemplate;
+use App\Support\MasterColor;
 use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -16,7 +23,7 @@ use Illuminate\Support\Facades\Cache;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v10-role-aware-tagged-comments';
+    private const CACHE_VERSION = 'v15-dashboard-inquiry-source-phase';
 
     private ?int $clientLifecycleVersion = null;
 
@@ -32,14 +39,27 @@ class DashboardService
         'ongoing-tasks',
         'activity',
         'clients',
+        'flow-distribution',
+        'task-status-distribution',
+        'catalogue-readiness',
     ];
 
-    public function primaryData(User $user): array
+    public function primaryData(User $user, int $clientId = 0, int $departmentId = 0, int $rangeDays = 7): array
     {
         return [
-            'metrics' => $this->summary($user),
-            'operationalHealth' => $this->operationalHealth($user),
-            'recentInquiries' => $this->recentInquiries($user),
+            'metrics' => $this->summaryForFilters($user, $clientId, $departmentId, $rangeDays),
+            'flowDistribution' => $this->flowDistribution($user, $clientId, $departmentId, $rangeDays),
+            'taskStatusDistribution' => $this->taskStatusDistribution($user, $clientId, $departmentId, $rangeDays),
+            'attentionTasks' => $this->attentionTasks($user),
+            'clientPortfolio' => $this->clientPortfolio($user),
+            'assigneePerformance' => $this->assigneePerformance($user, $clientId, $departmentId, $rangeDays),
+            'priorityJobs' => $this->priorityJobs($user, $clientId, $departmentId),
+            'priorityInquiries' => $this->priorityInquiries($user, $clientId, $departmentId),
+            'priorityTasks' => $this->priorityTasks($user, $clientId, $departmentId),
+            'recentActivity' => $this->recentOperationalActivity($user, $clientId, $departmentId),
+            'catalogueReadiness' => $this->catalogueReadiness($user),
+            'dashboardClients' => $this->dashboardClients($user),
+            'dashboardDepartments' => $this->dashboardDepartments($user),
         ];
     }
 
@@ -70,7 +90,7 @@ class DashboardService
     public function attentionJobs(User $user): Collection
     {
         return app(JobService::class)->activeQuery($user)
-            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested'])
+            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested'])
             ->with(['client:id,name,logo_path', 'phase:id,short_name'])
             ->where(fn ($query) => $query->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']))
             ->latest('flow_jobs.id')
@@ -125,9 +145,79 @@ class DashboardService
                     ->where('status', '!=', 'Draft')
                     ->count(),
                 'taggedComments' => $this->unreadMentionCount($user),
+                'activeProducts' => app(ProductCatalogService::class)->activeCount(),
                 'shipping' => (int) ($jobRow?->shipping_jobs ?? 0),
             ];
         });
+    }
+
+
+    public function summaryForFilters(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        int $rangeDays = 7,
+    ): array {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        [$rangeFrom, $rangeTo] = $this->dashboardRangeUtcBounds($rangeDays);
+
+        return $this->remember(
+            $user,
+            'summary-range-'.$rangeDays.'-client-'.$clientId.'-department-'.$departmentId,
+            function () use ($user, $clientId, $departmentId, $rangeFrom, $rangeTo): array {
+                $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+                // The dashboard range represents records that actually moved during
+                // the selected local-calendar window. This makes Today / 7 days /
+                // 30 days a real dashboard filter instead of changing only one panel.
+                $jobs = app(JobService::class)->activeQuery($user)->reorder()
+                    ->whereBetween('flow_jobs.updated_at', [$rangeFrom, $rangeTo])
+                    ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+                    ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)));
+
+                $tasks = $this->activeTaskQuery($user)->reorder()
+                    ->whereBetween('tasks.updated_at', [$rangeFrom, $rangeTo])
+                    ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
+                    ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)));
+
+                $inquiries = app(InquiryService::class)->visibleQuery($user)
+                    ->whereNull('inquiries.result')
+                    ->where('inquiries.status', '!=', 'Draft')
+                    ->whereBetween('inquiries.updated_at', [$rangeFrom, $rangeTo])
+                    ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
+                    ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)));
+
+                $jobRow = (clone $jobs)
+                    ->selectRaw('count(*) as active_jobs')
+                    ->selectRaw("sum(case when flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 1 else 0 end) as attention_jobs")
+                    ->first();
+
+                $taskRow = (clone $tasks)
+                    ->selectRaw('sum(case when tasks.due_date < ? then 1 else 0 end) as overdue_tasks', [$today])
+                    ->first();
+
+                // Client and product master totals are point-in-time catalogue
+                // values, so they remain stable while operational KPIs follow the
+                // selected range.
+                $activeClients = app(ClientService::class)->visibleQuery($user)
+                    ->where('clients.is_active', true)
+                    ->when($clientId > 0, fn (Builder $query) => $query->where('clients.id', $clientId))
+                    ->count();
+
+                return [
+                    'activeJobs' => (int) ($jobRow?->active_jobs ?? 0),
+                    'needsAttention' => (int) ($jobRow?->attention_jobs ?? 0),
+                    'overdueTasks' => (int) ($taskRow?->overdue_tasks ?? 0),
+                    'activeClients' => (int) $activeClients,
+                    'openInquiries' => (int) $inquiries->count(),
+                    'taggedComments' => $this->unreadMentionCount($user),
+                    'activeProducts' => app(ProductCatalogService::class)->activeCount(),
+                    'shipping' => 0,
+                ];
+            },
+        );
     }
 
 
@@ -144,14 +234,14 @@ class DashboardService
             ])
             ->with([
                 'client:id,name,logo_path',
-                'owner:id,name,profile_image_path',
+                'owner:id,name,profile_image_path,department_id',
                 // Current task is still needed for due-date/flag calculation, but its assignee is not
                 // the Inquiry assignee shown on the dashboard.
                 'currentTask:id,inquiry_id,title,status,needs_attention,attention_reason,due_date,completed_at',
             ])
             ->latest('inquiries.updated_at')
             ->latest('inquiries.id')
-            ->limit(5)
+            ->limit(30)
             ->get();
 
         if (!$canViewTasks) $rows->each(fn ($inquiry) => $inquiry->setRelation('currentTask', null));
@@ -271,6 +361,7 @@ class DashboardService
             ->update(['read_at' => now()]);
 
         $this->forgetMentions($user);
+        app(NotificationService::class)->broadcastRealtimeState($user);
     }
 
     /** Backwards-compatible alias for older callers. */
@@ -351,29 +442,105 @@ class DashboardService
         });
     }
 
-    public function assigneePerformance(User $user): Collection
-    {
+    public function assigneePerformance(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        int $rangeDays = 7,
+    ): Collection {
         $access = app(AccessControlService::class);
-        $query = User::query()->where('is_active', true);
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
 
-        if (!$access->isAdministrator($user) && $access->scope($user, 'tasks') !== 'all_records') {
-            $query->whereKey($user->id);
-        }
-
-        return $query
-            ->select(['users.id', 'users.name', 'users.profile_image_path'])
-            ->withCount([
-                'assignedTasks as ongoing_count' => fn ($tasks) => $this->constrainOngoingTasks($tasks),
-                'assignedTasks as done_count' => fn ($tasks) => $tasks->whereNotNull('completed_at'),
-                'assignedTasks as done_on_time_count' => fn ($tasks) => $tasks
-                    ->whereNotNull('completed_at')
-                    ->whereNotNull('due_date')
-                    ->whereColumn('completed_at', '<=', 'due_date'),
-            ])
-            ->orderByDesc('ongoing_count')
-            ->orderBy('name')
-            ->limit(4)
+        $users = User::query()
+            ->where('users.is_active', true)
+            ->when($departmentId > 0, fn (Builder $query) => $query->where('users.department_id', $departmentId))
+            ->when(
+                !$access->isAdministrator($user) && $access->scope($user, 'tasks') !== 'all_records',
+                fn (Builder $query) => $query->whereKey($user->id),
+            )
+            ->select(['users.id', 'users.department_id', 'users.name', 'users.profile_image_path'])
+            ->with('department:id,name')
+            ->orderBy('users.name')
+            ->limit(100)
             ->get();
+
+        if ($users->isEmpty()) return $users;
+
+        $userIds = $users->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+        [$completedFrom, $completedTo] = $settings->localDateRangeUtcBounds(
+            $today->subDays($rangeDays - 1)->toDateString(),
+            $today->toDateString(),
+        );
+
+        $orderBase = app(TaskService::class)->visibleQuery($user)
+            ->reorder()
+            ->whereIn('tasks.assignee_id', $userIds)
+            ->whereHas('job.client', fn (Builder $client) => $client->where('clients.is_active', true))
+            ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('flow_jobs.client_id', $clientId)));
+
+        $orderOngoing = $this->constrainOngoingTasks(clone $orderBase)
+            ->selectRaw('tasks.assignee_id as dashboard_assignee_id, count(*) as aggregate')
+            ->groupBy('tasks.assignee_id')
+            ->pluck('aggregate', 'dashboard_assignee_id');
+
+        $orderCompleted = (clone $orderBase)
+            ->whereNotNull('tasks.completed_at')
+            ->when($completedFrom, fn (Builder $query) => $query->where('tasks.completed_at', '>=', $completedFrom))
+            ->when($completedTo, fn (Builder $query) => $query->where('tasks.completed_at', '<=', $completedTo))
+            ->selectRaw('tasks.assignee_id as dashboard_assignee_id, count(*) as completed_count')
+            ->selectRaw('sum(case when tasks.due_date is not null and date(tasks.completed_at) <= tasks.due_date then 1 else 0 end) as on_time_count')
+            ->groupBy('tasks.assignee_id')
+            ->get()
+            ->keyBy('dashboard_assignee_id');
+
+        $inquiryBase = $access
+            ->applyInquiryTaskScope(InquiryTask::query(), $user)
+            ->reorder()
+            ->whereIn('inquiry_tasks.assignee_id', $userIds)
+            ->whereHas('inquiry.client', fn (Builder $client) => $client->where('clients.is_active', true))
+            ->when($clientId > 0, fn (Builder $query) => $query->whereHas('inquiry', fn (Builder $inquiry) => $inquiry->where('inquiries.client_id', $clientId)));
+
+        $inquiryOngoing = (clone $inquiryBase)
+            ->whereNull('inquiry_tasks.completed_at')
+            ->whereRaw("lower(trim(coalesce(inquiry_tasks.status, ''))) not in ('completed','cancelled')")
+            ->whereHas('inquiry', fn (Builder $inquiry) => $inquiry
+                ->whereNull('inquiries.result')
+                ->where('inquiries.status', '!=', 'Draft'))
+            ->selectRaw('inquiry_tasks.assignee_id as dashboard_assignee_id, count(*) as aggregate')
+            ->groupBy('inquiry_tasks.assignee_id')
+            ->pluck('aggregate', 'dashboard_assignee_id');
+
+        $inquiryCompleted = (clone $inquiryBase)
+            ->whereNotNull('inquiry_tasks.completed_at')
+            ->when($completedFrom, fn (Builder $query) => $query->where('inquiry_tasks.completed_at', '>=', $completedFrom))
+            ->when($completedTo, fn (Builder $query) => $query->where('inquiry_tasks.completed_at', '<=', $completedTo))
+            ->selectRaw('inquiry_tasks.assignee_id as dashboard_assignee_id, count(*) as completed_count')
+            ->selectRaw('sum(case when inquiry_tasks.due_date is not null and date(inquiry_tasks.completed_at) <= inquiry_tasks.due_date then 1 else 0 end) as on_time_count')
+            ->groupBy('inquiry_tasks.assignee_id')
+            ->get()
+            ->keyBy('dashboard_assignee_id');
+
+        return $users->map(function (User $person) use ($orderOngoing, $orderCompleted, $inquiryOngoing, $inquiryCompleted): User {
+            $id = (int) $person->id;
+            $orderDone = $orderCompleted->get($id);
+            $inquiryDone = $inquiryCompleted->get($id);
+
+            $person->setAttribute('ongoing_count',
+                (int) ($orderOngoing->get($id) ?? 0) + (int) ($inquiryOngoing->get($id) ?? 0)
+            );
+            $person->setAttribute('done_count',
+                (int) ($orderDone?->completed_count ?? 0) + (int) ($inquiryDone?->completed_count ?? 0)
+            );
+            $person->setAttribute('done_on_time_count',
+                (int) ($orderDone?->on_time_count ?? 0) + (int) ($inquiryDone?->on_time_count ?? 0)
+            );
+
+            return $person;
+        })->values();
     }
 
     public function attentionTasks(User $user): Collection
@@ -382,11 +549,12 @@ class DashboardService
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
         return $this->activeTaskQuery($user)
-            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason'])
+            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason', 'tasks.completed_at'])
             ->with([
                 'job:id,job_number,title,client_id',
                 'job.client:id,name,logo_path',
-                'assignee:id,name,profile_image_path',
+                'assignee:id,name,profile_image_path,department_id',
+                'orderTaskFlag:id,type,name,status,sort_order,color,metadata',
             ])
             ->where(function ($query) use ($today) {
                 $query->where('tasks.needs_attention', true)
@@ -395,45 +563,284 @@ class DashboardService
             })
             ->orderByRaw('case when tasks.due_date is not null and tasks.due_date < ? then 0 when tasks.needs_attention = 1 then 1 else 2 end', [$today])
             ->orderByRaw('tasks.due_date is null, tasks.due_date asc')
-            ->limit(3)
+            ->limit(30)
+            ->get();
+    }
+
+    /**
+     * Management Priority Work is intentionally different from the generic
+     * "recent" lists. Attention/overdue state wins first, then the configured
+     * business priority, then the nearest operational due date.
+     */
+    public function priorityJobs(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return app(JobService::class)->activeQuery($user)
+            ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)))
+            ->select([
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id',
+                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title',
+                'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested',
+                'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.priority',
+                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.updated_at',
+            ])
+            ->with([
+                'client:id,name,logo_path',
+                'phase:id,name,short_name',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
+                'owner:id,name,profile_image_path,department_id',
+                'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
+                'flaggedTasks.orderTaskFlag:id,type,name,status,sort_order,color,metadata',
+            ])
+            ->withCount('flaggedTasks as dashboard_flagged_task_count')
+            ->orderByRaw("case when flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 0 when flow_jobs.delivery_date is not null and flow_jobs.delivery_date < ? then 1 else 2 end", [$today])
+            ->orderByDesc('dashboard_flagged_task_count')
+            ->orderByRaw("case lower(trim(flow_jobs.priority)) when 'critical' then 6 when 'urgent' then 5 when 'high' then 4 when 'medium' then 3 when 'normal' then 3 when 'low' then 2 else 1 end desc")
+            ->orderByRaw('flow_jobs.delivery_date is null, flow_jobs.delivery_date asc')
+            ->orderByDesc('flow_jobs.updated_at')
+            ->limit(40)
+            ->get();
+    }
+
+    public function priorityInquiries(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return app(InquiryService::class)->visibleQuery($user)
+            ->whereNull('inquiries.result')
+            ->where('inquiries.status', '!=', 'Draft')
+            ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->where(function (Builder $scope) use ($departmentId): void {
+                $scope->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId))
+                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId));
+            }))
+            ->select([
+                'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id',
+                'inquiries.owner_id', 'inquiries.subject', 'inquiries.status',
+                'inquiries.priority', 'inquiries.required_delivery_date',
+                'inquiries.needs_attention', 'inquiries.updated_at',
+            ])
+            ->with([
+                'client:id,name,logo_path',
+                'owner:id,name,profile_image_path,department_id',
+                'currentTask:id,inquiry_id,assignee_id,title,status,needs_attention,attention_reason,due_date,completed_at',
+                'currentTask.assignee:id,name,profile_image_path,department_id',
+            ])
+            ->withCount([
+                'tasks as dashboard_priority_attention_count' => fn (Builder $tasks) => $tasks
+                    ->whereNull('inquiry_tasks.completed_at')
+                    ->where(function (Builder $query) use ($today): void {
+                        $query->where('inquiry_tasks.needs_attention', true)
+                            ->orWhere('inquiry_tasks.due_date', '<', $today)
+                            ->orWhereRaw("lower(trim(inquiry_tasks.status)) in ('blocked','waiting')");
+                    }),
+            ])
+            ->orderByDesc('inquiries.needs_attention')
+            ->orderByDesc('dashboard_priority_attention_count')
+            ->orderByRaw("case lower(trim(inquiries.priority)) when 'critical' then 6 when 'urgent' then 5 when 'high' then 4 when 'medium' then 3 when 'normal' then 3 when 'low' then 2 else 1 end desc")
+            ->orderByRaw('inquiries.required_delivery_date is null, inquiries.required_delivery_date asc')
+            ->orderByDesc('inquiries.updated_at')
+            ->limit(40)
+            ->get();
+    }
+
+    public function priorityTasks(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return $this->activeTaskQuery($user)
+            ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)))
+            ->select([
+                'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
+                'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority',
+                'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason',
+                'tasks.order_task_flag_id', 'tasks.completed_at', 'tasks.updated_at',
+            ])
+            ->with([
+                'job:id,job_number,title,client_id',
+                'job.client:id,name,logo_path',
+                'phase:id,name,short_name',
+                'assignee:id,name,profile_image_path,department_id',
+                'orderTaskFlag:id,type,name,status,sort_order,color,metadata',
+            ])
+            ->orderByRaw("case when tasks.due_date is not null and tasks.due_date < ? then 0 when tasks.needs_attention = 1 then 1 when lower(trim(tasks.status)) in ('blocked','waiting for client','waiting for internal approval','revision required') then 2 else 3 end", [$today])
+            ->orderByRaw("case lower(trim(tasks.priority)) when 'critical' then 6 when 'urgent' then 5 when 'high' then 4 when 'medium' then 3 when 'normal' then 3 when 'low' then 2 else 1 end desc")
+            ->orderByRaw('tasks.due_date is null, tasks.due_date asc')
+            ->orderByDesc('tasks.updated_at')
+            ->limit(40)
             ->get();
     }
 
     public function ongoingJobs(User $user): Collection
     {
         return app(JobService::class)->activeQuery($user)
-            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.updated_at'])
+            ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.updated_at'])
             ->with([
                 'client:id,name,logo_path',
                 'phase:id,name,short_name',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
+                'owner:id,name,profile_image_path,department_id',
                 'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
                 'flaggedTasks.orderTaskFlag:id,type,name,status,sort_order,color,metadata',
             ])
             ->orderByDesc('flow_jobs.updated_at')
-            ->limit(4)
+            ->limit(30)
             ->get();
     }
 
     public function ongoingTasks(User $user): Collection
     {
         return $this->activeTaskQuery($user)
-            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason', 'tasks.updated_at'])
-            ->with(['job:id,job_number,title', 'assignee:id,name,profile_image_path'])
+            ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason', 'tasks.order_task_flag_id', 'tasks.completed_at', 'tasks.updated_at'])
+            ->with(['job:id,job_number,title,client_id', 'job.client:id,name,logo_path', 'phase:id,name,short_name', 'assignee:id,name,profile_image_path,department_id', 'orderTaskFlag:id,type,name,status,sort_order,color,metadata'])
             ->orderByRaw('tasks.due_date is null, tasks.due_date asc')
             ->orderByDesc('tasks.updated_at')
-            ->limit(4)
+            ->limit(30)
             ->get();
     }
 
     public function recentActivity(User $user): Collection
     {
         return app(NotificationService::class)->visibleQuery($user)
-            ->select(['id', 'user_id', 'flow_job_id', 'flow_task_id', 'type', 'title', 'message', 'created_at'])
+            ->select(['id', 'user_id', 'flow_job_id', 'flow_task_id', 'inquiry_id', 'inquiry_task_id', 'type', 'title', 'message', 'created_at'])
             ->latest('created_at')
             ->latest('id')
-            ->limit(4)
+            ->limit(30)
             ->get();
+    }
+
+    public function recentOperationalActivity(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    {
+        $visibleJobIds = app(JobService::class)->visibleQuery($user)
+            ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)))
+            ->select('flow_jobs.id');
+        $visibleTaskIds = app(TaskService::class)->visibleQuery($user)
+            ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)))
+            ->select('tasks.id');
+        $visibleInquiryIds = app(InquiryService::class)->visibleQuery($user)
+            ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->where(function (Builder $scope) use ($departmentId): void {
+                $scope->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId))
+                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId));
+            }))
+            ->select('inquiries.id');
+
+        $rows = Activity::query()
+            ->with('user:id,name,profile_image_path')
+            ->where(function (Builder $query) use ($visibleJobIds, $visibleTaskIds, $visibleInquiryIds): void {
+                $query->where(function (Builder $jobs) use ($visibleJobIds): void {
+                    $jobs->where('activities.subject_type', FlowJob::class)
+                        ->whereIn('activities.subject_id', $visibleJobIds)
+                        // TaskService writes a canonical Task activity and a mirrored
+                        // Order activity. Showing both would duplicate the same change.
+                        ->where('activities.event', '!=', 'job.task_activity');
+                })->orWhere(function (Builder $tasks) use ($visibleTaskIds): void {
+                    $tasks->where('activities.subject_type', Task::class)
+                        ->whereIn('activities.subject_id', $visibleTaskIds);
+                })->orWhere(function (Builder $inquiries) use ($visibleInquiryIds): void {
+                    $inquiries->where('activities.subject_type', Inquiry::class)
+                        ->whereIn('activities.subject_id', $visibleInquiryIds);
+                });
+            })
+            ->latest('activities.created_at')
+            ->latest('activities.id')
+            ->limit(60)
+            ->get();
+
+        if ($rows->isEmpty()) return $rows;
+
+        $rows->loadMorph('subject', [
+            FlowJob::class => ['client:id,name,logo_path', 'owner:id,name,department_id'],
+            Task::class => ['job:id,job_number,title,client_id', 'job.client:id,name,logo_path', 'assignee:id,name,department_id'],
+            Inquiry::class => ['client:id,name,logo_path', 'owner:id,name,department_id'],
+        ]);
+
+        $inquiryTaskIds = $rows
+            ->filter(fn (Activity $activity) => $activity->subject_type === Inquiry::class && str_starts_with((string) $activity->event, 'inquiry.task_'))
+            ->map(fn (Activity $activity) => (int) data_get($activity->meta, 'inquiry_task_id', 0))
+            ->filter()
+            ->unique()
+            ->values();
+
+        $inquiryTasks = $inquiryTaskIds->isEmpty()
+            ? collect()
+            : InquiryTask::query()
+                ->whereIn('id', $inquiryTaskIds)
+                ->with('assignee:id,name,department_id')
+                ->get(['id', 'inquiry_id', 'assignee_id', 'title'])
+                ->keyBy('id');
+
+        return $rows->filter(function (Activity $activity) use ($inquiryTasks): bool {
+            $subject = $activity->subject;
+            if (!$subject) return false;
+
+            $actorName = trim((string) ($activity->user?->name ?: 'System'));
+            $description = trim((string) $activity->description);
+            $kind = 'orders';
+            $clientId = 0;
+            $departmentId = 0;
+            $title = $description !== '' ? $description : 'Record updated';
+            $detail = $actorName;
+            $parentId = 0;
+            $taskId = 0;
+
+            if ($subject instanceof Task) {
+                $kind = 'tasks';
+                $clientId = (int) ($subject->job?->client_id ?? 0);
+                $departmentId = (int) ($subject->assignee?->department_id ?? 0);
+                $title = trim((string) $subject->title) ?: 'Order task';
+                $detail = trim(implode(' · ', array_filter([
+                    $subject->task_number,
+                    $subject->job?->displayOrderNumber(),
+                    $description,
+                    $actorName !== '' ? 'by '.$actorName : null,
+                ])));
+                $parentId = (int) $subject->flow_job_id;
+                $taskId = (int) $subject->id;
+            } elseif ($subject instanceof Inquiry) {
+                $inquiryTaskId = (int) data_get($activity->meta, 'inquiry_task_id', 0);
+                $inquiryTask = $inquiryTaskId > 0 ? $inquiryTasks->get($inquiryTaskId) : null;
+                $isTaskChange = str_starts_with((string) $activity->event, 'inquiry.task_') || $inquiryTask !== null;
+                $kind = $isTaskChange ? 'tasks' : 'inquiries';
+                $clientId = (int) ($subject->client_id ?? 0);
+                $departmentId = (int) ($inquiryTask?->assignee?->department_id ?? $subject->owner?->department_id ?? 0);
+                $title = $isTaskChange
+                    ? (trim((string) ($inquiryTask?->title ?: 'Inquiry task')))
+                    : (trim((string) $subject->inquiry_number) ?: 'Inquiry');
+                $detail = trim(implode(' · ', array_filter([
+                    $subject->inquiry_number,
+                    $description,
+                    $actorName !== '' ? 'by '.$actorName : null,
+                ])));
+                $parentId = (int) $subject->id;
+                $taskId = $inquiryTaskId;
+            } elseif ($subject instanceof FlowJob) {
+                $kind = 'orders';
+                $clientId = (int) ($subject->client_id ?? 0);
+                $departmentId = (int) ($subject->owner?->department_id ?? 0);
+                $title = $subject->displayOrderNumber();
+                $detail = trim(implode(' · ', array_filter([
+                    $description,
+                    $actorName !== '' ? 'by '.$actorName : null,
+                ])));
+                $parentId = (int) $subject->id;
+            }
+
+            $activity->setAttribute('dashboard_kind', $kind);
+            $activity->setAttribute('dashboard_client_id', $clientId);
+            $activity->setAttribute('dashboard_department_id', $departmentId);
+            $activity->setAttribute('dashboard_title', $title);
+            $activity->setAttribute('dashboard_detail', $detail);
+            $activity->setAttribute('dashboard_parent_id', $parentId);
+            $activity->setAttribute('dashboard_task_id', $taskId);
+
+            return true;
+        })->values();
     }
 
     public function clientPortfolio(User $user): Collection
@@ -463,7 +870,7 @@ class DashboardService
             ])
             ->orderByDesc('active_jobs_count')
             ->orderBy('clients.name')
-            ->limit(4)
+            ->limit(30)
             ->get();
 
         if ($clients->isEmpty()) {
@@ -471,7 +878,7 @@ class DashboardService
         }
 
         // Inquiry volume must respect the signed-in user's record scope. Resolve
-        // all four portfolio clients in one grouped query instead of an N+1 count.
+        // the visible portfolio clients in one grouped query instead of an N+1 count.
         $inquiryCounts = app(InquiryService::class)->visibleQuery($user)
             ->whereIn('inquiries.client_id', $clients->pluck('id'))
             ->whereNull('inquiries.result')
@@ -485,6 +892,576 @@ class DashboardService
         });
 
         return $clients;
+    }
+
+    public function flowDistribution(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        int $rangeDays = 7,
+    ): array
+    {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        [$rangeFrom, $rangeTo] = $this->dashboardRangeUtcBounds($rangeDays);
+
+        $resolver = fn (): array => [
+            'orders' => $this->orderWorkflowPhaseDistribution($user, $clientId, $departmentId, $rangeFrom, $rangeTo),
+            'inquiries' => $this->inquiryWorkflowPhaseDistribution($user, $clientId, $departmentId, $rangeFrom, $rangeTo),
+        ];
+
+        return $this->remember(
+            $user,
+            'flow-distribution-range-'.$rangeDays.'-client-'.$clientId.'-department-'.$departmentId,
+            $resolver,
+        );
+    }
+
+    /**
+     * Dashboard Order flow must be phase-driven, not grouped by a phase id or
+     * by the short label. Every Order gets a private Workflow snapshot, so the
+     * same configured phase can have many database ids. We group by the source
+     * phase name and then merge equal names across the active Workflows.
+     */
+    private function orderWorkflowPhaseDistribution(
+        User $user,
+        int $clientId,
+        int $departmentId,
+        $rangeFrom,
+        $rangeTo,
+    ): array
+    {
+        $rows = app(JobService::class)->activeQuery($user)
+            ->reorder()
+            ->whereBetween('flow_jobs.updated_at', [$rangeFrom, $rangeTo])
+            ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)))
+            ->selectRaw('coalesce(flow_jobs.source_workflow_id, flow_jobs.workflow_id) as dashboard_workflow_id')
+            ->selectRaw('coalesce(flow_jobs.source_workflow_phase_id, flow_jobs.workflow_phase_id) as dashboard_phase_id')
+            ->addSelect('flow_jobs.client_id')
+            ->selectRaw('count(*) as aggregate')
+            ->groupByRaw('coalesce(flow_jobs.source_workflow_id, flow_jobs.workflow_id), coalesce(flow_jobs.source_workflow_phase_id, flow_jobs.workflow_phase_id), flow_jobs.client_id')
+            ->get();
+
+        if ($rows->isEmpty()) return [];
+
+        $workflowIds = $rows->pluck('dashboard_workflow_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $phaseIds = $rows->pluck('dashboard_phase_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $clientNames = $this->clientNamesForIds($rows->pluck('client_id'));
+        $activeClientsByWorkflow = $this->activeClientNamesByWorkflow($rows, $clientNames, 'dashboard_workflow_id');
+
+        $sourcePhases = WorkflowPhase::query()
+            ->whereIn('id', $phaseIds)
+            ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+            ->keyBy('id');
+
+        $missingPhaseIds = $phaseIds->diff($sourcePhases->keys());
+        $snapshotPhases = $missingPhaseIds->isEmpty()
+            ? collect()
+            : WorkflowPhase::query()
+                ->whereIn('source_workflow_phase_id', $missingPhaseIds)
+                ->orderBy('id')
+                ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+                ->unique('source_workflow_phase_id')
+                ->keyBy('source_workflow_phase_id');
+
+        $definitions = $this->workflowPhaseDefinitions($workflowIds);
+        $counts = [];
+        foreach ($rows as $row) {
+            $phaseId = (int) ($row->dashboard_phase_id ?? 0);
+            $phase = $sourcePhases->get($phaseId) ?: $snapshotPhases->get($phaseId);
+            $label = $this->dashboardPhaseLabel($phase?->name, $phase?->short_name);
+            $key = $this->dashboardPhaseKey($label);
+            $workflowId = (int) ($row->dashboard_workflow_id ?? 0);
+
+            if (!isset($counts[$key])) {
+                $counts[$key] = [
+                    'label' => $label,
+                    'count' => 0,
+                    'sequence' => (int) ($phase?->sequence ?? 9999),
+                    'workflow_ids' => [],
+                ];
+            }
+            $counts[$key]['count'] += (int) $row->aggregate;
+            $counts[$key]['sequence'] = min($counts[$key]['sequence'], (int) ($phase?->sequence ?? 9999));
+            if ($workflowId > 0) $counts[$key]['workflow_ids'][$workflowId] = true;
+        }
+
+        return $this->compileWorkflowPhaseDistribution($definitions, $counts, $workflowIds, $activeClientsByWorkflow);
+    }
+
+    /**
+     * Inquiry flow is phase-driven exactly like Order flow. The current Inquiry
+     * phase comes from the current task's persisted source workflow phase, with
+     * safe legacy fallbacks for records created before that source was stored.
+     */
+    private function inquiryWorkflowPhaseDistribution(
+        User $user,
+        int $clientId,
+        int $departmentId,
+        $rangeFrom,
+        $rangeTo,
+    ): array
+    {
+        // Orders have a persisted workflow_phase_id. Inquiry work is task-driven,
+        // so its equivalent is the source phase of the current Inquiry task. New
+        // Inquiry tasks persist source_workflow_phase_id; the Task Pack and task
+        // sequence fallbacks keep pre-migration/legacy records readable.
+        $currentTaskOrder = static function ($query) {
+            return $query
+                ->whereColumn('dashboard_current_inquiry_task.inquiry_id', 'inquiries.id')
+                ->whereNull('dashboard_current_inquiry_task.deleted_at')
+                ->orderByRaw('case when dashboard_current_inquiry_task.completed_at is null then 0 else 1 end')
+                ->orderByRaw('case when dashboard_current_inquiry_task.completed_at is null and dashboard_current_inquiry_task.started_at is not null then 0 when dashboard_current_inquiry_task.completed_at is null then 1 else 2 end')
+                ->orderByRaw('case when dashboard_current_inquiry_task.completed_at is null and dashboard_current_inquiry_task.started_at is not null then dashboard_current_inquiry_task.sequence end desc')
+                ->orderByRaw('case when dashboard_current_inquiry_task.completed_at is null and dashboard_current_inquiry_task.started_at is null then dashboard_current_inquiry_task.sequence end asc')
+                ->orderByDesc('dashboard_current_inquiry_task.sequence')
+                ->limit(1);
+        };
+
+        $rows = app(InquiryService::class)->visibleQuery($user)
+            ->whereNull('inquiries.result')
+            ->whereBetween('inquiries.updated_at', [$rangeFrom, $rangeTo])
+            ->where('inquiries.status', '!=', 'Draft')
+            ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)))
+            ->reorder()
+            ->select(['inquiries.id', 'inquiries.client_id', 'inquiries.source_workflow_template_id'])
+            ->selectSub(function ($query) use ($currentTaskOrder): void {
+                $currentTaskOrder($query->from('inquiry_tasks as dashboard_current_inquiry_task'))
+                    ->select('dashboard_current_inquiry_task.source_workflow_phase_id');
+            }, 'dashboard_source_workflow_phase_id')
+            ->selectSub(function ($query) use ($currentTaskOrder): void {
+                $currentTaskOrder($query->from('inquiry_tasks as dashboard_current_inquiry_task'))
+                    ->select('dashboard_current_inquiry_task.source_task_pack_item_id');
+            }, 'dashboard_source_task_pack_item_id')
+            ->selectSub(function ($query) use ($currentTaskOrder): void {
+                $currentTaskOrder($query->from('inquiry_tasks as dashboard_current_inquiry_task'))
+                    ->select('dashboard_current_inquiry_task.sequence');
+            }, 'dashboard_current_task_sequence')
+            ->get();
+
+        if ($rows->isEmpty()) return [];
+
+        $workflowIds = $rows->pluck('source_workflow_template_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $clientNames = $this->clientNamesForIds($rows->pluck('client_id'));
+        $activeClientsByWorkflow = $this->activeClientNamesByWorkflow($rows, $clientNames, 'source_workflow_template_id');
+        $definitions = $this->workflowPhaseDefinitions($workflowIds);
+        $definitionsById = $definitions->keyBy('id');
+
+        // Direct source phase is authoritative. Include an inactive legacy source
+        // phase too, so an Inquiry never silently falls back to a generic label
+        // after Workflow Setup changes.
+        $directPhaseIds = $rows->pluck('dashboard_source_workflow_phase_id')
+            ->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $legacyDirectPhases = $directPhaseIds->diff($definitionsById->keys())->isEmpty()
+            ? collect()
+            : WorkflowPhase::query()
+                ->whereIn('id', $directPhaseIds->diff($definitionsById->keys()))
+                ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+                ->map(fn (WorkflowPhase $phase): array => [
+                    'id' => (int) $phase->id,
+                    'workflow_id' => (int) ($phase->workflow_template_id ?: $phase->workflow_id),
+                    'label' => $this->dashboardPhaseLabel($phase->name, $phase->short_name),
+                    'sequence' => (int) $phase->sequence,
+                    'task_pack_id' => $phase->task_pack_id ? (int) $phase->task_pack_id : null,
+                ])
+                ->keyBy('id');
+
+        $sourceItemIds = $rows->pluck('dashboard_source_task_pack_item_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $packBySourceItem = $sourceItemIds->isEmpty()
+            ? collect()
+            : TaskPackItem::query()->whereIn('id', $sourceItemIds)->pluck('task_pack_id', 'id');
+
+        // Legacy fallback: map Workflow + Task Pack to every matching phase rather
+        // than only the first one. Reused Task Packs are disambiguated by the
+        // Inquiry task sequence below.
+        $phasesByWorkflowPack = [];
+        foreach ($definitions as $phase) {
+            $workflowId = (int) $phase['workflow_id'];
+            $packId = (int) ($phase['task_pack_id'] ?? 0);
+            if ($workflowId <= 0 || $packId <= 0) continue;
+            $phasesByWorkflowPack[$workflowId.':'.$packId][] = $phase;
+        }
+
+        // Sequence ranges mirror InquiryService::workflowRows(): phases are
+        // flattened in configured order and each phase contributes all items in
+        // its Task Pack. This gives old tasks a deterministic phase even when a
+        // source item id is missing or the same Task Pack is reused.
+        $packIds = $definitions->pluck('task_pack_id')->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        $packCounts = $packIds->isEmpty()
+            ? collect()
+            : TaskPackItem::query()
+                ->whereIn('task_pack_id', $packIds)
+                ->selectRaw('task_pack_id, count(*) as aggregate')
+                ->groupBy('task_pack_id')
+                ->pluck('aggregate', 'task_pack_id');
+        $phaseRangesByWorkflow = [];
+        foreach ($definitions->groupBy('workflow_id') as $workflowId => $workflowPhases) {
+            $cursor = 0;
+            foreach ($workflowPhases->sortBy(fn (array $phase) => [(int) $phase['sequence'], (int) $phase['id']]) as $phase) {
+                $taskCount = max(0, (int) ($packCounts->get((int) ($phase['task_pack_id'] ?? 0)) ?? 0));
+                if ($taskCount <= 0) continue;
+                $phaseRangesByWorkflow[(int) $workflowId][] = [
+                    'start' => $cursor + 1,
+                    'end' => $cursor + $taskCount,
+                    'phase' => $phase,
+                ];
+                $cursor += $taskCount;
+            }
+        }
+
+        $counts = [];
+        foreach ($rows as $row) {
+            $workflowId = (int) ($row->source_workflow_template_id ?? 0);
+            $sourcePhaseId = (int) ($row->dashboard_source_workflow_phase_id ?? 0);
+            $sourceItemId = (int) ($row->dashboard_source_task_pack_item_id ?? 0);
+            $taskSequence = (int) ($row->dashboard_current_task_sequence ?? 0);
+
+            $phase = $sourcePhaseId > 0
+                ? ($definitionsById->get($sourcePhaseId) ?: $legacyDirectPhases->get($sourcePhaseId))
+                : null;
+
+            if (! $phase && $workflowId > 0 && $sourceItemId > 0) {
+                $packId = (int) ($packBySourceItem->get($sourceItemId) ?? 0);
+                $matches = $phasesByWorkflowPack[$workflowId.':'.$packId] ?? [];
+                if (count($matches) === 1) {
+                    $phase = $matches[0];
+                }
+            }
+
+            if (! $phase && $workflowId > 0 && $taskSequence > 0) {
+                foreach ($phaseRangesByWorkflow[$workflowId] ?? [] as $range) {
+                    if ($taskSequence >= $range['start'] && $taskSequence <= $range['end']) {
+                        $phase = $range['phase'];
+                        break;
+                    }
+                }
+            }
+
+            $label = $phase['label'] ?? 'Unassigned';
+            $key = $this->dashboardPhaseKey($label);
+
+            if (!isset($counts[$key])) {
+                $counts[$key] = [
+                    'label' => $label,
+                    'count' => 0,
+                    'sequence' => (int) ($phase['sequence'] ?? 9999),
+                    'workflow_ids' => [],
+                ];
+            }
+            $counts[$key]['count']++;
+            $counts[$key]['sequence'] = min($counts[$key]['sequence'], (int) ($phase['sequence'] ?? 9999));
+            if ($workflowId > 0) $counts[$key]['workflow_ids'][$workflowId] = true;
+        }
+
+        return $this->compileWorkflowPhaseDistribution($definitions, $counts, $workflowIds, $activeClientsByWorkflow);
+    }
+
+    private function workflowPhaseDefinitions(Collection $workflowIds): Collection
+    {
+        if ($workflowIds->isEmpty()) return collect();
+
+        return WorkflowPhase::query()
+            ->where(function (Builder $query) use ($workflowIds): void {
+                $query->whereIn('workflow_template_id', $workflowIds)
+                    ->orWhere(function (Builder $legacy) use ($workflowIds): void {
+                        $legacy->whereNull('workflow_template_id')->whereIn('workflow_id', $workflowIds);
+                    });
+            })
+            ->where('is_active', true)
+            ->orderBy('sequence')
+            ->orderBy('id')
+            ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+            ->map(fn (WorkflowPhase $phase): array => [
+                'id' => (int) $phase->id,
+                'workflow_id' => (int) ($phase->workflow_template_id ?: $phase->workflow_id),
+                'label' => $this->dashboardPhaseLabel($phase->name, $phase->short_name),
+                'sequence' => (int) $phase->sequence,
+                'task_pack_id' => $phase->task_pack_id ? (int) $phase->task_pack_id : null,
+            ])
+            ->values();
+    }
+
+    private function compileWorkflowPhaseDistribution(Collection $definitions, array $counts, Collection $workflowIds, array $activeClientsByWorkflow): array
+    {
+        $workflowIds = $workflowIds->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        $templates = $workflowIds->isEmpty()
+            ? collect()
+            : WorkflowTemplate::query()
+                ->whereIn('id', $workflowIds)
+                ->with('clients:id,name')
+                ->get(['id', 'name', 'client_availability'])
+                ->keyBy('id');
+
+        $groups = [];
+        foreach ($definitions as $phase) {
+            $key = $this->dashboardPhaseKey($phase['label']);
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'label' => $phase['label'],
+                    'count' => 0,
+                    'sequence' => (int) $phase['sequence'],
+                    'workflow_ids' => [],
+                ];
+            }
+            $groups[$key]['sequence'] = min($groups[$key]['sequence'], (int) $phase['sequence']);
+            $groups[$key]['workflow_ids'][(int) $phase['workflow_id']] = true;
+        }
+
+        foreach ($counts as $key => $countRow) {
+            if (!isset($groups[$key])) {
+                $groups[$key] = [
+                    'label' => (string) $countRow['label'],
+                    'count' => 0,
+                    'sequence' => (int) $countRow['sequence'],
+                    'workflow_ids' => [],
+                ];
+            }
+            $groups[$key]['count'] += (int) $countRow['count'];
+            $groups[$key]['sequence'] = min($groups[$key]['sequence'], (int) $countRow['sequence']);
+            foreach (array_keys($countRow['workflow_ids'] ?? []) as $workflowId) {
+                if ((int) $workflowId > 0) $groups[$key]['workflow_ids'][(int) $workflowId] = true;
+            }
+        }
+
+        $workflowCount = max(1, $workflowIds->count());
+        $rows = collect($groups)->map(function (array $group) use ($workflowCount, $templates, $activeClientsByWorkflow): array {
+            $phaseWorkflowIds = collect(array_keys($group['workflow_ids']))->map(fn ($id) => (int) $id)->filter()->unique()->values();
+            $isMismatch = $workflowCount > 1 && $phaseWorkflowIds->count() < $workflowCount;
+            $scopeNames = collect();
+            $scopeType = null;
+
+            if ($isMismatch) {
+                foreach ($phaseWorkflowIds as $workflowId) {
+                    $template = $templates->get($workflowId);
+                    if ($template && (string) $template->client_availability === 'specific') {
+                        $scopeNames = $scopeNames->concat($template->clients->pluck('name'));
+                    } else {
+                        $scopeNames = $scopeNames->concat($activeClientsByWorkflow[$workflowId] ?? []);
+                    }
+                }
+                $scopeNames = $scopeNames->filter()->map(fn ($name) => trim((string) $name))->filter()->unique()->sort()->values();
+                if ($scopeNames->isNotEmpty()) {
+                    $scopeType = 'client';
+                } else {
+                    $scopeNames = $phaseWorkflowIds
+                        ->map(fn ($workflowId) => trim((string) ($templates->get($workflowId)?->name ?: '')))
+                        ->filter()->unique()->values();
+                    $scopeType = $scopeNames->isNotEmpty() ? 'workflow' : null;
+                }
+            }
+
+            $scopeLabel = $scopeNames->implode(', ');
+            return [
+                'label' => (string) $group['label'],
+                'count' => (int) $group['count'],
+                'sequence' => (int) $group['sequence'],
+                'is_mismatch' => $isMismatch,
+                'scope_type' => $scopeType,
+                'scope_label' => $scopeLabel,
+                'scope_text' => $isMismatch && $scopeLabel !== ''
+                    ? (($scopeType === 'client' ? ($scopeNames->count() > 1 ? 'Clients' : 'Client') : 'Workflow').' · '.$scopeLabel)
+                    : '',
+            ];
+        })
+            ->sortBy(fn (array $row) => [($row['label'] === 'Unassigned' ? 99999 : $row['sequence']), mb_strtolower($row['label'])])
+            ->values();
+
+        return $rows->all();
+    }
+
+    private function clientNamesForIds(Collection $clientIds): Collection
+    {
+        $clientIds = $clientIds->filter()->map(fn ($id) => (int) $id)->unique()->values();
+        return $clientIds->isEmpty()
+            ? collect()
+            : Client::query()->whereIn('id', $clientIds)->pluck('name', 'id');
+    }
+
+    private function activeClientNamesByWorkflow(Collection $rows, Collection $clientNames, string $workflowField): array
+    {
+        $map = [];
+        foreach ($rows as $row) {
+            $workflowId = (int) ($row->{$workflowField} ?? 0);
+            $clientId = (int) ($row->client_id ?? 0);
+            $name = trim((string) ($clientNames->get($clientId) ?? ''));
+            if ($workflowId <= 0 || $name === '') continue;
+            $map[$workflowId][$name] = $name;
+        }
+        return array_map(fn (array $names) => array_values($names), $map);
+    }
+
+    private function dashboardPhaseLabel(?string $name, ?string $shortName = null): string
+    {
+        $label = trim((string) $name);
+        if ($label === '') $label = trim((string) $shortName);
+        return $label !== '' ? $label : 'Unassigned';
+    }
+
+    private function dashboardPhaseKey(string $label): string
+    {
+        return mb_strtolower(trim((string) preg_replace('/\\s+/u', ' ', $label)));
+    }
+
+    public function taskStatusDistribution(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        int $rangeDays = 7,
+    ): array
+    {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        [$rangeFrom, $rangeTo] = $this->dashboardRangeUtcBounds($rangeDays);
+
+        $resolver = function () use ($user, $clientId, $departmentId, $rangeFrom, $rangeTo): array {
+            $orderTasks = $this->activeTaskQuery($user)
+                ->reorder()
+                ->whereBetween('tasks.updated_at', [$rangeFrom, $rangeTo])
+                ->whereRaw("lower(trim(coalesce(tasks.status, ''))) != 'cancelled'")
+                ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
+                ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)));
+
+            $inquiryTasks = app(AccessControlService::class)
+                ->applyInquiryTaskScope(InquiryTask::query(), $user)
+                ->whereBetween('inquiry_tasks.updated_at', [$rangeFrom, $rangeTo])
+                ->whereNull('inquiry_tasks.completed_at')
+                ->whereRaw("lower(trim(coalesce(inquiry_tasks.status, ''))) not in ('completed','cancelled')")
+                ->whereHas('inquiry', fn (Builder $inquiry) => $inquiry
+                    ->whereNull('inquiries.result')
+                    ->where('inquiries.status', '!=', 'Draft')
+                    ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true)))
+                ->when($clientId > 0, fn (Builder $query) => $query->whereHas('inquiry', fn (Builder $inquiry) => $inquiry->where('client_id', $clientId)))
+                ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)));
+
+            return [
+                'orders' => $this->buildTaskStatusDistribution($orderTasks, 'order_task_status'),
+                'inquiries' => $this->buildTaskStatusDistribution($inquiryTasks, 'inquiry_task_status'),
+            ];
+        };
+
+        // Status changes are inline/realtime actions, so this panel intentionally
+        // bypasses the short dashboard cache and always reflects the saved task rows.
+        return $resolver();
+    }
+
+    /**
+     * Use active Master Data records as the canonical status list and colour
+     * source, while retaining any still-open legacy status value so the total
+     * can never silently disagree with the visible tasks.
+     */
+    private function buildTaskStatusDistribution(Builder $query, string $masterType): array
+    {
+        $countRows = (clone $query)
+            ->selectRaw("coalesce(nullif(trim(status), ''), 'Unspecified') as dashboard_status")
+            ->selectRaw('count(*) as aggregate')
+            ->groupBy('status')
+            ->get();
+
+        $counts = [];
+        $labels = [];
+        foreach ($countRows as $row) {
+            $label = trim((string) ($row->dashboard_status ?: 'Unspecified')) ?: 'Unspecified';
+            $key = mb_strtolower(preg_replace('/\\s+/u', ' ', $label) ?: $label);
+            $counts[$key] = ($counts[$key] ?? 0) + (int) $row->aggregate;
+            $labels[$key] = $label;
+        }
+
+        $rows = [];
+        $seen = [];
+        $masterStatuses = app(MasterDataService::class)->active($masterType)
+            ->sortBy(fn ($record) => [(int) ($record->sort_order ?? 0), mb_strtolower((string) $record->name)])
+            ->values();
+
+        foreach ($masterStatuses as $record) {
+            $label = trim((string) $record->name);
+            if ($label === '') continue;
+            $key = mb_strtolower(preg_replace('/\\s+/u', ' ', $label) ?: $label);
+            $seen[$key] = true;
+            $rows[] = [
+                'label' => $label,
+                'count' => (int) ($counts[$key] ?? 0),
+                'color' => MasterColor::normalize((string) ($record->color ?? '')) ?: MasterColor::defaultFor($masterType, $label),
+                'configured' => true,
+            ];
+        }
+
+        foreach ($counts as $key => $count) {
+            if (isset($seen[$key])) continue;
+            $rows[] = [
+                'label' => (string) ($labels[$key] ?? 'Unspecified'),
+                'count' => (int) $count,
+                'color' => MasterColor::defaultFor($masterType, (string) ($labels[$key] ?? 'Unspecified')),
+                'configured' => false,
+            ];
+        }
+
+        return [
+            'total' => (int) array_sum(array_column($rows, 'count')),
+            'rows' => $rows,
+        ];
+    }
+
+    public function catalogueReadiness(User $user): array
+    {
+        return $this->remember($user, 'catalogue-readiness', function (): array {
+            $workspaceId = app(MasterDataService::class)->workspaceId();
+            $products = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product')
+                ->active();
+            $totalProducts = (clone $products)->count();
+            $percent = static fn (int $value, int $total): int => $total > 0 ? (int) round(($value / $total) * 100) : 0;
+
+            $withImages = (clone $products)->whereNotNull('metadata->product_image_path')->count();
+            $categorized = (clone $products)->whereNotNull('parent_id')->count();
+            $availability = (clone $products)->where(function (Builder $query): void {
+                $query->whereNotNull('metadata->client_availability')
+                    ->orWhereNotNull('metadata->client_availability_labels')
+                    ->orWhereNotNull('metadata->client_ids');
+            })->count();
+            $certificates = (clone $products)->where(function (Builder $query): void {
+                $query->whereNotNull('metadata->certificate_test_report_path')
+                    ->orWhereNotNull('metadata->certificate_test_report_url')
+                    ->orWhereNotNull('metadata->certificate_test_report');
+            })->count();
+
+            $supplierBase = MasterRecord::query()->forWorkspace($workspaceId)->ofType('supplier');
+            $supplierTotal = (clone $supplierBase)->count();
+            $activeSuppliers = (clone $supplierBase)->active()->count();
+
+            return [
+                'activeProducts' => $totalProducts,
+                'rows' => [
+                    ['label' => 'Products with images', 'value' => $percent($withImages, $totalProducts)],
+                    ['label' => 'Categorized products', 'value' => $percent($categorized, $totalProducts)],
+                    ['label' => 'Client availability mapped', 'value' => $percent($availability, $totalProducts)],
+                    ['label' => 'Certificates linked', 'value' => $percent($certificates, $totalProducts)],
+                    ['label' => 'Active suppliers', 'value' => $percent($activeSuppliers, $supplierTotal)],
+                ],
+            ];
+        });
+    }
+
+    public function dashboardClients(User $user): Collection
+    {
+        return app(ClientService::class)->visibleQuery($user)
+            ->where('clients.is_active', true)
+            ->orderBy('clients.name')
+            ->limit(100)
+            ->get(['clients.id', 'clients.name']);
+    }
+
+    public function dashboardDepartments(User $user): Collection
+    {
+        $query = Department::query()->where('is_active', true)->orderBy('name');
+        if (!app(AccessControlService::class)->isAdministrator($user) && app(AccessControlService::class)->scope($user, 'tasks') !== 'all_records') {
+            $query->whereKey($user->department_id ?: 0);
+        }
+        return $query->get(['id', 'name']);
     }
 
     private function activeTaskQuery(User $user): Builder
@@ -510,6 +1487,18 @@ class DashboardService
                 ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'")
                 ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
                 ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true)));
+    }
+
+    private function dashboardRangeUtcBounds(int $rangeDays): array
+    {
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+
+        return $settings->localDateRangeUtcBounds(
+            $today->subDays($rangeDays - 1)->toDateString(),
+            $today->toDateString(),
+        );
     }
 
     private function remember(User $user, string $section, Closure $resolver): mixed

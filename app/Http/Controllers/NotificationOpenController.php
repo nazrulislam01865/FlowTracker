@@ -8,10 +8,9 @@ use App\Models\FlowNotification;
 use App\Models\FlowTaskComment;
 use App\Models\InquiryTask;
 use App\Services\AccessControlService;
-use App\Services\DashboardService;
 use App\Services\JobService;
+use App\Services\NotificationService;
 use App\Services\InquiryService;
-use App\Services\ShellDataService;
 use App\Services\TaskService;
 use Illuminate\Http\RedirectResponse;
 
@@ -40,9 +39,7 @@ class NotificationOpenController extends Controller
         }
 
         if ($notification->read_at === null) {
-            $notification->forceFill(['read_at' => now()])->save();
-            app(DashboardService::class)->forgetMentions((int) $user->id);
-            app(ShellDataService::class)->forget((int) $user->id);
+            app(NotificationService::class)->markRead($user, $notification);
         }
 
         $access = app(AccessControlService::class);

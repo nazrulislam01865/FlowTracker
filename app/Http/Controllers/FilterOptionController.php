@@ -10,7 +10,7 @@ class FilterOptionController
 {
     public function __invoke(Request $request, string $type, FilterOptionService $service): JsonResponse
     {
-        abort_unless(in_array($type, ['clients','jobs','users','product-categories','products','workflows','priorities','task-statuses','document-categories','document-category-records','department-records','countries','job-statuses','job-healths','phases'], true), 404);
+        abort_unless(in_array($type, ['clients','jobs','users','product-categories','products','workflows','priorities','task-statuses','document-categories','document-category-records','department-records','departments','countries','phone-country-codes','job-statuses','job-healths','phases'], true), 404);
         $data = $request->validate([
             'q' => ['nullable','string','max:100'],
             'context' => ['nullable','string','max:30'],
@@ -27,7 +27,7 @@ class FilterOptionController
         // Inline pickers stay intentionally compact when first opened.
         // Once the user searches (2+ characters), return the normal larger result set.
         $compactInitialList = strlen($search) < 2 && (
-            in_array($type, ['clients','jobs','users','workflows','priorities','task-statuses','document-categories','document-category-records','department-records','countries','job-statuses','job-healths','phases'], true)
+            in_array($type, ['clients','jobs','users','workflows','priorities','task-statuses','document-categories','document-category-records','department-records','departments','countries','phone-country-codes','job-statuses','job-healths','phases'], true)
             || (in_array($context, ['job-detail', 'create-inquiry'], true) && in_array($type, ['product-categories', 'products'], true))
         );
         $limit = $compactInitialList ? 5 : 20;

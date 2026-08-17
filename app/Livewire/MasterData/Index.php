@@ -3,13 +3,17 @@
 namespace App\Livewire\MasterData;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Client;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
+use App\Services\ProductOptionImageService;
+use App\Services\ProductPriceTableParser;
 use App\Services\ProductCategoryDeletionService;
 use App\Support\MasterColor;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\Url;
@@ -19,6 +23,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use WithFileUploads;
     use WithPagination;
@@ -34,6 +39,14 @@ class Index extends Component
     public string $productReferenceCode = '';
     public string $productFormMainCategory = '';
     public string $productSize = '';
+    public string $productPriceTable = '';
+    public array $productPricePreview = [];
+    public array $productRemoteSurchargePreview = [];
+    public array $productOptions = [];
+    public array $productOptionUploads = [];
+    public array $productShipmentUrgencies = [];
+    public bool $productShipmentUrgencyPickerOpen = false;
+    public array $productShipmentUrgencyPickerSelection = [];
     public string $productSubcategory = '';
     public string $productClientAvailabilityMode = 'all';
     public array $productClientIds = [];
@@ -198,6 +211,11 @@ class Index extends Component
         $this->newProductCategoryName = '';
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
+        $this->productOptions = [];
+        $this->productOptionUploads = [];
+        $this->productShipmentUrgencies = [];
+        $this->productShipmentUrgencyPickerOpen = false;
+        $this->productShipmentUrgencyPickerSelection = [];
         $this->removeProductCertificate = false;
         $this->removeProductTemplate = false;
         $this->resetCategoryCreatorState();
@@ -212,6 +230,53 @@ class Index extends Component
             $this->productReferenceCode = $r->productReferenceCode();
             $this->productFormMainCategory = $r->productMainCategory();
             $this->productSize = $r->productSize();
+            $this->productPriceTable = trim((string) data_get($r->metadata, 'price_table_raw'));
+            $storedPriceBreakpoints = collect((array) data_get($r->metadata, 'price_breakpoints', []))
+                ->map(fn ($row) => [
+                    'quantity' => (int) data_get($row, 'quantity', 0),
+                    'price' => (float) data_get($row, 'price', 0),
+                ])
+                ->filter(fn ($row) => $row['quantity'] > 0 && $row['price'] >= 0)
+                ->sortBy('quantity')->values()->all();
+            $storedRemoteSurchargeBreakpoints = collect((array) data_get($r->metadata, 'remote_surcharge_breakpoints', []))
+                ->map(fn ($row) => [
+                    'quantity' => (int) data_get($row, 'quantity', 0),
+                    'price' => (float) data_get($row, 'price', 0),
+                ])
+                ->filter(fn ($row) => $row['quantity'] > 0 && $row['price'] >= 0)
+                ->sortBy('quantity')->values()->all();
+
+            if ($this->productPriceTable !== '') {
+                $parsedPriceTable = app(ProductPriceTableParser::class)->parseTable($this->productPriceTable);
+                $this->productPricePreview = $parsedPriceTable['price_breakpoints'];
+                $this->productRemoteSurchargePreview = $parsedPriceTable['remote_surcharge_breakpoints'];
+            } else {
+                $this->productPricePreview = $storedPriceBreakpoints;
+                $this->productRemoteSurchargePreview = $storedRemoteSurchargeBreakpoints;
+            }
+
+            if ($this->productPriceTable === '' && $this->productPricePreview !== []) {
+                $quantities = collect($this->productPricePreview)->pluck('quantity')->implode("	");
+                $prices = collect($this->productPricePreview)->pluck('price')->implode("	");
+                $this->productPriceTable = "Quantity	".$quantities."
+Product price	".$prices;
+                if ($this->productRemoteSurchargePreview !== []) {
+                    $remotePrices = collect($this->productRemoteSurchargePreview)->keyBy('quantity');
+                    $remoteRow = collect($this->productPricePreview)
+                        ->map(fn ($row) => data_get($remotePrices->get($row['quantity']), 'price', ''))
+                        ->implode("	");
+                    $this->productPriceTable .= "
+Remote Area charge	".$remoteRow;
+                }
+            }
+            $this->productOptions = $r->productOptions();
+            $this->productOptionUploads = [];
+            $this->productShipmentUrgencies = collect($r->productShipmentUrgencyOptions())
+                ->map(fn (array $option) => [
+                    'key' => trim((string) ($option['key'] ?? '')) ?: (string) Str::uuid(),
+                    'shipment_urgency_id' => (string) ($option['shipment_urgency_id'] ?? ''),
+                    'extra_charge' => (float) ($option['extra_charge'] ?? 0) > 0 ? (string) $option['extra_charge'] : '',
+                ])->values()->all();
             $this->productSubcategory = trim((string) (data_get($r->metadata, 'sub_category') ?: data_get($r->metadata, 'excel_sub_category')));
             $this->productClientAvailabilityMode = $r->hasSpecificProductAvailability() ? 'specific' : 'all';
             $storedClientIds = collect((array) data_get($r->metadata, 'client_ids', []))->map(fn ($value) => (int) $value)->filter()->values()->all();
@@ -257,6 +322,14 @@ class Index extends Component
             $this->productReferenceCode = '';
             $this->productFormMainCategory = '';
             $this->productSize = '';
+            $this->productPriceTable = '';
+            $this->productPricePreview = [];
+            $this->productRemoteSurchargePreview = [];
+            $this->productOptions = [];
+            $this->productOptionUploads = [];
+            $this->productShipmentUrgencies = [];
+            $this->productShipmentUrgencyPickerOpen = false;
+            $this->productShipmentUrgencyPickerSelection = [];
             $this->productSubcategory = '';
             $this->productClientAvailabilityMode = 'all';
             $this->productClientIds = [];
@@ -280,6 +353,11 @@ class Index extends Component
         $this->newProductCategoryName = '';
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
+        $this->productOptions = [];
+        $this->productOptionUploads = [];
+        $this->productShipmentUrgencies = [];
+        $this->productShipmentUrgencyPickerOpen = false;
+        $this->productShipmentUrgencyPickerSelection = [];
         $this->removeProductCertificate = false;
         $this->removeProductTemplate = false;
         $this->resetCategoryCreatorState();
@@ -1419,6 +1497,164 @@ class Index extends Component
         $this->resetValidation('productTemplateUpload');
     }
 
+    public function addProductOption(): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal, 404);
+        if (count($this->productOptions) >= 30) {
+            $this->addError('productOptions', 'A product can have up to 30 options.');
+            return;
+        }
+
+        $this->productOptions[] = [
+            'key' => (string) Str::uuid(),
+            'label' => '',
+            'extra_charge' => '',
+            'image_url' => null,
+        ];
+        $this->resetValidation('productOptions');
+    }
+
+    public function removeProductOption(int $index): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal, 404);
+        if (! array_key_exists($index, $this->productOptions)) return;
+
+        unset($this->productOptions[$index], $this->productOptionUploads[$index]);
+        $this->productOptions = array_values($this->productOptions);
+        $this->productOptionUploads = array_values($this->productOptionUploads);
+        $this->resetValidation('productOptions');
+        $this->resetValidation('productOptionUploads');
+    }
+
+    public function addProductShipmentUrgency(): void
+    {
+        // Keep this public action as the reusable entry point used by the form.
+        // Adding is now handled through the card picker instead of an empty select row.
+        $this->openProductShipmentUrgencyPicker();
+    }
+
+    public function openProductShipmentUrgencyPicker(): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal, 404);
+        if (count($this->productShipmentUrgencies) >= 20) {
+            $this->addError('productShipmentUrgencies', 'A product can have up to 20 shipping urgencies.');
+            return;
+        }
+
+        $this->productShipmentUrgencyPickerSelection = [];
+        $this->productShipmentUrgencyPickerOpen = true;
+        $this->resetValidation('productShipmentUrgencies');
+    }
+
+    public function closeProductShipmentUrgencyPicker(): void
+    {
+        $this->productShipmentUrgencyPickerOpen = false;
+        $this->productShipmentUrgencyPickerSelection = [];
+    }
+
+    public function toggleProductShipmentUrgencyPickerSelection(int $urgencyId): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal && $this->productShipmentUrgencyPickerOpen, 404);
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $exists = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('shipment_urgency')
+            ->whereKey($urgencyId)
+            ->where('status', 'active')
+            ->exists();
+        if (! $exists) return;
+
+        $alreadyAdded = collect($this->productShipmentUrgencies)
+            ->pluck('shipment_urgency_id')
+            ->map(fn ($value) => (int) $value)
+            ->contains($urgencyId);
+        if ($alreadyAdded) return;
+
+        $selection = collect($this->productShipmentUrgencyPickerSelection)
+            ->map(fn ($value) => (int) $value)
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($selection->contains($urgencyId)) {
+            $this->productShipmentUrgencyPickerSelection = $selection
+                ->reject(fn ($value) => $value === $urgencyId)
+                ->values()
+                ->all();
+            return;
+        }
+
+        if (count($this->productShipmentUrgencies) + $selection->count() >= 20) {
+            $this->addError('productShipmentUrgencies', 'A product can have up to 20 shipping urgencies.');
+            return;
+        }
+
+        $this->productShipmentUrgencyPickerSelection = $selection->push($urgencyId)->values()->all();
+        $this->resetValidation('productShipmentUrgencies');
+    }
+
+    public function confirmProductShipmentUrgencies(): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal && $this->productShipmentUrgencyPickerOpen, 404);
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $existingIds = collect($this->productShipmentUrgencies)
+            ->pluck('shipment_urgency_id')
+            ->map(fn ($value) => (int) $value)
+            ->filter()
+            ->unique();
+        $requestedIds = collect($this->productShipmentUrgencyPickerSelection)
+            ->map(fn ($value) => (int) $value)
+            ->filter()
+            ->unique()
+            ->reject(fn ($id) => $existingIds->contains($id));
+
+        $validIds = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('shipment_urgency')
+            ->where('status', 'active')
+            ->whereIn('id', $requestedIds->all())
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->pluck('id')
+            ->map(fn ($value) => (int) $value);
+
+        foreach ($validIds as $urgencyId) {
+            if (count($this->productShipmentUrgencies) >= 20) break;
+            $this->productShipmentUrgencies[] = [
+                'key' => (string) Str::uuid(),
+                'shipment_urgency_id' => (string) $urgencyId,
+                'extra_charge' => '',
+            ];
+        }
+
+        $this->closeProductShipmentUrgencyPicker();
+        $this->resetValidation('productShipmentUrgencies');
+    }
+
+    public function removeProductShipmentUrgency(int $index): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal, 404);
+        if (! array_key_exists($index, $this->productShipmentUrgencies)) return;
+
+        unset($this->productShipmentUrgencies[$index]);
+        $this->productShipmentUrgencies = array_values($this->productShipmentUrgencies);
+        $this->resetValidation('productShipmentUrgencies');
+    }
+
+    public function updatedProductPriceTable(): void
+    {
+        if ($this->group !== 'product') {
+            return;
+        }
+
+        $this->resetValidation('productPriceTable');
+        $parsedPriceTable = app(ProductPriceTableParser::class)->parseTable($this->productPriceTable);
+        $this->productPricePreview = $parsedPriceTable['price_breakpoints'];
+        $this->productRemoteSurchargePreview = $parsedPriceTable['remote_surcharge_breakpoints'];
+    }
+
     public function saveProductDraft(): void
     {
         $this->status = 'inactive';
@@ -1439,10 +1675,34 @@ class Index extends Component
 
         $data = $this->validate([
             'code' => ['required', 'string', 'max:40'],
-            'name' => ['required', 'string', 'max:255'],
+            'name' => $this->group === 'phone_country_code'
+                ? [
+                    'required',
+                    'string',
+                    'max:12',
+                    'regex:/^\+[0-9]{1,4}$/',
+                    Rule::unique('master_records', 'name')
+                        ->where(fn ($query) => $query
+                            ->where('workspace_id', $workspaceId)
+                            ->where('type', 'phone_country_code')
+                            ->whereNull('deleted_at'))
+                        ->ignore($this->editId),
+                ]
+                : ['required', 'string', 'max:255'],
             'productReferenceCode' => $this->group === 'product' ? ['nullable', 'string', 'max:80'] : ['nullable'],
             'productFormMainCategory' => $this->group === 'product' ? ['required', 'string', 'max:255'] : ['nullable'],
             'productSize' => $this->group === 'product' ? ['nullable', 'string', 'max:1200'] : ['nullable'],
+            'productPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
+            'productOptions' => $this->group === 'product' ? ['array', 'max:30'] : ['array'],
+            'productOptions.*.key' => $this->group === 'product' ? ['required', 'string', 'max:80'] : ['nullable'],
+            'productOptions.*.label' => $this->group === 'product' ? ['required', 'string', 'max:120'] : ['nullable'],
+            'productOptions.*.extra_charge' => $this->group === 'product' ? ['nullable', 'numeric', 'min:0', 'max:999999.999999'] : ['nullable'],
+            'productOptionUploads' => $this->group === 'product' ? ['array'] : ['array'],
+            'productOptionUploads.*' => $this->group === 'product' ? ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:5120'] : ['nullable'],
+            'productShipmentUrgencies' => $this->group === 'product' ? ['array', 'max:20'] : ['array'],
+            'productShipmentUrgencies.*.key' => $this->group === 'product' ? ['required', 'string', 'max:80'] : ['nullable'],
+            'productShipmentUrgencies.*.shipment_urgency_id' => $this->group === 'product' ? ['required', 'integer', Rule::exists('master_records', 'id')->where(fn ($q) => $q->where('workspace_id', $workspaceId)->where('type', 'shipment_urgency')->whereNull('deleted_at'))] : ['nullable'],
+            'productShipmentUrgencies.*.extra_charge' => $this->group === 'product' ? ['nullable', 'numeric', 'min:0', 'max:999999.999999'] : ['nullable'],
             'productSubcategory' => $this->group === 'product' ? ['nullable', 'string', 'max:255'] : ['nullable'],
             'productClientAvailabilityMode' => $this->group === 'product' ? ['required', Rule::in(['all', 'specific'])] : ['nullable'],
             'productClientIds' => $this->group === 'product' && $this->productClientAvailabilityMode === 'specific' ? ['required', 'array', 'min:1'] : ['array'],
@@ -1522,6 +1782,29 @@ class Index extends Component
             // Persist the canonical main-category spelling even if an old Product
             // row was opened with legacy metadata/casing.
             $data['productFormMainCategory'] = $main->name;
+
+            $shipmentUrgencyIds = collect($data['productShipmentUrgencies'] ?? [])
+                ->pluck('shipment_urgency_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter();
+            if ($shipmentUrgencyIds->count() !== $shipmentUrgencyIds->unique()->count()) {
+                throw ValidationException::withMessages([
+                    'productShipmentUrgencies' => 'Each shipping urgency can only be added once to a product.',
+                ]);
+            }
+        }
+
+        $productPriceBreakpoints = [];
+        $productRemoteSurchargeBreakpoints = [];
+        if ($this->group === 'product' && trim((string) $data['productPriceTable']) !== '') {
+            $parsedPriceTable = app(ProductPriceTableParser::class)->parseTable($data['productPriceTable']);
+            $productPriceBreakpoints = $parsedPriceTable['price_breakpoints'];
+            $productRemoteSurchargeBreakpoints = $parsedPriceTable['remote_surcharge_breakpoints'];
+            if ($productPriceBreakpoints === []) {
+                throw ValidationException::withMessages([
+                    'productPriceTable' => 'Paste a valid price table containing quantity and product price values.',
+                ]);
+            }
         }
 
         $metadata = null;
@@ -1557,6 +1840,17 @@ class Index extends Component
             $metadata['reference_code'] = trim((string) $data['productReferenceCode']);
             $metadata['main_category'] = trim((string) $data['productFormMainCategory']);
             $metadata['product_size'] = trim((string) $data['productSize']) ?: null;
+            if ($productPriceBreakpoints !== []) {
+                $metadata['price_table_raw'] = trim((string) $data['productPriceTable']);
+                $metadata['price_breakpoints'] = $productPriceBreakpoints;
+                if ($productRemoteSurchargeBreakpoints !== []) {
+                    $metadata['remote_surcharge_breakpoints'] = $productRemoteSurchargeBreakpoints;
+                } else {
+                    unset($metadata['remote_surcharge_breakpoints']);
+                }
+            } else {
+                unset($metadata['price_table_raw'], $metadata['price_breakpoints'], $metadata['remote_surcharge_breakpoints']);
+            }
             $metadata['sub_category'] = trim((string) $data['productSubcategory']) ?: null;
             unset($metadata['taxonomy_unassigned']);
             $metadata['test_certificate_number'] = trim((string) $data['productTestCertificateNumber']) ?: null;
@@ -1569,6 +1863,34 @@ class Index extends Component
             } else {
                 unset($metadata['client_ids'], $metadata['client_availability_labels'], $metadata['client_codes']);
             }
+
+            $shipmentUrgencyRows = collect($data['productShipmentUrgencies'] ?? []);
+            if ($shipmentUrgencyRows->isNotEmpty()) {
+                $shipmentUrgencies = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('shipment_urgency')
+                    ->whereIn('id', $shipmentUrgencyRows->pluck('shipment_urgency_id')->map(fn ($value) => (int) $value)->all())
+                    ->get(['id', 'code', 'name'])
+                    ->keyBy('id');
+
+                $metadata['shipment_urgency_options'] = $shipmentUrgencyRows->map(function (array $row) use ($shipmentUrgencies): array {
+                    $urgencyId = (int) ($row['shipment_urgency_id'] ?? 0);
+                    $urgency = $shipmentUrgencies->get($urgencyId);
+
+                    return [
+                        'key' => (string) ($row['key'] ?? Str::uuid()),
+                        'shipment_urgency_id' => $urgencyId,
+                        'shipment_urgency_code' => (string) ($urgency?->code ?? ''),
+                        'shipment_urgency_name' => (string) ($urgency?->name ?? ''),
+                        'extra_charge' => max(0, (float) ($row['extra_charge'] ?? 0)),
+                    ];
+                })->values()->all();
+            } else {
+                unset($metadata['shipment_urgency_options']);
+            }
+            // Remove the earlier incorrect shipment-method based product metadata.
+            unset($metadata['shipping_options']);
+
             $metadata = array_filter($metadata, fn ($value, $key) => $key === 'reference_code' || ($value !== null && $value !== ''), ARRAY_FILTER_USE_BOTH);
         }
 
@@ -1621,6 +1943,21 @@ class Index extends Component
 
         if ($this->group === 'product') {
             try {
+                $record = app(ProductOptionImageService::class)->sync(
+                    $record,
+                    $data['productOptions'] ?? [],
+                    $this->productOptionUploads,
+                );
+            } catch (\Throwable $exception) {
+                report($exception);
+                if ($wasCreating) $this->editId = $record->id;
+                $this->addError('productOptions', 'The product was saved, but an option image could not be stored. Please try the upload again.');
+                return;
+            }
+        }
+
+        if ($this->group === 'product') {
+            try {
                 $record = app(\App\Services\ProductDocumentService::class)->sync(
                     $record,
                     $this->productCertificateUpload,
@@ -1642,6 +1979,11 @@ class Index extends Component
         $this->removeProductImage = false;
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
+        $this->productOptions = [];
+        $this->productOptionUploads = [];
+        $this->productShipmentUrgencies = [];
+        $this->productShipmentUrgencyPickerOpen = false;
+        $this->productShipmentUrgencyPickerSelection = [];
         $this->removeProductCertificate = false;
         $this->removeProductTemplate = false;
         session()->flash('success', $this->group === 'product' ? 'Product saved.' : 'Master data saved.');
@@ -1812,6 +2154,7 @@ class Index extends Component
         if ($count < 1) return;
 
         $this->selectedProductsQuery()->reorder()->update(['status' => $status]);
+        app(\App\Services\WorkspaceRefreshService::class)->touch('MasterRecord:bulk-product-status');
         $this->clearProductSelection();
         $this->recordsReady = true;
         session()->flash('success', number_format($count).' '.strtolower(\Illuminate\Support\Str::plural('product', $count)).' set to '.$status.'.');
@@ -2712,6 +3055,29 @@ class Index extends Component
             ? $service->active('order_flag')
             : collect();
 
+        $availableProductShipmentUrgencies = collect();
+        if ($this->group === 'product' && $this->showModal) {
+            $selectedShipmentUrgencyIds = collect($this->productShipmentUrgencies)
+                ->pluck('shipment_urgency_id')
+                ->map(fn ($value) => (int) $value)
+                ->filter()
+                ->unique();
+            $availableProductShipmentUrgencies = $service->active('shipment_urgency');
+
+            if ($selectedShipmentUrgencyIds->isNotEmpty()) {
+                $selectedStoredUrgencies = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('shipment_urgency')
+                    ->whereIn('id', $selectedShipmentUrgencyIds->all())
+                    ->get();
+                $availableProductShipmentUrgencies = $availableProductShipmentUrgencies
+                    ->concat($selectedStoredUrgencies)
+                    ->unique('id')
+                    ->sortBy(fn (MasterRecord $urgency) => sprintf('%010d|%s', (int) $urgency->sort_order, mb_strtolower((string) $urgency->name)))
+                    ->values();
+            }
+        }
+
         return view('livewire.master-data.index', [
             'labels' => MasterDataService::LABELS,
             'rows' => $rows,
@@ -2726,6 +3092,7 @@ class Index extends Component
             'productMainCategoryFilterOptions' => $productMainCategoryFilterOptions,
             'productSubcategories' => $productSubcategories,
             'productClients' => $this->group === 'product' ? Client::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : collect(),
+            'availableProductShipmentUrgencies' => $availableProductShipmentUrgencies,
             'viewProduct' => $viewProduct,
             'editProduct' => $editProduct,
             'productSelectionCount' => $productSelectionCount,

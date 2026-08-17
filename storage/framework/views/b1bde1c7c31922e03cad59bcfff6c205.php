@@ -22,16 +22,24 @@
     if (!array_key_exists($masterGroup, $masterLabels)) $masterGroup = 'product';
 
     $catalogueGroups = ['product', 'product_category', 'supplier'];
+    $financialGroups = \App\Services\MasterDataService::FINANCIAL_TYPES;
     $catalogProductView = $user->canModule('catalog_products', 'view');
     $catalogProductCreate = $user->canModule('catalog_products', 'create');
     $productCategoryView = $user->canModule('product_categories', 'view');
     $productCategoryCreate = $user->canModule('product_categories', 'create');
     $supplierView = $user->canModule('suppliers', 'view');
+    $financeMasterView = $user->canModule('finance', 'view');
     $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
     $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
+    $financialGroupActive = request()->routeIs('financial-master-data')
+        || (request()->routeIs('master-data') && in_array($masterGroup, $financialGroups, true));
 
-    $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
-    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, 'task_status', 'task_flag'])->all();
+    $masterGroupActive = request()->routeIs('master-data')
+        && !in_array($masterGroup, [...$catalogueGroups, ...$financialGroups], true);
+    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, ...$financialGroups, 'task_status', 'task_flag'])->all();
+    $financialLinks = collect($financialGroups)
+        ->mapWithKeys(fn ($type) => [$type => $masterLabels[$type]])
+        ->all();
     $administrator = app(\App\Services\AccessControlService::class)->isAdministrator($user);
     $settingsGroupActive = request()->routeIs('company.setup', 'administration');
 ?>
@@ -553,6 +561,43 @@
 <?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
 <?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
 <?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($financeMasterView): ?>
+            <details class="ft-sidebar-group" <?php if($financialGroupActive): ?> open <?php endif; ?>>
+                <summary class="ft-sidebar-group-toggle <?php echo e($financialGroupActive ? 'is-active' : ''); ?>">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 14h4"/></svg>
+                    </span>
+                    <span>Financial Master Data</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children ft-master-sidebar-children">
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $financialLinks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $financialKey => $financialLabel): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                        <?php if (isset($component)) { $__componentOriginal230d78629742508075cd03dd9439398e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal230d78629742508075cd03dd9439398e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.nav-link','data' => ['route' => 'financial-master-data','label' => $financialLabel,'icon' => 'dot','child' => true,'params' => ['group' => $financialKey],'active' => $financialGroupActive && $masterGroup === $financialKey]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.nav-link'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['route' => 'financial-master-data','label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financialLabel),'icon' => 'dot','child' => true,'params' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(['group' => $financialKey]),'active' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($financialGroupActive && $masterGroup === $financialKey)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $attributes = $__attributesOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__attributesOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal230d78629742508075cd03dd9439398e)): ?>
+<?php $component = $__componentOriginal230d78629742508075cd03dd9439398e; ?>
+<?php unset($__componentOriginal230d78629742508075cd03dd9439398e); ?>
+<?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                </div>
+            </details>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($masterView): ?>
             <details class="ft-sidebar-group" <?php if($masterGroupActive): ?> open <?php endif; ?>>
                 <summary class="ft-sidebar-group-toggle <?php echo e($masterGroupActive ? 'is-active' : ''); ?>">

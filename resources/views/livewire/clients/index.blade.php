@@ -13,7 +13,14 @@
         :account-manager-id="$accountManagerId"
         :preferred-currency="$preferredCurrency"
         :client-country="$clientCountry"
+        :office-state="$officeState"
+        :billing-state="$billingState"
         :billing-country="$billingCountry"
+        :billing-recipient="$billingRecipient"
+        :billing-address-line1="$billingAddressLine1"
+        :billing-suite="$billingSuite"
+        :billing-city="$billingCity"
+        :billing-zip="$billingZip"
         :billing-same-as-office="$billingSameAsOffice"
         :sales-tax-status="$salesTaxStatus"
         :shipping-addresses="$shippingAddresses"
@@ -45,7 +52,14 @@
         :account-manager-id="$accountManagerId"
         :preferred-currency="$preferredCurrency"
         :client-country="$clientCountry"
+        :office-state="$officeState"
+        :billing-state="$billingState"
         :billing-country="$billingCountry"
+        :billing-recipient="$billingRecipient"
+        :billing-address-line1="$billingAddressLine1"
+        :billing-suite="$billingSuite"
+        :billing-city="$billingCity"
+        :billing-zip="$billingZip"
         :billing-same-as-office="$billingSameAsOffice"
         :sales-tax-status="$salesTaxStatus"
         :edit-shipping-addresses="$shippingAddresses"
@@ -85,19 +99,11 @@
     <div class="ft-clients-layout ft-clients-layout-full">
         <section class="ft-clients-main">
             @if(!$showArchived)
-            <div class="ft-clients-metrics">
-                <button type="button" wire:click="setQuick('all')" class="ft-client-metric {{ $quick==='all' && !$clientListFieldFilterActive ? 'is-active' : '' }}">
-                    <span class="ft-client-metric-icon ft-client-metric-blue">♙</span><span><small>Total clients</small><b>{{ number_format($summary['clients']) }}</b></span>
-                </button>
-                <button type="button" wire:click="setQuick('active_jobs')" class="ft-client-metric {{ $quick==='active_jobs'?'is-active':'' }}">
-                    <span class="ft-client-metric-icon ft-client-metric-green">▣</span><span><small>Active Jobs</small><b>{{ number_format($summary['active_jobs']) }}</b></span>
-                </button>
-                <button type="button" wire:click="setQuick('attention')" class="ft-client-metric {{ $quick==='attention'?'is-active':'' }}">
-                    <span class="ft-client-metric-icon ft-client-metric-amber">△</span><span><small>Needs attention</small><b>{{ number_format($summary['attention']) }}</b></span>
-                </button>
-                <button type="button" wire:click="setQuick('outstanding')" class="ft-client-metric {{ $quick==='outstanding'?'is-active':'' }}">
-                    <span class="ft-client-metric-icon ft-client-metric-purple">$</span><span><small>Outstanding</small><b>${{ number_format($summary['outstanding'],0) }}</b></span>
-                </button>
+            <div class="ft-clients-metrics ft-summary-card-grid ft-summary-card-grid-4" style="--ft-summary-columns:4" aria-label="Client summary filters">
+                <x-ui.summary-card label="Total clients" :value="$summary['clients'] ?? 0" icon="clients" tone="blue" caption="Active client records" :active="$quick === 'all' && ! $clientListFieldFilterActive" wire:click="setQuick('all')" aria-pressed="{{ $quick === 'all' && ! $clientListFieldFilterActive ? 'true' : 'false' }}" />
+                <x-ui.summary-card label="Active Jobs" :value="$summary['active_jobs'] ?? 0" icon="orders" tone="green" caption="Open client work" :active="$quick === 'active_jobs'" wire:click="setQuick('active_jobs')" aria-pressed="{{ $quick === 'active_jobs' ? 'true' : 'false' }}" />
+                <x-ui.summary-card label="Needs attention" :value="$summary['attention'] ?? 0" icon="attention" tone="red" caption="Client work requiring action" :active="$quick === 'attention'" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}" />
+                <x-ui.summary-card label="Outstanding" :value="$summary['outstanding'] ?? 0" :display-value="'$'.number_format((float) ($summary['outstanding'] ?? 0), 0)" icon="money" tone="purple" caption="Total outstanding balance" :active="$quick === 'outstanding'" wire:click="setQuick('outstanding')" aria-pressed="{{ $quick === 'outstanding' ? 'true' : 'false' }}" />
             </div>
             @endif
 

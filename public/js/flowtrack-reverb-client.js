@@ -321,11 +321,23 @@
     window.FlowTrackRealtime = client;
 
     if (notificationChannelName) {
-        client.subscribe(notificationChannelName).bind('flowtrack.notification', (payload = {}) => {
+        const notificationChannel = client.subscribe(notificationChannelName);
+
+        notificationChannel.bind('flowtrack.notification', (payload = {}) => {
             const current = Number.parseInt(document.querySelector('#sidebar .nav-btn[href*="/notifications"] .nav-badge')?.textContent || '0', 10) || 0;
             setUnreadCount(payload?.unread_count ?? current + 1);
             window.Livewire?.dispatch?.('flowtrack-notification');
             window.dispatchEvent(new CustomEvent('flowtrack-realtime-notification', { detail: payload }));
+        });
+
+        // Read/unread changes are private to this user and therefore use the
+        // private-user channel rather than the workspace invalidation channel.
+        // Reusing the Livewire notification refresh event keeps every existing
+        // notification/mention surface synchronized without page-specific code.
+        notificationChannel.bind('flowtrack.notification-state', (payload = {}) => {
+            setUnreadCount(payload?.unread_count ?? 0);
+            window.Livewire?.dispatch?.('flowtrack-notification');
+            window.dispatchEvent(new CustomEvent('flowtrack-realtime-notification-state', { detail: payload }));
         });
     }
 

@@ -159,6 +159,43 @@ class NotificationService
         $this->visibleQuery($user)->whereNull('read_at')->update(['read_at' => now()]);
         app(DashboardService::class)->forgetMentions($user);
         app(ShellDataService::class)->forget($user->id);
+        $this->broadcastRealtimeState($user);
+    }
+
+    /**
+     * Mark one currently-visible notification as read and synchronize the unread
+     * badge/notification surfaces in the user's other connected tabs.
+     */
+    public function markRead(User $user, FlowNotification $notification): int
+    {
+        $notification = $this->visibleQuery($user)->whereKey($notification->id)->firstOrFail();
+
+        if ($notification->read_at === null) {
+            $notification->forceFill(['read_at' => now()])->save();
+            app(DashboardService::class)->forgetMentions($user);
+            app(ShellDataService::class)->forget($user->id);
+        }
+
+        $unreadCount = $this->unreadCount($user);
+        $this->broadcastRealtimeState($user, $unreadCount);
+
+        return $unreadCount;
+    }
+
+    /**
+     * Reverb state event used for read/unread synchronization. FlowNotification
+     * intentionally is not a workspace-observed model because private notification
+     * state belongs only to its recipient, not every user in the workspace.
+     */
+    public function broadcastRealtimeState(User $recipient, ?int $unreadCount = null): void
+    {
+        if (! $recipient->is_active || ! app(ReverbChannelService::class)->enabled()) return;
+
+        $this->queueUserRealtimeEvent(
+            $recipient,
+            'flowtrack.notification-state',
+            ['unread_count' => $unreadCount ?? $this->unreadCount($recipient)],
+        );
     }
 
     public function notifyUser(
@@ -381,6 +418,55 @@ class NotificationService
                         $direct ? 'mention' : 'mention_admin',
                     );
                 });
+        });
+    }
+
+    /**
+     * Create an Inquiry-scoped notification through the same queued Reverb path
+     * used by Order/Task notifications. Keeping this here prevents Inquiry
+     * services from writing FlowNotification rows that never reach the browser.
+     */
+    public function notifyInquiryUser(
+        User $recipient,
+        Inquiry $inquiry,
+        ?InquiryTask $inquiryTask,
+        string $title,
+        string $message,
+        string $type = 'info',
+        ?User $actor = null,
+    ): void {
+        if (! $recipient->is_active) return;
+
+        $recipientId = (int) $recipient->id;
+        $inquiryId = (int) $inquiry->id;
+        $inquiryTaskId = $inquiryTask?->id ? (int) $inquiryTask->id : null;
+        $actorId = $actor?->id ? (int) $actor->id : null;
+
+        $this->runAfterCommit(function () use ($recipientId, $inquiryId, $inquiryTaskId, $title, $message, $type, $actorId): void {
+            $recipient = User::query()->where('is_active', true)->find($recipientId);
+            $inquiry = Inquiry::withTrashed()->find($inquiryId);
+            if (! $recipient || ! $inquiry || $inquiry->trashed()) return;
+
+            $inquiryTask = $inquiryTaskId ? InquiryTask::withTrashed()->find($inquiryTaskId) : null;
+            if ($inquiryTaskId && (! $inquiryTask || $inquiryTask->trashed() || (int) $inquiryTask->inquiry_id !== $inquiryId)) return;
+
+            $visible = app(InquiryService::class)->visibleQuery($recipient)->whereKey($inquiryId)->exists();
+            if (! $visible) return;
+
+            $notification = FlowNotification::create([
+                'user_id' => $recipient->id,
+                'actor_id' => $actorId,
+                'flow_job_id' => null,
+                'flow_task_id' => null,
+                'inquiry_id' => $inquiry->id,
+                'inquiry_task_id' => $inquiryTask?->id,
+                'type' => $type,
+                'title' => $title,
+                'message' => $message,
+            ]);
+
+            $this->forgetRecipientCaches($recipient);
+            $this->deliverRealtime($recipient, $notification, null, null, $inquiry, $inquiryTask);
         });
     }
 
@@ -661,25 +747,34 @@ class NotificationService
             'unread_count' => $this->unreadCount($recipient),
         ];
 
-        // Never make a Livewire/browser request wait for an realtime WebSocket
-        // HTTP call. Realtime delivery belongs on the queue so a slow or
-        // temporarily unavailable Reverb endpoint cannot turn a successful database
-        // action into a 30-second timeout.
+        $this->queueUserRealtimeEvent($recipient, 'flowtrack.notification', $payload, $notification->id);
+    }
+
+    /**
+     * Queue a private-user Reverb event without ever coupling WebSocket
+     * availability to the database action that caused it.
+     */
+    private function queueUserRealtimeEvent(
+        User $recipient,
+        string $event,
+        array $payload,
+        ?int $notificationId = null,
+    ): void {
         try {
             DeliverRealtimeNotification::dispatch(
                 $recipient->id,
-                'flowtrack.notification',
+                $event,
                 $payload,
             )
                 ->onConnection((string) config('services.realtime.queue_connection', 'database'))
                 ->afterCommit();
         } catch (\Throwable $exception) {
-            // The database notification is already saved. Realtime is an
-            // enhancement only, so queue problems must never fail the user's
-            // original action.
-            Log::warning('Realtime notification could not be queued.', [
-                'notification_id' => $notification->id,
+            // Realtime is an enhancement only. Queue/Reverb problems must never
+            // turn a successful FlowTrack database action into a false failure.
+            Log::warning('Realtime user event could not be queued.', [
+                'notification_id' => $notificationId,
                 'user_id' => $recipient->id,
+                'event' => $event,
                 'error' => $exception->getMessage(),
             ]);
         }

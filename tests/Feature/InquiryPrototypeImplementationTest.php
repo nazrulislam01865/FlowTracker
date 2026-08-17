@@ -35,17 +35,22 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("->when(\$clientId > 0, fn (Builder \$q) => \$q->where('inquiries.client_id', \$clientId))", $service);
         $this->assertStringContainsString('.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-list-client-filter{', $css);
         $this->assertStringContainsString("'fixedMenu' => false", file_get_contents(resource_path('views/components/ui/remote-filter.blade.php')));
-        $this->assertStringContainsString("wire:click=\"setMetricFilter('active')\"", $view);
-        $this->assertStringContainsString("wire:click=\"setMetricFilter('completed')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('createdToday')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('notStarted')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('inProgress')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('dueThisWeek')\"", $view);
+        $this->assertStringContainsString("wire:click=\"setMetricFilter('completedThisWeek')\"", $view);
         $this->assertStringContainsString("wire:click=\"setMetricFilter('attention')\"", $view);
-        $this->assertStringContainsString("wire:click=\"setMetricFilter('dueToday')\"", $view);
         $this->assertStringContainsString('public string $metricFilter', $component);
         $this->assertStringContainsString('public function setMetricFilter(string $metric): void', $component);
         $this->assertStringContainsString("'metric_filter' => \$this->metricFilter", $component);
         $this->assertStringContainsString('private function applyMetricListScope', $service);
-        $this->assertStringContainsString('private function applyDueTodayInquiryListScope', $service);
-        $this->assertStringContainsString("->whereDate('inquiry_tasks.due_date', \$today)", $service);
-        $this->assertStringContainsString("\$currentTaskDueDate = \$metricFilter === 'dueToday'", $service);
+        $this->assertStringContainsString('private function applyCreatedTodayListScope', $service);
+        $this->assertStringContainsString('private function applyNotStartedListScope', $service);
+        $this->assertStringContainsString('private function applyInProgressListScope', $service);
+        $this->assertStringContainsString('private function applyDueThisWeekListScope', $service);
+        $this->assertStringContainsString('private function applyCompletedThisWeekListScope', $service);
+        $this->assertStringContainsString("->whereBetween('inquiries.required_delivery_date', [\$weekStart, \$weekEnd])", $service);
         $this->assertStringContainsString("currentTaskSubquery('due_date', \$currentTaskDueDate)", $service);
         $this->assertStringContainsString('private function currentTaskSubquery(string $column, ?string $dueDate = null): Builder', $service);
         $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
@@ -53,9 +58,9 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('<div>Task Status</div>', $view);
         $this->assertStringContainsString('<div>Flag</div>', $view);
         $this->assertStringContainsString("currentTaskSubquery('status', \$currentTaskDueDate)", $service);
-        $this->assertStringContainsString("\$currentTaskAttentionSql = \$this->currentTaskSubquery('needs_attention')->toSql();", $service);
-        $this->assertStringContainsString("COALESCE((\$currentTaskAttentionSql), 0) = 1", $service);
-        $this->assertStringNotContainsString("->whereIn('inquiries.id', \$attentionTasks)", $service);
+        $this->assertStringContainsString("->orWhereNull('inquiry_tasks.assignee_id')", $service);
+        $this->assertStringContainsString("->orWhereDate('inquiry_tasks.due_date', '<', \$today)", $service);
+        $this->assertStringContainsString("LIKE '%blocked%'", $service);
     }
 
     public function test_inquiry_create_matches_prototype_and_uses_workflow_setup(): void

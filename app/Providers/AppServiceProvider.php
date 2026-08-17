@@ -2,15 +2,6 @@
 
 namespace App\Providers;
 
-use App\Models\Client;
-use App\Models\FlowJob;
-use App\Models\FlowJobMember;
-use App\Models\Inquiry;
-use App\Models\InquiryTask;
-use App\Models\MasterRecord;
-use App\Models\Task;
-use App\Models\User;
-use App\Models\WorkflowPhase;
 use App\Observers\WorkspaceDataObserver;
 use App\Services\AccessControlService;
 use App\Services\BrandingService;
@@ -50,17 +41,7 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
-        foreach ([
-            Client::class,
-            FlowJob::class,
-            FlowJobMember::class,
-            Inquiry::class,
-            InquiryTask::class,
-            MasterRecord::class,
-            Task::class,
-            User::class,
-            WorkflowPhase::class,
-        ] as $modelClass) {
+        foreach (WorkspaceDataObserver::observedModels() as $modelClass) {
             $modelClass::observe(WorkspaceDataObserver::class);
         }
 

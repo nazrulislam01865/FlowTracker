@@ -3,6 +3,7 @@
 namespace App\Livewire\Notifications;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Services\NotificationService;
 use Livewire\Attributes\On;
@@ -11,6 +12,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use WithPagination;
 
@@ -25,23 +27,14 @@ class Index extends Component
         $user = auth()->user();
         $service = app(NotificationService::class);
         $notification = $service->visibleQuery($user)->whereKey($id)->firstOrFail();
-        $notification->forceFill(['read_at' => now()])->save();
-        app(\App\Services\DashboardService::class)->forgetMentions($user);
-        app(\App\Services\ShellDataService::class)->forget((int) $user->id);
-        $this->dispatch('flowtrack-unread-count', count: $service->unreadCount($user));
+        $this->dispatch('flowtrack-unread-count', count: $service->markRead($user, $notification));
     }
 
     #[On('flowtrack-notification')]
     public function refreshNotifications(): void
     {
-        // The next render pulls the new database notification. The Pusher event
+        // The next render pulls the new database notification. The Reverb event
         // only tells Livewire that fresh data is available.
-    }
-
-    #[On('flowtrack-refresh')]
-    public function refreshWorkspace(): void
-    {
-        // Re-query so notifications attached to deleted records disappear at once.
     }
 
     public function render()

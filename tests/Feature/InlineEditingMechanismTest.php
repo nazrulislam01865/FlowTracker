@@ -21,6 +21,8 @@ class InlineEditingMechanismTest extends TestCase
             'updateJobPriority',
             'updateJobHealth',
             'updateJobTextField',
+            'updateJobShippingField',
+            'updateJobShippingPhone',
             'updateJobItem',
             'updateTaskAssigneeFromJob',
             'updateTaskDueDateFromJob',

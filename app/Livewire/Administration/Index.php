@@ -4,6 +4,7 @@ namespace App\Livewire\Administration;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Models\Department;
 use App\Models\Role;
@@ -20,6 +21,7 @@ use Livewire\WithFileUploads;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
     use WithFileUploads;

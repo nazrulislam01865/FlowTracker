@@ -16,6 +16,7 @@
     'wireKey' => 'shared-create-products',
     'rowKeyPrefix' => 'shared-selected-product',
     'requiredErrorField' => null,
+    'step' => 2,
 ])
 
 @php
@@ -54,7 +55,7 @@
 >
     <div class="ft-order-products-title-row">
         <div class="ft-create-section-title ft-order-products-title">
-            <span>2</span>
+            <span>{{ $step }}</span>
             <h2>Products &amp; quantities</h2>
             @if($required)
                 <em class="is-required">Required</em>

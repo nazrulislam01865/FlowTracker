@@ -3,6 +3,7 @@
 namespace App\Livewire\Clients;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Models\Client;
 use App\Models\ClientShippingAddress;
@@ -25,6 +26,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use WithFileUploads;
     use WithPagination;
@@ -69,7 +71,8 @@ class Index extends Component
     public string $officeCity = '';
     public string $officeState = '';
     public string $officeZip = '';
-    public bool $billingSameAsOffice = true;
+    public bool $billingSameAsOffice = false;
+    public string $billingRecipient = '';
     public string $billingAddressLine1 = '';
     public string $billingSuite = '';
     public string $billingCity = '';
@@ -333,26 +336,18 @@ class Index extends Component
             'contacts.*.phone' => ['nullable','string','max:60'],
             'accountManagerId' => [$draft ? 'nullable' : 'required','nullable','exists:users,id'],
             'preferredLanguage' => ['nullable','string','max:50'],
-            'officeAddressLine1' => [$draft ? 'nullable' : 'required','string','max:255'],
+            'officeAddressLine1' => ['nullable','string','max:255'],
             'officeSuite' => ['nullable','string','max:120'],
-            'officeCity' => [$draft ? 'nullable' : 'required','string','max:120'],
-            'officeState' => array_merge(
-                [(!$draft && $hasStatesForCountry($this->clientCountry)) ? 'required' : 'nullable','string','max:120'],
-                $stateRule($this->clientCountry)
-            ),
-            'officeZip' => [$draft ? 'nullable' : 'required','string','max:30'],
+            'officeCity' => ['nullable','string','max:120'],
+            'officeState' => ['nullable','string','max:120'],
+            'officeZip' => ['nullable','string','max:30'],
+            'billingRecipient' => [$draft ? 'nullable' : 'required','string','max:255'],
             'billingAddressLine1' => ['nullable','string','max:255'],
             'billingSuite' => ['nullable','string','max:120'],
             'billingCity' => ['nullable','string','max:120'],
-            // Hidden billing fields must not block saving when "same as office"
-            // is enabled. They may contain old values from an earlier profile.
-            'billingState' => $this->billingSameAsOffice
-                ? ['nullable','string','max:120']
-                : array_merge(['nullable','string','max:120'], $stateRule($this->billingCountry)),
+            'billingState' => array_merge(['nullable','string','max:120'], $stateRule($this->billingCountry)),
             'billingZip' => ['nullable','string','max:30'],
-            'billingCountry' => $this->billingSameAsOffice
-                ? ['nullable','string','max:120']
-                : array_merge(['nullable','string','max:120'], $countryRule()),
+            'billingCountry' => array_merge(['nullable','string','max:120'], $countryRule()),
             'einTaxId' => ['nullable','string','max:80'],
             'salesTaxStatus' => ['required','in:taxable,tax_exempt'],
             'paymentTerms' => ['nullable','string','max:60'],
@@ -376,7 +371,11 @@ class Index extends Component
                     ->contains(fn (string $field) => trim((string) ($address[$field] ?? '')) !== '');
                 if (!$requireShipping && !$hasContent) continue;
 
-                foreach (['label','address_line1','city','zip'] as $field) {
+                $requiredShippingFields = ['address_line1','city','zip'];
+                if ($requireShipping) {
+                    $requiredShippingFields[] = 'recipient';
+                }
+                foreach ($requiredShippingFields as $field) {
                     $rules["shippingAddresses.{$index}.{$field}"] = ['required','string','max:255'];
                 }
                 $shippingCountry = (string) ($address['country'] ?? '');
@@ -386,16 +385,14 @@ class Index extends Component
                     $stateRule($shippingCountry)
                 );
             }
-            if (!$this->billingSameAsOffice) {
-                foreach (['billingAddressLine1','billingCity','billingZip'] as $field) {
-                    $rules[$field] = ['required','string','max:255'];
-                }
-                $rules['billingCountry'] = array_merge(['required','string','max:120'], $countryRule());
-                $rules['billingState'] = array_merge(
-                    [$hasStatesForCountry($this->billingCountry) ? 'required' : 'nullable','string','max:120'],
-                    $stateRule($this->billingCountry)
-                );
+            foreach (['billingRecipient','billingAddressLine1','billingCity','billingZip'] as $field) {
+                $rules[$field] = ['required','string','max:255'];
             }
+            $rules['billingCountry'] = array_merge(['required','string','max:120'], $countryRule());
+            $rules['billingState'] = array_merge(
+                [$hasStatesForCountry($this->billingCountry) ? 'required' : 'nullable','string','max:120'],
+                $stateRule($this->billingCountry)
+            );
         }
 
         return $rules;
@@ -407,6 +404,18 @@ class Index extends Component
             'contacts.*.email.required' => 'Contact email is required.',
             'contacts.*.email.email' => 'Enter a valid email address.',
             'contacts.*.email.distinct' => 'Each contact must use a unique email address.',
+            'shippingAddresses.*.recipient.required' => 'Recipient name is required.',
+            'shippingAddresses.*.address_line1.required' => 'Address line 1 is required.',
+            'shippingAddresses.*.city.required' => 'City is required.',
+            'shippingAddresses.*.state.required' => 'State is required.',
+            'shippingAddresses.*.zip.required' => 'ZIP / postal code is required.',
+            'shippingAddresses.*.country.required' => 'Country / region is required.',
+            'billingRecipient.required' => 'Recipient name is required.',
+            'billingAddressLine1.required' => 'Address line 1 is required.',
+            'billingCity.required' => 'City is required.',
+            'billingState.required' => 'State is required.',
+            'billingZip.required' => 'ZIP / postal code is required.',
+            'billingCountry.required' => 'Country / region is required.',
         ];
     }
 
@@ -518,10 +527,7 @@ class Index extends Component
                 $data['officeAddressLine1'] ?? '', $data['officeSuite'] ?? '', $data['officeCity'] ?? '',
                 $data['officeState'] ?? '', $data['officeZip'] ?? '', $data['clientCountry'] ?? ''
             );
-            $billing = $this->billingSameAsOffice ? [
-                'line1' => $data['officeAddressLine1'] ?? '', 'suite' => $data['officeSuite'] ?? '', 'city' => $data['officeCity'] ?? '',
-                'state' => $data['officeState'] ?? '', 'zip' => $data['officeZip'] ?? '', 'country' => $data['clientCountry'] ?? '',
-            ] : [
+            $billing = [
                 'line1' => $data['billingAddressLine1'] ?? '', 'suite' => $data['billingSuite'] ?? '', 'city' => $data['billingCity'] ?? '',
                 'state' => $data['billingState'] ?? '', 'zip' => $data['billingZip'] ?? '', 'country' => $data['billingCountry'] ?? '',
             ];
@@ -534,7 +540,8 @@ class Index extends Component
                 'website' => $data['website'] ?: null, 'country' => $data['clientCountry'] ?: null, 'preferred_currency' => strtoupper($data['preferredCurrency']),
                 'office_address' => $officeAddress ?: null, 'office_address_line1' => $data['officeAddressLine1'] ?: null,
                 'office_suite' => $data['officeSuite'] ?: null, 'office_city' => $data['officeCity'] ?: null, 'office_state' => $data['officeState'] ?: null,
-                'office_zip' => $data['officeZip'] ?: null, 'billing_same_as_office' => $this->billingSameAsOffice,
+                'office_zip' => $data['officeZip'] ?: null, 'billing_same_as_office' => false,
+                'billing_recipient' => $data['billingRecipient'] ?: null,
                 'billing_address_line1' => $billing['line1'] ?: null, 'billing_suite' => $billing['suite'] ?: null, 'billing_city' => $billing['city'] ?: null,
                 'billing_state' => $billing['state'] ?: null, 'billing_zip' => $billing['zip'] ?: null, 'billing_country' => $billing['country'] ?: null,
                 'contact_name' => $primaryContact['name'] ?: null, 'contact_job_title' => $primaryContact['job_title'] ?: null, 'email' => $primaryContact['email'] ?: null,
@@ -575,6 +582,51 @@ class Index extends Component
         $this->showClientPreview = true;
         session()->flash('success', $draft ? 'Client draft saved successfully.' : 'Client created successfully.');
         app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), $draft ? 'Client draft saved' : 'Client created', $client->name.($draft ? ' was saved as a draft.' : ' was created.'), 'update', null, null, auth()->user());
+    }
+
+    public function useSavedAddressForShipping(): void
+    {
+        if ($this->shippingAddresses === []) {
+            $this->shippingAddresses = [$this->blankShippingAddress(true)];
+        }
+
+        $index = 0;
+        foreach ($this->shippingAddresses as $key => $address) {
+            if ((bool) ($address['expanded'] ?? false)) {
+                $index = (int) $key;
+                break;
+            }
+        }
+
+        $useBilling = trim($this->billingAddressLine1) !== '';
+        $line1 = $useBilling ? $this->billingAddressLine1 : $this->officeAddressLine1;
+        if (trim($line1) === '') {
+            $this->addError("shippingAddresses.{$index}.address_line1", 'Enter the office or billing address first, then choose Use saved address.');
+            return;
+        }
+
+        $suite = $useBilling ? $this->billingSuite : $this->officeSuite;
+        $city = $useBilling ? $this->billingCity : $this->officeCity;
+        $state = $useBilling ? $this->billingState : $this->officeState;
+        $zip = $useBilling ? $this->billingZip : $this->officeZip;
+        $country = $useBilling ? $this->billingCountry : $this->clientCountry;
+        $recipient = trim((string) data_get($this->contacts, '0.name'));
+
+        $this->shippingAddresses[$index] = array_merge(
+            $this->shippingAddresses[$index],
+            [
+                'recipient' => $recipient !== '' ? $recipient : ($this->shippingAddresses[$index]['recipient'] ?? ''),
+                'address_line1' => $line1,
+                'suite' => $suite,
+                'city' => $city,
+                'state' => $state,
+                'zip' => $zip,
+                'country' => $country !== '' ? $country : $this->defaultClientCountry(),
+                'expanded' => true,
+            ]
+        );
+
+        $this->resetValidation("shippingAddresses.{$index}");
     }
 
     public function addShippingAddress(): void
@@ -626,6 +678,22 @@ class Index extends Component
         unset($address);
     }
 
+    public function toggleSavedShippingAddress(int $index): void
+    {
+        abort_unless(isset($this->shippingAddresses[$index]), 404);
+
+        $shouldSaveAsDefault = ! (bool) ($this->shippingAddresses[$index]['is_default'] ?? false);
+        if ($shouldSaveAsDefault) {
+            foreach ($this->shippingAddresses as $key => &$address) {
+                $address['is_default'] = $key === $index;
+            }
+            unset($address);
+            return;
+        }
+
+        $this->shippingAddresses[$index]['is_default'] = false;
+    }
+
     public function showDifferentBillingAddress(): void { $this->billingSameAsOffice = false; }
 
     private function blankShippingAddress(bool $default = false): array
@@ -639,12 +707,12 @@ class Index extends Component
         $defaultCurrency = $this->defaultClientCurrency();
         $this->clientCode = $this->nextClientCode(); $this->clientName = ''; $this->clientLogoUpload = null; $this->existingClientLogoUrl = ''; $this->removeClientLogo = false; $this->legalBusinessName = ''; $this->website = '';
         $this->clientCountry = $defaultCountry; $this->preferredCurrency = $defaultCurrency; $this->officeAddress = ''; $this->officeAddressLine1 = '';
-        $this->officeSuite = ''; $this->officeCity = ''; $this->officeState = ''; $this->officeZip = ''; $this->billingSameAsOffice = true;
-        $this->billingAddressLine1 = ''; $this->billingSuite = ''; $this->billingCity = ''; $this->billingState = ''; $this->billingZip = '';
+        $this->officeSuite = ''; $this->officeCity = ''; $this->officeState = ''; $this->officeZip = ''; $this->billingSameAsOffice = false;
+        $this->billingRecipient = ''; $this->billingAddressLine1 = ''; $this->billingSuite = ''; $this->billingCity = ''; $this->billingState = ''; $this->billingZip = '';
         $this->billingCountry = $defaultCountry; $this->contactName = ''; $this->contactJobTitle = ''; $this->email = ''; $this->phone = ''; $this->contacts = [$this->blankContact()];
         $this->accountManagerId = auth()->id(); $this->preferredLanguage = 'English'; $this->outstandingBalance = '0'; $this->einTaxId = '';
         $this->salesTaxStatus = 'taxable'; $this->paymentTerms = ''; $this->poRequired = false; $this->notes = '';
-        $this->shippingAddresses = [$this->blankShippingAddress(true)]; $this->resetValidation();
+        $this->shippingAddresses = [$this->blankShippingAddress(false)]; $this->resetValidation();
     }
 
     private function defaultClientCountry(): string
@@ -753,13 +821,15 @@ class Index extends Component
         $this->officeCity = $client->office_city ?? '';
         $this->officeState = $client->office_state ?? '';
         $this->officeZip = $client->office_zip ?? '';
-        $this->billingSameAsOffice = (bool) $client->billing_same_as_office;
-        $this->billingAddressLine1 = $client->billing_address_line1 ?? '';
-        $this->billingSuite = $client->billing_suite ?? '';
-        $this->billingCity = $client->billing_city ?? '';
-        $this->billingState = $client->billing_state ?? '';
-        $this->billingZip = $client->billing_zip ?? '';
-        $this->billingCountry = $client->billing_country ?: $this->clientCountry;
+        $legacyBillingFromOffice = (bool) $client->billing_same_as_office && blank($client->billing_address_line1);
+        $this->billingSameAsOffice = false;
+        $this->billingRecipient = $client->billing_recipient ?: ($client->contact_name ?? '');
+        $this->billingAddressLine1 = $legacyBillingFromOffice ? ($client->office_address_line1 ?: $client->office_address ?: '') : ($client->billing_address_line1 ?? '');
+        $this->billingSuite = $legacyBillingFromOffice ? ($client->office_suite ?? '') : ($client->billing_suite ?? '');
+        $this->billingCity = $legacyBillingFromOffice ? ($client->office_city ?? '') : ($client->billing_city ?? '');
+        $this->billingState = $legacyBillingFromOffice ? ($client->office_state ?? '') : ($client->billing_state ?? '');
+        $this->billingZip = $legacyBillingFromOffice ? ($client->office_zip ?? '') : ($client->billing_zip ?? '');
+        $this->billingCountry = $legacyBillingFromOffice ? $this->clientCountry : ($client->billing_country ?: $this->clientCountry);
         $this->contactName = $client->contact_name ?? '';
         $this->contactJobTitle = $client->contact_job_title ?? '';
         $this->email = $client->email ?? '';
@@ -855,10 +925,7 @@ class Index extends Component
                 $data['officeAddressLine1'] ?? '', $data['officeSuite'] ?? '', $data['officeCity'] ?? '',
                 $data['officeState'] ?? '', $data['officeZip'] ?? '', $data['clientCountry'] ?? ''
             );
-            $billing = $this->billingSameAsOffice ? [
-                'line1' => $data['officeAddressLine1'] ?? '', 'suite' => $data['officeSuite'] ?? '', 'city' => $data['officeCity'] ?? '',
-                'state' => $data['officeState'] ?? '', 'zip' => $data['officeZip'] ?? '', 'country' => $data['clientCountry'] ?? '',
-            ] : [
+            $billing = [
                 'line1' => $data['billingAddressLine1'] ?? '', 'suite' => $data['billingSuite'] ?? '', 'city' => $data['billingCity'] ?? '',
                 'state' => $data['billingState'] ?? '', 'zip' => $data['billingZip'] ?? '', 'country' => $data['billingCountry'] ?? '',
             ];
@@ -878,7 +945,8 @@ class Index extends Component
                 'office_city' => $data['officeCity'] ?: null,
                 'office_state' => $data['officeState'] ?: null,
                 'office_zip' => $data['officeZip'] ?: null,
-                'billing_same_as_office' => $this->billingSameAsOffice,
+                'billing_same_as_office' => false,
+                'billing_recipient' => $data['billingRecipient'] ?: null,
                 'billing_address_line1' => $billing['line1'] ?: null,
                 'billing_suite' => $billing['suite'] ?: null,
                 'billing_city' => $billing['city'] ?: null,
@@ -941,7 +1009,7 @@ class Index extends Component
         try {
             app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Client updated', $client->name.' was updated.', 'update', null, null, auth()->user());
         } catch (\Throwable $exception) {
-            // A notification/Pusher failure must never roll back or visually
+            // A notification/Reverb failure must never roll back or visually
             // block a client profile update that was already saved successfully.
             report($exception);
         }
@@ -1086,9 +1154,15 @@ class Index extends Component
         })->all();
 
         return [
-            'users' => ($user->canModule('clients','assign') || $user->canModule('clients','edit_all'))
-                ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
-                : collect([$user]),
+            'users' => User::query()
+                ->where('is_active', true)
+                ->with('department:id,name')
+                ->when(
+                    ! ($user->canModule('clients','assign') || $user->canModule('clients','edit_all')),
+                    fn ($query) => $query->whereKey($user->id)
+                )
+                ->orderBy('name')
+                ->get(['id','department_id','name','profile_image_path']),
             'detail' => null,
             'clientCountries' => $countries->pluck('name')->values()->all(),
             'clientCountryFlags' => $countryFlags,

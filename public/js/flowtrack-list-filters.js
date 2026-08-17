@@ -78,6 +78,42 @@
         return Math.min(heightCap, Math.max(120, measuredHeight || heightCap));
     };
 
+    const findFixedContainingBlock = (node) => {
+        let parent = node?.parentElement || null;
+
+        while (parent && parent !== document.documentElement) {
+            const style = window.getComputedStyle(parent);
+            const contain = String(style.contain || '');
+            const willChange = String(style.willChange || '');
+            const contentVisibility = String(style.contentVisibility || 'visible');
+            const hasBackdropFilter = Boolean(style.backdropFilter) && style.backdropFilter !== 'none';
+
+            // position:fixed is viewport-relative only when no ancestor creates a
+            // fixed-position containing block. My Tasks order groups use
+            // content-visibility/contain for performance, so a fixed dropdown
+            // nested inside them is otherwise offset by the group's own position.
+            if (
+                style.transform !== 'none'
+                || style.perspective !== 'none'
+                || style.filter !== 'none'
+                || hasBackdropFilter
+                || contain.includes('layout')
+                || contain.includes('paint')
+                || contain.includes('strict')
+                || contain.includes('content')
+                || contentVisibility === 'auto'
+                || contentVisibility === 'hidden'
+                || /transform|perspective|filter/.test(willChange)
+            ) {
+                return parent;
+            }
+
+            parent = parent.parentElement;
+        }
+
+        return null;
+    };
+
     const positionDropdown = (component) => {
         const trigger = component.$refs?.trigger;
         const menu = component.$refs?.menu;
@@ -118,10 +154,21 @@
                 : rect.bottom + gap;
             const top = Math.max(edge, Math.min(preferredTop, viewportHeight - availableHeight - edge));
 
+            const containingBlock = findFixedContainingBlock(menu);
+            const containingRect = containingBlock?.getBoundingClientRect?.() || null;
+            const containingLeft = containingRect
+                ? containingRect.left + Number(containingBlock.clientLeft || 0)
+                : 0;
+            const containingTop = containingRect
+                ? containingRect.top + Number(containingBlock.clientTop || 0)
+                : 0;
+            const renderedLeft = left - containingLeft;
+            const renderedTop = top - containingTop;
+
             component.menuStyle = [
                 'position:fixed!important',
-                `left:${Math.round(left)}px!important`,
-                `top:${Math.round(top)}px!important`,
+                `left:${Math.round(renderedLeft)}px!important`,
+                `top:${Math.round(renderedTop)}px!important`,
                 'right:auto!important',
                 'bottom:auto!important',
                 `width:${Math.round(width)}px!important`,
@@ -327,6 +374,9 @@
                 } finally {
                     if (sequence === this.requestSequence) this.loading = false;
                 }
+            },
+            sync(value, label) {
+                this.syncSelection({ value, label }, this.params, this.items);
             },
             syncSelection(selection, params = {}, serverItems = []) {
                 const nextParams = params && typeof params === 'object' ? {...params} : {};

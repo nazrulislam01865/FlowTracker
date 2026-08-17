@@ -14,18 +14,35 @@ This build replaces Pusher Cloud with a self-hosted Laravel Reverb transport whi
 - The existing `realtime` database queue remains in place for phase 1.
 - The existing HTTP polling fallback remains active whenever the WebSocket is disconnected.
 
-## Important dependency note for this archive
+## Systemwide realtime architecture
 
-The source archive did not contain Composer itself, so the included `composer.lock` could not be regenerated in the build environment. `composer.json` already requires Reverb, and `scripts/deploy.sh` safely performs a one-time targeted `composer update laravel/reverb --with-all-dependencies` when the lock file does not yet contain Reverb. After that first run, Composer returns to normal deterministic `composer install` behavior.
+FlowTrack uses two reusable realtime paths rather than adding socket code inside every Create/Edit/Delete method:
 
-For development, run the targeted update once and keep the resulting `composer.lock` in your normal source-control/deployment workflow.
+1. **Private user channel** — `private-flowtrack.user.{id}`
+   - `flowtrack.notification` for assignments, mentions, attention alerts and other user-facing notifications.
+   - `flowtrack.notification-state` for read/unread synchronization across the user's open tabs.
+   - Database notifications remain the source of truth; Reverb only delivers the immediate signal.
+
+2. **Private workspace channel** — `private-flowtrack.workspace.{workspaceId}`
+   - `flowtrack.refresh` is a lightweight invalidation event. It never pushes record data or bypasses permissions.
+   - `WorkspaceDataObserver::observedModels()` centrally covers FlowTrack's operational parent and child models: Orders, Tasks, comments, checklists, documents, finance records, Inquiries, Inquiry tasks/comments/documents/links, Clients, master data, workflow/task-pack setup, users/roles and related records.
+   - `RefreshesFromWorkspace` is the shared Livewire concern used by the application's Livewire screens. Receiving the event causes the existing authorized query/render path to fetch fresh state. Components with cached metrics can implement `prepareForWorkspaceRefresh()` before the render.
+   - Set-based SQL operations that intentionally bypass Eloquent observers publish one explicit `WorkspaceRefreshService::touch(...)` after the mutation.
+
+`WorkspaceRefreshService` is transaction-aware and coalesces bursts of writes. A transaction emits only after commit, and closely spaced commits share one delayed Reverb invalidation. The workspace data-version cache is updated even if Reverb is disabled, so the polling fallback still detects changes.
+
+This means Order create/edit/delete, Task create/edit/status/assignee/delete/comment/document/checklist/link changes, Inquiry create/edit/delete/task/assignee/comment/document/link changes, Client changes, finance changes, Documents, Master Data and setup changes all use the same reusable refresh mechanism. Mention/assignment notifications continue to use the recipient-only channel.
+
+## Dependency note
+
+`composer.json` and `composer.lock` both contain Laravel Reverb. Normal deployments therefore use deterministic `composer install`. `scripts/deploy.sh` still contains a safe compatibility check for an older server checkout whose lock file predates Reverb; only in that situation does it perform the one-time targeted Reverb update.
 
 ## Local development
 
-Merge `.env.reverb.local.example` into the existing local `.env`, then run once:
+Merge `.env.reverb.local.example` into the existing local `.env`, then install the locked dependencies/build assets:
 
 ```bash
-composer update laravel/reverb --with-all-dependencies
+composer install
 npm install
 php artisan optimize:clear
 npm run build

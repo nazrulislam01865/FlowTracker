@@ -26,8 +26,10 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString('results update after 700 ms', $view);
         $this->assertStringNotContainsString('wire:model.live.debounce.350ms="search"', $view);
         $this->assertStringContainsString('+ New Order', $view);
-        $this->assertStringNotContainsString('ft-job-bulk-bar', $view);
-        $this->assertStringNotContainsString('toggleSelectAllJobs', $view);
+        $this->assertStringContainsString('ft-order-bulk-bar', $view);
+        $this->assertStringContainsString('toggleOrderPageSelection', $view);
+        $this->assertStringContainsString('toggleOrderSelection', $view);
+        $this->assertStringContainsString('bulkDeleteOrders', $component);
         $this->assertStringContainsString('public int $perPage = 25;', $component);
         $this->assertStringContainsString('paginateOrders(', $component);
         $this->assertStringContainsString('$this->search', $component);
@@ -45,6 +47,18 @@ class OrdersPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('if ($searchLength > 0 && $searchLength < 3)', $service);
         $this->assertStringContainsString("preg_match('/^(ORDER|JOB|ORD)[-0-9]/i', \$token)", $service);
         $this->assertStringContainsString("\$like = \$looksLikeReference ? \$token.'%' : '%'.\$token.'%'", $service);
+        $this->assertStringContainsString('label="Created Today"', $view);
+        $this->assertStringContainsString('label="Not Started"', $view);
+        $this->assertStringContainsString('label="In Progress"', $view);
+        $this->assertStringContainsString('label="Due This Week"', $view);
+        $this->assertStringContainsString('label="Completed This Week"', $view);
+        $this->assertStringContainsString('label="Needs Attention"', $view);
+        $this->assertStringContainsString('private function applyCreatedTodayOrderScope', $service);
+        $this->assertStringContainsString('private function applyNotStartedOrderScope', $service);
+        $this->assertStringContainsString('private function applyInProgressOrderScope', $service);
+        $this->assertStringContainsString('private function applyDueThisWeekOrderScope', $service);
+        $this->assertStringContainsString('private function applyCompletedThisWeekOrderScope', $service);
+        $this->assertStringContainsString('private function applyNeedsAttentionOrderScope', $service);
         $this->assertStringContainsString('label="Order"', $sidebar);
         $this->assertStringContainsString("Route::get('/orders'", $routes);
     }

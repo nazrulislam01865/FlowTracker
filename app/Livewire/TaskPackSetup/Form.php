@@ -3,6 +3,7 @@
 namespace App\Livewire\TaskPackSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Models\MasterRecord;
 use App\Models\TaskPack;
@@ -15,6 +16,7 @@ use Livewire\Component;
 
 class Form extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     public ?int $taskPackId = null;
     public string $packCode = '';

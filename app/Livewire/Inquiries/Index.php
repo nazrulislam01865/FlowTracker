@@ -3,6 +3,7 @@
 namespace App\Livewire\Inquiries;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Inquiry;
 use App\Models\InquiryTask;
 use App\Models\InquiryItem;
@@ -28,6 +29,7 @@ use Throwable;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use HandlesInlineEdits, WithFileUploads, WithPagination;
 
     private const INQUIRIES_PER_PAGE = 10;
@@ -38,8 +40,10 @@ class Index extends Component
     public string $listClient = '';
     public string $listClientLabel = '';
     public string $listStatus = '';
+    public string $dateFrom = '';
+    public string $dateTo = '';
     public bool $hideCompleted = false;
-    public array $metrics = ['active' => 0, 'completed' => 0, 'attention' => 0, 'dueToday' => 0];
+    public array $metrics = ['createdToday' => 0, 'notStarted' => 0, 'inProgress' => 0, 'dueThisWeek' => 0, 'completedThisWeek' => 0, 'attention' => 0];
 
     public bool $showCreate = false;
     public ?int $selectedInquiryId = null;
@@ -93,6 +97,16 @@ class Index extends Component
     public bool $editingInquiryProducts = false;
     public array $inquiryProductRows = [];
     public array $inquiryCategoryFilterOptions = [];
+
+    // Inquiry Details > Add another product. This mirrors the Order Details
+    // product picker but keeps independent state for the Inquiry screen.
+    public bool $showAddInquiryProductForm = false;
+    public string $inquiryProductSearch = '';
+    public bool $inquiryProductShowAllResults = false;
+    public ?int $inquiryProductSelectedId = null;
+    public string $inquiryProductCategory = '';
+    public string $inquiryProductQuantity = '1';
+    public string $inquiryProductUnitPrice = '0.00';
 
     // Options are loaded only when create/workflow management is opened.
     public array $userOptions = [];
@@ -217,6 +231,22 @@ class Index extends Component
         $this->resetPage('inquiryPage');
     }
 
+    public function updatedDateFrom(): void
+    {
+        $this->dateFrom = $this->normalizeDateFilter($this->dateFrom);
+        $this->clearListFiltersExcept('dateRange');
+        $this->normalizeDateRange('from');
+        $this->resetPage('inquiryPage');
+    }
+
+    public function updatedDateTo(): void
+    {
+        $this->dateTo = $this->normalizeDateFilter($this->dateTo);
+        $this->clearListFiltersExcept('dateRange');
+        $this->normalizeDateRange('to');
+        $this->resetPage('inquiryPage');
+    }
+
     public function setInquiryListFilter(string $property, mixed $value): void
     {
         abort_unless($property === 'listClient', 422, 'Unsupported Inquiry filter.');
@@ -275,7 +305,7 @@ class Index extends Component
 
     public function setMetricFilter(string $metric): void
     {
-        abort_unless(in_array($metric, ['active', 'completed', 'attention', 'dueToday'], true), 422);
+        abort_unless(in_array($metric, ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true), 422);
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
 
         $nextMetric = $this->metricFilter === $metric ? '' : $metric;
@@ -319,6 +349,10 @@ class Index extends Component
         if ($except !== 'hideCompleted') {
             $this->hideCompleted = false;
         }
+        if ($except !== 'dateRange') {
+            $this->dateFrom = '';
+            $this->dateTo = '';
+        }
 
         $this->metricFilter = '';
     }
@@ -331,6 +365,38 @@ class Index extends Component
         $this->listClientLabel = '';
         $this->listStatus = '';
         $this->hideCompleted = false;
+        $this->dateFrom = '';
+        $this->dateTo = '';
+    }
+
+    private function normalizeDateFilter(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return '';
+        }
+
+        try {
+            $date = \Carbon\CarbonImmutable::createFromFormat('!Y-m-d', $value, 'UTC');
+        } catch (\Throwable) {
+            return '';
+        }
+
+        return $date && $date->format('Y-m-d') === $value ? $value : '';
+    }
+
+    private function normalizeDateRange(string $changed): void
+    {
+        if ($this->dateFrom === '' || $this->dateTo === '' || $this->dateFrom <= $this->dateTo) {
+            return;
+        }
+
+        if ($changed === 'to') {
+            $this->dateFrom = $this->dateTo;
+            return;
+        }
+
+        $this->dateTo = $this->dateFrom;
     }
 
     public function deleteInquiry(int $id): void
@@ -1048,6 +1114,8 @@ class Index extends Component
             'category' => 'product category',
             'item_name' => 'product',
             'quantity' => 'quantity',
+            'unit_price' => 'unit price',
+            'notes' => 'product notes',
             default => 'product detail',
         };
 
@@ -1082,19 +1150,142 @@ class Index extends Component
         });
     }
 
-    public function addInquiryItem(): void
+    public function openAddInquiryProductForm(): void
     {
         $user = auth()->user();
         $inquiry = $this->selectedInquiry();
-        abort_unless(app(InquiryService::class)->canEdit($user, $inquiry), 403);
-        abort_if($inquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+        $access = app(AccessControlService::class);
 
-        // Repeated clicks should never create a stack of unfinished rows.
-        if ($inquiry->items()->where('item_name', '')->exists()) {
+        abort_unless(
+            app(InquiryService::class)->canEdit($user, $inquiry)
+            && ! $inquiry->result
+            && $access->can($user, 'catalog_products', 'view')
+            && $access->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $this->resetValidation([
+            'inquiryProductSelectedId', 'inquiryProductCategory', 'inquiryProductQuantity', 'inquiryProductUnitPrice',
+        ]);
+        $this->inquiryProductSearch = '';
+        $this->inquiryProductShowAllResults = false;
+        $this->inquiryProductSelectedId = null;
+        $this->inquiryProductCategory = '';
+        $this->inquiryProductQuantity = '1';
+        $this->inquiryProductUnitPrice = '0.00';
+        $this->showAddInquiryProductForm = true;
+    }
+
+    public function closeAddInquiryProductForm(): void
+    {
+        $this->showAddInquiryProductForm = false;
+        $this->inquiryProductSearch = '';
+        $this->inquiryProductShowAllResults = false;
+        $this->inquiryProductSelectedId = null;
+        $this->inquiryProductCategory = '';
+        $this->inquiryProductQuantity = '1';
+        $this->inquiryProductUnitPrice = '0.00';
+        $this->resetValidation([
+            'inquiryProductSelectedId', 'inquiryProductCategory', 'inquiryProductQuantity', 'inquiryProductUnitPrice',
+        ]);
+    }
+
+    public function showAllInquiryProductResults(): void
+    {
+        abort_unless($this->showAddInquiryProductForm, 422);
+        $this->inquiryProductShowAllResults = true;
+    }
+
+    public function selectInquiryProduct(int $productId): void
+    {
+        abort_unless($this->showAddInquiryProductForm && $this->selectedInquiryId, 422);
+        $user = auth()->user();
+        $inquiry = $this->selectedInquiry();
+        $access = app(AccessControlService::class);
+
+        abort_unless(
+            app(InquiryService::class)->canEdit($user, $inquiry)
+            && ! $inquiry->result
+            && $access->can($user, 'catalog_products', 'view')
+            && $access->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
+        $category = trim((string) ($product->parent?->name ?? ''));
+        if ($category === '') {
+            $legacy = trim((string) $product->description);
+            $category = trim(explode(' ·', $legacy, 2)[0]);
+        }
+
+        $this->inquiryProductSelectedId = (int) $product->id;
+        $this->inquiryProductCategory = $category !== '' ? $category : 'Uncategorized';
+        $this->inquiryProductSearch = (string) $product->name;
+        $this->resetValidation(['inquiryProductSelectedId', 'inquiryProductCategory']);
+    }
+
+    public function saveInquiryProduct(): void
+    {
+        abort_unless($this->showAddInquiryProductForm, 422);
+        $user = auth()->user();
+        $inquiry = $this->selectedInquiry();
+        $access = app(AccessControlService::class);
+
+        abort_unless(
+            app(InquiryService::class)->canEdit($user, $inquiry)
+            && ! $inquiry->result
+            && $access->can($user, 'catalog_products', 'view')
+            && $access->can($user, 'catalog_products', 'create'),
+            403
+        );
+
+        $data = $this->validate([
+            'inquiryProductSelectedId' => ['required', 'integer'],
+            'inquiryProductQuantity' => ['required', 'integer', 'min:1', 'max:999999999'],
+            'inquiryProductUnitPrice' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
+        ], [
+            'inquiryProductSelectedId.required' => 'Select a product first.',
+            'inquiryProductQuantity.required' => 'Enter a quantity.',
+            'inquiryProductUnitPrice.required' => 'Enter a unit price.',
+        ]);
+
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail((int) $data['inquiryProductSelectedId']);
+        $category = trim((string) ($product->parent?->name ?? ''));
+        if ($category === '') {
+            $legacy = trim((string) $product->description);
+            $category = trim(explode(' ·', $legacy, 2)[0]);
+        }
+        if ($category === '') {
+            $this->addError('inquiryProductSelectedId', 'This product does not have an active product category.');
             return;
         }
 
-        app(InquiryService::class)->addItem($inquiry, '', '', 1, $user);
+        $alreadyAdded = $inquiry->items()
+            ->whereRaw('LOWER(item_name) = ?', [mb_strtolower((string) $product->name)])
+            ->exists();
+        if ($alreadyAdded) {
+            $this->addError('inquiryProductSelectedId', 'This product is already added to the Inquiry.');
+            return;
+        }
+
+        app(InquiryService::class)->addItem(
+            $inquiry,
+            $category,
+            (string) $product->name,
+            (int) $data['inquiryProductQuantity'],
+            $user,
+            (float) $data['inquiryProductUnitPrice'],
+        );
+
+        $this->closeAddInquiryProductForm();
+    }
+
+    // Backwards-compatible entry point for any older UI that still calls this
+    // method. The details page now opens the shared search-based Add Product panel.
+    public function addInquiryItem(): void
+    {
+        $this->openAddInquiryProductForm();
     }
 
     public function removeInquiryItem(int $itemId): void
@@ -1271,6 +1462,13 @@ class Index extends Component
         $this->editingInquiryProducts = false;
         $this->inquiryProductRows = [];
         $this->inquiryCategoryFilterOptions = [];
+        $this->showAddInquiryProductForm = false;
+        $this->inquiryProductSearch = '';
+        $this->inquiryProductShowAllResults = false;
+        $this->inquiryProductSelectedId = null;
+        $this->inquiryProductCategory = '';
+        $this->inquiryProductQuantity = '1';
+        $this->inquiryProductUnitPrice = '0.00';
         $this->resetPage('inquiryDocumentsPage');
         $this->resetPage('inquiryActivityPage');
     }
@@ -1284,6 +1482,13 @@ class Index extends Component
         $this->editingInquiryProducts = false;
         $this->inquiryProductRows = [];
         $this->inquiryCategoryFilterOptions = [];
+        $this->showAddInquiryProductForm = false;
+        $this->inquiryProductSearch = '';
+        $this->inquiryProductShowAllResults = false;
+        $this->inquiryProductSelectedId = null;
+        $this->inquiryProductCategory = '';
+        $this->inquiryProductQuantity = '1';
+        $this->inquiryProductUnitPrice = '0.00';
         $this->showInquiryDocumentPicker = false;
         $this->inquiryExistingDocumentId = null;
         $this->showTaskAttentionModal = false;
@@ -1980,6 +2185,7 @@ class Index extends Component
         $this->managerRows = $inquiry->tasks->map(fn (InquiryTask $task) => [
             'id' => (int) $task->id,
             'source_id' => $task->source_task_pack_item_id ? (int) $task->source_task_pack_item_id : null,
+            'phase_id' => $task->source_workflow_phase_id ? (int) $task->source_workflow_phase_id : null,
             'name' => (string) $task->title,
             'description' => (string) ($task->description ?: ''),
             'assignee_id' => $task->assignee_id ? (int) $task->assignee_id : null,
@@ -2078,6 +2284,13 @@ class Index extends Component
         if (!$this->showCreate) $this->metrics = app(InquiryService::class)->metrics(auth()->user());
     }
 
+    protected function prepareForWorkspaceRefresh(): void
+    {
+        if (! $this->showCreate) {
+            $this->metrics = app(InquiryService::class)->metrics(auth()->user());
+        }
+    }
+
     public function render()
     {
         $user = auth()->user();
@@ -2097,6 +2310,8 @@ class Index extends Component
             'client_id' => $selectedClientId,
             'status' => $this->listStatus,
             'hide_completed' => $this->hideCompleted,
+            'date_from' => $this->dateFrom,
+            'date_to' => $this->dateTo,
         ], self::INQUIRIES_PER_PAGE);
         $listClientFilterOptions = app(\App\Services\FilterOptionService::class)
             ->options($user, 'clients', 'inquiries', '', $selectedClientId, 6);
@@ -2280,7 +2495,7 @@ class Index extends Component
             'currentTask.assignee:id,name,profile_image_path',
         ];
         if ($canViewInquiryProducts) {
-            $with[] = 'items:id,inquiry_id,category,item_name,quantity,unit,sort_order';
+            $with[] = 'items:id,inquiry_id,category,item_name,quantity,unit,unit_price,notes,sort_order,created_at,updated_at';
         }
         if ($this->detailTab === 'overview' && $canViewTasks) {
             // Overview owns the fully interactive Inquiry Taskflow. Load only tasks allowed by the Tasks matrix.
@@ -2308,6 +2523,48 @@ class Index extends Component
             $inquiry->setRelation('currentTask', null);
             $inquiry->setAttribute('tasks_count', 0);
             $inquiry->setAttribute('completed_tasks_count', 0);
+        }
+
+        $inquiryProductMasters = collect();
+        if ($canViewInquiryProducts) {
+            $productNames = $inquiry->items
+                ->pluck('item_name')
+                ->filter(fn ($name) => filled($name))
+                ->unique()
+                ->values();
+
+            if ($productNames->isNotEmpty()) {
+                $inquiryProductMasters = \App\Models\MasterRecord::query()
+                    ->where('workspace_id', max(1, (int) config('flowtrack.workspace_id', 1)))
+                    ->where('type', 'product')
+                    ->whereIn('name', $productNames)
+                    ->with('parent')
+                    ->get()
+                    ->keyBy(fn ($record) => mb_strtolower(trim((string) $record->name)));
+            }
+        }
+
+        $inquiryCurrency = strtoupper((string) ($inquiry->currency ?: 'USD'));
+        $inquiryCurrencySymbol = match ($inquiryCurrency) {
+            'USD' => '$',
+            'EUR' => '€',
+            'GBP' => '£',
+            'CNY', 'RMB' => '¥',
+            default => $inquiryCurrency.' ',
+        };
+
+        $inquiryProductSearchResults = collect();
+        $inquiryProductResultTotal = 0;
+        $inquiryProductSelectedProduct = null;
+        if ($this->detailTab === 'overview' && $this->showAddInquiryProductForm && $canViewInquiryProducts) {
+            $catalog = app(\App\Services\ProductCatalogService::class);
+            $productSearch = trim($this->inquiryProductSearch);
+            $inquiryProductResultTotal = $catalog->orderSearchCount($productSearch, null);
+            $resultLimit = $this->inquiryProductShowAllResults || $inquiryProductResultTotal <= 20 ? 20 : 3;
+            $inquiryProductSearchResults = $catalog->searchForOrderCreation($productSearch, null, $resultLimit);
+            if ($this->inquiryProductSelectedId) {
+                $inquiryProductSelectedProduct = $catalog->selectedProducts([$this->inquiryProductSelectedId])->first();
+            }
         }
 
         // Documents and Activity remain part of Overview, but no longer have separate tabs.
@@ -2363,6 +2620,11 @@ class Index extends Component
             'canCreateInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'create'),
             'canEditInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'edit'),
             'canDeleteInquiryProducts' => $canManageInquiryRecord && $canViewInquiryProducts && $access->can($user, 'catalog_products', 'delete'),
+            'inquiryProductMasters' => $inquiryProductMasters,
+            'inquiryCurrencySymbol' => $inquiryCurrencySymbol,
+            'inquiryProductSearchResults' => $inquiryProductSearchResults,
+            'inquiryProductResultTotal' => $inquiryProductResultTotal,
+            'inquiryProductSelectedProduct' => $inquiryProductSelectedProduct,
             'canEditActiveTask' => $canEditActiveTask,
             'canAddInquiryTask' => app(AccessControlService::class)->canCreateInquiryTask($user, $inquiry) && !$inquiry->result,
             'inquiryPriorities' => $this->detailTab === 'overview' ? app(\App\Services\MasterDataService::class)->active('priority') : collect(),
@@ -2688,6 +2950,7 @@ class Index extends Component
         return [
             'id' => null,
             'source_id' => null,
+            'phase_id' => null,
             'name' => 'New Inquiry Task',
             'description' => 'Describe what must be completed for this task.',
             'assignee_id' => auth()->id(),

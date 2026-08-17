@@ -248,6 +248,10 @@
             $('#skipped').textContent = result.counts.skipped;
             $('#failed').textContent = result.counts.failed;
             $('#importId').textContent = result.import_number;
+            const importedOrdersLink = $('#viewImportedOrders');
+            if (importedOrdersLink && result.view_orders_url) {
+                importedOrdersLink.href = result.view_orders_url;
+            }
             setStep(4);
         } catch (error) {
             setStep(3);

@@ -3,6 +3,7 @@
 namespace App\Services;
 
 use App\Models\Client;
+use App\Models\Department;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\Task;
@@ -37,7 +38,9 @@ class FilterOptionService
             'document-categories' => $this->masterOptions('document_category', $search, $limit),
             'document-category-records' => $this->masterRecordOptions('document_category', $search, $limit),
             'department-records' => $this->masterRecordOptions('department', $search, $limit),
+            'departments' => $this->departments($user, $context, $search, $limit),
             'countries' => $this->countries($user, $context, $search, $limit),
+            'phone-country-codes' => $this->phoneCountryCodes($search, $limit),
             'job-statuses' => $this->jobStatuses($user, $search, $limit),
             'job-healths' => $this->jobHealths($user, $search, $limit),
             'phases' => $this->phases($context, $search, $limit),
@@ -57,7 +60,9 @@ class FilterOptionService
                 'document-categories' => $this->masterByName('document_category', (string) $selectedId),
                 'document-category-records' => $this->masterRecordById('document_category', $selectedId),
                 'department-records' => $this->masterRecordById('department', $selectedId),
+                'departments' => $this->departmentById($user, $context, $selectedId),
                 'countries' => $this->countryByName($user, $context, (string) $selectedId),
+                'phone-country-codes' => $this->phoneCountryCodeByValue((string) $selectedId),
                 'job-statuses' => $this->jobStatusByName($user, (string) $selectedId),
                 'job-healths' => $this->jobHealthByName($user, (string) $selectedId),
                 'phases' => $this->phaseById($context, $selectedId),
@@ -114,6 +119,50 @@ class FilterOptionService
         }
 
         return app(ClientService::class)->visibleQuery($user);
+    }
+
+    private function departments(User $user, string $context, string $search, int $limit): Collection
+    {
+        $query = Department::query()->where('is_active', true);
+
+        if ($context === 'dashboard'
+            && !app(AccessControlService::class)->isAdministrator($user)
+            && app(AccessControlService::class)->scope($user, 'tasks') !== 'all_records') {
+            $query->whereKey($user->department_id ?: 0);
+        }
+
+        return $query
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
+            ->when(strlen($search) < 2, fn ($q) => $q->orderByDesc('updated_at'))
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'code', 'updated_at'])
+            ->map(fn (Department $department) => [
+                'id' => (int) $department->id,
+                'label' => (string) $department->name,
+                'meta' => (string) ($department->code ?: ''),
+            ]);
+    }
+
+    private function departmentById(User $user, string $context, int|string $id): ?array
+    {
+        if (!is_numeric($id)) return null;
+
+        $query = Department::query()->where('is_active', true);
+        if ($context === 'dashboard'
+            && !app(AccessControlService::class)->isAdministrator($user)
+            && app(AccessControlService::class)->scope($user, 'tasks') !== 'all_records') {
+            $query->whereKey($user->department_id ?: 0);
+        }
+
+        $department = $query->find((int) $id, ['id', 'name', 'code']);
+        return $department ? [
+            'id' => (int) $department->id,
+            'label' => (string) $department->name,
+            'meta' => (string) ($department->code ?: ''),
+        ] : null;
     }
 
     private function jobs(User $user, string $context, string $search, int $limit): Collection
@@ -489,6 +538,45 @@ class FilterOptionService
             'id' => (string) $record->id,
             'label' => (string) $record->name,
             'meta' => '',
+        ] : null;
+    }
+
+    private function phoneCountryCodes(string $search, int $limit): Collection
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType('phone_country_code')
+            ->active()
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('description', '%'.$search.'%')
+                ->orWhereLike('code', $search.'%')))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->limit($limit)
+            ->get(['id', 'name', 'description', 'code'])
+            ->map(fn (MasterRecord $record) => [
+                'id' => (string) $record->name,
+                'label' => (string) $record->name,
+                'meta' => (string) ($record->description ?: ''),
+            ]);
+    }
+
+    private function phoneCountryCodeByValue(string $value): ?array
+    {
+        if ($value === '') return null;
+
+        $record = MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType('phone_country_code')
+            ->active()
+            ->where('name', $value)
+            ->first(['id', 'name', 'description', 'code']);
+
+        return $record ? [
+            'id' => (string) $record->name,
+            'label' => (string) $record->name,
+            'meta' => (string) ($record->description ?: ''),
         ] : null;
     }
 

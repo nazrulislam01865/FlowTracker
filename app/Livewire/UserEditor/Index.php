@@ -2,6 +2,7 @@
 
 namespace App\Livewire\UserEditor;
 
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
@@ -18,6 +19,7 @@ use Livewire\WithFileUploads;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use WithFileUploads;
 
     public int $userId;

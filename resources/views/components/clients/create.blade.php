@@ -11,7 +11,14 @@
     'accountManagerId' => null,
     'preferredCurrency' => '',
     'clientCountry' => '',
+    'officeState' => '',
+    'billingState' => '',
     'billingCountry' => '',
+    'billingRecipient' => '',
+    'billingAddressLine1' => '',
+    'billingSuite' => '',
+    'billingCity' => '',
+    'billingZip' => '',
     'billingSameAsOffice' => true,
     'salesTaxStatus' => 'taxable',
     'shippingAddresses' => [],
@@ -24,9 +31,19 @@
 @php
     $isEdit = $mode === 'edit';
     $selectedManager = $users->firstWhere('id', (int) $accountManagerId);
-    $managerInitials = $selectedManager ? \App\Support\BoardPresenter::initials($selectedManager->name) : 'U';
+    $accountManagerOptions = collect($users)->map(fn ($user) => [
+        'id' => (string) $user->id,
+        'label' => (string) $user->name,
+        'meta' => (string) ($user->department?->name ?: ''),
+    ])->values();
+    $countryOptions = collect($clientCountries)->map(fn ($country) => [
+        'id' => (string) $country,
+        'label' => (string) $country,
+        'meta' => (string) ($clientCountryFlags[$country] ?? ''),
+    ])->values();
     $officeStates = $clientStatesByCountry[$clientCountry] ?? [];
     $billingStates = $clientStatesByCountry[$billingCountry] ?? [];
+    $billingLine2Visible = trim((string) $billingSuite) !== '';
     $clientLogoPreview = null;
     if ($clientLogoUpload && in_array(strtolower((string) $clientLogoUpload->getClientOriginalExtension()), ['jpg','jpeg','png','webp'], true)) {
         try { $clientLogoPreview = $clientLogoUpload->temporaryUrl(); } catch (\Throwable $e) { $clientLogoPreview = null; }
@@ -36,7 +53,7 @@
         ? sha1((string) json_encode($errors->getMessages(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))
         : '';
 @endphp
-<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype' : 'ft-create-client-page ft-client-create-prototype' }}" data-client-validation-signature="{{ $clientValidationSignature }}">
+<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype ft-reusable-form-theme' : 'ft-create-client-page ft-client-create-prototype ft-reusable-form-theme' }}" data-client-validation-signature="{{ $clientValidationSignature }}">
     <div class="ft-client-create-shell">
         @unless($isEdit)
             <div class="ft-client-create-top">
@@ -106,11 +123,23 @@
                         <b>Website <span>(Optional)</span></b>
                         <input wire:model="website" placeholder="www.acmeapparel.com">
                     </label>
-                    <label class="ft-proto-field">
+                    <div class="ft-proto-field">
                         <b>Account manager <em>*</em></b>
-                        <div class="ft-manager-select"><span>{{ $managerInitials }}</span><select wire:model.live="accountManagerId"><option value="">Unassigned</option>@foreach($users as $user)<option value="{{ $user->id }}">{{ $user->name }}</option>@endforeach</select></div>
+                        <x-ui.select-filter
+                            label="Account manager"
+                            property="accountManagerId"
+                            :value="$accountManagerId ?? ''"
+                            placeholder="Unassigned"
+                            :options="$accountManagerOptions"
+                            :selected-label="$selectedManager?->name ?? 'Unassigned'"
+                            search-placeholder="Search account manager…"
+                            :menu-width="360"
+                            :fixed-menu="true"
+                            :hide-label="true"
+                            class="ft-form-search-select"
+                        />
                         @error('accountManagerId')<small class="validation-error">{{ $message }}</small>@enderror
-                    </label>
+                    </div>
                     <label class="ft-proto-field">
                         <b>Preferred language <span>(Optional)</span></b>
                         <select wire:model="preferredLanguage">@foreach($clientLanguages as $language)<option value="{{ $language }}">{{ $language }}</option>@endforeach</select>
@@ -123,7 +152,7 @@
                                 <option value="{{ $code }}">{{ $code }} · {{ $currencyName }}</option>
                             @endforeach
                         </select>
-                        <small>Available currencies are managed in Master Data.</small>
+                        <small>Available currencies are managed in Financial Master Data.</small>
                         @error('preferredCurrency')<small class="validation-error">{{ $message }}</small>@enderror
                     </label>
                 </div>
@@ -160,80 +189,138 @@
                 @error('contacts')<small class="validation-error ft-client-contacts-error">{{ $message }}</small>@enderror
             </section>
 
-            <section class="ft-client-prototype-section">
-                <div class="ft-client-section-title"><span>3</span><div><h3>Office &amp; billing address</h3><p>Used for correspondence and billing.</p></div></div>
-                <div class="ft-client-grid ft-office-address-grid">
-                    <label class="ft-proto-field ft-address-line"><b>Address line 1 <em>*</em></b><input wire:model="officeAddressLine1" placeholder="123 W 37th Street">@error('officeAddressLine1')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field"><b>Suite / unit <span>(Optional)</span></b><input wire:model="officeSuite" placeholder="Suite 800"></label>
-                    <label class="ft-proto-field"><b>City <em>*</em></b><input wire:model="officeCity" placeholder="New York">@error('officeCity')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field"><b>State <em>*</em></b><select wire:model="officeState" @disabled(empty($officeStates))><option value="">{{ empty($officeStates) ? 'No states configured' : 'Select state' }}</option>@foreach($officeStates as $state)<option value="{{ $state }}">{{ $state }}</option>@endforeach</select>@error('officeState')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field"><b>ZIP code <em>*</em></b><input wire:model="officeZip" placeholder="10018">@error('officeZip')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                    <label class="ft-proto-field ft-country-field"><b>Country <em>*</em></b><div class="ft-country-select"><span>{{ $clientCountryFlags[$clientCountry] ?? '🌐' }}</span><select wire:model.live="clientCountry"><option value="">Select country</option>@foreach($clientCountries as $country)<option value="{{ $country }}">{{ $country }}</option>@endforeach</select></div><small>Countries are managed in Master Data.</small>@error('clientCountry')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                </div>
-                <div class="ft-billing-choice">
-                    <label><input type="checkbox" wire:model.live="billingSameAsOffice"> <span>Use office address as billing address</span></label>
-                    @if($billingSameAsOffice)
-                        <button type="button" wire:click="showDifferentBillingAddress">Add a different billing address</button>
-                    @endif
-                </div>
-                @if(!$billingSameAsOffice)
-                    <div class="ft-client-grid ft-billing-grid">
-                        <label class="ft-proto-field ft-address-line"><b>Billing address line 1</b><input wire:model="billingAddressLine1" placeholder="Billing street address">@error('billingAddressLine1')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label class="ft-proto-field"><b>Suite / unit <span>(Optional)</span></b><input wire:model="billingSuite"></label>
-                        <label class="ft-proto-field"><b>City</b><input wire:model="billingCity">@error('billingCity')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label class="ft-proto-field"><b>State</b><select wire:model="billingState" @disabled(empty($billingStates))><option value="">{{ empty($billingStates) ? 'No states configured' : 'Select state' }}</option>@foreach($billingStates as $state)<option value="{{ $state }}">{{ $state }}</option>@endforeach</select>@error('billingState')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label class="ft-proto-field"><b>ZIP code</b><input wire:model="billingZip">@error('billingZip')<small class="validation-error">{{ $message }}</small>@enderror</label>
-                        <label class="ft-proto-field ft-country-field"><b>Country</b><select wire:model.live="billingCountry"><option value="">Select country</option>@foreach($clientCountries as $country)<option value="{{ $country }}">{{ $country }}</option>@endforeach</select>@error('billingCountry')<small class="validation-error">{{ $message }}</small>@enderror</label>
+            <section class="ft-client-prototype-section ft-client-shipping-aligned-section">
+                <div class="ft-client-section-title ft-client-section-title-spread">
+                    <div class="ft-section-title-left">
+                        <span>3</span>
+                        <div>
+                            <h3>Shipping address</h3>
+                            <p>Enter the delivery address for this client.</p>
+                        </div>
                     </div>
+                    <button
+                        type="button"
+                        class="ft-client-shipping-saved-action"
+                        wire:click="useSavedAddressForShipping"
+                        title="Use the office or billing address already entered on this form"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 4.75A1.75 1.75 0 017.75 3h8.5A1.75 1.75 0 0118 4.75V21l-6-3.8L6 21V4.75z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg>
+                        <span>Use saved address</span>
+                    </button>
+                </div>
+
+                <div class="ft-shipping-prototype-list">
+                    @foreach($shippingAddresses as $index => $address)
+                        @php
+                            $shippingStates = $clientStatesByCountry[$address['country'] ?? ''] ?? [];
+                        @endphp
+                        <x-ui.shipping-address-editor
+                            :index="$index"
+                            :address="$address"
+                            :countries="$clientCountries"
+                            :country-flags="$clientCountryFlags"
+                            :states="$shippingStates"
+                            :can-remove="count($shippingAddresses) > 1"
+                            :recipient-required="!$isEdit"
+                        />
+                    @endforeach
+                </div>
+
+                @if(count($shippingAddresses) < 20)
+                    <button type="button" class="ft-shipping-prototype-add" wire:click="addShippingAddress">
+                        <span aria-hidden="true">+</span> Add another shipping address
+                    </button>
                 @endif
             </section>
 
-            <section class="ft-client-prototype-section ft-shipping-section">
+            <section class="ft-client-prototype-section ft-client-shipping-aligned-section">
                 <div class="ft-client-section-title ft-client-section-title-spread">
-                    <div class="ft-section-title-left"><span>4</span><div><h3>Shipping addresses</h3><p>Add one or more delivery locations for orders.</p></div></div>
-                    <small class="ft-address-count">{{ count($shippingAddresses) }} {{ count($shippingAddresses) === 1 ? 'address' : 'addresses' }}</small>
+                    <div class="ft-section-title-left">
+                        <span>4</span>
+                        <div>
+                            <h3>Billing address</h3>
+                            <p>Enter the billing address for this client.</p>
+                        </div>
+                    </div>
                 </div>
 
-                <div class="ft-shipping-list">
-                    @foreach($shippingAddresses as $index => $address)
-                        @php
-                            $hasShippingValidationError = collect($errors->keys())->contains(
-                                fn ($errorKey) => str_starts_with((string) $errorKey, "shippingAddresses.{$index}.")
-                            );
-                            $expanded = (bool)($address['expanded'] ?? false) || $hasShippingValidationError;
-                            $displayLabel = trim((string)($address['label'] ?? '')) ?: 'Shipping address '.($index + 1);
-                            $displayAddress = collect([$address['address_line1'] ?? '', $address['suite'] ?? '', $address['city'] ?? '', $address['state'] ?? '', $address['zip'] ?? '', $address['country'] ?? ''])->filter()->implode(', ');
-                        @endphp
-                        @if($expanded)
-                            <article class="ft-shipping-card is-expanded" wire:key="shipping-expanded-{{ $index }}">
-                                <header>
-                                    <div class="ft-shipping-card-title"><b>{{ $displayLabel }}</b>@if($address['is_default'] ?? false)<span>Default shipping</span>@endif</div>
-                                    <div class="ft-shipping-card-actions"><button type="button" wire:click="duplicateShippingAddress({{ $index }})">⧉&nbsp; Duplicate</button><button type="button" class="icon-only" aria-label="More options">⋮</button><button type="button" class="icon-only" wire:click="toggleShippingAddress({{ $index }})" aria-label="Collapse">⌃</button></div>
-                                </header>
-                                <div class="ft-client-grid ft-shipping-grid">
-                                    <label class="ft-proto-field"><b>Location label <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.label" placeholder="New York Warehouse">@error("shippingAddresses.$index.label")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    <label class="ft-proto-field"><b>Recipient <span>(Optional)</span></b><input wire:model="shippingAddresses.{{ $index }}.recipient" placeholder="Receiving Department"></label>
-                                    <label class="ft-proto-field ft-address-line"><b>Address line 1 <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.address_line1" placeholder="450 10th Avenue">@error("shippingAddresses.$index.address_line1")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    <label class="ft-proto-field"><b>Suite / unit <span>(Optional)</span></b><input wire:model="shippingAddresses.{{ $index }}.suite" placeholder="Dock 4"></label>
-                                    <label class="ft-proto-field"><b>City <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.city" placeholder="New York">@error("shippingAddresses.$index.city")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    @php
-                                        $shippingStates = $clientStatesByCountry[$address['country'] ?? ''] ?? [];
-                                    @endphp
-                                    <label class="ft-proto-field"><b>State <em>*</em></b><select wire:model="shippingAddresses.{{ $index }}.state" @disabled(empty($shippingStates))><option value="">{{ empty($shippingStates) ? 'No states configured' : 'Select state' }}</option>@foreach($shippingStates as $state)<option value="{{ $state }}">{{ $state }}</option>@endforeach</select>@error("shippingAddresses.$index.state")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    <label class="ft-proto-field"><b>ZIP code <em>*</em></b><input wire:model="shippingAddresses.{{ $index }}.zip" placeholder="10001">@error("shippingAddresses.$index.zip")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                    <label class="ft-proto-field ft-country-field"><b>Country <em>*</em></b><div class="ft-country-select"><span>{{ $clientCountryFlags[$address['country'] ?? ''] ?? '🌐' }}</span><select wire:model.live="shippingAddresses.{{ $index }}.country"><option value="">Select country</option>@foreach($clientCountries as $country)<option value="{{ $country }}">{{ $country }}</option>@endforeach</select></div>@error("shippingAddresses.$index.country")<small class="validation-error">{{ $message }}</small>@enderror</label>
-                                </div>
-                                <label class="ft-default-shipping-check"><input type="checkbox" @checked($address['is_default'] ?? false) wire:click="setDefaultShippingAddress({{ $index }})"> <span>Set as default shipping address</span></label>
-                            </article>
-                        @else
-                            <article class="ft-shipping-card is-collapsed" wire:key="shipping-collapsed-{{ $index }}">
-                                <div><b>{{ $displayLabel }}</b><p>{{ $displayAddress ?: 'Address details not added yet' }}</p></div>
-                                <div class="ft-shipping-collapsed-actions"><button type="button" wire:click="editShippingAddress({{ $index }})">✎&nbsp; Edit</button><button type="button" class="danger" wire:click="removeShippingAddress({{ $index }})">♙&nbsp; Remove</button><button type="button" class="icon-only" wire:click="toggleShippingAddress({{ $index }})">⌄</button></div>
-                            </article>
-                        @endif
-                    @endforeach
-                </div>
-                <button type="button" class="ft-add-shipping" wire:click="addShippingAddress"><span>＋</span> Add another shipping address</button>
+                <article
+                    class="ft-shipping-prototype-address"
+                    x-data="{ showLine2: @js($billingLine2Visible) }"
+                >
+                    <div class="ft-client-grid ft-shipping-aligned-grid">
+                        <label class="ft-proto-field ft-shipping-recipient-field">
+                            <b>Recipient name <em>*</em></b>
+                            <input wire:model="billingRecipient" placeholder="Recipient name">
+                            @error('billingRecipient')<small class="validation-error">{{ $message }}</small>@enderror
+                        </label>
+
+                        <div class="ft-proto-field ft-shipping-country-field">
+                            <b>Country / region <em>*</em></b>
+                            <x-ui.select-filter
+                                label="Country / region"
+                                property="billingCountry"
+                                :value="$billingCountry"
+                                placeholder="Select country / region"
+                                :options="$countryOptions"
+                                search-placeholder="Search country / region…"
+                                :menu-width="360"
+                                :fixed-menu="true"
+                                :hide-label="true"
+                                class="ft-form-search-select"
+                            />
+                            @error('billingCountry')<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
+
+                        <label class="ft-proto-field ft-shipping-address-line1-field">
+                            <b>Address line 1 <em>*</em></b>
+                            <input wire:model="billingAddressLine1" placeholder="Street address">
+                            @error('billingAddressLine1')<small class="validation-error">{{ $message }}</small>@enderror
+                        </label>
+
+                        <label class="ft-proto-field ft-shipping-address-line2-field" x-show="showLine2" x-cloak>
+                            <b>Address line 2 <span>(Optional)</span></b>
+                            <input wire:model="billingSuite" placeholder="Apartment, suite, unit, building, floor, etc.">
+                            @error('billingSuite')<small class="validation-error">{{ $message }}</small>@enderror
+                        </label>
+
+                        <label class="ft-proto-field ft-shipping-city-field">
+                            <b>City <em>*</em></b>
+                            <input wire:model="billingCity" placeholder="City">
+                            @error('billingCity')<small class="validation-error">{{ $message }}</small>@enderror
+                        </label>
+
+                        <div class="ft-proto-field ft-shipping-state-field">
+                            <b>State @if(count($billingStates))<em>*</em>@endif</b>
+                            <x-ui.select-filter
+                                label="State"
+                                property="billingState"
+                                :value="$billingState"
+                                :placeholder="empty($billingStates) ? 'No states configured' : 'Select state'"
+                                :options="$billingStates"
+                                :disabled="empty($billingStates)"
+                                search-placeholder="Search state…"
+                                :menu-width="340"
+                                :fixed-menu="true"
+                                :hide-label="true"
+                                class="ft-form-search-select"
+                            />
+                            @error('billingState')<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
+
+                        <label class="ft-proto-field ft-shipping-zip-field">
+                            <b>ZIP / postal code <em>*</em></b>
+                            <input wire:model="billingZip" placeholder="ZIP / postal code">
+                            @error('billingZip')<small class="validation-error">{{ $message }}</small>@enderror
+                        </label>
+                    </div>
+
+                    <div class="ft-shipping-prototype-line2" x-show="!showLine2" x-cloak>
+                        <button type="button" x-on:click="showLine2 = true">
+                            <span aria-hidden="true">+</span> Add address line 2
+                        </button>
+                    </div>
+                </article>
             </section>
 
             <section class="ft-client-prototype-section">

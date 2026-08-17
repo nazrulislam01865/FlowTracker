@@ -17,6 +17,14 @@
     'selectedMainCategory' => '',
     'selectedProductCategoryId' => null,
     'selectedSubcategory' => '',
+    'pricePreview' => [],
+    'remoteSurchargePreview' => [],
+    'productOptions' => [],
+    'productOptionUploads' => [],
+    'shipmentUrgencies' => collect(),
+    'productShipmentUrgencies' => [],
+    'shipmentUrgencyPickerOpen' => false,
+    'shipmentUrgencyPickerSelection' => [],
     'newProductCategoryMain' => '',
     'newSubcategoryProductCategoryId' => null,
 ])
@@ -168,7 +176,105 @@
             <small class="ft-product-help">Missing a category? Create it here without leaving the product form. Codes are generated automatically.</small>
         </x-catalog.product-section>
 
-        <x-catalog.product-section number="3" title="Supporting documents" subtitle="Add the product files now or replace them later while editing.">
+        <x-catalog.product-section number="3" title="Product pricing" subtitle="Paste the complete Quantity and Product price table directly from Excel.">
+            <label class="ft-product-field ft-product-price-table-field">
+                <span>Price table <em>Optional</em></span>
+                <textarea
+                    wire:model.change="productPriceTable"
+                    rows="6"
+                    spellcheck="false"
+                    placeholder="Paste the Excel price table here"
+                ></textarea>
+                <small>Excel price tables are detected automatically, including supplier tables with quantity columns.</small>
+                @error('productPriceTable')<b class="validation-error">{{ $message }}</b>@enderror
+            </label>
+
+            @if(count($pricePreview))
+                <div class="ft-product-price-preview-wrap">
+                    <table class="ft-product-price-preview">
+                        <thead>
+                            <tr>
+                                <th>Quantity</th>
+                                @foreach($pricePreview as $priceRow)
+                                    <th>{{ number_format((int) $priceRow['quantity']) }}</th>
+                                @endforeach
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr>
+                                <th>Product price</th>
+                                @foreach($pricePreview as $priceRow)
+                                    <td>{{ (float) $priceRow['price'] === 0.0 ? '0' : rtrim(rtrim(number_format((float) $priceRow['price'], 6, '.', ''), '0'), '.') }}</td>
+                                @endforeach
+                            </tr>
+                            @if(count($remoteSurchargePreview))
+                                @php
+                                    $remoteSurchargeByQuantity = collect($remoteSurchargePreview)->keyBy('quantity');
+                                @endphp
+                                <tr>
+                                    <th>Remote surcharge</th>
+                                    @foreach($pricePreview as $priceRow)
+                                        @php
+                                            $remotePrice = data_get($remoteSurchargeByQuantity->get($priceRow['quantity']), 'price');
+                                        @endphp
+                                        <td>{{ $remotePrice === null ? '—' : ((float) $remotePrice === 0.0 ? '0' : rtrim(rtrim(number_format((float) $remotePrice, 6, '.', ''), '0'), '.')) }}</td>
+                                    @endforeach
+                                </tr>
+                            @endif
+                        </tbody>
+                    </table>
+                </div>
+            @endif
+        </x-catalog.product-section>
+
+        <x-catalog.product-section number="4" title="Product options" subtitle="Add optional choices such as color, size or material. An option can also add an extra unit charge." class="ft-product-options-section">
+            <div class="ft-product-options-list">
+                @foreach($productOptions as $optionIndex => $option)
+                    @php
+                        $optionUpload = $productOptionUploads[$optionIndex] ?? null;
+                        $optionPreview = null;
+                        if ($optionUpload && method_exists($optionUpload, 'temporaryUrl')) {
+                            try { $optionPreview = $optionUpload->temporaryUrl(); } catch (\Throwable $e) { $optionPreview = null; }
+                        }
+                        $optionPreview ??= data_get($option, 'image_url');
+                    @endphp
+                    <div class="ft-product-option-row" wire:key="product-option-{{ data_get($option, 'key', $optionIndex) }}">
+                        <label class="ft-product-field ft-product-option-label-field">
+                            <span>Label <i>*</i></span>
+                            <input wire:model.blur="productOptions.{{ $optionIndex }}.label" placeholder="e.g. Red, Large, Cotton">
+                            @error('productOptions.'.$optionIndex.'.label')<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        <label class="ft-product-field ft-product-option-charge-field">
+                            <span>Extra charge <em>Optional</em></span>
+                            <input type="number" min="0" step="0.01" wire:model.blur="productOptions.{{ $optionIndex }}.extra_charge" placeholder="0.00" inputmode="decimal">
+                            @error('productOptions.'.$optionIndex.'.extra_charge')<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        <label class="ft-product-field ft-product-option-image-field">
+                            <span>Image <em>Optional</em></span>
+                            <span class="ft-product-option-image-input">
+                                @if($optionPreview)<img src="{{ $optionPreview }}" alt="">@else<span class="ft-product-option-image-placeholder">No image</span>@endif
+                                <span class="ft-product-option-image-button">{{ $optionPreview ? 'Change image' : 'Choose image' }}</span>
+                                <input type="file" wire:model="productOptionUploads.{{ $optionIndex }}" accept="image/png,image/jpeg,image/webp">
+                            </span>
+                            @error('productOptionUploads.'.$optionIndex)<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        <button type="button" class="ft-product-option-remove" wire:click="removeProductOption({{ $optionIndex }})" aria-label="Remove option">Remove</button>
+                    </div>
+                @endforeach
+            </div>
+            <button type="button" class="ft-product-option-add" wire:click="addProductOption">+ Add option</button>
+            @error('productOptions')<b class="validation-error">{{ $message }}</b>@enderror
+        </x-catalog.product-section>
+
+        <x-catalog.product-shipment-urgencies
+            number="5"
+            :shipment-urgencies="$shipmentUrgencies"
+            :selected-urgencies="$productShipmentUrgencies"
+            :picker-open="$shipmentUrgencyPickerOpen"
+            :picker-selection="$shipmentUrgencyPickerSelection"
+        />
+
+        <x-catalog.product-section number="6" title="Supporting documents" subtitle="Add the product files now or replace them later while editing.">
             <div class="ft-product-support-grid is-friendly">
                 <label class="ft-product-field ft-certificate-number-field"><span>Test certificate number <em>Optional</em></span><input wire:model.blur="productTestCertificateNumber" placeholder="T-26423684-06-R1"><small>Reference number printed on the test certificate.</small>@error('productTestCertificateNumber')<b class="validation-error">{{ $message }}</b>@enderror</label>
                 <x-catalog.file-upload

@@ -19,10 +19,24 @@ class MasterDataService
 
     public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
 
+    /** Financial setup values are governed by the Finance role-matrix module. */
+    public const FINANCIAL_TYPES = [
+        'currency',
+        'received_account',
+        'payment_method',
+        'payment_term',
+        'invoice_type',
+    ];
+
     public const ACCESS_MODULES = [
         'product' => 'catalog_products',
         'product_category' => 'product_categories',
         'supplier' => 'suppliers',
+        'currency' => 'finance',
+        'received_account' => 'finance',
+        'payment_method' => 'finance',
+        'payment_term' => 'finance',
+        'invoice_type' => 'finance',
     ];
 
     public static function permissionModuleForType(string $type): string
@@ -44,6 +58,7 @@ class MasterDataService
         'received_account' => 'Received Accounts',
         'country' => 'Countries',
         'state' => 'States',
+        'phone_country_code' => 'Phone Country Codes',
         'document_category' => 'Document Categories',
         'priority' => 'Priorities',
         'production_urgency' => 'Production Urgencies',
@@ -76,6 +91,7 @@ class MasterDataService
         'received_account' => 'RCA',
         'country' => 'CTR',
         'state' => 'STA',
+        'phone_country_code' => 'PNC',
         'document_category' => 'DOC',
         'priority' => 'PRI',
         'production_urgency' => 'PUR',
@@ -460,6 +476,14 @@ class MasterDataService
                 }
             });
         }
+
+        // Several catalogue changes intentionally propagate to existing Task /
+        // InquiryTask compatibility columns through set-based SQL. Those updates
+        // bypass Eloquent observers, so publish a final invalidation after every
+        // propagation step has completed. Duplicate model-observer signals are
+        // safely coalesced by WorkspaceRefreshService.
+        app(WorkspaceRefreshService::class)->touch('MasterRecord:propagated');
+
         return $record;
     }
 
@@ -569,6 +593,9 @@ class MasterDataService
         }
         if ($record->type === 'product' && data_get($record->metadata, 'product_image_path')) {
             app(ProductImageService::class)->remove($record);
+        }
+        if ($record->type === 'product' && data_get($record->metadata, 'product_options')) {
+            app(ProductOptionImageService::class)->removeAll($record);
         }
 
         $legacyGroup = self::LEGACY_GROUPS[$record->type] ?? Str::plural($record->type);

@@ -12,6 +12,8 @@ class MyWorkService
 {
     public const JOBS_PER_PAGE = 3;
 
+    private const INITIAL_TASK_STATUSES = ['not started', 'not start', 'ready', 'to do', 'todo'];
+
     /**
      * Paginate Jobs, never individual tasks. The first query selects only a
      * bounded page of Job IDs that contain personal work, then the page loads
@@ -22,11 +24,11 @@ class MyWorkService
         $access = app(AccessControlService::class);
         $quick = (string) ($filters['quick'] ?? 'all');
         $hideCompleted = (bool) ($filters['hide_completed'] ?? false);
-        $showCompleted = !$hideCompleted && $quick === 'all';
+        $showCompleted = !$hideCompleted && in_array($quick, ['all', 'createdToday', 'completedThisWeek'], true);
 
-        // Completed work is visible by default in the neutral My Work view.
-        // Action/date/mention views remain open-task-only; Hide completed can be
-        // enabled explicitly from the toolbar when the user wants a tighter list.
+        // Most My Task views are open-task-only. Created Today intentionally
+        // includes every task created today regardless of status, while Completed
+        // This Week must include completed tasks (and completed Orders) by design.
         $baseTasks = $this->personalTaskQuery(
             $user,
             $filters,
@@ -95,7 +97,7 @@ class MyWorkService
             ->leftJoin('clients as my_work_clients', 'my_work_clients.id', '=', 'flow_jobs.client_id')
             ->leftJoin('workflow_phases as my_work_job_phases', 'my_work_job_phases.id', '=', 'flow_jobs.workflow_phase_id')
             ->select([
-                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.title', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id',
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.title', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.created_by',
                 'flow_jobs.health', 'flow_jobs.progress', 'flow_jobs.status', 'flow_jobs.updated_at',
                 'my_work_clients.name as my_work_client_name',
                 'my_work_job_phases.name as my_work_phase_name',
@@ -130,8 +132,9 @@ class MyWorkService
             $job = $jobs->get($jobId);
             if (!$job) return null;
 
+            $parentCreatedByUser = (int) ($job->created_by ?: 0) === (int) $user->id;
             $taskRows = $tasksByJob->get($jobId, collect())
-                ->map(fn (Task $task) => $this->presentTask($task, $user, $access, $displayTimezone, $today))
+                ->map(fn (Task $task) => $this->presentTask($task, $user, $access, $displayTimezone, $today, $parentCreatedByUser))
                 ->values();
 
             return [
@@ -157,18 +160,12 @@ class MyWorkService
     }
 
     /**
-     * Summary cards are intentionally independent of search/sort so they stay
-     * stable while the user explores the list. One aggregate query covers the
-     * four date/action summaries; mentions uses the indexed notification link.
+     * Keep My Task counters aligned with the reusable Inquiry/Order summary-card
+     * language while counting task records inside the user's personal task scope.
+     * One aggregate query keeps this page fast even with a large task history.
      */
     public function metrics(User $user, bool $fresh = false): array
     {
-        // This method used to build the aggregate from the full Eloquent
-        // visibility query (nested whereHas clauses) in a second wire:init
-        // request. On a small PHP-FPM pool that request could stay busy long
-        // enough to make the rest of FlowTrack feel blocked. My Work has a
-        // simpler, documented scope, so calculate the counters directly from
-        // indexed task/job/client columns instead.
         $access = app(AccessControlService::class);
         $administrator = $access->isAdministrator($user);
 
@@ -182,46 +179,37 @@ class MyWorkService
             }
         }
 
-        $today = app(WorkspaceSettingsService::class)->localToday();
+        $workspace = app(WorkspaceSettingsService::class);
+        $today = $workspace->localToday();
         $todayDate = $today->toDateString();
-        $tomorrow = $today->copy()->addDay()->toDateString();
-        $weekEnd = $today->copy()->addDays(7)->toDateString();
+        $tomorrow = $today->addDay()->toDateString();
+        $weekStartDate = $today->startOfWeek()->toDateString();
+        $weekEndDate = $today->endOfWeek()->toDateString();
+        $todayStartUtc = $today->utc();
+        $todayEndUtc = $today->endOfDay()->utc();
+        [$weekStartUtc, $weekEndUtc] = $workspace->localWeekUtcBounds();
 
-        // The Mentions chip means: tasks whose COMMENT contains at least one
-        // valid @mention of any active FlowTrack user. Do not use the current
-        // user's notification rows here: those answer "who mentioned me?", and
-        // can make the list disagree with the task comment itself. TaskService
-        // records the parsed mention_user_ids on the task.comment activity, so
-        // this remains exact, comment-only, user-agnostic and index-friendly.
         $taskMentions = DB::table('activities')
             ->selectRaw('subject_id as flow_task_id')
             ->where('subject_type', Task::class)
             ->where('event', 'task.comment')
             ->whereNotNull('meta')
-            // Never inspect native JSON with a raw LIKE pattern. MySQL normalizes
-            // JSON with whitespace (for example "mention_user_ids": [1]), so the
-            // old compact-string check returned zero mentions in production even
-            // though the exact task.comment activity contained parsed mention IDs.
             ->whereJsonLength('meta->mention_user_ids', '>', 0)
             ->groupBy('subject_id');
 
+        // Do not globally remove completed tasks here: Created Today is explicitly
+        // status-agnostic and Completed This Week needs task history. Open-task
+        // conditions are applied inside the aggregate expressions instead.
         $query = DB::table('tasks')
             ->join('flow_jobs as my_work_metric_jobs', 'my_work_metric_jobs.id', '=', 'tasks.flow_job_id')
             ->join('clients as my_work_metric_clients', 'my_work_metric_clients.id', '=', 'my_work_metric_jobs.client_id')
             ->leftJoinSub($taskMentions, 'my_work_metric_task_mentions', fn ($join) => $join->on('my_work_metric_task_mentions.flow_task_id', '=', 'tasks.id'))
             ->whereNull('tasks.deleted_at')
-            ->whereNull('tasks.completed_at')
-            ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'")
             ->whereNull('my_work_metric_jobs.deleted_at')
-            ->whereNull('my_work_metric_jobs.completed_at')
-            ->whereRaw("LOWER(TRIM(my_work_metric_jobs.status)) != 'completed'")
             ->whereNotIn('my_work_metric_jobs.status', JobService::INACTIVE_STATUSES)
             ->where('my_work_metric_clients.is_active', true);
 
-        // My Tasks follows FlowTrack role scope:
-        // - Admin / Super Admin: see every visible Order task.
-        // - Other users: see tasks assigned to them plus tasks belonging to Orders
-        //   they created. The underlying task permission scope is still respected.
+        // Match the same operational responsibility used by personalTaskQuery().
         if (!$administrator) {
             $scopes = $access->scopes($user, 'tasks');
             $canSeeAssigned = $access->can($user, 'tasks', 'view') && (
@@ -239,27 +227,50 @@ class MyWorkService
             });
         }
 
+        $initialStatuses = "'".implode("','", self::INITIAL_TASK_STATUSES)."'";
+        $openTask = "tasks.completed_at IS NULL
+            AND LOWER(TRIM(COALESCE(tasks.status, ''))) <> 'completed'
+            AND my_work_metric_jobs.completed_at IS NULL
+            AND LOWER(TRIM(COALESCE(my_work_metric_jobs.status, ''))) <> 'completed'";
+        $notStarted = "COALESCE(tasks.progress, 0) = 0
+            AND LOWER(TRIM(COALESCE(tasks.status, ''))) IN ($initialStatuses)";
+        $inProgress = "(COALESCE(tasks.progress, 0) > 0
+            OR (LOWER(TRIM(COALESCE(tasks.status, ''))) <> ''
+                AND LOWER(TRIM(COALESCE(tasks.status, ''))) NOT IN ($initialStatuses)))";
+        $needsAttention = "(tasks.needs_attention = 1
+            OR tasks.order_task_flag_id IS NOT NULL
+            OR tasks.assignee_id IS NULL
+            OR tasks.due_date < ?
+            OR LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%blocked%'
+            OR LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%revision%'
+            OR LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%overdue%'
+            OR LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%delayed%'
+            OR LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%attention%')";
+
         $row = $query
-            ->selectRaw('COUNT(tasks.id) AS my_tasks_count')
-            ->selectRaw(
-                "SUM(CASE WHEN tasks.needs_attention = 1
-                    OR (LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'
-                        AND (tasks.due_date <= ? OR LOWER(tasks.priority) IN ('critical','high')))
-                    THEN 1 ELSE 0 END) AS attention_count",
-                [$weekEnd],
-            )
-            ->selectRaw('SUM(CASE WHEN tasks.due_date < ? THEN 1 ELSE 0 END) AS overdue_count', [$todayDate])
-            ->selectRaw('SUM(CASE WHEN tasks.due_date = ? THEN 1 ELSE 0 END) AS today_count', [$todayDate])
-            ->selectRaw(
-                "SUM(CASE WHEN tasks.due_date BETWEEN ? AND ? AND LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) AS upcoming_count",
-                [$tomorrow, $weekEnd],
-            )
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tasks.status)) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
-            ->selectRaw('SUM(CASE WHEN my_work_metric_task_mentions.flow_task_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count')
+            ->selectRaw("SUM(CASE WHEN $openTask THEN 1 ELSE 0 END) AS my_tasks_count")
+            ->selectRaw('SUM(CASE WHEN tasks.created_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS created_today_count', [$todayStartUtc, $todayEndUtc])
+            ->selectRaw("SUM(CASE WHEN $openTask AND $notStarted THEN 1 ELSE 0 END) AS not_started_count")
+            ->selectRaw("SUM(CASE WHEN $openTask AND $inProgress THEN 1 ELSE 0 END) AS in_progress_count")
+            ->selectRaw("SUM(CASE WHEN $openTask AND tasks.due_date BETWEEN ? AND ? THEN 1 ELSE 0 END) AS due_this_week_count", [$weekStartDate, $weekEndDate])
+            ->selectRaw('SUM(CASE WHEN tasks.completed_at BETWEEN ? AND ? THEN 1 ELSE 0 END) AS completed_this_week_count', [$weekStartUtc, $weekEndUtc])
+            ->selectRaw("SUM(CASE WHEN $openTask AND $needsAttention THEN 1 ELSE 0 END) AS attention_count", [$todayDate])
+            // Legacy counts remain available for old bookmarked quick-filter URLs
+            // and the Mentions chip; they are no longer displayed as summary cards.
+            ->selectRaw("SUM(CASE WHEN $openTask AND tasks.due_date < ? THEN 1 ELSE 0 END) AS overdue_count", [$todayDate])
+            ->selectRaw("SUM(CASE WHEN $openTask AND tasks.due_date = ? THEN 1 ELSE 0 END) AS today_count", [$todayDate])
+            ->selectRaw("SUM(CASE WHEN $openTask AND tasks.due_date BETWEEN ? AND ? AND LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) AS upcoming_count", [$tomorrow, $weekEndDate])
+            ->selectRaw("SUM(CASE WHEN $openTask AND LOWER(TRIM(tasks.status)) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
+            ->selectRaw("SUM(CASE WHEN $openTask AND my_work_metric_task_mentions.flow_task_id IS NOT NULL THEN 1 ELSE 0 END) AS mentions_count")
             ->first();
 
         return [
             'my_tasks' => (int) ($row?->my_tasks_count ?? 0),
+            'createdToday' => (int) ($row?->created_today_count ?? 0),
+            'notStarted' => (int) ($row?->not_started_count ?? 0),
+            'inProgress' => (int) ($row?->in_progress_count ?? 0),
+            'dueThisWeek' => (int) ($row?->due_this_week_count ?? 0),
+            'completedThisWeek' => (int) ($row?->completed_this_week_count ?? 0),
             'attention' => (int) ($row?->attention_count ?? 0),
             'overdue' => (int) ($row?->overdue_count ?? 0),
             'today' => (int) ($row?->today_count ?? 0),
@@ -273,6 +284,11 @@ class MyWorkService
     {
         return [
             'my_tasks' => 0,
+            'createdToday' => 0,
+            'notStarted' => 0,
+            'inProgress' => 0,
+            'dueThisWeek' => 0,
+            'completedThisWeek' => 0,
             'attention' => 0,
             'overdue' => 0,
             'today' => 0,
@@ -454,23 +470,51 @@ class MyWorkService
 
     private function applyQuickFilter(Builder $query, User $user, string $quick): void
     {
-        $today = app(WorkspaceSettingsService::class)->localToday();
+        $workspace = app(WorkspaceSettingsService::class);
+        $today = $workspace->localToday();
         $todayDate = $today->toDateString();
         $tomorrow = $today->addDay()->toDateString();
-        $weekEnd = $today->addDays(7)->toDateString();
+        $weekStartDate = $today->startOfWeek()->toDateString();
+        $weekEndDate = $today->endOfWeek()->toDateString();
+        [$weekStartUtc, $weekEndUtc] = $workspace->localWeekUtcBounds();
+        $initialStatuses = self::INITIAL_TASK_STATUSES;
+        $initialStatusPlaceholders = implode(',', array_fill(0, count($initialStatuses), '?'));
 
         match ($quick) {
-            'attention' => $query->where(fn (Builder $q) => $q
-                ->where('tasks.needs_attention', true)
-                ->orWhere(fn (Builder $derived) => $derived
-                    ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'")
-                    ->where(fn (Builder $condition) => $condition
-                        ->where('tasks.due_date', '<=', $weekEnd)
-                        ->orWhereRaw("LOWER(tasks.priority) IN ('critical','high')")))),
+            'createdToday' => $query->whereBetween('tasks.created_at', [
+                $today->utc(),
+                $today->endOfDay()->utc(),
+            ]),
+            'notStarted' => $query
+                ->whereRaw('COALESCE(tasks.progress, 0) = 0')
+                ->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) IN ($initialStatusPlaceholders)", $initialStatuses),
+            'inProgress' => $query->where(function (Builder $started) use ($initialStatuses, $initialStatusPlaceholders): void {
+                $started->where('tasks.progress', '>', 0)
+                    ->orWhere(function (Builder $status) use ($initialStatuses, $initialStatusPlaceholders): void {
+                        $status->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) <> ''")
+                            ->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) NOT IN ($initialStatusPlaceholders)", $initialStatuses);
+                    });
+            }),
+            'dueThisWeek' => $query->whereBetween('tasks.due_date', [$weekStartDate, $weekEndDate]),
+            'completedThisWeek' => $query
+                ->whereNotNull('tasks.completed_at')
+                ->whereBetween('tasks.completed_at', [$weekStartUtc, $weekEndUtc]),
+            'attention' => $query->where(function (Builder $attention) use ($todayDate): void {
+                $attention->where('tasks.needs_attention', true)
+                    ->orWhereNotNull('tasks.order_task_flag_id')
+                    ->orWhereNull('tasks.assignee_id')
+                    ->orWhereDate('tasks.due_date', '<', $todayDate)
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%blocked%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%revision%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%overdue%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%delayed%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%attention%'");
+            }),
+            // Preserve old URLs/chips that may still exist in bookmarks.
             'overdue' => $query->where('tasks.due_date', '<', $todayDate),
             'today' => $query->where('tasks.due_date', $todayDate),
             'upcoming' => $query
-                ->whereBetween('tasks.due_date', [$tomorrow, $weekEnd])
+                ->whereBetween('tasks.due_date', [$tomorrow, $weekEndDate])
                 ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'"),
             'waiting' => $query->whereRaw("LOWER(TRIM(tasks.status)) LIKE 'waiting%'"),
             'mentions' => $query->whereExists($this->commentMentionExistsSubquery()),
@@ -527,7 +571,14 @@ class MyWorkService
         };
     }
 
-    private function presentTask(Task $task, User $user, AccessControlService $access, string $displayTimezone, string $today): array
+    private function presentTask(
+        Task $task,
+        User $user,
+        AccessControlService $access,
+        string $displayTimezone,
+        string $today,
+        bool $parentCreatedByUser = false,
+    ): array
     {
         $dueDate = $task->due_date?->format('Y-m-d');
         $completed = $task->completed_at !== null || \App\Support\BoardLaneResolver::isCompleted((string) $task->status);
@@ -581,6 +632,12 @@ class MyWorkService
             'updated' => $updatedAt?->diffForHumans() ?: '—',
             'version' => (string) $task->getRawOriginal('updated_at'),
             'canEdit' => $access->canEditVisibleTask($user, $task),
+            // Tasks on this page already came through TaskService::visibleQuery(),
+            // so assignment authorization can be decided without another scope
+            // query for every rendered row.
+            'canAssign' => $access->isAdministrator($user)
+                || $parentCreatedByUser
+                || $access->can($user, 'tasks', 'assign'),
             'route' => route('jobs.index', ['open' => $task->flow_job_id, 'task' => $task->id]),
         ];
     }

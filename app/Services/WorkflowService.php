@@ -117,6 +117,12 @@ class WorkflowService
 
         $this->invalidateBoardWorkflowCache($workspaceId, (int) $workflow->id);
 
+        // Client availability is stored in a pivot table, so a pivot-only edit
+        // may not make WorkflowTemplate itself dirty and therefore may not fire
+        // an Eloquent observer. Publish one explicit invalidation for the whole
+        // save operation. WorkspaceRefreshService coalesces duplicate signals.
+        app(WorkspaceRefreshService::class)->touch('WorkflowTemplate:saved');
+
         return $workflow;
     }
 

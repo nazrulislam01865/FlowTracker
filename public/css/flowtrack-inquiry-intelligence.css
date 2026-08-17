@@ -29,3 +29,21 @@
 @media(max-width:480px){.ii-grid6,.ii-people-kpis,.ii-product-kpis,.ii-donuts{grid-template-columns:1fr}.ii-filters{grid-template-columns:1fr}.ii-search{grid-column:auto}.ii-actions{flex-direction:column}}
 @media print{@page{size:A4 landscape;margin:9mm}body{background:#fff!important}body>.app>.sidebar,body>.app>.main>.topbar,.mobile-bottom-nav,.mobile-sidebar-shade{display:none!important}body>.app{display:block!important}body>.app>.main{margin:0!important;width:100%!important}.content.ft-inquiry-intelligence-content-shell{padding:0!important}#inquiry-intelligence-app{max-width:none;padding:0}.ii-actions,.ii-filters,.ii-tabs{display:none!important}.ii-panel{display:block!important}.ii-card{box-shadow:none;break-inside:avoid}.ii-sect{margin-top:13px}.ii-grid6{grid-template-columns:repeat(6,1fr)}.ii-kpi{min-height:110px}.ii-pagefoot{margin-top:12px}}
 .content.ft-inquiry-intelligence-content-shell{max-width:none;padding:0;background:#f3f7fb}
+
+/* 2026-08-17 Inquiry Intelligence live-data validity pass */
+#inquiry-intelligence-app.ii-is-loading{cursor:progress}
+#inquiry-intelligence-app.ii-is-loading .ii-panel.active{opacity:.72;transition:opacity .12s ease}
+#inquiry-intelligence-app .ii-record-link{color:inherit;text-decoration:none;display:block}
+#inquiry-intelligence-app .ii-record-link:hover b,#inquiry-intelligence-app .ii-inline-link:hover{color:var(--ii-teal);text-decoration:underline;text-underline-offset:2px}
+#inquiry-intelligence-app .ii-inline-link{display:inline;color:#245b9b;font-weight:800}
+#inquiry-intelligence-app .ii-badge.ii-master{background:var(--ft-master-bg,#eaf2ff);color:var(--ft-master-text,#215fbd);border:1px solid var(--ft-master-border,transparent)}
+#inquiry-intelligence-app .ii-bar i.ii-master-fill{background:var(--ft-master-color,var(--ii-teal))}
+#inquiry-intelligence-app .ii-dot.ii-master-dot{background:var(--ft-master-color,var(--ii-blue));box-shadow:0 0 0 3px var(--ft-master-bg,var(--ii-blue-soft))}
+
+/* 2026-08-17 Inquiry Intelligence portfolio preview + dynamic management signals */
+#inquiry-intelligence-app .ii-barrow b small{display:block;margin-top:1px;color:var(--ii-muted);font-size:7px;font-weight:750;text-align:right}
+#inquiry-intelligence-app .ii-sect-actions{display:flex;align-items:center;justify-content:flex-end;gap:9px;flex-wrap:wrap}
+#inquiry-intelligence-app .ii-section-link{display:inline-flex;align-items:center;justify-content:center;min-height:31px;height:31px;padding:0 11px;color:var(--ii-teal);text-decoration:none;font-size:9px;line-height:29px}
+#inquiry-intelligence-app .ii-section-link:hover{color:#006f67;border-color:#8ec8c2;background:#f3fbfa}
+@media(max-width:760px){#inquiry-intelligence-app .ii-sect-actions{width:100%;justify-content:space-between}#inquiry-intelligence-app .ii-section-link{margin-left:auto}}
+@media print{#inquiry-intelligence-app .ii-section-link{display:none!important}}

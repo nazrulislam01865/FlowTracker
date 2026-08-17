@@ -10,6 +10,7 @@
     'triggerClass' => 'ft-inline-cell-input product',
     'menuWidth' => 320,
     'fixedMenu' => false,
+    'clearable' => false,
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
@@ -32,6 +33,7 @@
         fixedMenu: @js((bool) $fixedMenu),
     })"
     x-on:ft-inline-remote-open.stop="sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? @js($placeholder))); openMenu()"
+    x-on:ft-inline-remote-sync.stop="pendingValue = ''; pendingLabel = ''; pendingPreviousValue = ''; pendingPreviousLabel = ''; pendingAt = 0; sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? @js($placeholder)))"
     x-on:keydown.escape.window="if (open) { close(); $dispatch('ft-inline-remote-cancel') }"
     x-on:resize.window="open && reposition()"
     x-on:scroll.window="open && reposition()"
@@ -71,6 +73,18 @@
             placeholder="Search {{ strtolower($searchLabel) }}…"
             autocomplete="off"
         >
+
+        @if($clearable)
+            <button
+                type="button"
+                class="ft-remote-filter-option ft-remote-filter-clear"
+                x-show="selectedValue"
+                x-on:click="clearSelection(); $dispatch('ft-inline-remote-selected', { value: '', label: @js($placeholder), meta: '' })"
+            >
+                <span>{{ $placeholder }}</span>
+                <small>Clear</small>
+            </button>
+        @endif
 
         <div class="ft-remote-filter-list" role="listbox">
             <template x-if="loading">

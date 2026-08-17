@@ -8,6 +8,8 @@
     'createProductSearch'=>'','createProductCategoryFilter'=>'','createProductShowAllResults'=>false,'showCreateOrderProductModal'=>false,
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'',
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'workflowPhaseId'=>null,'mentionUsers'=>collect(),
+    'savedShippingAddresses'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,
+    'phoneCountryCodeOptions'=>collect(),'shippingPhoneCountryCode'=>'',
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
@@ -21,7 +23,7 @@
 <div {{ $attributes->class('ft-create-job-page') }}>
     <div class="ft-create-shell">
         <div class="ft-create-breadcrumb">Orders / Create order</div>
-        <div class="ft-create-title"><h1>Create new order</h1><p>Set the order scope, products, ownership and workflow.</p></div>
+        <div class="ft-create-title"><h1>Create new order</h1><p>Set the order scope, products, shipping, ownership and workflow.</p></div>
 
         <section class="ft-create-section">
             <div class="ft-create-section-title"><span>1</span><h2>Order basics</h2></div>
@@ -66,11 +68,112 @@
             </div>
         </section>
 
+        <section class="ft-create-section ft-order-shipping-section" wire:key="create-order-shipping-address">
+            <div class="ft-order-shipping-head">
+                <div class="ft-order-shipping-heading">
+                    <div class="ft-create-section-title ft-order-shipping-title">
+                        <span>2</span>
+                        <h2>Shipping address</h2>
+                        <em class="ft-order-optional-badge">Optional</em>
+                    </div>
+                    <p>Add the delivery address for this Order if needed.</p>
+                </div>
+                <button
+                    type="button"
+                    class="ft-order-saved-address-button"
+                    wire:click="openSavedShippingAddressPicker"
+                    @disabled(!$clientId || $savedShippingAddresses->isEmpty())
+                    title="{{ !$clientId ? 'Select a client first' : ($savedShippingAddresses->isEmpty() ? 'This client has no saved shipping addresses' : 'Choose from this client\'s saved shipping addresses') }}"
+                >
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6.5 4.5h11v15l-5.5-3.3-5.5 3.3v-15Z"/></svg>
+                    <span>Use saved address</span>
+                </button>
+            </div>
+
+            <label class="ft-create-field ft-order-shipping-address-field">
+                <b>Shipping Address</b>
+                <textarea wire:model="shippingAddress" rows="5" placeholder="Recipient name&#10;Street address&#10;City, State, Country"></textarea>
+                @error('shippingAddress')<small class="validation-error">{{ $message }}</small>@enderror
+            </label>
+
+            <div class="ft-order-shipping-contact-grid">
+                <div class="ft-create-field">
+                    <b>Phone Number</b>
+                    <div class="ft-order-phone-control">
+                        <x-ui.remote-filter
+                            class="ft-order-phone-code-filter"
+                            label="Phone country code"
+                            property="shippingPhoneCountryCode"
+                            type="phone-country-codes"
+                            context="create-job"
+                            :value="$shippingPhoneCountryCode"
+                            placeholder="Code"
+                            :selected-label="$shippingPhoneCountryCode ?: null"
+                            :initial-options="$phoneCountryCodeOptions"
+                            :clearable="true"
+                            :fixed-menu="true"
+                            :menu-width="300"
+                            wire:key="create-order-phone-country-code-{{ $shippingPhoneCountryCode ?: 'none' }}"
+                        />
+                        <input wire:model="shippingPhone" inputmode="tel" autocomplete="tel" placeholder="Enter phone number">
+                    </div>
+                    @error('shippingPhoneCountryCode')<small class="validation-error">{{ $message }}</small>@enderror
+                    @error('shippingPhone')<small class="validation-error">{{ $message }}</small>@enderror
+                </div>
+
+                <label class="ft-create-field">
+                    <b>Postal Code</b>
+                    <input wire:model="shippingPostalCode" autocomplete="postal-code" placeholder="Enter postal code">
+                    @error('shippingPostalCode')<small class="validation-error">{{ $message }}</small>@enderror
+                </label>
+            </div>
+        </section>
+
+        @if($showSavedShippingAddressPicker)
+            <div class="overlay livewire-overlay ft-order-saved-address-overlay" wire:click.self="closeSavedShippingAddressPicker"></div>
+            <section class="modal livewire-modal ft-order-saved-address-modal" role="dialog" aria-modal="true" aria-labelledby="ft-saved-address-title" x-data x-on:keydown.escape.window="$wire.closeSavedShippingAddressPicker()">
+                <div class="ft-order-saved-address-modal-head">
+                    <div>
+                        <h3 id="ft-saved-address-title">Saved shipping addresses</h3>
+                        <p>Choose a saved delivery address for {{ $selectedClient?->name ?? 'this client' }}.</p>
+                    </div>
+                    <button type="button" wire:click="closeSavedShippingAddressPicker" aria-label="Close saved address picker">&times;</button>
+                </div>
+                <div class="ft-order-saved-address-list">
+                    @forelse($savedShippingAddresses as $savedAddress)
+                        <button
+                            type="button"
+                            class="ft-order-saved-address-card {{ (int) $shippingSourceAddressId === (int) $savedAddress->id ? 'is-selected' : '' }}"
+                            wire:click="useSavedShippingAddress({{ $savedAddress->id }})"
+                            wire:key="create-order-saved-address-{{ $savedAddress->id }}"
+                        >
+                            <span class="ft-order-saved-address-card-icon">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6.5 4.5h11v15l-5.5-3.3-5.5 3.3v-15Z"/></svg>
+                            </span>
+                            <span class="ft-order-saved-address-copy">
+                                <span class="ft-order-saved-address-label">
+                                    <strong>{{ $savedAddress->label ?: 'Shipping address' }}</strong>
+                                    @if($savedAddress->is_default)<em>Default</em>@endif
+                                </span>
+                                @if($savedAddress->recipient)<span>{{ $savedAddress->recipient }}</span>@endif
+                                <span>{{ $savedAddress->address_line1 }}@if($savedAddress->suite), {{ $savedAddress->suite }}@endif</span>
+                                <span>{{ collect([$savedAddress->city, $savedAddress->state, $savedAddress->zip])->filter()->implode(', ') }}</span>
+                                <span>{{ $savedAddress->country }}</span>
+                            </span>
+                            <span class="ft-order-saved-address-use">Use address</span>
+                        </button>
+                    @empty
+                        <div class="ft-order-saved-address-empty">No saved shipping addresses are available for this client.</div>
+                    @endforelse
+                </div>
+            </section>
+        @endif
+
         @include('components.jobs.create-products')
 
         @if($assignmentReady)
         <section class="ft-create-section" wire:key="create-assignment-ready">
-            <div class="ft-create-section-title"><span>3</span><h2>Schedule & owner</h2></div>
+            <div class="ft-create-section-title"><span>4</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"><b>Customer required delivery date</b><input x-ref="deliveryDate" type="date" wire:model="deliveryDate">@error('deliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
                 <label class="ft-create-field ft-clickable-date-field" x-data x-on:click="if (!$event.target.closest('.validation-error')) { $refs.estimatedDeliveryDate?.showPicker?.(); $refs.estimatedDeliveryDate?.focus(); }"><b>Estimated Delivery date</b><input x-ref="estimatedDeliveryDate" type="date" wire:model="estimatedDeliveryDate">@error('estimatedDeliveryDate')<small class="validation-error">{{ $message }}</small>@enderror</label>
@@ -139,13 +242,13 @@
             </div>
         </section>
         @else
-            <x-jobs.create-section-placeholder number="3" title="Schedule & owner" section="assignment" :rows="5" />
+            <x-jobs.create-section-placeholder number="4" title="Schedule & owner" section="assignment" :rows="5" />
         @endif
 
         @if($workflowReady)
             <x-ui.create-workflow-picker
                 class="ft-create-section"
-                step="4"
+                step="5"
                 title="What happens next"
                 :workflow-options="$workflowFilterOptions"
                 :selected-workflow-id="$workflowId"
@@ -164,11 +267,11 @@
                 wire:key="create-order-workflow-picker-{{ $clientId ?: 'none' }}-{{ $workflowSelectorVersion }}"
             />
         @else
-            <x-jobs.create-section-placeholder number="4" title="What happens next" section="workflow" :rows="2" />
+            <x-jobs.create-section-placeholder number="5" title="What happens next" section="workflow" :rows="2" />
         @endif
 
         <section class="ft-create-section">
-            <div class="ft-create-section-title"><span>5</span><h2>Attachments</h2></div>
+            <div class="ft-create-section-title"><span>6</span><h2>Attachments</h2></div>
             @if(auth()->user()->canModule('documents','create'))
                 <div class="ft-create-upload-wrap">
                 <div class="ft-create-upload ft-livewire-upload-zone" data-file-dropzone>

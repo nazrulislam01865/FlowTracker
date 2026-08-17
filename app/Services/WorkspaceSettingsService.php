@@ -65,6 +65,42 @@ class WorkspaceSettingsService
         ];
     }
 
+    /**
+     * Convert optional local calendar dates to inclusive UTC bounds.
+     * This keeps list date filtering aligned with the workspace/user display
+     * timezone instead of treating YYYY-MM-DD values as UTC dates.
+     */
+    public function localDateRangeUtcBounds(?string $from, ?string $to): array
+    {
+        $fromDate = $this->parseLocalDate($from);
+        $toDate = $this->parseLocalDate($to);
+
+        if ($fromDate && $toDate && $fromDate->gt($toDate)) {
+            [$fromDate, $toDate] = [$toDate, $fromDate];
+        }
+
+        return [
+            $fromDate?->startOfDay()->utc(),
+            $toDate?->endOfDay()->utc(),
+        ];
+    }
+
+    private function parseLocalDate(?string $value): ?CarbonImmutable
+    {
+        $value = trim((string) $value);
+        if ($value === '' || ! preg_match('/^\d{4}-\d{2}-\d{2}$/', $value)) {
+            return null;
+        }
+
+        try {
+            $date = CarbonImmutable::createFromFormat('!Y-m-d', $value, $this->displayTimezone());
+        } catch (\Throwable) {
+            return null;
+        }
+
+        return $date && $date->format('Y-m-d') === $value ? $date : null;
+    }
+
     public function timezoneOptions(): array
     {
         return DateTimeZone::listIdentifiers();

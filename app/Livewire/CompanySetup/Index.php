@@ -2,11 +2,13 @@
 
 namespace App\Livewire\CompanySetup;
 
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Services\CompanyProfileService;
 use Livewire\Component;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     public bool $isEditing = false;
 
     public string $legalName = '';

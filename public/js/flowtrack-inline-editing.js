@@ -334,12 +334,16 @@
                     const responseHasValue = response && typeof response === 'object'
                         && Object.prototype.hasOwnProperty.call(response, 'value');
                     const confirmedValue = responseHasValue ? normalize(response.value) : normalizedValue;
+                    const responseHasDisplay = response && typeof response === 'object'
+                        && Object.prototype.hasOwnProperty.call(response, 'display');
+                    const confirmedDisplay = responseHasDisplay ? normalize(response.display) : normalizedDisplay;
 
                     this.lastResponse = response && typeof response === 'object' ? response : null;
                     this.value = confirmedValue;
+                    this.display = confirmedDisplay;
                     this.draftValue = confirmedValue;
                     this.savedValue = confirmedValue;
-                    this.savedDisplay = normalizedDisplay;
+                    this.savedDisplay = confirmedDisplay;
                     if (hasAvatarOverride || responseHasAvatar) {
                         this.avatarUrl = confirmedAvatarUrl;
                         this.savedAvatarUrl = confirmedAvatarUrl;

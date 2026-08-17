@@ -802,3 +802,254 @@ a{text-decoration:none}.validation-error{color:var(--red);font-size:11px;margin-
     .ft-phase-toggle{grid-template-columns:18px 20px minmax(100px,1fr) 24px!important;min-height:44px;height:auto!important;padding:6px 8px!important}
     .ft-phase-toggle small,.ft-phase-toggle em{display:none}
 }
+
+/* ========================================================================== 
+   Board correction — sticky lane headers + job-row task layout
+   2026-08-04
+   ========================================================================== */
+
+/* The page/filter controls scroll normally. The actual board lane header is the
+   sticky element, matching the reference and avoiding a huge sticky filter area. */
+.ft-board-page .ft-board-sticky-header{
+    position:relative!important;
+    top:auto!important;
+    z-index:10!important;
+    background:transparent!important;
+    box-shadow:none!important;
+}
+
+/* Never create separate vertical scroll areas for columns/cards. */
+.ft-board-page .ft-board-lanes-scroll,
+.ft-board-page .ft-board-body-scroll{
+    max-height:none!important;
+    overflow-x:auto!important;
+    overflow-y:visible!important;
+    padding-bottom:12px;
+}
+.ft-board-page .ft-board-column,
+.ft-board-page .ft-board-column-list{
+    max-height:none!important;
+    overflow:visible!important;
+}
+.ft-board-page .ft-board-column-list{
+    min-height:390px!important;
+}
+
+/* Sticky status/phase row. It sits directly below the global 68px top bar. */
+.ft-lane-sticky-header{
+    position:sticky;
+    top:68px;
+    z-index:19;
+    background:#f4f7fb;
+    padding:0 0 4px;
+    margin:0;
+    box-shadow:0 8px 13px rgba(20,42,72,.05);
+}
+.ft-lane-header-scroll{
+    padding-bottom:0!important;
+    scrollbar-width:none!important;
+    background:#f4f7fb;
+}
+.ft-lane-header-scroll::-webkit-scrollbar{display:none!important}
+
+/* Job Board: separate sticky phase header and normal page-scrolling columns. */
+.ft-job-board-header-grid,
+.ft-job-board-body-grid{
+    display:grid;
+    grid-auto-flow:column;
+    grid-auto-columns:315px;
+    gap:11px;
+    align-items:start;
+    min-width:max-content;
+}
+.ft-job-board-header-grid .ft-external-lane-head{
+    height:46px;
+    border:1px solid #d7e0eb;
+    border-radius:11px 11px 0 0;
+    background:#eef3f8;
+}
+.ft-job-board-body-grid .ft-board-column-nohead{
+    border-radius:0 0 11px 11px;
+    min-height:470px;
+    margin-top:0;
+}
+.ft-job-board-body-grid .ft-board-column-list{
+    padding-top:9px;
+}
+
+/* Task Board / My Work: one status header row, then one full-width row per Job. */
+.ft-task-board-status-header,
+.ft-task-job-row-grid{
+    display:grid;
+    grid-template-columns:repeat(var(--ft-lane-count), var(--ft-task-lane-width, 340px));
+    min-width:max-content;
+}
+.ft-task-board-status-header{
+    border:1px solid #d8e1ec;
+    border-radius:11px 11px 0 0;
+    overflow:hidden;
+    background:#f8fafc;
+}
+.ft-task-status-head{
+    height:48px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:10px;
+    padding:0 12px;
+    border-right:1px solid #d8e1ec;
+    background:#f8fafc;
+    color:#14233a;
+    font-size:12px;
+    font-weight:850;
+    letter-spacing:.025em;
+    white-space:nowrap;
+}
+.ft-task-status-head:last-child{border-right:0}
+.ft-task-status-head b{
+    display:inline-grid;
+    place-items:center;
+    min-width:24px;
+    height:22px;
+    padding:0 6px;
+    border-radius:10px;
+    background:#e6edf5;
+    color:#344760;
+    font-size:10px;
+    font-weight:850;
+}
+
+.ft-task-job-matrix{
+    --ft-task-lane-width:340px;
+    min-width:calc(var(--ft-lane-count) * var(--ft-task-lane-width));
+    border:1px solid #d8e1ec;
+    border-top:0;
+    border-radius:0 0 11px 11px;
+    overflow:hidden;
+    background:#fff;
+}
+.ft-task-job-matrix-group{
+    border-bottom:1px solid #d8e1ec;
+    background:#fff;
+}
+.ft-task-job-matrix-group:last-child{border-bottom:0}
+.ft-task-job-row-head{
+    min-height:58px;
+    display:flex;
+    align-items:center;
+    gap:9px;
+    padding:0 18px;
+    background:#fff;
+    border-bottom:1px solid #d8e1ec;
+    box-shadow:0 5px 13px rgba(21,43,72,.035);
+    color:#10223b;
+}
+.ft-task-job-row-toggle{
+    flex:0 0 26px;
+    width:26px;
+    height:26px;
+    border:0;
+    background:transparent;
+    display:grid;
+    place-items:center;
+    cursor:pointer;
+    color:#243a57;
+    padding:0;
+}
+.ft-task-job-row-toggle svg{
+    width:16px;
+    height:16px;
+    fill:none;
+    stroke:currentColor;
+    stroke-width:2.2;
+    transition:transform .16s ease;
+}
+.ft-task-job-row-toggle svg.rotated{transform:rotate(-90deg)}
+.ft-task-job-row-number,
+.ft-task-job-row-title{
+    color:#10223b;
+    text-decoration:none;
+    font-size:14px;
+    font-weight:850;
+    white-space:nowrap;
+}
+.ft-task-job-row-number:hover,
+.ft-task-job-row-title:hover{color:#1767e8;text-decoration:underline;text-underline-offset:2px}
+.ft-task-job-copy{font-size:12px;color:#667a94}
+.ft-task-job-dot{font-size:15px;color:#334760}
+.ft-task-job-client-pill{
+    display:inline-flex;
+    align-items:center;
+    min-height:25px;
+    padding:0 10px;
+    border-radius:13px;
+    background:#edf2f7;
+    color:#64758a;
+    font-size:10.5px;
+    font-weight:750;
+    white-space:nowrap;
+}
+.ft-task-job-row-total{
+    margin-left:auto;
+    color:#73849a;
+    font-size:10px;
+    font-weight:700;
+    white-space:nowrap;
+}
+.ft-task-job-status-cell{
+    min-height:185px;
+    padding:12px;
+    border-right:1px solid #d8e1ec;
+    background:#fff;
+}
+.ft-task-job-status-cell:last-child{border-right:0}
+.ft-task-job-status-cell .ft-task-board-card{
+    width:100%;
+    margin:0 0 10px!important;
+}
+.ft-task-job-status-cell .ft-task-board-card:last-child{margin-bottom:0!important}
+.ft-task-job-empty-cell{
+    min-height:72px;
+    display:grid;
+    place-items:center;
+    color:#93a3b8;
+    font-size:11px;
+}
+.ft-task-job-matrix-empty{
+    min-height:140px;
+    display:grid;
+    place-items:center;
+    color:#7e8fa5;
+    font-size:12px;
+}
+
+/* The control at the right side of Quick filters now controls board/job rows,
+   never the filter fields themselves. */
+.ft-board-page .ft-filter-collapse{
+    position:absolute!important;
+    right:0!important;
+    top:9px!important;
+    margin:0!important;
+    background:#fff!important;
+    z-index:2;
+}
+.ft-board-page .ft-board-reference-filter-grid,
+.ft-board-page .ft-mywork-filter-grid{display:grid!important}
+
+/* Responsive filter bars and boards. */
+@media(max-width:1380px){
+    .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:300px}
+    .ft-task-job-matrix{--ft-task-lane-width:320px}
+}
+@media(max-width:1100px){
+    .ft-board-page .ft-board-quick-row{
+        display:flex;
+        flex-wrap:wrap;
+        overflow:visible!important;
+        align-items:center;
+        padding-right:48px;
+    }
+    .ft-board-page .ft-quick-chip{flex:0 1 auto}
+    .ft-task-job-row-head{padding:0 13px}
+    .ft-task-job-row-number,.ft-task-job-row-title{font-size:12.5px}
+}

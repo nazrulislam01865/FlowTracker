@@ -18,6 +18,7 @@ class BulkOrderImportImplementationTest extends TestCase
         $controller = file_get_contents(app_path('Http/Controllers/BulkOrderImportController.php'));
         $bulkCss = file_get_contents(public_path('css/flowtrack-bulk-order-import.css'));
         $ordersTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
+        $ordersIndex = file_get_contents(app_path('Livewire/Orders/Index.php'));
         $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
         $bulkJs = file_get_contents(public_path('js/flowtrack-bulk-order-import.js'));
 
@@ -73,6 +74,18 @@ class BulkOrderImportImplementationTest extends TestCase
         $this->assertStringContainsString('Client ID *', $bulkJs);
         $this->assertStringContainsString('Production Urgency', $bulkJs);
         $this->assertStringContainsString('Shipment Urgent', $bulkJs);
+        $this->assertStringContainsString("'view_orders_url'", $controller);
+        $this->assertStringContainsString("'import' => \$result['import_id']", $controller);
+        $this->assertStringContainsString('result.view_orders_url', $bulkJs);
+        $this->assertStringContainsString('importedOrdersLink.href = result.view_orders_url', $bulkJs);
+
+        $this->assertStringContainsString("#[Url(as: 'import'", $ordersIndex);
+        $this->assertStringContainsString('public int $importBatchId = 0;', $ordersIndex);
+        $this->assertStringContainsString("clearListFiltersExcept('importBatch')", $ordersIndex);
+        $this->assertStringContainsString("from('bulk_order_import_rows as imported_order_rows')", $jobService);
+        $this->assertStringContainsString("whereIn('imported_order_rows.status', ['created', 'updated'])", $jobService);
+        $this->assertStringContainsString("plural('order', \$jobs->total())", $ordersTable);
+        $this->assertStringContainsString('Show all orders', $ordersTable);
 
         $this->assertStringContainsString("in_array('clientid', \$keys, true)", $reader);
         $this->assertStringContainsString("in_array('ordertitle', \$keys, true)", $reader);

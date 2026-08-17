@@ -14,12 +14,13 @@
 
 
     <section class="work-view" aria-busy="false">
-        <div class="metrics" aria-label="Personal work summary">
-            <button type="button" class="metric {{ $quick === 'my_tasks' ? 'active' : '' }}" wire:click="setMetricFilter('my_tasks')"><span><small>My Tasks</small><strong x-text="metrics.my_tasks ?? '—'">{{ $metrics['my_tasks'] ?? '—' }}</strong></span><i>✓</i></button>
-            <button type="button" class="metric red {{ $quick === 'overdue' ? 'active' : '' }}" wire:click="setMetricFilter('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue ?? '—'">{{ $metrics['overdue'] ?? '—' }}</strong></span><i>!</i></button>
-            <button type="button" class="metric amber {{ $quick === 'today' ? 'active' : '' }}" wire:click="setMetricFilter('today')"><span><small>Due today</small><strong x-text="metrics.today ?? '—'">{{ $metrics['today'] ?? '—' }}</strong></span><i>◷</i></button>
-            <button type="button" class="metric {{ $quick === 'upcoming' ? 'active' : '' }}" wire:click="setMetricFilter('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming ?? '—'">{{ $metrics['upcoming'] ?? '—' }}</strong></span><i>→</i></button>
-            <button type="button" class="metric {{ $quick === 'waiting' ? 'active' : '' }}" wire:click="setMetricFilter('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting ?? '—'">{{ $metrics['waiting'] ?? '—' }}</strong></span><i>⌛</i></button>
+        <div class="metrics ft-summary-card-grid" aria-label="My Task summary filters">
+            <x-ui.summary-card label="Created Today" :value="$metrics['createdToday'] ?? 0" value-expression="metrics.createdToday ?? '—'" icon="created" tone="blue" caption="Tasks created today" :active="$quick === 'createdToday'" wire:click="setMetricFilter('createdToday')" aria-pressed="{{ $quick === 'createdToday' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Not Started" :value="$metrics['notStarted'] ?? 0" value-expression="metrics.notStarted ?? '—'" icon="not-started" tone="slate" caption="Waiting for first action" :active="$quick === 'notStarted'" wire:click="setMetricFilter('notStarted')" aria-pressed="{{ $quick === 'notStarted' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="In Progress" :value="$metrics['inProgress'] ?? 0" value-expression="metrics.inProgress ?? '—'" icon="in-progress" tone="blue" caption="Work currently underway" :active="$quick === 'inProgress'" wire:click="setMetricFilter('inProgress')" aria-pressed="{{ $quick === 'inProgress' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Due This Week" :value="$metrics['dueThisWeek'] ?? 0" value-expression="metrics.dueThisWeek ?? '—'" icon="due-week" tone="amber" caption="Tasks due this week" :active="$quick === 'dueThisWeek'" wire:click="setMetricFilter('dueThisWeek')" aria-pressed="{{ $quick === 'dueThisWeek' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Completed This Week" :value="$metrics['completedThisWeek'] ?? 0" value-expression="metrics.completedThisWeek ?? '—'" icon="completed" tone="green" caption="Finished this week" :active="$quick === 'completedThisWeek'" wire:click="setMetricFilter('completedThisWeek')" aria-pressed="{{ $quick === 'completedThisWeek' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Needs Attention" :value="$metrics['attention'] ?? 0" value-expression="metrics.attention ?? '—'" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$quick === 'attention'" wire:click="setMetricFilter('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}" />
         </div>
 
         <div class="toolbar">
@@ -131,16 +132,46 @@
                                         }
                                     }"
                                     x-bind:class="{ 'saving': saving }"
+                                    x-on:my-work-task-version.stop="if ($event.detail?.version) version = String($event.detail.version)"
                                 >
                                     <div class="task-main">
                                         <a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>
                                         <span class="task-ref">{{ $task['number'] }}</span>
                                     </div>
                                     <span class="phase" data-label="Phase">{{ $task['phase'] }}</span>
-                                    <span class="assignee" data-label="Assignee" title="{{ $task['assignee'] }}">
-                                        <x-ui.avatar :name="$task['assignee']" :src="$task['assigneeAvatar']" :size="22" />
-                                        <span class="assignee-name">{{ $task['assignee'] }}</span>
-                                    </span>
+                                    <div
+                                        class="assignee assignee-editor ft-inline-edit-shell"
+                                        wire:key="my-work-task-{{ $task['id'] }}-assignee-{{ $task['assigneeId'] ?: 0 }}"
+                                        data-label="Assignee"
+                                        title="{{ $task['assignee'] }}"
+                                        x-data="window.FlowTrackInlineEdit({ key: @js('my-work-task-'.$task['id'].'-assignee'), label: 'task assignee', value: @js($task['assigneeId'] ?? ''), display: @js($task['assignee']), avatarUrl: @js($task['assigneeAvatar'] ?? '') })"
+                                        :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
+                                        x-on:click.outside="if (editing) cancelEdit()"
+                                        x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+                                        x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssignee({{ $task['id'] }}, draftValue, version), { avatarUrl: String($event.detail?.avatarUrl ?? '') }).then(async (ok) => { if (!ok) return; if (lastResponse?.version) $dispatch('my-work-task-version', { version: lastResponse.version }); if (lastResponse?.refresh) await $wire.$refresh(); })"
+                                    >
+                                        <div class="assignee-display" x-show="!editing">
+                                            <span class="assignee-avatar"><x-ui.inline-live-avatar :size="22" /></span>
+                                            <span class="assignee-name" x-text="display">{{ $task['assignee'] }}</span>
+                                            @if($task['canAssign'])
+                                                <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-inline-edit-button compact assignee-edit-button" title="Edit assignee" aria-label="Edit assignee for {{ $task['title'] }}" x-on:click.stop="openRemotePicker($event.currentTarget)">✎</button>
+                                            @endif
+                                        </div>
+                                        @if($task['canAssign'])
+                                            <div x-cloak x-show="editing" class="assignee-picker">
+                                                <x-ui.inline-remote-user
+                                                    :value="$task['assigneeId'] ?? ''"
+                                                    :selected-label="$task['assignee']"
+                                                    parent-type="job"
+                                                    :parent-id="$group['id']"
+                                                    trigger-class="assignee-picker-trigger"
+                                                    variant="compact"
+                                                    :menu-width="280"
+                                                />
+                                            </div>
+                                            <x-ui.inline-save-state compact />
+                                        @endif
+                                    </div>
                                     <span
                                         class="due-editor ft-inline-edit-shell {{ $task['dueTone'] }}" data-label="Due"
                                         x-data="window.FlowTrackInlineEdit({ key: @js('my-work-task-'.$task['id'].'-due-date'), label: 'task due date', value: @js($task['dueValue']), display: @js($task['dueDisplay']) })"

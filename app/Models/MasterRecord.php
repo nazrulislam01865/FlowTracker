@@ -89,6 +89,95 @@ class MasterRecord extends Model
         return 'PRD-'.str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
     }
 
+    /** @return array<int, array{quantity:int, price:float}> */
+    public function productPriceBreakpoints(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $rows = $this->normalizedProductPriceRows(data_get($this->metadata, 'price_breakpoints', []));
+        if ($rows !== []) return $rows;
+
+        // Backward/repair fallback: older Product rows can still contain the
+        // original pasted Excel table even if the normalized breakpoint array
+        // was not persisted correctly. Re-parse that source so Product Details
+        // always shows the saved pricing instead of silently hiding the section.
+        $raw = trim((string) data_get($this->metadata, 'price_table_raw'));
+        if ($raw === '') return [];
+
+        try {
+            return app(\App\Services\ProductPriceTableParser::class)->parseTable($raw)['price_breakpoints'] ?? [];
+        } catch (\Throwable $exception) {
+            report($exception);
+            return [];
+        }
+    }
+
+    public function productPriceForQuantity(int|float $quantity): ?float
+    {
+        if ($this->type !== 'product' || $quantity <= 0) return null;
+
+        $matchedPrice = null;
+        foreach ($this->productPriceBreakpoints() as $breakpoint) {
+            if ($breakpoint['quantity'] > $quantity) break;
+            $matchedPrice = (float) $breakpoint['price'];
+        }
+
+        return $matchedPrice;
+    }
+
+    /** @return array<int, array{quantity:int, price:float}> */
+    public function productRemoteSurchargeBreakpoints(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $rows = $this->normalizedProductPriceRows(data_get($this->metadata, 'remote_surcharge_breakpoints', []));
+        if ($rows !== []) return $rows;
+
+        $raw = trim((string) data_get($this->metadata, 'price_table_raw'));
+        if ($raw === '') return [];
+
+        try {
+            return app(\App\Services\ProductPriceTableParser::class)->parseTable($raw)['remote_surcharge_breakpoints'] ?? [];
+        } catch (\Throwable $exception) {
+            report($exception);
+            return [];
+        }
+    }
+
+    /** @return array<int, array{quantity:int, price:float}> */
+    private function normalizedProductPriceRows(mixed $value): array
+    {
+        // Be tolerant of legacy/imported rows where JSON was stored as a string
+        // inside metadata instead of as an already-decoded array.
+        if (is_string($value)) {
+            $decoded = json_decode($value, true);
+            $value = is_array($decoded) ? $decoded : [];
+        }
+
+        return collect(is_array($value) ? $value : [])
+            ->map(fn ($row) => [
+                'quantity' => (int) data_get($row, 'quantity', 0),
+                'price' => (float) data_get($row, 'price', -1),
+            ])
+            ->filter(fn ($row) => $row['quantity'] > 0 && $row['price'] >= 0)
+            ->sortBy('quantity')
+            ->values()
+            ->all();
+    }
+
+    public function productRemoteSurchargeForQuantity(int|float $quantity): ?float
+    {
+        if ($this->type !== 'product' || $quantity <= 0) return null;
+
+        $matchedPrice = null;
+        foreach ($this->productRemoteSurchargeBreakpoints() as $breakpoint) {
+            if ($breakpoint['quantity'] > $quantity) break;
+            $matchedPrice = (float) $breakpoint['price'];
+        }
+
+        return $matchedPrice;
+    }
+
     public function productReferenceCode(): string
     {
         $metadata = (array) ($this->metadata ?? []);
@@ -155,6 +244,100 @@ class MasterRecord extends Model
         $labels = $this->productAvailabilityLabels();
 
         return ! ($labels === [] || (count($labels) === 1 && strtolower($labels[0]) === 'all clients'));
+    }
+
+    /** @return array<int, array{key:string,shipment_urgency_id:int,shipment_urgency_code:string,shipment_urgency_name:string,extra_charge:float}> */
+    public function productShipmentUrgencyOptions(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        return collect((array) data_get($this->metadata, 'shipment_urgency_options', []))
+            ->filter(fn ($option) => is_array($option))
+            ->map(function (array $option): array {
+                return [
+                    'key' => trim((string) ($option['key'] ?? '')),
+                    'shipment_urgency_id' => (int) ($option['shipment_urgency_id'] ?? 0),
+                    'shipment_urgency_code' => trim((string) ($option['shipment_urgency_code'] ?? '')),
+                    'shipment_urgency_name' => trim((string) ($option['shipment_urgency_name'] ?? '')),
+                    'extra_charge' => max(0, (float) ($option['extra_charge'] ?? 0)),
+                ];
+            })
+            ->filter(fn ($option) => $option['shipment_urgency_id'] > 0)
+            ->values()
+            ->all();
+    }
+
+    /** @return array<int, array{key:string,label:string,extra_charge:float,image_url:?string}> */
+    public function productOptions(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        return collect((array) data_get($this->metadata, 'product_options', []))
+            ->filter(fn ($option) => is_array($option))
+            ->map(function (array $option): array {
+                $key = trim((string) ($option['key'] ?? ''));
+                $label = trim((string) ($option['label'] ?? ''));
+                $path = trim((string) ($option['image_path'] ?? ''));
+                $imageUrl = null;
+
+                if ($this->id && $key !== '' && $path !== '') {
+                    $imageUrl = route('master-data.product-option-image', [
+                        'product' => $this->id,
+                        'optionKey' => $key,
+                        'filename' => basename($path),
+                    ], false);
+                }
+
+                return [
+                    'key' => $key,
+                    'label' => $label,
+                    'extra_charge' => max(0, (float) ($option['extra_charge'] ?? 0)),
+                    'image_url' => $imageUrl,
+                ];
+            })
+            ->filter(fn ($option) => $option['key'] !== '' && $option['label'] !== '')
+            ->values()
+            ->all();
+    }
+
+    public function productOptionExtraCharge(string $optionKey): float
+    {
+        $optionKey = trim($optionKey);
+        if ($this->type !== 'product' || $optionKey === '') return 0.0;
+
+        foreach ($this->productOptions() as $option) {
+            if ((string) $option['key'] === $optionKey) {
+                return max(0, (float) ($option['extra_charge'] ?? 0));
+            }
+        }
+
+        return 0.0;
+    }
+
+    /** @param array<int,string> $optionKeys */
+    public function productOptionsExtraCharge(array $optionKeys): float
+    {
+        if ($this->type !== 'product' || $optionKeys === []) return 0.0;
+
+        $wanted = array_values(array_unique(array_filter(array_map(
+            static fn ($value) => trim((string) $value),
+            $optionKeys
+        ))));
+
+        if ($wanted === []) return 0.0;
+
+        return (float) collect($this->productOptions())
+            ->filter(fn ($option) => in_array((string) $option['key'], $wanted, true))
+            ->sum(fn ($option) => max(0, (float) ($option['extra_charge'] ?? 0)));
+    }
+
+    /** @param array<int,string> $optionKeys */
+    public function productPriceForQuantityWithOptions(int|float $quantity, array $optionKeys = []): ?float
+    {
+        $basePrice = $this->productPriceForQuantity($quantity);
+        if ($basePrice === null) return null;
+
+        return $basePrice + $this->productOptionsExtraCharge($optionKeys);
     }
 
     /** @return array<int,array{kind:string,label:string,url:?string,download_url:?string}> */

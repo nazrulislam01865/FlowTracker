@@ -22,16 +22,24 @@
     if (!array_key_exists($masterGroup, $masterLabels)) $masterGroup = 'product';
 
     $catalogueGroups = ['product', 'product_category', 'supplier'];
+    $financialGroups = \App\Services\MasterDataService::FINANCIAL_TYPES;
     $catalogProductView = $user->canModule('catalog_products', 'view');
     $catalogProductCreate = $user->canModule('catalog_products', 'create');
     $productCategoryView = $user->canModule('product_categories', 'view');
     $productCategoryCreate = $user->canModule('product_categories', 'create');
     $supplierView = $user->canModule('suppliers', 'view');
+    $financeMasterView = $user->canModule('finance', 'view');
     $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
     $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
+    $financialGroupActive = request()->routeIs('financial-master-data')
+        || (request()->routeIs('master-data') && in_array($masterGroup, $financialGroups, true));
 
-    $masterGroupActive = request()->routeIs('master-data') && !in_array($masterGroup, $catalogueGroups, true);
-    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, 'task_status', 'task_flag'])->all();
+    $masterGroupActive = request()->routeIs('master-data')
+        && !in_array($masterGroup, [...$catalogueGroups, ...$financialGroups], true);
+    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, ...$financialGroups, 'task_status', 'task_flag'])->all();
+    $financialLinks = collect($financialGroups)
+        ->mapWithKeys(fn ($type) => [$type => $masterLabels[$type]])
+        ->all();
     $administrator = app(\App\Services\AccessControlService::class)->isAdministrator($user);
     $settingsGroupActive = request()->routeIs('company.setup', 'administration');
 @endphp
@@ -154,6 +162,29 @@
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
         @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="settings" />@endif
         @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
+        @if($financeMasterView)
+            <details class="ft-sidebar-group" @if($financialGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $financialGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M3 9h18M7 14h4"/></svg>
+                    </span>
+                    <span>Financial Master Data</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children ft-master-sidebar-children">
+                    @foreach($financialLinks as $financialKey => $financialLabel)
+                        <x-ui.nav-link
+                            route="financial-master-data"
+                            :label="$financialLabel"
+                            icon="dot"
+                            child
+                            :params="['group' => $financialKey]"
+                            :active="$financialGroupActive && $masterGroup === $financialKey"
+                        />
+                    @endforeach
+                </div>
+            </details>
+        @endif
         @if($masterView)
             <details class="ft-sidebar-group" @if($masterGroupActive) open @endif>
                 <summary class="ft-sidebar-group-toggle {{ $masterGroupActive ? 'is-active' : '' }}">

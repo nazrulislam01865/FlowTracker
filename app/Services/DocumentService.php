@@ -149,6 +149,96 @@ class DocumentService
         return (bool) ($task->document_category_id ?: $task->setupTemplate?->document_category_id);
     }
 
+    public function rename(Document $document, string $name, User $user): void
+    {
+        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'edit'), 403);
+        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user)->firstOrFail();
+
+        $name = trim($name);
+        abort_if($name === '' || str_contains($name, '/') || str_contains($name, '\\'), 422, 'Enter a valid file name.');
+
+        $oldName = (string) $document->name;
+        Document::query()
+            ->where('flow_job_id', $document->flow_job_id)
+            ->where('task_id', $document->task_id)
+            ->where('category', $document->category)
+            ->where('name', $oldName)
+            ->update(['name' => $name, 'updated_at' => now()]);
+
+        // The grouped rename intentionally uses one SQL UPDATE, so Eloquent
+        // model observers do not fire for the affected Document rows. Publish
+        // one shared invalidation explicitly instead.
+        app(WorkspaceRefreshService::class)->touch('Document:renamed');
+
+        $document->name = $name;
+        $document->loadMissing(['task', 'job']);
+        if ($document->task) {
+            $document->task->activities()->create([
+                'user_id' => $user->id,
+                'event' => 'task.document_renamed',
+                'description' => 'Document renamed from '.$oldName.' to '.$name.'.',
+                'meta' => ['document_id' => $document->id, 'old_name' => $oldName, 'name' => $name],
+            ]);
+        }
+        if ($document->job) {
+            $document->job->activities()->create([
+                'user_id' => $user->id,
+                'event' => 'job.document_renamed',
+                'description' => 'Document renamed from '.$oldName.' to '.$name.'.',
+                'meta' => ['document_id' => $document->id, 'old_name' => $oldName, 'name' => $name, 'task_id' => $document->task_id],
+            ]);
+        }
+    }
+
+    public function storeVersion(Document $document, UploadedFile $file, User $user): Document
+    {
+        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'create'), 403);
+        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user)->firstOrFail();
+
+        $document->loadMissing(['task.job', 'job']);
+        if ($document->task) {
+            app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($document->task_id), $user)->firstOrFail();
+        } elseif ($document->flow_job_id) {
+            app(JobService::class)->findVisible($user, (int) $document->flow_job_id);
+        }
+
+        $disk = (string) config('flowtrack.document_disk', 'public');
+        $extension = strtolower(trim((string) $file->getClientOriginalExtension()));
+        if ($extension === '') $extension = strtolower(pathinfo((string) $document->name, PATHINFO_EXTENSION));
+        $storedName = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
+        $jobId = $document->flow_job_id ?: 'general';
+        $path = $file->storeAs('flowtrack/documents/'.$jobId, $storedName, $disk);
+        abort_if(!$path, 500, 'The document version could not be stored.');
+
+        $version = ((int) Document::query()
+            ->where('flow_job_id', $document->flow_job_id)
+            ->where('task_id', $document->task_id)
+            ->where('category', $document->category)
+            ->where('name', $document->name)
+            ->max('version')) + 1;
+
+        $created = Document::create([
+            'document_number' => $this->nextNumber(),
+            'flow_job_id' => $document->flow_job_id,
+            'client_id' => $document->client_id,
+            'task_id' => $document->task_id,
+            'uploaded_by' => $user->id,
+            'category' => $document->category,
+            'name' => $document->name,
+            'note' => $document->note,
+            'path' => $path,
+            'mime_type' => StoredFileResponse::mimeType($document->name, $file->getMimeType()),
+            'size' => $file->getSize(),
+            'version' => max(1, $version),
+            'is_final' => false,
+        ]);
+
+        $this->recordDocumentActivity($created, $user, 'uploaded');
+        $this->notifyDocumentChange($created, $user, 'uploaded');
+
+        return $created;
+    }
+
     public function versions(Document $document, User $user)
     {
         return app(AccessControlService::class)->applyDocumentScope(Document::query(), $user)

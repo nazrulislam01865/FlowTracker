@@ -50,7 +50,7 @@
         });
 
         const target = firstError.closest(
-            '.ft-proto-field, .ft-client-logo-upload, .ft-client-contact-editor-row, .ft-shipping-card, .ft-client-prototype-section'
+            '.ft-proto-field, .ft-theme-field, .ft-client-logo-upload, .ft-client-contact-editor-row, .ft-shipping-card, .ft-client-prototype-section'
         ) || firstError;
 
         target.classList.add('ft-client-validation-focus-target');

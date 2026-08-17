@@ -20,6 +20,8 @@
         $canDeleteMaster = auth()->user()->canModule($permissionModule, 'delete');
         $canCreateProductCategory = auth()->user()->canModule('product_categories', 'create');
         $catalogueGroup = in_array($group, ['product', 'product_category', 'supplier'], true);
+        $financialGroup = in_array($group, \App\Services\MasterDataService::FINANCIAL_TYPES, true);
+        $masterSectionLabel = $catalogueGroup ? 'Catalogue' : ($financialGroup ? 'Financial Master Data' : 'Master Data');
         $pageTitle = $labels[$group] ?? 'Master Data';
         $singularLabel = match ($group) {
             'product' => 'product',
@@ -43,9 +45,14 @@
             'supplier' => 'Maintain supplier values available throughout Order processing.',
             'production_unit' => 'Maintain the production units used by workflows and operations.',
             'shipment_method' => 'Maintain shipment methods available for orders and deliveries.',
-            'currency' => 'Maintain currencies available for clients, orders and commercial data.',
+            'currency' => 'Maintain currencies available for clients, orders, invoices and payments.',
+            'received_account' => 'Maintain the receiving accounts available when recording customer payments.',
+            'payment_method' => 'Maintain payment methods available when recording payments.',
+            'payment_term' => 'Maintain payment terms available for invoices and client finance settings.',
+            'invoice_type' => 'Maintain invoice types available when creating invoices.',
             'country' => 'Maintain countries used by client and address records.',
             'state' => 'Maintain states and their parent countries.',
+            'phone_country_code' => 'Maintain searchable international phone codes used on shipping and contact forms.',
             'document_category' => 'Maintain document categories used across uploads and workflows.',
             'priority' => 'Maintain priority levels and the colours used throughout FlowTrack.',
             'task_status' => 'Legacy task statuses retained for compatibility. New Order tasks use Order Task Statuses.',
@@ -93,6 +100,14 @@
                 :selected-main-category="$productFormMainCategory"
                 :selected-product-category-id="$parentId"
                 :selected-subcategory="$productSubcategory"
+                :price-preview="$productPricePreview"
+                :remote-surcharge-preview="$productRemoteSurchargePreview"
+                :product-options="$productOptions"
+                :product-option-uploads="$productOptionUploads"
+                :shipment-urgencies="$availableProductShipmentUrgencies"
+                :product-shipment-urgencies="$productShipmentUrgencies"
+                :shipment-urgency-picker-open="$productShipmentUrgencyPickerOpen"
+                :shipment-urgency-picker-selection="$productShipmentUrgencyPickerSelection"
                 :new-product-category-main="$newProductCategoryMain"
                 :new-subcategory-product-category-id="$newSubcategoryProductCategoryId"
             />
@@ -486,7 +501,7 @@
         @endif
     @else
         <div class="ft-master-breadcrumb" aria-label="Breadcrumb">
-            <span>{{ $catalogueGroup ? 'Catalogue' : 'Master Data' }}</span><i>/</i><strong>{{ $pageTitle }}</strong>
+            <span>{{ $masterSectionLabel }}</span><i>/</i><strong>{{ $pageTitle }}</strong>
         </div>
 
         <div class="ft-master-page-head">
@@ -541,7 +556,7 @@
                             <tr>
                                 <th>Sort order</th>
                                 <th>Code</th>
-                                <th>Name</th>
+                                <th>{{ $group === 'phone_country_code' ? 'Phone code' : 'Name' }}</th>
                                 @if($group === 'inquiry_task_status')<th>Inquiry status auto</th><th>Flag</th>@endif
                                 @if($group === 'order_task_status')<th>Automatic task flag</th>@endif
                                 @if($group === 'order_task_flag')<th>Order flag</th>@endif
@@ -557,7 +572,7 @@
                             <tr>
                                 <td class="ft-master-mobile-sort" data-label="Sort order">{{ $r->sort_order }}</td>
                                 <td class="ft-master-mobile-code" data-label="Code"><strong class="ft-master-product-code">{{ $r->code }}</strong></td>
-                                <td class="ft-master-mobile-name" data-label="Name">{{ $r->name }}</td>
+                                <td class="ft-master-mobile-name" data-label="{{ $group === 'phone_country_code' ? 'Phone code' : 'Name' }}">{{ $r->name }}</td>
                                 @if($group === 'inquiry_task_status')
                                     <td class="ft-master-mobile-auto-status" data-label="Inquiry status auto"><strong>{{ $r->inquiryAutoStatus() }}</strong></td>
                                     <td class="ft-master-mobile-flag" data-label="Flag">
@@ -661,8 +676,8 @@
                         @error('code')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
                     <div class="field">
-                        <label>Name *</label>
-                        <input wire:model="name">
+                        <label>{{ $group === 'phone_country_code' ? 'Phone code *' : 'Name *' }}</label>
+                        <input wire:model="name" @if($group === 'phone_country_code') placeholder="e.g. +880" inputmode="tel" @endif>
                         @error('name')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
 
@@ -788,8 +803,8 @@
                     @endif
 
                     <div class="field full">
-                        <label>Description</label>
-                        <textarea wire:model="description" rows="3"></textarea>
+                        <label>{{ $group === 'phone_country_code' ? 'Country / label' : 'Description' }}</label>
+                        <textarea wire:model="description" rows="3" @if($group === 'phone_country_code') placeholder="e.g. Bangladesh" @endif></textarea>
                         @error('description')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
                 </div>

@@ -28,6 +28,7 @@ class InquiryTask extends Model
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
     public function setupAssignee(): BelongsTo { return $this->belongsTo(User::class, 'setup_assignee_id'); }
     public function sourceTaskPackItem(): BelongsTo { return $this->belongsTo(TaskPackItem::class, 'source_task_pack_item_id'); }
+    public function sourceWorkflowPhase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'source_workflow_phase_id'); }
     public function taskStatus(): BelongsTo { return $this->belongsTo(MasterRecord::class, 'inquiry_task_status_id'); }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
     public function links(): HasMany { return $this->hasMany(InquiryTaskLink::class)->latest('id'); }

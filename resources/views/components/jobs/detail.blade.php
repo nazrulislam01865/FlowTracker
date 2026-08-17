@@ -93,7 +93,7 @@
     $manualAttentionReason = trim((string) ($job->attention_reason ?? ''));
     $orderAttentionLocked = (bool) $job->completed_at || in_array((string) $job->status, \App\Services\JobService::INACTIVE_STATUSES, true);
 @endphp
-<div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail') }}>
+<div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail ft-detail-products-scope') }}>
     <div class="ft-detail-toolbar ft-exact-job-header">
         <div class="ft-job-heading-copy">
             <div class="ft-detail-breadcrumb ft-id-breadcrumb">

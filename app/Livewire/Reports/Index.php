@@ -3,6 +3,7 @@
 namespace App\Livewire\Reports;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Services\InquiryIntelligenceService;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
@@ -10,6 +11,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
 
     public string $search = '';
@@ -41,6 +43,27 @@ class Index extends Component
     {
         $this->reset('search', 'status', 'priority', 'assigneeId');
         $this->period = 'month';
+        $this->employeeFocus = 'all';
+        $this->taskTab = 'recent';
+        unset($this->report);
+    }
+
+    public function updated(string $property): void
+    {
+        if (in_array($property, ['search', 'period', 'status', 'priority', 'assigneeId'], true)) {
+            $this->employeeFocus = 'all';
+            $this->taskTab = 'recent';
+            unset($this->report);
+        }
+    }
+
+    public function updatedPeriod(): void
+    {
+        $this->status = '';
+        $this->priority = '';
+        $this->assigneeId = 0;
+        $this->employeeFocus = 'all';
+        $this->taskTab = 'recent';
         unset($this->report);
     }
 
@@ -72,12 +95,29 @@ class Index extends Component
     public function getTaskRowsProperty(): array
     {
         $rows = collect($this->report['people']['task_details'] ?? []);
-        if ($this->employeeFocus !== 'all') $rows = $rows->where('assignee', $this->employeeFocus);
+
+        if ($this->employeeFocus !== 'all') {
+            $focusId = (int) $this->employeeFocus;
+            $rows = $focusId > 0 ? $rows->where('assignee_id', $focusId) : collect();
+        }
 
         return match ($this->taskTab) {
-            'longest' => $rows->sortByDesc(fn (array $row) => $row['hours_value'] ?? -1)->values()->all(),
-            'reopened' => $rows->where('reopened', true)->values()->all(),
-            default => $rows->values()->all(),
+            'longest' => $rows
+                ->where('is_completed', true)
+                ->filter(fn (array $row) => $row['hours_value'] !== null)
+                ->sortByDesc(fn (array $row) => $row['hours_value'])
+                ->values()
+                ->all(),
+            'reopened' => $rows
+                ->where('reopened', true)
+                ->sortByDesc(fn (array $row) => $row['updated_timestamp'] ?? 0)
+                ->values()
+                ->all(),
+            default => $rows
+                ->where('is_completed', true)
+                ->sortByDesc(fn (array $row) => $row['completed_timestamp'] ?? 0)
+                ->values()
+                ->all(),
         };
     }
 
@@ -90,6 +130,11 @@ class Index extends Component
             'priority' => $this->priority,
             'assignee_id' => $this->assigneeId,
         ];
+    }
+
+    protected function prepareForWorkspaceRefresh(): void
+    {
+        unset($this->report);
     }
 
     public function render()

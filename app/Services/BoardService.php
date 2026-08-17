@@ -414,7 +414,7 @@ class BoardService
 
     private function lookupCacheKey(int $userId): string
     {
-        return 'flowtrack:board:lookups:v2:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
+        return 'flowtrack:board:lookups:v3:clients-'.app(ClientService::class)->lifecycleVersion().':data-'.app(WorkspaceRefreshService::class)->version().':user:'.$userId;
     }
 
     public static function workflowOptionsCacheKey(int $workspaceId): string

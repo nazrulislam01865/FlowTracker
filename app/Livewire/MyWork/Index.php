@@ -3,10 +3,13 @@
 namespace App\Livewire\MyWork;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Task;
+use App\Models\User;
 use App\Services\MyWorkService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
+use Illuminate\Database\Eloquent\ModelNotFoundException;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Livewire\Attributes\On;
@@ -17,6 +20,7 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use HandlesInlineEdits;
     use WithPagination;
 
@@ -34,6 +38,11 @@ class Index extends Component
 
     public array $metrics = [
         'my_tasks' => null,
+        'createdToday' => null,
+        'notStarted' => null,
+        'inProgress' => null,
+        'dueThisWeek' => null,
+        'completedThisWeek' => null,
         'attention' => null,
         'overdue' => null,
         'today' => null,
@@ -48,8 +57,8 @@ class Index extends Component
     public bool $administratorView = false;
     public bool $hideCompleted = false;
 
-    private const METRIC_FILTERS = ['my_tasks', 'overdue', 'today', 'upcoming', 'waiting'];
-    private const QUICK_FILTERS = ['my_tasks', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'];
+    private const METRIC_FILTERS = ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'];
+    private const QUICK_FILTERS = ['my_tasks', 'all', 'mentions', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'overdue', 'today', 'upcoming', 'waiting'];
     private const SORTS = ['action', 'due', 'job'];
 
     public function mount(): void
@@ -120,9 +129,9 @@ class Index extends Component
         $this->search = '';
         $this->phaseFilter = '';
         $this->hideCompleted = false;
-        // My Tasks is the canonical personal scope, so clicking the card keeps
-        // that scope active instead of toggling to the completed-inclusive neutral view.
-        $this->quick = $quick === 'my_tasks' ? 'my_tasks' : ($this->quick === $quick ? 'my_tasks' : $quick);
+        // Summary cards are shortcuts over the same personal task scope. Clicking
+        // the active card again returns to the normal My Tasks view.
+        $this->quick = $this->quick === $quick ? 'my_tasks' : $quick;
         $this->resetPage('workPage');
     }
 
@@ -143,7 +152,7 @@ class Index extends Component
 
     private function clearMetricFilterForToolbar(): void
     {
-        if (in_array($this->quick, self::METRIC_FILTERS, true) && $this->quick !== 'my_tasks') {
+        if (in_array($this->quick, self::METRIC_FILTERS, true)) {
             $this->quick = 'my_tasks';
         }
     }
@@ -194,6 +203,60 @@ class Index extends Component
     }
 
     #[Renderless]
+    public function updateTaskAssignee(int $taskId, mixed $assigneeId, string $version): array
+    {
+        $assignee = null;
+        $updatedTask = null;
+
+        $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, $version, &$assignee, &$updatedTask): void {
+            $actor = auth()->user();
+            $personalTask = app(MyWorkService::class)->findPersonalVisibleTask($actor, $taskId);
+            $task = Task::query()->whereKey($personalTask->id)->lockForUpdate()->firstOrFail();
+
+            if ((string) $task->getRawOriginal('updated_at') !== $version) {
+                throw ValidationException::withMessages([
+                    'assignee_id' => 'This task changed since the list was loaded. Refresh My Tasks and try again.',
+                ]);
+            }
+
+            $assigneeId = trim((string) $assigneeId) === '' ? null : (int) $assigneeId;
+            $assignee = $assigneeId
+                ? User::query()->where('is_active', true)->findOrFail($assigneeId)
+                : null;
+
+            $updatedTask = app(TaskService::class)->updateDetailField(
+                $task,
+                'assignee_id',
+                $assigneeId,
+                $actor,
+            );
+        });
+
+        if (($result['ok'] ?? false) && $updatedTask instanceof Task) {
+            $result['value'] = $updatedTask->assignee_id ? (string) $updatedTask->assignee_id : '';
+            $result['display'] = (string) ($assignee?->name ?: 'Unassigned');
+            $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
+            $result['avatarUrl'] = $assignee?->profileImageUrl();
+
+            // Keep the successful assignee selection visible immediately. A full
+            // Livewire refresh is only necessary when reassignment can change
+            // whether this row belongs in the current My Tasks result set.
+            $needsListRefresh = trim($this->search) !== '' || $this->quick === 'attention';
+            if (!$this->administratorView && !$needsListRefresh) {
+                try {
+                    app(MyWorkService::class)->findPersonalVisibleTask(auth()->user(), (int) $updatedTask->id);
+                } catch (ModelNotFoundException) {
+                    $needsListRefresh = true;
+                }
+            }
+            $result['refresh'] = $needsListRefresh;
+            $this->refreshMetricsSnapshot(true);
+        }
+
+        return $result;
+    }
+
+    #[Renderless]
     public function updateTaskDueDate(int $taskId, ?string $date): array
     {
         $date = trim((string) $date);
@@ -230,6 +293,11 @@ class Index extends Component
         $this->dispatch(
             'my-work-metrics',
             my_tasks: $this->metrics['my_tasks'] ?? 0,
+            createdToday: $this->metrics['createdToday'] ?? 0,
+            notStarted: $this->metrics['notStarted'] ?? 0,
+            inProgress: $this->metrics['inProgress'] ?? 0,
+            dueThisWeek: $this->metrics['dueThisWeek'] ?? 0,
+            completedThisWeek: $this->metrics['completedThisWeek'] ?? 0,
             attention: $this->metrics['attention'] ?? 0,
             overdue: $this->metrics['overdue'] ?? 0,
             today: $this->metrics['today'] ?? 0,
@@ -237,6 +305,12 @@ class Index extends Component
             waiting: $this->metrics['waiting'] ?? 0,
             mentions: $this->metrics['mentions'] ?? 0,
         );
+    }
+
+    protected function prepareForWorkspaceRefresh(): void
+    {
+        $this->refreshMetricsSnapshot(true);
+        $this->statusOptions = app(MyWorkService::class)->statusOptions();
     }
 
     public function render()

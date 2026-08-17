@@ -1,4 +1,4 @@
-<div id="inquiry-intelligence-app" class="ii">
+<div id="inquiry-intelligence-app" class="ii" wire:loading.class="ii-is-loading" wire:target="search,period,status,priority,assigneeId,resetFilters,setTab,setTaskTab,employeeFocus">
 @php
     $report = $this->report;
     $portfolio = $report['portfolio'];
@@ -75,7 +75,7 @@
             <article class="ii-card ii-kpi ii-warn"><div class="ii-label">Open inquiries</div><div class="ii-big">{{ number_format($pk['open']) }}</div><div class="ii-trend">Still moving through inquiry workflow</div><div class="ii-track"><i style="width:{{ $pk['total'] ? round($pk['open']/$pk['total']*100) : 0 }}%"></i></div></article>
             <article class="ii-card ii-kpi ii-good"><div class="ii-label">Completed inquiries</div><div class="ii-big">{{ number_format($pk['completed']) }}</div><div class="ii-trend">Workflow completed or final result recorded</div><div class="ii-track"><i style="width:{{ $pk['total'] ? round($pk['completed']/$pk['total']*100) : 0 }}%"></i></div></article>
             <article class="ii-card ii-kpi ii-good"><div class="ii-label">Task completion</div><div class="ii-big">{{ number_format($pk['task_completion'],1) }}<small>%</small></div><div class="ii-trend">{{ number_format($pk['task_done']) }} of {{ number_format($pk['task_total']) }} workflow tasks</div><div class="ii-track"><i style="width:{{ min(100,$pk['task_completion']) }}%"></i></div></article>
-            <article class="ii-card ii-kpi ii-good"><div class="ii-label">File compliance</div><div class="ii-big">{{ $pk['file_compliance'] }}<small>%</small></div><div class="ii-trend">{{ $pk['evidenced'] }} of {{ $pk['evidence_total'] }} completed required-file tasks evidenced</div><div class="ii-track"><i style="width:{{ $pk['file_compliance'] }}%"></i></div></article>
+            <article class="ii-card ii-kpi ii-good"><div class="ii-label">File compliance</div><div class="ii-big">@if($pk['file_compliance'] !== null){{ number_format($pk['file_compliance'],1) }}<small>%</small>@else—@endif</div><div class="ii-trend">@if($pk['evidence_total'] > 0){{ $pk['evidenced'] }} of {{ $pk['evidence_total'] }} completed required-file tasks evidenced @else No completed required-file tasks in this selection @endif</div><div class="ii-track"><i style="width:{{ $pk['file_compliance'] ?? 0 }}%"></i></div></article>
             <article class="ii-card ii-kpi ii-warn"><div class="ii-label">Structured products</div><div class="ii-big">{{ $pk['structured_products'] }}<small>%</small></div><div class="ii-trend">{{ $pk['structured_count'] }} inquiries contain structured product lines</div><div class="ii-track"><i style="width:{{ $pk['structured_products'] }}%"></i></div></article>
         </div>
 
@@ -106,36 +106,45 @@
             </div>
         </div>
 
-        <div class="ii-sect"><div><h2>Management attention</h2><p>Exceptions and decision signals across the inquiry portfolio</p></div></div>
+        <div class="ii-sect"><div><h2>Management attention</h2><p>Exceptions and decision signals recalculated from the active filters</p></div><small>{{ number_format($portfolio['row_count']) }} filtered inquiries</small></div>
         <div class="ii-layout">
             <article class="ii-card"><div class="ii-attention">
-                <div class="ii-alert ii-amber"><b>{{ number_format($portfolio['attention']['attention_count']) }} inquiries require attention</b><p>Includes inquiry-level attention and open task statuses configured to require attention in Master Data.</p></div>
-                <div class="ii-alert ii-red"><b>{{ number_format($portfolio['attention']['unstructured_count']) }} inquiries lack structured product lines</b><p>Product analysis is limited where requests remain only in descriptions or attachments.</p></div>
-                <div class="ii-alert"><b>{{ number_format($portfolio['attention']['overdue_tasks']) }} open inquiry tasks are overdue</b><p>Calculated from the current task due date and completion state.</p></div>
+                @foreach($portfolio['attention']['signals'] as $signal)
+                    <div class="ii-alert {{ $signal['tone'] === 'amber' ? 'ii-amber' : ($signal['tone'] === 'red' ? 'ii-red' : '') }}">
+                        <b>{{ number_format($signal['count']) }} {{ $signal['label'] }}</b>
+                        <p>{{ $signal['description'] }}</p>
+                    </div>
+                @endforeach
             </div></article>
-            <article class="ii-card"><div class="ii-cardhead"><h3>Priority mix</h3><span>Current filters</span></div><div class="ii-bars">
+            <article class="ii-card"><div class="ii-cardhead"><h3>Priority mix</h3><span>{{ number_format($portfolio['row_count']) }} filtered inquiries</span></div><div class="ii-bars">
                 @forelse($portfolio['priority_mix'] as $priorityRow)
-                    <div class="ii-barrow"><span>{{ $priorityRow['name'] }}</span><div class="ii-bar"><i style="width:{{ $priorityRow['width'] }}%"></i></div><b>{{ $priorityRow['count'] }}</b></div>
+                    <div class="ii-barrow"><span>{{ $priorityRow['name'] }}</span><div class="ii-bar"><i class="ii-master-fill" style="width:{{ $priorityRow['width'] }}%;{{ \App\Support\MasterColor::style($priorityRow['color'] ?? null) }}"></i></div><b>{{ $priorityRow['count'] }}<small>{{ number_format($priorityRow['share'], 1) }}%</small></b></div>
                 @empty
-                    <div class="ii-empty-inline">No priority data.</div>
+                    <div class="ii-empty-inline">No priority data matches the active filters.</div>
                 @endforelse
             </div></article>
         </div>
 
-        <div class="ii-sect"><div><h2>All inquiries</h2><p>Filterable register of every inquiry available to this report</p></div><small>{{ number_format($portfolio['row_count']) }} results</small></div>
+        <div class="ii-sect">
+            <div><h2>All inquiries</h2><p>Recent inquiry preview from the same active filters</p></div>
+            <div class="ii-sect-actions">
+                <small>Showing {{ number_format($portfolio['preview_count']) }} of {{ number_format($portfolio['row_count']) }}</small>
+                <a class="ii-btn ii-section-link" href="{{ $portfolio['view_all_url'] }}" wire:navigate>View all inquiries</a>
+            </div>
+        </div>
         <article class="ii-card ii-tablewrap">
             <table>
                 <thead><tr><th>Reference / inquiry</th><th>Product signal</th><th>Created</th><th>Priority</th><th>Lead assignee</th><th>Progress</th><th>Status</th><th>Attention</th></tr></thead>
                 <tbody>
-                @forelse($portfolio['rows'] as $row)
+                @forelse($portfolio['preview_rows'] as $row)
                     <tr>
-                        <td><b>{{ $row['reference'] }}</b><small>{{ $row['subject'] }}</small></td>
+                        <td><a class="ii-record-link" href="{{ $row['url'] }}" wire:navigate><b>{{ $row['reference'] }}</b><small>{{ $row['subject'] }}</small></a></td>
                         <td>{{ $row['product'] }}</td>
                         <td>{{ $row['created'] }}</td>
-                        <td><span class="ii-badge ii-blue">{{ $row['priority'] }}</span></td>
+                        <td><span class="ii-badge ii-master" style="{{ \App\Support\MasterColor::style($row['priority_color'] ?? null) }}">{{ $row['priority'] }}</span></td>
                         <td>{{ $row['assignee'] }}</td>
                         <td><b>{{ $row['progress'] }}%</b><small>{{ $row['progress_text'] }}</small></td>
-                        <td><span class="ii-status"><i class="ii-dot {{ in_array($row['status'], ['Completed','Converted'], true) ? 'green' : '' }}"></i>{{ $row['status'] }}</span></td>
+                        <td><span class="ii-status"><i class="ii-dot ii-master-dot" style="{{ \App\Support\MasterColor::style($row['status_color'] ?? null) }}"></i>{{ $row['status'] }}</span></td>
                         <td><span class="ii-badge ii-{{ $badgeClass($row['attention_tone']) }}">{{ $row['attention'] }}</span></td>
                     </tr>
                 @empty
@@ -152,13 +161,13 @@
 
         <div class="ii-sect"><div><h2>Team summary</h2><p>Headline capacity and execution indicators</p></div></div>
         <div class="ii-people-kpis">
-            <article class="ii-card ii-smallkpi"><div class="ii-label">Employee roster</div><div class="ii-big">{{ number_format($peopleKpis['roster']) }}</div><div class="ii-trend">Active users in FlowTrack</div></article>
+            <article class="ii-card ii-smallkpi"><div class="ii-label">Employee roster</div><div class="ii-big">{{ number_format($peopleKpis['roster']) }}</div><div class="ii-trend">Active users in this workspace</div></article>
             <article class="ii-card ii-smallkpi"><div class="ii-label">Active this period</div><div class="ii-big">{{ number_format($peopleKpis['active']) }}</div><div class="ii-trend">Assignees with inquiry tasks</div></article>
             <article class="ii-card ii-smallkpi"><div class="ii-label">Tasks assigned</div><div class="ii-big">{{ number_format($peopleKpis['assigned']) }}</div><div class="ii-trend">Across filtered inquiries</div></article>
             <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Tasks completed</div><div class="ii-big">{{ number_format($peopleKpis['completed']) }}</div><div class="ii-trend">{{ $peopleKpis['completion_rate'] }}% completion rate</div></article>
-            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Avg completion time</div><div class="ii-big">{{ number_format($peopleKpis['avg_hours'],1) }}<small>h</small></div><div class="ii-trend">Start/assignment to completion</div></article>
-            <article class="ii-card ii-smallkpi ii-warn"><div class="ii-label">On-time completion</div><div class="ii-big">{{ number_format($peopleKpis['on_time'],1) }}<small>%</small></div><div class="ii-trend">Target ≥ 95%</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">First-pass quality</div><div class="ii-big">{{ number_format($peopleKpis['quality'],1) }}<small>%</small></div><div class="ii-trend">No recorded task reopen</div></article>
+            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Avg completion time</div><div class="ii-big">@if($peopleKpis['avg_hours'] !== null){{ number_format($peopleKpis['avg_hours'],1) }}<small>h</small>@else—@endif</div><div class="ii-trend">Start/creation to completion for completed tasks</div></article>
+            <article class="ii-card ii-smallkpi ii-warn"><div class="ii-label">On-time completion</div><div class="ii-big">@if($peopleKpis['on_time'] !== null){{ number_format($peopleKpis['on_time'],1) }}<small>%</small>@else—@endif</div><div class="ii-trend">{{ $peopleKpis['on_time_samples'] }} completed tasks with due dates</div></article>
+            <article class="ii-card ii-smallkpi"><div class="ii-label">First-pass quality</div><div class="ii-big">@if($peopleKpis['quality'] !== null){{ number_format($peopleKpis['quality'],1) }}<small>%</small>@else—@endif</div><div class="ii-trend">{{ $peopleKpis['quality_samples'] }} completed tasks checked for reopen events</div></article>
         </div>
 
         <div class="ii-sect"><div><h2>Performance highlights</h2><p>Ranked on cycle time, SLA, completion and quality — not speed alone</p></div></div>
@@ -176,7 +185,7 @@
                     <div class="ii-rankeyebrow">{{ $card['eyebrow'] }}</div>
                     @if($person)
                         <div class="ii-rankperson"><span class="ii-face">{{ $person['initials'] }}</span><div><h3>{{ $person['name'] }}</h3><p>{{ $person['completed'] }} completed tasks · {{ $person['signal']['label'] }}</p></div></div>
-                        <div class="ii-rankstats"><div><b>{{ number_format($person['avg_hours'],1) }}h</b><span>Avg cycle</span></div><div><b>{{ number_format($person['on_time'],0) }}%</b><span>On time</span></div><div><b>{{ $person['efficiency'] }}</b><span>Efficiency</span></div></div>
+                        <div class="ii-rankstats"><div><b>{{ $person['avg_hours'] !== null ? number_format($person['avg_hours'],1).'h' : '—' }}</b><span>Avg cycle</span></div><div><b>{{ $person['on_time'] !== null ? number_format($person['on_time'],0).'%' : '—' }}</b><span>On time</span></div><div><b>{{ $person['efficiency'] }}</b><span>Efficiency</span></div></div>
                     @else
                         <div class="ii-empty-inline">No assignee data in this period.</div>
                     @endif
@@ -191,8 +200,8 @@
                     <td class="ii-rankno">{{ str_pad((string)$row['rank'],2,'0',STR_PAD_LEFT) }}</td>
                     <td><div class="ii-emp-name"><span class="ii-face">{{ $row['initials'] }}</span><b>{{ $row['name'] }}</b></div></td>
                     <td>{{ $row['assigned'] }}</td><td>{{ $row['completed'] }}</td><td>{{ number_format($row['completion'],1) }}%</td>
-                    <td class="ii-hours {{ $row['avg_hours'] > 8 ? 'slow' : ($row['avg_hours'] > 0 && $row['avg_hours'] <= 2 ? 'fast' : '') }}">{{ number_format($row['avg_hours'],1) }}h</td>
-                    <td>{{ number_format($row['on_time'],1) }}%</td><td>{{ number_format($row['reopen'],1) }}%</td>
+                    <td class="ii-hours {{ $row['avg_hours'] !== null && $row['avg_hours'] > 8 ? 'slow' : ($row['avg_hours'] !== null && $row['avg_hours'] <= 2 ? 'fast' : '') }}">{{ $row['avg_hours'] !== null ? number_format($row['avg_hours'],1).'h' : '—' }}</td>
+                    <td>{{ $row['on_time'] !== null ? number_format($row['on_time'],1).'%' : '—' }}</td><td>{{ $row['reopen'] !== null ? number_format($row['reopen'],1).'%' : '—' }}</td>
                     <td><span class="ii-scorepill {{ $row['efficiency'] < 60 ? 'low' : ($row['efficiency'] < 80 ? 'mid' : '') }}">{{ $row['efficiency'] }}</span></td>
                     <td><span class="ii-badge ii-{{ $badgeClass($row['signal']['tone']) }}">{{ $row['signal']['label'] }}</span></td>
                 </tr>
@@ -217,11 +226,11 @@
                 <button type="button" class="ii-subtab {{ $taskTab === 'longest' ? 'active' : '' }}" wire:click="setTaskTab('longest')">Longest tasks</button>
                 <button type="button" class="ii-subtab {{ $taskTab === 'reopened' ? 'active' : '' }}" wire:click="setTaskTab('reopened')">Reopened tasks</button>
             </div>
-            <div class="ii-field"><label>Focus employee</label><select wire:model.live="employeeFocus"><option value="all">All active employees</option>@foreach($people['ranking'] as $row)<option value="{{ $row['name'] }}">{{ $row['name'] }}</option>@endforeach</select></div>
+            <div class="ii-field"><label>Focus employee</label><select wire:model.live="employeeFocus"><option value="all">All active employees</option>@foreach($people['ranking'] as $row)<option value="{{ $row['id'] }}">{{ $row['name'] }}</option>@endforeach</select></div>
         </div>
         <article class="ii-card ii-tablewrap"><table><thead><tr><th>Assignee</th><th>Inquiry</th><th>Task</th><th>Started / assigned</th><th>Completed</th><th>Hours taken</th><th>SLA</th><th>Quality</th></tr></thead><tbody>
             @forelse($this->taskRows as $row)
-                <tr><td><b>{{ $row['assignee'] }}</b></td><td>{{ $row['inquiry'] }}</td><td>{{ $row['task'] }}</td><td class="ii-timecell">{{ $row['started'] }}</td><td class="ii-timecell">{{ $row['completed'] }}</td><td class="ii-hours {{ $row['hours_value'] !== null && $row['hours_value'] > 8 ? 'slow' : ($row['hours_value'] !== null && $row['hours_value'] <= 2 ? 'fast' : '') }}">{{ $row['hours'] }}</td><td><span class="ii-badge ii-{{ $badgeClass($row['sla_tone']) }}">{{ $row['sla'] }}</span></td><td>{{ $row['quality'] }}</td></tr>
+                <tr><td><b>{{ $row['assignee'] }}</b></td><td>@if($row['inquiry_url'])<a class="ii-record-link ii-inline-link" href="{{ $row['inquiry_url'] }}" wire:navigate>{{ $row['inquiry'] }}</a>@else{{ $row['inquiry'] }}@endif</td><td>{{ $row['task'] }}</td><td class="ii-timecell">{{ $row['started'] }}</td><td class="ii-timecell">{{ $row['completed'] }}</td><td class="ii-hours {{ $row['hours_value'] !== null && $row['hours_value'] > 8 ? 'slow' : ($row['hours_value'] !== null && $row['hours_value'] <= 2 ? 'fast' : '') }}">{{ $row['hours'] }}</td><td><span class="ii-badge ii-{{ $badgeClass($row['sla_tone']) }}">{{ $row['sla'] }}</span></td><td>{{ $row['quality'] }}</td></tr>
             @empty
                 <tr><td colspan="8"><div class="ii-empty-inline">No task events match this focus.</div></td></tr>
             @endforelse
@@ -249,8 +258,8 @@
         <div class="ii-product-kpis">
             <article class="ii-card ii-smallkpi"><div class="ii-label">Product inquiries</div><div class="ii-big">{{ number_format($productKpis['product_inquiries']) }}</div><div class="ii-trend">Inquiries with structured product lines</div></article>
             <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Completed workflows</div><div class="ii-big">{{ number_format($productKpis['completed']) }}</div><div class="ii-trend">Product inquiries completed</div></article>
-            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Converted to order</div><div class="ii-big">{{ number_format($productKpis['converted']) }}</div><div class="ii-trend">{{ number_format($productKpis['conversion'],1) }}% of completed product inquiries</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">Avg quote workflow time</div><div class="ii-big">{{ number_format($productKpis['avg_quote_hours'],1) }}<small>h</small></div><div class="ii-trend">Inquiry start to workflow completion</div></article>
+            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Converted to order</div><div class="ii-big">{{ number_format($productKpis['converted']) }}</div><div class="ii-trend">{{ $productKpis['conversion'] !== null ? number_format($productKpis['conversion'],1).'%' : '—' }} of completed product inquiries</div></article>
+            <article class="ii-card ii-smallkpi"><div class="ii-label">Avg quote workflow time</div><div class="ii-big">@if($productKpis['avg_quote_hours'] !== null){{ number_format($productKpis['avg_quote_hours'],1) }}<small>h</small>@else—@endif</div><div class="ii-trend">Inquiry start/create to workflow completion</div></article>
             <article class="ii-card ii-smallkpi ii-warn"><div class="ii-label">Product data coverage</div><div class="ii-big">{{ number_format($productKpis['data_coverage'],0) }}<small>%</small></div><div class="ii-trend">{{ number_format(100-$productKpis['data_coverage'],0) }}% needs structured product lines</div></article>
             <article class="ii-card ii-smallkpi"><div class="ii-label">Top demand category</div><div class="ii-big ii-category-big">{{ $productKpis['top_category'] }}</div><div class="ii-trend">{{ $productKpis['top_category_share'] }}% of structured product inquiries</div></article>
         </div>
@@ -259,7 +268,7 @@
         <div class="ii-product-layout">
             <article class="ii-card ii-tablewrap"><table><thead><tr><th>Product category</th><th>Inquiries</th><th>Demand share</th><th>Avg workflow time</th><th>Completed</th><th>Conversion</th><th>Avg quantity</th><th>Signal</th></tr></thead><tbody>
                 @forelse($products['categories'] as $row)
-                    <tr><td><b>{{ $row['category'] }}</b><small>{{ $row['sample_product'] ?: 'Structured inquiry products' }}</small></td><td>{{ $row['inquiries'] }}</td><td>{{ $row['share'] }}%</td><td class="ii-hours {{ $row['avg_hours'] > 24 ? 'slow' : ($row['avg_hours'] > 0 && $row['avg_hours'] <= 4 ? 'fast' : '') }}">{{ number_format($row['avg_hours'],1) }}h</td><td>{{ $row['completed'] }}</td><td><b>{{ number_format($row['conversion'],1) }}%</b></td><td>{{ $row['avg_quantity'] !== null ? number_format($row['avg_quantity']).' pcs' : '—' }}</td><td><span class="ii-badge ii-{{ $badgeClass($row['signal']['tone']) }}">{{ $row['signal']['label'] }}</span></td></tr>
+                    <tr><td><b>{{ $row['category'] }}</b><small>{{ $row['sample_product'] ?: 'Structured inquiry products' }}</small></td><td>{{ $row['inquiries'] }}</td><td>{{ $row['share'] }}%</td><td class="ii-hours {{ $row['avg_hours'] !== null && $row['avg_hours'] > 24 ? 'slow' : ($row['avg_hours'] !== null && $row['avg_hours'] <= 4 ? 'fast' : '') }}">{{ $row['avg_hours'] !== null ? number_format($row['avg_hours'],1).'h' : '—' }}</td><td>{{ $row['completed'] }}</td><td><b>{{ $row['conversion'] !== null ? number_format($row['conversion'],1).'%' : '—' }}</b></td><td>{{ $row['avg_quantity'] !== null ? number_format($row['avg_quantity']).' pcs' : '—' }}</td><td><span class="ii-badge ii-{{ $badgeClass($row['signal']['tone']) }}">{{ $row['signal']['label'] }}</span></td></tr>
                 @empty
                     <tr><td colspan="8"><div class="ii-empty-inline">No structured product data matches the selected filters.</div></td></tr>
                 @endforelse

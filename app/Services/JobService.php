@@ -154,11 +154,19 @@ class JobService
         ?int $phaseId = null,
         ?int $assigneeId = null,
         ?int $ownerId = null,
+        string $metricFilter = '',
+        string $dateFrom = '',
+        string $dateTo = '',
+        ?int $bulkImportId = null,
     ): LengthAwarePaginator
     {
         app(OrderTaskFlagService::class)->syncDueTransitions();
         $search = trim($search);
+        [$dateFromUtc, $dateToUtc] = app(WorkspaceSettingsService::class)->localDateRangeUtcBounds($dateFrom, $dateTo);
         $searchLength = mb_strlen($search);
+        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true)) {
+            $metricFilter = '';
+        }
 
         // Avoid fan-out searches across Jobs, clients, owners, items,
         // inquiries and creator activity for inputs that are too short to
@@ -173,7 +181,7 @@ class JobService
             ->values();
 
         $query = $this->visibleQuery($user)
-            ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES)
+            ->when($metricFilter === '', fn (Builder $query) => $query->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES))
             ->when($clientId, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
             ->when($phaseId, fn (Builder $query) => $query->where(function (Builder $phaseQuery) use ($phaseId): void {
                 $phaseQuery->where('flow_jobs.source_workflow_phase_id', $phaseId)
@@ -189,7 +197,26 @@ class JobService
                         ->where('tasks.assignee_id', $assigneeId);
                 });
             })
-            ->when($ownerId, fn (Builder $query) => $query->where('flow_jobs.owner_id', $ownerId));
+            ->when($ownerId, fn (Builder $query) => $query->where('flow_jobs.owner_id', $ownerId))
+            ->when($dateFromUtc, fn (Builder $query) => $query->where('flow_jobs.created_at', '>=', $dateFromUtc))
+            ->when($dateToUtc, fn (Builder $query) => $query->where('flow_jobs.created_at', '<=', $dateToUtc))
+            ->when($bulkImportId, function (Builder $query) use ($bulkImportId): void {
+                // Filter by the immutable import-row audit trail instead of the
+                // flow_jobs.bulk_import_id convenience field. An existing Order
+                // may be updated by another import later, but this link must keep
+                // representing exactly the batch the user just completed.
+                $query->whereExists(function ($importRows) use ($bulkImportId): void {
+                    $importRows->selectRaw('1')
+                        ->from('bulk_order_import_rows as imported_order_rows')
+                        ->whereColumn('imported_order_rows.flow_job_id', 'flow_jobs.id')
+                        ->where('imported_order_rows.bulk_order_import_id', $bulkImportId)
+                        ->whereIn('imported_order_rows.status', ['created', 'updated']);
+                });
+            });
+
+        if ($metricFilter !== '') {
+            $query = $this->applySummaryMetricScope($query, $metricFilter);
+        }
 
         foreach ($tokens as $token) {
             $token = (string) $token;
@@ -252,31 +279,141 @@ class JobService
             ->paginate(max(1, min($perPage, 50)));
     }
 
+    public function bulkImportNumber(int $importId): ?string
+    {
+        if ($importId < 1) {
+            return null;
+        }
+
+        $number = DB::table('bulk_order_imports')
+            ->where('id', $importId)
+            ->where('workspace_id', app(SetupContext::class)->workspaceId())
+            ->value('import_number');
+
+        return filled($number) ? (string) $number : null;
+    }
+
     public function summaryCounts(User $user): array
     {
         app(OrderTaskFlagService::class)->syncDueTransitions();
-        $today = app(WorkspaceSettingsService::class)->localToday()->format('Y-m-d');
-        $weekEnd = app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)->format('Y-m-d');
-        $inactive = self::INACTIVE_STATUSES;
-
-        $row = $this->visibleQuery($user)
-            ->reorder()
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) then 1 else 0 end) as active_count", $inactive)
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_count", $inactive)
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and flow_jobs.delivery_date between ? and ? then 1 else 0 end) as week_count", [...$inactive, $today, $weekEnd])
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status like 'Waiting%' and tasks.completed_at is null and tasks.deleted_at is null) then 1 else 0 end) as waiting_count", $inactive)
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.status not in (?, ?) and (flow_jobs.commercial_value <= 0 or exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and workflow_phases.short_name = 'Invoice')) then 1 else 0 end) as invoice_count", $inactive)
-            ->selectRaw("sum(case when flow_jobs.completed_at is not null then 1 else 0 end) as completed_count")
-            ->first();
+        $base = $this->visibleQuery($user);
 
         return [
-            'all' => (int) ($row?->active_count ?? 0),
-            'attention' => (int) ($row?->attention_count ?? 0),
-            'week' => (int) ($row?->week_count ?? 0),
-            'waiting' => (int) ($row?->waiting_count ?? 0),
-            'invoice' => (int) ($row?->invoice_count ?? 0),
-            'completed' => (int) ($row?->completed_count ?? 0),
+            'createdToday' => (int) $this->applyCreatedTodayOrderScope(clone $base)->count(),
+            'notStarted' => (int) $this->applyNotStartedOrderScope(clone $base)->count(),
+            'inProgress' => (int) $this->applyInProgressOrderScope(clone $base)->count(),
+            'dueThisWeek' => (int) $this->applyDueThisWeekOrderScope(clone $base)->count(),
+            'completedThisWeek' => (int) $this->applyCompletedThisWeekOrderScope(clone $base)->count(),
+            'attention' => (int) $this->applyNeedsAttentionOrderScope(clone $base)->count(),
         ];
+    }
+
+    private function applySummaryMetricScope(Builder $query, string $metric): Builder
+    {
+        return match ($metric) {
+            'createdToday' => $this->applyCreatedTodayOrderScope($query),
+            'notStarted' => $this->applyNotStartedOrderScope($query),
+            'inProgress' => $this->applyInProgressOrderScope($query),
+            'dueThisWeek' => $this->applyDueThisWeekOrderScope($query),
+            'completedThisWeek' => $this->applyCompletedThisWeekOrderScope($query),
+            'attention' => $this->applyNeedsAttentionOrderScope($query),
+            default => $query,
+        };
+    }
+
+    private function applyCreatedTodayOrderScope(Builder $query): Builder
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday();
+
+        return $query->whereBetween('flow_jobs.created_at', [
+            $today->utc(),
+            $today->endOfDay()->utc(),
+        ]);
+    }
+
+    private function applyNotStartedOrderScope(Builder $query): Builder
+    {
+        return $this->applyOperationalOrderScope($query)
+            ->whereNull('flow_jobs.completed_at')
+            ->whereDoesntHave('tasks', fn (Builder $task) => $this->constrainStartedOrderTask($task));
+    }
+
+    private function applyInProgressOrderScope(Builder $query): Builder
+    {
+        return $this->applyOperationalOrderScope($query)
+            ->whereNull('flow_jobs.completed_at')
+            ->whereHas('tasks', fn (Builder $task) => $this->constrainStartedOrderTask($task));
+    }
+
+    private function applyDueThisWeekOrderScope(Builder $query): Builder
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday();
+        $weekStart = $today->startOfWeek()->toDateString();
+        $weekEnd = $today->endOfWeek()->toDateString();
+
+        return $this->applyOperationalOrderScope($query)
+            ->whereNull('flow_jobs.completed_at')
+            ->whereBetween('flow_jobs.delivery_date', [$weekStart, $weekEnd]);
+    }
+
+    private function applyCompletedThisWeekOrderScope(Builder $query): Builder
+    {
+        [$weekStartUtc, $weekEndUtc] = app(WorkspaceSettingsService::class)->localWeekUtcBounds();
+
+        return $this->applyOperationalOrderScope($query)
+            ->whereNotNull('flow_jobs.completed_at')
+            ->whereBetween('flow_jobs.completed_at', [$weekStartUtc, $weekEndUtc]);
+    }
+
+    private function applyNeedsAttentionOrderScope(Builder $query): Builder
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return $this->applyOperationalOrderScope($query)
+            ->whereNull('flow_jobs.completed_at')
+            ->where(function (Builder $attention) use ($today): void {
+                $attention->where('flow_jobs.attention_requested', true)
+                    ->orWhere('flow_jobs.needs_attention', true)
+                    ->orWhereNotNull('flow_jobs.order_flag_id')
+                    ->orWhereIn('flow_jobs.health', ['Needs Attention', 'At Risk', 'Delayed', 'Blocked'])
+                    ->orWhereHas('tasks', function (Builder $task) use ($today): void {
+                        $task->whereNull('tasks.completed_at')
+                            ->where(function (Builder $taskAttention) use ($today): void {
+                                $taskAttention->where('tasks.needs_attention', true)
+                                    ->orWhereNotNull('tasks.order_task_flag_id')
+                                    ->orWhereNull('tasks.assignee_id')
+                                    ->orWhereDate('tasks.due_date', '<', $today)
+                                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%blocked%'")
+                                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%revision%'")
+                                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%overdue%'")
+                                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%delayed%'")
+                                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%attention%'");
+                            });
+                    });
+            });
+    }
+
+    private function applyOperationalOrderScope(Builder $query): Builder
+    {
+        return $query->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES);
+    }
+
+    private function constrainStartedOrderTask(Builder $task): Builder
+    {
+        $initialStatuses = ['not started', 'not start', 'ready', 'to do', 'todo'];
+        $placeholders = implode(',', array_fill(0, count($initialStatuses), '?'));
+
+        return $task->where(function (Builder $started) use ($initialStatuses, $placeholders): void {
+            $started->whereNotNull('tasks.completed_at')
+                ->orWhere('tasks.progress', '>', 0)
+                ->orWhere(function (Builder $status) use ($initialStatuses, $placeholders): void {
+                    $status->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) <> ''")
+                        ->whereRaw(
+                            "LOWER(TRIM(COALESCE(tasks.status, ''))) NOT IN ($placeholders)",
+                            $initialStatuses,
+                        );
+                });
+        });
     }
 
     /**
@@ -678,6 +815,11 @@ class JobService
                 'production_urgency_ids' => array_values(array_map('intval', (array) ($data['production_urgency_ids'] ?? []))),
                 'shipment_urgency_ids' => array_values(array_map('intval', (array) ($data['shipment_urgency_ids'] ?? []))),
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
+                'shipping_address' => blank($data['shipping_address'] ?? null) ? null : trim((string) $data['shipping_address']),
+                'shipping_phone_country_code' => blank($data['shipping_phone_country_code'] ?? null) ? null : trim((string) $data['shipping_phone_country_code']),
+                'shipping_phone' => blank($data['shipping_phone'] ?? null) ? null : trim((string) $data['shipping_phone']),
+                'shipping_postal_code' => blank($data['shipping_postal_code'] ?? null) ? null : trim((string) $data['shipping_postal_code']),
+                'shipping_source_address_id' => filled($data['shipping_source_address_id'] ?? null) ? (int) $data['shipping_source_address_id'] : null,
                 'notes' => blank($data['notes'] ?? null) ? null : trim((string) $data['notes']),
                 'status' => $draft ? 'Draft' : 'New',
                 'health' => 'On Track',
@@ -1059,6 +1201,76 @@ class JobService
 
         app(DashboardService::class)->forget($actor->id);
         app(ReportService::class)->forget($actor->id);
+    }
+
+    public function updateShippingDetails(FlowJob $job, array $changes, User $actor): FlowJob
+    {
+        $this->assertEditable($job, $actor);
+
+        $allowed = [
+            'shipping_address',
+            'shipping_phone_country_code',
+            'shipping_phone',
+            'shipping_postal_code',
+        ];
+        $unknown = array_diff(array_keys($changes), $allowed);
+        abort_if($unknown !== [], 422, 'This shipping field cannot be edited inline.');
+        abort_if($changes === [], 422, 'No shipping details were provided.');
+
+        $updates = [];
+        foreach ($changes as $field => $value) {
+            $updates[$field] = trim((string) ($value ?? ''));
+        }
+
+        validator($updates, [
+            'shipping_address' => ['sometimes', 'nullable', 'string', 'max:2000'],
+            'shipping_phone_country_code' => ['sometimes', 'nullable', 'string', 'max:12', 'regex:/^\\+[0-9]{1,4}$/'],
+            'shipping_phone' => ['sometimes', 'nullable', 'string', 'max:60', 'regex:/^[0-9()\\s.\\-]{5,40}$/'],
+            'shipping_postal_code' => ['sometimes', 'nullable', 'string', 'max:30'],
+        ], [
+            'shipping_phone_country_code.regex' => 'Choose a valid international phone code.',
+            'shipping_phone.regex' => 'Enter a valid shipping contact phone number.',
+        ])->validate();
+
+        if (array_key_exists('shipping_phone_country_code', $updates) && $updates['shipping_phone_country_code'] !== '') {
+            $validPhoneCode = MasterRecord::query()
+                ->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('phone_country_code')
+                ->active()
+                ->where('name', $updates['shipping_phone_country_code'])
+                ->exists();
+
+            abort_unless($validPhoneCode, 422, 'Choose an active phone country code from Master Data.');
+        }
+
+        foreach ($updates as $field => $value) {
+            $updates[$field] = $value === '' ? null : $value;
+        }
+
+        // A manually changed address/postal code is now an Order-specific snapshot,
+        // so it should no longer claim to be identical to the saved client address.
+        if (array_key_exists('shipping_address', $updates) || array_key_exists('shipping_postal_code', $updates)) {
+            $updates['shipping_source_address_id'] = null;
+        }
+
+        $job->update($updates);
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.shipping_updated',
+            'description' => 'Order shipping details updated',
+            'meta' => ['fields' => array_values(array_intersect(array_keys($updates), $allowed))],
+        ]);
+
+        $fresh = $job->refresh();
+        app(NotificationService::class)->notifyJobParticipants(
+            $fresh,
+            'Order shipping details updated',
+            $fresh->job_number.' · Shipping details changed',
+            'update',
+            $actor,
+        );
+
+        return $fresh;
     }
 
     public function updateTextField(FlowJob $job, string $field, ?string $value, User $actor): FlowJob

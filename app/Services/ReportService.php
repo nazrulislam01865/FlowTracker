@@ -130,7 +130,7 @@ class ReportService
 
     private function kpiCacheKey(int $userId): string
     {
-        return 'flowtrack:reports:kpis:v2:clients-'.app(ClientService::class)->lifecycleVersion().':user:'.$userId;
+        return 'flowtrack:reports:kpis:v3:clients-'.app(ClientService::class)->lifecycleVersion().':data-'.app(WorkspaceRefreshService::class)->version().':user:'.$userId;
     }
 
     private function authorize(User $user): void

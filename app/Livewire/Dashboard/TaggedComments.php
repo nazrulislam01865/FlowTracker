@@ -2,12 +2,14 @@
 
 namespace App\Livewire\Dashboard;
 
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Services\DashboardService;
 use Livewire\Attributes\On;
 use Livewire\Component;
 
 class TaggedComments extends Component
 {
+    use RefreshesFromWorkspace;
     public string $filter = 'all';
 
     public function placeholder(): string
@@ -38,12 +40,6 @@ class TaggedComments extends Component
     {
         // A normal Livewire re-render is enough. NotificationService clears the
         // recipient's dashboard caches before the browser receives this event.
-    }
-
-    #[On('flowtrack-refresh')]
-    public function refreshWorkspace(): void
-    {
-        // Deleted parent records disappear from the mention query immediately.
     }
 
     public function render()

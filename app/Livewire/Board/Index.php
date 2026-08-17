@@ -4,6 +4,7 @@ namespace App\Livewire\Board;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Task;
 use App\Models\User;
 use App\Services\BoardService;
@@ -23,6 +24,7 @@ use Throwable;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
     use WithPagination;
@@ -296,6 +298,22 @@ class Index extends Component
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
+    {
+        $service = app(BoardTaskPackService::class);
+        $this->taskPackMetrics = $service->metrics(auth()->user());
+        $this->taskPackStatusOptions = $service->statusOptions();
+        $this->dispatch(
+            'board-task-metrics',
+            attention: $this->taskPackMetrics['attention'] ?? 0,
+            overdue: $this->taskPackMetrics['overdue'] ?? 0,
+            today: $this->taskPackMetrics['today'] ?? 0,
+            upcoming: $this->taskPackMetrics['upcoming'] ?? 0,
+            waiting: $this->taskPackMetrics['waiting'] ?? 0,
+            mentions: $this->taskPackMetrics['mentions'] ?? 0,
+        );
+    }
+
+    protected function prepareForWorkspaceRefresh(): void
     {
         $service = app(BoardTaskPackService::class);
         $this->taskPackMetrics = $service->metrics(auth()->user());

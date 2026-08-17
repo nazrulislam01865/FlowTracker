@@ -49,7 +49,7 @@ body:has(#my-work-app) .content{width:100%;max-width:1680px;margin:0 auto;paddin
 #my-work-app .list-shell{overflow:hidden;border:1px solid #d8e1ec;border-radius:11px;background:#fff}
 #my-work-app .task-head,#my-work-app .task-row{display:grid;grid-template-columns:minmax(220px,1.6fr) minmax(100px,.65fr) minmax(130px,.82fr) 128px 118px minmax(88px,.58fr) minmax(84px,.55fr) 48px;align-items:center;gap:8px}
 #my-work-app .task-head{min-height:32px;padding:0 11px;border-bottom:1px solid #dce3ec;background:#f8fafc;color:#69778e;font-size:7px;font-weight:780;letter-spacing:.04em;text-transform:uppercase}
-#my-work-app .order-group{border-bottom:1px solid #dce3ec;content-visibility:auto;contain:layout paint style;contain-intrinsic-size:205px}
+#my-work-app .order-group{border-bottom:1px solid #dce3ec;content-visibility:auto;contain:layout style;contain-intrinsic-size:205px}
 #my-work-app .order-group:last-child{border-bottom:0}
 #my-work-app .order-head{display:grid;grid-template-columns:22px minmax(180px,1.3fr) minmax(130px,.8fr) minmax(110px,.7fr) minmax(100px,.7fr) minmax(120px,.8fr) auto;align-items:center;gap:8px;min-height:49px;padding:7px 11px;background:#fbfcfe}
 #my-work-app .order-head:hover{background:#f8faff}
@@ -79,6 +79,18 @@ body:has(#my-work-app) .content{width:100%;max-width:1680px;margin:0 auto;paddin
 #my-work-app .assignee{display:flex;min-width:0;align-items:center;gap:6px;color:#4d5d74;font-size:8px}
 #my-work-app .assignee .avatar{flex:0 0 auto}
 #my-work-app .assignee-name{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#my-work-app .assignee-editor{position:relative;overflow:visible;min-height:30px}
+#my-work-app .assignee-display{display:flex;min-width:0;width:100%;align-items:center;gap:6px}
+#my-work-app .assignee-avatar{display:inline-flex;flex:0 0 auto}
+#my-work-app .assignee-editor .assignee-name{flex:0 1 auto}
+#my-work-app .assignee-edit-button{flex:0 0 auto;margin-left:1px}
+#my-work-app .assignee-picker{position:relative;z-index:1240;width:100%;min-width:0;overflow:visible}
+#my-work-app .assignee-picker .ft-inline-remote-user{width:100%;max-width:155px;overflow:visible}
+#my-work-app .assignee-picker-trigger{width:100%;height:30px;padding:0 7px;border:1px solid #8fb5fb;border-radius:7px;background:#fff;color:#344057;font-size:8.5px;font-weight:650;outline:0;box-shadow:0 0 0 2px rgba(23,103,232,.06)}
+#my-work-app .assignee-picker-trigger:focus{border-color:#4f8cf7;box-shadow:0 0 0 3px rgba(23,103,232,.10)}
+#my-work-app .assignee-editor .ft-inline-remote-user-menu{z-index:1500!important}
+#my-work-app .assignee-editor>.ft-inline-save-state{position:absolute;top:100%;left:0;z-index:5;margin:1px 0 0;padding:1px 3px;border-radius:4px;background:#fff;box-shadow:0 1px 4px rgba(28,48,77,.08)}
+#my-work-app .assignee-editor>.ft-inline-save-state:not(.is-saving):not(.is-saved):not(.is-error){display:none}
 #my-work-app .due-editor{display:flex;min-width:0;align-items:center;gap:3px;position:relative}
 #my-work-app .due-editor .ft-task-inline-display{min-width:0;overflow:hidden;color:#4f5f76;font-size:8px;text-overflow:ellipsis;white-space:nowrap}
 #my-work-app .due-editor.overdue .ft-task-inline-display{color:#c43f3f;font-weight:750}
@@ -121,6 +133,7 @@ body:has(#my-work-app) .content{width:100%;max-width:1680px;margin:0 auto;paddin
     #my-work-app .task-main{grid-area:task}
     #my-work-app .phase{grid-area:phase}
     #my-work-app .assignee{grid-area:assignee}
+    #my-work-app .assignee-picker .ft-inline-remote-user{max-width:170px}
     #my-work-app .due-editor{grid-area:due}
     #my-work-app .status-select{grid-area:status}
     #my-work-app .updated{grid-area:updated}
@@ -856,4 +869,22 @@ body:has(#my-work-app) .lang-btn{font-size:13px}
     #my-work-app .status-wrap .status-select{width:min(100%,190px);height:32px;font-size:9.5px}
     #my-work-app .task-row>.row-action{height:27px;padding-inline:7px;font-size:8px}
     #my-work-app .row-action-arrow{font-size:9px}
+}
+
+/* 2026-08-17: My Tasks assignee inline editing. */
+@media(max-width:600px){
+    #my-work-app .assignee-editor{
+        display:grid;
+        width:100%;
+        max-width:100%;
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:"label" "person";
+        gap:5px;
+    }
+    #my-work-app .assignee-editor::before{grid-area:label}
+    #my-work-app .assignee-display{grid-area:person;width:100%}
+    #my-work-app .assignee-picker{grid-area:person;width:min(100%,240px)}
+    #my-work-app .assignee-picker .ft-inline-remote-user{max-width:none}
+    #my-work-app .assignee-picker-trigger{height:34px;font-size:10px}
+    #my-work-app .assignee-editor>.ft-inline-save-state{grid-area:person;position:static;justify-self:start;margin:2px 0 0}
 }

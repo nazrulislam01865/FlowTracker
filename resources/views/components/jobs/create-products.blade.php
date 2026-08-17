@@ -18,6 +18,7 @@
         rows-property="jobItems"
         remove-method="removeProductRow"
         :required="true"
+        :step="3"
         required-error-field="jobItems"
         :active-product-count="$activeProductCount"
         :product-search-results="$productSearchResults"
@@ -33,12 +34,12 @@
         row-key-prefix="selected-order-product"
     />
 @elseif(!$catalogReady)
-    <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
+    <x-jobs.create-section-placeholder number="3" title="Products & quantities" section="catalog" :rows="3" />
 @else
     <section class="ft-create-section ft-order-products-prototype" wire:key="create-catalog-restricted">
         <div class="ft-order-products-title-row">
             <div class="ft-create-section-title ft-order-products-title">
-                <span>2</span><h2>Products &amp; quantities</h2>
+                <span>3</span><h2>Products &amp; quantities</h2>
             </div>
         </div>
         <div class="ft-create-note">Products are hidden because this role does not have <b>Products → View</b> permission. Product access on Create Order is controlled only by the Products role.</div>

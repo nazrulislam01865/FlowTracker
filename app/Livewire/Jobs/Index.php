@@ -4,8 +4,10 @@ namespace App\Livewire\Jobs;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Models\Activity;
+use App\Models\ClientShippingAddress;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\FlowJobItem;
@@ -39,6 +41,7 @@ use Throwable;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
     use WithPagination, WithFileUploads;
@@ -127,6 +130,12 @@ class Index extends Component
     public string $deliveryDate = '';
     public string $estimatedDeliveryDate = '';
     public string $description = '';
+    public string $shippingAddress = '';
+    public string $shippingPhoneCountryCode = '';
+    public string $shippingPhone = '';
+    public string $shippingPostalCode = '';
+    public ?int $shippingSourceAddressId = null;
+    public bool $showSavedShippingAddressPicker = false;
     public array $jobItems = [];
     public string $createProductSearch = '';
     public string $createProductCategoryFilter = '';
@@ -231,6 +240,12 @@ class Index extends Component
         // task in scope while the parent Order is outside their Job list scope.
         // Requiring both scopes caused valid tagged-comment links to 404.
         if ($this->selectedJobId && !$this->selectedTaskId) {
+            $requestedDetailTab = strtolower(trim((string) request('tab', '')));
+            if ($requestedDetailTab === 'finance') {
+                abort_unless(app(AccessControlService::class)->can(auth()->user(), 'finance', 'view'), 403);
+                $this->detailTab = 'finance';
+            }
+
             $this->prepareSelectedJob($this->selectedJobId);
             $this->applyFocusedComment();
         }
@@ -284,6 +299,7 @@ class Index extends Component
                 // before the progressively-loaded Workflow section is visible
                 // so there is never a stale Client/Workflow pair in state.
                 $this->applyClientWorkflowDefault($id);
+                $this->resetCreateShippingAddress();
             }
 
             if ($property === 'workflowId') {
@@ -865,6 +881,87 @@ class Index extends Component
 
         abort(422, 'Unknown Create Order section.');
     }
+
+    public function openSavedShippingAddressPicker(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless($this->clientId, 422, 'Select a client first.');
+
+        $clientAvailable = app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->whereKey($this->clientId)
+            ->exists();
+        abort_unless($clientAvailable, 403);
+
+        $hasSavedAddress = ClientShippingAddress::query()
+            ->where('client_id', $this->clientId)
+            ->exists();
+
+        if (!$hasSavedAddress) {
+            $this->addError('shippingAddress', 'The selected client does not have a saved shipping address yet.');
+            return;
+        }
+
+        $this->resetValidation('shippingAddress');
+        $this->showSavedShippingAddressPicker = true;
+    }
+
+    public function closeSavedShippingAddressPicker(): void
+    {
+        $this->showSavedShippingAddressPicker = false;
+    }
+
+    public function useSavedShippingAddress(int $addressId): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless($this->clientId, 422, 'Select a client first.');
+
+        $clientAvailable = app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->whereKey($this->clientId)
+            ->exists();
+        abort_unless($clientAvailable, 403);
+
+        $address = ClientShippingAddress::query()
+            ->where('client_id', $this->clientId)
+            ->findOrFail($addressId);
+
+        $lines = collect([
+            trim((string) $address->recipient),
+            trim(collect([$address->address_line1, $address->suite])->filter(fn ($part) => filled($part))->implode(', ')),
+            trim(collect([$address->city, $address->state, $address->country])->filter(fn ($part) => filled($part))->implode(', ')),
+        ])->filter(fn ($line) => $line !== '')->values();
+
+        $this->shippingAddress = $lines->implode("\n");
+        $this->shippingPostalCode = trim((string) $address->zip);
+        $this->shippingSourceAddressId = $address->id;
+        $this->showSavedShippingAddressPicker = false;
+        $this->resetValidation([
+            'shippingAddress',
+            'shippingPostalCode',
+            'shippingSourceAddressId',
+        ]);
+    }
+
+    private function resetCreateShippingAddress(): void
+    {
+        $this->shippingAddress = '';
+        $this->shippingPhoneCountryCode = '';
+        $this->shippingPhone = '';
+        $this->shippingPostalCode = '';
+        $this->shippingSourceAddressId = null;
+        $this->showSavedShippingAddressPicker = false;
+        $this->resetValidation([
+            'shippingAddress',
+            'shippingPhoneCountryCode',
+            'shippingPhone',
+            'shippingPostalCode',
+            'shippingSourceAddressId',
+        ]);
+    }
+
     public function addProductRow(): void { $this->focusCreateProductSearch(); }
     public function removeProductRow(int $index): void { if (!array_key_exists($index, $this->jobItems)) return; unset($this->jobItems[$index]); $this->jobItems = array_values($this->jobItems); $this->resetValidation('jobItems'); }
 
@@ -896,6 +993,16 @@ class Index extends Component
         $this->closeOrderAttentionReason();
         $this->closeFinanceModals();
         $this->prepareSelectedJob($id);
+    }
+
+    public function openInvoiceAndPayment(int $id): void
+    {
+        abort_unless(app(AccessControlService::class)->can(auth()->user(), 'finance', 'view'), 403);
+
+        // Reuse the normal Order opening flow so visibility checks, detail state,
+        // modals and activity state are reset exactly as they are for View.
+        $this->openJob($id);
+        $this->detailTab = 'finance';
     }
 
     public function closeDrawer(): void
@@ -1505,6 +1612,25 @@ class Index extends Component
             'deliveryDate' => ['nullable','date'],
             'estimatedDeliveryDate' => ['nullable','date'],
             'description' => ['nullable','string'],
+            'shippingAddress' => ['nullable','string','max:2000'],
+            'shippingPhoneCountryCode' => [
+                'nullable',
+                'string',
+                'max:12',
+                'regex:/^\+[0-9]{1,4}$/',
+                Rule::exists('master_records', 'name')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'phone_country_code')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'shippingPhone' => ['nullable','string','max:60','regex:/^[0-9()\s.\-]{5,40}$/'],
+            'shippingPostalCode' => ['nullable','string','max:30'],
+            'shippingSourceAddressId' => [
+                'nullable',
+                'integer',
+                Rule::exists('client_shipping_addresses', 'id')->where(fn ($query) => $query->where('client_id', $this->clientId)),
+            ],
             'jobItems' => ['required','array','min:1','max:25'],
             'jobItems.*.product_id' => ['required','integer'],
             'jobItems.*.category' => ['required','string','max:255'],
@@ -1517,6 +1643,9 @@ class Index extends Component
             'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
             'jobItems.required' => 'Select at least one product for this Order.',
             'jobItems.min' => 'Select at least one product for this Order.',
+            'shippingPhoneCountryCode.regex' => 'Choose a valid international phone code.',
+            'shippingPhoneCountryCode.exists' => 'Choose an active phone country code from Master Data.',
+            'shippingPhone.regex' => 'Enter a valid shipping contact phone number.',
         ]);
 
         if (count($this->jobAttachments) > 0) {
@@ -1592,6 +1721,11 @@ class Index extends Component
             'delivery_date' => $data['deliveryDate'] ?: null,
             'estimated_delivery_date' => $data['estimatedDeliveryDate'] ?: null,
             'description' => $data['description'],
+            'shipping_address' => blank($data['shippingAddress'] ?? null) ? null : trim((string) $data['shippingAddress']),
+            'shipping_phone_country_code' => blank($data['shippingPhoneCountryCode'] ?? null) ? null : trim((string) $data['shippingPhoneCountryCode']),
+            'shipping_phone' => blank($data['shippingPhone'] ?? null) ? null : trim((string) $data['shippingPhone']),
+            'shipping_postal_code' => blank($data['shippingPostalCode'] ?? null) ? null : trim((string) $data['shippingPostalCode']),
+            'shipping_source_address_id' => $data['shippingSourceAddressId'] ?? null,
             'draft' => $draft,
         ], auth()->user());
 
@@ -1707,6 +1841,33 @@ class Index extends Component
             abort_if($health === '', 422, 'Health is required.');
             $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
             app(JobService::class)->updateHealth($job, $health, auth()->user());
+        });
+    }
+
+    #[Renderless]
+    public function updateJobShippingField(int $jobId, string $field, mixed $value): array
+    {
+        $labels = [
+            'shipping_address' => 'shipping address',
+            'shipping_postal_code' => 'shipping postal code',
+        ];
+        abort_unless(array_key_exists($field, $labels), 422, 'This shipping field cannot be edited inline.');
+
+        return $this->persistInlineEdit($labels[$field], function () use ($jobId, $field, $value) {
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateShippingDetails($job, [$field => $value], auth()->user());
+        });
+    }
+
+    #[Renderless]
+    public function updateJobShippingPhone(int $jobId, mixed $countryCode, mixed $phone): array
+    {
+        return $this->persistInlineEdit('shipping phone number', function () use ($jobId, $countryCode, $phone) {
+            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
+            app(JobService::class)->updateShippingDetails($job, [
+                'shipping_phone_country_code' => $countryCode,
+                'shipping_phone' => $phone,
+            ], auth()->user());
         });
     }
 
@@ -3196,6 +3357,7 @@ class Index extends Component
             ? $requestedClientId
             : $clientQuery->value('id');
         $this->applyClientWorkflowDefault($this->clientId);
+        $this->shippingPhoneCountryCode = '';
         $this->jobItems = [];
     }
 
@@ -3218,6 +3380,12 @@ class Index extends Component
             'deliveryDate',
             'estimatedDeliveryDate',
             'description',
+            'shippingAddress',
+            'shippingPhoneCountryCode',
+            'shippingPhone',
+            'shippingPostalCode',
+            'shippingSourceAddressId',
+            'showSavedShippingAddressPicker',
             'jobItems',
             'createProductSearch',
             'createProductCategoryFilter',
@@ -3319,6 +3487,24 @@ class Index extends Component
                 ->whereKey($this->clientId)
                 ->get(['id', 'name', 'contact_name'])
             : collect();
+
+        $savedShippingAddresses = $clients->isNotEmpty()
+            ? ClientShippingAddress::query()
+                ->where('client_id', $this->clientId)
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get(['id', 'client_id', 'label', 'recipient', 'address_line1', 'suite', 'city', 'state', 'zip', 'country', 'is_default', 'sort_order'])
+            : collect();
+
+        $phoneCountryCodeOptions = $options->options(
+            $user,
+            'phone-country-codes',
+            'create-job',
+            '',
+            $this->shippingPhoneCountryCode,
+            5,
+        );
 
         // Render Create Order from workflow_templates (the setup source of
         // truth), not the legacy workflows mirror. This makes Workflow name
@@ -3471,6 +3657,8 @@ class Index extends Component
             'selectedJob' => null,
             'selectedTask' => null,
             'clients' => $clients,
+            'savedShippingAddresses' => $savedShippingAddresses,
+            'phoneCountryCodeOptions' => $phoneCountryCodeOptions,
             'workflows' => $workflows,
             'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),

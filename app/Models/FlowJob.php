@@ -33,6 +33,7 @@ class FlowJob extends Model
     }
 
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }
+    public function shippingSourceAddress(): BelongsTo { return $this->belongsTo(ClientShippingAddress::class, 'shipping_source_address_id'); }
     public function supplier(): BelongsTo { return $this->belongsTo(MasterRecord::class, 'supplier_id'); }
     public function sourceInquiry(): BelongsTo { return $this->belongsTo(Inquiry::class, 'source_inquiry_id'); }
     public function workflow(): BelongsTo { return $this->belongsTo(Workflow::class); }

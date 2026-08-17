@@ -3,33 +3,40 @@
 namespace App\Livewire\Documents;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
-
+use App\Livewire\Concerns\RefreshesFromWorkspace;
+use App\Models\Client;
 use App\Models\Document;
-use App\Models\MasterRecord;
-use App\Models\Task;
+use App\Models\InquiryDocument;
+use App\Models\User;
 use App\Services\AccessControlService;
-use App\Services\ClientService;
 use App\Services\DocumentService;
+use App\Services\InquiryService;
 use App\Services\JobService;
 use App\Services\MasterDataService;
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Pagination\LengthAwarePaginator;
+use Illuminate\Support\Facades\DB;
 use Livewire\Component;
 use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use WithFileUploads, WithPagination;
 
     public string $search = '';
-    public string $category = '';
     public string $client = '';
-    public string $job = '';
-    public string $phase = '';
-    public string $status = '';
+    public string $linkType = '';
+    public string $uploader = '';
+    public string $dateRange = '';
+    public string $sort = 'updated_desc';
     public int $perPage = 25;
-    public array $expandedJobs = [];
+
     public ?int $selectedDocumentId = null;
+    public string $selectedDocumentSource = 'order';
+    public bool $showDetails = false;
 
     public bool $showUpload = false;
     public array $documentUploads = [];
@@ -37,56 +44,151 @@ class Index extends Component
     public ?int $uploadTaskId = null;
     public string $uploadCategory = '';
 
+    public bool $showRename = false;
+    public ?int $renameDocumentId = null;
+    public string $renameDocumentSource = 'order';
+    public string $renameName = '';
+
+    public bool $showVersionUpload = false;
+    public ?int $versionDocumentId = null;
+    public $versionUpload = null;
+
+    public bool $showVersions = false;
+    public ?int $versionsDocumentId = null;
+
     public function mount(): void
     {
-        $this->job = request()->integer('job') ? (string) request()->integer('job') : '';
         $this->client = request()->integer('client') ? (string) request()->integer('client') : '';
         $this->uploadJobId = request()->integer('job') ?: null;
     }
 
     public function updated($property): void
     {
-        if (in_array($property, ['search','category','client','job','phase','status','perPage'], true)) $this->resetPage();
+        if (in_array($property, ['search', 'client', 'linkType', 'uploader', 'dateRange', 'sort', 'perPage'], true)) {
+            $this->resetPage();
+        }
     }
 
     public function clearFilters(): void
     {
-        $this->reset(['search','category','client','job','phase','status']);
+        $this->reset(['search', 'client', 'linkType', 'uploader', 'dateRange']);
+        $this->sort = 'updated_desc';
         $this->resetPage();
     }
 
-    public function clearFilter(string $filter): void
+    public function openDetails(string $source, int $id): void
     {
-        abort_unless(in_array($filter, ['search','category','client','job','phase','status'], true), 422);
-        $this->{$filter} = '';
-        $this->resetPage();
+        $this->resolveArchiveDocument($source, $id);
+        $this->selectedDocumentSource = $source;
+        $this->selectedDocumentId = $id;
+        $this->showDetails = true;
     }
 
-    public function toggleJob(int $jobId): void
+    public function closeDetails(): void
     {
-        $this->expandedJobs = in_array($jobId, $this->expandedJobs, true)
-            ? array_values(array_diff($this->expandedJobs, [$jobId]))
-            : array_values(array_unique([...$this->expandedJobs, $jobId]));
+        $this->showDetails = false;
     }
 
-    public function expandAll(): void
+    public function openRename(string $source, int $id): void
     {
-        $this->expandedJobs = app(DocumentService::class)->query(auth()->user(), $this->filters())->whereNotNull('flow_job_id')->distinct()->pluck('flow_job_id')->map(fn ($id)=>(int)$id)->all();
+        abort_unless(auth()->user()->canModule('documents', 'edit'), 403);
+        $document = $this->resolveArchiveDocument($source, $id, true);
+
+        $this->renameDocumentSource = $source;
+        $this->renameDocumentId = $id;
+        $this->renameName = (string) $document->name;
+        $this->showRename = true;
+        $this->resetValidation('renameName');
     }
 
-    public function collapseAll(): void { $this->expandedJobs = []; }
-
-    public function selectDocument(int $id): void
+    public function closeRename(): void
     {
-        $doc = app(AccessControlService::class)->applyDocumentScope(Document::query(), auth()->user())->findOrFail($id);
-        $this->selectedDocumentId = $doc->id;
-        if ($doc->flow_job_id && !in_array((int)$doc->flow_job_id, $this->expandedJobs, true)) $this->expandedJobs[] = (int)$doc->flow_job_id;
+        $this->showRename = false;
+        $this->renameDocumentId = null;
+        $this->renameName = '';
+        $this->resetValidation('renameName');
+    }
+
+    public function renameDocument(): void
+    {
+        abort_unless($this->renameDocumentId, 422);
+        abort_unless(auth()->user()->canModule('documents', 'edit'), 403);
+        $this->validate(['renameName' => ['required', 'string', 'max:255']]);
+
+        $name = trim($this->renameName);
+        abort_if($name === '' || str_contains($name, '/') || str_contains($name, '\\'), 422, 'Enter a valid file name.');
+
+        if ($this->renameDocumentSource === 'inquiry') {
+            $document = $this->resolveInquiryDocument($this->renameDocumentId, true);
+            $document->update(['name' => $name]);
+            $document->inquiry?->activities()->create([
+                'user_id' => auth()->id(),
+                'event' => 'inquiry.document_renamed',
+                'description' => 'Document renamed to '.$name.'.',
+                'meta' => ['inquiry_document_id' => $document->id],
+            ]);
+        } else {
+            $document = $this->resolveOrderDocument($this->renameDocumentId);
+            app(DocumentService::class)->rename($document, $name, auth()->user());
+        }
+
+        $this->closeRename();
+        session()->flash('success', 'Document renamed successfully.');
+    }
+
+    public function openVersionUpload(int $id): void
+    {
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        $this->resolveOrderDocument($id);
+        $this->versionDocumentId = $id;
+        $this->versionUpload = null;
+        $this->showVersionUpload = true;
+        $this->resetValidation('versionUpload');
+    }
+
+    public function closeVersionUpload(): void
+    {
+        $this->showVersionUpload = false;
+        $this->versionDocumentId = null;
+        $this->versionUpload = null;
+        $this->resetValidation('versionUpload');
+    }
+
+    public function storeNewVersion(): void
+    {
+        abort_unless($this->versionDocumentId, 422);
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        $this->validate([
+            'versionUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+        ]);
+
+        $base = $this->resolveOrderDocument($this->versionDocumentId);
+        $created = app(DocumentService::class)->storeVersion($base, $this->versionUpload, auth()->user());
+        $this->selectedDocumentSource = 'order';
+        $this->selectedDocumentId = $created->id;
+        $this->closeVersionUpload();
+        session()->flash('success', 'New document version uploaded successfully.');
+    }
+
+    public function openVersions(int $id): void
+    {
+        $this->resolveOrderDocument($id);
+        $this->versionsDocumentId = $id;
+        $this->showVersions = true;
+    }
+
+    public function closeVersions(): void
+    {
+        $this->showVersions = false;
+        $this->versionsDocumentId = null;
     }
 
     public function openUpload(): void
     {
-        abort_unless(auth()->user()->canModule('documents','create'), 403);
-        if ($this->uploadCategory === '') $this->uploadCategory = app(MasterDataService::class)->active('document_category')->first()?->name ?: 'Other';
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        if ($this->uploadCategory === '') {
+            $this->uploadCategory = app(MasterDataService::class)->active('document_category')->first()?->name ?: 'Other';
+        }
         $this->showUpload = true;
     }
 
@@ -97,21 +199,26 @@ class Index extends Component
         $this->uploadTaskId = null;
     }
 
-    public function updatedUploadJobId(): void { $this->uploadTaskId = null; }
+    public function updatedUploadJobId(): void
+    {
+        $this->uploadTaskId = null;
+    }
 
     public function storeDocuments(): void
     {
-        abort_unless(auth()->user()->canModule('documents','create'), 403);
+        abort_unless(auth()->user()->canModule('documents', 'create'), 403);
         $this->validate([
-            'documentUploads' => ['required','array','min:1'],
-            'documentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
-            'uploadJobId' => ['required','integer'],
-            'uploadTaskId' => ['nullable','integer'],
-            'uploadCategory' => ['required','string','max:100'],
+            'documentUploads' => ['required', 'array', 'min:1'],
+            'documentUploads.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'uploadJobId' => ['required', 'integer'],
+            'uploadTaskId' => ['nullable', 'integer'],
+            'uploadCategory' => ['required', 'string', 'max:100'],
         ]);
 
-        $job = app(JobService::class)->findVisible(auth()->user(), (int)$this->uploadJobId);
-        $task = $this->uploadTaskId ? app(\App\Services\TaskService::class)->visibleQuery(auth()->user())->where('flow_job_id',$job->id)->findOrFail($this->uploadTaskId) : null;
+        $job = app(JobService::class)->findVisible(auth()->user(), (int) $this->uploadJobId);
+        $task = $this->uploadTaskId
+            ? app(\App\Services\TaskService::class)->visibleQuery(auth()->user())->where('flow_job_id', $job->id)->findOrFail($this->uploadTaskId)
+            : null;
 
         foreach ($this->documentUploads as $file) {
             $doc = app(DocumentService::class)->store($file, [
@@ -120,24 +227,32 @@ class Index extends Component
                 'task_id' => $task?->id,
                 'category' => $this->uploadCategory,
             ], auth()->user());
+            $this->selectedDocumentSource = 'order';
             $this->selectedDocumentId = $doc->id;
         }
-        $this->expandedJobs[] = $job->id;
-        $this->expandedJobs = array_values(array_unique($this->expandedJobs));
+
         $this->closeUpload();
         session()->flash('success', 'Document(s) uploaded successfully.');
     }
 
-    public function deleteDocument(int $id): void
+    public function deleteArchiveDocument(string $source, int $id): void
     {
-        $doc = app(AccessControlService::class)->applyDocumentScope(Document::query(), auth()->user())->findOrFail($id);
-        app(DocumentService::class)->delete($doc, auth()->user());
-        if ($this->selectedDocumentId === $id) $this->selectedDocumentId = null;
-    }
+        abort_unless(auth()->user()->canModule('documents', 'delete'), 403);
 
-    private function filters(): array
-    {
-        return ['search'=>$this->search,'category'=>$this->category,'client'=>$this->client,'job'=>$this->job,'phase'=>$this->phase,'status'=>$this->status];
+        if ($source === 'inquiry') {
+            $document = $this->resolveInquiryDocument($id, true);
+            app(InquiryService::class)->removeDocument($document->inquiry, $document->id, auth()->user());
+        } else {
+            $document = $this->resolveOrderDocument($id);
+            app(DocumentService::class)->delete($document, auth()->user());
+        }
+
+        if ($this->selectedDocumentSource === $source && $this->selectedDocumentId === $id) {
+            $this->selectedDocumentId = null;
+            $this->showDetails = false;
+        }
+
+        session()->flash('success', 'Document deleted successfully.');
     }
 
     public function render()
@@ -148,49 +263,318 @@ class Index extends Component
     private function documentsPageData(): array
     {
         $user = auth()->user();
+        $documents = $this->archivePaginator($user);
         $service = app(DocumentService::class);
-        $access = app(AccessControlService::class);
-        $documents = $service->paginate($user, $this->filters(), $this->perPage);
-        $pageCollection = $documents->getCollection();
-        $grouped = $pageCollection->groupBy(fn ($d) => $d->flow_job_id ?: 0);
-        if (!$this->expandedJobs && $grouped->keys()->first()) $this->expandedJobs = [(int)$grouped->keys()->first()];
+        $inquiryService = app(InquiryService::class);
 
-        $base = $service->query($user);
-        $metrics = [
-            'all' => (clone $base)->count(),
-            'attention' => (clone $base)->where('is_final',false)->whereHas('task',fn($t)=>$t->where('needs_attention',true))->count(),
-            'approval' => (clone $base)->where('is_final',false)->whereHas('task',fn($t)=>$t->whereIn('status',['In Review','Waiting for Internal Approval']))->count(),
-            'recent' => (clone $base)->where('updated_at','>=',now()->subDays(7))->count(),
-        ];
+        $orderIds = $documents->getCollection()->where('source_type', 'order')->pluck('source_id')->map(fn ($id) => (int) $id)->all();
+        $inquiryIds = $documents->getCollection()->where('source_type', 'inquiry')->pluck('source_id')->map(fn ($id) => (int) $id)->all();
+
+        $orderModels = Document::query()
+            ->with(['job.client', 'client', 'task', 'uploader'])
+            ->whereIn('id', $orderIds)
+            ->get()
+            ->keyBy('id');
+        $inquiryModels = InquiryDocument::query()
+            ->with(['inquiry.client', 'task', 'uploader'])
+            ->whereIn('id', $inquiryIds)
+            ->get()
+            ->keyBy('id');
+
+        $rows = $documents->getCollection()->map(function ($archive) use ($orderModels, $inquiryModels, $user, $inquiryService) {
+            if ($archive->source_type === 'inquiry') {
+                $document = $inquiryModels->get((int) $archive->source_id);
+                if (!$document) return null;
+                $inquiry = $document->inquiry;
+                $task = $document->task;
+
+                return [
+                    'source' => 'inquiry',
+                    'id' => (int) $document->id,
+                    'name' => (string) $document->name,
+                    'extension' => strtolower(pathinfo((string) $document->name, PATHINFO_EXTENSION)),
+                    'size' => (int) $document->size,
+                    'updated_at' => $document->updated_at,
+                    'uploader' => $document->uploader,
+                    'client' => $inquiry?->client,
+                    'record_kind' => 'Inquiry',
+                    'record_number' => $inquiry?->inquiry_number ?: 'Inquiry',
+                    'record_url' => $inquiry ? route('inquiries.index', ['open' => $inquiry->id]) : null,
+                    'task_title' => $task?->title,
+                    'task_number' => $task ? 'Task '.$task->sequence : null,
+                    'task_url' => ($inquiry && $task) ? route('inquiries.index', ['open' => $inquiry->id, 'task' => $task->id]) : null,
+                    'open_url' => route('inquiries.documents.open', $document),
+                    'download_url' => route('inquiries.documents.download', $document),
+                    'is_unlinked' => false,
+                    'is_client_only' => false,
+                    'can_edit' => auth()->user()->canModule('documents', 'edit') && $inquiry && $inquiryService->canEditVisible($user, $inquiry),
+                    'can_delete' => auth()->user()->canModule('documents', 'delete') && $inquiry && $inquiryService->canEditVisible($user, $inquiry),
+                    'supports_versions' => false,
+                ];
+            }
+
+            $document = $orderModels->get((int) $archive->source_id);
+            if (!$document) return null;
+            $job = $document->job;
+            $task = $document->task;
+            $client = $document->client ?: $job?->client;
+            $isUnlinked = !$document->flow_job_id && !$document->task_id && !$document->client_id;
+            $isClientOnly = !$document->flow_job_id && !$document->task_id && (bool) $document->client_id;
+
+            return [
+                'source' => 'order',
+                'id' => (int) $document->id,
+                'name' => (string) $document->name,
+                'extension' => strtolower(pathinfo((string) $document->name, PATHINFO_EXTENSION)),
+                'size' => (int) $document->size,
+                'updated_at' => $document->updated_at,
+                'uploader' => $document->uploader,
+                'client' => $client,
+                'record_kind' => $isUnlinked ? 'Not linked' : ($isClientOnly ? 'Client only' : 'Order'),
+                'record_number' => $job?->displayOrderNumber() ?: null,
+                'record_url' => $job ? route('jobs.index', ['open' => $job->id]) : null,
+                'task_title' => $task?->title,
+                'task_number' => $task?->task_number,
+                'task_url' => ($job && $task) ? route('jobs.index', ['open' => $job->id, 'task' => $task->id]) : null,
+                'open_url' => route('documents.open', $document),
+                'download_url' => route('documents.download', $document),
+                'is_unlinked' => $isUnlinked,
+                'is_client_only' => $isClientOnly,
+                'can_edit' => auth()->user()->canModule('documents', 'edit'),
+                'can_delete' => auth()->user()->canModule('documents', 'delete'),
+                'supports_versions' => true,
+            ];
+        })->filter()->values();
+        $documents->setCollection($rows);
+
+        [$allCount, $storageBytes] = $this->archiveTotals($user);
+        [$clientOptions, $uploaderOptions] = $this->archiveFilterOptions($user);
 
         $categories = $this->showUpload ? app(MasterDataService::class)->active('document_category') : collect();
-
-        $selected = $this->selectedDocumentId
-            ? $access->applyDocumentScope(Document::query()->with(['job.client','task.phase','task.assignee','uploader']),$user)->find($this->selectedDocumentId)
-            : null;
-        if (!$selected) $selected = $pageCollection->first();
-
-        $optionService = app(\App\Services\FilterOptionService::class);
         $jobs = $this->showUpload
-            ? app(JobService::class)->visibleQuery($user)->with('client:id,name,logo_path')->orderByDesc('id')->limit(250)->get(['id','job_number','title','client_id'])
+            ? app(JobService::class)->visibleQuery($user)->with('client:id,name,logo_path')->orderByDesc('id')->limit(250)->get(['id', 'job_number', 'order_number', 'title', 'client_id'])
             : collect();
         $uploadTasks = $this->showUpload && $this->uploadJobId
-            ? app(\App\Services\TaskService::class)->visibleQuery($user)->where('flow_job_id',$this->uploadJobId)->with('phase')->orderBy('id')->get()
+            ? app(\App\Services\TaskService::class)->visibleQuery($user)->where('flow_job_id', $this->uploadJobId)->with('phase')->orderBy('id')->get()
             : collect();
+
+        $selected = null;
+        if ($this->showDetails && $this->selectedDocumentId) {
+            $selected = $this->archiveDetailData($this->selectedDocumentSource, $this->selectedDocumentId);
+        }
+
+        $versions = collect();
+        if ($this->showVersions && $this->versionsDocumentId) {
+            $base = $this->resolveOrderDocument($this->versionsDocumentId);
+            $versions = $service->versions($base, $user);
+        }
 
         return [
             'documents' => $documents,
-            'grouped' => $grouped,
-            'metrics' => $metrics,
-            'jobFilterOptions' => $optionService->options($user, 'jobs', 'documents', '', $this->job !== '' ? (int)$this->job : null, 5),
-            'clientFilterOptions' => $optionService->options($user, 'clients', 'documents', '', $this->client !== '' ? (int)$this->client : null, 5),
-            'phaseFilterOptions' => $optionService->options($user, 'phases', 'documents', '', $this->phase !== '' ? (int)$this->phase : null, 5),
-            'categoryFilterOptions' => $optionService->options($user, 'document-categories', 'documents', '', $this->category, 5),
+            'documentCount' => $allCount,
+            'storageBytes' => $storageBytes,
+            'clientOptions' => $clientOptions,
+            'uploaderOptions' => $uploaderOptions,
             'jobs' => $jobs,
             'categories' => $categories,
             'uploadTasks' => $uploadTasks,
             'selected' => $selected,
-            'versions' => $selected ? $service->versions($selected, $user) : collect(),
+            'versions' => $versions,
         ];
+    }
+
+    private function archivePaginator(User $user): LengthAwarePaginator
+    {
+        $order = $this->orderArchiveQuery($user)
+            ->selectRaw("'order' as source_type, documents.id as source_id, documents.updated_at as archive_updated_at, documents.name as archive_name, documents.size as archive_size");
+        $inquiry = $this->inquiryArchiveQuery($user)
+            ->selectRaw("'inquiry' as source_type, inquiry_documents.id as source_id, inquiry_documents.updated_at as archive_updated_at, inquiry_documents.name as archive_name, inquiry_documents.size as archive_size");
+
+        if ($this->linkType === 'inquiry') {
+            $union = $inquiry->toBase();
+        } elseif (in_array($this->linkType, ['order', 'client', 'unlinked'], true)) {
+            $union = $order->toBase();
+        } else {
+            $union = $order->toBase()->unionAll($inquiry->toBase());
+        }
+
+        $query = DB::query()->fromSub($union, 'document_archive');
+        match ($this->sort) {
+            'updated_asc' => $query->orderBy('archive_updated_at')->orderBy('source_id'),
+            'name_asc' => $query->orderBy('archive_name')->orderByDesc('archive_updated_at'),
+            'name_desc' => $query->orderByDesc('archive_name')->orderByDesc('archive_updated_at'),
+            'size_desc' => $query->orderByDesc('archive_size')->orderByDesc('archive_updated_at'),
+            default => $query->orderByDesc('archive_updated_at')->orderByDesc('source_id'),
+        };
+
+        return $query->paginate(max(10, min(100, $this->perPage)));
+    }
+
+    private function orderArchiveQuery(User $user): Builder
+    {
+        $query = app(DocumentService::class)->query($user, [
+            'search' => trim($this->search),
+            'client' => $this->client,
+        ]);
+
+        if ($this->linkType === 'order') {
+            $query->whereNotNull('documents.flow_job_id');
+        } elseif ($this->linkType === 'task') {
+            $query->whereNotNull('documents.task_id');
+        } elseif ($this->linkType === 'client') {
+            $query->whereNull('documents.flow_job_id')->whereNull('documents.task_id')->whereNotNull('documents.client_id');
+        } elseif ($this->linkType === 'unlinked') {
+            $query->whereNull('documents.flow_job_id')->whereNull('documents.task_id')->whereNull('documents.client_id');
+        }
+
+        if ($this->uploader !== '') $query->where('documents.uploaded_by', (int) $this->uploader);
+        $this->applyDateRange($query, 'documents.updated_at');
+
+        return $query;
+    }
+
+    private function inquiryArchiveQuery(User $user): Builder
+    {
+        $visibleInquiries = app(InquiryService::class)->visibleQuery($user)->select('inquiries.id');
+        $query = InquiryDocument::query()
+            ->join('inquiries', 'inquiries.id', '=', 'inquiry_documents.inquiry_id')
+            ->whereIn('inquiry_documents.inquiry_id', $visibleInquiries);
+
+        $search = trim($this->search);
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+            $query->where(function (Builder $match) use ($like): void {
+                $match->whereLike('inquiry_documents.name', $like)
+                    ->orWhereLike('inquiries.inquiry_number', $like)
+                    ->orWhereLike('inquiries.subject', $like)
+                    ->orWhereHas('task', fn (Builder $task) => $task->whereLike('title', $like))
+                    ->orWhereHas('uploader', fn (Builder $uploader) => $uploader->whereLike('name', $like));
+            });
+        }
+
+        if ($this->client !== '') $query->where('inquiries.client_id', (int) $this->client);
+        if ($this->uploader !== '') $query->where('inquiry_documents.uploaded_by', (int) $this->uploader);
+        if ($this->linkType === 'task') $query->whereNotNull('inquiry_documents.inquiry_task_id');
+        if (in_array($this->linkType, ['order', 'client', 'unlinked'], true)) $query->whereRaw('1 = 0');
+        $this->applyDateRange($query, 'inquiry_documents.updated_at');
+
+        return $query;
+    }
+
+    private function applyDateRange(Builder $query, string $column): void
+    {
+        match ($this->dateRange) {
+            'today' => $query->where($column, '>=', now()->startOfDay()),
+            '7_days' => $query->where($column, '>=', now()->subDays(7)),
+            '30_days' => $query->where($column, '>=', now()->subDays(30)),
+            default => null,
+        };
+    }
+
+    private function archiveTotals(User $user): array
+    {
+        $order = app(DocumentService::class)->query($user);
+        $visibleInquiryIds = app(InquiryService::class)->visibleQuery($user)->select('inquiries.id');
+        $inquiry = InquiryDocument::query()->whereIn('inquiry_id', $visibleInquiryIds);
+
+        return [
+            (clone $order)->count() + (clone $inquiry)->count(),
+            (int) (clone $order)->sum('size') + (int) (clone $inquiry)->sum('size'),
+        ];
+    }
+
+    private function archiveFilterOptions(User $user): array
+    {
+        $order = app(DocumentService::class)->query($user);
+        $visibleInquiryIds = app(InquiryService::class)->visibleQuery($user)->select('inquiries.id');
+
+        $orderClientIds = (clone $order)->whereNotNull('documents.client_id')->distinct()->pluck('documents.client_id');
+        $inquiryClientIds = InquiryDocument::query()
+            ->join('inquiries', 'inquiries.id', '=', 'inquiry_documents.inquiry_id')
+            ->whereIn('inquiry_documents.inquiry_id', $visibleInquiryIds)
+            ->whereNotNull('inquiries.client_id')
+            ->distinct()
+            ->pluck('inquiries.client_id');
+        $clientIds = $orderClientIds->merge($inquiryClientIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        $orderUploaderIds = (clone $order)->whereNotNull('documents.uploaded_by')->distinct()->pluck('documents.uploaded_by');
+        $inquiryUploaderIds = InquiryDocument::query()
+            ->whereIn('inquiry_id', app(InquiryService::class)->visibleQuery($user)->select('inquiries.id'))
+            ->whereNotNull('uploaded_by')
+            ->distinct()
+            ->pluck('uploaded_by');
+        $uploaderIds = $orderUploaderIds->merge($inquiryUploaderIds)->map(fn ($id) => (int) $id)->unique()->values();
+
+        return [
+            Client::query()->whereIn('id', $clientIds)->orderBy('name')->get(['id', 'name']),
+            User::query()->whereIn('id', $uploaderIds)->orderBy('name')->get(['id', 'name', 'profile_image_path']),
+        ];
+    }
+
+    private function archiveDetailData(string $source, int $id): ?array
+    {
+        if ($source === 'inquiry') {
+            $document = $this->resolveInquiryDocument($id);
+            $document->loadMissing(['inquiry.client', 'task', 'uploader']);
+            return [
+                'source' => 'inquiry',
+                'id' => $document->id,
+                'name' => $document->name,
+                'size' => $document->size,
+                'mime_type' => $document->mime_type,
+                'updated_at' => $document->updated_at,
+                'created_at' => $document->created_at,
+                'uploader' => $document->uploader,
+                'client_name' => $document->inquiry?->client?->name,
+                'record_label' => $document->inquiry?->inquiry_number,
+                'task_label' => $document->task?->title,
+                'open_url' => route('inquiries.documents.open', $document),
+                'download_url' => route('inquiries.documents.download', $document),
+                'version' => null,
+            ];
+        }
+
+        $document = $this->resolveOrderDocument($id);
+        $document->loadMissing(['job.client', 'client', 'task', 'uploader']);
+        return [
+            'source' => 'order',
+            'id' => $document->id,
+            'name' => $document->name,
+            'size' => $document->size,
+            'mime_type' => $document->mime_type,
+            'updated_at' => $document->updated_at,
+            'created_at' => $document->created_at,
+            'uploader' => $document->uploader,
+            'client_name' => $document->client?->name ?: $document->job?->client?->name,
+            'record_label' => $document->job?->displayOrderNumber() ?: ($document->client ? 'Client only' : 'Not linked'),
+            'task_label' => $document->task?->title,
+            'open_url' => route('documents.open', $document),
+            'download_url' => route('documents.download', $document),
+            'version' => $document->version,
+        ];
+    }
+
+    private function resolveArchiveDocument(string $source, int $id, bool $forEdit = false): Document|InquiryDocument
+    {
+        return $source === 'inquiry'
+            ? $this->resolveInquiryDocument($id, $forEdit)
+            : $this->resolveOrderDocument($id);
+    }
+
+    private function resolveOrderDocument(int $id): Document
+    {
+        return app(AccessControlService::class)
+            ->applyDocumentScope(Document::query(), auth()->user())
+            ->findOrFail($id);
+    }
+
+    private function resolveInquiryDocument(int $id, bool $forEdit = false): InquiryDocument
+    {
+        abort_unless(auth()->user()->canModule('documents', 'view'), 403);
+        $document = InquiryDocument::query()->with('inquiry')->findOrFail($id);
+        $inquiry = app(InquiryService::class)->findVisible(auth()->user(), (int) $document->inquiry_id);
+        if ($forEdit) abort_unless(app(InquiryService::class)->canEditVisible(auth()->user(), $inquiry), 403);
+        $document->setRelation('inquiry', $inquiry);
+        return $document;
     }
 }

@@ -23,6 +23,7 @@ use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\ProfileImageController;
 use App\Http\Controllers\ProductDocumentController;
 use App\Http\Controllers\ProductImageController;
+use App\Http\Controllers\ProductOptionImageController;
 use App\Http\Controllers\RichTextImageController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\WorkflowSetupController;
@@ -85,7 +86,7 @@ Route::middleware('auth')->group(function () {
     })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
-    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|countries|job-statuses|job-healths|phases')->name('filter-options.index');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|department-records|departments|countries|phone-country-codes|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
     Route::get('/orders/bulk-import', [BulkOrderImportController::class, 'index'])->middleware('permission:jobs.create')->name('orders.bulk-import');
@@ -164,6 +165,11 @@ Route::middleware('auth')->group(function () {
         ->whereNumber('product')
         ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
         ->name('master-data.product-image');
+    Route::get('/master-data/products/{product}/options/{optionKey}/image/{filename}', ProductOptionImageController::class)
+        ->whereNumber('product')
+        ->where('optionKey', '[A-Za-z0-9-]{8,80}')
+        ->where('filename', '[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)')
+        ->name('master-data.product-option-image');
     Route::get('/master-data/products/{product}/documents/{kind}/{filename}', ProductDocumentController::class)
         ->whereNumber('product')
         ->whereIn('kind', ['certificate', 'template'])
@@ -188,6 +194,9 @@ Route::middleware('auth')->group(function () {
     Route::get('/task-pack-setup', [TaskPackSetupController::class, 'index'])->middleware('permission:taskpacks.view')->name('task-pack.setup');
     Route::get('/task-pack-setup/create', [TaskPackSetupController::class, 'create'])->middleware('permission:taskpacks.create')->name('task-pack.create');
     Route::get('/task-pack-setup/{taskPack}/edit', [TaskPackSetupController::class, 'edit'])->middleware('permission:taskpacks.update')->whereNumber('taskPack')->name('task-pack.edit');
+    Route::get('/financial-master-data', MasterDataController::class)
+        ->middleware('permission:finance.view')
+        ->name('financial-master-data');
     Route::get('/master-data', MasterDataController::class)->name('master-data');
     Route::get('/company-setup', CompanySetupController::class)->middleware('super.admin')->name('company.setup');
     Route::get('/administration', AdministrationController::class)->middleware('super.admin')->name('administration');

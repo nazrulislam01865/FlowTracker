@@ -84,7 +84,7 @@ class RequestPerformanceMonitor
         if (!config('performance.enabled', true)) return;
 
         // Queue workers do not pass through the HTTP middleware. Sample their
-        // outgoing requests independently so Pusher and other integrations are
+        // outgoing requests independently so Reverb and other integrations are
         // still observable without polluting normal request metrics.
         if (!$this->activeRequest && !$this->sampled) {
             $this->sampled = $this->shouldSample();

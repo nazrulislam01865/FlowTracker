@@ -3,6 +3,7 @@
 namespace App\Livewire\TaskPackSetup;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 
 use App\Models\TaskPack;
 use App\Models\TaskPackItem;
@@ -13,6 +14,7 @@ use Livewire\Component;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     public ?int $selectedPackId = null;
     public bool $showPackModal = false;

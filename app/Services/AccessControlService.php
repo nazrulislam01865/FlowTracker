@@ -24,6 +24,7 @@ class AccessControlService
     /** Modules that are actually implemented and enforced by FlowTrack today. */
     public const MODULES = [
         'dashboard' => ['name' => 'Dashboard', 'group' => 'General'],
+        'reports' => ['name' => 'Inquiry Intelligence', 'group' => 'General'],
         'notifications' => ['name' => 'Notifications', 'group' => 'General'],
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
         'inquiries' => ['name' => 'Inquiries', 'group' => 'Commercial'],
@@ -50,6 +51,7 @@ class AccessControlService
      */
     public const SUPPORTED_ACTIONS = [
         'dashboard' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'reports' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'notifications' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'clients' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'inquiries' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
@@ -66,7 +68,7 @@ class AccessControlService
     ];
 
     /** These modules do not have per-record ownership scope. */
-    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata', 'catalog_products', 'product_categories', 'suppliers'];
+    public const UNIVERSAL_RECORD_MODULES = ['dashboard', 'reports', 'notifications', 'clients', 'workflow', 'taskpacks', 'masterdata', 'catalog_products', 'product_categories', 'suppliers'];
 
     /** Shared Product/Finance capabilities inherit record visibility from the parent Inquiry/Order. */
     public const PARENT_RECORD_MODULES = ['finance'];

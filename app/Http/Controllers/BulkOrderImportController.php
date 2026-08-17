@@ -79,7 +79,12 @@ class BulkOrderImportController extends Controller
         ]);
 
         try {
-            return response()->json($service->import($data['token'], $data, $request->user()));
+            $result = $service->import($data['token'], $data, $request->user());
+            $result['view_orders_url'] = route('jobs.index', [
+                'import' => $result['import_id'],
+            ]);
+
+            return response()->json($result);
         } catch (RuntimeException $exception) {
             return response()->json(['message' => $exception->getMessage()], 422);
         } catch (Throwable $exception) {

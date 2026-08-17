@@ -3,6 +3,7 @@
 namespace App\Livewire\Profile;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
+use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\User;
 use App\Services\AdminService;
 use App\Services\AccessControlService;
@@ -12,6 +13,7 @@ use Livewire\WithFileUploads;
 
 class Index extends Component
 {
+    use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use WithFileUploads;
 

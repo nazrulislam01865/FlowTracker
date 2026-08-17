@@ -1,255 +1,4 @@
 
-
-/* ========================================================================== 
-   Board correction — sticky lane headers + job-row task layout
-   2026-08-04
-   ========================================================================== */
-
-/* The page/filter controls scroll normally. The actual board lane header is the
-   sticky element, matching the reference and avoiding a huge sticky filter area. */
-.ft-board-page .ft-board-sticky-header{
-    position:relative!important;
-    top:auto!important;
-    z-index:10!important;
-    background:transparent!important;
-    box-shadow:none!important;
-}
-
-/* Never create separate vertical scroll areas for columns/cards. */
-.ft-board-page .ft-board-lanes-scroll,
-.ft-board-page .ft-board-body-scroll{
-    max-height:none!important;
-    overflow-x:auto!important;
-    overflow-y:visible!important;
-    padding-bottom:12px;
-}
-.ft-board-page .ft-board-column,
-.ft-board-page .ft-board-column-list{
-    max-height:none!important;
-    overflow:visible!important;
-}
-.ft-board-page .ft-board-column-list{
-    min-height:390px!important;
-}
-
-/* Sticky status/phase row. It sits directly below the global 68px top bar. */
-.ft-lane-sticky-header{
-    position:sticky;
-    top:68px;
-    z-index:19;
-    background:#f4f7fb;
-    padding:0 0 4px;
-    margin:0;
-    box-shadow:0 8px 13px rgba(20,42,72,.05);
-}
-.ft-lane-header-scroll{
-    padding-bottom:0!important;
-    scrollbar-width:none!important;
-    background:#f4f7fb;
-}
-.ft-lane-header-scroll::-webkit-scrollbar{display:none!important}
-
-/* Job Board: separate sticky phase header and normal page-scrolling columns. */
-.ft-job-board-header-grid,
-.ft-job-board-body-grid{
-    display:grid;
-    grid-auto-flow:column;
-    grid-auto-columns:315px;
-    gap:11px;
-    align-items:start;
-    min-width:max-content;
-}
-.ft-job-board-header-grid .ft-external-lane-head{
-    height:46px;
-    border:1px solid #d7e0eb;
-    border-radius:11px 11px 0 0;
-    background:#eef3f8;
-}
-.ft-job-board-body-grid .ft-board-column-nohead{
-    border-radius:0 0 11px 11px;
-    min-height:470px;
-    margin-top:0;
-}
-.ft-job-board-body-grid .ft-board-column-list{
-    padding-top:9px;
-}
-
-/* Task Board / My Work: one status header row, then one full-width row per Job. */
-.ft-task-board-status-header,
-.ft-task-job-row-grid{
-    display:grid;
-    grid-template-columns:repeat(var(--ft-lane-count), var(--ft-task-lane-width, 340px));
-    min-width:max-content;
-}
-.ft-task-board-status-header{
-    border:1px solid #d8e1ec;
-    border-radius:11px 11px 0 0;
-    overflow:hidden;
-    background:#f8fafc;
-}
-.ft-task-status-head{
-    height:48px;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    gap:10px;
-    padding:0 12px;
-    border-right:1px solid #d8e1ec;
-    background:#f8fafc;
-    color:#14233a;
-    font-size:12px;
-    font-weight:850;
-    letter-spacing:.025em;
-    white-space:nowrap;
-}
-.ft-task-status-head:last-child{border-right:0}
-.ft-task-status-head b{
-    display:inline-grid;
-    place-items:center;
-    min-width:24px;
-    height:22px;
-    padding:0 6px;
-    border-radius:10px;
-    background:#e6edf5;
-    color:#344760;
-    font-size:10px;
-    font-weight:850;
-}
-
-.ft-task-job-matrix{
-    --ft-task-lane-width:340px;
-    min-width:calc(var(--ft-lane-count) * var(--ft-task-lane-width));
-    border:1px solid #d8e1ec;
-    border-top:0;
-    border-radius:0 0 11px 11px;
-    overflow:hidden;
-    background:#fff;
-}
-.ft-task-job-matrix-group{
-    border-bottom:1px solid #d8e1ec;
-    background:#fff;
-}
-.ft-task-job-matrix-group:last-child{border-bottom:0}
-.ft-task-job-row-head{
-    min-height:58px;
-    display:flex;
-    align-items:center;
-    gap:9px;
-    padding:0 18px;
-    background:#fff;
-    border-bottom:1px solid #d8e1ec;
-    box-shadow:0 5px 13px rgba(21,43,72,.035);
-    color:#10223b;
-}
-.ft-task-job-row-toggle{
-    flex:0 0 26px;
-    width:26px;
-    height:26px;
-    border:0;
-    background:transparent;
-    display:grid;
-    place-items:center;
-    cursor:pointer;
-    color:#243a57;
-    padding:0;
-}
-.ft-task-job-row-toggle svg{
-    width:16px;
-    height:16px;
-    fill:none;
-    stroke:currentColor;
-    stroke-width:2.2;
-    transition:transform .16s ease;
-}
-.ft-task-job-row-toggle svg.rotated{transform:rotate(-90deg)}
-.ft-task-job-row-number,
-.ft-task-job-row-title{
-    color:#10223b;
-    text-decoration:none;
-    font-size:14px;
-    font-weight:850;
-    white-space:nowrap;
-}
-.ft-task-job-row-number:hover,
-.ft-task-job-row-title:hover{color:#1767e8;text-decoration:underline;text-underline-offset:2px}
-.ft-task-job-copy{font-size:12px;color:#667a94}
-.ft-task-job-dot{font-size:15px;color:#334760}
-.ft-task-job-client-pill{
-    display:inline-flex;
-    align-items:center;
-    min-height:25px;
-    padding:0 10px;
-    border-radius:13px;
-    background:#edf2f7;
-    color:#64758a;
-    font-size:10.5px;
-    font-weight:750;
-    white-space:nowrap;
-}
-.ft-task-job-row-total{
-    margin-left:auto;
-    color:#73849a;
-    font-size:10px;
-    font-weight:700;
-    white-space:nowrap;
-}
-.ft-task-job-status-cell{
-    min-height:185px;
-    padding:12px;
-    border-right:1px solid #d8e1ec;
-    background:#fff;
-}
-.ft-task-job-status-cell:last-child{border-right:0}
-.ft-task-job-status-cell .ft-task-board-card{
-    width:100%;
-    margin:0 0 10px!important;
-}
-.ft-task-job-status-cell .ft-task-board-card:last-child{margin-bottom:0!important}
-.ft-task-job-empty-cell{
-    min-height:72px;
-    display:grid;
-    place-items:center;
-    color:#93a3b8;
-    font-size:11px;
-}
-.ft-task-job-matrix-empty{
-    min-height:140px;
-    display:grid;
-    place-items:center;
-    color:#7e8fa5;
-    font-size:12px;
-}
-
-/* The control at the right side of Quick filters now controls board/job rows,
-   never the filter fields themselves. */
-.ft-board-page .ft-filter-collapse{
-    position:absolute!important;
-    right:0!important;
-    top:9px!important;
-    margin:0!important;
-    background:#fff!important;
-    z-index:2;
-}
-.ft-board-page .ft-board-reference-filter-grid,
-.ft-board-page .ft-mywork-filter-grid{display:grid!important}
-
-/* Responsive filter bars and boards. */
-@media(max-width:1380px){
-    .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:300px}
-    .ft-task-job-matrix{--ft-task-lane-width:320px}
-}
-@media(max-width:1100px){
-    .ft-board-page .ft-board-quick-row{
-        display:flex;
-        flex-wrap:wrap;
-        overflow:visible!important;
-        align-items:center;
-        padding-right:48px;
-    }
-    .ft-board-page .ft-quick-chip{flex:0 1 auto}
-    .ft-task-job-row-head{padding:0 13px}
-    .ft-task-job-row-number,.ft-task-job-row-title{font-size:12.5px}
-}
 @media(max-width:900px){
     .ft-lane-sticky-header{top:68px}
     .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:min(86vw,320px)}
@@ -1888,3 +1637,107 @@ body:has(.ft-client-preview-backdrop){
 .ft-exact-task-detail .ft-task-property-assignee-editor .ft-remote-filter-message{display:block!important;width:100%!important;padding:8px 9px 3px!important;font-size:9px!important;line-height:1.35!important}
 .ft-exact-task-detail .ft-task-property .ft-inline-save-state{position:absolute;right:5px;bottom:3px;margin:0;z-index:5}
 .ft-exact-task-detail .ft-task-property .ft-inline-save-state:empty{display:none}
+@media(max-width:800px){
+    .ft-exact-task-detail .ft-task-property-inline-input,
+    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user,
+    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-trigger{max-width:none}
+    .ft-exact-task-detail .ft-task-property-assignee-editor .ft-inline-remote-user-menu{width:min(300px,calc(100vw - 24px))!important;min-width:0!important}
+}
+
+/* 2026-08-08 Task Details: keep Completed On as a normal property card in the desktop property row. */
+.ft-exact-task-detail .ft-friendly-task-properties{
+    grid-template-columns:repeat(7,minmax(0,1fr));
+}
+@media(max-width:1300px){
+    .ft-exact-task-detail .ft-friendly-task-properties{
+        grid-template-columns:repeat(3,minmax(0,1fr));
+    }
+}
+@media(max-width:800px){
+    .ft-exact-task-detail .ft-friendly-task-properties{
+        grid-template-columns:1fr;
+    }
+}
+
+/* Automatic per-user local time: settings summary and two-line completion timestamp. */
+.ft-auto-timezone-row{grid-template-columns:minmax(240px,1fr) minmax(260px,360px)}
+.ft-auto-timezone-row .ft-access-info{display:flex;flex-direction:column;align-items:flex-start;gap:4px;margin:0}
+.ft-auto-timezone-row .ft-access-info span{margin:0}
+@media(max-width:800px){.ft-auto-timezone-row{grid-template-columns:1fr}}
+
+/* 2026-08-08 shared list-filter typography alignment. The standalone
+   flowtrack-list-filters.css is loaded last in the app layout; keep these
+   source styles in sync for the generated Vite bundle as well. */
+.ft-list-filter-shell .ft-jl-control>label{margin-bottom:6px;font-size:13px;line-height:1.3;font-weight:500;letter-spacing:0}
+.ft-list-filter-shell .ft-remote-filter-button{min-height:42px;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.35;font-weight:400}
+.ft-list-filter-shell .ft-filter-chevron{font-size:13px;font-weight:400}
+.ft-list-filter-shell .ft-remote-filter-menu{width:min(320px,calc(100vw - 24px))!important;min-width:min(260px,calc(100vw - 24px))!important;max-width:calc(100vw - 24px)!important;padding:8px!important;border-radius:12px;box-shadow:0 14px 32px rgba(28,45,66,.14)}
+.ft-list-filter-shell .ft-remote-filter-search{min-height:42px;margin:0 0 8px;padding:9px 12px;border-radius:10px;font-size:14px;line-height:1.35;font-weight:400}
+.ft-list-filter-shell .ft-remote-filter-list{gap:2px;max-height:245px}
+.ft-list-filter-shell .ft-remote-filter-option{min-height:40px;padding:9px 11px;border-radius:9px;font-size:14px;line-height:1.35;font-weight:400}
+.ft-list-filter-shell .ft-remote-filter-option[aria-selected="true"]{font-weight:400}
+.ft-list-filter-shell .ft-remote-filter-option>small{font-size:12px;line-height:1.3;font-weight:400;text-align:right}
+.ft-list-filter-shell .ft-remote-filter-message{padding:8px 10px 4px;font-size:12px;line-height:1.4;font-weight:400}
+@media(max-width:520px){.ft-list-filter-shell .ft-remote-filter-menu{width:100%!important;min-width:100%!important;max-width:100%!important}}
+
+/* 2026-08-08 My Work list: exact production mapping of the supplied prototype.
+   Measurements, spacing, weights, responsive breakpoints and list proportions mirror the prototype. */
+.ft-mywork-v2-page{width:100%;min-width:0;color:#172033}
+.ft-mywork-v2-head{display:flex;align-items:flex-end;justify-content:space-between;gap:14px}
+.ft-mywork-v2-head h1{margin:0;color:#172033;font-size:23px;line-height:normal;font-weight:700;letter-spacing:-.025em}
+.ft-mywork-v2-head p{margin:4px 0 0;color:#60708b;font-size:10px;line-height:normal;font-weight:400}
+.ft-mywork-v2-all-tasks{display:grid;width:auto;height:28px;min-height:28px;place-items:center;padding:0 10px;border:1px solid #cbd8e8;border-radius:7px;background:#fff;color:#155ce9;font-size:7.5px;line-height:1;font-weight:750;text-decoration:none;white-space:nowrap}
+.ft-mywork-v2-all-tasks:hover{background:#fff}
+.ft-mywork-v2-tabs{display:flex;gap:4px;margin-top:12px;border-bottom:1px solid #dbe3ed}
+.ft-mywork-v2-tab{position:relative;display:inline-flex;min-height:36px;align-items:center;padding:0 11px;color:#69778e;font-size:9px;line-height:normal;font-weight:750}
+.ft-mywork-v2-tab.active{color:#155ce9}
+.ft-mywork-v2-tab.active::after{content:"";position:absolute;right:9px;bottom:-1px;left:9px;height:2px;background:#2463eb}
+.ft-mywork-v2-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:9px;margin-top:12px}
+.ft-mywork-v2-metric{display:flex;min-width:0;min-height:66px;align-items:center;justify-content:space-between;gap:8px;padding:10px 11px;border:1px solid #dbe3ed;border-radius:10px;background:#fff;color:#172033;text-align:left;box-shadow:none}
+.ft-mywork-v2-metric:hover,.ft-mywork-v2-metric.active{border-color:#91afea;background:#fbfdff}
+.ft-mywork-v2-metric span{min-width:0}
+.ft-mywork-v2-metric small{display:block;overflow:hidden;color:#718097;font-size:8px;line-height:normal;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.ft-mywork-v2-metric strong{display:block;margin-top:3px;color:#172033;font-size:18px;line-height:1;font-weight:700}
+.ft-mywork-v2-metric i{display:grid;width:27px;height:27px;flex:0 0 27px;place-items:center;border-radius:8px;background:#edf3ff;color:#2463eb;font-size:10px;font-style:normal}
+.ft-mywork-v2-metric.red i{background:#fff0f0;color:#c43f3f}.ft-mywork-v2-metric.amber i{background:#fff6e5;color:#9a6208}
+.ft-mywork-v2-toolbar{display:flex;align-items:center;gap:8px;margin-top:10px;padding:10px;border:1px solid #dbe3ed;border-radius:11px;background:#fff;box-shadow:none}
+.ft-mywork-v2-search-wrap{position:relative;min-width:240px;flex:1;margin:0}
+.ft-mywork-v2-search-icon{position:absolute;left:11px;top:50%;width:13px;height:13px;fill:none;stroke:#718198;stroke-width:1.8;transform:translateY(-50%);pointer-events:none}
+.ft-mywork-v2-search{width:100%;height:38px;padding:0 62px 0 34px;border:1px solid #ccd8e8;border-radius:9px;background:#fff;color:#172033;outline:0;font-size:9px;line-height:normal;font-weight:400}
+.ft-mywork-v2-search::placeholder{color:#7a8798}
+.ft-mywork-v2-search:focus{border-color:#78a0f2;box-shadow:0 0 0 3px rgba(36,99,235,.08)}
+.ft-mywork-v2-clear{position:absolute;right:7px;top:50%;padding:4px 6px;border:0;background:transparent;color:#65748a;font-size:7.5px;line-height:normal;font-weight:400;transform:translateY(-50%)}
+.ft-mywork-v2-quick-filters{display:flex;gap:5px;min-width:0}
+.ft-mywork-v2-chip{min-height:33px;padding:0 9px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#526078;font-size:8px;line-height:normal;font-weight:720;white-space:nowrap}
+.ft-mywork-v2-chip:hover{background:#fff}.ft-mywork-v2-chip.active{border-color:#91afea;background:#edf3ff;color:#245fcf}
+.ft-mywork-v2-sort{height:35px;min-width:150px;padding:0 28px 0 9px;border:1px solid #d2dce9;border-radius:8px;background:#fff;color:#37445a;font-size:8px;line-height:normal;font-weight:400;outline:0}
+.ft-mywork-v2-sort:focus{border-color:#78a0f2;box-shadow:none}
+.ft-mywork-v2-load-state{display:flex;min-height:28px;align-items:center;justify-content:space-between;gap:8px;padding:0 3px;color:#758298;font-size:7.5px;line-height:normal;font-weight:400}
+.ft-mywork-v2-loading-copy{display:flex;align-items:center;gap:6px;white-space:nowrap}.ft-mywork-v2-loading-active{display:inline-flex;align-items:center;gap:6px}.ft-mywork-v2-spinner{display:inline-block;width:12px;height:12px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:ftMyWorkSpin .6s linear infinite}
+.ft-mywork-v2-list-shell{overflow:hidden;border:1px solid #d8e1ec;border-radius:11px;background:#fff;box-shadow:none}
+.ft-mywork-v2-task-head,.ft-mywork-v2-task-row{display:grid;grid-template-columns:minmax(230px,1.75fr) minmax(115px,.75fr) 92px 124px minmax(95px,.65fr) minmax(92px,.62fr) 48px;align-items:center;gap:8px}
+.ft-mywork-v2-task-head{min-height:32px;padding:0 11px;border-bottom:1px solid #dce3ec;background:#f8fafc;color:#69778e;font-size:7px;line-height:normal;font-weight:780;letter-spacing:.04em;text-transform:uppercase}
+.ft-mywork-v2-results{transition:opacity .15s ease}.ft-mywork-v2-results.is-refreshing{opacity:.68}
+.ft-mywork-v2-job-group{border-bottom:1px solid #dce3ec;content-visibility:auto;contain:layout paint style;contain-intrinsic-size:205px}.ft-mywork-v2-job-group:last-child{border-bottom:0}
+.ft-mywork-v2-job-head{display:grid;grid-template-columns:22px minmax(180px,1.3fr) minmax(130px,.8fr) minmax(110px,.7fr) minmax(100px,.7fr) minmax(120px,.8fr) auto;align-items:center;gap:8px;min-height:49px;padding:7px 11px;background:#fbfcfe}
+.ft-mywork-v2-job-head:hover{background:#f8faff}
+.ft-mywork-v2-collapse{display:grid;width:22px;height:22px;place-items:center;border:0;background:transparent;color:#506078;font-size:11px;line-height:1}
+.ft-mywork-v2-job-identity{display:block;min-width:0}
+.ft-mywork-v2-job-id{color:#155ce9;font-size:9px;line-height:normal;font-weight:800;text-decoration:none}.ft-mywork-v2-job-id:hover{text-decoration:none}
+.ft-mywork-v2-job-title{display:block;margin-top:2px;overflow:hidden;color:#253248;font-size:9px;line-height:normal;font-weight:730;text-overflow:ellipsis;white-space:nowrap}
+.ft-mywork-v2-job-client,.ft-mywork-v2-job-stage{overflow:hidden;color:#64738a;font-size:8px;line-height:normal;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.ft-mywork-v2-health,.ft-mywork-v2-flag{display:inline-flex;max-width:100%;width:max-content;align-items:center;padding:3px 6px;border-radius:8px;font-size:7px;line-height:normal;font-weight:750;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ft-mywork-v2-health.green,.ft-mywork-v2-flag.green{background:#edf9f4;color:#147e5b}.ft-mywork-v2-health.amber,.ft-mywork-v2-flag.amber{background:#fff6e5;color:#9a6208}.ft-mywork-v2-health.red,.ft-mywork-v2-flag.red{background:#fff0f0;color:#c43f3f}.ft-mywork-v2-health.blue,.ft-mywork-v2-flag.blue{background:#edf3ff;color:#245fcf}.ft-mywork-v2-health.neutral,.ft-mywork-v2-flag.neutral{background:#edf9f4;color:#147e5b}
+.ft-mywork-v2-progress{display:flex;align-items:center;gap:6px;color:#67768c;font-size:7.5px;line-height:normal;font-weight:400;white-space:nowrap}.ft-mywork-v2-progress>i{display:block;width:54px;height:5px;overflow:hidden;border-radius:5px;background:#e7ecf3}.ft-mywork-v2-progress>i>i{display:block;height:100%;border-radius:5px;background:#2463eb}
+.ft-mywork-v2-task-count{color:#607087;font-size:7.5px;line-height:normal;font-weight:400;text-align:right;white-space:nowrap}
+.ft-mywork-v2-task-row{position:relative;min-height:54px;padding:6px 11px;border-top:1px solid #e5eaf1;background:#fff}.ft-mywork-v2-task-row:hover{background:#fbfdff}.ft-mywork-v2-task-row.saving{opacity:.55}
+.ft-mywork-v2-task-main{min-width:0}.ft-mywork-v2-task-link{display:block;overflow:hidden;color:#263248;font-size:9px;line-height:normal;font-weight:750;text-decoration:none;text-overflow:ellipsis;white-space:nowrap}.ft-mywork-v2-task-link:hover{color:#155ce9;text-decoration:underline}.ft-mywork-v2-task-ref{display:block;margin-top:3px;color:#7c899c;font-size:7px;line-height:normal;font-weight:400}
+.ft-mywork-v2-row-error{display:block;margin-top:3px;color:#b42318;font-size:7px;line-height:1.25;font-weight:400}
+.ft-mywork-v2-phase{overflow:hidden;color:#5a687f;font-size:8px;line-height:normal;font-weight:400;text-overflow:ellipsis;white-space:nowrap}
+.ft-mywork-v2-due{font-size:8px;line-height:normal;font-weight:400;white-space:nowrap}.ft-mywork-v2-due.overdue{color:#c43f3f;font-weight:750}.ft-mywork-v2-due.today{color:#9a6208;font-weight:750}
+.ft-mywork-v2-status-cell{min-width:0}.ft-mywork-v2-status{width:100%;height:30px;padding:0 22px 0 7px;border:1px solid #cfdbea;border-radius:7px;background:#fff;color:#344057;font-size:7.5px;line-height:normal;font-weight:400;outline:0}.ft-mywork-v2-status:focus{border-color:#cfdbea;box-shadow:none}.ft-mywork-v2-status:disabled{opacity:.65;cursor:default}.ft-mywork-v2-status-static{display:block;overflow:hidden;color:#344057;font-size:7.5px;text-overflow:ellipsis;white-space:nowrap}
+.ft-mywork-v2-updated{color:#718097;font-size:7.5px;line-height:normal;font-weight:400;white-space:nowrap}
+.ft-mywork-v2-open{display:grid;width:42px;height:28px;place-items:center;border:1px solid #cbd8e8;border-radius:7px;background:#fff;color:#155ce9;font-size:7.5px;line-height:1;font-weight:750;text-decoration:none}.ft-mywork-v2-open:hover{background:#fff}
+.ft-mywork-v2-row-spinner{position:absolute;right:8px;top:8px;width:10px;height:10px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:ftMyWorkSpin .6s linear infinite}
+.ft-mywork-v2-empty{padding:40px 15px;color:#718097;font-size:9px;line-height:normal;text-align:center}.ft-mywork-v2-empty strong{display:block;margin-bottom:5px;color:#2d3950;font-size:11px;font-weight:700}.ft-mywork-v2-empty span{display:block}
+.ft-mywork-v2-footer{display:flex;min-height:50px;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;border-top:1px solid #dce3ec;background:#fbfcfe;color:#69778e;font-size:8px;line-height:normal;font-weight:400}.ft-mywork-v2-pages{display:flex;gap:5px;align-items:center}.ft-mywork-v2-page-button{min-width:31px;height:31px;padding:0 8px;border:1px solid #cfdbea;border-radius:7px;background:#fff;color:#40506a;font-size:8px;line-height:normal;font-weight:750}
