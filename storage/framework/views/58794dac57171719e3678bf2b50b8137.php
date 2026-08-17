@@ -46,7 +46,7 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 
-<?php if (! $__env->hasRenderedOnce('64ef0629-752e-4cfd-9caa-c61e822ec11e')): $__env->markAsRenderedOnce('64ef0629-752e-4cfd-9caa-c61e822ec11e'); ?>
+<?php if (! $__env->hasRenderedOnce('c6e60145-42ed-497d-b03e-8991094c932c')): $__env->markAsRenderedOnce('c6e60145-42ed-497d-b03e-8991094c932c'); ?>
     <style>
         .ft-summary-card-grid{display:grid!important;grid-template-columns:repeat(var(--ft-summary-columns,6),minmax(0,1fr))!important;gap:10px!important;margin-bottom:12px!important}
         .ft-summary-card{--ft-summary-accent:#0f8f8a;--ft-summary-soft:#edf9f8;position:relative!important;display:grid!important;grid-template-columns:minmax(0,1fr) 36px!important;grid-template-rows:auto 1fr auto!important;gap:2px 8px!important;width:100%!important;min-width:0!important;min-height:92px!important;margin:0!important;padding:10px 12px!important;overflow:hidden!important;border:1px solid #dbe3ed!important;border-radius:11px!important;background:#fff!important;color:#172033!important;text-align:left!important;font:inherit!important;appearance:none!important;cursor:pointer!important;transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease!important;transform:none!important;box-shadow:none!important}

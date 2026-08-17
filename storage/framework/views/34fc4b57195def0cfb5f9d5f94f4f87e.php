@@ -308,64 +308,7 @@
         </article>
     </section>
 
-    <section class="ft-mgmt-panel" style="margin-bottom:14px">
-        <div class="ft-mgmt-panel-head"><div><h2>Team performance &amp; workload</h2><p>Capacity, completion pace, on-time rate and attention exposure</p></div><button type="button" class="ft-mgmt-link" wire:click="toggleTeamSort"><?php echo e($teamSortByWorkload ? 'Restore default' : 'Sort by workload'); ?></button></div>
-        <div class="ft-mgmt-panel-body">
-            <div class="ft-mgmt-team-grid">
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $assigneePerformance; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $person): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                    <?php
-                        $ongoing = (int) $person->ongoing_count;
-                        $completed = (int) $person->done_count;
-                        $onTime = $completed > 0 ? (int) round(((int) $person->done_on_time_count / $completed) * 100) : 100;
-                        $load = $ongoing > 0 ? min(100, max(8, (int) round(($ongoing / max(1, (int) $teamMaxOngoing)) * 100))) : 0;
-                        $highThreshold = max(8.0, ((float) $teamAverageOngoing) * 1.25);
-                        $availableThreshold = max(1.0, ((float) $teamAverageOngoing) * .60);
-                        $workloadLabel = $ongoing <= 0 ? 'Available' : ($ongoing >= $highThreshold ? 'High' : ($ongoing <= $availableThreshold ? 'Available' : 'Balanced'));
-                        $score = max(0, min(100, (int) round(($onTime * .7) + ((100 - max(0, $load - 65)) * .3))));
-                    ?>
-                    <a class="ft-mgmt-team-card" href="<?php echo e(route('all-tasks', ['assignee' => $person->id])); ?>" wire:navigate <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'mgmt-person-'.e($person->id).''; ?>wire:key="mgmt-person-<?php echo e($person->id); ?>" style="text-decoration:none;color:inherit">
-                        <div class="ft-mgmt-person"><?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.avatar','data' => ['user' => $person,'name' => $person->name,'size' => 27]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.avatar'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['user' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($person),'name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($person->name),'size' => 27]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
-<?php $attributes = $__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
-<?php unset($__attributesOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2)): ?>
-<?php $component = $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2; ?>
-<?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
-<?php endif; ?><div style="min-width:0"><?php echo e($person->name); ?><div class="ft-mgmt-sub"><?php echo e($person->department?->name ?? 'Team member'); ?></div></div><span style="margin-left:auto"><span class="ft-mgmt-score"><?php echo e($score); ?></span><span class="ft-mgmt-capacity"> / 100</span></span></div>
-                        <div class="ft-mgmt-team-stat"><span>Ongoing</span><b><?php echo e($ongoing); ?></b></div>
-                        <div class="ft-mgmt-team-stat"><span>Completed</span><b><?php echo e($completed); ?></b></div>
-                        <div class="ft-mgmt-team-stat"><span>On time</span><b><?php echo e($onTime); ?>%</b></div>
-                        <div class="ft-mgmt-loadbar"><span style="width:<?php echo e($load); ?>%;<?php echo e($workloadLabel === 'High' ? 'background:#e8a526' : ''); ?>"></span></div>
-                        <div class="ft-mgmt-team-stat"><span>Workload</span><b><?php echo e($workloadLabel); ?></b></div>
-                    </a>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                    <div class="ft-mgmt-empty">No team workload matches the current filters.</div>
-                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-            </div>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($teamHiddenCount > 0 || $teamExpanded): ?>
-                <div class="ft-mgmt-team-more">
-                    <button type="button" class="ft-mgmt-btn" wire:click="toggleTeamExpanded">
-                        <?php echo e($teamExpanded ? 'Show fewer users' : 'See more users ('.$teamHiddenCount.')'); ?>
-
-                    </button>
-                </div>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        </div>
-    </section>
+    
 
     <section class="ft-mgmt-panel" style="margin-bottom:14px">
         <div class="ft-mgmt-panel-head">

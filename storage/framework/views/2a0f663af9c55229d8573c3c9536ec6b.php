@@ -1,4 +1,6 @@
 <div id="inquiry-intelligence-app" class="ii" wire:loading.class="ii-is-loading" wire:target="search,period,status,priority,assigneeId,resetFilters,setTab,setTaskTab,employeeFocus">
+    
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(false): ?>
 <?php
     $report = $this->report;
     $portfolio = $report['portfolio'];
@@ -64,7 +66,7 @@
 
     <nav class="ii-tabs" aria-label="Inquiry intelligence sections">
         <button type="button" class="ii-tab <?php echo e($activeTab === 'portfolio' ? 'active' : ''); ?>" wire:click="setTab('portfolio')">Portfolio overview</button>
-        <button type="button" class="ii-tab <?php echo e($activeTab === 'people' ? 'active' : ''); ?>" wire:click="setTab('people')">Assignee performance</button>
+        
         <button type="button" class="ii-tab <?php echo e($activeTab === 'products' ? 'active' : ''); ?>" wire:click="setTab('products')">Product performance</button>
     </nav>
 
@@ -155,100 +157,7 @@
         </article>
     </section>
 
-    <section class="ii-panel <?php echo e($activeTab === 'people' ? 'active' : ''); ?>" <?php if($activeTab !== 'people'): ?> hidden <?php endif; ?>>
-        <div class="ii-sect"><div><h2>Assignee performance center</h2><p>Speed, productivity, efficiency, quality and workload across the inquiry team</p></div><small><?php echo e($report['period']['label']); ?> · live data</small></div>
-        <div class="ii-demo-banner"><div><b>FlowTrack operational scoring</b>Metrics use actual inquiry-task timestamps, due dates, reopen events and workflow output. Employees with fewer than 10 completed tasks remain visible but are marked as insufficient data for formal ranking.</div><span class="ii-badge ii-blue">Live data</span></div>
-
-        <div class="ii-sect"><div><h2>Team summary</h2><p>Headline capacity and execution indicators</p></div></div>
-        <div class="ii-people-kpis">
-            <article class="ii-card ii-smallkpi"><div class="ii-label">Employee roster</div><div class="ii-big"><?php echo e(number_format($peopleKpis['roster'])); ?></div><div class="ii-trend">Active users in this workspace</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">Active this period</div><div class="ii-big"><?php echo e(number_format($peopleKpis['active'])); ?></div><div class="ii-trend">Assignees with inquiry tasks</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">Tasks assigned</div><div class="ii-big"><?php echo e(number_format($peopleKpis['assigned'])); ?></div><div class="ii-trend">Across filtered inquiries</div></article>
-            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Tasks completed</div><div class="ii-big"><?php echo e(number_format($peopleKpis['completed'])); ?></div><div class="ii-trend"><?php echo e($peopleKpis['completion_rate']); ?>% completion rate</div></article>
-            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Avg completion time</div><div class="ii-big"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($peopleKpis['avg_hours'] !== null): ?><?php echo e(number_format($peopleKpis['avg_hours'],1)); ?><small>h</small><?php else: ?>—<?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div><div class="ii-trend">Start/creation to completion for completed tasks</div></article>
-            <article class="ii-card ii-smallkpi ii-warn"><div class="ii-label">On-time completion</div><div class="ii-big"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($peopleKpis['on_time'] !== null): ?><?php echo e(number_format($peopleKpis['on_time'],1)); ?><small>%</small><?php else: ?>—<?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div><div class="ii-trend"><?php echo e($peopleKpis['on_time_samples']); ?> completed tasks with due dates</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">First-pass quality</div><div class="ii-big"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($peopleKpis['quality'] !== null): ?><?php echo e(number_format($peopleKpis['quality'],1)); ?><small>%</small><?php else: ?>—<?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div><div class="ii-trend"><?php echo e($peopleKpis['quality_samples']); ?> completed tasks checked for reopen events</div></article>
-        </div>
-
-        <div class="ii-sect"><div><h2>Performance highlights</h2><p>Ranked on cycle time, SLA, completion and quality — not speed alone</p></div></div>
-        <div class="ii-rankgrid">
-            <?php
-                $highlightCards = [
-                    ['key'=>'best','class'=>'','eyebrow'=>'Best overall performer'],
-                    ['key'=>'throughput','class'=>'ii-watch','eyebrow'=>'Highest throughput'],
-                    ['key'=>'coaching','class'=>'ii-attn','eyebrow'=>'Coaching priority'],
-                ];
-            ?>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $highlightCards; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $card): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                <?php $person = $people['highlights'][$card['key']] ?? null; ?>
-                <article class="ii-card ii-rankcard <?php echo e($card['class']); ?>">
-                    <div class="ii-rankeyebrow"><?php echo e($card['eyebrow']); ?></div>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($person): ?>
-                        <div class="ii-rankperson"><span class="ii-face"><?php echo e($person['initials']); ?></span><div><h3><?php echo e($person['name']); ?></h3><p><?php echo e($person['completed']); ?> completed tasks · <?php echo e($person['signal']['label']); ?></p></div></div>
-                        <div class="ii-rankstats"><div><b><?php echo e($person['avg_hours'] !== null ? number_format($person['avg_hours'],1).'h' : '—'); ?></b><span>Avg cycle</span></div><div><b><?php echo e($person['on_time'] !== null ? number_format($person['on_time'],0).'%' : '—'); ?></b><span>On time</span></div><div><b><?php echo e($person['efficiency']); ?></b><span>Efficiency</span></div></div>
-                    <?php else: ?>
-                        <div class="ii-empty-inline">No assignee data in this period.</div>
-                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                </article>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-        </div>
-
-        <div class="ii-sect"><div><h2>Employee performance ranking</h2><p>Minimum 10 completed tasks; lower cycle time is better, while quality and SLA protect against speed-only ranking</p></div><small>Sorted by efficiency score</small></div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Rank</th><th>Assignee</th><th>Assigned</th><th>Completed</th><th>Completion</th><th>Avg hours</th><th>On time</th><th>Reopen</th><th>Efficiency</th><th>Management signal</th></tr></thead><tbody>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $people['ranking']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                <tr>
-                    <td class="ii-rankno"><?php echo e(str_pad((string)$row['rank'],2,'0',STR_PAD_LEFT)); ?></td>
-                    <td><div class="ii-emp-name"><span class="ii-face"><?php echo e($row['initials']); ?></span><b><?php echo e($row['name']); ?></b></div></td>
-                    <td><?php echo e($row['assigned']); ?></td><td><?php echo e($row['completed']); ?></td><td><?php echo e(number_format($row['completion'],1)); ?>%</td>
-                    <td class="ii-hours <?php echo e($row['avg_hours'] !== null && $row['avg_hours'] > 8 ? 'slow' : ($row['avg_hours'] !== null && $row['avg_hours'] <= 2 ? 'fast' : '')); ?>"><?php echo e($row['avg_hours'] !== null ? number_format($row['avg_hours'],1).'h' : '—'); ?></td>
-                    <td><?php echo e($row['on_time'] !== null ? number_format($row['on_time'],1).'%' : '—'); ?></td><td><?php echo e($row['reopen'] !== null ? number_format($row['reopen'],1).'%' : '—'); ?></td>
-                    <td><span class="ii-scorepill <?php echo e($row['efficiency'] < 60 ? 'low' : ($row['efficiency'] < 80 ? 'mid' : '')); ?>"><?php echo e($row['efficiency']); ?></span></td>
-                    <td><span class="ii-badge ii-<?php echo e($badgeClass($row['signal']['tone'])); ?>"><?php echo e($row['signal']['label']); ?></span></td>
-                </tr>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                <tr><td colspan="10"><div class="ii-empty-inline">No assignee activity matches the selected filters.</div></td></tr>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        </tbody></table></article>
-
-        <div class="ii-sect"><div><h2>Assignee inquiry-to-order conversion</h2><p>Completed inquiry handoffs converted into linked FlowTrack orders, attributed to the inquiry owner or latest task assignee</p></div><small>Current filtered period</small></div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Assignee</th><th>Completed inquiries</th><th>Orders converted</th><th>Conversion rate</th><th>Vs team average</th><th>Interpretation</th></tr></thead><tbody>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $people['conversion']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                <tr><td><b><?php echo e($row['name']); ?></b></td><td><?php echo e($row['completed_inquiries']); ?></td><td><b><?php echo e($row['orders']); ?></b></td><td class="ii-conversion"><?php echo e(number_format($row['conversion'],1)); ?>%</td><td><span class="ii-badge ii-<?php echo e($badgeClass($row['tone'])); ?>"><?php echo e($row['delta'] >= 0 ? '+' : ''); ?><?php echo e(number_format($row['delta'],1)); ?> pts</span></td><td><?php echo e($row['interpretation']); ?></td></tr>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                <tr><td colspan="6"><div class="ii-empty-inline">No completed inquiry conversion data in this period.</div></td></tr>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        </tbody></table></article>
-
-        <div class="ii-sect"><div><h2>Task start-to-completion detail</h2><p>Event-level audit trail for cycle-time verification and coaching</p></div></div>
-        <div class="ii-focusbar">
-            <div class="ii-subtabs">
-                <button type="button" class="ii-subtab <?php echo e($taskTab === 'recent' ? 'active' : ''); ?>" wire:click="setTaskTab('recent')">Recent completions</button>
-                <button type="button" class="ii-subtab <?php echo e($taskTab === 'longest' ? 'active' : ''); ?>" wire:click="setTaskTab('longest')">Longest tasks</button>
-                <button type="button" class="ii-subtab <?php echo e($taskTab === 'reopened' ? 'active' : ''); ?>" wire:click="setTaskTab('reopened')">Reopened tasks</button>
-            </div>
-            <div class="ii-field"><label>Focus employee</label><select wire:model.live="employeeFocus"><option value="all">All active employees</option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $people['ranking']; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($row['id']); ?>"><?php echo e($row['name']); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?></select></div>
-        </div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Assignee</th><th>Inquiry</th><th>Task</th><th>Started / assigned</th><th>Completed</th><th>Hours taken</th><th>SLA</th><th>Quality</th></tr></thead><tbody>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $this->taskRows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $row): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                <tr><td><b><?php echo e($row['assignee']); ?></b></td><td><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['inquiry_url']): ?><a class="ii-record-link ii-inline-link" href="<?php echo e($row['inquiry_url']); ?>" wire:navigate><?php echo e($row['inquiry']); ?></a><?php else: ?><?php echo e($row['inquiry']); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></td><td><?php echo e($row['task']); ?></td><td class="ii-timecell"><?php echo e($row['started']); ?></td><td class="ii-timecell"><?php echo e($row['completed']); ?></td><td class="ii-hours <?php echo e($row['hours_value'] !== null && $row['hours_value'] > 8 ? 'slow' : ($row['hours_value'] !== null && $row['hours_value'] <= 2 ? 'fast' : '')); ?>"><?php echo e($row['hours']); ?></td><td><span class="ii-badge ii-<?php echo e($badgeClass($row['sla_tone'])); ?>"><?php echo e($row['sla']); ?></span></td><td><?php echo e($row['quality']); ?></td></tr>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                <tr><td colspan="8"><div class="ii-empty-inline">No task events match this focus.</div></td></tr>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        </tbody></table></article>
-
-        <div class="ii-sect"><div><h2>KPI definitions and guardrails</h2><p>A fair score separates throughput, cycle time, due-date reliability and recorded rework</p></div></div>
-        <div class="ii-metric-defs">
-            <article class="ii-card ii-metricdef"><b>Efficiency score · 30%</b><p>Relative cycle speed compared with the team median for completed inquiry tasks.</p></article>
-            <article class="ii-card ii-metricdef"><b>On-time completion · 25%</b><p>Completed tasks finished on or before their configured due date.</p></article>
-            <article class="ii-card ii-metricdef"><b>Productivity · 20%</b><p>Completed-task output compared with the team median for the selected period.</p></article>
-            <article class="ii-card ii-metricdef"><b>First-pass quality · 15%</b><p>Tasks completed without a recorded <span class="ii-codekey">inquiry.task_reopened</span> event.</p></article>
-            <article class="ii-card ii-metricdef"><b>Workload reliability · 10%</b><p>Open backlog adjusted for tasks that are already overdue.</p></article>
-            <article class="ii-card ii-metricdef"><b>Minimum sample rule</b><p>Do not formally rank employees with fewer than 10 completed tasks in the selected period.</p></article>
-            <article class="ii-card ii-metricdef"><b>Data scope</b><p>Only inquiries visible under the signed-in user’s Inquiry access scope are included.</p></article>
-            <article class="ii-card ii-metricdef"><b>Coaching, not punishment</b><p>Use low scores to diagnose training, workload, supplier or process issues before judging performance.</p></article>
-        </div>
-
-    </section>
+    
 
     <section class="ii-panel <?php echo e($activeTab === 'products' ? 'active' : ''); ?>" <?php if($activeTab !== 'products'): ?> hidden <?php endif; ?>>
         <div class="ii-sect"><div><h2>Product performance center</h2><p>Demand, inquiry workload, turnaround, conversion and recurring client questions</p></div><small><?php echo e($report['period']['label']); ?> · live data</small></div>
@@ -317,5 +226,6 @@
 
     <p class="ii-method">Method note: all headline metrics on this page are calculated from FlowTrack records visible to the signed-in user. Task cycle time uses <b>started_at</b> when available and falls back to task creation/assignment time for older records. Product analytics does not infer missing product categories from attachments. Assignee scores with fewer than 10 completed tasks are shown for context but marked as insufficient data.</p>
     <footer class="ii-pagefoot"><span>StepPromo · Inquiry Intelligence</span><span>Management analytics · <?php echo e($report['period']['label']); ?></span></footer>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/reports/index.blade.php ENDPATH**/ ?>

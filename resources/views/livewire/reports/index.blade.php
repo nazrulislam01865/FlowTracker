@@ -1,4 +1,6 @@
 <div id="inquiry-intelligence-app" class="ii" wire:loading.class="ii-is-loading" wire:target="search,period,status,priority,assigneeId,resetFilters,setTab,setTaskTab,employeeFocus">
+    {{-- ENTIRE INQUIRY INTELLIGENCE PAGE TEMPORARILY DISABLED. Remove the @if(false) wrapper to restore. --}}
+    @if(false)
 @php
     $report = $this->report;
     $portfolio = $report['portfolio'];
@@ -64,7 +66,9 @@
 
     <nav class="ii-tabs" aria-label="Inquiry intelligence sections">
         <button type="button" class="ii-tab {{ $activeTab === 'portfolio' ? 'active' : '' }}" wire:click="setTab('portfolio')">Portfolio overview</button>
+        {{-- TEMPORARILY DISABLED: Assignee/team performance tab.
         <button type="button" class="ii-tab {{ $activeTab === 'people' ? 'active' : '' }}" wire:click="setTab('people')">Assignee performance</button>
+        --}}
         <button type="button" class="ii-tab {{ $activeTab === 'products' ? 'active' : '' }}" wire:click="setTab('products')">Product performance</button>
     </nav>
 
@@ -155,6 +159,7 @@
         </article>
     </section>
 
+    {{-- TEMPORARILY DISABLED: Assignee/team performance panel. Remove this Blade comment wrapper and the tab comment above to restore.
     <section class="ii-panel {{ $activeTab === 'people' ? 'active' : '' }}" @if($activeTab !== 'people') hidden @endif>
         <div class="ii-sect"><div><h2>Assignee performance center</h2><p>Speed, productivity, efficiency, quality and workload across the inquiry team</p></div><small>{{ $report['period']['label'] }} · live data</small></div>
         <div class="ii-demo-banner"><div><b>FlowTrack operational scoring</b>Metrics use actual inquiry-task timestamps, due dates, reopen events and workflow output. Employees with fewer than 10 completed tasks remain visible but are marked as insufficient data for formal ranking.</div><span class="ii-badge ii-blue">Live data</span></div>
@@ -249,6 +254,7 @@
         </div>
 
     </section>
+    --}}
 
     <section class="ii-panel {{ $activeTab === 'products' ? 'active' : '' }}" @if($activeTab !== 'products') hidden @endif>
         <div class="ii-sect"><div><h2>Product performance center</h2><p>Demand, inquiry workload, turnaround, conversion and recurring client questions</p></div><small>{{ $report['period']['label'] }} · live data</small></div>
@@ -317,4 +323,5 @@
 
     <p class="ii-method">Method note: all headline metrics on this page are calculated from FlowTrack records visible to the signed-in user. Task cycle time uses <b>started_at</b> when available and falls back to task creation/assignment time for older records. Product analytics does not infer missing product categories from attachments. Assignee scores with fewer than 10 completed tasks are shown for context but marked as insufficient data.</p>
     <footer class="ii-pagefoot"><span>StepPromo · Inquiry Intelligence</span><span>Management analytics · {{ $report['period']['label'] }}</span></footer>
+    @endif
 </div>

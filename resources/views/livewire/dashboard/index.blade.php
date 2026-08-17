@@ -259,6 +259,7 @@
         </article>
     </section>
 
+    {{-- TEMPORARILY DISABLED: Team performance & workload. Remove this Blade comment wrapper to restore.
     <section class="ft-mgmt-panel" style="margin-bottom:14px">
         <div class="ft-mgmt-panel-head"><div><h2>Team performance &amp; workload</h2><p>Capacity, completion pace, on-time rate and attention exposure</p></div><button type="button" class="ft-mgmt-link" wire:click="toggleTeamSort">{{ $teamSortByWorkload ? 'Restore default' : 'Sort by workload' }}</button></div>
         <div class="ft-mgmt-panel-body">
@@ -295,6 +296,7 @@
             @endif
         </div>
     </section>
+    --}}
 
     <section class="ft-mgmt-panel" style="margin-bottom:14px">
         <div class="ft-mgmt-panel-head">

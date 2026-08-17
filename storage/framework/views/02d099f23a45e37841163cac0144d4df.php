@@ -44,7 +44,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $active = filled($fromValue) || filled($toValue);
 ?>
 
-<?php if (! $__env->hasRenderedOnce('c775039b-5913-4d21-a451-a3563b203d5f')): $__env->markAsRenderedOnce('c775039b-5913-4d21-a451-a3563b203d5f'); ?>
+<?php if (! $__env->hasRenderedOnce('176d6545-e9ca-45d0-ac4a-2f3b0ef310ab')): $__env->markAsRenderedOnce('176d6545-e9ca-45d0-ac4a-2f3b0ef310ab'); ?>
     <style>
         .ft-date-range-filter{display:flex;min-width:0;align-items:flex-end;padding:7px 10px;border-bottom:1px solid #dbe3ed;background:#fbfcfe;color:#33445d;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
         .ft-date-range-filter.is-active{background:#f8fbff}

@@ -1,0 +1,255 @@
+<?php
+    $masterData = app(\App\Services\MasterDataService::class);
+?>
+<div wire:init="loadTaskPackOptions" class="ft-admin-reference ft-taskpack-form-page">
+    <div class="ft-admin-form-top">
+        <div>
+            <div class="ft-admin-breadcrumb"><?php echo e($taskPackId ? 'Edit Task Pack' : 'Add Task Pack'); ?></div>
+            <h1><?php echo e($taskPackId ? 'Edit Task Pack' : 'Add Task Pack'); ?></h1>
+            <p>Build the task sequence on a full page for easier editing.</p>
+        </div>
+        <a href="<?php echo e(route('task-pack.setup')); ?>" wire:navigate class="ft-admin-back">← Back to Task Pack Setup</a>
+    </div>
+
+    <form wire:submit="save" class="ft-admin-form-card">
+        <div class="ft-admin-form-card-head">
+            <h2><?php echo e($taskPackId ? 'Edit Task Pack' : 'Create Task Pack'); ?></h2>
+            <p>Build the complete reusable task sequence activated by workflow phases.</p>
+        </div>
+
+        <div class="ft-admin-form-body">
+            <div class="ft-admin-field">
+                <label>Task Pack code</label>
+                <div class="ft-admin-locked"><?php echo e($packCode); ?></div>
+                <small>Automatically generated and permanently locked.</small>
+            </div>
+
+            <div class="ft-admin-field">
+                <label>Status</label>
+                <select wire:model="packStatus">
+                    <option value="active">Active</option>
+                    <option value="inactive">Inactive</option>
+                </select>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['packStatus'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
+
+            <div class="ft-admin-field">
+                <label>Task Pack name *</label>
+                <input type="text" wire:model="packName" placeholder="e.g. Quality Inspection">
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['packName'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
+
+            <div class="ft-admin-field">
+                <label>Description</label>
+                <textarea wire:model="packDescription" rows="3" placeholder="Explain when this Task Pack is used..."></textarea>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['packDescription'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
+
+            <div class="ft-sequence-title-row">
+                <div><h2>Task sequence</h2><p>Tasks are created in this order when the phase becomes active.</p></div>
+            </div>
+
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['tasks'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+            <div class="ft-task-editor-list">
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $tasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                    <section class="ft-task-editor-card" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'task-pack-form-task-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).''; ?>wire:key="task-pack-form-task-<?php echo e($task['id'] ?? 'new-'.$index); ?>-<?php echo e($index); ?>">
+                        <div class="ft-task-editor-head">
+                            <div><h3>Task <?php echo e($index + 1); ?></h3><p>Sequence <?php echo e($index + 1); ?> in this Task Pack</p></div>
+                            <div class="ft-task-editor-actions">
+                                <button type="button" wire:click="moveTask(<?php echo e($index); ?>, -1)" <?php if($index === 0): echo 'disabled'; endif; ?>>↑</button>
+                                <button type="button" wire:click="moveTask(<?php echo e($index); ?>, 1)" <?php if($index === count($tasks)-1): echo 'disabled'; endif; ?>>↓</button>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(empty($task['id']) || $canDeleteTaskPack): ?><button type="button" wire:click="removeTask(<?php echo e($index); ?>)">Remove</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </div>
+
+                        <div class="ft-admin-field">
+                            <label>Task title *</label>
+                            <input type="text" wire:model="tasks.<?php echo e($index); ?>.title" placeholder="Task title">
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ["tasks.$index.title"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <div class="ft-admin-field">
+                            <label>Description</label>
+                            <textarea wire:model="tasks.<?php echo e($index); ?>.description" rows="2"></textarea>
+                        </div>
+
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($optionsReady): ?>
+                        <div class="ft-admin-field" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'task-pack-options-'.e($index).''; ?>wire:key="task-pack-options-<?php echo e($index); ?>">
+                            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-taskpack-assignee-filter','label' => 'Default assignee','property' => 'tasks.'.e($index).'.default_assignee_id','type' => 'users','context' => 'task-pack-setup','action' => 'setTaskPackAssignee','value' => $task['default_assignee_id'] ?? '','placeholder' => 'Unassigned','selectedLabel' => $task['default_assignee_label'] ?? 'Unassigned','initialOptions' => $assigneeFilterOptions,'menuWidth' => 320,'fixedMenu' => true,'wire:key' => 'task-pack-assignee-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['default_assignee_id'] ?? 'none').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.remote-filter'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'ft-taskpack-assignee-filter','label' => 'Default assignee','property' => 'tasks.'.e($index).'.default_assignee_id','type' => 'users','context' => 'task-pack-setup','action' => 'setTaskPackAssignee','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['default_assignee_id'] ?? ''),'placeholder' => 'Unassigned','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['default_assignee_label'] ?? 'Unassigned'),'initial-options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($assigneeFilterOptions),'menu-width' => 320,'fixed-menu' => true,'wire:key' => 'task-pack-assignee-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['default_assignee_id'] ?? 'none').'']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ["tasks.$index.default_assignee_id"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <div class="ft-admin-field">
+                            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-taskpack-assignee-filter','label' => 'Default department','property' => 'tasks.'.e($index).'.default_department_id','type' => 'department-records','context' => 'task-pack-setup','action' => 'setTaskPackDepartment','value' => $task['default_department_id'] ?? '','placeholder' => 'No department default','selectedLabel' => $task['default_department_label'] ?? 'No department default','initialOptions' => $departmentFilterOptions,'menuWidth' => 320,'fixedMenu' => true,'wire:key' => 'task-pack-department-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['default_department_id'] ?? 'none').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.remote-filter'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'ft-taskpack-assignee-filter','label' => 'Default department','property' => 'tasks.'.e($index).'.default_department_id','type' => 'department-records','context' => 'task-pack-setup','action' => 'setTaskPackDepartment','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['default_department_id'] ?? ''),'placeholder' => 'No department default','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['default_department_label'] ?? 'No department default'),'initial-options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($departmentFilterOptions),'menu-width' => 320,'fixed-menu' => true,'wire:key' => 'task-pack-department-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['default_department_id'] ?? 'none').'']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ["tasks.$index.default_department_id"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <div class="ft-admin-field">
+                            <label>Priority</label>
+                            <select data-master-color-select wire:model="tasks.<?php echo e($index); ?>.priority_id">
+                                <option value="">Use Job priority</option>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $priorities; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $priority): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($priority->id); ?>" data-color="<?php echo e($masterData->displayColorFor('priority', $priority->name)); ?>"><?php echo e($priority->name); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            </select>
+                        </div>
+
+                        <div class="ft-admin-field">
+                            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-taskpack-assignee-filter','label' => 'Required document','property' => 'tasks.'.e($index).'.document_category_id','type' => 'document-category-records','context' => 'task-pack-setup','action' => 'setTaskPackDocumentCategory','value' => $task['document_category_id'] ?? '','placeholder' => 'No task-specific file','selectedLabel' => $task['document_category_label'] ?? 'No task-specific file','initialOptions' => $documentFilterOptions,'menuWidth' => 320,'fixedMenu' => true,'wire:key' => 'task-pack-document-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['document_category_id'] ?? 'none').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.remote-filter'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['class' => 'ft-taskpack-assignee-filter','label' => 'Required document','property' => 'tasks.'.e($index).'.document_category_id','type' => 'document-category-records','context' => 'task-pack-setup','action' => 'setTaskPackDocumentCategory','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['document_category_id'] ?? ''),'placeholder' => 'No task-specific file','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task['document_category_label'] ?? 'No task-specific file'),'initial-options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($documentFilterOptions),'menu-width' => 320,'fixed-menu' => true,'wire:key' => 'task-pack-document-'.e($task['id'] ?? 'new-'.$index).'-'.e($index).'-'.e($task['document_category_id'] ?? 'none').'']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
+<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
+<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php endif; ?>
+                            <small>The file must be attached to the Job before this task can be completed.</small>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ["tasks.$index.document_category_id"];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+
+                        <?php else: ?>
+                            <div class="ft-taskpack-options-placeholder" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'task-pack-options-loading-'.e($index).''; ?>wire:key="task-pack-options-loading-<?php echo e($index); ?>" role="status" aria-live="polite" aria-busy="true">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php for($field = 0; $field < 4; $field++): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <div><span></span><span></span></div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endfor; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                            </div>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <label class="ft-required-task-check">
+                            <input type="checkbox" wire:model="tasks.<?php echo e($index); ?>.is_required">
+                            <span>Required task</span>
+                        </label>
+                    </section>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+            </div>
+
+            <div class="ft-task-sequence-add-row">
+                <button type="button" class="ft-add-soft" wire:click="addTask">＋ Add Task</button>
+            </div>
+        </div>
+
+        <div class="ft-admin-form-footer">
+            <button type="button" class="ft-admin-cancel" wire:click="cancel">Cancel</button>
+            <button type="submit" class="ft-admin-primary" <?php if(!$optionsReady): echo 'disabled'; endif; ?>><?php echo e($taskPackId ? 'Save Task Pack' : 'Create Task Pack'); ?></button>
+        </div>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['options'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    </form>
+</div>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/task-pack-setup/form.blade.php ENDPATH**/ ?>

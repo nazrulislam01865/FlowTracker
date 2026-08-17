@@ -57,9 +57,11 @@
             <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />
         @endif
 
+        {{-- TEMPORARILY DISABLED: Inquiry Intelligence navigation. Restore together with the page.
         @if($user->canAccess('reports.view'))
             <x-ui.nav-link route="reports" label="Inquiry Intelligence" icon="reports" />
         @endif
+        --}}
 
         @if($inquiryView || $inquiryCreate)
             <details class="ft-sidebar-group" @if($inquiryGroupActive) open @endif>
