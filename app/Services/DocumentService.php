@@ -12,9 +12,9 @@ use Illuminate\Support\Str;
 
 class DocumentService
 {
-    public function query(User $user, array $filters = [])
+    public function query(User $user, array $filters = [], string $permissionModule = 'documents')
     {
-        $query = app(AccessControlService::class)->applyDocumentScope(Document::query(), $user)
+        $query = app(AccessControlService::class)->applyDocumentScope(Document::query(), $user, $permissionModule)
             ->with(['job.client','job.phase','job.tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user),'task.phase','task.assignee','uploader']);
 
         return $query
@@ -40,29 +40,39 @@ class DocumentService
             });
     }
 
-    public function list(User $user, array $filters = [])
+    public function list(User $user, array $filters = [], string $permissionModule = 'documents')
     {
-        return $this->query($user, $filters)->latest()->limit(250)->get();
+        return $this->query($user, $filters, $permissionModule)->latest()->limit(250)->get();
     }
 
-    public function paginate(User $user, array $filters = [], int $perPage = 25)
+    public function paginate(User $user, array $filters = [], int $perPage = 25, string $permissionModule = 'documents')
     {
-        return $this->query($user, $filters)->latest()->paginate($perPage);
+        return $this->query($user, $filters, $permissionModule)->latest()->paginate($perPage);
     }
 
-    public function store(UploadedFile $file, array $data, User $user): Document
+    public function store(UploadedFile $file, array $data, User $user, string $permissionModule = 'documents'): Document
     {
-        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'create'), 403);
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($user, $permissionModule, 'create'), 403);
 
         $task = null;
         if (!empty($data['task_id'])) {
             $task = Task::with(['job','documentCategory','setupTemplate.documentCategory'])->findOrFail((int) $data['task_id']);
-            app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
-            app(JobService::class)->findVisible($user, (int) $task->flow_job_id);
+            if ($permissionModule === 'document_archive') {
+                $access->applyDocumentArchiveTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
+                $access->applyDocumentArchiveJobScope(\App\Models\FlowJob::query()->whereKey($task->flow_job_id), $user)->firstOrFail();
+            } else {
+                $access->applyTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
+                app(JobService::class)->findVisible($user, (int) $task->flow_job_id);
+            }
             if (!empty($data['flow_job_id'])) abort_unless((int) $task->flow_job_id === (int) $data['flow_job_id'], 422, 'The selected document task does not belong to this Job.');
             if (($data['require_task_pack_requirement'] ?? false) === true) abort_unless($this->taskHasRequirement($task), 422, 'This task has no Task Pack document requirement.');
         } elseif (!empty($data['flow_job_id'])) {
-            app(JobService::class)->findVisible($user, (int) $data['flow_job_id']);
+            if ($permissionModule === 'document_archive') {
+                $access->applyDocumentArchiveJobScope(\App\Models\FlowJob::query()->whereKey((int) $data['flow_job_id']), $user)->firstOrFail();
+            } else {
+                app(JobService::class)->findVisible($user, (int) $data['flow_job_id']);
+            }
         }
 
         $disk = (string) config('flowtrack.document_disk', 'public');
@@ -127,11 +137,11 @@ class DocumentService
         return $document;
     }
 
-    public function delete(Document $document, ?User $actor = null): void
+    public function delete(Document $document, ?User $actor = null, string $permissionModule = 'documents'): void
     {
         if ($actor) {
-            abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'delete'), 403);
-            app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $actor)->firstOrFail();
+            abort_unless(app(AccessControlService::class)->can($actor, $permissionModule, 'delete'), 403);
+            app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $actor, $permissionModule)->firstOrFail();
         }
         $document->loadMissing(['task','job']);
         $name = $document->name; $path = $document->path;
@@ -149,10 +159,10 @@ class DocumentService
         return (bool) ($task->document_category_id ?: $task->setupTemplate?->document_category_id);
     }
 
-    public function rename(Document $document, string $name, User $user): void
+    public function rename(Document $document, string $name, User $user, string $permissionModule = 'documents'): void
     {
-        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'edit'), 403);
-        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user)->firstOrFail();
+        abort_unless(app(AccessControlService::class)->can($user, $permissionModule, 'edit'), 403);
+        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user, $permissionModule)->firstOrFail();
 
         $name = trim($name);
         abort_if($name === '' || str_contains($name, '/') || str_contains($name, '\\'), 422, 'Enter a valid file name.');
@@ -190,16 +200,25 @@ class DocumentService
         }
     }
 
-    public function storeVersion(Document $document, UploadedFile $file, User $user): Document
+    public function storeVersion(Document $document, UploadedFile $file, User $user, string $permissionModule = 'documents'): Document
     {
-        abort_unless(app(AccessControlService::class)->can($user, 'documents', 'create'), 403);
-        app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user)->firstOrFail();
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($user, $permissionModule, 'create'), 403);
+        $access->applyDocumentScope(Document::query()->whereKey($document->id), $user, $permissionModule)->firstOrFail();
 
         $document->loadMissing(['task.job', 'job']);
         if ($document->task) {
-            app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($document->task_id), $user)->firstOrFail();
+            if ($permissionModule === 'document_archive') {
+                $access->applyDocumentArchiveTaskScope(Task::query()->whereKey($document->task_id), $user)->firstOrFail();
+            } else {
+                $access->applyTaskScope(Task::query()->whereKey($document->task_id), $user)->firstOrFail();
+            }
         } elseif ($document->flow_job_id) {
-            app(JobService::class)->findVisible($user, (int) $document->flow_job_id);
+            if ($permissionModule === 'document_archive') {
+                $access->applyDocumentArchiveJobScope(\App\Models\FlowJob::query()->whereKey($document->flow_job_id), $user)->firstOrFail();
+            } else {
+                app(JobService::class)->findVisible($user, (int) $document->flow_job_id);
+            }
         }
 
         $disk = (string) config('flowtrack.document_disk', 'public');
@@ -239,9 +258,9 @@ class DocumentService
         return $created;
     }
 
-    public function versions(Document $document, User $user)
+    public function versions(Document $document, User $user, string $permissionModule = 'documents')
     {
-        return app(AccessControlService::class)->applyDocumentScope(Document::query(), $user)
+        return app(AccessControlService::class)->applyDocumentScope(Document::query(), $user, $permissionModule)
             ->with('uploader')
             ->where('flow_job_id', $document->flow_job_id)
             ->where('task_id', $document->task_id)

@@ -37,22 +37,22 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ]); ?>
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260815-client-single-filter-1">
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260818-taskpack-task-prototype-1">
     <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260815-user-assignment-refine-1">
     <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
     <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
     <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
     <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260817-client-search-select-1">
     <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard', 'team-performance.report')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260817-portfolio-preview-2">
+    <link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260818-searchable-report-filters-1">
     
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260817-inquiry-date-toolbar-1">
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260818-inquiry-filter-align-1">
     
     <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260817-inline-assignee-1">
-    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260817-product-shipment-urgencies-2">
+    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260818-dashboard-portfolio-statuses-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260818-taskpack-work-calendar-1">
     <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-column-width-1">
     <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260815-inquiry-section-numbering-1">
     <link rel="stylesheet" href="/css/flowtrack-create-order.css?v=20260817-shipping-address-3-optional">
@@ -64,17 +64,17 @@
     
     <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
     
-    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260817-dashboard-remote-filters-1">
+    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260818-dashboard-kpi-match-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>
-<body class="<?php echo e(request()->routeIs('dashboard') ? 'ft-management-dashboard-page' : ''); ?>">
+<body class="<?php echo e(request()->routeIs('dashboard', 'team-performance.report') ? 'ft-management-dashboard-page' : ''); ?>">
 <div class="app">
     <?php echo $__env->make('layouts.partials.sidebar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
     <div id="sidebarShade" class="mobile-sidebar-shade"></div>
     <main class="main">
         <?php echo $__env->make('layouts.partials.topbar', array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
-        <div class="content <?php echo e(request()->routeIs('dashboard') ? 'ft-dashboard-content-shell' : ''); ?> <?php echo e(request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : ''); ?>">
+        <div class="content <?php echo e(request()->routeIs('dashboard', 'team-performance.report') ? 'ft-dashboard-content-shell' : ''); ?> <?php echo e(request()->routeIs('reports') ? 'ft-inquiry-intelligence-content-shell' : ''); ?>">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(session('success') && !request()->routeIs('task-pack.setup','master-data','financial-master-data','profile','inquiries.*','company.setup')): ?><div class="flash"><?php echo e(session('success')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php echo $__env->yieldContent('content'); ?>
         </div>

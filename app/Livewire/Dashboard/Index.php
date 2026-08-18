@@ -23,8 +23,10 @@ class Index extends Component
     public string $priorityTab = 'orders';
     public string $taskStatusTab = 'orders';
     public string $activityTab = 'all';
-    public bool $teamSortByWorkload = false;
-    public bool $teamExpanded = false;
+    public string $attentionTab = 'all';
+    public string $teamPeriod = 'this_week';
+    public string $teamCustomFrom = '';
+    public string $teamCustomTo = '';
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
@@ -36,22 +38,40 @@ class Index extends Component
     {
         abort_unless(in_array($days, [1, 7, 30], true), 422);
         $this->rangeDays = $days;
-        $this->teamExpanded = false;
     }
 
     public function updatedClientFilter(): void
     {
-        $this->teamExpanded = false;
     }
 
     public function updatedTeamFilter(): void
     {
-        $this->teamExpanded = false;
     }
 
     public function updatedSearch(): void
     {
-        $this->teamExpanded = false;
+    }
+
+    public function updatedTeamPeriod(string $period): void
+    {
+        if (!in_array($period, ['this_week', 'this_month', 'last_30_days', 'custom'], true)) {
+            $this->teamPeriod = 'this_week';
+        }
+
+        if ($this->teamPeriod === 'custom' && ($this->teamCustomFrom === '' || $this->teamCustomTo === '')) {
+            $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
+            $this->teamCustomFrom = $today->copy()->startOfWeek()->toDateString();
+            $this->teamCustomTo = $today->toDateString();
+        }
+
+    }
+
+    public function updatedTeamCustomFrom(): void
+    {
+    }
+
+    public function updatedTeamCustomTo(): void
+    {
     }
 
     public function setDashboardFilter(string $property, mixed $value): void
@@ -66,8 +86,7 @@ class Index extends Component
             } else {
                 $this->teamFilter = '';
             }
-            $this->teamExpanded = false;
-            return;
+                return;
         }
 
         abort_unless(ctype_digit($raw), 422, 'Please choose a valid filter option.');
@@ -83,7 +102,6 @@ class Index extends Component
         } else {
             $this->teamFilter = (string) $id;
         }
-        $this->teamExpanded = false;
     }
 
     public function setFlowTab(string $tab): void
@@ -110,14 +128,10 @@ class Index extends Component
         $this->activityTab = $tab;
     }
 
-    public function toggleTeamSort(): void
+    public function setAttentionTab(string $tab): void
     {
-        $this->teamSortByWorkload = ! $this->teamSortByWorkload;
-    }
-
-    public function toggleTeamExpanded(): void
-    {
-        $this->teamExpanded = ! $this->teamExpanded;
+        abort_unless(in_array($tab, ['all', 'orders', 'inquiries'], true), 422);
+        $this->attentionTab = $tab;
     }
 
     public function render()
@@ -126,18 +140,25 @@ class Index extends Component
         $clientId = max(0, (int) $this->clientFilter);
         $departmentId = max(0, (int) $this->teamFilter);
         $query = mb_strtolower(trim($this->search));
-        $data = app(DashboardService::class)->primaryData($user, $clientId, $departmentId, $this->rangeDays);
+        $data = app(DashboardService::class)->primaryData(
+            $user,
+            $clientId,
+            $departmentId,
+            $this->rangeDays,
+            $this->teamPeriod,
+            $this->teamCustomFrom ?: null,
+            $this->teamCustomTo ?: null,
+        );
         $filterOptions = app(\App\Services\FilterOptionService::class);
         $data['dashboardClientFilterOptions'] = $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6);
         $data['dashboardTeamFilterOptions'] = $filterOptions->options($user, 'departments', 'dashboard', '', $departmentId ?: null, 6);
         $data['administratorView'] = app(AccessControlService::class)->isAdministrator($user);
-        $cutoff = app(\App\Services\WorkspaceSettingsService::class)
-            ->localToday()
-            ->copy()
+        $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
+        $cutoff = $today->copy()
             ->subDays(max(0, $this->rangeDays - 1))
             ->startOfDay();
 
-        $data['priorityInquiries'] = $this->filterCollection(
+        $filteredPriorityInquiries = $this->filterCollection(
             $data['priorityInquiries'],
             $clientId,
             $departmentId,
@@ -151,7 +172,8 @@ class Index extends Component
             fn ($row): ?int => $row->currentTask?->assignee?->department_id
                 ? (int) $row->currentTask->assignee->department_id
                 : ($row->owner?->department_id ? (int) $row->owner->department_id : null),
-        )->take(5)->values();
+        );
+        $data['priorityInquiries'] = $filteredPriorityInquiries->take(5)->values();
 
         $data['attentionTasks'] = $this->filterCollection(
             $data['attentionTasks'],
@@ -167,7 +189,7 @@ class Index extends Component
             fn ($row): ?int => $row->assignee?->department_id ? (int) $row->assignee->department_id : null,
         )->take(4)->values();
 
-        $data['priorityJobs'] = $this->filterCollection(
+        $filteredPriorityJobs = $this->filterCollection(
             $data['priorityJobs'],
             $clientId,
             $departmentId,
@@ -179,7 +201,81 @@ class Index extends Component
             ],
             fn ($row): ?int => $row->client_id ? (int) $row->client_id : null,
             fn ($row): ?int => $row->owner?->department_id ? (int) $row->owner->department_id : null,
-        )->take(5)->values();
+        );
+        $data['priorityJobs'] = $filteredPriorityJobs->take(5)->values();
+
+        $attentionOrders = $this->filterCollection(
+            $data['attentionOrders'] ?? collect(),
+            $clientId,
+            $departmentId,
+            $query,
+            fn ($row): array => [
+                $row->job_number, $row->title, $row->health, $row->attention_reason,
+                $row->client?->name, $row->owner?->name,
+                $row->flaggedTasks?->first()?->attention_reason,
+            ],
+            fn ($row): ?int => $row->client_id ? (int) $row->client_id : null,
+            fn ($row): ?int => $row->owner?->department_id ? (int) $row->owner->department_id : null,
+        );
+
+        $attentionInquiries = $this->filterCollection(
+            $data['attentionInquiries'] ?? collect(),
+            $clientId,
+            $departmentId,
+            $query,
+            fn ($row): array => [
+                $row->inquiry_number, $row->subject, $row->status,
+                $row->client?->name, $row->owner?->name,
+                $row->currentTask?->title, $row->currentTask?->status,
+                $row->currentTask?->attention_reason, $row->currentTask?->assignee?->name,
+            ],
+            fn ($row): ?int => $row->client_id ? (int) $row->client_id : null,
+            fn ($row): ?int => $row->currentTask?->assignee?->department_id
+                ? (int) $row->currentTask->assignee->department_id
+                : ($row->owner?->department_id ? (int) $row->owner->department_id : null),
+        );
+
+        $data['attentionOrderCount'] = $attentionOrders->count();
+        $data['attentionInquiryCount'] = $attentionInquiries->count();
+        $data['attentionTotalCount'] = $data['attentionOrderCount'] + $data['attentionInquiryCount'];
+        $data['attentionOrders'] = $attentionOrders;
+        $data['attentionInquiries'] = $attentionInquiries;
+        $attentionSort = static function (array $left, array $right) use ($today): int {
+            $score = static function (array $item) use ($today): array {
+                $row = $item['record'];
+                $isOrder = $item['kind'] === 'orders';
+                $due = $isOrder ? $row->delivery_date : ($row->currentTask?->due_date ?: $row->required_delivery_date);
+
+                return [
+                    $due && $due->lt($today) ? 0 : 1,
+                    ((bool) ($row->needs_attention ?? false) || (bool) ($row->attention_requested ?? false)) ? 0 : 1,
+                    -($row->updated_at?->timestamp ?? 0),
+                ];
+            };
+
+            return $score($left) <=> $score($right);
+        };
+
+        $data['attentionItems'] = match ($this->attentionTab) {
+            'orders' => $attentionOrders
+                ->map(fn ($row) => ['kind' => 'orders', 'record' => $row])
+                ->take(6)
+                ->values(),
+            'inquiries' => $attentionInquiries
+                ->map(fn ($row) => ['kind' => 'inquiries', 'record' => $row])
+                ->take(6)
+                ->values(),
+            default => $attentionOrders
+                ->take(3)
+                ->map(fn ($row) => ['kind' => 'orders', 'record' => $row])
+                ->concat(
+                    $attentionInquiries
+                        ->take(3)
+                        ->map(fn ($row) => ['kind' => 'inquiries', 'record' => $row])
+                )
+                ->sort($attentionSort)
+                ->values(),
+        };
 
         $data['priorityTasks'] = $this->filterCollection(
             $data['priorityTasks'],
@@ -210,26 +306,13 @@ class Index extends Component
                 ]))), $query);
             });
 
-        $teamPerformance = $this->teamSortByWorkload
-            ? $teamPerformance->sort(function ($left, $right): int {
-                $ongoing = (int) $right->ongoing_count <=> (int) $left->ongoing_count;
-                if ($ongoing !== 0) return $ongoing;
+        $dashboardService = app(DashboardService::class);
+        $teamPerformance = $dashboardService->decorateTeamPerformance($teamPerformance);
+        $teamPerformance = $dashboardService->sortTeamPerformance($teamPerformance, 'performance');
 
-                $completed = (int) $right->done_count <=> (int) $left->done_count;
-                if ($completed !== 0) return $completed;
-
-                return strcasecmp((string) $left->name, (string) $right->name);
-            })
-            : $teamPerformance->sortBy(fn ($row) => mb_strtolower((string) $row->name));
-
-        $teamPerformance = $teamPerformance->values();
         $data['teamUserTotal'] = $teamPerformance->count();
-        $data['teamHiddenCount'] = max(0, $data['teamUserTotal'] - 5);
-        $data['teamMaxOngoing'] = max(1, (int) ($teamPerformance->max(fn ($row) => (int) $row->ongoing_count) ?? 0));
-        $data['teamAverageOngoing'] = $teamPerformance->isNotEmpty()
-            ? (float) $teamPerformance->avg(fn ($row) => (int) $row->ongoing_count)
-            : 0.0;
-        $data['assigneePerformance'] = ($this->teamExpanded ? $teamPerformance : $teamPerformance->take(5))->values();
+        $data['teamHiddenCount'] = max(0, $data['teamUserTotal'] - 4);
+        $data['assigneePerformance'] = $teamPerformance->take(4)->values();
 
         $data['recentActivity'] = collect($data['recentActivity'])
             ->filter(fn ($row) => !$row->created_at || $row->created_at->gte($cutoff))

@@ -20,10 +20,11 @@ use Closure;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v15-dashboard-inquiry-source-phase';
+    private const CACHE_VERSION = 'v18-dashboard-attention-mentions';
 
     private ?int $clientLifecycleVersion = null;
 
@@ -44,15 +45,20 @@ class DashboardService
         'catalogue-readiness',
     ];
 
-    public function primaryData(User $user, int $clientId = 0, int $departmentId = 0, int $rangeDays = 7): array
+    public function primaryData(User $user, int $clientId = 0, int $departmentId = 0, int $rangeDays = 7, string $teamPeriod = 'this_week', ?string $teamCustomFrom = null, ?string $teamCustomTo = null): array
     {
         return [
             'metrics' => $this->summaryForFilters($user, $clientId, $departmentId, $rangeDays),
             'flowDistribution' => $this->flowDistribution($user, $clientId, $departmentId, $rangeDays),
             'taskStatusDistribution' => $this->taskStatusDistribution($user, $clientId, $departmentId, $rangeDays),
             'attentionTasks' => $this->attentionTasks($user),
+            'attentionOrders' => $this->attentionOrders($user),
+            'attentionInquiries' => $this->attentionInquiries($user),
             'clientPortfolio' => $this->clientPortfolio($user),
-            'assigneePerformance' => $this->assigneePerformance($user, $clientId, $departmentId, $rangeDays),
+            'assigneePerformance' => $user->canAccess('reports.view')
+                ? $this->assigneePerformance($user, $clientId, $departmentId, $teamPeriod, $teamCustomFrom, $teamCustomTo)
+                : collect(),
+            'teamReportingPeriod' => $this->teamReportingPeriod($teamPeriod, $teamCustomFrom, $teamCustomTo),
             'priorityJobs' => $this->priorityJobs($user, $clientId, $departmentId),
             'priorityInquiries' => $this->priorityInquiries($user, $clientId, $departmentId),
             'priorityTasks' => $this->priorityTasks($user, $clientId, $departmentId),
@@ -66,7 +72,7 @@ class DashboardService
     public function secondaryData(User $user): array
     {
         return [
-            'assigneePerformance' => $this->assigneePerformance($user),
+            'assigneePerformance' => $user->canAccess('reports.view') ? $this->assigneePerformance($user) : collect(),
             'attentionTasks' => $this->attentionTasks($user),
             'ongoingJobs' => $this->ongoingJobs($user),
             'ongoingTasks' => $this->ongoingTasks($user),
@@ -91,7 +97,7 @@ class DashboardService
     {
         return app(JobService::class)->activeQuery($user)
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested'])
-            ->with(['client:id,name,logo_path', 'phase:id,short_name'])
+            ->with(['client:id,name,logo_path', 'phase:id,short_name,color'])
             ->where(fn ($query) => $query->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']))
             ->latest('flow_jobs.id')
             ->limit(6)
@@ -258,11 +264,15 @@ class DashboardService
 
         match ($filter) {
             'unread' => $query->whereNull('flow_notifications.read_at'),
-            'job' => $query
-                ->whereNotNull('flow_notifications.flow_job_id')
-                ->whereNull('flow_notifications.flow_task_id'),
-            'task' => $query->whereNotNull('flow_notifications.flow_task_id'),
-            'inquiry' => $query->where(function (Builder $inquiryMentions): void {
+            'orders' => $query
+                ->where(function (Builder $orderMentions): void {
+                    $orderMentions
+                        ->whereNotNull('flow_notifications.flow_job_id')
+                        ->orWhereNotNull('flow_notifications.flow_task_id');
+                })
+                ->whereNull('flow_notifications.inquiry_id')
+                ->whereNull('flow_notifications.inquiry_task_id'),
+            'inquiries' => $query->where(function (Builder $inquiryMentions): void {
                 $inquiryMentions
                     ->whereNotNull('flow_notifications.inquiry_id')
                     ->orWhereNotNull('flow_notifications.inquiry_task_id');
@@ -275,9 +285,11 @@ class DashboardService
             'inquiry_task_id', 'type', 'title', 'message', 'read_at', 'created_at',
         ];
         $relations = [
-            'job:id,job_number,title,client_id',
+            'job:id,job_number,title,client_id,workflow_phase_id',
             'job.client:id,name,logo_path',
-            'task:id,task_number,title,flow_job_id',
+            'job.phase:id,name,short_name',
+            'task:id,task_number,title,flow_job_id,workflow_phase_id',
+            'task.phase:id,name,short_name',
             'inquiry:id,inquiry_number,subject',
             'inquiryTask:id,inquiry_id,title',
         ];
@@ -371,13 +383,18 @@ class DashboardService
     }
 
     /**
-     * Dashboard Tagged Comments intentionally includes mentions created from both
-     * comments and descriptions across Orders, Tasks and Inquiries. Orphaned or
-     * soft-deleted records are excluded without executing content-matching queries.
+     * Personal dashboard mentions created from comments/descriptions in Orders
+     * and Inquiries. Orphaned or soft-deleted records are excluded by the
+     * notification visibility query without content-matching queries.
      */
     private function dashboardMentionQuery(User $user): Builder
     {
         $query = app(NotificationService::class)->visibleQuery($user);
+
+        // Admin/Super Admin receive mention_admin audit copies for mentions made
+        // anywhere they are allowed to see. Include those copies in the dashboard
+        // feed so the management view is workspace-wide. Normal users must only
+        // ever see direct mentions addressed to their own notification user_id.
         if (app(AccessControlService::class)->isAdministrator($user)) {
             return $query->whereIn('flow_notifications.type', ['mention', 'mention_admin']);
         }
@@ -442,19 +459,93 @@ class DashboardService
         });
     }
 
+    public function teamReportingPeriod(
+        string $period = 'this_week',
+        ?string $customFrom = null,
+        ?string $customTo = null,
+    ): array {
+        $period = in_array($period, ['this_week', 'this_month', 'last_30_days', 'custom'], true)
+            ? $period
+            : 'this_week';
+
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+        $from = $today->copy()->startOfWeek();
+        $to = $today->copy();
+        $label = 'This week';
+
+        if ($period === 'this_month') {
+            $from = $today->copy()->startOfMonth();
+            $label = 'This month';
+        } elseif ($period === 'last_30_days') {
+            $from = $today->copy()->subDays(29);
+            $label = 'Last 30 days';
+        } elseif ($period === 'custom') {
+            $parsedFrom = $this->parseDashboardDate($customFrom);
+            $parsedTo = $this->parseDashboardDate($customTo);
+
+            if ($parsedFrom && $parsedTo) {
+                if ($parsedFrom->gt($parsedTo)) {
+                    [$parsedFrom, $parsedTo] = [$parsedTo, $parsedFrom];
+                }
+                $from = $parsedFrom;
+                $to = $parsedTo;
+                $label = $from->isSameDay($to)
+                    ? $from->format('M j, Y')
+                    : $from->format('M j').' – '.$to->format('M j, Y');
+            } else {
+                $period = 'this_week';
+            }
+        }
+
+        [$fromUtc, $toUtc] = $settings->localDateRangeUtcBounds(
+            $from->toDateString(),
+            $to->toDateString(),
+        );
+
+        return [
+            'key' => $period,
+            'label' => $label,
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'from_utc' => $fromUtc,
+            'to_utc' => $toUtc,
+        ];
+    }
+
     public function assigneePerformance(
         User $user,
         int $clientId = 0,
         int $departmentId = 0,
-        int $rangeDays = 7,
+        string $period = 'this_week',
+        ?string $customFrom = null,
+        ?string $customTo = null,
     ): Collection {
         $access = app(AccessControlService::class);
         $clientId = max(0, $clientId);
         $departmentId = max(0, $departmentId);
-        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $reportingPeriod = $this->teamReportingPeriod($period, $customFrom, $customTo);
+        $assignedFrom = $reportingPeriod['from_utc'];
+        $assignedTo = $reportingPeriod['to_utc'];
 
+        $administratorSlugs = ['super-admin', 'admin', 'administrator'];
         $users = User::query()
+            // Keep Team Performance aligned with Administration -> Users.
+            // The users table can contain legacy/demo/imported accounts that are
+            // not members of the current workspace. Those accounts (and any old
+            // tasks assigned to them) must never appear in performance reports.
+            ->whereHas('workspaceMemberships', fn (Builder $membership) => $membership
+                ->where('workspace_id', $workspaceId)
+                ->where('status', 'active'))
             ->where('users.is_active', true)
+            ->where('users.is_super_admin', false)
+            ->whereDoesntHave('roles', fn (Builder $role) => $role
+                ->where('is_active', true)
+                ->whereIn('slug', $administratorSlugs))
+            ->whereDoesntHave('role', fn (Builder $role) => $role
+                ->where('is_active', true)
+                ->whereIn('slug', $administratorSlugs))
             ->when($departmentId > 0, fn (Builder $query) => $query->where('users.department_id', $departmentId))
             ->when(
                 !$access->isAdministrator($user) && $access->scope($user, 'tasks') !== 'all_records',
@@ -463,84 +554,299 @@ class DashboardService
             ->select(['users.id', 'users.department_id', 'users.name', 'users.profile_image_path'])
             ->with('department:id,name')
             ->orderBy('users.name')
-            ->limit(100)
             ->get();
 
         if ($users->isEmpty()) return $users;
 
         $userIds = $users->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $settings = app(WorkspaceSettingsService::class);
-        $today = $settings->localToday();
-        [$completedFrom, $completedTo] = $settings->localDateRangeUtcBounds(
-            $today->subDays($rangeDays - 1)->toDateString(),
-            $today->toDateString(),
-        );
+        $orderTaskRules = app(OrderTaskFlagService::class);
+        $inquiryStatusRecords = MasterRecord::withTrashed()
+            ->forWorkspace($workspaceId)
+            ->ofType('inquiry_task_status')
+            ->get(['name', 'metadata']);
 
+        $cancelledStatuses = $inquiryStatusRecords
+            ->filter(fn (MasterRecord $status): bool => strcasecmp($status->inquiryAutoStatus(), 'Cancelled') === 0)
+            ->pluck('name')
+            ->map(fn ($name): string => mb_strtolower(trim((string) $name)))
+            ->merge([
+                'cancelled', 'canceled',
+                mb_strtolower(trim($orderTaskRules->cancelledStatus())),
+            ])
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+        $orderCompletedStatuses = collect([
+            'completed', 'complete', 'done',
+            mb_strtolower(trim($orderTaskRules->completedStatus())),
+        ])->filter()->unique()->values()->all();
+        $inquiryCompletedStatuses = $inquiryStatusRecords
+            ->filter(fn (MasterRecord $status): bool => strcasecmp($status->inquiryAutoStatus(), InquiryService::AUTO_COMPLETED_STATUS) === 0)
+            ->pluck('name')
+            ->map(fn ($name): string => mb_strtolower(trim((string) $name)))
+            ->merge(['completed', 'complete', 'done'])
+            ->filter()
+            ->unique()
+            ->values()
+            ->all();
+
+        // Team performance must reflect the real task rows currently assigned to
+        // each employee. Do not require an active Client here: historical/open
+        // tasks remain real workload even if the Client was later deactivated.
         $orderBase = app(TaskService::class)->visibleQuery($user)
             ->reorder()
-            ->whereIn('tasks.assignee_id', $userIds)
-            ->whereHas('job.client', fn (Builder $client) => $client->where('clients.is_active', true))
             ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('flow_jobs.client_id', $clientId)));
 
-        $orderOngoing = $this->constrainOngoingTasks(clone $orderBase)
-            ->selectRaw('tasks.assignee_id as dashboard_assignee_id, count(*) as aggregate')
+        $orderOpen = (clone $orderBase)
+            ->whereIn('tasks.assignee_id', $userIds)
+            ->whereNull('tasks.completed_at')
+            ->whereNotIn(DB::raw("LOWER(TRIM(COALESCE(tasks.status, '')))"), array_merge($cancelledStatuses, $orderCompletedStatuses))
+            ->whereBetween(DB::raw('COALESCE(tasks.assignee_assigned_at, tasks.created_at)'), [$assignedFrom, $assignedTo])
+            ->selectRaw('tasks.assignee_id as dashboard_assignee_id, count(*) as open_count')
             ->groupBy('tasks.assignee_id')
-            ->pluck('aggregate', 'dashboard_assignee_id');
+            ->pluck('open_count', 'dashboard_assignee_id');
 
         $orderCompleted = (clone $orderBase)
-            ->whereNotNull('tasks.completed_at')
-            ->when($completedFrom, fn (Builder $query) => $query->where('tasks.completed_at', '>=', $completedFrom))
-            ->when($completedTo, fn (Builder $query) => $query->where('tasks.completed_at', '<=', $completedTo))
+            ->whereIn('tasks.assignee_id', $userIds)
+            ->whereNotIn(DB::raw("LOWER(TRIM(COALESCE(tasks.status, '')))"), $cancelledStatuses)
+            ->where(function (Builder $query) use ($orderCompletedStatuses): void {
+                $query->whereNotNull('tasks.completed_at')
+                    ->orWhereIn(DB::raw("LOWER(TRIM(COALESCE(tasks.status, '')))"), $orderCompletedStatuses);
+            })
+            ->whereBetween(DB::raw('COALESCE(tasks.assignee_assigned_at, tasks.created_at)'), [$assignedFrom, $assignedTo])
             ->selectRaw('tasks.assignee_id as dashboard_assignee_id, count(*) as completed_count')
-            ->selectRaw('sum(case when tasks.due_date is not null and date(tasks.completed_at) <= tasks.due_date then 1 else 0 end) as on_time_count')
             ->groupBy('tasks.assignee_id')
-            ->get()
-            ->keyBy('dashboard_assignee_id');
+            ->pluck('completed_count', 'dashboard_assignee_id');
 
         $inquiryBase = $access
             ->applyInquiryTaskScope(InquiryTask::query(), $user)
             ->reorder()
-            ->whereIn('inquiry_tasks.assignee_id', $userIds)
-            ->whereHas('inquiry.client', fn (Builder $client) => $client->where('clients.is_active', true))
+            ->whereHas('inquiry', fn (Builder $inquiry) => $inquiry->where('inquiries.workspace_id', $workspaceId))
             ->when($clientId > 0, fn (Builder $query) => $query->whereHas('inquiry', fn (Builder $inquiry) => $inquiry->where('inquiries.client_id', $clientId)));
 
-        $inquiryOngoing = (clone $inquiryBase)
+        $inquiryOpen = (clone $inquiryBase)
+            ->whereIn('inquiry_tasks.assignee_id', $userIds)
             ->whereNull('inquiry_tasks.completed_at')
-            ->whereRaw("lower(trim(coalesce(inquiry_tasks.status, ''))) not in ('completed','cancelled')")
-            ->whereHas('inquiry', fn (Builder $inquiry) => $inquiry
-                ->whereNull('inquiries.result')
-                ->where('inquiries.status', '!=', 'Draft'))
-            ->selectRaw('inquiry_tasks.assignee_id as dashboard_assignee_id, count(*) as aggregate')
+            ->whereNotIn(DB::raw("LOWER(TRIM(COALESCE(inquiry_tasks.status, '')))"), array_merge($cancelledStatuses, $inquiryCompletedStatuses))
+            ->whereBetween(DB::raw('COALESCE(inquiry_tasks.assignee_assigned_at, inquiry_tasks.created_at)'), [$assignedFrom, $assignedTo])
+            ->selectRaw('inquiry_tasks.assignee_id as dashboard_assignee_id, count(*) as open_count')
             ->groupBy('inquiry_tasks.assignee_id')
-            ->pluck('aggregate', 'dashboard_assignee_id');
+            ->pluck('open_count', 'dashboard_assignee_id');
 
         $inquiryCompleted = (clone $inquiryBase)
-            ->whereNotNull('inquiry_tasks.completed_at')
-            ->when($completedFrom, fn (Builder $query) => $query->where('inquiry_tasks.completed_at', '>=', $completedFrom))
-            ->when($completedTo, fn (Builder $query) => $query->where('inquiry_tasks.completed_at', '<=', $completedTo))
+            ->whereIn('inquiry_tasks.assignee_id', $userIds)
+            ->whereNotIn(DB::raw("LOWER(TRIM(COALESCE(inquiry_tasks.status, '')))"), $cancelledStatuses)
+            ->where(function (Builder $query) use ($inquiryCompletedStatuses): void {
+                $query->whereNotNull('inquiry_tasks.completed_at')
+                    ->orWhereIn(DB::raw("LOWER(TRIM(COALESCE(inquiry_tasks.status, '')))"), $inquiryCompletedStatuses);
+            })
+            ->whereBetween(DB::raw('COALESCE(inquiry_tasks.assignee_assigned_at, inquiry_tasks.created_at)'), [$assignedFrom, $assignedTo])
             ->selectRaw('inquiry_tasks.assignee_id as dashboard_assignee_id, count(*) as completed_count')
-            ->selectRaw('sum(case when inquiry_tasks.due_date is not null and date(inquiry_tasks.completed_at) <= inquiry_tasks.due_date then 1 else 0 end) as on_time_count')
             ->groupBy('inquiry_tasks.assignee_id')
-            ->get()
-            ->keyBy('dashboard_assignee_id');
+            ->pluck('completed_count', 'dashboard_assignee_id');
 
-        return $users->map(function (User $person) use ($orderOngoing, $orderCompleted, $inquiryOngoing, $inquiryCompleted): User {
+        return $users->map(function (User $person) use ($orderOpen, $orderCompleted, $inquiryOpen, $inquiryCompleted): User {
             $id = (int) $person->id;
-            $orderDone = $orderCompleted->get($id);
-            $inquiryDone = $inquiryCompleted->get($id);
+            $orderOpenCount = (int) ($orderOpen->get($id) ?? 0);
+            $inquiryOpenCount = (int) ($inquiryOpen->get($id) ?? 0);
+            $orderCompletedCount = (int) ($orderCompleted->get($id) ?? 0);
+            $inquiryCompletedCount = (int) ($inquiryCompleted->get($id) ?? 0);
+            $open = $orderOpenCount + $inquiryOpenCount;
+            $completed = $orderCompletedCount + $inquiryCompletedCount;
+            $total = $open + $completed;
 
-            $person->setAttribute('ongoing_count',
-                (int) ($orderOngoing->get($id) ?? 0) + (int) ($inquiryOngoing->get($id) ?? 0)
-            );
-            $person->setAttribute('done_count',
-                (int) ($orderDone?->completed_count ?? 0) + (int) ($inquiryDone?->completed_count ?? 0)
-            );
-            $person->setAttribute('done_on_time_count',
-                (int) ($orderDone?->on_time_count ?? 0) + (int) ($inquiryDone?->on_time_count ?? 0)
-            );
+            $person->setAttribute('order_task_count', $orderOpenCount + $orderCompletedCount);
+            $person->setAttribute('inquiry_task_count', $inquiryOpenCount + $inquiryCompletedCount);
+            $person->setAttribute('total_task_count', $total);
+            $person->setAttribute('open_count', $open);
+            $person->setAttribute('completed_count', $completed);
+            $person->setAttribute('completion_rate', $total > 0 ? (int) round(($completed / $total) * 100) : null);
+
+            // On-time is intentionally disabled in Team Performance cards for
+            // now. Keep the attribute explicit so the UI cannot accidentally
+            // show a calculated/legacy value.
+            $person->setAttribute('completed_with_due_date_count', 0);
+            $person->setAttribute('done_on_time_count', 0);
+            $person->setAttribute('on_time_rate', null);
+
+            // Backwards-compatible attributes used by the lazy secondary panel.
+            $person->setAttribute('ongoing_count', $open);
+            $person->setAttribute('done_count', $completed);
 
             return $person;
         })->values();
+    }
+
+    /**
+     * Add workload labels used by both the dashboard preview and the full team report.
+     */
+    public function decorateTeamPerformance(Collection $rows): Collection
+    {
+        // Workload status is intentionally left blank for now. The actual open
+        // task count is still available and is the source of truth in the card.
+        $rows->each(function ($row): void {
+            $row->setAttribute('workload_label', '');
+            $row->setAttribute('workload_percent', 0);
+        });
+
+        return $rows->values();
+    }
+
+    /**
+     * Consistent ranking for the dashboard preview and Team Performance Report.
+     * Users with assigned tasks are ranked before empty-state users.
+     */
+    public function sortTeamPerformance(Collection $rows, string $sort = 'performance'): Collection
+    {
+        $sort = in_array($sort, ['performance', 'workload', 'name'], true) ? $sort : 'performance';
+
+        if ($sort === 'name') {
+            return $rows->sortBy(fn ($row) => mb_strtolower((string) $row->name))->values();
+        }
+
+        if ($sort === 'workload') {
+            return $rows->sort(function ($left, $right): int {
+                $open = (int) $right->open_count <=> (int) $left->open_count;
+                if ($open !== 0) return $open;
+
+                $completed = (int) $right->completed_count <=> (int) $left->completed_count;
+                if ($completed !== 0) return $completed;
+
+                return strcasecmp((string) $left->name, (string) $right->name);
+            })->values();
+        }
+
+        return $rows->sort(function ($left, $right): int {
+            $leftHasTasks = (int) $left->total_task_count > 0 ? 1 : 0;
+            $rightHasTasks = (int) $right->total_task_count > 0 ? 1 : 0;
+            $hasTasks = $rightHasTasks <=> $leftHasTasks;
+            if ($hasTasks !== 0) return $hasTasks;
+
+            $completion = (int) ($right->completion_rate ?? -1) <=> (int) ($left->completion_rate ?? -1);
+            if ($completion !== 0) return $completion;
+
+            $completed = (int) $right->completed_count <=> (int) $left->completed_count;
+            if ($completed !== 0) return $completed;
+
+            $total = (int) $right->total_task_count <=> (int) $left->total_task_count;
+            if ($total !== 0) return $total;
+
+            return strcasecmp((string) $left->name, (string) $right->name);
+        })->values();
+    }
+
+    private function parseDashboardDate(?string $value): ?\Carbon\Carbon
+    {
+        $value = trim((string) $value);
+        if ($value === '') return null;
+
+        try {
+            $date = \Carbon\Carbon::createFromFormat('Y-m-d', $value);
+            return $date && $date->format('Y-m-d') === $value ? $date->startOfDay() : null;
+        } catch (\Throwable) {
+            return null;
+        }
+    }
+
+    public function attentionOrders(User $user): Collection
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return app(JobService::class)->activeQuery($user)
+            ->select([
+                'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id',
+                'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title',
+                'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested',
+                'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.priority',
+                'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.updated_at',
+            ])
+            ->with([
+                'client:id,name,logo_path',
+                'phase:id,name,short_name,color',
+                'orderFlag:id,type,name,color,status,sort_order,metadata',
+                'owner:id,name,profile_image_path,department_id',
+                'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
+                'flaggedTasks.orderTaskFlag:id,type,name,status,sort_order,color,metadata',
+                'tasks' => fn ($tasks) => $tasks
+                    ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason', 'tasks.order_task_flag_id', 'tasks.completed_at'])
+                    ->whereNull('tasks.completed_at')
+                    ->where(function ($query) use ($today): void {
+                        $query->where('tasks.needs_attention', true)
+                            ->orWhere('tasks.due_date', '<', $today)
+                            ->orWhereNotNull('tasks.order_task_flag_id')
+                            ->orWhereRaw("lower(trim(tasks.status)) in ('blocked','waiting for client','waiting for internal approval','revision required')");
+                    })
+                    ->orderByRaw('tasks.due_date is null, tasks.due_date asc')
+                    ->orderBy('tasks.id'),
+            ])
+            ->withCount('flaggedTasks as dashboard_flagged_task_count')
+            ->where(function (Builder $query) use ($today): void {
+                $query->where('flow_jobs.attention_requested', true)
+                    ->orWhere('flow_jobs.needs_attention', true)
+                    ->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])
+                    ->orWhere('flow_jobs.delivery_date', '<', $today)
+                    ->orWhereHas('tasks', function (Builder $tasks) use ($today): void {
+                        $tasks->whereNull('tasks.completed_at')
+                            ->where(function (Builder $attention) use ($today): void {
+                                $attention->where('tasks.needs_attention', true)
+                                    ->orWhere('tasks.due_date', '<', $today)
+                                    ->orWhereNotNull('tasks.order_task_flag_id')
+                                    ->orWhereRaw("lower(trim(tasks.status)) in ('blocked','waiting for client','waiting for internal approval','revision required')");
+                            });
+                    });
+            })
+            ->orderByRaw("case when flow_jobs.delivery_date is not null and flow_jobs.delivery_date < ? then 0 when flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 then 1 when flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 2 else 3 end", [$today])
+            ->orderByRaw('flow_jobs.delivery_date is null, flow_jobs.delivery_date asc')
+            ->orderByDesc('flow_jobs.updated_at')
+            ->get();
+    }
+
+    public function attentionInquiries(User $user): Collection
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return app(InquiryService::class)->visibleQuery($user)
+            ->whereNull('inquiries.result')
+            ->where('inquiries.status', '!=', 'Draft')
+            ->select([
+                'inquiries.id', 'inquiries.inquiry_number', 'inquiries.client_id',
+                'inquiries.owner_id', 'inquiries.subject', 'inquiries.status',
+                'inquiries.priority', 'inquiries.required_delivery_date',
+                'inquiries.needs_attention', 'inquiries.updated_at',
+            ])
+            ->with([
+                'client:id,name,logo_path',
+                'owner:id,name,profile_image_path,department_id',
+                'currentTask:id,inquiry_id,assignee_id,title,status,needs_attention,attention_reason,due_date,completed_at',
+                'currentTask.assignee:id,name,profile_image_path,department_id',
+            ])
+            ->withCount([
+                'tasks as dashboard_priority_attention_count' => fn (Builder $tasks) => $tasks
+                    ->whereNull('inquiry_tasks.completed_at')
+                    ->where(function (Builder $query) use ($today): void {
+                        $query->where('inquiry_tasks.needs_attention', true)
+                            ->orWhere('inquiry_tasks.due_date', '<', $today)
+                            ->orWhereRaw("lower(trim(inquiry_tasks.status)) in ('blocked','waiting','revision required')");
+                    }),
+            ])
+            ->where(function (Builder $query) use ($today): void {
+                $query->where('inquiries.needs_attention', true)
+                    ->orWhere('inquiries.required_delivery_date', '<', $today)
+                    ->orWhereHas('tasks', function (Builder $tasks) use ($today): void {
+                        $tasks->whereNull('inquiry_tasks.completed_at')
+                            ->where(function (Builder $attention) use ($today): void {
+                                $attention->where('inquiry_tasks.needs_attention', true)
+                                    ->orWhere('inquiry_tasks.due_date', '<', $today)
+                                    ->orWhereRaw("lower(trim(inquiry_tasks.status)) in ('blocked','waiting','revision required')");
+                            });
+                    });
+            })
+            ->orderByDesc('inquiries.needs_attention')
+            ->orderByDesc('dashboard_priority_attention_count')
+            ->orderByRaw('inquiries.required_delivery_date is null, inquiries.required_delivery_date asc')
+            ->orderByDesc('inquiries.updated_at')
+            ->get();
     }
 
     public function attentionTasks(User $user): Collection
@@ -588,7 +894,7 @@ class DashboardService
             ])
             ->with([
                 'client:id,name,logo_path',
-                'phase:id,name,short_name',
+                'phase:id,name,short_name,color',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'owner:id,name,profile_image_path,department_id',
                 'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
@@ -662,7 +968,7 @@ class DashboardService
             ->with([
                 'job:id,job_number,title,client_id',
                 'job.client:id,name,logo_path',
-                'phase:id,name,short_name',
+                'phase:id,name,short_name,color',
                 'assignee:id,name,profile_image_path,department_id',
                 'orderTaskFlag:id,type,name,status,sort_order,color,metadata',
             ])
@@ -680,7 +986,7 @@ class DashboardService
             ->select(['flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title', 'flow_jobs.health', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested', 'flow_jobs.attention_reason', 'flow_jobs.order_flag_id', 'flow_jobs.progress', 'flow_jobs.delivery_date', 'flow_jobs.updated_at'])
             ->with([
                 'client:id,name,logo_path',
-                'phase:id,name,short_name',
+                'phase:id,name,short_name,color',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'owner:id,name,profile_image_path,department_id',
                 'flaggedTasks:id,flow_job_id,status,due_date,order_task_flag_id,needs_attention,attention_reason,completed_at',
@@ -695,7 +1001,7 @@ class DashboardService
     {
         return $this->activeTaskQuery($user)
             ->select(['tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.due_date', 'tasks.needs_attention', 'tasks.attention_reason', 'tasks.order_task_flag_id', 'tasks.completed_at', 'tasks.updated_at'])
-            ->with(['job:id,job_number,title,client_id', 'job.client:id,name,logo_path', 'phase:id,name,short_name', 'assignee:id,name,profile_image_path,department_id', 'orderTaskFlag:id,type,name,status,sort_order,color,metadata'])
+            ->with(['job:id,job_number,title,client_id', 'job.client:id,name,logo_path', 'phase:id,name,short_name,color', 'assignee:id,name,profile_image_path,department_id', 'orderTaskFlag:id,type,name,status,sort_order,color,metadata'])
             ->orderByRaw('tasks.due_date is null, tasks.due_date asc')
             ->orderByDesc('tasks.updated_at')
             ->limit(30)
@@ -793,10 +1099,9 @@ class DashboardService
                 $kind = 'tasks';
                 $clientId = (int) ($subject->job?->client_id ?? 0);
                 $departmentId = (int) ($subject->assignee?->department_id ?? 0);
-                $title = trim((string) $subject->title) ?: 'Order task';
+                $title = trim((string) ($subject->job?->displayOrderNumber() ?: $subject->task_number ?: 'Order task'));
                 $detail = trim(implode(' · ', array_filter([
-                    $subject->task_number,
-                    $subject->job?->displayOrderNumber(),
+                    trim((string) $subject->title) ?: null,
                     $description,
                     $actorName !== '' ? 'by '.$actorName : null,
                 ])));
@@ -809,11 +1114,9 @@ class DashboardService
                 $kind = $isTaskChange ? 'tasks' : 'inquiries';
                 $clientId = (int) ($subject->client_id ?? 0);
                 $departmentId = (int) ($inquiryTask?->assignee?->department_id ?? $subject->owner?->department_id ?? 0);
-                $title = $isTaskChange
-                    ? (trim((string) ($inquiryTask?->title ?: 'Inquiry task')))
-                    : (trim((string) $subject->inquiry_number) ?: 'Inquiry');
+                $title = trim((string) $subject->inquiry_number) ?: 'Inquiry';
                 $detail = trim(implode(' · ', array_filter([
-                    $subject->inquiry_number,
+                    $isTaskChange ? (trim((string) ($inquiryTask?->title ?: 'Inquiry task'))) : null,
                     $description,
                     $actorName !== '' ? 'by '.$actorName : null,
                 ])));
@@ -852,6 +1155,7 @@ class DashboardService
             ->where('clients.is_active', true)
             ->select(['clients.id', 'clients.name', 'clients.logo_path'])
             ->withCount([
+                // Keep the old dashboard attributes for secondary/legacy views.
                 'jobs as active_jobs_count' => fn ($jobs) => $access->applyJobScope(
                     $jobs->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
                     $user
@@ -867,6 +1171,20 @@ class DashboardService
                     $tasks->whereNull('tasks.completed_at')->where('tasks.due_date', '<', $today),
                     $user
                 ),
+
+                // Portfolio prototype metrics: every visible non-cancelled Order,
+                // including completed Orders, plus its completed subset.
+                'jobs as orders_count' => fn ($jobs) => $access->applyJobScope(
+                    $jobs->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
+                    $user
+                ),
+                'jobs as completed_orders_count' => fn ($jobs) => $access->applyJobScope(
+                    $jobs->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                        ->where(fn ($query) => $query
+                            ->whereNotNull('flow_jobs.completed_at')
+                            ->orWhereRaw("LOWER(TRIM(COALESCE(flow_jobs.status, ''))) = 'completed'")),
+                    $user
+                ),
             ])
             ->orderByDesc('active_jobs_count')
             ->orderBy('clients.name')
@@ -877,18 +1195,39 @@ class DashboardService
             return $clients;
         }
 
-        // Inquiry volume must respect the signed-in user's record scope. Resolve
-        // the visible portfolio clients in one grouped query instead of an N+1 count.
-        $inquiryCounts = app(InquiryService::class)->visibleQuery($user)
+        // Build Inquiry totals from the same permission-scoped query used by the
+        // Inquiry module. Drafts are not operational portfolio records; converted,
+        // closed/dead and completed records remain in the created total and count as
+        // completed when they have a terminal lifecycle marker.
+        $inquiryStats = app(InquiryService::class)->visibleQuery($user)
             ->whereIn('inquiries.client_id', $clients->pluck('id'))
-            ->whereNull('inquiries.result')
-            ->where('inquiries.status', '!=', 'Draft')
-            ->selectRaw('inquiries.client_id, count(*) as aggregate')
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->selectRaw('inquiries.client_id')
+            ->selectRaw('COUNT(*) as inquiries_count')
+            ->selectRaw("SUM(CASE WHEN inquiries.completed_at IS NOT NULL OR inquiries.result IS NOT NULL OR LOWER(TRIM(COALESCE(inquiries.status, ''))) IN ('completed','converted','closed','dead') THEN 1 ELSE 0 END) as completed_inquiries_count")
+            ->selectRaw("SUM(CASE WHEN inquiries.completed_at IS NULL AND inquiries.result IS NULL AND LOWER(TRIM(COALESCE(inquiries.status, ''))) NOT IN ('completed','converted','closed','dead') THEN 1 ELSE 0 END) as open_inquiries_count")
+            ->selectRaw("SUM(CASE WHEN inquiries.completed_at IS NULL AND inquiries.result IS NULL AND inquiries.needs_attention = 1 THEN 1 ELSE 0 END) as attention_inquiries_count")
             ->groupBy('inquiries.client_id')
-            ->pluck('aggregate', 'inquiries.client_id');
+            ->get()
+            ->keyBy('client_id');
 
-        $clients->each(function (Client $client) use ($inquiryCounts): void {
-            $client->setAttribute('open_inquiries_count', (int) ($inquiryCounts[$client->id] ?? 0));
+        $clients->each(function (Client $client) use ($inquiryStats): void {
+            $stats = $inquiryStats->get($client->id);
+            $inquiries = (int) ($stats?->inquiries_count ?? 0);
+            $completedInquiries = (int) ($stats?->completed_inquiries_count ?? 0);
+            $openInquiries = (int) ($stats?->open_inquiries_count ?? 0);
+            $attentionInquiries = (int) ($stats?->attention_inquiries_count ?? 0);
+            $orders = (int) ($client->orders_count ?? 0);
+            $completedOrders = (int) ($client->completed_orders_count ?? 0);
+            $attentionOrders = (int) ($client->at_risk_jobs_count ?? 0);
+
+            $client->setAttribute('inquiries_count', $inquiries);
+            $client->setAttribute('completed_inquiries_count', $completedInquiries);
+            $client->setAttribute('open_inquiries_count', $openInquiries);
+            $client->setAttribute('attention_inquiries_count', $attentionInquiries);
+            $client->setAttribute('total_records_count', $inquiries + $orders);
+            $client->setAttribute('completed_records_count', $completedInquiries + $completedOrders);
+            $client->setAttribute('attention_items_count', $attentionInquiries + $attentionOrders);
         });
 
         return $clients;
@@ -953,7 +1292,7 @@ class DashboardService
 
         $sourcePhases = WorkflowPhase::query()
             ->whereIn('id', $phaseIds)
-            ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+            ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id', 'color'])
             ->keyBy('id');
 
         $missingPhaseIds = $phaseIds->diff($sourcePhases->keys());
@@ -962,7 +1301,7 @@ class DashboardService
             : WorkflowPhase::query()
                 ->whereIn('source_workflow_phase_id', $missingPhaseIds)
                 ->orderBy('id')
-                ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+                ->get(['id', 'workflow_id', 'workflow_template_id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence', 'task_pack_id', 'color'])
                 ->unique('source_workflow_phase_id')
                 ->keyBy('source_workflow_phase_id');
 
@@ -978,6 +1317,8 @@ class DashboardService
             if (!isset($counts[$key])) {
                 $counts[$key] = [
                     'label' => $label,
+                    'short_label' => $this->dashboardPhaseShortLabel($phase?->short_name, $phase?->name),
+                    'color' => MasterColor::normalize((string) ($phase?->color ?? '')),
                     'count' => 0,
                     'sequence' => (int) ($phase?->sequence ?? 9999),
                     'workflow_ids' => [],
@@ -1059,11 +1400,13 @@ class DashboardService
             ? collect()
             : WorkflowPhase::query()
                 ->whereIn('id', $directPhaseIds->diff($definitionsById->keys()))
-                ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+                ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id', 'color'])
                 ->map(fn (WorkflowPhase $phase): array => [
                     'id' => (int) $phase->id,
                     'workflow_id' => (int) ($phase->workflow_template_id ?: $phase->workflow_id),
                     'label' => $this->dashboardPhaseLabel($phase->name, $phase->short_name),
+                    'short_label' => $this->dashboardPhaseShortLabel($phase->short_name, $phase->name),
+                    'color' => MasterColor::normalize((string) ($phase->color ?? '')),
                     'sequence' => (int) $phase->sequence,
                     'task_pack_id' => $phase->task_pack_id ? (int) $phase->task_pack_id : null,
                 ])
@@ -1146,6 +1489,8 @@ class DashboardService
             if (!isset($counts[$key])) {
                 $counts[$key] = [
                     'label' => $label,
+                    'short_label' => (string) ($phase['short_label'] ?? $label),
+                    'color' => MasterColor::normalize((string) ($phase['color'] ?? '')),
                     'count' => 0,
                     'sequence' => (int) ($phase['sequence'] ?? 9999),
                     'workflow_ids' => [],
@@ -1173,11 +1518,13 @@ class DashboardService
             ->where('is_active', true)
             ->orderBy('sequence')
             ->orderBy('id')
-            ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id'])
+            ->get(['id', 'workflow_id', 'workflow_template_id', 'name', 'short_name', 'sequence', 'task_pack_id', 'color'])
             ->map(fn (WorkflowPhase $phase): array => [
                 'id' => (int) $phase->id,
                 'workflow_id' => (int) ($phase->workflow_template_id ?: $phase->workflow_id),
                 'label' => $this->dashboardPhaseLabel($phase->name, $phase->short_name),
+                'short_label' => $this->dashboardPhaseShortLabel($phase->short_name, $phase->name),
+                'color' => MasterColor::normalize((string) ($phase->color ?? '')),
                 'sequence' => (int) $phase->sequence,
                 'task_pack_id' => $phase->task_pack_id ? (int) $phase->task_pack_id : null,
             ])
@@ -1201,6 +1548,8 @@ class DashboardService
             if (!isset($groups[$key])) {
                 $groups[$key] = [
                     'label' => $phase['label'],
+                    'short_label' => (string) ($phase['short_label'] ?? $phase['label']),
+                    'color' => MasterColor::normalize((string) ($phase['color'] ?? '')),
                     'count' => 0,
                     'sequence' => (int) $phase['sequence'],
                     'workflow_ids' => [],
@@ -1214,6 +1563,8 @@ class DashboardService
             if (!isset($groups[$key])) {
                 $groups[$key] = [
                     'label' => (string) $countRow['label'],
+                    'short_label' => (string) ($countRow['short_label'] ?? $countRow['label']),
+                    'color' => MasterColor::normalize((string) ($countRow['color'] ?? '')),
                     'count' => 0,
                     'sequence' => (int) $countRow['sequence'],
                     'workflow_ids' => [],
@@ -1221,6 +1572,12 @@ class DashboardService
             }
             $groups[$key]['count'] += (int) $countRow['count'];
             $groups[$key]['sequence'] = min($groups[$key]['sequence'], (int) $countRow['sequence']);
+            if (blank($groups[$key]['short_label'] ?? null) && filled($countRow['short_label'] ?? null)) {
+                $groups[$key]['short_label'] = (string) $countRow['short_label'];
+            }
+            if (blank($groups[$key]['color'] ?? null) && filled($countRow['color'] ?? null)) {
+                $groups[$key]['color'] = MasterColor::normalize((string) $countRow['color']);
+            }
             foreach (array_keys($countRow['workflow_ids'] ?? []) as $workflowId) {
                 if ((int) $workflowId > 0) $groups[$key]['workflow_ids'][(int) $workflowId] = true;
             }
@@ -1256,6 +1613,8 @@ class DashboardService
             $scopeLabel = $scopeNames->implode(', ');
             return [
                 'label' => (string) $group['label'],
+                'short_label' => (string) ($group['short_label'] ?? $group['label']),
+                'color' => MasterColor::normalize((string) ($group['color'] ?? '')),
                 'count' => (int) $group['count'],
                 'sequence' => (int) $group['sequence'],
                 'is_mismatch' => $isMismatch,
@@ -1300,6 +1659,13 @@ class DashboardService
         return $label !== '' ? $label : 'Unassigned';
     }
 
+    private function dashboardPhaseShortLabel(?string $shortName, ?string $name = null): string
+    {
+        $label = trim((string) $shortName);
+        if ($label === '') $label = trim((string) $name);
+        return $label !== '' ? $label : 'Unassigned';
+    }
+
     private function dashboardPhaseKey(string $label): string
     {
         return mb_strtolower(trim((string) preg_replace('/\\s+/u', ' ', $label)));
@@ -1318,21 +1684,24 @@ class DashboardService
         [$rangeFrom, $rangeTo] = $this->dashboardRangeUtcBounds($rangeDays);
 
         $resolver = function () use ($user, $clientId, $departmentId, $rangeFrom, $rangeTo): array {
-            $orderTasks = $this->activeTaskQuery($user)
+            // Distribution must represent every configured Master Data status,
+            // including Completed/Cancelled. Therefore do not start from the
+            // dashboard's ongoing-task query, which intentionally removes terminal
+            // statuses. The date/client/team filters still apply to the underlying
+            // visible task rows.
+            $orderTasks = app(TaskService::class)->visibleQuery($user)
                 ->reorder()
                 ->whereBetween('tasks.updated_at', [$rangeFrom, $rangeTo])
-                ->whereRaw("lower(trim(coalesce(tasks.status, ''))) != 'cancelled'")
+                ->whereHas('job', fn (Builder $job) => $job
+                    ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true)))
                 ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
                 ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)));
 
             $inquiryTasks = app(AccessControlService::class)
                 ->applyInquiryTaskScope(InquiryTask::query(), $user)
                 ->whereBetween('inquiry_tasks.updated_at', [$rangeFrom, $rangeTo])
-                ->whereNull('inquiry_tasks.completed_at')
-                ->whereRaw("lower(trim(coalesce(inquiry_tasks.status, ''))) not in ('completed','cancelled')")
                 ->whereHas('inquiry', fn (Builder $inquiry) => $inquiry
-                    ->whereNull('inquiries.result')
-                    ->where('inquiries.status', '!=', 'Draft')
+                    ->where('inquiries.workspace_id', app(MasterDataService::class)->workspaceId())
                     ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true)))
                 ->when($clientId > 0, fn (Builder $query) => $query->whereHas('inquiry', fn (Builder $inquiry) => $inquiry->where('client_id', $clientId)))
                 ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)));
@@ -1349,9 +1718,12 @@ class DashboardService
     }
 
     /**
-     * Use active Master Data records as the canonical status list and colour
-     * source, while retaining any still-open legacy status value so the total
-     * can never silently disagree with the visible tasks.
+     * Master Data is the single source of truth for dashboard task-status rows.
+     *
+     * Only active statuses configured for the requested type are displayed, and
+     * they stay in the exact Master Data sort_order sequence. Task rows carrying
+     * an old/unconfigured status are intentionally not surfaced as extra dashboard
+     * statuses; they should be corrected through the task/master-data workflow.
      */
     private function buildTaskStatusDistribution(Builder $query, string $masterType): array
     {
@@ -1362,40 +1734,28 @@ class DashboardService
             ->get();
 
         $counts = [];
-        $labels = [];
         foreach ($countRows as $row) {
             $label = trim((string) ($row->dashboard_status ?: 'Unspecified')) ?: 'Unspecified';
-            $key = mb_strtolower(preg_replace('/\\s+/u', ' ', $label) ?: $label);
+            $key = mb_strtolower(preg_replace('/\s+/u', ' ', $label) ?: $label);
             $counts[$key] = ($counts[$key] ?? 0) + (int) $row->aggregate;
-            $labels[$key] = $label;
         }
 
+        // active() is already ordered by Master Data sort_order, then name.
+        // Do not re-sort or append task-only/legacy statuses here.
+        $masterStatuses = app(MasterDataService::class)->active($masterType)->values();
         $rows = [];
-        $seen = [];
-        $masterStatuses = app(MasterDataService::class)->active($masterType)
-            ->sortBy(fn ($record) => [(int) ($record->sort_order ?? 0), mb_strtolower((string) $record->name)])
-            ->values();
 
         foreach ($masterStatuses as $record) {
             $label = trim((string) $record->name);
             if ($label === '') continue;
-            $key = mb_strtolower(preg_replace('/\\s+/u', ' ', $label) ?: $label);
-            $seen[$key] = true;
+
+            $key = mb_strtolower(preg_replace('/\s+/u', ' ', $label) ?: $label);
             $rows[] = [
                 'label' => $label,
                 'count' => (int) ($counts[$key] ?? 0),
                 'color' => MasterColor::normalize((string) ($record->color ?? '')) ?: MasterColor::defaultFor($masterType, $label),
                 'configured' => true,
-            ];
-        }
-
-        foreach ($counts as $key => $count) {
-            if (isset($seen[$key])) continue;
-            $rows[] = [
-                'label' => (string) ($labels[$key] ?? 'Unspecified'),
-                'count' => (int) $count,
-                'color' => MasterColor::defaultFor($masterType, (string) ($labels[$key] ?? 'Unspecified')),
-                'configured' => false,
+                'sort_order' => (int) ($record->sort_order ?? 0),
             ];
         }
 
@@ -1429,19 +1789,71 @@ class DashboardService
                     ->orWhereNotNull('metadata->certificate_test_report');
             })->count();
 
+            $templates = (clone $products)->where(function (Builder $query): void {
+                $query->whereNotNull('metadata->template_doc_path')
+                    ->orWhereNotNull('metadata->template_doc_url')
+                    ->orWhereNotNull('metadata->template_doc');
+            })->count();
+
+            $mainCategories = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('product_main_category')
+                ->active()
+                ->count();
+
             $supplierBase = MasterRecord::query()->forWorkspace($workspaceId)->ofType('supplier');
             $supplierTotal = (clone $supplierBase)->count();
             $activeSuppliers = (clone $supplierBase)->active()->count();
 
+            $rows = [
+                [
+                    'label' => 'Product images',
+                    'value' => $percent($withImages, $totalProducts),
+                    'detail' => number_format($withImages).' of '.number_format($totalProducts),
+                    'tone' => 'amber',
+                ],
+                [
+                    'label' => 'Category mapping',
+                    'value' => $percent($categorized, $totalProducts),
+                    'detail' => number_format($categorized).' mapped',
+                    'tone' => 'green',
+                ],
+                [
+                    'label' => 'Client availability',
+                    'value' => $percent($availability, $totalProducts),
+                    'detail' => number_format($availability).' mapped',
+                    'tone' => 'green',
+                ],
+                [
+                    'label' => 'Certificates linked',
+                    'value' => $percent($certificates, $totalProducts),
+                    'detail' => number_format($certificates).' linked',
+                    'tone' => 'red',
+                ],
+                [
+                    'label' => 'Product templates',
+                    'value' => $percent($templates, $totalProducts),
+                    'detail' => number_format($templates).' linked',
+                    'tone' => 'amber',
+                ],
+                [
+                    'label' => 'Supplier mapping',
+                    'value' => $percent($activeSuppliers, $supplierTotal),
+                    'detail' => number_format($activeSuppliers).' active',
+                    'tone' => 'blue',
+                ],
+            ];
+
+            $readyPercent = $rows === []
+                ? 0
+                : (int) round(collect($rows)->avg(fn (array $row): int => (int) $row['value']));
+
             return [
                 'activeProducts' => $totalProducts,
-                'rows' => [
-                    ['label' => 'Products with images', 'value' => $percent($withImages, $totalProducts)],
-                    ['label' => 'Categorized products', 'value' => $percent($categorized, $totalProducts)],
-                    ['label' => 'Client availability mapped', 'value' => $percent($availability, $totalProducts)],
-                    ['label' => 'Certificates linked', 'value' => $percent($certificates, $totalProducts)],
-                    ['label' => 'Active suppliers', 'value' => $percent($activeSuppliers, $supplierTotal)],
-                ],
+                'mainCategories' => $mainCategories,
+                'activeSuppliers' => $activeSuppliers,
+                'readyPercent' => $readyPercent,
+                'rows' => $rows,
             ];
         });
     }

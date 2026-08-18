@@ -1,4 +1,7 @@
-.ft-client-status-pill.is-active{background:#ddf6e6;color:#1b9653}.ft-client-status-pill.is-archived{background:#eef2f6;color:#6d7b8f}
+
+.ft-client-proto-identity{display:flex;align-items:center;gap:16px;min-width:0}.ft-client-proto-logo{width:60px;height:60px;border-radius:50%;display:grid;place-items:center;background:#d9f5e4;color:#159252;font-size:21px;font-weight:800;flex:0 0 auto}
+.ft-client-proto-title-block{min-width:0}.ft-client-proto-title-line{display:flex;align-items:center;gap:12px;min-width:0}.ft-client-proto-title-line h1{margin:0;color:#0c1b35;font-size:23px;line-height:1.1;font-weight:800;letter-spacing:-.035em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ft-client-status-pill{display:inline-flex;align-items:center;border-radius:14px;padding:4px 10px;font-size:9.5px;font-weight:800;line-height:1}.ft-client-status-pill.is-active{background:#ddf6e6;color:#1b9653}.ft-client-status-pill.is-archived{background:#eef2f6;color:#6d7b8f}
 .ft-client-proto-subline{margin-top:10px;display:flex;align-items:center;gap:10px;color:#5f708b;font-size:10.5px;white-space:nowrap;overflow:hidden}.ft-client-proto-subline>span{overflow:hidden;text-overflow:ellipsis}.ft-client-proto-subline i{width:3px;height:3px;background:#96a5b7;border-radius:50%;flex:0 0 auto}
 .ft-client-proto-actions{display:flex;align-items:center;gap:11px;flex:0 0 auto}.ft-client-proto-secondary,.ft-client-proto-primary{height:39px;border-radius:8px;display:inline-flex;align-items:center;justify-content:center;gap:8px;padding:0 16px;text-decoration:none;font-size:10.5px;font-weight:800;cursor:pointer}
 .ft-client-proto-secondary{background:#fff;border:1px solid #cdd9e7;color:#183052}.ft-client-proto-secondary svg{width:14px;height:14px}.ft-client-proto-primary{border:1px solid #176df0;background:#176df0;color:#fff;box-shadow:0 2px 5px rgba(23,109,240,.16)}.ft-client-proto-primary>span{font-size:20px;font-weight:400;line-height:1;margin-top:-1px}
@@ -388,32 +391,26 @@
 .ft-inquiry-prototype .ft-inquiry-products-create-section .ft-product-row-footer span{order:1}
 .ft-inquiry-prototype .ft-inquiry-products-create-section .ft-product-row-footer button{order:2;margin-left:auto}
 
-/* 2026-08-12 Order Overview taskflow parity with Inquiry details.
-   Phase rows use a deterministic tint palette; task rows alternate mint/white.
+/* Order Overview taskflow parity with Inquiry details.
+   Phase row colors come from Workflow Setup; task rows alternate mint/white.
    Task documents can be uploaded directly against the owning Task Pack task. */
 .ft-overview-task-card .ft-order-overview-taskflow{overflow:visible}
 .ft-overview-task-card .ft-order-phase-head{
     width:100%;height:38px;margin:0;border:0;border-bottom:1px solid #dce5f0;border-radius:0;
     display:grid;grid-template-columns:20px minmax(220px,1fr) auto 80px;gap:8px;align-items:center;
     padding:0 10px;text-align:left;color:#10233e;font:inherit;
-    background:var(--ft-order-phase-bg,#f8fafc);
+    background:var(--ft-master-bg,#f8fafc);
 }
-.ft-overview-task-card .ft-phase-tone-1{--ft-order-phase-bg:#f4efff;--ft-order-phase-accent:#7c2bd9;--ft-order-phase-chip-bg:#e9ddfb}
-.ft-overview-task-card .ft-phase-tone-2{--ft-order-phase-bg:#eef6ff;--ft-order-phase-accent:#3377d6;--ft-order-phase-chip-bg:#dcecff}
-.ft-overview-task-card .ft-phase-tone-3{--ft-order-phase-bg:#fff7e6;--ft-order-phase-accent:#d49723;--ft-order-phase-chip-bg:#f8e9c6}
-.ft-overview-task-card .ft-phase-tone-4{--ft-order-phase-bg:#eafbf5;--ft-order-phase-accent:#15966d;--ft-order-phase-chip-bg:#d5f3e8}
-.ft-overview-task-card .ft-phase-tone-5{--ft-order-phase-bg:#fff1f3;--ft-order-phase-accent:#d55b72;--ft-order-phase-chip-bg:#f8dfe4}
-.ft-overview-task-card .ft-phase-tone-6{--ft-order-phase-bg:#ecfbff;--ft-order-phase-accent:#2796ac;--ft-order-phase-chip-bg:#d8f2f7}
 .ft-overview-task-card .ft-order-phase-head b{
     width:18px;height:18px;display:grid;place-items:center;border-radius:5px;
-    background:var(--ft-order-phase-chip-bg,#e8eef5);color:var(--ft-order-phase-accent);
+    background:var(--ft-master-bg,#e8eef5);border:1px solid var(--ft-master-border,#dce5ed);color:var(--ft-master-text,#536984);
     font-size:9px;font-weight:800;
 }
-.ft-overview-task-card .ft-order-phase-head b.current-number{background:var(--ft-order-phase-accent);color:#fff}
+.ft-overview-task-card .ft-order-phase-head b.current-number{background:var(--ft-master-color,#64748b);border-color:var(--ft-master-color,#64748b);color:#fff}
 .ft-overview-task-card .ft-order-phase-head strong{font-size:10.5px;font-weight:800;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .ft-overview-task-card .ft-order-phase-head small{font-size:9px;text-align:right;color:#60738b;white-space:nowrap}
 .ft-overview-task-card .ft-order-phase-head em{position:relative;width:80px!important;height:5px;border-radius:999px;background:rgba(99,117,141,.14);overflow:hidden}
-.ft-overview-task-card .ft-order-phase-head em:before{content:"";position:absolute;inset:0 auto 0 0;width:var(--phase-progress,0%);border-radius:inherit;background:var(--ft-order-phase-accent)}
+.ft-overview-task-card .ft-order-phase-head em:before{content:"";position:absolute;inset:0 auto 0 0;width:var(--phase-progress,0%);border-radius:inherit;background:var(--ft-master-color,#64748b)}
 
 .ft-overview-task-card .ft-phase-task-columns{
     grid-template-columns:minmax(245px,1fr) 190px 135px 190px 118px 55px;
@@ -2199,3 +2196,5 @@
     justify-content: center;
     padding: 18px 0 4px;
 }
+
+.ft-efficiency-prototype-options label{pointer-events:none;cursor:default}.ft-efficiency-prototype-options input{pointer-events:none}

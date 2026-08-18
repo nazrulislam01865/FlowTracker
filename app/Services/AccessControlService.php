@@ -24,7 +24,7 @@ class AccessControlService
     /** Modules that are actually implemented and enforced by FlowTrack today. */
     public const MODULES = [
         'dashboard' => ['name' => 'Dashboard', 'group' => 'General'],
-        'reports' => ['name' => 'Inquiry Intelligence', 'group' => 'General'],
+        'reports' => ['name' => 'Report', 'group' => 'General'],
         'notifications' => ['name' => 'Notifications', 'group' => 'General'],
         'clients' => ['name' => 'Clients', 'group' => 'Commercial'],
         'inquiries' => ['name' => 'Inquiries', 'group' => 'Commercial'],
@@ -35,6 +35,7 @@ class AccessControlService
         'finance' => ['name' => 'Finance', 'group' => 'Commercial'],
         'tasks' => ['name' => 'Tasks & Checklists', 'group' => 'Operations'],
         'documents' => ['name' => 'Documents', 'group' => 'Records'],
+        'document_archive' => ['name' => 'Document Archive', 'group' => 'Records'],
         'workflow' => ['name' => 'Workflow Setup', 'group' => 'Administration'],
         'taskpacks' => ['name' => 'Task Pack Setup', 'group' => 'Administration'],
         'masterdata' => ['name' => 'Master Data', 'group' => 'Administration'],
@@ -62,6 +63,7 @@ class AccessControlService
         'finance' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'tasks' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'documents' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
+        'document_archive' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'workflow' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'taskpacks' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
         'masterdata' => ['view','create','edit_own','edit_all','delete','assign','link','export','manage'],
@@ -73,7 +75,7 @@ class AccessControlService
     /** Shared Product/Finance capabilities inherit record visibility from the parent Inquiry/Order. */
     public const PARENT_RECORD_MODULES = ['finance'];
 
-    public const SCOPED_MODULES = ['inquiries', 'jobs', 'tasks', 'documents'];
+    public const SCOPED_MODULES = ['inquiries', 'jobs', 'tasks', 'documents', 'document_archive'];
 
     public static function supportedActions(string $module): array
     {
@@ -364,17 +366,94 @@ class AccessControlService
         return $query;
     }
 
-    public function applyDocumentScope(Builder|Relation $query, User $user): Builder
+    public function applyDocumentScope(Builder|Relation $query, User $user, string $module = 'documents'): Builder
     {
         $query = $this->eloquentBuilder($query);
-        if (!$this->can($user, 'documents', 'view')) return $query->whereRaw('1 = 0');
-        $scopes = $this->scopes($user, 'documents');
+        if (!in_array($module, ['documents', 'document_archive'], true) || !$this->can($user, $module, 'view')) {
+            return $query->whereRaw('1 = 0');
+        }
+
+        $scopes = $this->scopes($user, $module);
         if (in_array('all_records', $scopes, true)) return $query;
         if ($this->normalizeScopes($scopes) === ['none']) return $query->whereRaw('1 = 0');
 
+        if ($module === 'documents') {
+            // Preserve the existing in-record Documents visibility semantics.
+            return $query->where(function ($q) use ($user, $scopes) {
+                $q->whereHas('task', fn ($tasks) => $this->constrainTasks($tasks, $user, $scopes))
+                    ->orWhereHas('job', fn ($jobs) => $this->constrainJobs($jobs, $user, $scopes));
+            });
+        }
+
+        // The standalone archive also contains client-only/unlinked files, so
+        // its own-record and department scopes must account for the uploader.
         return $query->where(function ($q) use ($user, $scopes) {
-            $q->whereHas('task', fn ($tasks) => $this->constrainTasks($tasks, $user, $scopes))
+            $q->where('uploaded_by', $user->id)
+                ->orWhereHas('task', fn ($tasks) => $this->constrainTasks($tasks, $user, $scopes))
                 ->orWhereHas('job', fn ($jobs) => $this->constrainJobs($jobs, $user, $scopes));
+
+            if (in_array('department', $this->normalizeScopes($scopes), true) && $user->department_id) {
+                $q->orWhereHas('uploader', fn ($uploader) => $uploader->where('department_id', $user->department_id));
+            }
+        });
+    }
+
+    /** Scope Order records used only by the standalone Document Archive. */
+    public function applyDocumentArchiveJobScope(Builder|Relation $query, User $user): Builder
+    {
+        $query = $this->eloquentBuilder($query);
+        if (!$this->can($user, 'document_archive', 'view')) return $query->whereRaw('1 = 0');
+        $scopes = $this->scopes($user, 'document_archive');
+        if ($this->normalizeScopes($scopes) === ['none']) return $query->whereRaw('1 = 0');
+        return $this->constrainJobs($query, $user, $scopes);
+    }
+
+    /** Scope Order tasks used only by the standalone Document Archive. */
+    public function applyDocumentArchiveTaskScope(Builder|Relation $query, User $user): Builder
+    {
+        $query = $this->eloquentBuilder($query);
+        if (!$this->can($user, 'document_archive', 'view')) return $query->whereRaw('1 = 0');
+        $scopes = $this->scopes($user, 'document_archive');
+        if ($this->normalizeScopes($scopes) === ['none']) return $query->whereRaw('1 = 0');
+        return $this->constrainTasks($query, $user, $scopes);
+    }
+
+    /**
+     * Scope Inquiry documents independently from the Inquiry module so access
+     * to the Document Archive can be delegated without exposing Inquiry pages.
+     */
+    public function applyInquiryDocumentArchiveScope(Builder|Relation $query, User $user): Builder
+    {
+        $query = $this->eloquentBuilder($query);
+        if (!$this->can($user, 'document_archive', 'view')) return $query->whereRaw('1 = 0');
+
+        $query->whereHas('inquiry', fn (Builder $inquiry) => $inquiry
+            ->where('workspace_id', app(SetupContext::class)->workspaceId()));
+
+        $scopes = $this->normalizeScopes($this->scopes($user, 'document_archive'));
+        if (in_array('all_records', $scopes, true)) return $query;
+        if ($scopes === ['none']) return $query->whereRaw('1 = 0');
+
+        return $query->where(function (Builder $scopeQuery) use ($user, $scopes): void {
+            $scopeQuery->where('inquiry_documents.uploaded_by', $user->id);
+
+            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
+                $scopeQuery->orWhereHas('inquiry', function (Builder $inquiry) use ($user): void {
+                    $inquiry->where('created_by', $user->id)
+                        ->orWhere('owner_id', $user->id);
+                });
+            }
+
+            if (in_array('assigned_jobs', $scopes, true)) {
+                $scopeQuery->orWhereHas('task', fn (Builder $task) => $task->where('assignee_id', $user->id));
+            }
+
+            if (in_array('department', $scopes, true) && $user->department_id) {
+                $scopeQuery
+                    ->orWhereHas('uploader', fn (Builder $uploader) => $uploader->where('department_id', $user->department_id))
+                    ->orWhereHas('inquiry.owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
+                    ->orWhereHas('task.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
+            }
         });
     }
 

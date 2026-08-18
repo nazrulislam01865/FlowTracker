@@ -82,6 +82,68 @@ class MasterRecord extends Model
         return $key !== '' ? $key : null;
     }
 
+    public function taskPackWorkCalendarDayRange(): string
+    {
+        if ($this->type !== 'task_pack_work_calendar') return '';
+
+        $labels = [
+            'monday' => 'Mon',
+            'tuesday' => 'Tue',
+            'wednesday' => 'Wed',
+            'thursday' => 'Thu',
+            'friday' => 'Fri',
+            'saturday' => 'Sat',
+            'sunday' => 'Sun',
+        ];
+
+        $from = strtolower(trim((string) data_get($this->metadata, 'day_from')));
+        $to = strtolower(trim((string) data_get($this->metadata, 'day_to')));
+
+        if ($from === '' && $to === '' && $this->code === 'TPW-001') {
+            $from = 'monday';
+            $to = 'friday';
+        }
+
+        if ($from === '' || $to === '') return '—';
+        if ($from === $to) return $labels[$from] ?? ucfirst($from);
+
+        return ($labels[$from] ?? ucfirst($from)).'–'.($labels[$to] ?? ucfirst($to));
+    }
+
+    public function taskPackWorkCalendarTimeRange(): string
+    {
+        if ($this->type !== 'task_pack_work_calendar') return '';
+
+        $from = trim((string) data_get($this->metadata, 'time_from'));
+        $to = trim((string) data_get($this->metadata, 'time_to'));
+
+        if ($from === '' && $to === '' && $this->code === 'TPW-001') {
+            $from = '09:00';
+            $to = '18:00';
+        }
+
+        return $from !== '' && $to !== '' ? $from.'–'.$to : '—';
+    }
+
+    public function taskPackWorkCalendarLabel(): string
+    {
+        if ($this->type !== 'task_pack_work_calendar') return trim((string) $this->name);
+
+        $name = trim((string) $this->name);
+        $days = $this->taskPackWorkCalendarDayRange();
+        $times = $this->taskPackWorkCalendarTimeRange();
+
+        // Legacy seeded records already contained the schedule inside the name.
+        // Keep them readable without duplicating that schedule until migrated.
+        if (str_contains($name, '·')) return $name;
+
+        $schedule = collect([$days !== '—' ? $days : null, $times !== '—' ? $times : null])
+            ->filter()
+            ->implode(', ');
+
+        return $schedule !== '' ? $name.' · '.$schedule : $name;
+    }
+
     public function productDisplayCode(): string
     {
         if ($this->type !== 'product') return trim((string) $this->code);

@@ -102,6 +102,8 @@
                             :from-value="$dateFrom"
                             :to-value="$dateTo"
                             label="Created date"
+                            from-label="From"
+                            to-label="To"
                         />
                         <button
                             class="chip ft-inquiry-clear-filter"

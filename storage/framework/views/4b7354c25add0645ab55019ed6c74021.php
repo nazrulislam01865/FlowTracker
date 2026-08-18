@@ -105,7 +105,7 @@ unset($__defined_vars, $__key, $__value); ?>
 ?>
 
 <div id="ft-orders-page" class="ft-orders-prototype">
-    <?php if (! $__env->hasRenderedOnce('3bb41ca0-41cd-44ea-8d57-3050f088358d')): $__env->markAsRenderedOnce('3bb41ca0-41cd-44ea-8d57-3050f088358d'); ?>
+    <?php if (! $__env->hasRenderedOnce('45c518dc-64f6-4adc-bffd-39d26e9648d2')): $__env->markAsRenderedOnce('45c518dc-64f6-4adc-bffd-39d26e9648d2'); ?>
         <style>
             .ft-orders-prototype{color-scheme:light;--navy:#0d1b2b;--navy-active:#22466f;--blue:#2463eb;--blue-soft:#edf3ff;--canvas:#f3f6fb;--surface:#fff;--line:#dbe3ed;--text:#172033;--muted:#62728a;--green:#147e5b;--green-soft:#edf9f4;--amber:#a56708;--amber-soft:#fff6e5;--red:#c43f3f;--red-soft:#fff0f0;--purple:#6f54cf;--purple-soft:#f1edff;width:100%;min-width:0;color:var(--text);font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
             .ft-orders-prototype button,.ft-orders-prototype input,.ft-orders-prototype a{font:inherit}.ft-orders-prototype button,.ft-orders-prototype a{-webkit-tap-highlight-color:transparent}.ft-orders-prototype button{cursor:pointer}.ft-orders-prototype a{color:inherit}
@@ -382,6 +382,64 @@ unset($__defined_vars, $__key, $__value); ?>
             .ft-orders-prototype .ft-job-row.ft-client-row-nep:nth-child(even){background:#eef6ff}
             .ft-orders-prototype .ft-job-row.ft-client-row-iid:hover{background:#e5f5ea}
             .ft-orders-prototype .ft-job-row.ft-client-row-nep:hover{background:#e4f0ff}
+
+
+            /* 2026-08-18: align the Order list filter bar with the Inquiry list.
+               Search occupies the first row; all filters share one aligned row. */
+            .ft-orders-prototype .ft-search-bar{
+                display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);
+            }
+            .ft-orders-prototype .ft-search{
+                width:100%;min-width:0;flex:1 1 100%;align-self:auto;
+            }
+            .ft-orders-prototype .ft-search input{
+                height:36px;min-height:36px;line-height:36px;border-radius:8px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls{
+                display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;min-width:0;align-items:center;gap:7px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-list-filter{
+                width:100%;min-width:0;max-width:none;margin:0!important;align-self:center;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-list-filter .ft-remote-filter-button{
+                width:100%;height:36px;min-height:36px;border-radius:8px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{
+                grid-column:span 2;display:flex;width:100%;min-width:0;max-width:none;min-height:36px;align-items:center;padding:0;border:0;background:transparent;border-radius:0;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range.is-active{background:transparent}
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-fields{
+                display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;min-width:0;align-items:center;gap:8px;flex-wrap:nowrap;
+            }
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field{
+                display:grid;grid-template-columns:auto minmax(0,1fr);min-width:0;align-items:center;gap:6px;color:#64748b;font-size:10px;font-weight:720;line-height:1;white-space:nowrap;
+            }
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field>span{margin:0;flex:0 0 auto}
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field input{
+                width:100%;min-width:0;height:36px;min-height:36px;padding:0 8px;border-radius:8px;font-size:10.5px;line-height:36px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters{
+                width:100%;height:36px;min-height:36px;align-self:center;padding:0 10px;border:1px solid #d8e1ec;border-radius:8px;background:#f8fafc;color:#64748b;font-size:10px;font-weight:650;line-height:1;white-space:nowrap;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters:not(:disabled):hover{
+                border-color:#c4cfdd;background:#f1f5f9;color:#334155;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters:disabled{
+                opacity:.45;cursor:not-allowed;background:#f8fafc;color:#94a3b8;border-color:#e2e8f0;
+            }
+            @media(max-width:980px){
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+            }
+            @media(max-width:680px){
+                .ft-orders-prototype .ft-search-bar{gap:8px;padding:11px}
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+                .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{grid-column:span 2}
+            }
+            @media(max-width:480px){
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:1fr}
+                .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{grid-column:span 1}
+                .ft-orders-prototype .ft-order-date-range .ft-date-range-fields{grid-template-columns:1fr}
+            }
         </style>
     <?php endif; ?>
 
@@ -550,7 +608,8 @@ unset($__defined_vars, $__key, $__value); ?>
                 <button class="<?php echo \Illuminate\Support\Arr::toCssClasses(['ft-search-clear','show'=>filled($searchFilter)]); ?>" wire:click="<?php echo e($clearAction); ?>" type="button">Clear</button>
             </label>
 
-            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+            <div class="ft-order-filter-controls">
+                <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-order-list-filter ft-order-list-filter-client','label' => 'Client','property' => 'client','type' => 'clients','context' => 'jobs','value' => $clientFilter,'placeholder' => 'All clients','initialOptions' => $clientFilterOptions,'fixedMenu' => true,'menuWidth' => 280,'wire:key' => 'order-list-client-filter-'.e(filled($clientFilter) ? $clientFilter : 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.remote-filter'); ?>
@@ -573,7 +632,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
 <?php endif; ?>
 
-            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+                <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-order-list-filter ft-order-list-filter-phase','label' => 'Phase','property' => 'phase','type' => 'phases','context' => 'order-list','value' => $phaseFilter,'placeholder' => 'All phases','initialOptions' => $phaseFilterOptions,'fixedMenu' => true,'menuWidth' => 280,'wire:key' => 'order-list-phase-filter-'.e(filled($phaseFilter) ? $phaseFilter : 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.remote-filter'); ?>
@@ -596,7 +655,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
 <?php endif; ?>
 
-            <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
+                <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-order-list-filter ft-order-list-filter-owner','label' => $peopleLabel,'property' => $peopleProperty,'type' => 'users','context' => $peopleContext,'value' => $peopleFilter,'placeholder' => $peoplePlaceholder,'initialOptions' => $peopleFilterOptions,'fixedMenu' => true,'menuWidth' => 260,'wire:key' => 'order-list-people-filter-'.e($peopleProperty).'-'.e(filled($peopleFilter) ? $peopleFilter : 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.remote-filter'); ?>
@@ -619,37 +678,17 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
 <?php endif; ?>
 
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clearFiltersAction): ?>
-                <button
-                    type="button"
-                    class="ft-order-clear-filters"
-                    wire:click="<?php echo e($clearFiltersAction); ?>"
-                    <?php if(blank($searchFilter) && blank($clientFilter) && blank($phaseFilter) && blank($peopleFilter) && blank($metricFilter) && blank($dateFrom) && blank($dateTo) && ! $importFilterId): echo 'disabled'; endif; ?>
-                >Clear filters</button>
-            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        </div>
-
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($importFilterId): ?>
-            <div class="ft-import-batch-filter" role="status" aria-live="polite">
-                <span class="ft-import-batch-filter-dot" aria-hidden="true"></span>
-                <span>Showing <strong><?php echo e(number_format($jobs->total())); ?></strong> <?php echo e(\Illuminate\Support\Str::plural('order', $jobs->total())); ?> imported in <strong><?php echo e($importFilterLabel ?: 'this import'); ?></strong></span>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clearFiltersAction): ?>
-                    <button type="button" wire:click="<?php echo e($clearFiltersAction); ?>">Show all orders</button>
-                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-            </div>
-        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($dateRangeEnabled): ?>
-            <?php if (isset($component)) { $__componentOriginalfddc3e752d626ff4464d9025a0e0b874 = $component; } ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($dateRangeEnabled): ?>
+                    <?php if (isset($component)) { $__componentOriginalfddc3e752d626ff4464d9025a0e0b874 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalfddc3e752d626ff4464d9025a0e0b874 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.date-range-filter','data' => ['class' => 'ft-order-date-range','fromProperty' => 'dateFrom','toProperty' => 'dateTo','fromValue' => $dateFrom,'toValue' => $dateTo,'label' => 'Created date']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.date-range-filter','data' => ['class' => 'ft-order-date-range','fromProperty' => 'dateFrom','toProperty' => 'dateTo','fromValue' => $dateFrom,'toValue' => $dateTo,'label' => 'Created date','fromLabel' => 'From','toLabel' => 'To']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.date-range-filter'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['class' => 'ft-order-date-range','from-property' => 'dateFrom','to-property' => 'dateTo','from-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateFrom),'to-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateTo),'label' => 'Created date']); ?>
+<?php $component->withAttributes(['class' => 'ft-order-date-range','from-property' => 'dateFrom','to-property' => 'dateTo','from-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateFrom),'to-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateTo),'label' => 'Created date','from-label' => 'From','to-label' => 'To']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -662,6 +701,27 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php $component = $__componentOriginalfddc3e752d626ff4464d9025a0e0b874; ?>
 <?php unset($__componentOriginalfddc3e752d626ff4464d9025a0e0b874); ?>
 <?php endif; ?>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clearFiltersAction): ?>
+                    <button
+                        type="button"
+                        class="ft-order-clear-filters"
+                        wire:click="<?php echo e($clearFiltersAction); ?>"
+                        <?php if(blank($searchFilter) && blank($clientFilter) && blank($phaseFilter) && blank($peopleFilter) && blank($metricFilter) && blank($dateFrom) && blank($dateTo) && ! $importFilterId): echo 'disabled'; endif; ?>
+                    >Clear filter</button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
+        </div>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($importFilterId): ?>
+            <div class="ft-import-batch-filter" role="status" aria-live="polite">
+                <span class="ft-import-batch-filter-dot" aria-hidden="true"></span>
+                <span>Showing <strong><?php echo e(number_format($jobs->total())); ?></strong> <?php echo e(\Illuminate\Support\Str::plural('order', $jobs->total())); ?> imported in <strong><?php echo e($importFilterLabel ?: 'this import'); ?></strong></span>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clearFiltersAction): ?>
+                    <button type="button" wire:click="<?php echo e($clearFiltersAction); ?>">Show all orders</button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canDeleteOrders && $selectedOrderCount > 0): ?>
@@ -826,7 +886,28 @@ unset($__defined_vars, $__key, $__value); ?>
                             <span class="ft-product-detail" title="<?php echo e($productNames->implode(' · ')); ?>"><?php echo e($productNames->implode(' · ')); ?></span>
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
-                    <div class="ft-cell ft-stage-cell" data-label="Phase"><span class="ft-pill <?php echo e($tone($phaseName)); ?>" title="<?php echo e($phaseName); ?>"><?php echo e($phaseName); ?></span></div>
+                    <div class="ft-cell ft-stage-cell" data-label="Phase"><?php if (isset($component)) { $__componentOriginal9414ddaaf6095649bba169634abf8f57 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9414ddaaf6095649bba169634abf8f57 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.phase-label','data' => ['phase' => $job->phase,'fallback' => $phaseName,'class' => 'ft-pill']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.phase-label'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->phase),'fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($phaseName),'class' => 'ft-pill']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $attributes = $__attributesOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__attributesOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $component = $__componentOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__componentOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?></div>
                     <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill <?php echo e($tone($health)); ?>"><?php echo e($health); ?></span></div>
                     <div class="ft-cell ft-flag-cell" data-label="Flag"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($flag): ?><span class="ft-pill <?php echo e($flagColor ? 'ft-master-color' : $tone($flag)); ?>" style="<?php echo e(\App\Support\MasterColor::style($flagColor)); ?>" <?php if($flagReason): ?> title="<?php echo e($flagReason); ?>" <?php endif; ?>><?php echo e($flag); ?></span><?php else: ?><span class="ft-standard-empty">No flag</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div>
                     <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">

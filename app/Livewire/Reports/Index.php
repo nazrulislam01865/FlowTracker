@@ -22,6 +22,8 @@ class Index extends Component
     public string $activeTab = 'portfolio';
     public string $employeeFocus = 'all';
     public string $taskTab = 'recent';
+    public int $taskPage = 1;
+    public int $taskPerPage = 10;
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
@@ -36,7 +38,31 @@ class Index extends Component
 
     public function setTaskTab(string $tab): void
     {
-        if (in_array($tab, ['recent','longest','reopened'], true)) $this->taskTab = $tab;
+        if (in_array($tab, ['recent','longest','reopened'], true)) {
+            $this->taskTab = $tab;
+            $this->taskPage = 1;
+        }
+    }
+
+    public function updatedEmployeeFocus(): void
+    {
+        $this->taskPage = 1;
+    }
+
+    public function gotoTaskPage(int $page): void
+    {
+        $pages = (int) ($this->taskPagination['pages'] ?? 1);
+        $this->taskPage = max(1, min($page, max(1, $pages)));
+    }
+
+    public function previousTaskPage(): void
+    {
+        $this->gotoTaskPage($this->taskPage - 1);
+    }
+
+    public function nextTaskPage(): void
+    {
+        $this->gotoTaskPage($this->taskPage + 1);
     }
 
     public function resetFilters(): void
@@ -45,6 +71,7 @@ class Index extends Component
         $this->period = 'month';
         $this->employeeFocus = 'all';
         $this->taskTab = 'recent';
+        $this->taskPage = 1;
         unset($this->report);
     }
 
@@ -53,6 +80,7 @@ class Index extends Component
         if (in_array($property, ['search', 'period', 'status', 'priority', 'assigneeId'], true)) {
             $this->employeeFocus = 'all';
             $this->taskTab = 'recent';
+            $this->taskPage = 1;
             unset($this->report);
         }
     }
@@ -64,6 +92,7 @@ class Index extends Component
         $this->assigneeId = 0;
         $this->employeeFocus = 'all';
         $this->taskTab = 'recent';
+        $this->taskPage = 1;
         unset($this->report);
     }
 
@@ -94,6 +123,37 @@ class Index extends Component
 
     public function getTaskRowsProperty(): array
     {
+        $rows = $this->filteredTaskRows();
+        $meta = $this->taskPagination;
+        $offset = max(0, ((int) $meta['page'] - 1) * $this->taskPerPage);
+
+        return $rows->slice($offset, $this->taskPerPage)->values()->all();
+    }
+
+    public function getTaskPaginationProperty(): array
+    {
+        $total = $this->filteredTaskRows()->count();
+        $pages = max(1, (int) ceil($total / max(1, $this->taskPerPage)));
+        $page = max(1, min($this->taskPage, $pages));
+        $from = $total > 0 ? (($page - 1) * $this->taskPerPage) + 1 : 0;
+        $to = $total > 0 ? min($total, $page * $this->taskPerPage) : 0;
+
+        $start = max(1, $page - 2);
+        $end = min($pages, $start + 4);
+        $start = max(1, $end - 4);
+
+        return [
+            'page' => $page,
+            'pages' => $pages,
+            'total' => $total,
+            'from' => $from,
+            'to' => $to,
+            'numbers' => range($start, $end),
+        ];
+    }
+
+    private function filteredTaskRows(): \Illuminate\Support\Collection
+    {
         $rows = collect($this->report['people']['task_details'] ?? []);
 
         if ($this->employeeFocus !== 'all') {
@@ -106,18 +166,15 @@ class Index extends Component
                 ->where('is_completed', true)
                 ->filter(fn (array $row) => $row['hours_value'] !== null)
                 ->sortByDesc(fn (array $row) => $row['hours_value'])
-                ->values()
-                ->all(),
+                ->values(),
             'reopened' => $rows
                 ->where('reopened', true)
-                ->sortByDesc(fn (array $row) => $row['updated_timestamp'] ?? 0)
-                ->values()
-                ->all(),
+                ->sortByDesc(fn (array $row) => $row['reopened_timestamp'] ?? 0)
+                ->values(),
             default => $rows
                 ->where('is_completed', true)
                 ->sortByDesc(fn (array $row) => $row['completed_timestamp'] ?? 0)
-                ->values()
-                ->all(),
+                ->values(),
         };
     }
 

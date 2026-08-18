@@ -4651,3 +4651,40 @@ body > .ft-mention-menu{z-index:1705}
   .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-fields{grid-template-columns:1fr}
 }
 
+
+
+/* 2026-08-18: align Inquiry date range with the rest of the filter bar.
+   Keep the date labels inline before their inputs so every control shares
+   the same visual baseline and compact 36px height. */
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls>.ft-inquiry-date-range{
+  align-items:center;min-height:36px;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-fields{
+  align-items:center;gap:10px;flex-wrap:nowrap;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field{
+  display:flex;align-items:center;gap:6px;min-width:0;font-size:10px;font-weight:720;line-height:1;color:#64748b;white-space:nowrap;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field>span{
+  flex:0 0 auto;margin:0;
+}
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field input{
+  width:142px;min-width:0;height:36px;min-height:36px;line-height:36px;
+}
+@media (min-width:901px) and (max-width:1600px){
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-fields{
+    display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field{
+    display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;
+  }
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field input{width:100%}
+}
+@media(max-width:900px){
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-field{
+    display:grid;grid-template-columns:auto minmax(0,1fr);align-items:center;gap:6px;
+  }
+}
+@media(max-width:480px){
+  .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-date-range .ft-date-range-fields{grid-template-columns:1fr}
+}

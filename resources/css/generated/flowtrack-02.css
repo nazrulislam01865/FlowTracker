@@ -1,4 +1,24 @@
 
+.ft-board-page .ft-board-reference-filter-grid,
+.ft-board-page .ft-mywork-filter-grid{display:grid!important}
+
+/* Responsive filter bars and boards. */
+@media(max-width:1380px){
+    .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:300px}
+    .ft-task-job-matrix{--ft-task-lane-width:320px}
+}
+@media(max-width:1100px){
+    .ft-board-page .ft-board-quick-row{
+        display:flex;
+        flex-wrap:wrap;
+        overflow:visible!important;
+        align-items:center;
+        padding-right:48px;
+    }
+    .ft-board-page .ft-quick-chip{flex:0 1 auto}
+    .ft-task-job-row-head{padding:0 13px}
+    .ft-task-job-row-number,.ft-task-job-row-title{font-size:12.5px}
+}
 @media(max-width:900px){
     .ft-lane-sticky-header{top:68px}
     .ft-job-board-header-grid,.ft-job-board-body-grid{grid-auto-columns:min(86vw,320px)}
@@ -1739,5 +1759,4 @@ body:has(.ft-client-preview-backdrop){
 .ft-mywork-v2-updated{color:#718097;font-size:7.5px;line-height:normal;font-weight:400;white-space:nowrap}
 .ft-mywork-v2-open{display:grid;width:42px;height:28px;place-items:center;border:1px solid #cbd8e8;border-radius:7px;background:#fff;color:#155ce9;font-size:7.5px;line-height:1;font-weight:750;text-decoration:none}.ft-mywork-v2-open:hover{background:#fff}
 .ft-mywork-v2-row-spinner{position:absolute;right:8px;top:8px;width:10px;height:10px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:ftMyWorkSpin .6s linear infinite}
-.ft-mywork-v2-empty{padding:40px 15px;color:#718097;font-size:9px;line-height:normal;text-align:center}.ft-mywork-v2-empty strong{display:block;margin-bottom:5px;color:#2d3950;font-size:11px;font-weight:700}.ft-mywork-v2-empty span{display:block}
-.ft-mywork-v2-footer{display:flex;min-height:50px;align-items:center;justify-content:space-between;gap:10px;padding:8px 11px;border-top:1px solid #dce3ec;background:#fbfcfe;color:#69778e;font-size:8px;line-height:normal;font-weight:400}.ft-mywork-v2-pages{display:flex;gap:5px;align-items:center}.ft-mywork-v2-page-button{min-width:31px;height:31px;padding:0 8px;border:1px solid #cfdbea;border-radius:7px;background:#fff;color:#40506a;font-size:8px;line-height:normal;font-weight:750}
+.ft-mywork-v2-empty{padding:40px 15px;color:#718097;font-size:9px;line-height:normal;text-align:center}

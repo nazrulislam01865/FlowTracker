@@ -126,7 +126,7 @@ class BoardTaskPackService
             ])
             ->with([
                 'client:id,name,logo_path',
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
             ])
             ->get()
             ->keyBy('id');
@@ -166,7 +166,7 @@ class BoardTaskPackService
                 'tasks.completed_at', 'tasks.updated_at',
             ])
             ->with([
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
                 'assignee:id,name,department_id,profile_image_path',
                 'orderTaskFlag:id,type,name,color,status,sort_order,metadata',
             ]);
@@ -215,6 +215,7 @@ class BoardTaskPackService
                 'title' => (string) $job->title,
                 'client' => (string) ($job->client?->name ?: 'No client'),
                 'stage' => (string) ($job->phase?->short_name ?: $job->phase?->name ?: 'No phase'),
+                'stageColor' => $job->phase?->color,
                 'health' => (string) ($job->health ?: 'On Track'),
                 'healthTone' => $this->tone((string) ($job->health ?: 'On Track')),
                 'progress' => max(0, min(100, (int) $job->progress)),
@@ -500,6 +501,7 @@ class BoardTaskPackService
                 : null,
             'isMine' => (int) ($task->assignee_id ?: 0) === (int) $user->id,
             'phase' => (string) ($task->phase?->short_name ?: $task->phase?->name ?: 'No phase'),
+            'phaseColor' => $task->phase?->color,
             'due' => $dueLabel,
             'dueTone' => $dueTone,
             'status' => (string) $task->status,

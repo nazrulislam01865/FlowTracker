@@ -1,53 +1,77 @@
-<section class="ft-panel" id="tagged">
-    <div class="ft-panel-head">
-        <div><h2 class="ft-panel-title">Tagged comments <span id="unread-count">{{ $unreadMentionCount }} unread</span></h2><div class="ft-panel-note">{{ $administratorView ? 'All mentions across orders, tasks and inquiries' : 'Your mentions from comments and descriptions across orders, tasks and inquiries' }}</div></div>
-        <button class="ft-link" type="button" wire:click="markAllRead" @disabled($unreadMentionCount === 0)>Mark all read</button>
+<section class="ft-mgmt-panel ft-mgmt-mentions-panel" id="mentions-for-you">
+    <div class="ft-mgmt-mentions-head">
+        <div class="ft-mgmt-mentions-heading">
+            <div class="ft-mgmt-mentions-title-line">
+                <h2>Mentions for you</h2>
+                <span class="ft-mgmt-mentions-unread-count">{{ $unreadMentionCount }} unread</span>
+            </div>
+            <p>{{ app(\App\Services\AccessControlService::class)->isAdministrator(auth()->user()) ? 'All mentions across Orders, Tasks and Inquiries' : 'Comments where teammates tagged you in Orders or Inquiries' }}</p>
+        </div>
+        <button class="ft-mgmt-mentions-mark-read" type="button" wire:click="markAllRead" @disabled($unreadMentionCount === 0)>Mark all as read</button>
     </div>
-    <div class="ft-mention-tabs">
-        @foreach(['all' => 'All', 'unread' => 'Unread', 'job' => 'Orders', 'task' => 'Tasks', 'inquiry' => 'Inquiries'] as $key => $label)
-            <button type="button" class="ft-tab {{ $filter === $key ? 'active' : '' }}" wire:click="setFilter('{{ $key }}')">{{ $label }}</button>
-        @endforeach
+
+    <div class="ft-mgmt-mentions-tabs" role="tablist" aria-label="Mention type">
+        <button type="button" class="{{ $filter === 'all' ? 'active' : '' }}" wire:click="setFilter('all')">All</button>
+        <button type="button" class="{{ $filter === 'unread' ? 'active' : '' }}" wire:click="setFilter('unread')">Unread ({{ $unreadMentionCount }})</button>
+        <button type="button" class="{{ $filter === 'orders' ? 'active' : '' }}" wire:click="setFilter('orders')">Orders</button>
+        <button type="button" class="{{ $filter === 'inquiries' ? 'active' : '' }}" wire:click="setFilter('inquiries')">Inquiries</button>
     </div>
-    <div class="ft-mentions">
+
+    <div class="ft-mgmt-mentions-list">
         @forelse($mentions as $mention)
             @php
                 $route = app(\App\Services\NotificationService::class)->urlFor($mention);
                 $actor = $mention->actor;
-                $actorName = $actor?->name;
-                $orderTerminology = static function (?string $value): string {
-                    return preg_replace_callback('/\bjobs?\b/i', static function (array $match): string {
-                        return match ($match[0]) {
-                            'Jobs' => 'Orders',
-                            'jobs' => 'orders',
-                            'JOB' => 'ORDER',
-                            'JOBS' => 'ORDERS',
-                            default => ctype_upper($match[0][0] ?? '') ? 'Order' : 'order',
-                        };
-                    }, (string) $value) ?: (string) $value;
-                };
+                $actorName = trim((string) ($actor?->name ?? ''));
 
-                // Legacy mention rows created before actor_id existed still keep
-                // the actor's name in the title. Use it as a safe initials fallback
-                // if the migration could not resolve a unique user record.
-                if (!$actorName && preg_match('/^(.*?) mentioned (?:you|a user) in /u', (string) $mention->title, $actorMatch)) {
+                if ($actorName === '' && preg_match('/^(.*?) mentioned (?:you|a user) in /u', (string) $mention->title, $actorMatch)) {
                     $actorName = trim((string) ($actorMatch[1] ?? ''));
                 }
+                $actorName = $actorName !== '' ? $actorName : 'FlowTrack';
 
-                $actorName = $actorName ?: 'FlowTrack';
-                $messagePreview = str(app(\App\Services\MentionService::class)->displayText($mention->message))->limit(90);
-                $contextLabel = $mention->inquiry_task_id
-                    ? (($mention->inquiry?->inquiry_number ?: 'Inquiry').' · '.($mention->inquiryTask?->title ?: 'Task'))
-                    : ($mention->inquiry_id
-                        ? ($mention->inquiry?->inquiry_number ?: 'Inquiry')
-                        : ($mention->task?->task_number ?: ($mention->job?->displayOrderNumber() ?: 'Notification')));
+                $isInquiry = (bool) ($mention->inquiry_id || $mention->inquiry_task_id);
+                $reference = $isInquiry
+                    ? ($mention->inquiry?->inquiry_number ?: 'Inquiry')
+                    : ($mention->job?->displayOrderNumber() ?: 'Order');
+
+                $message = str(app(\App\Services\MentionService::class)->displayText($mention->message))
+                    ->squish()
+                    ->limit(180)
+                    ->toString();
+                $escapedMessage = e($message);
+                $currentMention = '@'.auth()->user()->name;
+                $messageHtml = str_replace(
+                    e($currentMention),
+                    '<span class="ft-mgmt-mention-user">'.e($currentMention).'</span>',
+                    $escapedMessage
+                );
+
+                if ($isInquiry) {
+                    $contextTitle = $mention->inquiryTask?->title ?: 'Inquiry activity';
+                    $contextLabel = 'Inquiry · '.$contextTitle;
+                } else {
+                    $phaseName = $mention->task?->phase?->short_name
+                        ?: $mention->task?->phase?->name
+                        ?: $mention->job?->phase?->short_name
+                        ?: $mention->job?->phase?->name
+                        ?: 'Order';
+                    $contextTitle = $mention->task?->title ?: 'Order activity';
+                    $contextLabel = $phaseName.' · '.$contextTitle;
+                }
             @endphp
-            <a class="ft-mention {{ $mention->read_at ? '' : 'unread' }}" href="{{ $route }}" wire:key="dashboard-mention-{{ $mention->id }}">
-                <x-ui.avatar class="ft-avatar" :user="$actor" :name="$actorName" :size="29" />
-                <span><strong class="ft-mention-copy">{{ $orderTerminology($mention->title) }}: <strong>“{{ $messagePreview }}”</strong></strong><span class="ft-mention-meta">{{ $contextLabel }}</span></span>
-                <time class="ft-mention-time">{{ $mention->created_at?->diffForHumans() }}</time>
-            </a>
+            <div class="ft-mgmt-mention-row {{ $mention->read_at ? '' : 'is-unread' }}" wire:key="dashboard-mention-{{ $mention->id }}">
+                <span class="ft-mgmt-mention-unread-dot" aria-hidden="true"></span>
+                <x-ui.avatar class="ft-mgmt-mention-avatar" :user="$actor" :name="$actorName" :size="42" />
+                <div class="ft-mgmt-mention-copy">
+                    <strong>{{ $actorName }} {{ $mention->type === 'mention_admin' ? 'mentioned a user in' : 'mentioned you in' }} {{ $reference }}</strong>
+                    <p>{!! $messageHtml !== '' ? $messageHtml : 'Mentioned you in a comment.' !!}</p>
+                    <small>{{ $contextLabel }}</small>
+                </div>
+                <time>{{ $mention->created_at?->diffForHumans(short: true) }}</time>
+                <a class="ft-mgmt-mention-view" href="{{ $route }}">View</a>
+            </div>
         @empty
-            <div class="ft-panel-empty">No tagged comments in this view.</div>
+            <div class="ft-mgmt-mentions-empty">No mentions in this view.</div>
         @endforelse
     </div>
 </section>

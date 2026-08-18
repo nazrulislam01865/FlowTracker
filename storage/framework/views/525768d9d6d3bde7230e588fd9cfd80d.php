@@ -64,6 +64,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $checkTotal = max(1, $total);
     $taskDocumentName = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name;
     $accessControl = app(\App\Services\AccessControlService::class);
+    $canModerateTaskActivity = $accessControl->isAdministrator(auth()->user());
     $mayEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
     $canEditTask = $editMode && $mayEditTask;
     $canAssignTask = $editMode && $accessControl->canAssignTask(auth()->user(), $task);
@@ -145,7 +146,28 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php endif; ?>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </h1>
-                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task->phase?->name): ?><span class="ft-task-title-phase">· <?php echo e($task->phase->name); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task->phase?->name): ?><span class="ft-task-title-phase">· <?php if (isset($component)) { $__componentOriginal9414ddaaf6095649bba169634abf8f57 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9414ddaaf6095649bba169634abf8f57 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.phase-label','data' => ['phase' => $task->phase]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.phase-label'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->phase)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $attributes = $__attributesOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__attributesOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $component = $__componentOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__componentOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
         </div>
         <div class="ft-detail-actions"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask): ?><button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" <?php if($task->status==='Completed'): echo 'disabled'; endif; ?>><?php echo e($task->status==='Completed' ? 'Completed' : 'Mark complete'); ?></button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?><button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
@@ -314,7 +336,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php endif; ?>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
-                <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><b class="ft-property-value"><?php echo e($task->phase?->name ?? '—'); ?></b></div></div>
+                <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><?php if (isset($component)) { $__componentOriginal9414ddaaf6095649bba169634abf8f57 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9414ddaaf6095649bba169634abf8f57 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.phase-label','data' => ['phase' => $task->phase,'class' => 'ft-property-value']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.phase-label'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->phase),'class' => 'ft-property-value']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $attributes = $__attributesOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__attributesOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $component = $__componentOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__componentOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?></div></div>
                 <div
                     class="ft-task-property ft-inline-edit-shell"
                     x-data="window.FlowTrackInlineEdit({ key: <?php echo \Illuminate\Support\Js::from('task-'.$task->id.'-start-date')->toHtml() ?>, label: 'task start date', value: <?php echo \Illuminate\Support\Js::from($effectiveStartDate?->format('Y-m-d') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($effectiveStartDate?->format('M j, Y') ?? 'Not set')->toHtml() ?> })"
@@ -607,7 +650,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php unset($__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2); ?>
 <?php endif; ?><span><?php echo e($entry->kind==='comment' ? '💬' : '↻'); ?></span></div>
                             <div class="ft-activity-entry-content">
-                                <div class="ft-activity-entry-head"><div><b><?php echo e($actorName); ?></b><span class="ft-activity-kind <?php echo e($entry->kind==='comment' ? 'comment' : 'history'); ?>"><?php echo e($entry->kind==='comment' ? 'Comment' : 'Change'); ?></span></div><time title="<?php echo e($entryLocalTime?->format('M j, Y g:i A')); ?> <?php echo e($displayTimezone); ?>"><?php echo e($entry->created_at?->diffForHumans()); ?></time></div>
+                                <div class="ft-activity-entry-head"><div><b><?php echo e($actorName); ?></b><span class="ft-activity-kind <?php echo e($entry->kind==='comment' ? 'comment' : 'history'); ?>"><?php echo e($entry->kind==='comment' ? 'Comment' : 'Change'); ?></span></div><div style="display:flex;align-items:center;gap:8px"><time title="<?php echo e($entryLocalTime?->format('M j, Y g:i A')); ?> <?php echo e($displayTimezone); ?>"><?php echo e($entry->created_at?->diffForHumans()); ?></time><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canModerateTaskActivity && $entry->event !== 'task.moderation_deleted'): ?><button type="button" style="border:0;background:transparent;color:#c82424;font-size:11px;font-weight:700;padding:2px 4px" wire:click="<?php echo e($entry->kind === 'comment' ? 'deleteTaskComment('.$entry->id.')' : 'deleteTaskActivity('.$entry->id.')'); ?>" wire:confirm="Delete this <?php echo e($entry->kind === 'comment' ? 'comment/mention' : 'task activity'); ?>? The deletion itself will remain recorded in activity.">Delete</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div></div>
                                 <div class="ft-rich-text-content"><?php if (isset($component)) { $__componentOriginal1d83f45bf838052fadc84bf85b829e43 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal1d83f45bf838052fadc84bf85b829e43 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.mention-text','data' => ['text' => $entry->body]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

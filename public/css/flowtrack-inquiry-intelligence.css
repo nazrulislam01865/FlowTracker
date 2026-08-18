@@ -47,3 +47,102 @@
 #inquiry-intelligence-app .ii-section-link:hover{color:#006f67;border-color:#8ec8c2;background:#f3fbfa}
 @media(max-width:760px){#inquiry-intelligence-app .ii-sect-actions{width:100%;justify-content:space-between}#inquiry-intelligence-app .ii-section-link{margin-left:auto}}
 @media print{#inquiry-intelligence-app .ii-section-link{display:none!important}}
+
+/* 2026-08-18 Inquiry Intelligence task-detail pagination + inquiry SLA */
+#inquiry-intelligence-app .ii-task-detail-card{overflow:hidden}
+#inquiry-intelligence-app .ii-task-detail-card .ii-tablewrap{overflow:auto}
+#inquiry-intelligence-app .ii-task-detail-table{min-width:1380px}
+#inquiry-intelligence-app .ii-task-detail-table th,#inquiry-intelligence-app .ii-task-detail-table td{vertical-align:middle}
+#inquiry-intelligence-app .ii-task-name{max-width:250px;white-space:normal;line-height:1.35}
+#inquiry-intelligence-app .ii-status-text{display:inline-block;max-width:150px;color:#314b69;font-weight:750;white-space:normal;line-height:1.3}
+#inquiry-intelligence-app .ii-sla-target{white-space:nowrap}
+#inquiry-intelligence-app .ii-sla-target b{font-size:10px}
+#inquiry-intelligence-app .ii-sla-target small{margin-top:2px;font-size:7.5px}
+#inquiry-intelligence-app .ii-task-pagination{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:10px 12px;border-top:1px solid var(--ii-line);background:#fbfcfe;color:var(--ii-muted);font-size:9px}
+#inquiry-intelligence-app .ii-task-page-actions{display:flex;align-items:center;gap:5px}
+#inquiry-intelligence-app .ii-task-page-actions button{min-width:30px;height:30px;padding:0 9px;border:1px solid var(--ii-line);border-radius:6px;background:#fff;color:#35506f;font:800 9px/1 inherit;cursor:pointer}
+#inquiry-intelligence-app .ii-task-page-actions button:hover:not(:disabled){border-color:#a9c8fa;background:var(--ii-blue-soft);color:var(--ii-blue)}
+#inquiry-intelligence-app .ii-task-page-actions button.active{border-color:var(--ii-blue);background:var(--ii-blue);color:#fff}
+#inquiry-intelligence-app .ii-task-page-actions button:disabled{opacity:.45;cursor:not-allowed}
+@media(max-width:760px){#inquiry-intelligence-app .ii-task-pagination{align-items:flex-start;flex-direction:column}#inquiry-intelligence-app .ii-task-page-actions{max-width:100%;overflow-x:auto}}
+@media print{#inquiry-intelligence-app .ii-task-pagination{display:none!important}}
+
+/* 2026-08-18 Inquiry Intelligence searchable filters
+   Reuse the shared Order-list searchable dropdown interaction while retaining
+   this report's compact toolbar dimensions. */
+#inquiry-intelligence-app .ii-searchable-filter > label{
+  display:flex;
+  align-items:center;
+  height:12px;
+  margin:0 0 3px;
+  color:var(--ii-muted);
+  font-size:7px;
+  font-weight:800;
+  line-height:1;
+  letter-spacing:.35px;
+  text-transform:uppercase;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-button{
+  width:100%;
+  height:31px;
+  min-height:31px;
+  margin:0;
+  padding:0 9px;
+  border:1px solid #cfdbe9;
+  border-radius:6px;
+  background:#fff;
+  color:#304965;
+  font-size:10px;
+  font-weight:500;
+  line-height:29px;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-button:hover,
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-button[aria-expanded="true"]{
+  border-color:var(--ii-blue);
+  box-shadow:0 0 0 2px var(--ii-blue-soft);
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-filter-chevron{
+  font-size:10px;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-menu{
+  padding:8px;
+  border-color:#cfdbe9;
+  border-radius:10px;
+  font-size:11px;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-search{
+  display:block;
+  width:100%;
+  height:38px;
+  min-height:38px;
+  margin:0 0 7px;
+  padding:0 10px;
+  border:1px solid #cfdbe9;
+  border-radius:8px;
+  background:#fff;
+  color:#304965;
+  font-size:11px;
+  line-height:38px;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-search:focus{
+  border-color:var(--ii-blue);
+  box-shadow:0 0 0 2px var(--ii-blue-soft);
+  outline:none;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-option{
+  min-height:36px;
+  padding:8px 9px;
+  border-radius:7px;
+  font-size:11px;
+}
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-option > small,
+#inquiry-intelligence-app .ii-searchable-filter .ft-remote-filter-message{
+  font-size:9px;
+}
+#inquiry-intelligence-app .ii-focus-employee-filter{
+  width:250px;
+  min-width:250px;
+}
+@media(max-width:760px){
+  #inquiry-intelligence-app .ii-focus-employee-filter{width:100%;min-width:0}
+}

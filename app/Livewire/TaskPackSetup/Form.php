@@ -56,6 +56,13 @@ class Form extends Component
                 'document_category_id' => $item->document_category_id,
                 'document_category_label' => (string) ($item->documentCategory?->name ?: 'No task-specific file'),
                 'due_offset_days' => (int) $item->due_offset_days,
+                'standard_duration_value' => (float) ($item->standard_duration_value ?: 8),
+                'standard_duration_unit' => (string) ($item->standard_duration_unit ?: 'TPD-001'),
+                'timer_start_rule' => (string) ($item->timer_start_rule ?: 'TPS-001'),
+                'timer_stop_rule' => (string) ($item->timer_stop_rule ?: 'TPE-001'),
+                'work_calendar' => (string) ($item->work_calendar ?: 'TPW-001'),
+                'set_due_from_standard_duration' => $item->set_due_from_standard_duration === null ? true : (bool) $item->set_due_from_standard_duration,
+                'allow_efficiency_override' => (bool) $item->allow_efficiency_override,
                 'is_required' => (bool) $item->is_required,
             ])->values()->all();
         } else {
@@ -75,6 +82,7 @@ class Form extends Component
 
     public function loadTaskPackOptions(): void
     {
+        app(TaskPackService::class)->ensureTaskPackMasterDataDefaults();
         $this->optionsReady = true;
     }
 
@@ -191,6 +199,13 @@ class Form extends Component
         $masterRule = fn (string $type) => Rule::exists('master_records', 'id')->where(
             fn ($query) => $query->where('workspace_id', $workspaceId)->where('type', $type)->whereNull('deleted_at')
         );
+        $masterCodeRule = fn (string $type) => Rule::exists('master_records', 'code')->where(
+            fn ($query) => $query
+                ->where('workspace_id', $workspaceId)
+                ->where('type', $type)
+                ->where('status', 'active')
+                ->whereNull('deleted_at')
+        );
 
         $data = $this->validate([
             'packName' => ['required','string','max:255'],
@@ -205,6 +220,13 @@ class Form extends Component
             'tasks.*.priority_id' => ['nullable','integer', $masterRule('priority')],
             'tasks.*.document_category_id' => ['nullable','integer', $masterRule('document_category')],
             'tasks.*.due_offset_days' => ['nullable','integer','min:0','max:3650'],
+            'tasks.*.standard_duration_value' => ['required','numeric','min:0.01','max:10000'],
+            'tasks.*.standard_duration_unit' => ['required','string','max:40', $masterCodeRule('task_pack_duration_unit')],
+            'tasks.*.timer_start_rule' => ['required','string','max:40', $masterCodeRule('task_pack_timer_start')],
+            'tasks.*.timer_stop_rule' => ['required','string','max:40', $masterCodeRule('task_pack_timer_stop')],
+            'tasks.*.work_calendar' => ['required','string','max:40', $masterCodeRule('task_pack_work_calendar')],
+            'tasks.*.set_due_from_standard_duration' => ['boolean'],
+            'tasks.*.allow_efficiency_override' => ['boolean'],
             'tasks.*.is_required' => ['boolean'],
         ]);
 
@@ -247,6 +269,13 @@ class Form extends Component
             'document_category_id' => null,
             'document_category_label' => 'No task-specific file',
             'due_offset_days' => 1,
+            'standard_duration_value' => 8.0,
+            'standard_duration_unit' => 'TPD-001',
+            'timer_start_rule' => 'TPS-001',
+            'timer_stop_rule' => 'TPE-001',
+            'work_calendar' => 'TPW-001',
+            'set_due_from_standard_duration' => true,
+            'allow_efficiency_override' => false,
             'is_required' => true,
         ];
     }
@@ -273,6 +302,10 @@ class Form extends Component
             'departmentFilterOptions' => $departmentFilterOptions,
             'documentFilterOptions' => $documentFilterOptions,
             'priorities' => $this->optionsReady ? $master->active('priority') : collect(),
+            'durationUnitOptions' => $this->optionsReady ? $master->active('task_pack_duration_unit') : collect(),
+            'timerStartOptions' => $this->optionsReady ? $master->active('task_pack_timer_start') : collect(),
+            'timerStopOptions' => $this->optionsReady ? $master->active('task_pack_timer_stop') : collect(),
+            'workCalendarOptions' => $this->optionsReady ? $master->active('task_pack_work_calendar') : collect(),
             'canDeleteTaskPack' => (bool) ($user?->canModule('taskpacks', 'delete')),
         ]);
     }

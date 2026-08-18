@@ -78,7 +78,7 @@
                         </thead>
                         <tbody>
                             @forelse($selected->phases as $phase)
-                                <tr wire:key="workflow-phase-row-{{ $phase->id }}">
+                                <tr class="ft-phase-row-color" style="{{ \App\Support\MasterColor::style($phase->color) }}" wire:key="workflow-phase-row-{{ $phase->id }}">
                                     <td>
                                         @if($canEditWorkflow)
                                             <div class="ft-sequence-buttons">
@@ -227,6 +227,15 @@
                         <input type="text" wire:model="shortName" placeholder="New">
                         @error('shortName')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
+                </div>
+                <div class="ft-admin-field">
+                    <label>Phase color *</label>
+                    <div class="ft-master-color-picker-row" style="{{ \App\Support\MasterColor::style($phaseColor) }}">
+                        <input class="ft-master-color-picker" type="color" wire:model.live="phaseColor" aria-label="Choose workflow phase color">
+                        <input type="text" maxlength="7" wire:model.blur="phaseColor" placeholder="#2563EB" aria-label="Workflow phase hex color">
+                        <span class="ft-master-color-preview"><i class="ft-master-color-dot"></i><span>This color is used for this phase across FlowTrack.</span></span>
+                    </div>
+                    @error('phaseColor')<div class="validation-error">{{ $message }}</div>@enderror
                 </div>
                 <div class="ft-admin-field">
                     <label>Task Pack</label>

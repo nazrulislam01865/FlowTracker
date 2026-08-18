@@ -34,7 +34,7 @@
                                 if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
                                 this.currentStatus=result.status||next;
                                 this.version=result.version||this.version;
-                                if(result.metrics)window.dispatchEvent(new CustomEvent('my-work-metrics',{detail:result.metrics}));
+                                if(result.refresh)await $wire.$refresh();
                             }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
                             finally{this.saving=false;select.disabled=false;}
                         }

@@ -58,7 +58,7 @@ class FlowTrackDemoSeeder extends Seeder
             $isManager = $role->slug === 'operations-manager';
             foreach (AccessControlService::MODULES as $module => $meta) {
                 $allowed = match ($module) {
-                    'dashboard','jobs','inquiries','tasks','documents','notifications' => true,
+                    'dashboard','jobs','inquiries','tasks','documents','document_archive','notifications' => true,
                     'clients','reports' => in_array($role->slug, ['operations-manager','sales-manager','sales-executive','accounts'], true),
                     'quotation' => in_array($role->slug, ['operations-manager','sales-manager','sales-executive','sourcing'], true),
                     'artwork' => in_array($role->slug, ['operations-manager','designer'], true),
@@ -69,9 +69,9 @@ class FlowTrackDemoSeeder extends Seeder
                     default => false,
                 };
                 $actions = $allowed ? ['view'] : [];
-                if ($allowed && in_array($module, ['jobs','inquiries','tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'create';
-                if ($allowed && in_array($module, ['inquiries','tasks','documents','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'edit_own';
-                if ($allowed && $module === 'documents') $actions[] = 'link';
+                if ($allowed && in_array($module, ['jobs','inquiries','tasks','documents','document_archive','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'create';
+                if ($allowed && in_array($module, ['inquiries','tasks','documents','document_archive','quotation','artwork','sample','production','shipment','invoice'], true)) $actions[] = 'edit_own';
+                if ($allowed && in_array($module, ['documents','document_archive'], true)) $actions[] = 'link';
                 if ($allowed && $module === 'reports') $actions[] = 'export';
                 if ($isManager && $allowed) $actions = array_values(array_unique(array_merge($actions, ['edit_all','assign','export'])));
                 RoleModuleAccess::updateOrCreate(

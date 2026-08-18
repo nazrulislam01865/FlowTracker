@@ -4,8 +4,10 @@ namespace App\Livewire\MyWork;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
+use App\Models\InquiryTask;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\InquiryService;
 use App\Services\MyWorkService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
@@ -36,6 +38,12 @@ class Index extends Component
     #[Url(as: 'phase', history: true)]
     public string $phaseFilter = '';
 
+    #[Url(as: 'source', history: true)]
+    public string $sourceFilter = 'orders';
+
+    #[Url(as: 'status', history: true)]
+    public string $statusFilter = '';
+
     public array $metrics = [
         'my_tasks' => null,
         'createdToday' => null,
@@ -65,6 +73,9 @@ class Index extends Component
     {
         if (!in_array($this->quick, self::QUICK_FILTERS, true)) $this->quick = 'my_tasks';
         if (!in_array($this->sort, self::SORTS, true)) $this->sort = 'action';
+        if (!in_array($this->sourceFilter, ['orders', 'inquiries'], true)) $this->sourceFilter = 'orders';
+        $this->statusFilter = mb_substr(trim($this->statusFilter), 0, 120);
+        if ($this->sourceFilter === 'inquiries' && $this->statusFilter === '') $this->sourceFilter = 'orders';
 
         $user = auth()->user();
         $service = app(MyWorkService::class);
@@ -128,6 +139,8 @@ class Index extends Component
 
         $this->search = '';
         $this->phaseFilter = '';
+        $this->sourceFilter = 'orders';
+        $this->statusFilter = '';
         $this->hideCompleted = false;
         // Summary cards are shortcuts over the same personal task scope. Clicking
         // the active card again returns to the normal My Tasks view.
@@ -145,6 +158,18 @@ class Index extends Component
     {
         $this->search = '';
         $this->phaseFilter = '';
+        $this->sourceFilter = 'orders';
+        $this->statusFilter = '';
+        $this->quick = 'my_tasks';
+        $this->hideCompleted = false;
+        $this->resetPage('workPage');
+    }
+
+    public function clearStatusFilter(): void
+    {
+        $this->sourceFilter = 'orders';
+        $this->statusFilter = '';
+        $this->search = '';
         $this->quick = 'my_tasks';
         $this->hideCompleted = false;
         $this->resetPage('workPage');
@@ -278,6 +303,58 @@ class Index extends Component
         return $result;
     }
 
+    #[Renderless]
+    public function updateInquiryTaskStatus(int $taskId, string $status, string $version): array
+    {
+        $status = trim($status);
+        $updatedTask = null;
+
+        $result = $this->persistInlineEdit('inquiry task status', function () use ($taskId, $status, $version, &$updatedTask): void {
+            $actor = auth()->user();
+            $visibleTask = app(InquiryService::class)->findVisibleTask($actor, $taskId);
+            $task = InquiryTask::query()->whereKey($visibleTask->id)->lockForUpdate()->firstOrFail();
+
+            if ((string) $task->getRawOriginal('updated_at') !== $version) {
+                throw ValidationException::withMessages([
+                    'status' => 'This Inquiry task changed since the list was loaded. Refresh My Tasks and try again.',
+                ]);
+            }
+
+            $updatedTask = app(InquiryService::class)->updateTaskStatus($task, $status, $actor);
+        });
+
+        if (($result['ok'] ?? false) && $updatedTask instanceof InquiryTask) {
+            $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
+            $result['status'] = (string) $updatedTask->status;
+            $result['refresh'] = $this->sourceFilter === 'inquiries' && $this->statusFilter !== '';
+        }
+
+        return $result;
+    }
+
+    #[Renderless]
+    public function updateInquiryTaskDueDate(int $taskId, ?string $date): array
+    {
+        $date = trim((string) $date);
+        $updatedTask = null;
+
+        $result = $this->persistInlineEdit('inquiry task due date', function () use ($taskId, $date, &$updatedTask): void {
+            $actor = auth()->user();
+            if ($date !== '') {
+                validator(['date' => $date], ['date' => ['date']])->validate();
+            }
+
+            $task = app(InquiryService::class)->findVisibleTask($actor, $taskId);
+            $updatedTask = app(InquiryService::class)->updateTaskDueDate($task, $date ?: null, $actor);
+        });
+
+        if (($result['ok'] ?? false) && $updatedTask instanceof InquiryTask) {
+            $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
+        }
+
+        return $result;
+    }
+
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
@@ -315,16 +392,39 @@ class Index extends Component
 
     public function render()
     {
+        $user = auth()->user();
+
+        if ($this->sourceFilter === 'inquiries' && $this->statusFilter !== '') {
+            $inquiryGroups = app(InquiryService::class)->myTaskGroups($user, [
+                'search' => $this->search,
+                'quick' => $this->quick,
+                'sort' => $this->sort,
+                'status' => $this->statusFilter,
+            ], 80);
+
+            return view('livewire.my-work.index', [
+                'inquiryGroups' => $inquiryGroups,
+                'inquiryVisibleTaskCount' => $inquiryGroups->sum(fn (array $group) => (int) ($group['taskCount'] ?? 0)),
+                'workGroups' => collect(),
+                'workPaginator' => null,
+                'visibleTaskCount' => 0,
+                'searchNeedsMoreCharacters' => false,
+            ]);
+        }
+
         $service = app(MyWorkService::class);
-        $page = $service->paginate(auth()->user(), [
+        $page = $service->paginate($user, [
             'search' => $this->search,
             'quick' => $this->quick,
             'sort' => $this->sort,
             'phase' => $this->phaseFilter,
+            'status' => $this->statusFilter,
             'hide_completed' => $this->hideCompleted,
         ], $this->perPage, 'workPage');
 
         return view('livewire.my-work.index', [
+            'inquiryGroups' => collect(),
+            'inquiryVisibleTaskCount' => 0,
             'workGroups' => $page['groups'],
             'workPaginator' => $page['paginator'],
             'visibleTaskCount' => $page['visibleTaskCount'],

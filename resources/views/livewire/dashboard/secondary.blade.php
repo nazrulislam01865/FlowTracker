@@ -37,23 +37,23 @@
 <div class="ft-dashboard-secondary-sections">
     <div class="ft-grid ft-grid-balanced">
         <section class="ft-panel ft-dashboard-assignee-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Ongoing workload before Done, completion and overdue exposure</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Open and completed Inquiry + Order tasks for the selected reporting cohort</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-assignee-table">
                     <colgroup><col style="width:29%"><col style="width:16%"><col style="width:18%"><col style="width:19%"><col style="width:18%"></colgroup>
-                    <thead><tr><th>Assignee</th><th>Ongoing</th><th>Done</th><th>On time</th><th>Workload</th></tr></thead>
+                    <thead><tr><th>Assignee</th><th>Open</th><th>Completed</th><th>On time</th><th>Workload</th></tr></thead>
                     <tbody>
                         @forelse($assigneePerformance as $person)
                             @php
-                                $onTime = $person->done_count > 0 ? (int) round(($person->done_on_time_count / $person->done_count) * 100) : 100;
+                                $onTime = $person->on_time_rate;
                                 $workloadPct = min(100, max(8, (int) $person->ongoing_count * 12));
                                 $workloadLabel = $person->ongoing_count >= 8 ? 'High' : ($person->ongoing_count >= 5 ? 'Med' : 'Good');
                             @endphp
                             <tr wire:key="dashboard-assignee-{{ $person->id }}">
                                 <td data-label="Assignee"><span class="ft-person"><x-ui.avatar :user="$person" :name="$person->name" :size="22" /><span class="ft-cell-clip">{{ $person->name }}</span></span></td>
-                                <td data-label="Ongoing"><a class="ft-text-link" href="{{ route('all-tasks', ['assignee' => $person->id]) }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
-                                <td data-label="Done">{{ $person->done_count }}</td>
-                                <td data-label="On time">{{ $onTime }}%</td>
+                                <td data-label="Open"><a class="ft-text-link" href="{{ route('all-tasks', ['assignee' => $person->id]) }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
+                                <td data-label="Completed">{{ $person->done_count }}</td>
+                                <td data-label="On time">{{ $onTime === null ? '—' : $onTime.'%' }}</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:{{ $workloadPct }}%"></span></i>{{ $workloadLabel }}</span></td>
                             </tr>
                         @empty
@@ -98,7 +98,7 @@
                             <tr wire:key="dashboard-job-{{ $job->id }}">
                                 <td data-label="Order"><a class="ft-text-link ft-cell-clip" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>{{ $job->title }}</a><span class="ft-ref">{{ $job->displayOrderNumber() }}</span></td>
                                 <td data-label="Client"><span class="ft-client-name-with-logo"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="22" /><span class="ft-cell-clip">{{ $job->client?->name ?? '—' }}</span></span></td>
-                                <td data-label="Status"><span class="ft-pill {{ $statusTone($job->phase?->short_name) }}">{{ $job->phase?->short_name ?? 'Unassigned' }}</span></td>
+                                <td data-label="Status"><x-ui.phase-label :phase="$job->phase" short fallback="Unassigned" class="ft-pill" /></td>
                                 <td data-label="Flag"><span class="ft-flag {{ $flagColor ? 'ft-master-color' : $flagTone }}" style="{{ \App\Support\MasterColor::style($flagColor) }}">{{ $flagLabel }}</span></td>
                                 <td data-label="View"><a class="ft-view" href="{{ route('jobs.index', ['open' => $job->id]) }}" wire:navigate>View</a></td>
                             </tr>

@@ -3,7 +3,7 @@
     <?php
         $hasParent = in_array($group, ['product', 'state'], true);
         $hasColor = in_array($group, \App\Services\MasterDataService::COLOR_TYPES, true);
-        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0);
+        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0) + ($group === 'task_pack_work_calendar' ? 2 : 0);
         $colorUsageLabel = match ($group) {
             'task_status' => 'legacy task status',
             'task_flag' => 'legacy task flag',
@@ -21,7 +21,10 @@
         $canCreateProductCategory = auth()->user()->canModule('product_categories', 'create');
         $catalogueGroup = in_array($group, ['product', 'product_category', 'supplier'], true);
         $financialGroup = in_array($group, \App\Services\MasterDataService::FINANCIAL_TYPES, true);
-        $masterSectionLabel = $catalogueGroup ? 'Catalogue' : ($financialGroup ? 'Financial Master Data' : 'Master Data');
+        $taskPackMasterGroup = in_array($group, \App\Services\MasterDataService::TASK_PACK_MASTER_TYPES, true);
+        $masterSectionLabel = $catalogueGroup
+            ? 'Catalogue'
+            : ($financialGroup ? 'Financial Master Data' : ($taskPackMasterGroup ? 'Task Pack Master Data' : 'Master Data'));
         $pageTitle = $labels[$group] ?? 'Master Data';
         $singularLabel = match ($group) {
             'product' => 'product',
@@ -35,6 +38,10 @@
             'order_task_status' => 'order task status',
             'order_task_flag' => 'order task flag',
             'order_flag' => 'order flag',
+            'task_pack_duration_unit' => 'duration unit',
+            'task_pack_timer_start' => 'timer start rule',
+            'task_pack_timer_stop' => 'timer stop rule',
+            'task_pack_work_calendar' => 'work calendar',
             default => strtolower(\Illuminate\Support\Str::singular($pageTitle)),
         };
         $displayTimezone = app(\App\Services\WorkspaceSettingsService::class)->displayTimezone();
@@ -61,6 +68,10 @@
             'order_task_status' => 'Maintain Order task statuses and choose which Order Task Flag each status applies automatically.',
             'order_task_flag' => 'Maintain Order task flags and map each one to the Order Flag that should appear on the parent Order.',
             'order_flag' => 'Maintain the separate Order-level flags shown on Order lists and details.',
+            'task_pack_duration_unit' => 'Maintain duration units available in the Task Pack time and efficiency prototype.',
+            'task_pack_timer_start' => 'Maintain timer-start choices available in the Task Pack time and efficiency prototype.',
+            'task_pack_timer_stop' => 'Maintain timer-stop choices available in the Task Pack time and efficiency prototype.',
+            'task_pack_work_calendar' => 'Maintain work-calendar choices available in the Task Pack time and efficiency prototype.',
             default => 'Maintain values used throughout FlowTrack.',
         };
         $productImagePreview = null;
@@ -826,6 +837,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <th>Sort order</th>
                                 <th>Code</th>
                                 <th><?php echo e($group === 'phone_country_code' ? 'Phone code' : 'Name'); ?></th>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'task_pack_work_calendar'): ?><th>Days</th><th>Working hours</th><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'inquiry_task_status'): ?><th>Inquiry status auto</th><th>Flag</th><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'order_task_status'): ?><th>Automatic task flag</th><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'order_task_flag'): ?><th>Order flag</th><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -842,6 +854,10 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <td class="ft-master-mobile-sort" data-label="Sort order"><?php echo e($r->sort_order); ?></td>
                                 <td class="ft-master-mobile-code" data-label="Code"><strong class="ft-master-product-code"><?php echo e($r->code); ?></strong></td>
                                 <td class="ft-master-mobile-name" data-label="<?php echo e($group === 'phone_country_code' ? 'Phone code' : 'Name'); ?>"><?php echo e($r->name); ?></td>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'task_pack_work_calendar'): ?>
+                                    <td data-label="Days"><strong class="ft-work-calendar-table-value"><?php echo e($r->taskPackWorkCalendarDayRange()); ?></strong></td>
+                                    <td data-label="Working hours"><strong class="ft-work-calendar-table-value"><?php echo e($r->taskPackWorkCalendarTimeRange()); ?></strong></td>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'inquiry_task_status'): ?>
                                     <td class="ft-master-mobile-auto-status" data-label="Inquiry status auto"><strong><?php echo e($r->inquiryAutoStatus()); ?></strong></td>
                                     <td class="ft-master-mobile-flag" data-label="Flag">
@@ -973,8 +989,8 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
                     <div class="field">
-                        <label><?php echo e($group === 'phone_country_code' ? 'Phone code *' : 'Name *'); ?></label>
-                        <input wire:model="name" <?php if($group === 'phone_country_code'): ?> placeholder="e.g. +880" inputmode="tel" <?php endif; ?>>
+                        <label><?php echo e($group === 'phone_country_code' ? 'Phone code *' : ($group === 'task_pack_work_calendar' ? 'Calendar name *' : 'Name *')); ?></label>
+                        <input wire:model="name" <?php if($group === 'phone_country_code'): ?> placeholder="e.g. +880" inputmode="tel" <?php elseif($group === 'task_pack_work_calendar'): ?> placeholder="e.g. Workspace hours" <?php endif; ?>>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['name'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -984,6 +1000,93 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
+
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'task_pack_work_calendar'): ?>
+                        <?php
+                            $workCalendarDays = [
+                                'monday' => 'Monday',
+                                'tuesday' => 'Tuesday',
+                                'wednesday' => 'Wednesday',
+                                'thursday' => 'Thursday',
+                                'friday' => 'Friday',
+                                'saturday' => 'Saturday',
+                                'sunday' => 'Sunday',
+                            ];
+                        ?>
+                        <section class="field full ft-work-calendar-editor" aria-label="Work calendar schedule">
+                            <div class="ft-work-calendar-editor-head">
+                                <div class="ft-work-calendar-editor-icon" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+                                </div>
+                                <div>
+                                    <strong>Working schedule</strong>
+                                    <small>Set the working-day range and daily working hours used by this calendar.</small>
+                                </div>
+                            </div>
+
+                            <div class="ft-work-calendar-grid">
+                                <div class="ft-work-calendar-field">
+                                    <label>Day from *</label>
+                                    <select wire:model.live="workCalendarDayFrom">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $workCalendarDays; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $value => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($value); ?>"><?php echo e($label); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    </select>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['workCalendarDayFrom'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
+                                <div class="ft-work-calendar-field">
+                                    <label>Day to *</label>
+                                    <select wire:model.live="workCalendarDayTo">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $workCalendarDays; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $value => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?><option value="<?php echo e($value); ?>"><?php echo e($label); ?></option><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    </select>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['workCalendarDayTo'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
+                                <div class="ft-work-calendar-field">
+                                    <label>Time from *</label>
+                                    <input type="time" wire:model.live="workCalendarTimeFrom">
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['workCalendarTimeFrom'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
+                                <div class="ft-work-calendar-field">
+                                    <label>Time to *</label>
+                                    <input type="time" wire:model.live="workCalendarTimeTo">
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['workCalendarTimeTo'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><div class="validation-error"><?php echo e($message); ?></div><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
+                            </div>
+
+                            <div class="ft-work-calendar-preview">
+                                <span>Calendar preview</span>
+                                <strong><?php echo e($workCalendarDays[$workCalendarDayFrom] ?? ucfirst($workCalendarDayFrom)); ?> → <?php echo e($workCalendarDays[$workCalendarDayTo] ?? ucfirst($workCalendarDayTo)); ?></strong>
+                                <i></i>
+                                <strong><?php echo e($workCalendarTimeFrom ?: '—'); ?> → <?php echo e($workCalendarTimeTo ?: '—'); ?></strong>
+                            </div>
+                        </section>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($group === 'inquiry_task_status'): ?>
                         <div class="field">

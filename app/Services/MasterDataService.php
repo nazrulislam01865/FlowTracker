@@ -28,6 +28,41 @@ class MasterDataService
         'invoice_type',
     ];
 
+    /** Task Pack efficiency/setup values managed from their own Master Data menu. */
+    public const TASK_PACK_MASTER_TYPES = [
+        'task_pack_duration_unit',
+        'task_pack_timer_start',
+        'task_pack_timer_stop',
+        'task_pack_work_calendar',
+    ];
+
+    public const TASK_PACK_MASTER_DEFAULTS = [
+        'task_pack_duration_unit' => [
+            ['code' => 'TPD-001', 'name' => 'Business hours'],
+            ['code' => 'TPD-002', 'name' => 'Calendar hours'],
+            ['code' => 'TPD-003', 'name' => 'Business days'],
+            ['code' => 'TPD-004', 'name' => 'Calendar days'],
+        ],
+        'task_pack_timer_start' => [
+            ['code' => 'TPS-001', 'name' => 'When status changes to In Progress'],
+        ],
+        'task_pack_timer_stop' => [
+            ['code' => 'TPE-001', 'name' => 'When status changes to Completed'],
+        ],
+        'task_pack_work_calendar' => [
+            [
+                'code' => 'TPW-001',
+                'name' => 'Workspace hours',
+                'metadata' => [
+                    'day_from' => 'monday',
+                    'day_to' => 'friday',
+                    'time_from' => '09:00',
+                    'time_to' => '18:00',
+                ],
+            ],
+        ],
+    ];
+
     public const ACCESS_MODULES = [
         'product' => 'catalog_products',
         'product_category' => 'product_categories',
@@ -69,6 +104,10 @@ class MasterDataService
         'order_task_status' => 'Order Task Statuses',
         'order_task_flag' => 'Order Task Flags',
         'order_flag' => 'Order Flags',
+        'task_pack_duration_unit' => 'Duration Units',
+        'task_pack_timer_start' => 'Timer Start Rules',
+        'task_pack_timer_stop' => 'Timer Stop Rules',
+        'task_pack_work_calendar' => 'Work Calendars',
     ];
 
     /**
@@ -102,6 +141,10 @@ class MasterDataService
         'order_task_status' => 'OTS',
         'order_task_flag' => 'OTF',
         'order_flag' => 'ORF',
+        'task_pack_duration_unit' => 'TPD',
+        'task_pack_timer_start' => 'TPS',
+        'task_pack_timer_stop' => 'TPE',
+        'task_pack_work_calendar' => 'TPW',
     ];
 
     private const LEGACY_GROUPS = [
@@ -557,6 +600,24 @@ class MasterDataService
         }
 
         if ($record->children()->exists()) throw ValidationException::withMessages(['record' => 'Remove or reassign child records before deleting this record.']);
+        if (Schema::hasTable('task_pack_items') && in_array($record->type, self::TASK_PACK_MASTER_TYPES, true)) {
+            $column = match ($record->type) {
+                'task_pack_duration_unit' => 'standard_duration_unit',
+                'task_pack_timer_start' => 'timer_start_rule',
+                'task_pack_timer_stop' => 'timer_stop_rule',
+                'task_pack_work_calendar' => 'work_calendar',
+                default => null,
+            };
+
+            $inUse = $column && Schema::hasColumn('task_pack_items', $column)
+                ? DB::table('task_pack_items')->where($column, $record->code)->exists()
+                : false;
+
+
+            if ($inUse) {
+                throw ValidationException::withMessages(['record' => 'This Task Pack Master Data value is already used by a Task Pack. Deactivate it instead.']);
+            }
+        }
         if (DB::table('task_pack_items')->where('default_department_id', $id)->orWhere('priority_id', $id)->orWhere('document_category_id', $id)->exists()) {
             throw ValidationException::withMessages(['record' => 'This record is used by a Task Pack and cannot be deleted. Deactivate it instead.']);
         }

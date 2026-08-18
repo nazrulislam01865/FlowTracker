@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksTaskAssigneePerformance;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -9,7 +11,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class InquiryTask extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, TracksTaskAssigneePerformance;
 
     protected $guarded = [];
 
@@ -21,11 +23,14 @@ class InquiryTask extends Model
             'needs_attention' => 'boolean',
             'started_at' => 'datetime',
             'completed_at' => 'datetime',
+            'assignee_assigned_at' => 'datetime',
+            'assignee_assigned_at_completion' => 'datetime',
         ];
     }
 
     public function inquiry(): BelongsTo { return $this->belongsTo(Inquiry::class); }
     public function assignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_id'); }
+    public function completionAssignee(): BelongsTo { return $this->belongsTo(User::class, 'assignee_at_completion'); }
     public function setupAssignee(): BelongsTo { return $this->belongsTo(User::class, 'setup_assignee_id'); }
     public function sourceTaskPackItem(): BelongsTo { return $this->belongsTo(TaskPackItem::class, 'source_task_pack_item_id'); }
     public function sourceWorkflowPhase(): BelongsTo { return $this->belongsTo(WorkflowPhase::class, 'source_workflow_phase_id'); }

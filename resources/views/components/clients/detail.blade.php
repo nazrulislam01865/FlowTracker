@@ -336,6 +336,10 @@
                     @forelse($orders ?? [] as $job)
                         @php
                             $label = $statusLabel($job);
+                            $jobStatus = mb_strtolower(trim((string) $job->status));
+                            $showPhaseStatus = !$job->completed_at
+                                && $job->phase
+                                && ($jobStatus === '' || in_array($jobStatus, ['new', 'active', 'open', 'in progress'], true));
                             $ownerName = $job->owner?->name ?: 'Unassigned';
                             $overdue = $job->delivery_date && !$job->completed_at && $job->delivery_date->isPast();
                         @endphp
@@ -344,7 +348,13 @@
                             <td><a href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a></td>
                             <td>{{ $job->created_at?->format('M j, Y') }}</td>
                             <td>{{ \Illuminate\Support\Str::limit($job->title ?: $job->product ?: '—', 42) }}</td>
-                            <td><span class="ft-client-order-status {{ $statusClass($label) }}">{{ $label }}</span></td>
+                            <td>
+                                @if($showPhaseStatus)
+                                    <x-ui.phase-label :phase="$job->phase" short class="ft-client-order-status" />
+                                @else
+                                    <span class="ft-client-order-status {{ $statusClass($label) }}">{{ $label }}</span>
+                                @endif
+                            </td>
                             <td><div class="ft-client-order-owner"><x-ui.avatar :user="$job->owner" :name="$ownerName" :size="23" /><span>{{ $ownerName }}</span></div></td>
                             <td class="{{ $overdue ? 'is-overdue' : '' }}">{{ $job->delivery_date?->format('M j, Y') ?? '—' }}@if($overdue)<span>△</span>@endif</td>
                             <td>{{ $job->commercial_value > 0 ? '$'.number_format((float)$job->commercial_value, 0) : '—' }}</td>
@@ -375,7 +385,7 @@
         <div class="ft-client-info-banner ft-client-order-info"><span>i</span> Order totals and statuses update automatically as tasks progress.</div>
     @elseif($tab === 'documents')
         <section class="ft-client-proto-card ft-client-generic-tab-card">
-            <div class="ft-client-card-head"><div><h2>Client documents</h2><p>Documents linked to {{ $client->name }}.</p></div><a href="{{ route('documents.index', ['client'=>$client->id]) }}" wire:navigate>Open Documents</a></div>
+            <div class="ft-client-card-head"><div><h2>Client documents</h2><p>Documents linked to {{ $client->name }}.</p></div>@if(auth()->user()->canModule('document_archive', 'view'))<a href="{{ route('documents.index', ['client'=>$client->id]) }}" wire:navigate>Open Document Archive</a>@endif</div>
             <div class="ft-client-generic-list">
                 @forelse($documents ?? [] as $document)
                     <div><span class="ft-client-doc-icon">▤</span><div><b>{{ $document->name }}</b><small>{{ $document->category ?: 'Document' }} · {{ $document->document_number }}</small></div><span>{{ $document->updated_at?->format('M j, Y') }}</span></div>

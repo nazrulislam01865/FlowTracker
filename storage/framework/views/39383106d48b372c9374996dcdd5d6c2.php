@@ -1107,7 +1107,7 @@ unset($__defined_vars, $__key, $__value); ?>
 
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $job->workflow->phases; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $phase): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-            <button type="button" class="<?php echo e($phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '')); ?>" disabled aria-disabled="true" title="Workflow page is temporarily disabled">
+            <button type="button" class="<?php echo e($phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '')); ?>" style="<?php echo e(\App\Support\MasterColor::style($phase->color)); ?>" disabled aria-disabled="true" title="<?php echo e($phase->name); ?>">
                 <span><?php echo e($phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence); ?></span><small><?php echo e($phase->short_name); ?></small>
             </button>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
@@ -1268,9 +1268,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     $phaseProgress = $allPhaseTasks->count() ? round($completed/max(1,$allPhaseTasks->count())*100) : 0;
                     $phaseTasks = $allPhaseTasks;
                     $expanded = in_array((int) $phase->id, array_map('intval', $expandedPhaseIds), true);
-                    $phaseTone = ((max(1, (int) $phase->sequence) - 1) % 6) + 1;
                 ?>
-                <div class="ft-phase-group ft-phase-tone-<?php echo e($phaseTone); ?> <?php echo e($expanded ? 'open' : ''); ?>" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-phase-'.e($phase->id).''; ?>wire:key="job-phase-<?php echo e($phase->id); ?>">
+                <div class="ft-phase-group <?php echo e($expanded ? 'open' : ''); ?>" style="<?php echo e(\App\Support\MasterColor::style($phase->color)); ?>" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-phase-'.e($phase->id).''; ?>wire:key="job-phase-<?php echo e($phase->id); ?>">
                     <div class="ft-phase-group-head ft-order-phase-head">
                         <b class="<?php echo e($phase->id === $job->phase->id ? 'current-number' : ''); ?>"><?php echo e($phase->sequence); ?></b>
                         <strong><?php echo e($phase->name); ?></strong>

@@ -1220,7 +1220,7 @@ class Index extends Component
                 : User::query()->whereIn('id', $ownerIds)->orderBy('name')->get(['id','name','profile_image_path']);
 
             $orders = (clone $jobQuery)
-                ->with(['phase:id,name,short_name','owner:id,name,profile_image_path'])
+                ->with(['phase:id,name,short_name,color','owner:id,name,profile_image_path'])
                 ->when(trim($this->clientOrderSearch) !== '', function ($query) {
                     $search = trim($this->clientOrderSearch);
                     $legacy = preg_replace('/^ORDER-/i', 'JOB-', $search) ?: $search;

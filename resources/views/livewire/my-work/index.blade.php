@@ -8,10 +8,66 @@
     <div class="page-head">
         <div>
             <h1>My Tasks</h1>
-            <p>{{ $administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.' }}</p>
+            <p>
+                @if($sourceFilter === 'inquiries' && $statusFilter !== '')
+                    Inquiry tasks matching the selected dashboard status filter.
+                @else
+                    {{ $administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.' }}
+                @endif
+            </p>
         </div>
     </div>
 
+
+    @if($sourceFilter === 'inquiries' && $statusFilter !== '')
+    <section class="work-view" aria-busy="false">
+        <div class="toolbar">
+            <div class="toolbar-primary">
+                <label class="search-wrap">
+                    <span class="search-icon">⌕</span>
+                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search filtered Inquiry tasks" aria-label="Search filtered Inquiry tasks">
+                    @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
+                </label>
+                <div class="quick-filters" aria-label="Active dashboard task filter">
+                    <span class="chip active">Inquiry tasks</span>
+                    <span class="chip active">Status: {{ $statusFilter }}</span>
+                </div>
+            </div>
+            <div class="toolbar-secondary">
+                <select class="sort" wire:model.live="sort" aria-label="Sort filtered Inquiry tasks">
+                    <option value="action">Sort: Action priority</option>
+                    <option value="due">Sort: Due soon</option>
+                    <option value="job">Sort: Inquiry number</option>
+                </select>
+                <button type="button" class="chip clear-filters" wire:click="clearStatusFilter">Clear status filter</button>
+            </div>
+        </div>
+
+        <div class="load-state">
+            <span><strong>{{ $statusFilter }}</strong> Inquiry tasks</span>
+            <span class="loading-copy">
+                <span wire:loading.delay.long wire:target="search,sort,clearSearch,clearStatusFilter"><i class="spinner"></i> Updating tasks…</span>
+            </span>
+        </div>
+
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,clearSearch,clearStatusFilter" aria-live="polite"><span></span> Updating tasks…</div>
+
+        <section class="list-shell" aria-label="My Inquiry Tasks filtered by status" wire:loading.class="is-refreshing" wire:target="search,sort,clearSearch,clearStatusFilter">
+            <div class="task-table-scroll">
+                <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
+                <div>
+                    @include('livewire.my-work._inquiry-groups', ['inquiryGroups' => $inquiryGroups])
+                    @if($inquiryGroups->isEmpty())
+                        <div class="empty"><strong>No matching Inquiry tasks</strong>No My Task records currently use the selected status.</div>
+                    @endif
+                </div>
+            </div>
+            <footer class="footer">
+                <span>{{ $inquiryVisibleTaskCount }} {{ $inquiryVisibleTaskCount === 1 ? 'task' : 'tasks' }} with status “{{ $statusFilter }}”</span>
+            </footer>
+        </section>
+    </section>
+    @else
 
     <section class="work-view" aria-busy="false">
         <div class="metrics ft-summary-card-grid" aria-label="My Task summary filters">
@@ -48,6 +104,9 @@
             <div class="toolbar-secondary">
                 <div class="quick-filters">
                     <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('{{ $quick === 'mentions' ? 'my_tasks' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
+                    @if($statusFilter !== '')
+                        <button type="button" class="chip active" wire:click="clearStatusFilter" title="Clear dashboard status filter">Status: {{ $statusFilter }} ×</button>
+                    @endif
                 </div>
                 <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
                     <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
@@ -59,7 +118,7 @@
                     <option value="due">Sort: Due soon</option>
                     <option value="job">Sort: Order number</option>
                 </select>
-                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $quick === 'my_tasks' && !$hideCompleted)>Clear filters</button>
+                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $statusFilter === '' && $quick === 'my_tasks' && !$hideCompleted)>Clear filters</button>
             </div>
         </div>
 
@@ -138,7 +197,7 @@
                                         <a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>
                                         <span class="task-ref">{{ $task['number'] }}</span>
                                     </div>
-                                    <span class="phase" data-label="Phase">{{ $task['phase'] }}</span>
+                                    <span class="phase ft-phase-color-label" data-label="Phase" style="{{ \App\Support\MasterColor::style($task['phaseColor'] ?? null) }}">{{ $task['phase'] }}</span>
                                     <div
                                         class="assignee assignee-editor ft-inline-edit-shell"
                                         wire:key="my-work-task-{{ $task['id'] }}-assignee-{{ $task['assigneeId'] ?: 0 }}"
@@ -232,5 +291,6 @@
             </footer>
         </section>
     </section>
+    @endif
 
 </div>

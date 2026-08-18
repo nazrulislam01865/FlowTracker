@@ -11,6 +11,7 @@ use App\Models\TaskPackItem;
 use App\Models\TaskPackTask;
 use App\Models\WorkflowPhase;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -19,6 +20,39 @@ use Illuminate\Validation\ValidationException;
 class TaskPackService
 {
     public function workspaceId(): int { return app(SetupContext::class)->workspaceId(); }
+
+    public function ensureTaskPackMasterDataDefaults(): void
+    {
+        if (!Schema::hasTable('master_records')) return;
+
+        $workspaceId = $this->workspaceId();
+        foreach (MasterDataService::TASK_PACK_MASTER_DEFAULTS as $type => $defaults) {
+            $hasAny = MasterRecord::withTrashed()
+                ->where('workspace_id', $workspaceId)
+                ->where('type', $type)
+                ->exists();
+            if ($hasAny) continue;
+
+            foreach ($defaults as $index => $default) {
+                MasterRecord::query()->create([
+                    'workspace_id' => $workspaceId,
+                    'parent_id' => null,
+                    'type' => $type,
+                    'code' => $default['code'],
+                    'name' => $default['name'],
+                    'description' => null,
+                    'metadata' => array_merge(
+                        ['seeded_by' => 'task_pack_master_data_v1'],
+                        (array) ($default['metadata'] ?? [])
+                    ),
+                    'status' => 'active',
+                    'sort_order' => $index + 1,
+                ]);
+            }
+
+            Cache::forget("flowtrack:master:active:{$workspaceId}:{$type}");
+        }
+    }
 
     public function all()
     {
@@ -119,6 +153,13 @@ class TaskPackService
                     'priority_id' => $row['priority_id'] ?? null,
                     'document_category_id' => $row['document_category_id'] ?? null,
                     'due_offset_days' => $row['due_offset_days'] ?? 1,
+                    'standard_duration_value' => $row['standard_duration_value'] ?? 8,
+                    'standard_duration_unit' => $row['standard_duration_unit'] ?? 'TPD-001',
+                    'timer_start_rule' => $row['timer_start_rule'] ?? 'TPS-001',
+                    'timer_stop_rule' => $row['timer_stop_rule'] ?? 'TPE-001',
+                    'work_calendar' => $row['work_calendar'] ?? 'TPW-001',
+                    'set_due_from_standard_duration' => (bool) ($row['set_due_from_standard_duration'] ?? true),
+                    'allow_efficiency_override' => (bool) ($row['allow_efficiency_override'] ?? false),
                     'is_required' => (bool) ($row['is_required'] ?? true),
                     'sort_order' => $index,
                 ], $itemId, false);
@@ -205,7 +246,7 @@ class TaskPackService
             ->orderBy('workflow_template_id')
             ->orderBy('sequence')
             ->limit(8)
-            ->get(['id', 'workflow_template_id', 'name', 'sequence', 'task_pack_id']);
+            ->get(['id', 'workflow_template_id', 'name', 'sequence', 'task_pack_id', 'color']);
 
         $jobsBase = FlowJob::withTrashed()
             ->where(function ($query) use ($sourceWorkflowIds) {
@@ -237,6 +278,7 @@ class TaskPackService
                 'id' => (int) $phase->id,
                 'name' => (string) $phase->name,
                 'sequence' => (int) $phase->sequence,
+                'color' => \App\Support\MasterColor::normalize((string) ($phase->color ?? '')),
                 'workflow_name' => (string) ($phase->workflowTemplate?->name ?: 'Workflow'),
             ])->all(),
             'generated_task_count' => 0,
@@ -331,6 +373,17 @@ class TaskPackService
                 'priority_id' => $data['priority_id'] ?? null,
                 'document_category_id' => $data['document_category_id'] ?? null,
                 'due_offset_days' => max(0, (int) ($data['due_offset_days'] ?? 1)),
+                'standard_duration_value' => max(0.01, (float) ($data['standard_duration_value'] ?? $existingItem?->standard_duration_value ?? 8)),
+                'standard_duration_unit' => trim((string) ($data['standard_duration_unit'] ?? $existingItem?->standard_duration_unit ?? 'TPD-001')),
+                'timer_start_rule' => trim((string) ($data['timer_start_rule'] ?? $existingItem?->timer_start_rule ?? 'TPS-001')),
+                'timer_stop_rule' => trim((string) ($data['timer_stop_rule'] ?? $existingItem?->timer_stop_rule ?? 'TPE-001')),
+                'work_calendar' => trim((string) ($data['work_calendar'] ?? $existingItem?->work_calendar ?? 'TPW-001')),
+                'set_due_from_standard_duration' => array_key_exists('set_due_from_standard_duration', $data)
+                    ? (bool) $data['set_due_from_standard_duration']
+                    : ($existingItem ? (bool) $existingItem->set_due_from_standard_duration : true),
+                'allow_efficiency_override' => array_key_exists('allow_efficiency_override', $data)
+                    ? (bool) $data['allow_efficiency_override']
+                    : ($existingItem ? (bool) $existingItem->allow_efficiency_override : false),
                 'is_required' => (bool) ($data['is_required'] ?? true),
                 'sort_order' => $sort,
             ]);

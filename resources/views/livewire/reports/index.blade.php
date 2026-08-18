@@ -1,6 +1,4 @@
 <div id="inquiry-intelligence-app" class="ii" wire:loading.class="ii-is-loading" wire:target="search,period,status,priority,assigneeId,resetFilters,setTab,setTaskTab,employeeFocus">
-    {{-- ENTIRE INQUIRY INTELLIGENCE PAGE TEMPORARILY DISABLED. Remove the @if(false) wrapper to restore. --}}
-    @if(false)
 @php
     $report = $this->report;
     $portfolio = $report['portfolio'];
@@ -10,6 +8,25 @@
     $products = $report['products'];
     $productKpis = $products['kpis'];
     $badgeClass = fn (string $tone) => in_array($tone, ['green','amber','red','blue'], true) ? $tone : 'blue';
+    $periodFilterOptions = collect([
+        ['id' => 'month', 'label' => app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('F Y')],
+        ['id' => '30d', 'label' => 'Last 30 days'],
+        ['id' => 'qtd', 'label' => 'Quarter to date'],
+        ['id' => 'ytd', 'label' => 'Year to date'],
+    ]);
+    $statusFilterOptions = collect($report['filters']['statuses'])->map(fn ($option) => ['id' => $option, 'label' => $option]);
+    $priorityFilterOptions = collect($report['filters']['priorities'])->map(fn ($option) => ['id' => $option, 'label' => $option]);
+    $assigneeFilterOptions = collect([['id' => '0', 'label' => 'All assignees']])
+        ->concat(collect($report['filters']['assignees'])->map(fn ($option) => ['id' => (string) $option['id'], 'label' => $option['name']]));
+    // Focus Employee must always come from the current workspace user roster,
+    // not from the performance-ranking result set. This keeps every active
+    // workspace user selectable even when they have no task rows in the
+    // current reporting period.
+    $employeeFocusOptions = collect([['id' => 'all', 'label' => 'All active employees']])
+        ->concat(collect($report['filters']['assignees'])->map(fn ($option) => [
+            'id' => (string) $option['id'],
+            'label' => $option['name'],
+        ]));
 @endphp
 
     <div class="ii-crumb"><b>Analytics</b> &nbsp;/&nbsp; Inquiry Intelligence</div>
@@ -31,44 +48,65 @@
             <label>Search</label>
             <input type="search" wire:model.live.debounce.400ms="search" placeholder="Reference, title, product or assignee">
         </div>
-        <div class="ii-field">
-            <label>Period</label>
-            <select wire:model.live="period">
-                <option value="month">{{ app(\App\Services\WorkspaceSettingsService::class)->localNow()->format('F Y') }}</option>
-                <option value="30d">Last 30 days</option>
-                <option value="qtd">Quarter to date</option>
-                <option value="ytd">Year to date</option>
-            </select>
-        </div>
-        <div class="ii-field">
-            <label>Status</label>
-            <select wire:model.live="status">
-                <option value="">All statuses</option>
-                @foreach($report['filters']['statuses'] as $option)<option value="{{ $option }}">{{ $option }}</option>@endforeach
-            </select>
-        </div>
-        <div class="ii-field">
-            <label>Priority</label>
-            <select wire:model.live="priority">
-                <option value="">All priorities</option>
-                @foreach($report['filters']['priorities'] as $option)<option value="{{ $option }}">{{ $option }}</option>@endforeach
-            </select>
-        </div>
-        <div class="ii-field">
-            <label>Assignee</label>
-            <select wire:model.live="assigneeId">
-                <option value="0">All assignees</option>
-                @foreach($report['filters']['assignees'] as $option)<option value="{{ $option['id'] }}">{{ $option['name'] }}</option>@endforeach
-            </select>
-        </div>
+
+        <x-ui.select-filter
+            class="ii-field ii-searchable-filter"
+            label="Period"
+            property="period"
+            :value="$period"
+            :options="$periodFilterOptions"
+            :clearable="false"
+            search-placeholder="Search period…"
+            :fixed-menu="true"
+            :menu-width="280"
+            wire:key="inquiry-intelligence-period-{{ $period }}"
+        />
+
+        <x-ui.select-filter
+            class="ii-field ii-searchable-filter"
+            label="Status"
+            property="status"
+            :value="$status"
+            placeholder="All statuses"
+            :options="$statusFilterOptions"
+            search-placeholder="Search status…"
+            :fixed-menu="true"
+            :menu-width="280"
+            wire:key="inquiry-intelligence-status-{{ $status ?: 'all' }}"
+        />
+
+        <x-ui.select-filter
+            class="ii-field ii-searchable-filter"
+            label="Priority"
+            property="priority"
+            :value="$priority"
+            placeholder="All priorities"
+            :options="$priorityFilterOptions"
+            search-placeholder="Search priority…"
+            :fixed-menu="true"
+            :menu-width="280"
+            wire:key="inquiry-intelligence-priority-{{ $priority ?: 'all' }}"
+        />
+
+        <x-ui.select-filter
+            class="ii-field ii-searchable-filter"
+            label="Assignee"
+            property="assigneeId"
+            :value="(string) $assigneeId"
+            :options="$assigneeFilterOptions"
+            :clearable="false"
+            search-placeholder="Search assignee…"
+            :fixed-menu="true"
+            :menu-width="300"
+            wire:key="inquiry-intelligence-assignee-{{ $assigneeId }}"
+        />
+
         <button type="button" class="ii-btn ii-filter-reset" wire:click="resetFilters">Reset</button>
     </section>
 
     <nav class="ii-tabs" aria-label="Inquiry intelligence sections">
         <button type="button" class="ii-tab {{ $activeTab === 'portfolio' ? 'active' : '' }}" wire:click="setTab('portfolio')">Portfolio overview</button>
-        {{-- TEMPORARILY DISABLED: Assignee/team performance tab.
         <button type="button" class="ii-tab {{ $activeTab === 'people' ? 'active' : '' }}" wire:click="setTab('people')">Assignee performance</button>
-        --}}
         <button type="button" class="ii-tab {{ $activeTab === 'products' ? 'active' : '' }}" wire:click="setTab('products')">Product performance</button>
     </nav>
 
@@ -159,10 +197,9 @@
         </article>
     </section>
 
-    {{-- TEMPORARILY DISABLED: Assignee/team performance panel. Remove this Blade comment wrapper and the tab comment above to restore.
     <section class="ii-panel {{ $activeTab === 'people' ? 'active' : '' }}" @if($activeTab !== 'people') hidden @endif>
-        <div class="ii-sect"><div><h2>Assignee performance center</h2><p>Speed, productivity, efficiency, quality and workload across the inquiry team</p></div><small>{{ $report['period']['label'] }} · live data</small></div>
-        <div class="ii-demo-banner"><div><b>FlowTrack operational scoring</b>Metrics use actual inquiry-task timestamps, due dates, reopen events and workflow output. Employees with fewer than 10 completed tasks remain visible but are marked as insufficient data for formal ranking.</div><span class="ii-badge ii-blue">Live data</span></div>
+        <div class="ii-sect"><div><h2>Assignee performance center</h2><p>Completion, turnaround time, due-date reliability and reopen activity across the inquiry team</p></div><small>{{ $report['period']['label'] }} · live data</small></div>
+        <div class="ii-demo-banner"><div><b>Live task performance</b>Completion uses assigned vs completed tasks. Average hours use only the task's recorded Started/In Progress timestamp through completion. On-time uses completed tasks with due dates, and every completed-to-open status change is counted as a reopen.</div><span class="ii-badge ii-blue">Live data</span></div>
 
         <div class="ii-sect"><div><h2>Team summary</h2><p>Headline capacity and execution indicators</p></div></div>
         <div class="ii-people-kpis">
@@ -170,12 +207,12 @@
             <article class="ii-card ii-smallkpi"><div class="ii-label">Active this period</div><div class="ii-big">{{ number_format($peopleKpis['active']) }}</div><div class="ii-trend">Assignees with inquiry tasks</div></article>
             <article class="ii-card ii-smallkpi"><div class="ii-label">Tasks assigned</div><div class="ii-big">{{ number_format($peopleKpis['assigned']) }}</div><div class="ii-trend">Across filtered inquiries</div></article>
             <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Tasks completed</div><div class="ii-big">{{ number_format($peopleKpis['completed']) }}</div><div class="ii-trend">{{ $peopleKpis['completion_rate'] }}% completion rate</div></article>
-            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Avg completion time</div><div class="ii-big">@if($peopleKpis['avg_hours'] !== null){{ number_format($peopleKpis['avg_hours'],1) }}<small>h</small>@else—@endif</div><div class="ii-trend">Start/creation to completion for completed tasks</div></article>
+            <article class="ii-card ii-smallkpi ii-good"><div class="ii-label">Avg completion time</div><div class="ii-big">@if($peopleKpis['avg_hours'] !== null){{ number_format($peopleKpis['avg_hours'],1) }}<small>h</small>@else—@endif</div><div class="ii-trend">{{ $peopleKpis['avg_hours_samples'] }} completed tasks with a recorded start time</div></article>
             <article class="ii-card ii-smallkpi ii-warn"><div class="ii-label">On-time completion</div><div class="ii-big">@if($peopleKpis['on_time'] !== null){{ number_format($peopleKpis['on_time'],1) }}<small>%</small>@else—@endif</div><div class="ii-trend">{{ $peopleKpis['on_time_samples'] }} completed tasks with due dates</div></article>
-            <article class="ii-card ii-smallkpi"><div class="ii-label">First-pass quality</div><div class="ii-big">@if($peopleKpis['quality'] !== null){{ number_format($peopleKpis['quality'],1) }}<small>%</small>@else—@endif</div><div class="ii-trend">{{ $peopleKpis['quality_samples'] }} completed tasks checked for reopen events</div></article>
+            <article class="ii-card ii-smallkpi"><div class="ii-label">Reopen events</div><div class="ii-big">{{ number_format($peopleKpis['reopen_events']) }}</div><div class="ii-trend">Completed tasks moved back to any non-completed status</div></article>
         </div>
 
-        <div class="ii-sect"><div><h2>Performance highlights</h2><p>Ranked on cycle time, SLA, completion and quality — not speed alone</p></div></div>
+        <div class="ii-sect"><div><h2>Performance highlights</h2><p>Live highlights based on completion, on-time delivery, average task hours and completed-task throughput</p></div></div>
         <div class="ii-rankgrid">
             @php
                 $highlightCards = [
@@ -189,8 +226,8 @@
                 <article class="ii-card ii-rankcard {{ $card['class'] }}">
                     <div class="ii-rankeyebrow">{{ $card['eyebrow'] }}</div>
                     @if($person)
-                        <div class="ii-rankperson"><span class="ii-face">{{ $person['initials'] }}</span><div><h3>{{ $person['name'] }}</h3><p>{{ $person['completed'] }} completed tasks · {{ $person['signal']['label'] }}</p></div></div>
-                        <div class="ii-rankstats"><div><b>{{ $person['avg_hours'] !== null ? number_format($person['avg_hours'],1).'h' : '—' }}</b><span>Avg cycle</span></div><div><b>{{ $person['on_time'] !== null ? number_format($person['on_time'],0).'%' : '—' }}</b><span>On time</span></div><div><b>{{ $person['efficiency'] }}</b><span>Efficiency</span></div></div>
+                        <div class="ii-rankperson"><span class="ii-face">{{ $person['initials'] }}</span><div><h3>{{ $person['name'] }}</h3><p>{{ $person['completed'] }} completed tasks · {{ $person['reopen_count'] }} {{ $person['reopen_count'] === 1 ? 'reopen' : 'reopens' }}</p></div></div>
+                        <div class="ii-rankstats"><div><b>{{ $person['avg_hours'] !== null ? number_format($person['avg_hours'],1).'h' : '—' }}</b><span>Avg hours</span></div><div><b>{{ $person['on_time'] !== null ? number_format($person['on_time'],0).'%' : '—' }}</b><span>On time</span></div><div><b>{{ number_format($person['completion'],0) }}%</b><span>Completion</span></div></div>
                     @else
                         <div class="ii-empty-inline">No assignee data in this period.</div>
                     @endif
@@ -198,63 +235,104 @@
             @endforeach
         </div>
 
-        <div class="ii-sect"><div><h2>Employee performance ranking</h2><p>Minimum 10 completed tasks; lower cycle time is better, while quality and SLA protect against speed-only ranking</p></div><small>Sorted by efficiency score</small></div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Rank</th><th>Assignee</th><th>Assigned</th><th>Completed</th><th>Completion</th><th>Avg hours</th><th>On time</th><th>Reopen</th><th>Efficiency</th><th>Management signal</th></tr></thead><tbody>
+        <div class="ii-sect"><div><h2>Employee performance ranking</h2><p>Completion rate remains the primary ranking measure; on-time rate, completed volume, lower average hours and fewer reopens resolve ties</p></div><small>Live task metrics</small></div>
+        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Rank</th><th>Assignee</th><th>Assigned</th><th>Completed</th><th>Completion</th><th>Avg hours</th><th>On time</th><th>Reopen count</th></tr></thead><tbody>
             @forelse($people['ranking'] as $row)
                 <tr>
                     <td class="ii-rankno">{{ str_pad((string)$row['rank'],2,'0',STR_PAD_LEFT) }}</td>
                     <td><div class="ii-emp-name"><span class="ii-face">{{ $row['initials'] }}</span><b>{{ $row['name'] }}</b></div></td>
                     <td>{{ $row['assigned'] }}</td><td>{{ $row['completed'] }}</td><td>{{ number_format($row['completion'],1) }}%</td>
                     <td class="ii-hours {{ $row['avg_hours'] !== null && $row['avg_hours'] > 8 ? 'slow' : ($row['avg_hours'] !== null && $row['avg_hours'] <= 2 ? 'fast' : '') }}">{{ $row['avg_hours'] !== null ? number_format($row['avg_hours'],1).'h' : '—' }}</td>
-                    <td>{{ $row['on_time'] !== null ? number_format($row['on_time'],1).'%' : '—' }}</td><td>{{ $row['reopen'] !== null ? number_format($row['reopen'],1).'%' : '—' }}</td>
-                    <td><span class="ii-scorepill {{ $row['efficiency'] < 60 ? 'low' : ($row['efficiency'] < 80 ? 'mid' : '') }}">{{ $row['efficiency'] }}</span></td>
-                    <td><span class="ii-badge ii-{{ $badgeClass($row['signal']['tone']) }}">{{ $row['signal']['label'] }}</span></td>
+                    <td>{{ $row['on_time'] !== null ? number_format($row['on_time'],1).'%' : '—' }}</td>
+                    <td><b>{{ $row['reopen_count'] }}</b></td>
                 </tr>
             @empty
-                <tr><td colspan="10"><div class="ii-empty-inline">No assignee activity matches the selected filters.</div></td></tr>
+                <tr><td colspan="8"><div class="ii-empty-inline">No assignee activity matches the selected filters.</div></td></tr>
             @endforelse
         </tbody></table></article>
 
-        <div class="ii-sect"><div><h2>Assignee inquiry-to-order conversion</h2><p>Completed inquiry handoffs converted into linked FlowTrack orders, attributed to the inquiry owner or latest task assignee</p></div><small>Current filtered period</small></div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Assignee</th><th>Completed inquiries</th><th>Orders converted</th><th>Conversion rate</th><th>Vs team average</th><th>Interpretation</th></tr></thead><tbody>
-            @forelse($people['conversion'] as $row)
-                <tr><td><b>{{ $row['name'] }}</b></td><td>{{ $row['completed_inquiries'] }}</td><td><b>{{ $row['orders'] }}</b></td><td class="ii-conversion">{{ number_format($row['conversion'],1) }}%</td><td><span class="ii-badge ii-{{ $badgeClass($row['tone']) }}">{{ $row['delta'] >= 0 ? '+' : '' }}{{ number_format($row['delta'],1) }} pts</span></td><td>{{ $row['interpretation'] }}</td></tr>
-            @empty
-                <tr><td colspan="6"><div class="ii-empty-inline">No completed inquiry conversion data in this period.</div></td></tr>
-            @endforelse
-        </tbody></table></article>
+        <div class="ii-sect"><div><h2>Assignee inquiry-to-order conversion</h2><p>The 5 most recent Inquiry records converted into linked FlowTrack Orders, attributed to the inquiry owner or latest task assignee</p></div><small>Current filtered period</small></div>
+        <article class="ii-card ii-tablewrap">
+            <table>
+                <thead><tr><th>Assignee</th><th>Inquiry</th><th>Converted order</th><th>Completed inquiries</th><th>Orders converted</th><th>Conversion rate</th><th>Converted at</th></tr></thead>
+                <tbody>
+                    @forelse($people['conversion'] as $row)
+                        <tr>
+                            <td><b>{{ $row['assignee'] }}</b></td>
+                            <td><a class="ii-record-link ii-inline-link" href="{{ $row['inquiry_url'] }}" wire:navigate>{{ $row['inquiry'] }}</a></td>
+                            <td><a class="ii-record-link ii-inline-link" href="{{ $row['order_url'] }}" wire:navigate>{{ $row['order'] }}</a></td>
+                            <td>{{ $row['completed_inquiries'] }}</td>
+                            <td><b>{{ $row['orders_converted'] }}</b></td>
+                            <td class="ii-conversion">{{ number_format($row['conversion_rate'], 1) }}%</td>
+                            <td class="ii-timecell">{{ $row['converted_at'] }}</td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="7"><div class="ii-empty-inline">No Inquiry-to-Order conversions match the selected period and filters.</div></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+        </article>
 
-        <div class="ii-sect"><div><h2>Task start-to-completion detail</h2><p>Event-level audit trail for cycle-time verification and coaching</p></div></div>
+        <div class="ii-sect"><div><h2>Task start-to-completion detail</h2><p>Shows real task start/completion timing, Inquiry SLA target and every Completed → non-completed reopen event</p></div><small>10 rows per page</small></div>
         <div class="ii-focusbar">
             <div class="ii-subtabs">
                 <button type="button" class="ii-subtab {{ $taskTab === 'recent' ? 'active' : '' }}" wire:click="setTaskTab('recent')">Recent completions</button>
                 <button type="button" class="ii-subtab {{ $taskTab === 'longest' ? 'active' : '' }}" wire:click="setTaskTab('longest')">Longest tasks</button>
                 <button type="button" class="ii-subtab {{ $taskTab === 'reopened' ? 'active' : '' }}" wire:click="setTaskTab('reopened')">Reopened tasks</button>
             </div>
-            <div class="ii-field"><label>Focus employee</label><select wire:model.live="employeeFocus"><option value="all">All active employees</option>@foreach($people['ranking'] as $row)<option value="{{ $row['id'] }}">{{ $row['name'] }}</option>@endforeach</select></div>
+            <x-ui.select-filter
+                class="ii-field ii-searchable-filter ii-focus-employee-filter"
+                label="Focus employee"
+                property="employeeFocus"
+                :value="$employeeFocus"
+                :options="$employeeFocusOptions"
+                :clearable="false"
+                search-placeholder="Search employee…"
+                :fixed-menu="true"
+                :menu-width="320"
+                wire:key="inquiry-intelligence-focus-{{ $employeeFocus }}"
+            />
         </div>
-        <article class="ii-card ii-tablewrap"><table><thead><tr><th>Assignee</th><th>Inquiry</th><th>Task</th><th>Started / assigned</th><th>Completed</th><th>Hours taken</th><th>SLA</th><th>Quality</th></tr></thead><tbody>
-            @forelse($this->taskRows as $row)
-                <tr><td><b>{{ $row['assignee'] }}</b></td><td>@if($row['inquiry_url'])<a class="ii-record-link ii-inline-link" href="{{ $row['inquiry_url'] }}" wire:navigate>{{ $row['inquiry'] }}</a>@else{{ $row['inquiry'] }}@endif</td><td>{{ $row['task'] }}</td><td class="ii-timecell">{{ $row['started'] }}</td><td class="ii-timecell">{{ $row['completed'] }}</td><td class="ii-hours {{ $row['hours_value'] !== null && $row['hours_value'] > 8 ? 'slow' : ($row['hours_value'] !== null && $row['hours_value'] <= 2 ? 'fast' : '') }}">{{ $row['hours'] }}</td><td><span class="ii-badge ii-{{ $badgeClass($row['sla_tone']) }}">{{ $row['sla'] }}</span></td><td>{{ $row['quality'] }}</td></tr>
-            @empty
-                <tr><td colspan="8"><div class="ii-empty-inline">No task events match this focus.</div></td></tr>
-            @endforelse
-        </tbody></table></article>
+        <article class="ii-card ii-task-detail-card">
+            <div class="ii-tablewrap ii-task-table-scroll">
+            <table class="ii-task-detail-table">
+                <thead><tr><th>Assignee</th><th>Inquiry</th><th>Task</th><th>Status</th><th>Started</th><th>Completed</th><th>Hours taken</th><th>SLA target</th><th>SLA</th><th>Reopen count</th></tr></thead>
+                <tbody>
+                    @forelse($this->taskRows as $row)
+                        <tr>
+                            <td><b>{{ $row['assignee'] }}</b></td>
+                            <td>@if($row['inquiry_url'])<a class="ii-record-link ii-inline-link" href="{{ $row['inquiry_url'] }}" wire:navigate>{{ $row['inquiry'] }}</a>@else{{ $row['inquiry'] }}@endif</td>
+                            <td><b class="ii-task-name">{{ $row['task'] }}</b></td>
+                            <td><span class="ii-status-text">{{ $row['status'] }}</span></td>
+                            <td class="ii-timecell">{{ $row['started'] }}</td>
+                            <td class="ii-timecell">{{ $row['completed'] }}</td>
+                            <td class="ii-hours {{ $row['hours_value'] !== null && $row['hours_value'] > 8 ? 'slow' : ($row['hours_value'] !== null && $row['hours_value'] <= 2 ? 'fast' : '') }}">{{ $row['hours'] }}</td>
+                            <td class="ii-sla-target"><b>{{ $row['sla_target'] }}</b><small>{{ $row['sla_source'] }}</small></td>
+                            <td><span class="ii-badge ii-{{ $badgeClass($row['sla_tone']) }}">{{ $row['sla'] }}</span></td>
+                            <td><b>{{ $row['reopen_count'] }}</b></td>
+                        </tr>
+                    @empty
+                        <tr><td colspan="10"><div class="ii-empty-inline">No task events match this focus.</div></td></tr>
+                    @endforelse
+                </tbody>
+            </table>
+            </div>
+            @php($taskPager = $this->taskPagination)
+            <div class="ii-task-pagination">
+                <span>Showing {{ $taskPager['from'] }}–{{ $taskPager['to'] }} of {{ $taskPager['total'] }}</span>
+                <div class="ii-task-page-actions">
+                    <button type="button" wire:click="previousTaskPage" @disabled($taskPager['page'] <= 1)>Previous</button>
+                    @foreach($taskPager['numbers'] as $pageNumber)
+                        <button type="button" class="{{ $taskPager['page'] === $pageNumber ? 'active' : '' }}" wire:click="gotoTaskPage({{ $pageNumber }})">{{ $pageNumber }}</button>
+                    @endforeach
+                    <button type="button" wire:click="nextTaskPage" @disabled($taskPager['page'] >= $taskPager['pages'])>Next</button>
+                </div>
+            </div>
+        </article>
 
-        <div class="ii-sect"><div><h2>KPI definitions and guardrails</h2><p>A fair score separates throughput, cycle time, due-date reliability and recorded rework</p></div></div>
-        <div class="ii-metric-defs">
-            <article class="ii-card ii-metricdef"><b>Efficiency score · 30%</b><p>Relative cycle speed compared with the team median for completed inquiry tasks.</p></article>
-            <article class="ii-card ii-metricdef"><b>On-time completion · 25%</b><p>Completed tasks finished on or before their configured due date.</p></article>
-            <article class="ii-card ii-metricdef"><b>Productivity · 20%</b><p>Completed-task output compared with the team median for the selected period.</p></article>
-            <article class="ii-card ii-metricdef"><b>First-pass quality · 15%</b><p>Tasks completed without a recorded <span class="ii-codekey">inquiry.task_reopened</span> event.</p></article>
-            <article class="ii-card ii-metricdef"><b>Workload reliability · 10%</b><p>Open backlog adjusted for tasks that are already overdue.</p></article>
-            <article class="ii-card ii-metricdef"><b>Minimum sample rule</b><p>Do not formally rank employees with fewer than 10 completed tasks in the selected period.</p></article>
-            <article class="ii-card ii-metricdef"><b>Data scope</b><p>Only inquiries visible under the signed-in user’s Inquiry access scope are included.</p></article>
-            <article class="ii-card ii-metricdef"><b>Coaching, not punishment</b><p>Use low scores to diagnose training, workload, supplier or process issues before judging performance.</p></article>
-        </div>
+
 
     </section>
-    --}}
 
     <section class="ii-panel {{ $activeTab === 'products' ? 'active' : '' }}" @if($activeTab !== 'products') hidden @endif>
         <div class="ii-sect"><div><h2>Product performance center</h2><p>Demand, inquiry workload, turnaround, conversion and recurring client questions</p></div><small>{{ $report['period']['label'] }} · live data</small></div>
@@ -321,7 +399,5 @@
         </div>
     </section>
 
-    <p class="ii-method">Method note: all headline metrics on this page are calculated from FlowTrack records visible to the signed-in user. Task cycle time uses <b>started_at</b> when available and falls back to task creation/assignment time for older records. Product analytics does not infer missing product categories from attachments. Assignee scores with fewer than 10 completed tasks are shown for context but marked as insufficient data.</p>
     <footer class="ii-pagefoot"><span>StepPromo · Inquiry Intelligence</span><span>Management analytics · {{ $report['period']['label'] }}</span></footer>
-    @endif
 </div>

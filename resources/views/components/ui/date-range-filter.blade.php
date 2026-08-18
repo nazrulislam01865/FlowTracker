@@ -4,6 +4,8 @@
     'fromValue' => '',
     'toValue' => '',
     'label' => 'Created date',
+    'fromLabel' => 'Date from',
+    'toLabel' => 'Date to',
 ])
 
 @php
@@ -33,7 +35,7 @@
 <div {{ $attributes->class(['ft-date-range-filter', 'is-active' => $active]) }} role="group" aria-label="{{ $label }} range filter">
     <div class="ft-date-range-fields">
         <label class="ft-date-range-field">
-            <span>Date from</span>
+            <span>{{ $fromLabel }}</span>
             <input
                 type="date"
                 lang="en-GB"
@@ -43,7 +45,7 @@
             >
         </label>
         <label class="ft-date-range-field">
-            <span>Date to</span>
+            <span>{{ $toLabel }}</span>
             <input
                 type="date"
                 lang="en-GB"

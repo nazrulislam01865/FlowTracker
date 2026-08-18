@@ -53,105 +53,195 @@
 
             <div class="ft-task-editor-list">
                 @foreach($tasks as $index => $task)
-                    <section class="ft-task-editor-card" wire:key="task-pack-form-task-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}">
+                    <section class="ft-task-editor-card ft-task-editor-prototype" wire:key="task-pack-form-task-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}">
                         <div class="ft-task-editor-head">
-                            <div><h3>Task {{ $index + 1 }}</h3><p>Sequence {{ $index + 1 }} in this Task Pack</p></div>
-                            <div class="ft-task-editor-actions">
-                                <button type="button" wire:click="moveTask({{ $index }}, -1)" @disabled($index === 0)>↑</button>
-                                <button type="button" wire:click="moveTask({{ $index }}, 1)" @disabled($index === count($tasks)-1)>↓</button>
-                                @if(empty($task['id']) || $canDeleteTaskPack)<button type="button" wire:click="removeTask({{ $index }})">Remove</button>@endif
+                            <div>
+                                <h3>Task {{ $index + 1 }}</h3>
+                                <p>Sequence {{ $index + 1 }} in this Task Pack</p>
+                            </div>
+                            <div class="ft-task-editor-actions" aria-label="Task sequence actions">
+                                <button type="button" class="ft-task-move-button" wire:click="moveTask({{ $index }}, -1)" @disabled($index === 0) aria-label="Move task up">↑</button>
+                                <button type="button" class="ft-task-move-button" wire:click="moveTask({{ $index }}, 1)" @disabled($index === count($tasks)-1) aria-label="Move task down">↓</button>
+                                @if(empty($task['id']) || $canDeleteTaskPack)
+                                    <button type="button" class="ft-task-remove-button" wire:click="removeTask({{ $index }})">Remove</button>
+                                @endif
                             </div>
                         </div>
 
-                        <div class="ft-admin-field">
+                        <div class="ft-admin-field ft-task-prototype-full">
                             <label>Task title *</label>
-                            <input type="text" wire:model="tasks.{{ $index }}.title" placeholder="Task title">
+                            <input type="text" wire:model="tasks.{{ $index }}.title" placeholder="Prepare Artwork">
                             @error("tasks.$index.title")<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
 
-                        <div class="ft-admin-field">
+                        <div class="ft-admin-field ft-task-prototype-full">
                             <label>Description</label>
-                            <textarea wire:model="tasks.{{ $index }}.description" rows="2"></textarea>
+                            <textarea wire:model="tasks.{{ $index }}.description" rows="2" placeholder="Add clear instructions or completion criteria..."></textarea>
+                            @error("tasks.$index.description")<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
 
                         @if($optionsReady)
-                        <div class="ft-admin-field" wire:key="task-pack-options-{{ $index }}">
-                            <x-ui.remote-filter
-                                class="ft-taskpack-assignee-filter"
-                                label="Default assignee"
-                                property="tasks.{{ $index }}.default_assignee_id"
-                                type="users"
-                                context="task-pack-setup"
-                                action="setTaskPackAssignee"
-                                :value="$task['default_assignee_id'] ?? ''"
-                                placeholder="Unassigned"
-                                :selected-label="$task['default_assignee_label'] ?? 'Unassigned'"
-                                :initial-options="$assigneeFilterOptions"
-                                :menu-width="320"
-                                :fixed-menu="true"
-                                wire:key="task-pack-assignee-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_assignee_id'] ?? 'none' }}"
-                            />
-                            @error("tasks.$index.default_assignee_id")<div class="validation-error">{{ $message }}</div>@enderror
-                        </div>
+                            <div class="ft-task-prototype-grid" wire:key="task-pack-options-{{ $index }}">
+                                <div class="ft-admin-field">
+                                    <x-ui.remote-filter
+                                        class="ft-taskpack-assignee-filter"
+                                        label="Default assignee"
+                                        property="tasks.{{ $index }}.default_assignee_id"
+                                        type="users"
+                                        context="task-pack-setup"
+                                        action="setTaskPackAssignee"
+                                        :value="$task['default_assignee_id'] ?? ''"
+                                        placeholder="Unassigned"
+                                        :selected-label="$task['default_assignee_label'] ?? 'Unassigned'"
+                                        :initial-options="$assigneeFilterOptions"
+                                        :menu-width="420"
+                                        :fixed-menu="true"
+                                        wire:key="task-pack-assignee-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_assignee_id'] ?? 'none' }}"
+                                    />
+                                    @error("tasks.$index.default_assignee_id")<div class="validation-error">{{ $message }}</div>@enderror
+                                </div>
 
-                        <div class="ft-admin-field">
-                            <x-ui.remote-filter
-                                class="ft-taskpack-assignee-filter"
-                                label="Default department"
-                                property="tasks.{{ $index }}.default_department_id"
-                                type="department-records"
-                                context="task-pack-setup"
-                                action="setTaskPackDepartment"
-                                :value="$task['default_department_id'] ?? ''"
-                                placeholder="No department default"
-                                :selected-label="$task['default_department_label'] ?? 'No department default'"
-                                :initial-options="$departmentFilterOptions"
-                                :menu-width="320"
-                                :fixed-menu="true"
-                                wire:key="task-pack-department-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_department_id'] ?? 'none' }}"
-                            />
-                            @error("tasks.$index.default_department_id")<div class="validation-error">{{ $message }}</div>@enderror
-                        </div>
+                                <div class="ft-admin-field">
+                                    <x-ui.remote-filter
+                                        class="ft-taskpack-assignee-filter"
+                                        label="Default department"
+                                        property="tasks.{{ $index }}.default_department_id"
+                                        type="department-records"
+                                        context="task-pack-setup"
+                                        action="setTaskPackDepartment"
+                                        :value="$task['default_department_id'] ?? ''"
+                                        placeholder="No department default"
+                                        :selected-label="$task['default_department_label'] ?? 'No department default'"
+                                        :initial-options="$departmentFilterOptions"
+                                        :menu-width="420"
+                                        :fixed-menu="true"
+                                        wire:key="task-pack-department-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['default_department_id'] ?? 'none' }}"
+                                    />
+                                    @error("tasks.$index.default_department_id")<div class="validation-error">{{ $message }}</div>@enderror
+                                </div>
 
-                        <div class="ft-admin-field">
-                            <label>Priority</label>
-                            <select data-master-color-select wire:model="tasks.{{ $index }}.priority_id">
-                                <option value="">Use Job priority</option>
-                                @foreach($priorities as $priority)<option value="{{ $priority->id }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>@endforeach
-                            </select>
-                        </div>
+                                <div class="ft-admin-field">
+                                    <label>Priority</label>
+                                    <select data-master-color-select wire:model="tasks.{{ $index }}.priority_id">
+                                        <option value="">Use Order priority</option>
+                                        @foreach($priorities as $priority)
+                                            <option value="{{ $priority->id }}" data-color="{{ $masterData->displayColorFor('priority', $priority->name) }}">{{ $priority->name }}</option>
+                                        @endforeach
+                                    </select>
+                                    @error("tasks.$index.priority_id")<div class="validation-error">{{ $message }}</div>@enderror
+                                </div>
 
-                        <div class="ft-admin-field">
-                            <x-ui.remote-filter
-                                class="ft-taskpack-assignee-filter"
-                                label="Required document"
-                                property="tasks.{{ $index }}.document_category_id"
-                                type="document-category-records"
-                                context="task-pack-setup"
-                                action="setTaskPackDocumentCategory"
-                                :value="$task['document_category_id'] ?? ''"
-                                placeholder="No task-specific file"
-                                :selected-label="$task['document_category_label'] ?? 'No task-specific file'"
-                                :initial-options="$documentFilterOptions"
-                                :menu-width="320"
-                                :fixed-menu="true"
-                                wire:key="task-pack-document-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['document_category_id'] ?? 'none' }}"
-                            />
-                            <small>The file must be attached to the Job before this task can be completed.</small>
-                            @error("tasks.$index.document_category_id")<div class="validation-error">{{ $message }}</div>@enderror
-                        </div>
-
+                                <div class="ft-admin-field">
+                                    <x-ui.remote-filter
+                                        class="ft-taskpack-assignee-filter"
+                                        label="Required document"
+                                        property="tasks.{{ $index }}.document_category_id"
+                                        type="document-category-records"
+                                        context="task-pack-setup"
+                                        action="setTaskPackDocumentCategory"
+                                        :value="$task['document_category_id'] ?? ''"
+                                        placeholder="No task-specific file"
+                                        :selected-label="$task['document_category_label'] ?? 'No task-specific file'"
+                                        :initial-options="$documentFilterOptions"
+                                        :menu-width="420"
+                                        :fixed-menu="true"
+                                        wire:key="task-pack-document-{{ $task['id'] ?? 'new-'.$index }}-{{ $index }}-{{ $task['document_category_id'] ?? 'none' }}"
+                                    />
+                                    <small>The file must be attached before this task can be completed.</small>
+                                    @error("tasks.$index.document_category_id")<div class="validation-error">{{ $message }}</div>@enderror
+                                </div>
+                            </div>
                         @else
-                            <div class="ft-taskpack-options-placeholder" wire:key="task-pack-options-loading-{{ $index }}" role="status" aria-live="polite" aria-busy="true">
+                            <div class="ft-taskpack-options-placeholder ft-task-prototype-grid" wire:key="task-pack-options-loading-{{ $index }}" role="status" aria-live="polite" aria-busy="true">
                                 @for($field = 0; $field < 4; $field++)
                                     <div><span></span><span></span></div>
                                 @endfor
                             </div>
                         @endif
-                        <label class="ft-required-task-check">
+
+                        <label class="ft-required-task-check ft-required-task-prototype">
                             <input type="checkbox" wire:model="tasks.{{ $index }}.is_required">
                             <span>Required task</span>
                         </label>
+
+                        <section class="ft-efficiency-standard" aria-label="Time and efficiency standard">
+                            <div class="ft-efficiency-config">
+                                <header class="ft-efficiency-head">
+                                    <span class="ft-efficiency-clock" aria-hidden="true">
+                                        <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+                                    </span>
+                                    <div>
+                                        <h4>Time &amp; efficiency standard</h4>
+                                        <p>Define the expected active working time for this task.</p>
+                                    </div>
+                                </header>
+
+                                <div class="ft-efficiency-fields">
+                                    <div class="ft-admin-field">
+                                        <label>Standard duration *</label>
+                                        <div class="ft-duration-control">
+                                            <input type="number" min="0.01" max="10000" step="0.01" inputmode="decimal" wire:model.live.debounce.350ms="tasks.{{ $index }}.standard_duration_value">
+                                            <select wire:model.live="tasks.{{ $index }}.standard_duration_unit">
+                                                @forelse($durationUnitOptions as $option)
+                                                    <option value="{{ $option->code }}">{{ $option->name }}</option>
+                                                @empty
+                                                    <option value="">No duration units configured</option>
+                                                @endforelse
+                                            </select>
+                                        </div>
+                                        @error("tasks.$index.standard_duration_value")<div class="validation-error">{{ $message }}</div>@enderror
+                                        @error("tasks.$index.standard_duration_unit")<div class="validation-error">{{ $message }}</div>@enderror
+                                    </div>
+
+                                    <div class="ft-admin-field">
+                                        <label>Timer starts</label>
+                                        <select wire:model="tasks.{{ $index }}.timer_start_rule">
+                                            @forelse($timerStartOptions as $option)
+                                                <option value="{{ $option->code }}">{{ $option->name }}</option>
+                                            @empty
+                                                <option value="">No timer start rules configured</option>
+                                            @endforelse
+                                        </select>
+                                        @error("tasks.$index.timer_start_rule")<div class="validation-error">{{ $message }}</div>@enderror
+                                    </div>
+
+                                    <div class="ft-admin-field">
+                                        <label>Timer stops</label>
+                                        <select wire:model="tasks.{{ $index }}.timer_stop_rule">
+                                            @forelse($timerStopOptions as $option)
+                                                <option value="{{ $option->code }}">{{ $option->name }}</option>
+                                            @empty
+                                                <option value="">No timer stop rules configured</option>
+                                            @endforelse
+                                        </select>
+                                        @error("tasks.$index.timer_stop_rule")<div class="validation-error">{{ $message }}</div>@enderror
+                                    </div>
+
+                                    <div class="ft-admin-field">
+                                        <label>Work calendar</label>
+                                        <select wire:model="tasks.{{ $index }}.work_calendar">
+                                            @forelse($workCalendarOptions as $option)
+                                                <option value="{{ $option->code }}">{{ $option->taskPackWorkCalendarLabel() }}</option>
+                                            @empty
+                                                <option value="">No work calendars configured</option>
+                                            @endforelse
+                                        </select>
+                                        @error("tasks.$index.work_calendar")<div class="validation-error">{{ $message }}</div>@enderror
+                                    </div>
+                                </div>
+
+                                <div class="ft-efficiency-checks ft-efficiency-prototype-options" aria-label="Prototype-only efficiency options">
+                                    <label aria-disabled="true" style="pointer-events:none">
+                                        <input type="checkbox" checked tabindex="-1" aria-disabled="true">
+                                        <span><b>Set the task due date from the standard duration</b><small>Calculated using the selected business calendar.</small></span>
+                                    </label>
+                                    <label aria-disabled="true" style="pointer-events:none">
+                                        <input type="checkbox" tabindex="-1" aria-disabled="true">
+                                        <span><b>Allow authorized users to override this benchmark</b></span>
+                                    </label>
+                                </div>
+                            </div>
+                        </section>
                     </section>
                 @endforeach
             </div>
@@ -161,7 +251,8 @@
             </div>
         </div>
 
-        <div class="ft-admin-form-footer">
+        <div class="ft-admin-form-footer ft-taskpack-form-footer">
+            <p>Changes apply to new tasks created from this Task Pack.</p>
             <button type="button" class="ft-admin-cancel" wire:click="cancel">Cancel</button>
             <button type="submit" class="ft-admin-primary" @disabled(!$optionsReady)>{{ $taskPackId ? 'Save Task Pack' : 'Create Task Pack' }}</button>
         </div>

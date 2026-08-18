@@ -620,7 +620,7 @@
 
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         @foreach($job->workflow->phases as $phase)
-            <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" disabled aria-disabled="true" title="Workflow page is temporarily disabled">
+            <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" style="{{ \App\Support\MasterColor::style($phase->color) }}" disabled aria-disabled="true" title="{{ $phase->name }}">
                 <span>{{ $phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence }}</span><small>{{ $phase->short_name }}</small>
             </button>
         @endforeach
@@ -736,9 +736,8 @@
                     $phaseProgress = $allPhaseTasks->count() ? round($completed/max(1,$allPhaseTasks->count())*100) : 0;
                     $phaseTasks = $allPhaseTasks;
                     $expanded = in_array((int) $phase->id, array_map('intval', $expandedPhaseIds), true);
-                    $phaseTone = ((max(1, (int) $phase->sequence) - 1) % 6) + 1;
                 @endphp
-                <div class="ft-phase-group ft-phase-tone-{{ $phaseTone }} {{ $expanded ? 'open' : '' }}" wire:key="job-phase-{{ $phase->id }}">
+                <div class="ft-phase-group {{ $expanded ? 'open' : '' }}" style="{{ \App\Support\MasterColor::style($phase->color) }}" wire:key="job-phase-{{ $phase->id }}">
                     <div class="ft-phase-group-head ft-order-phase-head">
                         <b class="{{ $phase->id === $job->phase->id ? 'current-number' : '' }}">{{ $phase->sequence }}</b>
                         <strong>{{ $phase->name }}</strong>

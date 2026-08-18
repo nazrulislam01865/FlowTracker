@@ -23,6 +23,7 @@
 
     $catalogueGroups = ['product', 'product_category', 'supplier'];
     $financialGroups = \App\Services\MasterDataService::FINANCIAL_TYPES;
+    $taskPackMasterGroups = \App\Services\MasterDataService::TASK_PACK_MASTER_TYPES;
     $catalogProductView = $user->canModule('catalog_products', 'view');
     $catalogProductCreate = $user->canModule('catalog_products', 'create');
     $productCategoryView = $user->canModule('product_categories', 'view');
@@ -33,15 +34,22 @@
     $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
     $financialGroupActive = request()->routeIs('financial-master-data')
         || (request()->routeIs('master-data') && in_array($masterGroup, $financialGroups, true));
+    $taskPackMasterGroupActive = request()->routeIs('master-data')
+        && in_array($masterGroup, $taskPackMasterGroups, true);
 
     $masterGroupActive = request()->routeIs('master-data')
-        && !in_array($masterGroup, [...$catalogueGroups, ...$financialGroups], true);
-    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, ...$financialGroups, 'task_status', 'task_flag'])->all();
+        && !in_array($masterGroup, [...$catalogueGroups, ...$financialGroups, ...$taskPackMasterGroups], true);
+    $masterLinks = collect($masterLabels)->except([...$catalogueGroups, ...$financialGroups, ...$taskPackMasterGroups, 'task_status', 'task_flag'])->all();
+    $taskPackMasterLinks = collect($taskPackMasterGroups)
+        ->mapWithKeys(fn ($type) => [$type => $masterLabels[$type]])
+        ->all();
     $financialLinks = collect($financialGroups)
         ->mapWithKeys(fn ($type) => [$type => $masterLabels[$type]])
         ->all();
     $administrator = app(\App\Services\AccessControlService::class)->isAdministrator($user);
     $settingsGroupActive = request()->routeIs('company.setup', 'administration');
+    $reportView = $user->canAccess('reports.view');
+    $reportGroupActive = request()->routeIs('reports', 'team-performance.report');
 @endphp
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
@@ -54,14 +62,8 @@
 
     <nav class="ft-sidebar-nav" aria-label="Primary navigation">
         @if($user->canAccess('dashboard.view'))
-            <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" />
+            <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" :active="request()->routeIs('dashboard')" />
         @endif
-
-        {{-- TEMPORARILY DISABLED: Inquiry Intelligence navigation. Restore together with the page.
-        @if($user->canAccess('reports.view'))
-            <x-ui.nav-link route="reports" label="Inquiry Intelligence" icon="reports" />
-        @endif
-        --}}
 
         @if($inquiryView || $inquiryCreate)
             <details class="ft-sidebar-group" @if($inquiryGroupActive) open @endif>
@@ -156,14 +158,53 @@
             <x-ui.nav-link route="master-data" label="Suppliers" icon="suppliers" :params="['group' => 'supplier']" :active="$catalogueGroupActive && $masterGroup === 'supplier'" />
         @endif
 
-        @if($user->canAccess('documents.view'))
-            <x-ui.nav-link route="documents.index" label="Documents" icon="documents" />
+        @if($user->canAccess('document_archive.view'))
+            <x-ui.nav-link route="documents.index" label="Document Archive" icon="documents" />
+        @endif
+
+        @if($reportView)
+            <details class="ft-sidebar-group" @if($reportGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $reportGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                    </span>
+                    <span>Report</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    <x-ui.nav-link route="reports" label="Inquiry Intelligence" icon="reports" child :active="request()->routeIs('reports')" />
+                    <x-ui.nav-link route="team-performance.report" label="Team Performance Report" icon="work" child :active="request()->routeIs('team-performance.report')" />
+                </div>
+            </details>
         @endif
 
         <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
         @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="settings" />@endif
         @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
+        @if($masterView)
+            <details class="ft-sidebar-group" @if($taskPackMasterGroupActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $taskPackMasterGroupActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M5 4h14v5H5zM5 11h14v9H5z"/><path d="M9 14h6M9 17h4"/></svg>
+                    </span>
+                    <span>Task Pack Master Data</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children ft-master-sidebar-children">
+                    @foreach($taskPackMasterLinks as $taskPackMasterKey => $taskPackMasterLabel)
+                        <x-ui.nav-link
+                            route="master-data"
+                            :label="$taskPackMasterLabel"
+                            icon="dot"
+                            child
+                            :params="['group' => $taskPackMasterKey]"
+                            :active="$taskPackMasterGroupActive && $masterGroup === $taskPackMasterKey"
+                        />
+                    @endforeach
+                </div>
+            </details>
+        @endif
         @if($financeMasterView)
             <details class="ft-sidebar-group" @if($financialGroupActive) open @endif>
                 <summary class="ft-sidebar-group-toggle {{ $financialGroupActive ? 'is-active' : '' }}">

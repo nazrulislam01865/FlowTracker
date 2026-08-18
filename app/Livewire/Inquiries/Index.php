@@ -36,6 +36,7 @@ class Index extends Component
 
     public string $search = '';
     public string $quick = 'all';
+    #[\Livewire\Attributes\Url(as: 'metric', history: true, except: '')]
     public string $metricFilter = '';
     public string $listClient = '';
     public string $listClientLabel = '';
@@ -165,6 +166,10 @@ class Index extends Component
     {
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
         $this->metrics = app(InquiryService::class)->metrics(auth()->user());
+        $this->metricFilter = trim((string) request('metric', $this->metricFilter));
+        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
+            $this->metricFilter = '';
+        }
         $this->resetCreateCollections();
 
         if (request()->boolean('create')) {
@@ -1936,6 +1941,14 @@ class Index extends Component
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), (int) $this->selectedTaskId, ['inquiry']);
         app(InquiryService::class)->addTaskComment($task, trim($this->taskComment), auth()->user());
         $this->taskComment = '';
+    }
+
+    public function deleteInquiryTaskActivity(int $activityId): void
+    {
+        $inquiry = $this->selectedInquiry();
+        app(\App\Services\TaskActivityModerationService::class)->deleteInquiryTaskActivity($inquiry, $activityId, auth()->user());
+        $this->resetPage('inquiryActivityPage');
+        session()->flash('success', 'Task activity deleted and the deletion was recorded.');
     }
 
     public function setInquiryActivityTab(string $tab): void

@@ -332,6 +332,64 @@
             .ft-orders-prototype .ft-job-row.ft-client-row-nep:nth-child(even){background:#eef6ff}
             .ft-orders-prototype .ft-job-row.ft-client-row-iid:hover{background:#e5f5ea}
             .ft-orders-prototype .ft-job-row.ft-client-row-nep:hover{background:#e4f0ff}
+
+
+            /* 2026-08-18: align the Order list filter bar with the Inquiry list.
+               Search occupies the first row; all filters share one aligned row. */
+            .ft-orders-prototype .ft-search-bar{
+                display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line);
+            }
+            .ft-orders-prototype .ft-search{
+                width:100%;min-width:0;flex:1 1 100%;align-self:auto;
+            }
+            .ft-orders-prototype .ft-search input{
+                height:36px;min-height:36px;line-height:36px;border-radius:8px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls{
+                display:grid;grid-template-columns:repeat(6,minmax(0,1fr));width:100%;min-width:0;align-items:center;gap:7px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-list-filter{
+                width:100%;min-width:0;max-width:none;margin:0!important;align-self:center;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-list-filter .ft-remote-filter-button{
+                width:100%;height:36px;min-height:36px;border-radius:8px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{
+                grid-column:span 2;display:flex;width:100%;min-width:0;max-width:none;min-height:36px;align-items:center;padding:0;border:0;background:transparent;border-radius:0;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range.is-active{background:transparent}
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-fields{
+                display:grid;grid-template-columns:repeat(2,minmax(0,1fr));width:100%;min-width:0;align-items:center;gap:8px;flex-wrap:nowrap;
+            }
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field{
+                display:grid;grid-template-columns:auto minmax(0,1fr);min-width:0;align-items:center;gap:6px;color:#64748b;font-size:10px;font-weight:720;line-height:1;white-space:nowrap;
+            }
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field>span{margin:0;flex:0 0 auto}
+            .ft-orders-prototype .ft-order-date-range .ft-date-range-field input{
+                width:100%;min-width:0;height:36px;min-height:36px;padding:0 8px;border-radius:8px;font-size:10.5px;line-height:36px;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters{
+                width:100%;height:36px;min-height:36px;align-self:center;padding:0 10px;border:1px solid #d8e1ec;border-radius:8px;background:#f8fafc;color:#64748b;font-size:10px;font-weight:650;line-height:1;white-space:nowrap;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters:not(:disabled):hover{
+                border-color:#c4cfdd;background:#f1f5f9;color:#334155;
+            }
+            .ft-orders-prototype .ft-order-filter-controls>.ft-order-clear-filters:disabled{
+                opacity:.45;cursor:not-allowed;background:#f8fafc;color:#94a3b8;border-color:#e2e8f0;
+            }
+            @media(max-width:980px){
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:repeat(3,minmax(0,1fr))}
+            }
+            @media(max-width:680px){
+                .ft-orders-prototype .ft-search-bar{gap:8px;padding:11px}
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:repeat(2,minmax(0,1fr))}
+                .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{grid-column:span 2}
+            }
+            @media(max-width:480px){
+                .ft-orders-prototype .ft-order-filter-controls{grid-template-columns:1fr}
+                .ft-orders-prototype .ft-order-filter-controls>.ft-order-date-range{grid-column:span 1}
+                .ft-orders-prototype .ft-order-date-range .ft-date-range-fields{grid-template-columns:1fr}
+            }
         </style>
     @endonce
 
@@ -374,56 +432,71 @@
                 <button @class(['ft-search-clear','show'=>filled($searchFilter)]) wire:click="{{ $clearAction }}" type="button">Clear</button>
             </label>
 
-            <x-ui.remote-filter
-                class="ft-order-list-filter ft-order-list-filter-client"
-                label="Client"
-                property="client"
-                type="clients"
-                context="jobs"
-                :value="$clientFilter"
-                placeholder="All clients"
-                :initial-options="$clientFilterOptions"
-                :fixed-menu="true"
-                :menu-width="280"
-                wire:key="order-list-client-filter-{{ filled($clientFilter) ? $clientFilter : 'all' }}"
-            />
+            <div class="ft-order-filter-controls">
+                <x-ui.remote-filter
+                    class="ft-order-list-filter ft-order-list-filter-client"
+                    label="Client"
+                    property="client"
+                    type="clients"
+                    context="jobs"
+                    :value="$clientFilter"
+                    placeholder="All clients"
+                    :initial-options="$clientFilterOptions"
+                    :fixed-menu="true"
+                    :menu-width="280"
+                    wire:key="order-list-client-filter-{{ filled($clientFilter) ? $clientFilter : 'all' }}"
+                />
 
-            <x-ui.remote-filter
-                class="ft-order-list-filter ft-order-list-filter-phase"
-                label="Phase"
-                property="phase"
-                type="phases"
-                context="order-list"
-                :value="$phaseFilter"
-                placeholder="All phases"
-                :initial-options="$phaseFilterOptions"
-                :fixed-menu="true"
-                :menu-width="280"
-                wire:key="order-list-phase-filter-{{ filled($phaseFilter) ? $phaseFilter : 'all' }}"
-            />
+                <x-ui.remote-filter
+                    class="ft-order-list-filter ft-order-list-filter-phase"
+                    label="Phase"
+                    property="phase"
+                    type="phases"
+                    context="order-list"
+                    :value="$phaseFilter"
+                    placeholder="All phases"
+                    :initial-options="$phaseFilterOptions"
+                    :fixed-menu="true"
+                    :menu-width="280"
+                    wire:key="order-list-phase-filter-{{ filled($phaseFilter) ? $phaseFilter : 'all' }}"
+                />
 
-            <x-ui.remote-filter
-                class="ft-order-list-filter ft-order-list-filter-owner"
-                :label="$peopleLabel"
-                :property="$peopleProperty"
-                type="users"
-                :context="$peopleContext"
-                :value="$peopleFilter"
-                :placeholder="$peoplePlaceholder"
-                :initial-options="$peopleFilterOptions"
-                :fixed-menu="true"
-                :menu-width="260"
-                wire:key="order-list-people-filter-{{ $peopleProperty }}-{{ filled($peopleFilter) ? $peopleFilter : 'all' }}"
-            />
+                <x-ui.remote-filter
+                    class="ft-order-list-filter ft-order-list-filter-owner"
+                    :label="$peopleLabel"
+                    :property="$peopleProperty"
+                    type="users"
+                    :context="$peopleContext"
+                    :value="$peopleFilter"
+                    :placeholder="$peoplePlaceholder"
+                    :initial-options="$peopleFilterOptions"
+                    :fixed-menu="true"
+                    :menu-width="260"
+                    wire:key="order-list-people-filter-{{ $peopleProperty }}-{{ filled($peopleFilter) ? $peopleFilter : 'all' }}"
+                />
 
-            @if($clearFiltersAction)
-                <button
-                    type="button"
-                    class="ft-order-clear-filters"
-                    wire:click="{{ $clearFiltersAction }}"
-                    @disabled(blank($searchFilter) && blank($clientFilter) && blank($phaseFilter) && blank($peopleFilter) && blank($metricFilter) && blank($dateFrom) && blank($dateTo) && ! $importFilterId)
-                >Clear filters</button>
-            @endif
+                @if($dateRangeEnabled)
+                    <x-ui.date-range-filter
+                        class="ft-order-date-range"
+                        from-property="dateFrom"
+                        to-property="dateTo"
+                        :from-value="$dateFrom"
+                        :to-value="$dateTo"
+                        label="Created date"
+                        from-label="From"
+                        to-label="To"
+                    />
+                @endif
+
+                @if($clearFiltersAction)
+                    <button
+                        type="button"
+                        class="ft-order-clear-filters"
+                        wire:click="{{ $clearFiltersAction }}"
+                        @disabled(blank($searchFilter) && blank($clientFilter) && blank($phaseFilter) && blank($peopleFilter) && blank($metricFilter) && blank($dateFrom) && blank($dateTo) && ! $importFilterId)
+                    >Clear filter</button>
+                @endif
+            </div>
         </div>
 
         @if($importFilterId)
@@ -434,17 +507,6 @@
                     <button type="button" wire:click="{{ $clearFiltersAction }}">Show all orders</button>
                 @endif
             </div>
-        @endif
-
-        @if($dateRangeEnabled)
-            <x-ui.date-range-filter
-                class="ft-order-date-range"
-                from-property="dateFrom"
-                to-property="dateTo"
-                :from-value="$dateFrom"
-                :to-value="$dateTo"
-                label="Created date"
-            />
         @endif
 
         @if($canDeleteOrders && $selectedOrderCount > 0)
@@ -546,7 +608,7 @@
                             <span class="ft-product-detail" title="{{ $productNames->implode(' · ') }}">{{ $productNames->implode(' · ') }}</span>
                         @endif
                     </div>
-                    <div class="ft-cell ft-stage-cell" data-label="Phase"><span class="ft-pill {{ $tone($phaseName) }}" title="{{ $phaseName }}">{{ $phaseName }}</span></div>
+                    <div class="ft-cell ft-stage-cell" data-label="Phase"><x-ui.phase-label :phase="$job->phase" :fallback="$phaseName" class="ft-pill" /></div>
                     <div class="ft-cell ft-health-cell" data-label="Health"><span class="ft-pill {{ $tone($health) }}">{{ $health }}</span></div>
                     <div class="ft-cell ft-flag-cell" data-label="Flag">@if($flag)<span class="ft-pill {{ $flagColor ? 'ft-master-color' : $tone($flag) }}" style="{{ \App\Support\MasterColor::style($flagColor) }}" @if($flagReason) title="{{ $flagReason }}" @endif>{{ $flag }}</span>@else<span class="ft-standard-empty">No flag</span>@endif</div>
                     <div class="ft-cell ft-owner-cell" data-label="Owner / delivery">

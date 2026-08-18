@@ -106,3 +106,52 @@ select.ft-master-color{
     .ft-master-color-picker-row{grid-template-columns:52px 1fr}
     .ft-master-color-preview{grid-column:1/-1}
 }
+
+/* Workflow phases use their stored Workflow Setup color everywhere. */
+.ft-phase-color-label{
+    display:inline-flex;
+    align-items:center;
+    width:max-content;
+    max-width:100%;
+    padding:3px 7px;
+    border:1px solid var(--ft-master-border,#d8e2ee);
+    border-radius:7px;
+    background:var(--ft-master-bg,#f8fafc);
+    color:var(--ft-master-text,#334155)!important;
+    font-weight:750;
+    line-height:1.2;
+}
+.ft-phase-color-text{color:var(--ft-master-text,var(--ft-master-color,#334155))!important;font-weight:750}
+.ft-phase-row-color>td{background:var(--ft-master-bg,#fff)!important}
+.ft-phase-row-color>td:first-child{box-shadow:inset 3px 0 0 var(--ft-master-color,#94a3b8)}
+.ft-phase-row-color:hover>td{background:var(--ft-master-bg,#f8fafc)!important}
+
+/* Runtime overrides are kept in this directly loaded stylesheet too, so phase
+   colors update correctly even before the next Vite production build. */
+.ft-phase-group[style] .ft-phase-group-head,
+.ft-overview-task-card .ft-phase-group[style] .ft-phase-group-head{
+    background:var(--ft-master-bg,#f8fafc)!important;
+    border-color:var(--ft-master-border,#dce5f0)!important;
+}
+.ft-phase-group[style] .ft-phase-group-head b,
+.ft-overview-task-card .ft-phase-group[style] .ft-phase-group-head b.current-number{
+    background:var(--ft-master-color,#64748b)!important;
+    border-color:var(--ft-master-color,#64748b)!important;
+    color:#fff!important;
+}
+.ft-phase-group[style] .ft-phase-group-head strong{color:var(--ft-master-text,#334155)!important}
+.ft-phase-group[style] .ft-phase-group-head em:before{background:var(--ft-master-color,#64748b)!important}
+.ft-workflow-mini-line button[style] span,
+.ft-workflow-mini-line button[style].done span,
+.ft-workflow-mini-line button[style].current span{
+    background:var(--ft-master-color,#64748b)!important;
+    border-color:var(--ft-master-color,#64748b)!important;
+    color:#fff!important;
+}
+.ft-workflow-mini-line button[style] small{color:var(--ft-master-text,#334155)!important}
+.ft-workflow-step[style] span{background:var(--ft-master-bg,#f8fafc)!important;border-color:var(--ft-master-border,#dce5f0)!important;color:var(--ft-master-text,#334155)!important}
+.ft-workflow-step[style].done span,.ft-workflow-step[style].current span{background:var(--ft-master-color,#64748b)!important;border-color:var(--ft-master-color,#64748b)!important;color:#fff!important}
+.ft-workflow-step[style].done:before,.ft-workflow-step[style].current:before{background:var(--ft-master-color,#64748b)!important}
+.ft-workflow-step[style] small,.ft-workflow-step[style] em{color:var(--ft-master-text,#334155)!important}
+.ft-exact-job-detail .ft-doc-phase-group[style] .ft-doc-phase-summary{background:var(--ft-master-bg,#f8fafc)!important;border-left-color:var(--ft-master-color,#94a3b8)!important}
+.ft-exact-job-detail .ft-doc-phase-group[style] .ft-doc-phase-number{background:var(--ft-master-color,#64748b)!important;color:#fff!important}

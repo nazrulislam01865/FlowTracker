@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Models\Concerns\TracksTaskAssigneePerformance;
+
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -10,7 +12,7 @@ use Illuminate\Database\Eloquent\Relations\MorphMany;
 
 class Task extends Model
 {
-    use SoftDeletes;
+    use SoftDeletes, TracksTaskAssigneePerformance;
 
     protected $guarded = [];
 
@@ -21,6 +23,8 @@ class Task extends Model
             'due_date' => 'date',
             'needs_attention' => 'boolean',
             'completed_at' => 'datetime',
+            'assignee_assigned_at' => 'datetime',
+            'assignee_assigned_at_completion' => 'datetime',
         ];
     }
 
@@ -37,6 +41,11 @@ class Task extends Model
     public function assignee(): BelongsTo
     {
         return $this->belongsTo(User::class, 'assignee_id');
+    }
+
+    public function completionAssignee(): BelongsTo
+    {
+        return $this->belongsTo(User::class, 'assignee_at_completion');
     }
 
     public function attentionFlag(): BelongsTo

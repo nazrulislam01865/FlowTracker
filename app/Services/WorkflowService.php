@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
+use App\Support\MasterColor;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
@@ -135,6 +136,7 @@ class WorkflowService
                 $this->savePhase($target, [
                     'name' => $phase->name,
                     'short_name' => $phase->short_name,
+                    'color' => $phase->color,
                     'task_pack_id' => $phase->task_pack_id,
                     'document_category_id' => $phase->document_category_id,
                     'allow_job_start' => (bool) $phase->allow_job_start,
@@ -380,6 +382,14 @@ class WorkflowService
                 : (((int) $workflow->phases()->max('sequence')) + 1);
         }
 
+        $phaseColor = null;
+        if (Schema::hasColumn('workflow_phases', 'color')) {
+            $phaseColor = MasterColor::normalize((string) ($data['color'] ?? $phase?->color ?? ''));
+            if (! $phaseColor) {
+                throw ValidationException::withMessages(['phaseColor' => 'Choose a valid phase color.']);
+            }
+        }
+
         $payload = [
             'workflow_template_id' => $workflow->id,
             'task_pack_id' => $data['task_pack_id'] ?? null,
@@ -398,6 +408,7 @@ class WorkflowService
             'entry_condition' => blank($data['entry_condition'] ?? null) ? null : trim($data['entry_condition']),
             'exit_condition' => blank($data['exit_condition'] ?? null) ? null : trim($data['exit_condition']),
         ];
+        if (Schema::hasColumn('workflow_phases', 'color')) $payload['color'] = $phaseColor;
         if (Schema::hasColumn('workflow_phases', 'workflow_id')) $payload['workflow_id'] = $workflow->id;
         if (Schema::hasColumn('workflow_phases', 'can_skip')) $payload['can_skip'] = true;
         if (Schema::hasColumn('workflow_phases', 'required_document')) $payload['required_document'] = $document?->name;
@@ -405,6 +416,16 @@ class WorkflowService
         if (Schema::hasColumn('workflow_phases', 'exit_rule')) $payload['exit_rule'] = blank($data['exit_condition'] ?? null) ? null : trim($data['exit_condition']);
 
         $savedPhase = WorkflowPhase::query()->updateOrCreate(['id' => $phase?->id], $payload);
+
+        // Phase color is presentation configuration, not historical workflow state.
+        // Keep existing Order snapshot phases visually in sync with their source
+        // setup phase so every phase label/row uses the configured master color.
+        if (Schema::hasColumn('workflow_phases', 'color') && $phaseColor) {
+            WorkflowPhase::query()
+                ->where('source_workflow_phase_id', $savedPhase->id)
+                ->update(['color' => $phaseColor]);
+        }
+
         $this->invalidateBoardWorkflowCache($this->workspaceId(), (int) $workflow->id);
 
         return $savedPhase;

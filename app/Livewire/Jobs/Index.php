@@ -2864,6 +2864,25 @@ class Index extends Component
         $this->taskActivityPage = 1;
     }
 
+    public function deleteTaskComment(int $commentId): void
+    {
+        abort_unless($this->selectedTaskId, 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
+        app(\App\Services\TaskActivityModerationService::class)->deleteOrderTaskComment($task, $commentId, auth()->user());
+        if ($this->focusComment === 'task-'.$commentId) $this->focusComment = null;
+        $this->taskActivityPage = 1;
+        session()->flash('success', 'Task comment deleted and the deletion was recorded in activity.');
+    }
+
+    public function deleteTaskActivity(int $activityId): void
+    {
+        abort_unless($this->selectedTaskId, 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
+        app(\App\Services\TaskActivityModerationService::class)->deleteOrderTaskActivity($task, $activityId, auth()->user());
+        $this->taskActivityPage = 1;
+        session()->flash('success', 'Task activity deleted and the deletion was recorded.');
+    }
+
     public function setTaskActivityTab(string $tab): void
     {
         abort_unless(in_array($tab, ['all','comments','history'], true), 422);

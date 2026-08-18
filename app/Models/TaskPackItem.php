@@ -14,6 +14,9 @@ class TaskPackItem extends Model
         return [
             'is_required' => 'boolean',
             'due_offset_days' => 'integer',
+            'standard_duration_value' => 'float',
+            'set_due_from_standard_duration' => 'boolean',
+            'allow_efficiency_override' => 'boolean',
             'sort_order' => 'integer',
         ];
     }

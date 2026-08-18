@@ -38,7 +38,7 @@
                 $phaseTasks = \App\Support\JobDetailPresenter::phaseTasks($job,$phase);
                 $phaseDone = \App\Support\JobDetailPresenter::completedCount($phaseTasks);
             @endphp
-            <div class="ft-workflow-step {{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}">
+            <div class="ft-workflow-step {{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" style="{{ \App\Support\MasterColor::style($phase->color) }}">
                 <span>{{ $phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence }}</span>
                 <small>{{ $phase->short_name }}</small>
                 @if($phase->id === $job->phase->id)<em>Current · {{ $phaseDone }}/{{ $phaseTasks->count() }}</em>@endif
@@ -88,7 +88,7 @@
                 <table class="ft-history-table"><thead><tr><th>Phase</th><th>Status</th><th>Entered</th><th>Completed</th><th>Time in phase</th><th>Outcome</th></tr></thead><tbody>
                     @foreach($rows as $row)
                         <tr>
-                            <td data-label="Phase"><b>{{ $row->phase->sequence }}</b> &nbsp; {{ $row->phase->short_name }}</td>
+                            <td data-label="Phase"><x-ui.phase-label :phase="$row->phase" short /></td>
                             <td data-label="Status"><span class="ft-soft-pill {{ $row->status==='Completed'?'green':($row->status==='Current'?'blue':'gray') }}">{{ $row->status }}</span></td>
                             <td data-label="Entered">{{ \App\Support\UserLocalTime::format($row->entered, 'M j Y') }}</td>
                             <td data-label="Completed">{{ \App\Support\UserLocalTime::format($row->completed, 'M j Y') }}</td>

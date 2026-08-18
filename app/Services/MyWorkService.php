@@ -24,7 +24,8 @@ class MyWorkService
         $access = app(AccessControlService::class);
         $quick = (string) ($filters['quick'] ?? 'all');
         $hideCompleted = (bool) ($filters['hide_completed'] ?? false);
-        $showCompleted = !$hideCompleted && in_array($quick, ['all', 'createdToday', 'completedThisWeek'], true);
+        $statusFilter = trim((string) ($filters['status'] ?? ''));
+        $showCompleted = !$hideCompleted && ($statusFilter !== '' || in_array($quick, ['all', 'createdToday', 'completedThisWeek'], true));
 
         // Most My Task views are open-task-only. Created Today intentionally
         // includes every task created today regardless of status, while Completed
@@ -102,6 +103,7 @@ class MyWorkService
                 'my_work_clients.name as my_work_client_name',
                 'my_work_job_phases.name as my_work_phase_name',
                 'my_work_job_phases.short_name as my_work_phase_short_name',
+                'my_work_job_phases.color as my_work_phase_color',
             ])
             ->get()
             ->keyBy('id');
@@ -118,6 +120,7 @@ class MyWorkService
                 'tasks.completed_at', 'tasks.updated_at',
                 'my_work_task_phases.name as my_work_phase_name',
                 'my_work_task_phases.short_name as my_work_phase_short_name',
+                'my_work_task_phases.color as my_work_phase_color',
                 'my_work_assignees.name as my_work_assignee_name',
                 'my_work_assignees.profile_image_path as my_work_assignee_profile_image_path',
                 'my_work_task_flags.name as task_flag_name',
@@ -463,6 +466,11 @@ class MyWorkService
             });
         }
 
+        $statusFilter = trim((string) ($filters['status'] ?? ''));
+        if ($statusFilter !== '') {
+            $query->whereRaw('LOWER(TRIM(tasks.status)) = ?', [mb_strtolower($statusFilter)]);
+        }
+
         $this->applyQuickFilter($query, $user, (string) ($filters['quick'] ?? 'all'));
 
         return $query;
@@ -614,7 +622,8 @@ class MyWorkService
             'id' => (int) $task->id,
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
-            'phase' => (string) ($task->getAttribute('my_work_phase_name') ?: $task->getAttribute('my_work_phase_short_name') ?: 'No phase'),
+            'phase' => (string) ($task->getAttribute('my_work_phase_short_name') ?: $task->getAttribute('my_work_phase_name') ?: 'No phase'),
+            'phaseColor' => $task->getAttribute('my_work_phase_color'),
             'assignee' => (string) ($task->getAttribute('my_work_assignee_name') ?: 'Unassigned'),
             'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : null,
             'assigneeAvatar' => ($task->assignee_id && $task->getAttribute('my_work_assignee_profile_image_path'))

@@ -81,6 +81,10 @@ class Index extends Component
     public string $status = 'active';
     public int $sortOrder = 0;
     public string $metadataJson = '';
+    public string $workCalendarDayFrom = 'monday';
+    public string $workCalendarDayTo = 'friday';
+    public string $workCalendarTimeFrom = '09:00';
+    public string $workCalendarTimeTo = '18:00';
     public string $autoInquiryStatus = 'To do';
     public bool $requiresAttention = false;
     public ?int $orderTaskFlagId = null;
@@ -136,6 +140,15 @@ class Index extends Component
         }
 
         $this->authorizeGroupAction('view');
+
+        // Dashboard Active products KPI opens the catalogue already filtered
+        // to the same active records counted by the card.
+        if ($this->group === 'product') {
+            $requestedProductStatus = strtolower(trim((string) request('product_status', '')));
+            if (in_array($requestedProductStatus, ['active', 'inactive'], true)) {
+                $this->productStatus = $requestedProductStatus;
+            }
+        }
 
         // Allow other workflows (for example Create Inquiry) to send the user
         // directly to the standalone Add Product form instead of opening a
@@ -219,6 +232,10 @@ class Index extends Component
         $this->removeProductCertificate = false;
         $this->removeProductTemplate = false;
         $this->resetCategoryCreatorState();
+        $this->workCalendarDayFrom = 'monday';
+        $this->workCalendarDayTo = 'friday';
+        $this->workCalendarTimeFrom = '09:00';
+        $this->workCalendarTimeTo = '18:00';
         $this->resetValidation();
 
         if ($id) {
@@ -297,6 +314,12 @@ Remote Area charge	".$remoteRow;
             $this->sortOrder = (int) $r->sort_order;
             $this->existingProductImageUrl = $r->productImageUrl();
             $metadata = (array) ($r->metadata ?? []);
+            if ($this->group === 'task_pack_work_calendar') {
+                $this->workCalendarDayFrom = strtolower(trim((string) ($metadata['day_from'] ?? 'monday'))) ?: 'monday';
+                $this->workCalendarDayTo = strtolower(trim((string) ($metadata['day_to'] ?? 'friday'))) ?: 'friday';
+                $this->workCalendarTimeFrom = trim((string) ($metadata['time_from'] ?? '09:00')) ?: '09:00';
+                $this->workCalendarTimeTo = trim((string) ($metadata['time_to'] ?? '18:00')) ?: '18:00';
+            }
             if ($this->group === 'inquiry_task_status') {
                 $this->autoInquiryStatus = (string) ($metadata['auto_inquiry_status'] ?? '__task_status__');
                 $this->requiresAttention = filter_var($metadata['requires_attention'] ?? false, FILTER_VALIDATE_BOOL);
@@ -1734,6 +1757,14 @@ Remote Area charge	".$remoteRow;
             'status' => ['required', 'in:active,inactive'],
             'sortOrder' => ['required', 'integer', 'min:0', 'max:1000000'],
             'metadataJson' => ['nullable', 'string'],
+            'workCalendarDayFrom' => $this->group === 'task_pack_work_calendar'
+                ? ['required', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])]
+                : ['nullable'],
+            'workCalendarDayTo' => $this->group === 'task_pack_work_calendar'
+                ? ['required', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])]
+                : ['nullable'],
+            'workCalendarTimeFrom' => $this->group === 'task_pack_work_calendar' ? ['required', 'date_format:H:i'] : ['nullable'],
+            'workCalendarTimeTo' => $this->group === 'task_pack_work_calendar' ? ['required', 'date_format:H:i', 'after:workCalendarTimeFrom'] : ['nullable'],
             'autoInquiryStatus' => $this->group === 'inquiry_task_status'
                 ? ['required', Rule::in(['To do', 'In Progress', 'Completed', 'Cancelled', '__task_status__'])]
                 : ['nullable'],
@@ -1813,6 +1844,14 @@ Remote Area charge	".$remoteRow;
             if (json_last_error() !== JSON_ERROR_NONE || !is_array($metadata)) {
                 throw ValidationException::withMessages(['metadataJson' => 'Metadata must be valid JSON.']);
             }
+        }
+
+        if ($this->group === 'task_pack_work_calendar') {
+            $metadata ??= [];
+            $metadata['day_from'] = $data['workCalendarDayFrom'];
+            $metadata['day_to'] = $data['workCalendarDayTo'];
+            $metadata['time_from'] = $data['workCalendarTimeFrom'];
+            $metadata['time_to'] = $data['workCalendarTimeTo'];
         }
 
         if ($this->group === 'inquiry_task_status') {

@@ -408,7 +408,7 @@ body{background:#f3f6fb;color:#172033}
                                         @if($task['route'])<a class="task-link" href="{{ $task['route'] }}" wire:navigate>{{ $task['title'] }}</a>@else<span class="task-link">{{ $task['title'] }}</span>@endif
                                         <span class="task-ref">{{ $task['number'] }}</span>
                                     </div>
-                                    <span class="phase">{{ $task['phase'] }}</span>
+                                    <span class="phase ft-phase-color-label" style="{{ \App\Support\MasterColor::style($task['phaseColor'] ?? null) }}">{{ $task['phase'] }}</span>
                                     <span class="assignee" title="{{ $task['assignee'] }}">
                                         <x-ui.avatar :name="$task['assignee']" :src="$task['assigneeImage']" :size="22" />
                                         <span class="assignee-name">{{ $task['assignee'] }}</span>

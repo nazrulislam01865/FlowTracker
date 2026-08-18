@@ -304,7 +304,28 @@ unset($__defined_vars, $__key, $__value); ?>
                 <span class="ft-soft-pill <?php echo e(\App\Support\JobDetailPresenter::healthClass($job->health)); ?>"><?php echo e($job->health); ?></span>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($jobFlag): ?><span class="ft-soft-pill <?php echo e($jobFlagColor ? 'ft-master-color' : 'amber'); ?>" style="<?php echo e(\App\Support\MasterColor::style($jobFlagColor)); ?>">⚑ <?php echo e($jobFlag); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 <span class="ft-soft-pill <?php echo e($jobPriorityColor ? 'ft-master-color' : 'red'); ?>" style="<?php echo e(\App\Support\MasterColor::style($jobPriorityColor)); ?>"><?php echo e($job->priority); ?></span>
-                <span class="ft-soft-pill purple"><?php echo e($job->phase?->name ?? $job->status); ?></span>
+                <?php if (isset($component)) { $__componentOriginal9414ddaaf6095649bba169634abf8f57 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal9414ddaaf6095649bba169634abf8f57 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.phase-label','data' => ['phase' => $job->phase,'fallback' => $job->status,'class' => 'ft-soft-pill']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.phase-label'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->phase),'fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->status),'class' => 'ft-soft-pill']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $attributes = $__attributesOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__attributesOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal9414ddaaf6095649bba169634abf8f57)): ?>
+<?php $component = $__componentOriginal9414ddaaf6095649bba169634abf8f57; ?>
+<?php unset($__componentOriginal9414ddaaf6095649bba169634abf8f57); ?>
+<?php endif; ?>
             </div>
         </div>
         <div class="ft-detail-actions ft-exact-job-team" aria-label="Order team">

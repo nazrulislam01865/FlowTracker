@@ -58,7 +58,7 @@ class InquiryIntelligenceService
                 ])->with([
                     'assignee:id,name,profile_image_path',
                     'documents:id,inquiry_id,inquiry_task_id',
-                    'inquiry:id,inquiry_number',
+                    'inquiry:id,inquiry_number,required_delivery_date',
                 ]),
                 'convertedJob:id,source_inquiry_id,job_number,order_number,status,created_at,completed_at',
                 'sourceOrder:id,source_inquiry_id,job_number,order_number,status,created_at,completed_at',
@@ -73,11 +73,12 @@ class InquiryIntelligenceService
         }
 
         $inquiryIds = $inquiries->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $reopenedTaskIds = $this->reopenedTaskIds($inquiryIds);
-        $assignmentTimes = $this->taskAssignmentTimes($inquiryIds);
+        $reopenEventStats = $this->reopenEventStats($inquiryIds);
+        $reopenEventCounts = collect($reopenEventStats)->map(fn (array $row) => (int) ($row['count'] ?? 0))->all();
+        $reopenLatestTimestamps = collect($reopenEventStats)->map(fn (array $row) => (int) ($row['latest_timestamp'] ?? 0))->all();
 
-        $portfolio = $this->portfolio($inquiries, $reopenedTaskIds, $fromLocal, $toLocal, $timezone);
-        $people = $this->people($inquiries, $reopenedTaskIds, $assignmentTimes, $timezone, $assigneeId);
+        $portfolio = $this->portfolio($inquiries, $fromLocal, $toLocal, $timezone);
+        $people = $this->people($inquiries, $reopenEventCounts, $reopenLatestTimestamps, $timezone, $assigneeId);
         $products = $this->products($inquiries);
 
         return [
@@ -89,7 +90,7 @@ class InquiryIntelligenceService
             'filters' => [
                 'statuses' => $this->statusOptions($user, $fromUtc, $toUtc),
                 'priorities' => $this->priorityOptions($user, $fromUtc, $toUtc),
-                'assignees' => $this->assigneeOptions($user, $fromUtc, $toUtc),
+                'assignees' => $this->assigneeOptions(),
             ],
             'portfolio' => $portfolio,
             'people' => $people,
@@ -105,7 +106,7 @@ class InquiryIntelligenceService
         return $report['portfolio']['rows'];
     }
 
-    private function portfolio(Collection $inquiries, array $reopenedTaskIds, CarbonImmutable $from, CarbonImmutable $to, string $timezone): array
+    private function portfolio(Collection $inquiries, CarbonImmutable $from, CarbonImmutable $to, string $timezone): array
     {
         $total = $inquiries->count();
         $completed = $inquiries->filter(fn (Inquiry $inquiry) => $this->isCompleted($inquiry))->count();
@@ -259,26 +260,24 @@ class InquiryIntelligenceService
         ];
     }
 
-    private function people(Collection $inquiries, array $reopenedTaskIds, array $assignmentTimes, string $timezone, int $assigneeId = 0): array
+    private function people(Collection $inquiries, array $reopenEventCounts, array $reopenLatestTimestamps, string $timezone, int $assigneeId = 0): array
     {
+        $performanceUserIds = $this->performanceUserIds();
         $tasks = $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->tasks)
-            ->filter(fn (InquiryTask $task) => $task->assignee_id && $task->assignee)
+            ->filter(fn (InquiryTask $task) => $task->assignee_id
+                && $task->assignee
+                && in_array((int) $task->assignee_id, $performanceUserIds, true))
             ->when($assigneeId > 0, fn (Collection $rows) => $rows->where('assignee_id', $assigneeId)->values())
             ->values();
         $groups = $tasks->groupBy('assignee_id');
         $completedTasks = $tasks->whereNotNull('completed_at')->values();
         $durations = $completedTasks
-            ->map(fn (InquiryTask $task) => $this->taskHours($task, $assignmentTimes[(int) $task->id] ?? null))
+            ->map(fn (InquiryTask $task) => $this->taskHours($task))
             ->filter(fn ($hours) => $hours !== null && $hours >= 0)
             ->values();
-        $teamMedianHours = $durations->count() ? (float) $durations->median() : null;
-        $completedCounts = $groups
-            ->map(fn (Collection $rows) => $rows->whereNotNull('completed_at')->count())
-            ->filter(fn ($n) => $n > 0);
-        $medianCompleted = $completedCounts->count() ? max(1.0, (float) $completedCounts->median()) : 1.0;
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
-        $ranking = $groups->map(function (Collection $personTasks) use ($reopenedTaskIds, $assignmentTimes, $teamMedianHours, $medianCompleted, $today, $timezone): array {
+        $ranking = $groups->map(function (Collection $personTasks) use ($reopenEventCounts, $today, $timezone): array {
             /** @var InquiryTask $first */
             $first = $personTasks->first();
             $completed = $personTasks->whereNotNull('completed_at')->values();
@@ -286,7 +285,7 @@ class InquiryIntelligenceService
             $completedCount = $completed->count();
             $completionPct = $assigned > 0 ? $completedCount / $assigned * 100 : 0;
             $hours = $completed
-                ->map(fn (InquiryTask $task) => $this->taskHours($task, $assignmentTimes[(int) $task->id] ?? null))
+                ->map(fn (InquiryTask $task) => $this->taskHours($task))
                 ->filter(fn ($value) => $value !== null && $value >= 0)
                 ->values();
             $avgHours = $hours->count() ? (float) $hours->avg() : null;
@@ -296,17 +295,11 @@ class InquiryIntelligenceService
                 return $task->completed_at->copy()->setTimezone($timezone)->toDateString() <= $task->due_date->toDateString();
             })->count();
             $onTime = $dueEligible->count() > 0 ? $onTimeCount / $dueEligible->count() * 100 : null;
-            $reopened = $completed->filter(fn (InquiryTask $task) => in_array((int) $task->id, $reopenedTaskIds, true))->count();
-            $reopenPct = $completedCount > 0 ? $reopened / $completedCount * 100 : null;
-            $quality = $reopenPct !== null ? max(0, 100 - $reopenPct) : null;
+            $reopenCount = (int) $personTasks->sum(
+                fn (InquiryTask $task): int => (int) ($reopenEventCounts[(int) $task->id] ?? 0)
+            );
             $open = $personTasks->whereNull('completed_at')->values();
             $overdue = $open->filter(fn (InquiryTask $task) => $task->due_date && $task->due_date->toDateString() < $today)->count();
-            $reliability = $open->count() > 0 ? max(0, 100 - ($overdue / $open->count() * 100)) : 100.0;
-            $speed = $avgHours !== null && $avgHours > 0 && $teamMedianHours !== null && $teamMedianHours > 0
-                ? min(100, $teamMedianHours / $avgHours * 100)
-                : null;
-            $productivity = $completedCount > 0 ? min(100, $completedCount / $medianCompleted * 100) : 0.0;
-            $efficiency = $this->weightedEfficiency($speed, $onTime, $productivity, $quality, $reliability);
 
             return [
                 'id' => (int) $first->assignee_id,
@@ -318,18 +311,33 @@ class InquiryIntelligenceService
                 'completed' => $completedCount,
                 'completion' => round($completionPct, 1),
                 'avg_hours' => $avgHours !== null ? round($avgHours, 1) : null,
+                'avg_hours_samples' => $hours->count(),
                 'on_time' => $onTime !== null ? round($onTime, 1) : null,
                 'due_samples' => $dueEligible->count(),
-                'reopen' => $reopenPct !== null ? round($reopenPct, 1) : null,
-                'quality' => $quality !== null ? round($quality, 1) : null,
-                'efficiency' => $efficiency,
-                'qualified' => $completedCount >= 10,
-                'signal' => $this->managementSignal($efficiency, $onTime, $quality, $reopenPct, $completedCount),
+                'reopen_count' => $reopenCount,
             ];
         })->sort(function (array $a, array $b): int {
-            if ($a['qualified'] !== $b['qualified']) return $a['qualified'] ? -1 : 1;
-            if ($a['efficiency'] !== $b['efficiency']) return $b['efficiency'] <=> $a['efficiency'];
+            if ($a['completion'] !== $b['completion']) return $b['completion'] <=> $a['completion'];
+
+            $aOnTime = $a['on_time'];
+            $bOnTime = $b['on_time'];
+            if ($aOnTime !== $bOnTime) {
+                if ($aOnTime === null) return 1;
+                if ($bOnTime === null) return -1;
+                return $bOnTime <=> $aOnTime;
+            }
+
             if ($a['completed'] !== $b['completed']) return $b['completed'] <=> $a['completed'];
+
+            $aHours = $a['avg_hours'];
+            $bHours = $b['avg_hours'];
+            if ($aHours !== $bHours) {
+                if ($aHours === null) return 1;
+                if ($bHours === null) return -1;
+                return $aHours <=> $bHours;
+            }
+
+            if ($a['reopen_count'] !== $b['reopen_count']) return $a['reopen_count'] <=> $b['reopen_count'];
             return strcasecmp($a['name'], $b['name']);
         })->values();
 
@@ -346,29 +354,39 @@ class InquiryIntelligenceService
                     && $task->completed_at->copy()->setTimezone($timezone)->toDateString() <= $task->due_date->toDateString();
             })->count() / $teamDue->count() * 100
             : null;
-        $teamReopened = $completedTasks->filter(fn (InquiryTask $task) => in_array((int) $task->id, $reopenedTaskIds, true))->count();
-        $teamQuality = $completedTasks->count() > 0
-            ? max(0, 100 - ($teamReopened / $completedTasks->count() * 100))
-            : null;
+        $teamReopenEvents = (int) $tasks->sum(
+            fn (InquiryTask $task): int => (int) ($reopenEventCounts[(int) $task->id] ?? 0)
+        );
 
         $taskDetails = $tasks
             ->sortByDesc(fn (InquiryTask $task) => $task->completed_at?->timestamp ?? $task->updated_at?->timestamp ?? 0)
-            ->take(100)
-            ->map(function (InquiryTask $task) use ($reopenedTaskIds, $assignmentTimes, $timezone, $today): array {
-                $effectiveStart = $this->taskStartAt($task, $assignmentTimes[(int) $task->id] ?? null);
-                $started = $effectiveStart?->copy()->setTimezone($timezone);
+            ->map(function (InquiryTask $task) use ($reopenEventCounts, $reopenLatestTimestamps, $timezone, $today): array {
+                $started = $task->started_at?->copy()->setTimezone($timezone);
                 $completed = $task->completed_at?->copy()->setTimezone($timezone);
-                $hours = $this->taskHours($task, $assignmentTimes[(int) $task->id] ?? null);
-                $reopened = in_array((int) $task->id, $reopenedTaskIds, true);
-                $sla = 'No due date';
+                $hours = $this->taskHours($task);
+                $reopenCount = (int) ($reopenEventCounts[(int) $task->id] ?? 0);
+                // Task detail SLA follows the Inquiry's client-facing required delivery date when available.
+                // If the Inquiry has no delivery target, fall back to the task's own due date.
+                $inquiryDue = $task->inquiry?->required_delivery_date;
+                $slaTarget = $inquiryDue ?: $task->due_date;
+                $slaSource = $inquiryDue ? 'Inquiry due' : ($task->due_date ? 'Task due' : 'No SLA target');
+                $sla = 'No SLA target';
                 $slaTone = 'blue';
 
-                if ($task->due_date) {
-                    $dueDate = $task->due_date->toDateString();
+                if ($slaTarget) {
+                    $slaDate = $slaTarget->toDateString();
                     if (!$task->completed_at) {
-                        $sla = $dueDate < $today ? 'Overdue · '.$task->due_date->format('M j') : ($dueDate === $today ? 'Due today' : 'Due '.$task->due_date->format('M j'));
-                        $slaTone = $dueDate < $today ? 'red' : 'amber';
-                    } elseif ($completed && $completed->toDateString() <= $dueDate) {
+                        if ($slaDate < $today) {
+                            $sla = 'Overdue';
+                            $slaTone = 'red';
+                        } elseif ($slaDate === $today) {
+                            $sla = 'Due today';
+                            $slaTone = 'amber';
+                        } else {
+                            $sla = 'On track';
+                            $slaTone = 'green';
+                        }
+                    } elseif ($completed && $completed->toDateString() <= $slaDate) {
                         $sla = 'On time';
                         $slaTone = 'green';
                     } else {
@@ -385,34 +403,53 @@ class InquiryIntelligenceService
                     'inquiry_url' => $task->inquiry_id ? route('inquiries.index', ['open' => $task->inquiry_id, 'task' => $task->id]) : null,
                     'task_id' => (int) $task->id,
                     'task' => (string) $task->title,
-                    'status' => (string) $task->status,
-                    'started' => $started?->format('M j · g:i A') ?: '—',
-                    'completed' => $completed?->format('M j · g:i A') ?: '— Waiting',
-                    'hours' => $hours !== null ? $this->formatHours($hours) : 'Open',
+                    'status' => trim((string) $task->status) ?: '—',
+                    'started' => $started?->format('M j, Y · g:i A') ?: '—',
+                    'completed' => $completed?->format('M j, Y · g:i A') ?: ($reopenCount > 0 ? 'Reopened · currently open' : '—'),
+                    'task_due' => $task->due_date?->format('M j, Y') ?: '—',
+                    'inquiry_due' => $inquiryDue?->format('M j, Y') ?: '—',
+                    'sla_target' => $slaTarget?->format('M j, Y') ?: '—',
+                    'sla_source' => $slaSource,
+                    'hours' => $hours !== null ? $this->formatHours($hours) : ($task->completed_at ? '—' : 'Open'),
                     'hours_value' => $hours,
                     'sla' => $sla,
                     'sla_tone' => $slaTone,
-                    'quality' => $reopened ? 'Reopened' : ($task->completed_at ? 'First pass' : 'Pending'),
-                    'reopened' => $reopened,
+                    'reopen_count' => $reopenCount,
+                    'reopened' => $reopenCount > 0,
                     'is_open' => !$task->completed_at,
                     'is_completed' => (bool) $task->completed_at,
                     'completed_timestamp' => $task->completed_at?->timestamp ?? 0,
                     'updated_timestamp' => $task->updated_at?->timestamp ?? 0,
+                    'reopened_timestamp' => (int) ($reopenLatestTimestamps[(int) $task->id] ?? 0),
                 ];
             })->values()->all();
 
-        $conversion = $this->assigneeConversion($inquiries, $ranking, $assigneeId);
-        $qualified = $ranking->where('qualified');
-        $best = $qualified->first() ?: $ranking->first();
-        $throughput = ($qualified->isNotEmpty() ? $qualified : $ranking)->sortByDesc('completed')->first();
-        $coaching = ($qualified->isNotEmpty() ? $qualified : $ranking)->sortBy('efficiency')->first();
-        $workspaceId = app(SetupContext::class)->workspaceId();
-        $roster = User::query()
-            ->where('is_active', true)
-            ->whereHas('workspaceMemberships', fn ($membership) => $membership
-                ->where('workspace_id', $workspaceId)
-                ->where('status', 'active'))
-            ->count();
+        $conversion = $this->recentConversions($inquiries, $timezone, $assigneeId, $performanceUserIds);
+        $activeRanking = $ranking->where('assigned', '>', 0)->values();
+        $best = $activeRanking->first();
+        $throughput = $activeRanking
+            ->sort(function (array $a, array $b): int {
+                if ($a['completed'] !== $b['completed']) return $b['completed'] <=> $a['completed'];
+                if ($a['completion'] !== $b['completion']) return $b['completion'] <=> $a['completion'];
+                return strcasecmp($a['name'], $b['name']);
+            })->first();
+        $coaching = $activeRanking
+            ->sort(function (array $a, array $b): int {
+                if ($a['completion'] !== $b['completion']) return $a['completion'] <=> $b['completion'];
+                if ($a['reopen_count'] !== $b['reopen_count']) return $b['reopen_count'] <=> $a['reopen_count'];
+
+                $aOnTime = $a['on_time'];
+                $bOnTime = $b['on_time'];
+                if ($aOnTime !== $bOnTime) {
+                    if ($aOnTime === null) return 1;
+                    if ($bOnTime === null) return -1;
+                    return $aOnTime <=> $bOnTime;
+                }
+
+                if ($a['completed'] !== $b['completed']) return $a['completed'] <=> $b['completed'];
+                return strcasecmp($a['name'], $b['name']);
+            })->first();
+        $roster = count($performanceUserIds);
 
         return [
             'kpis' => [
@@ -422,10 +459,10 @@ class InquiryIntelligenceService
                 'completed' => $completedTasks->count(),
                 'completion_rate' => $tasks->count() > 0 ? round($completedTasks->count() / $tasks->count() * 100, 1) : 0,
                 'avg_hours' => $durations->count() ? round((float) $durations->avg(), 1) : null,
+                'avg_hours_samples' => $durations->count(),
                 'on_time' => $teamOnTime !== null ? round($teamOnTime, 1) : null,
                 'on_time_samples' => $teamDue->count(),
-                'quality' => $teamQuality !== null ? round($teamQuality, 1) : null,
-                'quality_samples' => $completedTasks->count(),
+                'reopen_events' => $teamReopenEvents,
             ],
             'ranking' => $ranking->all(),
             'highlights' => [
@@ -525,45 +562,76 @@ class InquiryIntelligenceService
         ];
     }
 
-    private function assigneeConversion(Collection $inquiries, Collection $ranking, int $assigneeId = 0): array
+    /**
+     * Return the five most recent real Inquiry -> Order conversion events in
+     * the current filtered period. Each row also carries the assignee's
+     * completed-inquiry sample and conversion rate for useful context.
+     */
+    private function recentConversions(Collection $inquiries, string $timezone, int $assigneeId = 0, array $performanceUserIds = []): array
     {
-        $byAssignee = [];
+        $leadFor = function (Inquiry $inquiry): ?User {
+            return $inquiry->owner
+                ?: $inquiry->tasks->sortByDesc('sequence')->first()?->assignee
+                ?: $inquiry->creator;
+        };
 
+        $stats = [];
         foreach ($inquiries as $inquiry) {
             if (!$this->isCompleted($inquiry)) continue;
-
-            $lead = $inquiry->owner ?: $this->currentOpenTask($inquiry->tasks)?->assignee ?: $inquiry->tasks->sortByDesc('sequence')->first()?->assignee;
+            $lead = $leadFor($inquiry);
             if (!$lead) continue;
 
             $id = (int) $lead->id;
+            if (!in_array($id, $performanceUserIds, true)) continue;
             if ($assigneeId > 0 && $id !== $assigneeId) continue;
-            if (!isset($byAssignee[$id])) {
-                $byAssignee[$id] = ['id' => $id, 'name' => $lead->name, 'completed_inquiries' => 0, 'orders' => 0];
+            if (!isset($stats[$id])) {
+                $stats[$id] = ['completed_inquiries' => 0, 'orders_converted' => 0];
             }
 
-            $byAssignee[$id]['completed_inquiries']++;
-            if ($this->isConverted($inquiry)) $byAssignee[$id]['orders']++;
+            $stats[$id]['completed_inquiries']++;
+            if ($this->isConverted($inquiry)) $stats[$id]['orders_converted']++;
         }
 
-        $rows = collect($byAssignee)->map(function (array $row): array {
-            $row['conversion'] = $row['completed_inquiries'] > 0 ? round($row['orders'] / $row['completed_inquiries'] * 100, 1) : 0;
-            return $row;
-        })->sortByDesc('conversion')->values();
+        return $inquiries
+            ->filter(fn (Inquiry $inquiry) => $this->isConverted($inquiry))
+            ->map(function (Inquiry $inquiry) use ($timezone, $assigneeId, $leadFor, $stats, $performanceUserIds): ?array {
+                $order = $inquiry->convertedJob ?: $inquiry->sourceOrder;
+                if (!$order) return null;
 
-        $totalCompleted = (int) $rows->sum('completed_inquiries');
-        $totalOrders = (int) $rows->sum('orders');
-        $target = $totalCompleted > 0 ? round($totalOrders / $totalCompleted * 100, 1) : 0;
+                $lead = $leadFor($inquiry);
+                if (!$lead) return null;
+                $id = (int) $lead->id;
+                if (!in_array($id, $performanceUserIds, true)) return null;
+                if ($assigneeId > 0 && $id !== $assigneeId) return null;
 
-        return $rows->map(function (array $row) use ($target): array {
-            $delta = round($row['conversion'] - $target, 1);
-            $row['target'] = $target;
-            $row['delta'] = $delta;
-            $row['tone'] = $row['completed_inquiries'] < 5 ? 'amber' : ($delta >= 0 ? 'green' : ($delta <= -10 ? 'red' : 'amber'));
-            $row['interpretation'] = $row['completed_inquiries'] < 5
-                ? 'Limited completed-inquiry sample'
-                : ($delta >= 5 ? 'Above team conversion' : ($delta < -10 ? 'Review handoff and close reasons' : 'Near team average'));
-            return $row;
-        })->all();
+                $completedInquiries = (int) ($stats[$id]['completed_inquiries'] ?? 0);
+                $ordersConverted = (int) ($stats[$id]['orders_converted'] ?? 0);
+                $conversionRate = $completedInquiries > 0 ? round($ordersConverted / $completedInquiries * 100, 1) : 0;
+                $convertedAt = strcasecmp((string) $inquiry->result, 'converted') === 0 && $inquiry->completed_at
+                    ? $inquiry->completed_at
+                    : ($order->created_at ?: $inquiry->updated_at);
+
+                return [
+                    'assignee_id' => $id,
+                    'assignee' => (string) $lead->name,
+                    'inquiry_id' => (int) $inquiry->id,
+                    'inquiry' => (string) $inquiry->inquiry_number,
+                    'inquiry_url' => route('inquiries.index', ['open' => $inquiry->id]),
+                    'order_id' => (int) $order->id,
+                    'order' => method_exists($order, 'displayOrderNumber') ? $order->displayOrderNumber() : ((string) ($order->order_number ?: $order->job_number)),
+                    'order_url' => route('jobs.index', ['open' => $order->id]),
+                    'completed_inquiries' => $completedInquiries,
+                    'orders_converted' => $ordersConverted,
+                    'conversion_rate' => $conversionRate,
+                    'converted_at' => $convertedAt?->copy()->setTimezone($timezone)->format('M j, Y · g:i A') ?: '—',
+                    'converted_timestamp' => $convertedAt?->timestamp ?? 0,
+                ];
+            })
+            ->filter()
+            ->sortByDesc('converted_timestamp')
+            ->take(5)
+            ->values()
+            ->all();
     }
 
     private function queryThemes(Collection $inquiries): array
@@ -648,37 +716,37 @@ class InquiryIntelligenceService
         ];
     }
 
-    private function taskAssignmentTimes(array $inquiryIds): array
+    /**
+     * Count every real reopen transition for each Inquiry task and keep the
+     * latest reopen event timestamp for sorting the Reopened tasks tab.
+     */
+    private function reopenEventStats(array $inquiryIds): array
     {
         if ($inquiryIds === []) return [];
 
-        return Activity::query()
-            ->where('subject_type', Inquiry::class)
-            ->whereIn('subject_id', $inquiryIds)
-            ->where('event', 'inquiry.task_assignee_changed')
-            ->orderBy('created_at')
-            ->get(['meta', 'created_at'])
-            ->filter(fn (Activity $activity) => (int) data_get($activity->meta, 'inquiry_task_id') > 0)
-            ->groupBy(fn (Activity $activity) => (int) data_get($activity->meta, 'inquiry_task_id'))
-            ->map(fn (Collection $events) => $events->last()?->created_at)
-            ->filter()
-            ->all();
-    }
-
-    private function reopenedTaskIds(array $inquiryIds): array
-    {
-        if ($inquiryIds === []) return [];
-
-        return Activity::query()
+        $stats = [];
+        Activity::query()
             ->where('subject_type', Inquiry::class)
             ->whereIn('subject_id', $inquiryIds)
             ->where('event', 'inquiry.task_reopened')
-            ->get(['meta'])
-            ->map(fn (Activity $activity) => (int) data_get($activity->meta, 'inquiry_task_id'))
-            ->filter()
-            ->unique()
-            ->values()
-            ->all();
+            ->orderBy('created_at')
+            ->get(['meta', 'created_at'])
+            ->each(function (Activity $activity) use (&$stats): void {
+                $taskId = (int) data_get($activity->meta, 'inquiry_task_id');
+                if ($taskId <= 0) return;
+
+                if (!isset($stats[$taskId])) {
+                    $stats[$taskId] = ['count' => 0, 'latest_timestamp' => 0];
+                }
+
+                $stats[$taskId]['count']++;
+                $stats[$taskId]['latest_timestamp'] = max(
+                    (int) $stats[$taskId]['latest_timestamp'],
+                    (int) ($activity->created_at?->timestamp ?? 0)
+                );
+            });
+
+        return $stats;
     }
 
     private function statusOptions(User $user, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): array
@@ -721,24 +789,49 @@ class InquiryIntelligenceService
             ->all();
     }
 
-    private function assigneeOptions(User $user, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): array
+    private function assigneeOptions(): array
     {
-        $visibleIds = app(InquiryService::class)->visibleQuery($user)
-            ->whereBetween('inquiries.created_at', [$fromUtc, $toUtc])
-            ->select('inquiries.id');
-
-        $assigneeIds = InquiryTask::query()
-            ->whereIn('inquiry_id', clone $visibleIds)
-            ->whereNotNull('assignee_id')
-            ->select('assignee_id');
-
-        return User::query()
-            ->where('is_active', true)
-            ->whereIn('id', $assigneeIds)
-            ->orderBy('name')
-            ->get(['id','name'])
-            ->map(fn (User $assignee) => ['id' => (int) $assignee->id, 'name' => (string) $assignee->name])
+        // Inquiry Intelligence must use the real active workspace roster only.
+        // Administrator and Super Admin accounts are management/system accounts
+        // and are intentionally excluded from employee performance selectors.
+        return $this->performanceUsersQuery()
+            ->orderBy('users.name')
+            ->get(['users.id', 'users.name'])
+            ->map(fn (User $assignee) => [
+                'id' => (int) $assignee->id,
+                'name' => (string) $assignee->name,
+            ])
             ->all();
+    }
+
+    /** @return list<int> */
+    private function performanceUserIds(): array
+    {
+        return $this->performanceUsersQuery()
+            ->pluck('users.id')
+            ->map(fn ($id): int => (int) $id)
+            ->values()
+            ->all();
+    }
+
+    private function performanceUsersQuery(): Builder
+    {
+        $administratorSlugs = ['super-admin', 'admin', 'administrator'];
+
+        // Performance reporting follows the real FlowTrack user roster. Do not
+        // require a workspace_memberships row here: older/imported users can be
+        // valid active assignees even when that auxiliary row was never
+        // backfilled. The users table is authoritative for whether the account
+        // exists/is active; Admin and Super Admin accounts are excluded.
+        return User::query()
+            ->where('users.is_active', true)
+            ->where('users.is_super_admin', false)
+            ->whereDoesntHave('roles', fn (Builder $role) => $role
+                ->where('is_active', true)
+                ->whereIn('slug', $administratorSlugs))
+            ->whereDoesntHave('role', fn (Builder $role) => $role
+                ->where('is_active', true)
+                ->whereIn('slug', $administratorSlugs));
     }
 
     private function periodBounds(string $period): array
@@ -834,21 +927,18 @@ class InquiryIntelligenceService
         return ['label' => 'On track', 'tone' => 'blue'];
     }
 
-    private function taskHours(InquiryTask $task, $assignmentAt = null): ?float
+    /**
+     * Average-cycle timing is deliberately status based: the clock starts only
+     * when InquiryService records started_at as the task first enters a working
+     * state (for example In Progress/Started), and stops at completed_at.
+     * Assignment/creation time is never used as a fallback.
+     */
+    private function taskHours(InquiryTask $task): ?float
     {
-        if (!$task->completed_at) return null;
-        $start = $this->taskStartAt($task, $assignmentAt);
-        if (!$start) return null;
-        return max(0, $start->diffInSeconds($task->completed_at) / 3600);
-    }
+        if (!$task->started_at || !$task->completed_at) return null;
+        if ($task->completed_at->lt($task->started_at)) return null;
 
-    private function taskStartAt(InquiryTask $task, $assignmentAt = null)
-    {
-        $candidates = collect([$task->started_at, $assignmentAt])->filter();
-        if ($candidates->isNotEmpty()) {
-            return $candidates->sortByDesc(fn ($date) => $date->timestamp)->first();
-        }
-        return $task->created_at;
+        return $task->started_at->diffInSeconds($task->completed_at) / 3600;
     }
 
     private function inquiryCycleHours(Inquiry $inquiry): ?float
@@ -882,43 +972,9 @@ class InquiryIntelligenceService
         $minutes = (int) round($hours * 60);
         $h = intdiv($minutes, 60);
         $m = $minutes % 60;
+        if ($minutes <= 0 && $hours > 0) return '<1m';
         if ($h <= 0) return $m.'m';
         return $h.'h '.str_pad((string) $m, 2, '0', STR_PAD_LEFT).'m';
-    }
-
-    private function weightedEfficiency(?float $speed, ?float $onTime, float $productivity, ?float $quality, float $reliability): int
-    {
-        $components = [
-            [$speed, 30],
-            [$onTime, 25],
-            [$productivity, 20],
-            [$quality, 15],
-            [$reliability, 10],
-        ];
-        $weighted = 0.0;
-        $weight = 0.0;
-
-        foreach ($components as [$value, $componentWeight]) {
-            if ($value === null) continue;
-            $weighted += max(0, min(100, (float) $value)) * $componentWeight;
-            $weight += $componentWeight;
-        }
-
-        return $weight > 0 ? (int) round($weighted / $weight) : 0;
-    }
-
-    private function managementSignal(int $efficiency, ?float $onTime, ?float $quality, ?float $reopen, int $completed): array
-    {
-        if ($completed < 10) return ['label' => 'Insufficient data', 'tone' => 'blue'];
-        if ($efficiency >= 90 && ($onTime === null || $onTime >= 95) && ($quality === null || $quality >= 95) && $completed >= 20) {
-            return ['label' => 'Top performer', 'tone' => 'green'];
-        }
-        if (($reopen !== null && $reopen > 15) || $efficiency < 50) return ['label' => 'Immediate review', 'tone' => 'red'];
-        if ($efficiency < 60) return ['label' => 'Coaching priority', 'tone' => 'red'];
-        if (($quality !== null && $quality < 92) || ($reopen !== null && $reopen > 8)) return ['label' => 'Quality watch', 'tone' => 'amber'];
-        if ($onTime !== null && $onTime < 90) return ['label' => 'SLA watch', 'tone' => 'amber'];
-        if ($efficiency >= 85) return ['label' => 'Strong execution', 'tone' => 'green'];
-        return ['label' => 'On track', 'tone' => 'blue'];
     }
 
     private function initials(string $name): string

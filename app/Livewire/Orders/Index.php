@@ -21,6 +21,7 @@ class Index extends Component
     public string $client = '';
     public string $phase = '';
     public string $owner = '';
+    #[Url(as: 'metric', history: true, except: '')]
     public string $metricFilter = '';
     public string $dateFrom = '';
     public string $dateTo = '';
@@ -37,6 +38,10 @@ class Index extends Component
         $this->client = $this->numericFilterFromRequest('client');
         $this->phase = $this->numericFilterFromRequest('phase');
         $this->owner = $this->numericFilterFromRequest('owner');
+        $this->metricFilter = trim((string) request('metric', $this->metricFilter));
+        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
+            $this->metricFilter = '';
+        }
         $this->dateFrom = $this->normalizeDateFilter((string) request('date_from', ''));
         $this->dateTo = $this->normalizeDateFilter((string) request('date_to', ''));
         $this->normalizeDateRange('from');

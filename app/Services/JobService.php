@@ -121,7 +121,7 @@ class JobService
             ->with([
                 'client:id,code,name,logo_path',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
                 'members:id,flow_job_id,user_id',
@@ -131,7 +131,7 @@ class JobService
                     ->whereNull('completed_at')
                     ->where('status', '!=', 'Completed')
                     ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
-                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence'])
+                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence,color'])
                     ->orderByRaw('due_date is null, due_date asc'),
             ])
             ->withCount('items')
@@ -164,7 +164,7 @@ class JobService
         $search = trim($search);
         [$dateFromUtc, $dateToUtc] = app(WorkspaceSettingsService::class)->localDateRangeUtcBounds($dateFrom, $dateTo);
         $searchLength = mb_strlen($search);
-        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true)) {
+        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
             $metricFilter = '';
         }
 
@@ -215,7 +215,7 @@ class JobService
             });
 
         if ($metricFilter !== '') {
-            $query = $this->applySummaryMetricScope($query, $metricFilter);
+            $query = $this->applySummaryMetricScope($query, $metricFilter, $user);
         }
 
         foreach ($tokens as $token) {
@@ -260,7 +260,7 @@ class JobService
                 'client:id,name,logo_path',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'sourceInquiry:id,inquiry_number,reference_number',
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'items:id,flow_job_id,product_name,category_name,quantity,sort_order',
                 'createdActivity' => fn ($activity) => $activity->select([
@@ -308,7 +308,7 @@ class JobService
         ];
     }
 
-    private function applySummaryMetricScope(Builder $query, string $metric): Builder
+    private function applySummaryMetricScope(Builder $query, string $metric, User $user): Builder
     {
         return match ($metric) {
             'createdToday' => $this->applyCreatedTodayOrderScope($query),
@@ -317,8 +317,50 @@ class JobService
             'dueThisWeek' => $this->applyDueThisWeekOrderScope($query),
             'completedThisWeek' => $this->applyCompletedThisWeekOrderScope($query),
             'attention' => $this->applyNeedsAttentionOrderScope($query),
+            'dashboardActive' => $this->applyDashboardActiveOrderScope($query),
+            'dashboardAttention' => $this->applyDashboardAttentionOrderScope($query),
+            'dashboardOverdueTasks' => $this->applyDashboardOverdueTaskOrderScope($query, $user),
             default => $query,
         };
+    }
+
+    /** Match the Dashboard "Active orders" KPI exactly. */
+    private function applyDashboardActiveOrderScope(Builder $query): Builder
+    {
+        return $query
+            ->whereHas('client', fn (Builder $client) => $client->where('is_active', true))
+            ->whereNull('flow_jobs.completed_at')
+            ->whereNotIn('flow_jobs.status', self::INACTIVE_STATUSES);
+    }
+
+    /** Match the Dashboard "Needs attention" KPI exactly (Order-level attention). */
+    private function applyDashboardAttentionOrderScope(Builder $query): Builder
+    {
+        return $this->applyDashboardActiveOrderScope($query)
+            ->where(function (Builder $attention): void {
+                $attention->where('flow_jobs.attention_requested', true)
+                    ->orWhere('flow_jobs.needs_attention', true)
+                    ->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention']);
+            });
+    }
+
+    /**
+     * Dashboard overdue count is task-based; the Orders destination therefore
+     * shows each visible active Order that contains at least one visible overdue task.
+     */
+    private function applyDashboardOverdueTaskOrderScope(Builder $query, User $user): Builder
+    {
+        $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+
+        return $this->applyDashboardActiveOrderScope($query)
+            ->whereRaw("LOWER(TRIM(COALESCE(flow_jobs.status, ''))) != 'completed'")
+            ->whereHas('tasks', function (Builder $tasks) use ($user, $today): void {
+                app(AccessControlService::class)
+                    ->applyTaskScope($tasks, $user)
+                    ->whereNull('tasks.completed_at')
+                    ->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) != 'completed'")
+                    ->whereDate('tasks.due_date', '<', $today);
+            });
     }
 
     private function applyCreatedTodayOrderScope(Builder $query): Builder
@@ -429,7 +471,7 @@ class JobService
             ->with([
                 'client:id,name,logo_path',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
                 'creator:id,name,profile_image_path',
@@ -600,7 +642,7 @@ class JobService
                     ->applyTaskScope($query, $user)
                     ->with([
                         'assignee:id,name,profile_image_path',
-                        'phase:id,name,short_name,sequence',
+                        'phase:id,name,short_name,sequence,color',
                         'template',
                         'documentCategory',
                         'setupTemplate.documentCategory',
@@ -631,7 +673,7 @@ class JobService
                     ->applyTaskScope($query, $user)
                     ->with([
                         'assignee:id,name,profile_image_path',
-                        'phase:id,name,short_name,sequence',
+                        'phase:id,name,short_name,sequence,color',
                         'template',
                         'documentCategory',
                         'setupTemplate.documentCategory',
@@ -681,7 +723,7 @@ class JobService
                 ->applyTaskScope($query, $user)
                 ->with([
                     'assignee:id,name,profile_image_path',
-                    'phase:id,name,short_name,sequence',
+                    'phase:id,name,short_name,sequence,color',
                     'template',
                     'documentCategory',
                     'setupTemplate.documentCategory',

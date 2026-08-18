@@ -52,7 +52,7 @@
                 <strong>{{ $formatBytes((int) $storageBytes) }} used</strong>
             </div>
         </div>
-        @if(auth()->user()->canModule('documents', 'create'))
+        @if(auth()->user()->canModule('document_archive', 'create'))
             <button type="button" class="ft-da-upload-button" wire:click="openUpload">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
                 <span>Upload document</span>
@@ -234,7 +234,7 @@
                                     <a class="ft-da-icon-button" href="{{ $row['open_url'] }}" target="_blank" rel="noopener" aria-label="Preview {{ $row['name'] }}" title="Preview document">
                                         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
                                     </a>
-                                    @if(auth()->user()->canModule('documents', 'export'))
+                                    @if(auth()->user()->canModule('document_archive', 'export'))
                                         <a class="ft-da-download-button" href="{{ $row['download_url'] }}">
                                             <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3v12m0 0 4-4m-4 4-4-4M5 19h14"/></svg>
                                             <span>Download</span>
@@ -294,7 +294,7 @@
                                                 <span>Rename document</span>
                                             </button>
                                         @endif
-                                        @if($row['supports_versions'] && auth()->user()->canModule('documents', 'create'))
+                                        @if($row['supports_versions'] && auth()->user()->canModule('document_archive', 'create'))
                                             <button type="button" role="menuitem" wire:click="openVersionUpload({{ $row['id'] }})">
                                                 <svg viewBox="0 0 24 24"><path d="M12 16V4m0 0-4 4m4-4 4 4"/><path d="M5 15v5h14v-5"/></svg>
                                                 <span>Upload new version</span>
@@ -435,7 +435,7 @@
                     <div><dt>Updated</dt><dd>{{ \App\Support\UserLocalTime::format($selected['updated_at'], 'M j, Y g:i A') }}</dd></div>
                 </dl>
             </div>
-            <div class="modal-foot"><button type="button" class="ghost" wire:click="closeDetails">Close</button><a class="primary" href="{{ $selected['open_url'] }}" target="_blank" rel="noopener">Open document</a>@if(auth()->user()->canModule('documents', 'export'))<a class="ghost" href="{{ $selected['download_url'] }}">Download</a>@endif</div>
+            <div class="modal-foot"><button type="button" class="ghost" wire:click="closeDetails">Close</button><a class="primary" href="{{ $selected['open_url'] }}" target="_blank" rel="noopener">Open document</a>@if(auth()->user()->canModule('document_archive', 'export'))<a class="ghost" href="{{ $selected['download_url'] }}">Download</a>@endif</div>
         </div>
     @endif
 

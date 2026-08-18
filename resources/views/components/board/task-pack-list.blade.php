@@ -95,7 +95,7 @@
                                 @if($task['isMine'])<small>You</small>@endif
                             </span>
 
-                            <span class="ft-board-taskpack-phase">{{ $task['phase'] }}</span>
+                            <span class="ft-board-taskpack-phase ft-phase-color-label" style="{{ \App\Support\MasterColor::style($task['phaseColor'] ?? null) }}">{{ $task['phase'] }}</span>
                             <time class="ft-board-taskpack-due {{ $task['dueTone'] }}">{{ $task['due'] }}</time>
 
                             <select

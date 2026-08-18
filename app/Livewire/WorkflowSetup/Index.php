@@ -11,6 +11,7 @@ use App\Models\WorkflowTemplate;
 use App\Services\MasterDataService;
 use App\Services\TaskPackService;
 use App\Services\WorkflowService;
+use App\Support\MasterColor;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
@@ -34,6 +35,7 @@ class Index extends Component
     public bool $showPhaseModal = false;
     public string $phaseName = '';
     public string $shortName = '';
+    public string $phaseColor = '#2563EB';
     public ?int $taskPackId = null;
     public bool $requiresApproval = false;
     public bool $phaseActive = true;
@@ -163,11 +165,12 @@ class Index extends Component
         $this->resetValidation(); $this->showPhaseModal=true; $this->editPhaseId=$id;
         if($id){
             $p=WorkflowPhase::where('workflow_template_id',$this->selectedWorkflowId)->findOrFail($id);
-            $this->phaseName=$p->name; $this->shortName=$p->short_name; $this->taskPackId=$p->task_pack_id;
+            $this->phaseName=$p->name; $this->shortName=$p->short_name; $this->phaseColor=MasterColor::normalize((string) $p->color) ?: '#2563EB'; $this->taskPackId=$p->task_pack_id;
             $this->requiresApproval=(bool)$p->requires_approval; $this->phaseActive=(bool)$p->is_active;
             $this->entryCondition=(string)$p->entry_condition; $this->exitCondition=(string)$p->exit_condition;
         }else{
             $this->reset(['phaseName','shortName','taskPackId']);
+            $this->phaseColor='#2563EB';
             $this->entryCondition='Previous phase complete'; $this->exitCondition='Required work complete';
             $this->requiresApproval=false; $this->phaseActive=true;
         }
@@ -178,12 +181,12 @@ class Index extends Component
     public function savePhase():void
     {
         $data=$this->validate([
-            'phaseName'=>['required','string','max:255'], 'shortName'=>['required','string','max:50'], 'taskPackId'=>['nullable','exists:task_packs,id'],
+            'phaseName'=>['required','string','max:255'], 'shortName'=>['required','string','max:50'], 'phaseColor'=>['required','regex:/^#[0-9A-Fa-f]{6}$/'], 'taskPackId'=>['nullable','exists:task_packs,id'],
             'entryCondition'=>['nullable','string','max:255'], 'exitCondition'=>['nullable','string','max:255'], 'requiresApproval'=>['boolean'], 'phaseActive'=>['boolean'],
         ]);
         $workflow=WorkflowTemplate::findOrFail($this->selectedWorkflowId);
         app(WorkflowService::class)->savePhase($workflow,[
-            'name'=>$data['phaseName'],'short_name'=>$data['shortName'],'task_pack_id'=>$data['taskPackId'],
+            'name'=>$data['phaseName'],'short_name'=>$data['shortName'],'color'=>MasterColor::normalize($data['phaseColor']),'task_pack_id'=>$data['taskPackId'],
             'requires_approval'=>$data['requiresApproval'],'is_active'=>$data['phaseActive'],
             'entry_condition'=>$data['entryCondition'],'exit_condition'=>$data['exitCondition'],
         ],$this->editPhaseId?WorkflowPhase::find($this->editPhaseId):null);

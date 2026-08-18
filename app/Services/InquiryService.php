@@ -294,7 +294,7 @@ class InquiryService
             (string) ($filters['date_to'] ?? ''),
         );
 
-        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true)) {
+        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
             $metricFilter = '';
         }
 
@@ -393,8 +393,17 @@ class InquiryService
             'dueThisWeek' => $this->applyDueThisWeekListScope($query),
             'completedThisWeek' => $this->applyCompletedThisWeekListScope($query),
             'attention' => $this->applyAttentionNeededListScope($query, $user),
+            'dashboardOpen' => $this->applyDashboardOpenInquiryScope($query),
             default => $query,
         };
+    }
+
+    /** Match the Dashboard "Open inquiries" KPI exactly. */
+    private function applyDashboardOpenInquiryScope(Builder $query): Builder
+    {
+        return $query
+            ->whereNull('inquiries.result')
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'");
     }
 
     private function applyCreatedTodayListScope(Builder $query): Builder
@@ -2217,18 +2226,30 @@ class InquiryService
         $weekEnd = $today->copy()->addDays(7)->toDateString();
         $quick = (string) ($filters['quick'] ?? 'all');
         $search = trim((string) ($filters['search'] ?? ''));
+        $statusFilter = trim((string) ($filters['status'] ?? ''));
+
+        $visibleInquiries = $this->visibleQuery($user)->where('inquiries.status', '!=', 'Draft');
+        if ($statusFilter === '') {
+            $visibleInquiries->whereNull('result');
+        }
 
         $query = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
-            ->whereNull('inquiry_tasks.completed_at')
-            ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
-            ->whereNotExists(function ($earlier): void {
-                $earlier->selectRaw('1')
-                    ->from('inquiry_tasks as earlier_inquiry_tasks')
-                    ->whereColumn('earlier_inquiry_tasks.inquiry_id', 'inquiry_tasks.inquiry_id')
-                    ->whereColumn('earlier_inquiry_tasks.sequence', '<', 'inquiry_tasks.sequence')
-                    ->whereNull('earlier_inquiry_tasks.completed_at')
-                    ->whereNull('earlier_inquiry_tasks.deleted_at');
-            });
+            ->whereIn('inquiry_tasks.inquiry_id', $visibleInquiries->select('inquiries.id'));
+
+        if ($statusFilter !== '') {
+            $query->whereRaw('LOWER(TRIM(inquiry_tasks.status)) = ?', [mb_strtolower($statusFilter)]);
+        } else {
+            $query
+                ->whereNull('inquiry_tasks.completed_at')
+                ->whereNotExists(function ($earlier): void {
+                    $earlier->selectRaw('1')
+                        ->from('inquiry_tasks as earlier_inquiry_tasks')
+                        ->whereColumn('earlier_inquiry_tasks.inquiry_id', 'inquiry_tasks.inquiry_id')
+                        ->whereColumn('earlier_inquiry_tasks.sequence', '<', 'inquiry_tasks.sequence')
+                        ->whereNull('earlier_inquiry_tasks.completed_at')
+                        ->whereNull('earlier_inquiry_tasks.deleted_at');
+                });
+        }
 
 
         if ($search !== '' && mb_strlen($search) >= 2) {
@@ -2270,7 +2291,7 @@ class InquiryService
                 'inquiry:id,inquiry_number,client_id,subject,status,priority,updated_at',
                 'inquiry.client:id,name,logo_path',
             ])
-            ->limit(max(1, min(6, $limit)))
+            ->limit(max(1, min($statusFilter !== '' ? 80 : 6, $limit)))
             ->get(['id', 'inquiry_id', 'assignee_id', 'title', 'status', 'needs_attention', 'attention_reason', 'due_date', 'sequence', 'updated_at']);
 
         $inquiryIds = $tasks->pluck('inquiry_id')->unique()->values();
@@ -2283,7 +2304,7 @@ class InquiryService
             ->get()->keyBy('inquiry_id');
         $displayTimezone = app(WorkspaceSettingsService::class)->displayTimezone();
 
-        return $tasks->map(function (InquiryTask $task) use ($counts, $user, $displayTimezone, $todayDate): array {
+        $groups = $tasks->map(function (InquiryTask $task) use ($counts, $user, $displayTimezone, $todayDate): array {
             $inquiry = $task->inquiry;
             $count = $counts->get($task->inquiry_id);
             $total = (int) ($count?->total_count ?? 0);
@@ -2336,6 +2357,18 @@ class InquiryService
                 ]]),
             ];
         })->values();
+
+        if ($statusFilter === '') return $groups;
+
+        return $groups
+            ->groupBy('id')
+            ->map(function (Collection $rows): array {
+                $group = $rows->first();
+                $group['tasks'] = $rows->flatMap(fn (array $row) => $row['tasks'])->values();
+                $group['taskCount'] = $group['tasks']->count();
+                return $group;
+            })
+            ->values();
     }
 
     public function myTaskMetrics(User $user): array

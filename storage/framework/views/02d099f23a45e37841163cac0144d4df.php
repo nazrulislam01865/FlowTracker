@@ -7,6 +7,8 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'fromValue' => '',
     'toValue' => '',
     'label' => 'Created date',
+    'fromLabel' => 'Date from',
+    'toLabel' => 'Date to',
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -28,6 +30,8 @@ foreach (array_filter(([
     'fromValue' => '',
     'toValue' => '',
     'label' => 'Created date',
+    'fromLabel' => 'Date from',
+    'toLabel' => 'Date to',
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -44,7 +48,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $active = filled($fromValue) || filled($toValue);
 ?>
 
-<?php if (! $__env->hasRenderedOnce('176d6545-e9ca-45d0-ac4a-2f3b0ef310ab')): $__env->markAsRenderedOnce('176d6545-e9ca-45d0-ac4a-2f3b0ef310ab'); ?>
+<?php if (! $__env->hasRenderedOnce('8f9b6217-1a7d-43d6-a5e1-7a45190d33ee')): $__env->markAsRenderedOnce('8f9b6217-1a7d-43d6-a5e1-7a45190d33ee'); ?>
     <style>
         .ft-date-range-filter{display:flex;min-width:0;align-items:flex-end;padding:7px 10px;border-bottom:1px solid #dbe3ed;background:#fbfcfe;color:#33445d;font-family:Inter,ui-sans-serif,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
         .ft-date-range-filter.is-active{background:#f8fbff}
@@ -67,7 +71,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <div <?php echo e($attributes->class(['ft-date-range-filter', 'is-active' => $active])); ?> role="group" aria-label="<?php echo e($label); ?> range filter">
     <div class="ft-date-range-fields">
         <label class="ft-date-range-field">
-            <span>Date from</span>
+            <span><?php echo e($fromLabel); ?></span>
             <input
                 type="date"
                 lang="en-GB"
@@ -77,7 +81,7 @@ unset($__defined_vars, $__key, $__value); ?>
             >
         </label>
         <label class="ft-date-range-field">
-            <span>Date to</span>
+            <span><?php echo e($toLabel); ?></span>
             <input
                 type="date"
                 lang="en-GB"

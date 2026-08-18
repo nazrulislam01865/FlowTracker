@@ -28,6 +28,7 @@ use App\Http\Controllers\RichTextImageController;
 use App\Http\Controllers\ReportsController;
 use App\Http\Controllers\WorkflowSetupController;
 use App\Http\Controllers\TaskPackSetupController;
+use App\Http\Controllers\TeamPerformanceReportController;
 use App\Http\Controllers\UserEditController;
 use App\Models\Document;
 use App\Support\StoredFileResponse;
@@ -86,6 +87,7 @@ Route::middleware('auth')->group(function () {
     })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
+    Route::get('/team-performance-report', TeamPerformanceReportController::class)->middleware('permission:reports.view')->name('team-performance.report');
     Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|department-records|departments|countries|phone-country-codes|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
@@ -100,7 +102,38 @@ Route::middleware('auth')->group(function () {
     })->middleware('permission:jobs.view')->name('jobs.legacy');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');
     Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
-    Route::get('/documents', DocumentsController::class)->middleware('permission:documents.view')->name('documents.index');
+    Route::get('/documents', DocumentsController::class)->middleware('permission:document_archive.view')->name('documents.index');
+    Route::get('/document-archive/inquiries/{document}/open', function (\App\Models\InquiryDocument $document) {
+        app(\App\Services\AccessControlService::class)
+            ->applyInquiryDocumentArchiveScope(\App\Models\InquiryDocument::query()->whereKey($document->id), auth()->user())
+            ->firstOrFail();
+
+        return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
+    })->middleware('permission:document_archive.view')->name('document-archive.inquiries.open');
+    Route::get('/document-archive/inquiries/{document}/download', function (\App\Models\InquiryDocument $document) {
+        abort_unless(auth()->user()->canModule('document_archive', 'export'), 403);
+        app(\App\Services\AccessControlService::class)
+            ->applyInquiryDocumentArchiveScope(\App\Models\InquiryDocument::query()->whereKey($document->id), auth()->user())
+            ->firstOrFail();
+
+        return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
+    })->name('document-archive.inquiries.download');
+    Route::get('/document-archive/orders/{document}/open', function (Document $document) {
+        app(\App\Services\AccessControlService::class)
+            ->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user(), 'document_archive')
+            ->firstOrFail();
+
+        return StoredFileResponse::inline((string) $document->path, (string) $document->name, $document->mime_type);
+    })->middleware('permission:document_archive.view')->name('document-archive.orders.open');
+    Route::get('/document-archive/orders/{document}/download', function (Document $document) {
+        abort_unless(auth()->user()->canModule('document_archive', 'export'), 403);
+        app(\App\Services\AccessControlService::class)
+            ->applyDocumentScope(Document::query()->whereKey($document->id), auth()->user(), 'document_archive')
+            ->firstOrFail();
+
+        return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
+    })->name('document-archive.orders.download');
+
     Route::get('/inquiries/documents/{document}/open', function (\App\Models\InquiryDocument $document) {
         abort_unless(auth()->user()->canModule('documents', 'view'), 403);
         app(\App\Services\InquiryService::class)->visibleQuery(auth()->user())->whereKey($document->inquiry_id)->firstOrFail();

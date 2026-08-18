@@ -802,3 +802,29 @@
 @media(max-width:520px){
   .ft-clients-reference .ft-client-clear-filter{height:34px}
 }
+
+/* 2026-08-18: Task Pack task prototype remote-select sizing. */
+.ft-taskpack-form-page .ft-task-editor-prototype .ft-taskpack-assignee-filter > label{
+  margin:0 0 6px;
+  color:#182a43;
+  font-size:10.5px;
+  font-weight:750;
+  line-height:1.25;
+}
+.ft-taskpack-form-page .ft-task-editor-prototype .ft-taskpack-assignee-filter .ft-remote-filter-button{
+  min-height:42px;
+  height:42px;
+  border:1px solid #d5deea;
+  border-radius:8px;
+  padding:0 12px;
+  color:#1d304b;
+  background:#fff;
+  font-size:11.5px;
+  box-shadow:none;
+}
+.ft-taskpack-form-page .ft-task-editor-prototype .ft-taskpack-assignee-filter .ft-remote-filter-button:hover,
+.ft-taskpack-form-page .ft-task-editor-prototype .ft-taskpack-assignee-filter .ft-remote-filter-button[aria-expanded="true"]{
+  border-color:#93b5df;
+  background:#fff;
+  box-shadow:0 0 0 2px rgba(44,111,185,.07);
+}

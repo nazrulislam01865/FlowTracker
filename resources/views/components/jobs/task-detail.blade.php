@@ -21,6 +21,7 @@
     $checkTotal = max(1, $total);
     $taskDocumentName = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name;
     $accessControl = app(\App\Services\AccessControlService::class);
+    $canModerateTaskActivity = $accessControl->isAdministrator(auth()->user());
     $mayEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
     $canEditTask = $editMode && $mayEditTask;
     $canAssignTask = $editMode && $accessControl->canAssignTask(auth()->user(), $task);
@@ -81,7 +82,7 @@
                         <x-ui.inline-save-state />
                     @endif
                 </h1>
-                @if($task->phase?->name)<span class="ft-task-title-phase">· {{ $task->phase->name }}</span>@endif
+                @if($task->phase?->name)<span class="ft-task-title-phase">· <x-ui.phase-label :phase="$task->phase" /></span>@endif
             </div>
         </div>
         <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
@@ -146,7 +147,7 @@
                         <x-ui.inline-save-state compact />
                     @endif
                 </div>
-                <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><b class="ft-property-value">{{ $task->phase?->name ?? '—' }}</b></div></div>
+                <div class="ft-task-property"><small>Phase</small><div class="ft-task-property-display"><x-ui.phase-label :phase="$task->phase" class="ft-property-value" /></div></div>
                 <div
                     class="ft-task-property ft-inline-edit-shell"
                     x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-start-date'), label: 'task start date', value: @js($effectiveStartDate?->format('Y-m-d') ?? ''), display: @js($effectiveStartDate?->format('M j, Y') ?? 'Not set') })"
@@ -285,7 +286,7 @@
                         <article @if($entryAnchor) id="{{ $entryAnchor }}" @endif class="ft-activity-entry {{ $entry->kind==='comment' ? 'is-comment' : 'is-history' }} {{ $isFocusedComment ? 'is-focused-comment' : '' }}" @if($isFocusedComment) x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" @endif>
                             <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$entry->user" :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
-                                <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time></div>
+                                <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><div style="display:flex;align-items:center;gap:8px"><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time>@if($canModerateTaskActivity && $entry->event !== 'task.moderation_deleted')<button type="button" style="border:0;background:transparent;color:#c82424;font-size:11px;font-weight:700;padding:2px 4px" wire:click="{{ $entry->kind === 'comment' ? 'deleteTaskComment('.$entry->id.')' : 'deleteTaskActivity('.$entry->id.')' }}" wire:confirm="Delete this {{ $entry->kind === 'comment' ? 'comment/mention' : 'task activity' }}? The deletion itself will remain recorded in activity.">Delete</button>@endif</div></div>
                                 <div class="ft-rich-text-content"><x-ui.mention-text :text="$entry->body" /></div>
                                 <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $entryLocalTime?->format('M j, Y · g:i A') }}</span></div>
                             </div>

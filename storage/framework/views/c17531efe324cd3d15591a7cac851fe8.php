@@ -8,10 +8,67 @@
     <div class="page-head">
         <div>
             <h1>My Tasks</h1>
-            <p><?php echo e($administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.'); ?></p>
+            <p>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sourceFilter === 'inquiries' && $statusFilter !== ''): ?>
+                    Inquiry tasks matching the selected dashboard status filter.
+                <?php else: ?>
+                    <?php echo e($administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.'); ?>
+
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </p>
         </div>
     </div>
 
+
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($sourceFilter === 'inquiries' && $statusFilter !== ''): ?>
+    <section class="work-view" aria-busy="false">
+        <div class="toolbar">
+            <div class="toolbar-primary">
+                <label class="search-wrap">
+                    <span class="search-icon">⌕</span>
+                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search filtered Inquiry tasks" aria-label="Search filtered Inquiry tasks">
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($search !== ''): ?><button class="clear" type="button" wire:click="clearSearch">Clear</button><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                </label>
+                <div class="quick-filters" aria-label="Active dashboard task filter">
+                    <span class="chip active">Inquiry tasks</span>
+                    <span class="chip active">Status: <?php echo e($statusFilter); ?></span>
+                </div>
+            </div>
+            <div class="toolbar-secondary">
+                <select class="sort" wire:model.live="sort" aria-label="Sort filtered Inquiry tasks">
+                    <option value="action">Sort: Action priority</option>
+                    <option value="due">Sort: Due soon</option>
+                    <option value="job">Sort: Inquiry number</option>
+                </select>
+                <button type="button" class="chip clear-filters" wire:click="clearStatusFilter">Clear status filter</button>
+            </div>
+        </div>
+
+        <div class="load-state">
+            <span><strong><?php echo e($statusFilter); ?></strong> Inquiry tasks</span>
+            <span class="loading-copy">
+                <span wire:loading.delay.long wire:target="search,sort,clearSearch,clearStatusFilter"><i class="spinner"></i> Updating tasks…</span>
+            </span>
+        </div>
+
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,sort,clearSearch,clearStatusFilter" aria-live="polite"><span></span> Updating tasks…</div>
+
+        <section class="list-shell" aria-label="My Inquiry Tasks filtered by status" wire:loading.class="is-refreshing" wire:target="search,sort,clearSearch,clearStatusFilter">
+            <div class="task-table-scroll">
+                <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
+                <div>
+                    <?php echo $__env->make('livewire.my-work._inquiry-groups', ['inquiryGroups' => $inquiryGroups], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inquiryGroups->isEmpty()): ?>
+                        <div class="empty"><strong>No matching Inquiry tasks</strong>No My Task records currently use the selected status.</div>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                </div>
+            </div>
+            <footer class="footer">
+                <span><?php echo e($inquiryVisibleTaskCount); ?> <?php echo e($inquiryVisibleTaskCount === 1 ? 'task' : 'tasks'); ?> with status “<?php echo e($statusFilter); ?>”</span>
+            </footer>
+        </section>
+    </section>
+    <?php else: ?>
 
     <section class="work-view" aria-busy="false">
         <div class="metrics ft-summary-card-grid" aria-label="My Task summary filters">
@@ -174,6 +231,9 @@
             <div class="toolbar-secondary">
                 <div class="quick-filters">
                     <button type="button" class="chip <?php echo e($quick === 'mentions' ? 'active' : ''); ?>" wire:click="setQuick('<?php echo e($quick === 'mentions' ? 'my_tasks' : 'mentions'); ?>')">Mentions (<span x-text="metrics.mentions ?? '—'"><?php echo e($metrics['mentions'] ?? '—'); ?></span>)</button>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($statusFilter !== ''): ?>
+                        <button type="button" class="chip active" wire:click="clearStatusFilter" title="Clear dashboard status filter">Status: <?php echo e($statusFilter); ?> ×</button>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
                 <label class="completed-toggle <?php echo e($hideCompleted ? 'active' : ''); ?>">
                     <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
@@ -185,7 +245,7 @@
                     <option value="due">Sort: Due soon</option>
                     <option value="job">Sort: Order number</option>
                 </select>
-                <button type="button" class="chip clear-filters" wire:click="clearFilters" <?php if($search === '' && $phaseFilter === '' && $quick === 'my_tasks' && !$hideCompleted): echo 'disabled'; endif; ?>>Clear filters</button>
+                <button type="button" class="chip clear-filters" wire:click="clearFilters" <?php if($search === '' && $phaseFilter === '' && $statusFilter === '' && $quick === 'my_tasks' && !$hideCompleted): echo 'disabled'; endif; ?>>Clear filters</button>
             </div>
         </div>
 
@@ -264,7 +324,7 @@
                                         <a class="task-link" href="<?php echo e($task['route']); ?>" wire:navigate><?php echo e($task['title']); ?></a>
                                         <span class="task-ref"><?php echo e($task['number']); ?></span>
                                     </div>
-                                    <span class="phase" data-label="Phase"><?php echo e($task['phase']); ?></span>
+                                    <span class="phase ft-phase-color-label" data-label="Phase" style="<?php echo e(\App\Support\MasterColor::style($task['phaseColor'] ?? null)); ?>"><?php echo e($task['phase']); ?></span>
                                     <div
                                         class="assignee assignee-editor ft-inline-edit-shell"
                                         <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'my-work-task-'.e($task['id']).'-assignee-'.e($task['assigneeId'] ?: 0).''; ?>wire:key="my-work-task-<?php echo e($task['id']); ?>-assignee-<?php echo e($task['assigneeId'] ?: 0); ?>"
@@ -434,6 +494,7 @@
             </footer>
         </section>
     </section>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
 </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/my-work/index.blade.php ENDPATH**/ ?>

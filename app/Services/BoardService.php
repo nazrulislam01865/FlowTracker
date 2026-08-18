@@ -45,7 +45,7 @@ class BoardService
             ])
             ->with([
                 'client:id,name,logo_path',
-                'phase:id,workflow_id,name,short_name,sequence',
+                'phase:id,workflow_id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
                 'items:id,flow_job_id,quantity',
@@ -59,7 +59,7 @@ class BoardService
                         'tasks.completed_at', 'tasks.updated_at',
                     ])
                     ->whereHas('job', fn ($job) => $job->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
-                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence'])
+                    ->with(['assignee:id,name,profile_image_path', 'phase:id,name,sequence,color'])
                     ->orderByRaw('completed_at is null desc')
                     ->orderByRaw('due_date is null, due_date asc'),
                 'latestActivity' => fn ($query) => $query->select([
@@ -88,7 +88,7 @@ class BoardService
             ->with([
                 'job:id,job_number,title,client_id,coordinator_id,status,completed_at',
                 'job.client:id,name,logo_path',
-                'phase:id,name,short_name,sequence',
+                'phase:id,name,short_name,sequence,color',
                 'assignee:id,name,profile_image_path',
             ])
             ->withCount([

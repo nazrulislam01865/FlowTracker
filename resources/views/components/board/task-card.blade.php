@@ -27,7 +27,7 @@
         <a href="{{ route('jobs.index', ['open'=>$task->flow_job_id]) }}" wire:navigate>{{ $task->job?->displayOrderNumber() }}</a>
         <span>·</span><span>{{ $task->job?->client?->name ?? 'No client' }}</span>
     </div>
-    <div class="ft-task-phase-name">{{ $task->phase?->name ?? '—' }}</div>
+    <div class="ft-task-phase-name"><x-ui.phase-label :phase="$task->phase" short /></div>
 
     @if($waiting)
         <div class="ft-waiting-panel">

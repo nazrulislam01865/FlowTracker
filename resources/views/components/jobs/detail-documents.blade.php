@@ -362,7 +362,7 @@
                             $openPhase = (int)($job->workflow_phase_id ?? 0) === (int)$phase->id || ((int)($job->workflow_phase_id ?? 0) === 0 && (int)$phase->sequence === 1);
                         @endphp
 
-                        <details class="ft-doc-phase-group" <?php if ($openPhase): ?>open<?php endif; ?>>
+                        <details class="ft-doc-phase-group" style="{{ \App\Support\MasterColor::style($phase->color) }}" <?php if ($openPhase): ?>open<?php endif; ?>>
                             <summary class="ft-doc-phase-summary">
                                 <span class="ft-doc-phase-chevron">›</span>
                                 <b class="ft-doc-phase-number">{{ $phase->sequence }}</b>

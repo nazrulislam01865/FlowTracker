@@ -107,7 +107,7 @@
                         <b style="display:block;font-size:12px;color:#263b58;margin-bottom:8px">Workflow phases using this Task Pack</b>
                         <div style="display:grid;gap:6px">
                             @foreach(($packDeleteImpact['mapped_phases'] ?? []) as $phase)
-                                <span style="font-size:10.5px;color:#526780"><b style="color:#24364f">{{ $phase['workflow_name'] }}</b> · Stage {{ $phase['sequence'] }} · {{ $phase['name'] }}</span>
+                                <span style="font-size:10.5px;color:#526780"><b style="color:#24364f">{{ $phase['workflow_name'] }}</b> · Stage {{ $phase['sequence'] }} · <span class="ft-phase-color-label" style="{{ \App\Support\MasterColor::style($phase['color'] ?? null) }}">{{ $phase['name'] }}</span></span>
                             @endforeach
                         </div>
                         @if(($packDeleteImpact['mapped_phase_count'] ?? 0) > count($packDeleteImpact['mapped_phases'] ?? []))

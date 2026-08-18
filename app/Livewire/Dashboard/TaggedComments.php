@@ -17,7 +17,7 @@ class TaggedComments extends Component
         return <<<'HTML'
             <section class="ft-panel">
                 <div class="ft-panel-head">
-                    <h2 class="ft-panel-title">Tagged Comments</h2>
+                    <h2 class="ft-panel-title">Mentions for you</h2>
                 </div>
                 <div style="padding:24px">Loading comments...</div>
             </section>
@@ -26,7 +26,7 @@ class TaggedComments extends Component
 
     public function setFilter(string $filter): void
     {
-        abort_unless(in_array($filter, ['all', 'unread', 'job', 'task', 'inquiry'], true), 422);
+        abort_unless(in_array($filter, ['all', 'unread', 'orders', 'inquiries'], true), 422);
         $this->filter = $filter;
     }
 
@@ -47,12 +47,11 @@ class TaggedComments extends Component
         $service = app(DashboardService::class);
         // Apply the selected category in SQL before LIMIT. Filtering an already
         // limited collection can incorrectly hide older matching mentions.
-        $mentions = $service->mentions(auth()->user(), $this->filter, 3);
+        $mentions = $service->mentions(auth()->user(), $this->filter, 4);
 
         return view('livewire.dashboard.tagged-comments', [
             'mentions' => $mentions,
             'unreadMentionCount' => $service->unreadMentionCount(auth()->user()),
-            'administratorView' => app(\App\Services\AccessControlService::class)->isAdministrator(auth()->user()),
         ]);
     }
 }
