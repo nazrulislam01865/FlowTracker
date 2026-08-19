@@ -14,6 +14,8 @@ class Report extends Component
     use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
 
+    private const TEAM_PER_PAGE = 8;
+
     #[Url(as: 'period', history: true, except: 'this_week')]
     public string $teamPeriod = 'this_week';
 
@@ -34,6 +36,8 @@ class Report extends Component
 
     #[Url(as: 'sort', history: true, except: 'performance')]
     public string $sort = 'performance';
+
+    public int $teamPage = 1;
 
     public function mount(): void
     {
@@ -57,6 +61,23 @@ class Report extends Component
             $this->teamCustomFrom = $today->copy()->startOfWeek()->toDateString();
             $this->teamCustomTo = $today->toDateString();
         }
+
+        $this->teamPage = 1;
+    }
+
+    public function updatedTeamCustomFrom(): void
+    {
+        $this->teamPage = 1;
+    }
+
+    public function updatedTeamCustomTo(): void
+    {
+        $this->teamPage = 1;
+    }
+
+    public function updatedSearch(): void
+    {
+        $this->teamPage = 1;
     }
 
     public function updatedSort(string $sort): void
@@ -64,6 +85,8 @@ class Report extends Component
         if (!in_array($sort, ['performance', 'workload', 'name'], true)) {
             $this->sort = 'performance';
         }
+
+        $this->teamPage = 1;
     }
 
     public function setReportFilter(string $property, mixed $value): void
@@ -74,6 +97,7 @@ class Report extends Component
         $raw = trim((string) $value);
         if ($raw === '') {
             $this->{$property} = '';
+            $this->teamPage = 1;
             return;
         }
 
@@ -86,6 +110,7 @@ class Report extends Component
         abort_unless($selected, 422, 'That filter option is no longer available.');
 
         $this->{$property} = (string) $id;
+        $this->teamPage = 1;
     }
 
     public function clearFilters(): void
@@ -94,6 +119,17 @@ class Report extends Component
         $this->teamFilter = '';
         $this->search = '';
         $this->sort = 'performance';
+        $this->teamPage = 1;
+    }
+
+    public function previousTeamPage(): void
+    {
+        $this->teamPage = max(1, $this->teamPage - 1);
+    }
+
+    public function nextTeamPage(): void
+    {
+        $this->teamPage++;
     }
 
     public function render()
@@ -125,10 +161,18 @@ class Report extends Component
         $teamPerformance = $service->decorateTeamPerformance($teamPerformance);
         $teamPerformance = $service->sortTeamPerformance($teamPerformance, $this->sort);
 
+        $resultCount = $teamPerformance->count();
+        $lastPage = max(1, (int) ceil($resultCount / self::TEAM_PER_PAGE));
+        $page = min(max(1, $this->teamPage), $lastPage);
+        $offset = ($page - 1) * self::TEAM_PER_PAGE;
+        $visibleTeamPerformance = $teamPerformance
+            ->slice($offset, self::TEAM_PER_PAGE)
+            ->values();
+
         $filterOptions = app(FilterOptionService::class);
 
         return view('livewire.team-performance.report', [
-            'assigneePerformance' => $teamPerformance,
+            'assigneePerformance' => $visibleTeamPerformance,
             'teamReportingPeriod' => $service->teamReportingPeriod(
                 $this->teamPeriod,
                 $this->teamCustomFrom ?: null,
@@ -136,7 +180,16 @@ class Report extends Component
             ),
             'reportClientFilterOptions' => $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6),
             'reportTeamFilterOptions' => $filterOptions->options($user, 'departments', 'dashboard', '', $departmentId ?: null, 6),
-            'resultCount' => $teamPerformance->count(),
+            'resultCount' => $resultCount,
+            'teamPagination' => [
+                'page' => $page,
+                'lastPage' => $lastPage,
+                'total' => $resultCount,
+                'from' => $resultCount > 0 ? $offset + 1 : 0,
+                'to' => min($offset + self::TEAM_PER_PAGE, $resultCount),
+                'hasPrevious' => $page > 1,
+                'hasNext' => $page < $lastPage,
+            ],
         ]);
     }
 }

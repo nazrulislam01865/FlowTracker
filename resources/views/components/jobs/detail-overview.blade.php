@@ -931,9 +931,9 @@
             <div class="ft-upload-zone compact ft-task-upload-zone ft-job-overview-dropzone">
                 @if($canUploadDocument)
                     <label class="ft-task-upload-drop ft-livewire-upload-zone {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-upload-error' : '' }}" data-file-dropzone data-auto-upload-method="uploadJobOverviewDocuments" for="jobOverviewDocumentUpload-{{ $job->id }}">
-                        <input id="jobOverviewDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                        <input id="jobOverviewDocumentUpload-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.eps,.esp">
                         <span class="ft-paperclip">⌕</span>
-                        <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                        <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, Office files, JPG, PNG, ZIP, EPS or ESP · Max 20 MB</small></div>
                     </label>
                 @else
                     <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Job attachments.</small></div></div>
@@ -1023,7 +1023,7 @@
 
                     @if($overviewTaskDocumentSource === 'upload' && $canUploadDocument)
                         <label class="ft-order-task-document-dropzone">
-                            <input type="file" wire:model="overviewTaskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
+                            <input type="file" wire:model="overviewTaskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp">
                             <span class="ft-order-task-document-upload-icon">⇧</span>
                             @if($overviewTaskDocumentUpload)
                                 <strong>{{ $overviewTaskDocumentUpload->getClientOriginalName() }}</strong>
@@ -1032,7 +1032,7 @@
                             @else
                                 <strong>Drop a file here</strong>
                                 <b>or browse files</b>
-                                <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small>
+                                <small>PDF, Office files, JPG, PNG, ZIP, EPS or ESP · Max 20 MB</small>
                             @endif
                         </label>
                         @error('overviewTaskDocumentUpload')<p class="ft-order-task-document-error">{{ $message }}</p>@enderror

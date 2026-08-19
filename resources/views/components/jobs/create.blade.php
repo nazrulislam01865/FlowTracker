@@ -276,9 +276,9 @@
                 <div class="ft-create-upload-wrap">
                 <div class="ft-create-upload ft-livewire-upload-zone" data-file-dropzone>
                     <span class="ft-create-paperclip">⌕</span>
-                    <div><b>Drop files here or <label for="job-create-files">browse</label></b><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                    <div><b>Drop files here or <label for="job-create-files">browse</label></b><small data-drop-status>PDF, Office files, JPG, PNG, ZIP, EPS or ESP · Max 20 MB</small></div>
                     @if(auth()->user()->canModule('document_archive','view'))<a href="{{ route('documents.index') }}" wire:navigate>Open Documents</a>@endif
-                    <input id="job-create-files" type="file" wire:model="jobAttachments" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                    <input id="job-create-files" type="file" wire:model="jobAttachments" multiple hidden accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.eps,.esp">
                 </div>
                 </div>
             @else

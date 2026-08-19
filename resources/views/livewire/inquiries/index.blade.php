@@ -453,12 +453,12 @@
                             x-on:keydown.enter.prevent="$refs.createAttachmentInput.click()"
                             x-on:keydown.space.prevent="$refs.createAttachmentInput.click()"
                         >
-                            <input x-ref="createAttachmentInput" class="file-input" type="file" wire:model="createAttachments" multiple>
+                            <input x-ref="createAttachmentInput" class="file-input" type="file" wire:model="createAttachments" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp">
                             <div class="inquiry-dropzone-icon" aria-hidden="true">⇧</div>
                             <div class="inquiry-dropzone-copy">
                                 <strong>Drop client files here</strong>
                                 <span class="ft-inquiry-drop-or">or <b>browse files</b></span>
-                                <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB per file</small>
+                                <small>PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB per file</small>
                             </div>
                             <button class="secondary inquiry-dropzone-button" type="button" x-on:click.stop="$refs.createAttachmentInput.click()">Choose files</button>
                         </div>
@@ -1102,7 +1102,7 @@
 
                             @if($taskDocumentSource === 'upload' && $canCreateDocuments)
                                 <label class="ft-inquiry-task-document-dropzone">
-                                    <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
+                                    <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp">
                                     <span class="ft-inquiry-task-document-upload-icon">⇧</span>
                                     @if($taskDocumentUpload)
                                         <strong>{{ $taskDocumentUpload->getClientOriginalName() }}</strong>
@@ -1111,7 +1111,7 @@
                                     @else
                                         <strong>Drop a file here</strong>
                                         <b>or browse files</b>
-                                        <small>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small>
+                                        <small>PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB</small>
                                     @endif
                                 </label>
                                 @error('taskDocumentUpload')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror

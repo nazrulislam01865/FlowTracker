@@ -16,6 +16,7 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('Retry upload', $view);
         $this->assertStringContainsString('Choose another file', $view);
         $this->assertStringContainsString('Upload complete', $view);
+        $this->assertStringContainsString("'eps', 'esp'", $view);
         $this->assertStringContainsString('to replace this document.', $view);
         $this->assertStringNotContainsString('Upload &amp; link', $view);
     }
@@ -25,7 +26,7 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $component = file_get_contents(app_path('Livewire/Jobs/Index.php'));
 
         $this->assertStringContainsString('public function updatedJobRequiredDocumentUpload(): void', $component);
-        $this->assertStringContainsString("'jobRequiredDocumentUpload' => ['required','file','max:20480','mimes:pdf,docx,xlsx,jpg,jpeg,png,zip']", $component);
+        $this->assertStringContainsString("'jobRequiredDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::ORDER_REQUIRED, 20480)", $component);
         $this->assertStringContainsString("'require_task_pack_requirement' => true", $component);
 
         $storePosition = strpos($component, '$document = app(DocumentService::class)->store');

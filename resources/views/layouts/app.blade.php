@@ -73,7 +73,7 @@
          paint the page before a body-level stylesheet finishes loading, causing a visible FOUC. --}}
     <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
     {{-- Reusable management theme is loaded last for dashboard content only; the shared sidebar remains system-wide. --}}
-    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260818-dashboard-kpi-match-1">
+    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260819-team-department-colors-1">
     @livewireStyles
 </head>
 <body class="{{ request()->routeIs('dashboard', 'team-performance.report') ? 'ft-management-dashboard-page' : '' }}">

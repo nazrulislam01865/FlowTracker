@@ -412,6 +412,36 @@
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </table>
         </div>
+        <div class="ft-mgmt-priority-pagination" aria-label="Priority work pagination">
+            <span class="ft-mgmt-priority-page-status">
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($priorityPagination['total'] ?? 0) > 0): ?>
+                    <?php echo e($priorityPagination['from']); ?>–<?php echo e($priorityPagination['to']); ?> of <?php echo e($priorityPagination['total']); ?>
+
+                <?php else: ?>
+                    0 items
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </span>
+            <button
+                type="button"
+                class="ft-mgmt-priority-page-btn"
+                wire:click="previousPriorityPage"
+                wire:loading.attr="disabled"
+                wire:target="previousPriorityPage,nextPriorityPage"
+                <?php if(!($priorityPagination['hasPrevious'] ?? false)): echo 'disabled'; endif; ?>
+                aria-label="Previous priority work page"
+                title="Previous page"
+            >←</button>
+            <button
+                type="button"
+                class="ft-mgmt-priority-page-btn"
+                wire:click="nextPriorityPage"
+                wire:loading.attr="disabled"
+                wire:target="previousPriorityPage,nextPriorityPage"
+                <?php if(!($priorityPagination['hasNext'] ?? false)): echo 'disabled'; endif; ?>
+                aria-label="Next priority work page"
+                title="Next page"
+            >→</button>
+        </div>
     </section>
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
@@ -469,7 +499,7 @@
 $__split = function ($name, $params = []) {
     return [$name, $params];
 };
-[$__name, $__params] = $__split('dashboard.tagged-comments', []);
+[$__name, $__params] = $__split('dashboard.tagged-comments', ['range-days' => $rangeDays,'client-filter' => $clientFilter,'team-filter' => $teamFilter,'search' => $search]);
 
 $__keyOuter = $__key ?? null;
 
@@ -548,9 +578,12 @@ unset($__split);
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->user()->canAccess('reports.view')): ?>
     <?php
         $teamReportParams = array_filter([
-            'period' => $teamPeriod,
-            'from' => $teamPeriod === 'custom' ? $teamCustomFrom : null,
-            'to' => $teamPeriod === 'custom' ? $teamCustomTo : null,
+            // Keep "View all" aligned with the dashboard's global period. The
+            // full report still supports its own reporting-period controls after
+            // the user leaves the dashboard.
+            'period' => 'custom',
+            'from' => $teamReportingPeriod['from'] ?? null,
+            'to' => $teamReportingPeriod['to'] ?? null,
             'client' => $clientFilter,
             'department' => $teamFilter,
             'q' => $search,
@@ -560,34 +593,11 @@ unset($__split);
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>
-                <p>Top 4 assignees ranked from actual Inquiry and Order task records in the selected reporting period.</p>
+                <p>Top 4 assignees from actual Inquiry and Order task records · <?php echo e($teamReportingPeriod['label'] ?? 'Last 7 days'); ?>.</p>
             </div>
             <a class="ft-mgmt-btn ft-mgmt-team-view-all" href="<?php echo e(route('team-performance.report', $teamReportParams)); ?>" wire:navigate>View all</a>
         </div>
         <div class="ft-mgmt-panel-body">
-            <div class="ft-mgmt-team-filter-row">
-                <div class="ft-mgmt-team-controls">
-                    <label class="ft-mgmt-team-period">
-                        <span>Reporting period</span>
-                        <select wire:model.live="teamPeriod" aria-label="Team performance reporting period">
-                            <option value="this_week">This week</option>
-                            <option value="this_month">This month</option>
-                            <option value="last_30_days">Last 30 days</option>
-                            <option value="custom">Custom range</option>
-                        </select>
-                    </label>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($teamPeriod === 'custom'): ?>
-                        <div class="ft-mgmt-team-custom-range">
-                            <label><span>From</span><input type="date" wire:model.live="teamCustomFrom" aria-label="Custom reporting period start"></label>
-                            <label><span>To</span><input type="date" wire:model.live="teamCustomTo" aria-label="Custom reporting period end"></label>
-                        </div>
-                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                </div>
-                <div class="ft-mgmt-team-filter-note">
-                    <strong><?php echo e($teamReportingPeriod['label'] ?? 'This week'); ?></strong>
-                    <span>Live task totals · current assignee · cancelled/deleted tasks excluded</span>
-                </div>
-            </div>
             <div class="ft-mgmt-team-grid">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $assigneePerformance; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $person): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                     <?php if (isset($component)) { $__componentOriginal09bad63cc66db31fb9cc464e04232869 = $component; } ?>
@@ -613,7 +623,7 @@ unset($__split);
 <?php unset($__componentOriginal09bad63cc66db31fb9cc464e04232869); ?>
 <?php endif; ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                    <div class="ft-mgmt-empty">No team workload matches the current filters and reporting period.</div>
+                    <div class="ft-mgmt-empty">No team workload matches the current dashboard filters and period.</div>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </div>
         </div>
@@ -623,7 +633,7 @@ unset($__split);
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
         <article class="ft-mgmt-panel ft-mgmt-client-panel">
-            <div class="ft-mgmt-panel-head"><div><h2>Client portfolio</h2><p>Active work, inquiry volume and completion</p></div><a class="ft-mgmt-link" href="<?php echo e(route('clients.index')); ?>" wire:navigate>All clients</a></div>
+            <div class="ft-mgmt-panel-head"><div><h2>Client portfolio</h2><p>Activity and completion in the selected dashboard period</p></div><a class="ft-mgmt-link" href="<?php echo e(route('clients.index')); ?>" wire:navigate>All clients</a></div>
             <div class="ft-mgmt-panel-body ft-mgmt-client-portfolio-body">
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($clientPortfolio->isNotEmpty()): ?>
                     <div class="ft-mgmt-client-head" aria-hidden="true">

@@ -10,6 +10,7 @@
     };
     $masterData = app(\App\Services\MasterDataService::class);
     $taskFlagService = app(\App\Services\TaskFlagService::class);
+    $administrator = app(\App\Services\AccessControlService::class)->isAdministrator(auth()->user());
     $orderTerminology = static function (?string $value): string {
         return preg_replace_callback('/\bjobs?\b/i', static function (array $match): string {
             return match ($match[0]) {
@@ -51,7 +52,13 @@
                             @endphp
                             <tr wire:key="dashboard-assignee-{{ $person->id }}">
                                 <td data-label="Assignee"><span class="ft-person"><x-ui.avatar :user="$person" :name="$person->name" :size="22" /><span class="ft-cell-clip">{{ $person->name }}</span></span></td>
-                                <td data-label="Open"><a class="ft-text-link" href="{{ route('all-tasks', ['assignee' => $person->id]) }}" wire:navigate>{{ $person->ongoing_count }} ↗</a></td>
+                                <td data-label="Open">
+                                    @if($administrator)
+                                        <a class="ft-text-link" href="{{ route('all-tasks', ['assignee' => $person->id]) }}" wire:navigate>{{ $person->ongoing_count }} ↗</a>
+                                    @else
+                                        {{ $person->ongoing_count }}
+                                    @endif
+                                </td>
                                 <td data-label="Completed">{{ $person->done_count }}</td>
                                 <td data-label="On time">{{ $onTime === null ? '—' : $onTime.'%' }}</td>
                                 <td data-label="Workload"><span class="ft-load"><i class="ft-load-track"><span style="width:{{ $workloadPct }}%"></span></i>{{ $workloadLabel }}</span></td>
@@ -65,7 +72,7 @@
         </section>
 
         <section class="ft-panel ft-dashboard-attention-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current orders</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>View all tasks</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Needs attention</h2><div class="ft-panel-note">Highest-priority tasks across current orders</div></div>@if($administrator)<a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>View all tasks</a>@endif</div>
             <div class="ft-risk-list">
                 @forelse($attentionTasks as $task)
                     @php
@@ -111,7 +118,7 @@
         </section>
 
         <section class="ft-panel ft-dashboard-tasks-panel">
-            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div><a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>Open all tasks</a></div>
+            <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div>@if($administrator)<a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>Open all tasks</a>@endif</div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-tasks-table">
                     <colgroup><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>

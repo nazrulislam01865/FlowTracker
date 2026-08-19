@@ -11,7 +11,9 @@ use Illuminate\Support\Facades\DB;
 
 class BoardTaskPackService
 {
-    public const JOBS_PER_PAGE = 10;
+    public const JOBS_PER_PAGE = 3;
+
+    private const INITIAL_TASK_STATUSES = ['not started', 'not start', 'ready', 'to do', 'todo'];
 
     /**
      * Board Task Pack visibility follows the Tasks role-matrix scope.
@@ -56,7 +58,8 @@ class BoardTaskPackService
         $baseTasks = $this->filteredTaskQuery($user, $filters);
         $quick = (string) ($filters['quick'] ?? 'all');
         $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
-        $openOnly = $hideCompleted || $quick !== 'all';
+        $showCompleted = !$hideCompleted && in_array($quick, ['all', 'createdToday', 'completedThisWeek'], true);
+        $openOnly = !$showCompleted;
 
         $grouped = (clone $baseTasks)
             ->reorder()
@@ -131,14 +134,21 @@ class BoardTaskPackService
             ->get()
             ->keyBy('id');
 
-        // Normally filters choose which Job groups belong on the page and the
-        // Board then shows the complete Task Pack for each qualifying Job. The
-        // Mentions chip is intentionally different: it is a task-level filter,
-        // so only the exact tasks whose own comments contain a valid @mention
-        // are loaded. A mention on one task must never reveal sibling task rows
-        // merely because they belong to the same Order.
-        $mentionsOnly = $quick === 'mentions';
-        $taskLevelFilter = $mentionsOnly || filled($filters['assignee'] ?? null);
+        // All Tasks now follows the My Tasks interaction model: summary cards,
+        // phase filters, mentions, assignee search and free-text search are all
+        // task-level filters. A qualifying Order may therefore contain only the
+        // exact matching task rows instead of re-hydrating unrelated siblings.
+        $search = trim((string) ($filters['search'] ?? ''));
+        $phase = trim((string) ($filters['phase'] ?? ''));
+
+        // My Tasks-style card/phase filters are task-level filters. Only the
+        // exact matching Order tasks are hydrated inside a qualifying Order, so
+        // a summary card or phase selection never brings unrelated sibling tasks
+        // back into the result. Search remains task-level for the same reason.
+        $taskLevelFilter = $quick !== 'all'
+            || $phase !== ''
+            || filled($filters['assignee'] ?? null)
+            || $search !== '';
         // Never hydrate sibling tasks outside the Tasks matrix scope. Group-level
         // filters may choose the Order group, but every task row is re-authorized.
         $tasks = $taskLevelFilter
@@ -192,6 +202,7 @@ class BoardTaskPackService
             $displayTimezone,
             $today,
             $openableJobIds,
+            $taskLevelFilter,
         ) {
             $job = $jobs->get($jobId);
             if (!$job) return null;
@@ -208,6 +219,10 @@ class BoardTaskPackService
                     (int) ($job->created_by ?: 0) === (int) $user->id,
                 ))
                 ->values();
+
+            // Search/assignee/mention filters must never leave an Order group
+            // behind without an exact matching task row.
+            if ($taskLevelFilter && $taskRows->isEmpty()) return null;
 
             return [
                 'id' => (int) $job->id,
@@ -233,55 +248,19 @@ class BoardTaskPackService
     }
 
     /**
-     * My Work-style summary for the Task Board scope. The aggregate is based
-     * on open tasks from Jobs the current user is allowed to inspect here.
+     * Use the exact same summary definitions as My Tasks. All Tasks is restricted
+     * to administrators, and MyWorkService already broadens administrator scope
+     * to all active Order tasks, so both pages now stay numerically consistent.
      */
     public function metrics(User $user): array
     {
-        $today = app(WorkspaceSettingsService::class)->localToday();
-        $todayDate = $today->toDateString();
-        $tomorrow = $today->copy()->addDay()->toDateString();
-        $weekEnd = $today->copy()->addDays(7)->toDateString();
+        return app(MyWorkService::class)->metrics($user);
+    }
 
-        $base = app(AccessControlService::class)->applyTaskScope(Task::query(), $user)
-            ->whereHas('job', fn (Builder $job) => $job
-                ->whereHas('client', fn (Builder $client) => $client->where('is_active', true))
-                ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
-                ->whereNull('flow_jobs.completed_at')
-                ->whereRaw("LOWER(TRIM(flow_jobs.status)) != 'completed'"))
-            ->whereNull('tasks.completed_at')
-            ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
-
-        $row = (clone $base)
-            ->reorder()
-            ->selectRaw(
-                "SUM(CASE WHEN tasks.needs_attention = 1
-                    OR (LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'
-                        AND (tasks.due_date <= ? OR LOWER(tasks.priority) IN ('critical','high')))
-                    THEN 1 ELSE 0 END) AS attention_count",
-                [$weekEnd],
-            )
-            ->selectRaw('SUM(CASE WHEN tasks.due_date < ? THEN 1 ELSE 0 END) AS overdue_count', [$todayDate])
-            ->selectRaw('SUM(CASE WHEN tasks.due_date = ? THEN 1 ELSE 0 END) AS today_count', [$todayDate])
-            ->selectRaw(
-                "SUM(CASE WHEN tasks.due_date BETWEEN ? AND ? AND LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%' THEN 1 ELSE 0 END) AS upcoming_count",
-                [$tomorrow, $weekEnd],
-            )
-            ->selectRaw("SUM(CASE WHEN LOWER(TRIM(tasks.status)) LIKE 'waiting%' THEN 1 ELSE 0 END) AS waiting_count")
-            ->first();
-
-        $mentions = (clone $base)
-            ->whereExists($this->commentMentionExistsSubquery())
-            ->count();
-
-        return [
-            'attention' => (int) ($row?->attention_count ?? 0),
-            'overdue' => (int) ($row?->overdue_count ?? 0),
-            'today' => (int) ($row?->today_count ?? 0),
-            'upcoming' => (int) ($row?->upcoming_count ?? 0),
-            'waiting' => (int) ($row?->waiting_count ?? 0),
-            'mentions' => (int) $mentions,
-        ];
+    /** @return list<string> */
+    public function phaseOptions(): array
+    {
+        return app(MyWorkService::class)->orderPhaseOptions();
     }
 
     /** @return list<string> */
@@ -301,7 +280,8 @@ class BoardTaskPackService
     {
         $quick = (string) ($filters['quick'] ?? 'all');
         $hideCompleted = (bool) ($filters['hide_completed'] ?? true);
-        $openOnly = $hideCompleted || $quick !== 'all';
+        $showCompleted = !$hideCompleted && in_array($quick, ['all', 'createdToday', 'completedThisWeek'], true);
+        $openOnly = !$showCompleted;
 
         $query = app(AccessControlService::class)->applyTaskScope(Task::query(), $user)
             ->whereHas('job', function (Builder $job) use ($openOnly): void {
@@ -318,19 +298,28 @@ class BoardTaskPackService
             $like = '%'.$search.'%';
             $prefix = $search.'%';
             $looksLikeReference = preg_match('/^(JOB|TSK|TASK|ORD)[-0-9]/i', $search) === 1;
+            $matchingAssigneeIds = $this->matchingAssigneeIdsForSearch($search);
 
-            $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference): void {
-                $inner->whereLike('tasks.task_number', $looksLikeReference ? $prefix : $like)
-                    ->orWhereLike('tasks.title', $like)
-                    ->orWhereLike('tasks.attention_reason', $like)
-                    ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->whereLike('name', $like))
-                    ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like))
-                    ->orWhereHas('job', fn (Builder $job) => $job
-                        ->whereLike('job_number', $looksLikeReference ? $prefix : $like)
-                        ->orWhereLike('order_number', $looksLikeReference ? $prefix : $like)
-                        ->orWhereLike('title', $like)
-                        ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like)));
-            });
+            if ($matchingAssigneeIds !== []) {
+                // Assignee-name searches are strict task matches. If a user name
+                // matches the search text, do not fall through to an Order/client
+                // match and hydrate unrelated sibling tasks from that Order.
+                // If none of that assignee's tasks satisfy the remaining filters,
+                // the result is intentionally empty.
+                $query->whereIn('tasks.assignee_id', $matchingAssigneeIds);
+            } else {
+                $query->where(function (Builder $inner) use ($like, $prefix, $looksLikeReference): void {
+                    $inner->whereLike('tasks.task_number', $looksLikeReference ? $prefix : $like)
+                        ->orWhereLike('tasks.title', $like)
+                        ->orWhereLike('tasks.attention_reason', $like)
+                        ->orWhereHas('attentionFlag', fn (Builder $flag) => $flag->whereLike('name', $like))
+                        ->orWhereHas('job', fn (Builder $job) => $job
+                            ->whereLike('job_number', $looksLikeReference ? $prefix : $like)
+                            ->orWhereLike('order_number', $looksLikeReference ? $prefix : $like)
+                            ->orWhereLike('title', $like)
+                            ->orWhereHas('client', fn (Builder $client) => $client->whereLike('name', $like)));
+                });
+            }
         }
 
         $query
@@ -350,6 +339,24 @@ class BoardTaskPackService
                 };
             });
 
+        $phase = trim((string) ($filters['phase'] ?? ''));
+        if ($phase !== '') {
+            $normalizedPhase = mb_strtolower($phase);
+            $sourcePhaseIds = app(MyWorkService::class)->orderPhaseSourceIdsForName($phase);
+
+            $query->whereHas('phase', function (Builder $phaseQuery) use ($normalizedPhase, $sourcePhaseIds): void {
+                $phaseQuery->where(function (Builder $phaseMatch) use ($normalizedPhase, $sourcePhaseIds): void {
+                    $phaseMatch->whereRaw('LOWER(TRIM(workflow_phases.name)) = ?', [$normalizedPhase]);
+
+                    if ($sourcePhaseIds !== []) {
+                        $phaseMatch
+                            ->orWhereIn('workflow_phases.source_workflow_phase_id', $sourcePhaseIds)
+                            ->orWhereIn('workflow_phases.id', $sourcePhaseIds);
+                    }
+                });
+            });
+        }
+
         $this->applyQuickFilter($query, $user, $quick);
 
         if ($openOnly) {
@@ -361,31 +368,68 @@ class BoardTaskPackService
         return $query;
     }
 
+    /** @return list<int> */
+    private function matchingAssigneeIdsForSearch(string $search): array
+    {
+        $search = trim($search);
+        if ($search === '') return [];
+
+        return User::query()
+            ->whereLike('name', '%'.$search.'%')
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
+    }
+
     private function applyQuickFilter(Builder $query, User $user, string $quick): void
     {
-        $today = app(WorkspaceSettingsService::class)->localToday();
+        $workspace = app(WorkspaceSettingsService::class);
+        $today = $workspace->localToday();
         $todayDate = $today->toDateString();
         $tomorrow = $today->copy()->addDay()->toDateString();
-        $weekEnd = $today->copy()->addDays(7)->toDateString();
-
-        if ($quick !== 'all') {
-            $query
-                ->whereNull('tasks.completed_at')
-                ->whereRaw("LOWER(TRIM(tasks.status)) != 'completed'");
-        }
+        $weekStartDate = $today->copy()->startOfWeek()->toDateString();
+        $weekEndDate = $today->copy()->endOfWeek()->toDateString();
+        [$weekStartUtc, $weekEndUtc] = $workspace->localWeekUtcBounds();
+        $initialStatuses = self::INITIAL_TASK_STATUSES;
+        $initialStatusPlaceholders = implode(',', array_fill(0, count($initialStatuses), '?'));
 
         match ($quick) {
-            'attention' => $query->where(fn (Builder $q) => $q
-                ->where('tasks.needs_attention', true)
-                ->orWhere(fn (Builder $derived) => $derived
-                    ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'")
-                    ->where(fn (Builder $condition) => $condition
-                        ->where('tasks.due_date', '<=', $weekEnd)
-                        ->orWhereRaw("LOWER(tasks.priority) IN ('critical','high')")))),
+            'createdToday' => $query->whereBetween('tasks.created_at', [
+                $today->copy()->startOfDay()->utc(),
+                $today->copy()->endOfDay()->utc(),
+            ]),
+            'notStarted' => $query
+                ->whereRaw('COALESCE(tasks.progress, 0) = 0')
+                ->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) IN ($initialStatusPlaceholders)", $initialStatuses),
+            'inProgress' => $query->where(function (Builder $started) use ($initialStatuses, $initialStatusPlaceholders): void {
+                $started->where('tasks.progress', '>', 0)
+                    ->orWhere(function (Builder $status) use ($initialStatuses, $initialStatusPlaceholders): void {
+                        $status->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) <> ''")
+                            ->whereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) NOT IN ($initialStatusPlaceholders)", $initialStatuses);
+                    });
+            }),
+            'dueThisWeek' => $query->whereBetween('tasks.due_date', [$weekStartDate, $weekEndDate]),
+            'completedThisWeek' => $query
+                ->whereNotNull('tasks.completed_at')
+                ->whereBetween('tasks.completed_at', [$weekStartUtc, $weekEndUtc]),
+            'attention' => $query->where(function (Builder $attention) use ($todayDate): void {
+                $attention->where('tasks.needs_attention', true)
+                    ->orWhereNotNull('tasks.order_task_flag_id')
+                    ->orWhereNull('tasks.assignee_id')
+                    ->orWhereDate('tasks.due_date', '<', $todayDate)
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%blocked%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%revision%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%overdue%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%delayed%'")
+                    ->orWhereRaw("LOWER(TRIM(COALESCE(tasks.status, ''))) LIKE '%attention%'");
+            }),
+            // Preserve old bookmarks while the visible All Tasks toolbar now
+            // mirrors the My Tasks filters.
             'overdue' => $query->where('tasks.due_date', '<', $todayDate),
             'today' => $query->where('tasks.due_date', $todayDate),
             'upcoming' => $query
-                ->whereBetween('tasks.due_date', [$tomorrow, $weekEnd])
+                ->whereBetween('tasks.due_date', [$tomorrow, $weekEndDate])
                 ->whereRaw("LOWER(TRIM(tasks.status)) NOT LIKE 'waiting%'"),
             'waiting' => $query->whereRaw("LOWER(TRIM(tasks.status)) LIKE 'waiting%'"),
             'mentions' => $query->whereExists($this->commentMentionExistsSubquery()),

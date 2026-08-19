@@ -64,7 +64,7 @@
     
     <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
     
-    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260818-dashboard-kpi-match-1">
+    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260819-team-department-colors-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

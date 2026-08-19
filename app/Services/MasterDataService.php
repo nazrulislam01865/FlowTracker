@@ -17,7 +17,7 @@ class MasterDataService
     /** @var array<string,array<string,string>> */
     private array $colorMaps = [];
 
-    public const COLOR_TYPES = ['priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
+    public const COLOR_TYPES = ['department', 'priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
 
     /** Financial setup values are governed by the Finance role-matrix module. */
     public const FINANCIAL_TYPES = [

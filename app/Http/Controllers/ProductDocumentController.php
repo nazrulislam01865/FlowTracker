@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use App\Support\StoredFileResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Storage;
 
@@ -15,12 +16,12 @@ class ProductDocumentController extends Controller
         abort_unless($product->workspace_id === app(MasterDataService::class)->workspaceId(), 404);
         abort_unless($product->type === 'product', 404);
 
-        $pathKey = match ($kind) {
-            'certificate' => 'certificate_test_report_path',
-            'template' => 'template_doc_path',
-            default => null,
+        [$pathKey, $labelKey] = match ($kind) {
+            'certificate' => ['certificate_test_report_path', 'certificate_test_report'],
+            'template' => ['template_doc_path', 'template_doc'],
+            default => [null, null],
         };
-        abort_unless($pathKey, 404);
+        abort_unless($pathKey && $labelKey, 404);
 
         $path = trim((string) data_get($product->metadata, $pathKey));
         $prefix = 'product-documents/'.$product->workspace_id.'/'.$product->id.'/';
@@ -28,11 +29,16 @@ class ProductDocumentController extends Controller
         abort_unless(basename($path) === $filename, 404);
         abort_unless(Storage::disk('public')->exists($path), 404);
 
-        $headers = ['X-Content-Type-Options' => 'nosniff'];
-        if ($request->boolean('download')) {
-            return Storage::disk('public')->download($path, $filename, $headers);
-        }
+        $originalName = trim((string) data_get($product->metadata, $labelKey));
+        $originalName = $originalName !== '' ? basename(str_replace('\\', '/', $originalName)) : $filename;
 
-        return Storage::disk('public')->response($path, $filename, $headers);
+        $headers = [
+            'Content-Type' => StoredFileResponse::mimeType($originalName) ?: 'application/octet-stream',
+            'X-Content-Type-Options' => 'nosniff',
+        ];
+
+        return $request->boolean('download')
+            ? Storage::disk('public')->download($path, $originalName, $headers)
+            : Storage::disk('public')->response($path, $originalName, $headers);
     }
 }

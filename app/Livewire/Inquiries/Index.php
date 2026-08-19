@@ -18,6 +18,7 @@ use App\Services\MentionService;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
 use App\Services\WorkspaceSettingsService;
+use App\Support\AttachmentUpload;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Schema;
 use Livewire\Attributes\On;
@@ -1883,7 +1884,7 @@ class Index extends Component
         if ($this->taskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
             $this->validate([
-                'taskDocumentUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+                'taskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
             ]);
             $service->upload($task->inquiry, $this->taskDocumentUpload, auth()->user(), $task, $note);
         } else {
@@ -1913,7 +1914,7 @@ class Index extends Component
 
     public function uploadTaskFile(): void
     {
-        $this->validate(['taskUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai']]);
+        $this->validate(['taskUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480)]);
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), (int) $this->selectedTaskId, ['inquiry']);
         app(InquiryService::class)->upload($task->inquiry, $this->taskUpload, auth()->user(), $task);
         $this->taskUpload = null;
@@ -1923,7 +1924,7 @@ class Index extends Component
     {
         $upload = $this->taskQuickUploads[$taskId] ?? null;
         if (!$upload) return;
-        $this->validate(["taskQuickUploads.$taskId" => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai']]);
+        $this->validate(["taskQuickUploads.$taskId" => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480)]);
         $task = app(InquiryService::class)->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
         app(InquiryService::class)->upload($task->inquiry, $upload, auth()->user(), $task);
         unset($this->taskQuickUploads[$taskId]);
@@ -2012,11 +2013,10 @@ class Index extends Component
         $this->resetValidation(['inquiryUploads', 'inquiryUploads.*']);
         $validator = validator(['inquiryUploads' => $this->inquiryUploads], [
             'inquiryUploads' => ['required','array','min:1'],
-            'inquiryUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+            'inquiryUploads.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
         ], [
             'inquiryUploads.required' => 'Choose at least one file to upload.',
             'inquiryUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
-            'inquiryUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT, CSV or AI.',
         ]);
 
         if ($validator->fails()) {
@@ -2703,7 +2703,7 @@ class Index extends Component
             'createProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
             'createProductRows.*.unit_price' => ['nullable', 'numeric', 'min:0', 'max:999999999999.99'],
             'createProductRows.*.notes' => ['nullable', 'string', 'max:2000'],
-            'createAttachments.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+            'createAttachments.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
         ]);
 
         // Client is shared reference data for Inquiry creation. Fetch the

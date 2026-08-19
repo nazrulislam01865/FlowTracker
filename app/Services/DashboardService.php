@@ -45,23 +45,35 @@ class DashboardService
         'catalogue-readiness',
     ];
 
-    public function primaryData(User $user, int $clientId = 0, int $departmentId = 0, int $rangeDays = 7, string $teamPeriod = 'this_week', ?string $teamCustomFrom = null, ?string $teamCustomTo = null): array
+    public function primaryData(User $user, int $clientId = 0, int $departmentId = 0, int $rangeDays = 7): array
     {
+        // The management dashboard has one global period control (Today / 7 days / 30 days).
+        // Team Performance and Client Portfolio must use the same period instead of keeping
+        // their own independent reporting window.
+        $dashboardPeriod = $this->dashboardReportingPeriod($rangeDays);
+
         return [
             'metrics' => $this->summaryForFilters($user, $clientId, $departmentId, $rangeDays),
             'flowDistribution' => $this->flowDistribution($user, $clientId, $departmentId, $rangeDays),
             'taskStatusDistribution' => $this->taskStatusDistribution($user, $clientId, $departmentId, $rangeDays),
             'attentionTasks' => $this->attentionTasks($user),
-            'attentionOrders' => $this->attentionOrders($user),
-            'attentionInquiries' => $this->attentionInquiries($user),
-            'clientPortfolio' => $this->clientPortfolio($user),
+            'attentionOrders' => $this->attentionOrders($user, $clientId, $departmentId, $rangeDays),
+            'attentionInquiries' => $this->attentionInquiries($user, $clientId, $departmentId, $rangeDays),
+            'clientPortfolio' => $this->clientPortfolio($user, $clientId, $departmentId, $rangeDays),
             'assigneePerformance' => $user->canAccess('reports.view')
-                ? $this->assigneePerformance($user, $clientId, $departmentId, $teamPeriod, $teamCustomFrom, $teamCustomTo)
+                ? $this->assigneePerformance(
+                    $user,
+                    $clientId,
+                    $departmentId,
+                    'custom',
+                    $dashboardPeriod['from'],
+                    $dashboardPeriod['to'],
+                )
                 : collect(),
-            'teamReportingPeriod' => $this->teamReportingPeriod($teamPeriod, $teamCustomFrom, $teamCustomTo),
-            'priorityJobs' => $this->priorityJobs($user, $clientId, $departmentId),
-            'priorityInquiries' => $this->priorityInquiries($user, $clientId, $departmentId),
-            'priorityTasks' => $this->priorityTasks($user, $clientId, $departmentId),
+            'teamReportingPeriod' => $dashboardPeriod,
+            'priorityJobs' => $this->priorityJobs($user, $clientId, $departmentId, $rangeDays),
+            'priorityInquiries' => $this->priorityInquiries($user, $clientId, $departmentId, $rangeDays),
+            'priorityTasks' => $this->priorityTasks($user, $clientId, $departmentId, $rangeDays),
             'recentActivity' => $this->recentOperationalActivity($user, $clientId, $departmentId),
             'catalogueReadiness' => $this->catalogueReadiness($user),
             'dashboardClients' => $this->dashboardClients($user),
@@ -254,13 +266,26 @@ class DashboardService
         return $rows;
     }
 
-    public function mentions(User $user, string $filter = 'all', int $limit = 12): Collection
-    {
+    public function mentions(
+        User $user,
+        string $filter = 'all',
+        int $limit = 12,
+        int $clientId = 0,
+        int $departmentId = 0,
+        ?int $rangeDays = null,
+        string $search = '',
+    ): Collection {
         // A mention is a first-class notification. Do not try to rediscover its
         // source by comparing the notification message with a comment body: rich
         // text normalization, description mentions, and Inquiry mentions make that
         // brittle. The foreign-key context is the durable source of truth.
-        $query = $this->dashboardMentionQuery($user);
+        $query = $this->applyDashboardMentionFilters(
+            $this->dashboardMentionQuery($user),
+            $clientId,
+            $departmentId,
+            $rangeDays,
+            $search,
+        );
 
         match ($filter) {
             'unread' => $query->whereNull('flow_notifications.read_at'),
@@ -357,19 +382,53 @@ class DashboardService
         }
     }
 
-    public function unreadMentionCount(User $user): int
-    {
-        return (int) $this->remember(
-            $user,
-            'mention-count',
-            fn () => $this->dashboardMentionQuery($user)->whereNull('read_at')->count(),
-        );
+    public function unreadMentionCount(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        ?int $rangeDays = null,
+        string $search = '',
+    ): int {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $search = trim($search);
+
+        // Preserve the existing short-lived cache for the global notification
+        // badge. Dashboard-filtered counts are intentionally uncached because the
+        // search text can change on every keystroke and must never return a count
+        // from a different client/team/range combination.
+        if ($clientId === 0 && $departmentId === 0 && $rangeDays === null && $search === '') {
+            return (int) $this->remember(
+                $user,
+                'mention-count',
+                fn () => $this->dashboardMentionQuery($user)->whereNull('read_at')->count(),
+            );
+        }
+
+        return (int) $this->applyDashboardMentionFilters(
+            $this->dashboardMentionQuery($user),
+            $clientId,
+            $departmentId,
+            $rangeDays,
+            $search,
+        )->whereNull('flow_notifications.read_at')->count();
     }
 
-    public function markAllMentionsRead(User $user): void
-    {
-        $this->dashboardMentionQuery($user)
-            ->whereNull('read_at')
+    public function markAllMentionsRead(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        ?int $rangeDays = null,
+        string $search = '',
+    ): void {
+        $this->applyDashboardMentionFilters(
+            $this->dashboardMentionQuery($user),
+            $clientId,
+            $departmentId,
+            $rangeDays,
+            $search,
+        )
+            ->whereNull('flow_notifications.read_at')
             ->update(['read_at' => now()]);
 
         $this->forgetMentions($user);
@@ -400,6 +459,129 @@ class DashboardService
         }
 
         return $query->where('flow_notifications.type', 'mention');
+    }
+
+    /**
+     * Apply the management dashboard's global controls to the mention feed before
+     * ORDER BY/LIMIT. Nested Livewire components are independent islands, so these
+     * constraints are passed in explicitly by Dashboard\TaggedComments.
+     */
+    private function applyDashboardMentionFilters(
+        Builder $query,
+        int $clientId = 0,
+        int $departmentId = 0,
+        ?int $rangeDays = null,
+        string $search = '',
+    ): Builder {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $search = mb_strtolower(trim($search));
+
+        if ($rangeDays !== null) {
+            $query->whereBetween('flow_notifications.created_at', $this->dashboardRangeUtcBounds($rangeDays));
+        }
+
+        if ($clientId > 0) {
+            $query->where(function (Builder $contexts) use ($clientId): void {
+                $contexts
+                    ->where(function (Builder $task) use ($clientId): void {
+                        $task->whereNotNull('flow_notifications.flow_task_id')
+                            ->whereHas('task.job', fn (Builder $job) => $job->where('flow_jobs.client_id', $clientId));
+                    })
+                    ->orWhere(function (Builder $inquiryTask) use ($clientId): void {
+                        $inquiryTask->whereNull('flow_notifications.flow_task_id')
+                            ->whereNotNull('flow_notifications.inquiry_task_id')
+                            ->whereHas('inquiryTask.inquiry', fn (Builder $inquiry) => $inquiry->where('inquiries.client_id', $clientId));
+                    })
+                    ->orWhere(function (Builder $job) use ($clientId): void {
+                        $job->whereNull('flow_notifications.flow_task_id')
+                            ->whereNull('flow_notifications.inquiry_task_id')
+                            ->whereNull('flow_notifications.inquiry_id')
+                            ->whereNotNull('flow_notifications.flow_job_id')
+                            ->whereHas('job', fn (Builder $record) => $record->where('flow_jobs.client_id', $clientId));
+                    })
+                    ->orWhere(function (Builder $inquiry) use ($clientId): void {
+                        $inquiry->whereNull('flow_notifications.flow_task_id')
+                            ->whereNull('flow_notifications.inquiry_task_id')
+                            ->whereNull('flow_notifications.flow_job_id')
+                            ->whereNotNull('flow_notifications.inquiry_id')
+                            ->whereHas('inquiry', fn (Builder $record) => $record->where('inquiries.client_id', $clientId));
+                    });
+            });
+        }
+
+        if ($departmentId > 0) {
+            $query->where(function (Builder $contexts) use ($departmentId): void {
+                $contexts
+                    ->where(function (Builder $task) use ($departmentId): void {
+                        $task->whereNotNull('flow_notifications.flow_task_id')
+                            ->where(function (Builder $team) use ($departmentId): void {
+                                $team->whereHas('task.assignee', fn (Builder $assignee) => $assignee->where('users.department_id', $departmentId))
+                                    ->orWhere(function (Builder $fallback) use ($departmentId): void {
+                                        $fallback->whereHas('task', fn (Builder $taskRecord) => $taskRecord->whereNull('tasks.assignee_id'))
+                                            ->whereHas('task.job.owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId));
+                                    });
+                            });
+                    })
+                    ->orWhere(function (Builder $inquiryTask) use ($departmentId): void {
+                        $inquiryTask->whereNull('flow_notifications.flow_task_id')
+                            ->whereNotNull('flow_notifications.inquiry_task_id')
+                            ->where(function (Builder $team) use ($departmentId): void {
+                                $team->whereHas('inquiryTask.assignee', fn (Builder $assignee) => $assignee->where('users.department_id', $departmentId))
+                                    ->orWhere(function (Builder $fallback) use ($departmentId): void {
+                                        $fallback->whereHas('inquiryTask', fn (Builder $taskRecord) => $taskRecord->whereNull('inquiry_tasks.assignee_id'))
+                                            ->whereHas('inquiryTask.inquiry.owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId));
+                                    });
+                            });
+                    })
+                    ->orWhere(function (Builder $job) use ($departmentId): void {
+                        $job->whereNull('flow_notifications.flow_task_id')
+                            ->whereNull('flow_notifications.inquiry_task_id')
+                            ->whereNull('flow_notifications.inquiry_id')
+                            ->whereNotNull('flow_notifications.flow_job_id')
+                            ->whereHas('job.owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId));
+                    })
+                    ->orWhere(function (Builder $inquiry) use ($departmentId): void {
+                        $inquiry->whereNull('flow_notifications.flow_task_id')
+                            ->whereNull('flow_notifications.inquiry_task_id')
+                            ->whereNull('flow_notifications.flow_job_id')
+                            ->whereNotNull('flow_notifications.inquiry_id')
+                            ->whereHas('inquiry.owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId));
+                    });
+            });
+        }
+
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+            $query->where(function (Builder $match) use ($like): void {
+                $match
+                    ->whereRaw("LOWER(COALESCE(flow_notifications.title, '')) LIKE ?", [$like])
+                    ->orWhereRaw("LOWER(COALESCE(flow_notifications.message, '')) LIKE ?", [$like])
+                    ->orWhereHas('job', function (Builder $job) use ($like): void {
+                        $job->whereRaw("LOWER(COALESCE(flow_jobs.job_number, '')) LIKE ?", [$like])
+                            ->orWhereRaw("LOWER(COALESCE(flow_jobs.title, '')) LIKE ?", [$like])
+                            ->orWhereHas('client', fn (Builder $client) => $client->whereRaw("LOWER(COALESCE(clients.name, '')) LIKE ?", [$like]))
+                            ->orWhereHas('owner', fn (Builder $owner) => $owner->whereRaw("LOWER(COALESCE(users.name, '')) LIKE ?", [$like]));
+                    })
+                    ->orWhereHas('task', function (Builder $task) use ($like): void {
+                        $task->whereRaw("LOWER(COALESCE(tasks.task_number, '')) LIKE ?", [$like])
+                            ->orWhereRaw("LOWER(COALESCE(tasks.title, '')) LIKE ?", [$like])
+                            ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereRaw("LOWER(COALESCE(users.name, '')) LIKE ?", [$like]));
+                    })
+                    ->orWhereHas('inquiry', function (Builder $inquiry) use ($like): void {
+                        $inquiry->whereRaw("LOWER(COALESCE(inquiries.inquiry_number, '')) LIKE ?", [$like])
+                            ->orWhereRaw("LOWER(COALESCE(inquiries.subject, '')) LIKE ?", [$like])
+                            ->orWhereHas('client', fn (Builder $client) => $client->whereRaw("LOWER(COALESCE(clients.name, '')) LIKE ?", [$like]))
+                            ->orWhereHas('owner', fn (Builder $owner) => $owner->whereRaw("LOWER(COALESCE(users.name, '')) LIKE ?", [$like]));
+                    })
+                    ->orWhereHas('inquiryTask', function (Builder $task) use ($like): void {
+                        $task->whereRaw("LOWER(COALESCE(inquiry_tasks.title, '')) LIKE ?", [$like])
+                            ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereRaw("LOWER(COALESCE(users.name, '')) LIKE ?", [$like]));
+                    });
+            });
+        }
+
+        return $query;
     }
 
     public function operationalHealth(User $user): array
@@ -457,6 +639,32 @@ class DashboardService
                 'flaggedTotal' => array_sum(array_column($flags, 'count')),
             ];
         });
+    }
+
+    public function dashboardReportingPeriod(int $rangeDays = 7): array
+    {
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+        $from = $today->copy()->subDays($rangeDays - 1);
+        $to = $today->copy();
+        [$fromUtc, $toUtc] = $settings->localDateRangeUtcBounds(
+            $from->toDateString(),
+            $to->toDateString(),
+        );
+
+        return [
+            'key' => 'dashboard_'.$rangeDays,
+            'label' => match ($rangeDays) {
+                1 => 'Today',
+                30 => 'Last 30 days',
+                default => 'Last 7 days',
+            },
+            'from' => $from->toDateString(),
+            'to' => $to->toDateString(),
+            'from_utc' => $fromUtc,
+            'to_utc' => $toUtc,
+        ];
     }
 
     public function teamReportingPeriod(
@@ -552,7 +760,7 @@ class DashboardService
                 fn (Builder $query) => $query->whereKey($user->id),
             )
             ->select(['users.id', 'users.department_id', 'users.name', 'users.profile_image_path'])
-            ->with('department:id,name')
+            ->with('department:id,name,code')
             ->orderBy('users.name')
             ->get();
 
@@ -683,9 +891,21 @@ class DashboardService
      */
     public function decorateTeamPerformance(Collection $rows): Collection
     {
+        // Resolve department colors once for the whole collection. The shared
+        // MasterDataService keeps an in-request color map, avoiding a query per
+        // employee card while keeping Dashboard and the full report consistent.
+        $masterData = app(MasterDataService::class);
+
         // Workload status is intentionally left blank for now. The actual open
         // task count is still available and is the source of truth in the card.
-        $rows->each(function ($row): void {
+        $rows->each(function ($row) use ($masterData): void {
+            $department = $row->department;
+            $departmentColor = $department
+                ? ($masterData->colorFor('department', (string) ($department->code ?? ''))
+                    ?: $masterData->displayColorFor('department', (string) ($department->name ?? '')))
+                : null;
+
+            $row->setAttribute('department_color', $departmentColor);
             $row->setAttribute('workload_label', '');
             $row->setAttribute('workload_percent', 0);
         });
@@ -749,11 +969,15 @@ class DashboardService
         }
     }
 
-    public function attentionOrders(User $user): Collection
+    public function attentionOrders(User $user, int $clientId = 0, int $departmentId = 0, ?int $rangeDays = null): Collection
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
 
         return app(JobService::class)->activeQuery($user)
+            ->when($rangeBounds, fn (Builder $query) => $query->whereBetween('flow_jobs.updated_at', $rangeBounds))
+            ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId)))
             ->select([
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id',
                 'flow_jobs.workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.title',
@@ -802,11 +1026,21 @@ class DashboardService
             ->get();
     }
 
-    public function attentionInquiries(User $user): Collection
+    public function attentionInquiries(User $user, int $clientId = 0, int $departmentId = 0, ?int $rangeDays = null): Collection
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
 
         return app(InquiryService::class)->visibleQuery($user)
+            ->when($rangeBounds, fn (Builder $query) => $query->whereBetween('inquiries.updated_at', $rangeBounds))
+            ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
+            ->when($departmentId > 0, fn (Builder $query) => $query->where(function (Builder $team) use ($departmentId): void {
+                $team->whereHas('currentTask.assignee', fn (Builder $assignee) => $assignee->where('users.department_id', $departmentId))
+                    ->orWhere(function (Builder $fallback) use ($departmentId): void {
+                        $fallback->whereDoesntHave('currentTask.assignee')
+                            ->whereHas('owner', fn (Builder $owner) => $owner->where('users.department_id', $departmentId));
+                    });
+            }))
             ->whereNull('inquiries.result')
             ->where('inquiries.status', '!=', 'Draft')
             ->select([
@@ -878,11 +1112,13 @@ class DashboardService
      * "recent" lists. Attention/overdue state wins first, then the configured
      * business priority, then the nearest operational due date.
      */
-    public function priorityJobs(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    public function priorityJobs(User $user, int $clientId = 0, int $departmentId = 0, ?int $rangeDays = null): Collection
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
 
         return app(JobService::class)->activeQuery($user)
+            ->when($rangeBounds, fn (Builder $query) => $query->whereBetween('flow_jobs.updated_at', $rangeBounds))
             ->when($clientId > 0, fn (Builder $query) => $query->where('flow_jobs.client_id', $clientId))
             ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId)))
             ->select([
@@ -910,11 +1146,13 @@ class DashboardService
             ->get();
     }
 
-    public function priorityInquiries(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    public function priorityInquiries(User $user, int $clientId = 0, int $departmentId = 0, ?int $rangeDays = null): Collection
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
 
         return app(InquiryService::class)->visibleQuery($user)
+            ->when($rangeBounds, fn (Builder $query) => $query->whereBetween('inquiries.updated_at', $rangeBounds))
             ->whereNull('inquiries.result')
             ->where('inquiries.status', '!=', 'Draft')
             ->when($clientId > 0, fn (Builder $query) => $query->where('inquiries.client_id', $clientId))
@@ -952,11 +1190,13 @@ class DashboardService
             ->get();
     }
 
-    public function priorityTasks(User $user, int $clientId = 0, int $departmentId = 0): Collection
+    public function priorityTasks(User $user, int $clientId = 0, int $departmentId = 0, ?int $rangeDays = null): Collection
     {
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
 
         return $this->activeTaskQuery($user)
+            ->when($rangeBounds, fn (Builder $query) => $query->whereBetween('tasks.updated_at', $rangeBounds))
             ->when($clientId > 0, fn (Builder $query) => $query->whereHas('job', fn (Builder $job) => $job->where('client_id', $clientId)))
             ->when($departmentId > 0, fn (Builder $query) => $query->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId)))
             ->select([
@@ -1146,62 +1386,122 @@ class DashboardService
         })->values();
     }
 
-    public function clientPortfolio(User $user): Collection
-    {
+    public function clientPortfolio(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        ?int $rangeDays = null,
+    ): Collection {
         $access = app(AccessControlService::class);
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeBounds = $rangeDays !== null ? $this->dashboardRangeUtcBounds($rangeDays) : null;
+
+        $applyJobFilters = function ($jobs) use ($access, $user, $departmentId, $rangeBounds) {
+            $jobs = $access->applyJobScope($jobs, $user);
+
+            if ($rangeBounds) {
+                $jobs->whereBetween('flow_jobs.updated_at', $rangeBounds);
+            }
+
+            if ($departmentId > 0) {
+                $jobs->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId));
+            }
+
+            return $jobs;
+        };
+
+        $applyTaskFilters = function ($tasks) use ($access, $user, $departmentId, $rangeBounds) {
+            $tasks = $access->applyTaskScope($tasks, $user);
+
+            if ($rangeBounds) {
+                $tasks->whereBetween('tasks.updated_at', $rangeBounds);
+            }
+
+            if ($departmentId > 0) {
+                $tasks->whereHas('assignee', fn (Builder $assignee) => $assignee->where('department_id', $departmentId));
+            }
+
+            return $tasks;
+        };
+
+        $applyInquiryFilters = function ($inquiries) use ($access, $user, $departmentId, $rangeBounds) {
+            $inquiries = $access->applyInquiryScope($inquiries, $user);
+
+            if ($rangeBounds) {
+                $inquiries->whereBetween('inquiries.updated_at', $rangeBounds);
+            }
+
+            if ($departmentId > 0) {
+                $inquiries->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId));
+            }
+
+            return $inquiries;
+        };
 
         $clients = app(ClientService::class)->visibleQuery($user)
             ->where('clients.is_active', true)
+            ->when($clientId > 0, fn (Builder $query) => $query->where('clients.id', $clientId))
             ->select(['clients.id', 'clients.name', 'clients.logo_path'])
             ->withCount([
-                // Keep the old dashboard attributes for secondary/legacy views.
-                'jobs as active_jobs_count' => fn ($jobs) => $access->applyJobScope(
-                    $jobs->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
-                    $user
-                ),
-                'jobs as at_risk_jobs_count' => fn ($jobs) => $access->applyJobScope(
-                    $jobs->whereNull('flow_jobs.completed_at')
-                        ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
-                        ->where(fn ($query) => $query->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])),
-                    $user
-                ),
-                'tasks as open_tasks_count' => fn ($tasks) => $access->applyTaskScope($tasks->whereNull('tasks.completed_at'), $user),
-                'tasks as overdue_tasks_count' => fn ($tasks) => $access->applyTaskScope(
-                    $tasks->whereNull('tasks.completed_at')->where('tasks.due_date', '<', $today),
-                    $user
-                ),
+                // Keep the legacy attributes used by the secondary dashboard, but
+                // scope them to the global dashboard period/team when supplied.
+                'jobs as active_jobs_count' => fn ($jobs) => $applyJobFilters($jobs)
+                    ->whereNull('flow_jobs.completed_at')
+                    ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
+                'jobs as at_risk_jobs_count' => fn ($jobs) => $applyJobFilters($jobs)
+                    ->whereNull('flow_jobs.completed_at')
+                    ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                    ->where(fn ($query) => $query
+                        ->where('flow_jobs.attention_requested', true)
+                        ->orWhere('flow_jobs.needs_attention', true)
+                        ->orWhereIn('flow_jobs.health', ['At Risk', 'Delayed', 'Blocked', 'Needs Attention'])),
+                'tasks as open_tasks_count' => fn ($tasks) => $applyTaskFilters($tasks)
+                    ->whereNull('tasks.completed_at'),
+                'tasks as overdue_tasks_count' => fn ($tasks) => $applyTaskFilters($tasks)
+                    ->whereNull('tasks.completed_at')
+                    ->where('tasks.due_date', '<', $today),
 
-                // Portfolio prototype metrics: every visible non-cancelled Order,
-                // including completed Orders, plus its completed subset.
-                'jobs as orders_count' => fn ($jobs) => $access->applyJobScope(
-                    $jobs->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
-                    $user
-                ),
-                'jobs as completed_orders_count' => fn ($jobs) => $access->applyJobScope(
-                    $jobs->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
-                        ->where(fn ($query) => $query
-                            ->whereNotNull('flow_jobs.completed_at')
-                            ->orWhereRaw("LOWER(TRIM(COALESCE(flow_jobs.status, ''))) = 'completed'")),
-                    $user
-                ),
+                // Portfolio metrics are operational records touched in the selected
+                // dashboard period. This makes Today / 7 days / 30 days immediately
+                // change the Client Portfolio instead of showing all-time totals.
+                'jobs as orders_count' => fn ($jobs) => $applyJobFilters($jobs)
+                    ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES),
+                'jobs as completed_orders_count' => fn ($jobs) => $applyJobFilters($jobs)
+                    ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                    ->where(fn ($query) => $query
+                        ->whereNotNull('flow_jobs.completed_at')
+                        ->orWhereRaw("LOWER(TRIM(COALESCE(flow_jobs.status, ''))) = 'completed'")),
+                'inquiries as portfolio_inquiries_count' => fn ($inquiries) => $applyInquiryFilters($inquiries)
+                    ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'"),
             ])
-            ->orderByDesc('active_jobs_count')
+            ->orderByDesc('orders_count')
+            ->orderByDesc('portfolio_inquiries_count')
             ->orderBy('clients.name')
-            ->limit(30)
+            ->limit($clientId > 0 ? 1 : 60)
             ->get();
 
         if ($clients->isEmpty()) {
             return $clients;
         }
 
-        // Build Inquiry totals from the same permission-scoped query used by the
-        // Inquiry module. Drafts are not operational portfolio records; converted,
-        // closed/dead and completed records remain in the created total and count as
-        // completed when they have a terminal lifecycle marker.
-        $inquiryStats = app(InquiryService::class)->visibleQuery($user)
+        // Build Inquiry totals from the same permission/range/team scope used by
+        // the dashboard. Drafts are not operational portfolio records; terminal
+        // records remain in the total and are counted as completed.
+        $inquiryStatsQuery = app(InquiryService::class)->visibleQuery($user)
             ->whereIn('inquiries.client_id', $clients->pluck('id'))
-            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'")
+            ->whereRaw("LOWER(TRIM(COALESCE(inquiries.status, ''))) != 'draft'");
+
+        if ($rangeBounds) {
+            $inquiryStatsQuery->whereBetween('inquiries.updated_at', $rangeBounds);
+        }
+
+        if ($departmentId > 0) {
+            $inquiryStatsQuery->whereHas('owner', fn (Builder $owner) => $owner->where('department_id', $departmentId));
+        }
+
+        $inquiryStats = $inquiryStatsQuery
             ->selectRaw('inquiries.client_id')
             ->selectRaw('COUNT(*) as inquiries_count')
             ->selectRaw("SUM(CASE WHEN inquiries.completed_at IS NOT NULL OR inquiries.result IS NOT NULL OR LOWER(TRIM(COALESCE(inquiries.status, ''))) IN ('completed','converted','closed','dead') THEN 1 ELSE 0 END) as completed_inquiries_count")
@@ -1230,7 +1530,19 @@ class DashboardService
             $client->setAttribute('attention_items_count', $attentionInquiries + $attentionOrders);
         });
 
-        return $clients;
+        return $clients
+            ->filter(fn (Client $client) => $clientId > 0 || (int) $client->total_records_count > 0)
+            ->sort(function (Client $left, Client $right): int {
+                $total = (int) $right->total_records_count <=> (int) $left->total_records_count;
+                if ($total !== 0) return $total;
+
+                $attention = (int) $right->attention_items_count <=> (int) $left->attention_items_count;
+                if ($attention !== 0) return $attention;
+
+                return strcasecmp((string) $left->name, (string) $right->name);
+            })
+            ->take(30)
+            ->values();
     }
 
     public function flowDistribution(

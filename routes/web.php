@@ -101,7 +101,7 @@ Route::middleware('auth')->group(function () {
         return redirect()->route('jobs.index', $request->query());
     })->middleware('permission:jobs.view')->name('jobs.legacy');
     Route::get('/clients', ClientsController::class)->middleware('permission:clients.view')->name('clients.index');
-    Route::get('/all-tasks', BoardController::class)->middleware('permission:tasks.view')->name('all-tasks');
+    Route::get('/all-tasks', BoardController::class)->middleware('super.admin')->name('all-tasks');
     Route::get('/documents', DocumentsController::class)->middleware('permission:document_archive.view')->name('documents.index');
     Route::get('/document-archive/inquiries/{document}/open', function (\App\Models\InquiryDocument $document) {
         app(\App\Services\AccessControlService::class)

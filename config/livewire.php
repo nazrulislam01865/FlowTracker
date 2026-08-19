@@ -1,11 +1,11 @@
 <?php
 
 return [
-    // Keep Livewire's temporary-upload gate aligned with FlowTrack's document
-    // validation, including Branding's WebP/ICO assets. Otherwise Livewire can
-    // reject an allowed file before the component can run its own validation.
+    // Keep Livewire's temporary-upload gate format-neutral. Each component
+    // validates its own permanent file types, including EPS / ESP attachments.
+    // This prevents MIME guessing from rejecting those formats too early.
     'temporary_file_upload' => [
-        'rules' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,webp,ico,zip,txt,csv,ai'],
+        'rules' => ['required', 'file', 'max:20480'],
     ],
     'navigate' => [
         'show_progress_bar' => false,

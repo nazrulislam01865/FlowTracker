@@ -25,6 +25,21 @@ final class MasterColor
     {
         $name = strtolower(trim((string) $name));
 
+        if ($type === 'department') {
+            if ($name === '') return '#2563EB';
+
+            // Departments benefit from distinct, stable defaults so the team
+            // report is useful immediately. An administrator can still replace
+            // any generated color from Master Data -> Departments.
+            $palette = [
+                '#2563EB', '#7C3AED', '#0891B2', '#0F766E',
+                '#16A34A', '#CA8A04', '#EA580C', '#DC2626',
+                '#DB2777', '#9333EA', '#4F46E5', '#0369A1',
+            ];
+
+            return $palette[((int) sprintf('%u', crc32($name))) % count($palette)];
+        }
+
         if (in_array($type, ['task_flag', 'order_task_flag', 'order_flag'], true)) {
             return match (true) {
                 str_contains($name, 'block') => '#DC2626',

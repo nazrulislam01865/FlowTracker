@@ -24,6 +24,9 @@ use Throwable;
 
 class Index extends Component
 {
+    private const TASK_METRIC_FILTERS = ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'];
+    private const TASK_QUICK_FILTERS = ['all', 'mentions', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'overdue', 'today', 'upcoming', 'waiting'];
+
     use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
@@ -43,8 +46,10 @@ class Index extends Component
     public string $sort = 'delivery';
     public string $taskSort = 'action';
     public string $taskQuick = 'all';
+    public string $taskPhaseFilter = '';
     public array $taskPackMetrics = [];
     public array $taskPackStatusOptions = [];
+    public array $taskPackPhaseOptions = [];
     public bool $hideEmptyPhases = false;
     public bool $cardsReady = false;
     public int $cardLimit = 60;
@@ -65,8 +70,31 @@ class Index extends Component
 
     public function setTaskQuick(string $quick): void
     {
-        abort_unless(in_array($quick, ['attention', 'all', 'mentions', 'overdue', 'today', 'upcoming', 'waiting'], true), 422);
+        abort_unless(in_array($quick, self::TASK_QUICK_FILTERS, true), 422);
         $this->taskQuick = $quick;
+        $this->resetPage('taskPackPage');
+    }
+
+    public function setTaskMetricFilter(string $quick): void
+    {
+        abort_unless(in_array($quick, self::TASK_METRIC_FILTERS, true), 422);
+
+        $this->search = '';
+        $this->taskPhaseFilter = '';
+        // Created Today and Completed This Week intentionally include completed
+        // work, matching the My Tasks summary-card behaviour.
+        $this->hideCompleted = false;
+        $this->taskQuick = $this->taskQuick === $quick ? 'all' : $quick;
+        $this->resetPage('taskPackPage');
+    }
+
+    public function setTaskPhaseFilter(string $phase): void
+    {
+        $phase = trim($phase);
+        abort_unless($phase === '' || in_array($phase, $this->taskPackPhaseOptions, true), 422);
+
+        $this->clearTaskMetricFilterForToolbar();
+        $this->taskPhaseFilter = $this->taskPhaseFilter === $phase ? '' : $phase;
         $this->resetPage('taskPackPage');
     }
 
@@ -74,6 +102,13 @@ class Index extends Component
     {
         $this->search = '';
         $this->resetPage('taskPackPage');
+    }
+
+    private function clearTaskMetricFilterForToolbar(): void
+    {
+        if (in_array($this->taskQuick, self::TASK_METRIC_FILTERS, true)) {
+            $this->taskQuick = 'all';
+        }
     }
 
     public function clearFilters(): void
@@ -85,6 +120,9 @@ class Index extends Component
         $this->assignee = '';
         $this->status = '';
         $this->due = '';
+        $this->taskPhaseFilter = '';
+        $this->taskQuick = 'all';
+        $this->hideCompleted = true;
         $this->cardLimit = 60;
         $this->resetPage('taskPackPage');
     }
@@ -100,7 +138,10 @@ class Index extends Component
 
     public function updated(string $property): void
     {
-        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort', 'taskSort', 'taskQuick', 'hideCompleted'], true)) {
+        if (in_array($property, ['workflow', 'search', 'job', 'client', 'assignee', 'status', 'due', 'sort', 'taskSort', 'taskQuick', 'taskPhaseFilter', 'hideCompleted'], true)) {
+            if (in_array($property, ['search', 'taskPhaseFilter', 'hideCompleted'], true)) {
+                $this->clearTaskMetricFilterForToolbar();
+            }
             $this->cardsReady = true;
             $this->cardLimit = 60;
             if ($this->mode === 'tasks') {
@@ -111,7 +152,9 @@ class Index extends Component
 
     public function updatedTaskPackPerPage(int|string $value): void
     {
-        $this->taskPackPerPage = in_array((int) $value, [10, 20], true) ? (int) $value : BoardTaskPackService::JOBS_PER_PAGE;
+        // All Tasks is intentionally fixed at three Order groups per page so
+        // each page stays compact and predictable regardless of task count.
+        $this->taskPackPerPage = BoardTaskPackService::JOBS_PER_PAGE;
         $this->resetPage('taskPackPage');
     }
 
@@ -291,6 +334,7 @@ class Index extends Component
             'search' => $this->search,
             'assignee' => $this->assignee,
             'quick' => $this->taskQuick,
+            'phase' => $this->taskPhaseFilter,
             'sort' => $this->taskSort,
             'hide_completed' => $this->hideCompleted,
         ];
@@ -304,6 +348,11 @@ class Index extends Component
         $this->taskPackStatusOptions = $service->statusOptions();
         $this->dispatch(
             'board-task-metrics',
+            createdToday: $this->taskPackMetrics['createdToday'] ?? 0,
+            notStarted: $this->taskPackMetrics['notStarted'] ?? 0,
+            inProgress: $this->taskPackMetrics['inProgress'] ?? 0,
+            dueThisWeek: $this->taskPackMetrics['dueThisWeek'] ?? 0,
+            completedThisWeek: $this->taskPackMetrics['completedThisWeek'] ?? 0,
             attention: $this->taskPackMetrics['attention'] ?? 0,
             overdue: $this->taskPackMetrics['overdue'] ?? 0,
             today: $this->taskPackMetrics['today'] ?? 0,
@@ -320,6 +369,11 @@ class Index extends Component
         $this->taskPackStatusOptions = $service->statusOptions();
         $this->dispatch(
             'board-task-metrics',
+            createdToday: $this->taskPackMetrics['createdToday'] ?? 0,
+            notStarted: $this->taskPackMetrics['notStarted'] ?? 0,
+            inProgress: $this->taskPackMetrics['inProgress'] ?? 0,
+            dueThisWeek: $this->taskPackMetrics['dueThisWeek'] ?? 0,
+            completedThisWeek: $this->taskPackMetrics['completedThisWeek'] ?? 0,
             attention: $this->taskPackMetrics['attention'] ?? 0,
             overdue: $this->taskPackMetrics['overdue'] ?? 0,
             today: $this->taskPackMetrics['today'] ?? 0,
@@ -381,6 +435,12 @@ class Index extends Component
 
         if ($this->taskPackStatusOptions === []) {
             $this->taskPackStatusOptions = $service->statusOptions();
+        }
+        if ($this->taskPackPhaseOptions === []) {
+            $this->taskPackPhaseOptions = $service->phaseOptions();
+        }
+        if ($this->taskPhaseFilter !== '' && !in_array($this->taskPhaseFilter, $this->taskPackPhaseOptions, true)) {
+            $this->taskPhaseFilter = '';
         }
         if ($this->taskPackMetrics === []) {
             $this->taskPackMetrics = $service->metrics($user);

@@ -397,9 +397,9 @@
                     </div>
                     <div class="field full">
                         <label class="upload-zone ft-livewire-upload-zone" data-file-dropzone for="document-page-upload-input">
-                            <input id="document-page-upload-input" type="file" wire:model="documentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                            <input id="document-page-upload-input" type="file" wire:model="documentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.eps,.esp">
                             <b>Drop files here or browse</b>
-                            <div class="small muted" data-drop-status>PDF, DOCX, XLSX, JPG, PNG, ZIP, TXT or CSV · Max 20 MB each</div>
+                            <div class="small muted" data-drop-status>PDF, Office files, JPG, PNG, ZIP, TXT, CSV, EPS or ESP · Max 20 MB each</div>
                         </label>
                         <div class="ft-file-upload-progress" wire:loading wire:target="documentUploads">Preparing selected files…</div>
                         @if(count($documentUploads))<div class="ft-upload-ready-list">@foreach($documentUploads as $file)<span>{{ $file->getClientOriginalName() }}</span>@endforeach</div>@endif
@@ -454,7 +454,7 @@
             <div class="modal-head"><div><h2>Upload new version</h2><div class="small muted">The new file is added to the same document history.</div></div><button type="button" class="close-btn" wire:click="closeVersionUpload">×</button></div>
             <div class="modal-body">
                 <label class="upload-zone ft-livewire-upload-zone" data-file-dropzone for="document-version-upload-input">
-                    <input id="document-version-upload-input" type="file" wire:model="versionUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                    <input id="document-version-upload-input" type="file" wire:model="versionUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.eps,.esp">
                     <b>Drop a file here or browse</b><div class="small muted">Maximum file size 20 MB</div>
                 </label>
                 @error('versionUpload')<div class="validation-error">{{ $message }}</div>@enderror

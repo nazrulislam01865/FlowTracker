@@ -217,9 +217,9 @@
                 <div class="ft-upload-zone compact ft-task-upload-zone">
                     @if($canUploadDocument && !$showTaskDocumentPicker)
                         <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadSelectedTaskDocuments" for="taskDocumentUpload-{{ $task->id }}">
-                            <input id="taskDocumentUpload-{{ $task->id }}" type="file" wire:model="taskDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv">
+                            <input id="taskDocumentUpload-{{ $task->id }}" type="file" wire:model="taskDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.eps,.esp">
                             <span class="ft-paperclip">⌕</span>
-                            <div>Drop files here or <strong>browse</strong><small data-drop-status>{{ $taskDocumentName ? 'Required document: '.$taskDocumentName.' · ' : '' }}PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                            <div>Drop files here or <strong>browse</strong><small data-drop-status>{{ $taskDocumentName ? 'Required document: '.$taskDocumentName.' · ' : '' }}PDF, Office files, JPG, PNG, ZIP, EPS or ESP · Max 20 MB</small></div>
                         </label>
                     @elseif(!$canUploadDocument)
                         <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to task attachments.</small></div></div>

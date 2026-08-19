@@ -91,6 +91,8 @@ final class StoredFileResponse
             'txt' => 'text/plain',
             'csv' => 'text/csv',
             'ai' => 'application/postscript',
+            'eps' => 'application/postscript',
+            'esp' => 'application/octet-stream',
         ];
 
         if ($extension !== '' && isset($known[$extension])) {

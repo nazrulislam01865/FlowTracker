@@ -13,6 +13,7 @@ use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\DocumentService;
 use App\Services\MasterDataService;
+use App\Support\AttachmentUpload;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Pagination\LengthAwarePaginator;
 use Illuminate\Support\Facades\DB;
@@ -160,7 +161,7 @@ class Index extends Component
         abort_unless($this->versionDocumentId, 422);
         abort_unless(auth()->user()->canModule('document_archive', 'create'), 403);
         $this->validate([
-            'versionUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'versionUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS, 20480),
         ]);
 
         $base = $this->resolveOrderDocument($this->versionDocumentId);
@@ -210,7 +211,7 @@ class Index extends Component
         abort_unless(auth()->user()->canModule('document_archive', 'create'), 403);
         $this->validate([
             'documentUploads' => ['required', 'array', 'min:1'],
-            'documentUploads.*' => ['file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'documentUploads.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS, 20480),
             'uploadJobId' => ['required', 'integer'],
             'uploadTaskId' => ['nullable', 'integer'],
             'uploadCategory' => ['required', 'string', 'max:100'],

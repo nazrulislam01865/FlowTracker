@@ -101,6 +101,9 @@
                     @if($taskView)
                         <x-ui.nav-link route="my-work" label="My Tasks" icon="work" :badge="$myWork" child />
                     @endif
+                    @if($administrator)
+                        <x-ui.nav-link route="all-tasks" label="All Tasks" icon="board" child />
+                    @endif
                     @if($orderCreate)
                         <x-ui.nav-link route="jobs.index" label="Create Order" icon="plus" child :params="['create' => 1]" :active="request()->routeIs('jobs.index') && request()->boolean('create')" />
                         <x-ui.nav-link route="orders.bulk-import" label="Create Bulk Order" icon="upload" child />

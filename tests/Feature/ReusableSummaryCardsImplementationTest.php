@@ -10,6 +10,7 @@ class ReusableSummaryCardsImplementationTest extends TestCase
     {
         $component = file_get_contents(resource_path('views/components/ui/summary-card.blade.php'));
         $myWork = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
+        $allTasks = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
         $clients = file_get_contents(resource_path('views/livewire/clients/index.blade.php'));
 
         $this->assertStringContainsString("'displayValue' => null", $component);
@@ -21,6 +22,11 @@ class ReusableSummaryCardsImplementationTest extends TestCase
             $this->assertStringContainsString('label="'.$label.'"', $myWork);
         }
         $this->assertSame(6, substr_count($myWork, '<x-ui.summary-card '));
+
+        foreach (['Created Today', 'Not Started', 'In Progress', 'Due This Week', 'Completed This Week', 'Needs Attention'] as $label) {
+            $this->assertStringContainsString('label="'.$label.'"', $allTasks);
+        }
+        $this->assertSame(6, substr_count($allTasks, '<x-ui.summary-card '));
 
         foreach (['Total clients', 'Active Jobs', 'Needs attention', 'Outstanding'] as $label) {
             $this->assertStringContainsString('label="'.$label.'"', $clients);

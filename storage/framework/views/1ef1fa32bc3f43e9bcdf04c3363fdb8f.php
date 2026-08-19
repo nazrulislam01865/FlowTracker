@@ -34,8 +34,13 @@ unset($__defined_vars, $__key, $__value); ?>
     $completionRate = $person->completion_rate;
     $inquiryCount = (int) $person->inquiry_task_count;
     $orderCount = (int) $person->order_task_count;
+    $departmentColor = $person->department_color ?? null;
 ?>
-<article <?php echo e($attributes->class(['ft-mgmt-team-card'])); ?>>
+<article
+    <?php echo e($attributes->class(['ft-mgmt-team-card', 'has-department-color' => filled($departmentColor)])); ?>
+
+    style="<?php echo e(\App\Support\MasterColor::style($departmentColor)); ?>"
+>
     <div class="ft-mgmt-team-prototype-head">
         <div class="ft-mgmt-person ft-mgmt-team-person">
             <?php if (isset($component)) { $__componentOriginald04dd79f9e235eb8e58dee4526a2f3c2 = $component; } ?>
@@ -88,9 +93,18 @@ unset($__defined_vars, $__key, $__value); ?>
     <div class="ft-mgmt-team-divider"></div>
 
     <div class="ft-mgmt-team-stat-list">
-        <div class="ft-mgmt-team-stat"><span>Total tasks</span><b><?php echo e($total); ?></b></div>
-        <div class="ft-mgmt-team-stat"><span>Open tasks</span><b><?php echo e($open); ?></b></div>
-        <div class="ft-mgmt-team-stat"><span>Completed tasks</span><b><?php echo e($completed); ?></b></div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-total">
+            <span class="ft-mgmt-team-stat-chip">Total tasks</span>
+            <b><?php echo e($total); ?></b>
+        </div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-open">
+            <span class="ft-mgmt-team-stat-chip">Open tasks</span>
+            <b><?php echo e($open); ?></b>
+        </div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-completed">
+            <span class="ft-mgmt-team-stat-chip">Completed tasks</span>
+            <b><?php echo e($completed); ?></b>
+        </div>
     </div>
 
     <div class="ft-mgmt-team-divider"></div>

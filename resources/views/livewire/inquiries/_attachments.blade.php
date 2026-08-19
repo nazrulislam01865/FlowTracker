@@ -3,9 +3,9 @@
     <div class="ft-upload-zone compact ft-task-upload-zone">
         @if($canEditInquiry && $canCreateDocuments && !$showInquiryDocumentPicker)
             <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadInquiryFiles" for="inquiryOverviewUpload-{{ $inquiry->id }}">
-                <input id="inquiryOverviewUpload-{{ $inquiry->id }}" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai">
+                <input id="inquiryOverviewUpload-{{ $inquiry->id }}" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp">
                 <span class="ft-paperclip">⌕</span>
-                <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, DOCX, XLSX, JPG, PNG or ZIP · Max 20 MB</small></div>
+                <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB</small></div>
             </label>
         @elseif(!$canEditInquiry || (!$canCreateDocuments && !$canLinkDocuments))
             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Inquiry attachments.</small></div></div>

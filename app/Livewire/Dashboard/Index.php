@@ -24,54 +24,38 @@ class Index extends Component
     public string $taskStatusTab = 'orders';
     public string $activityTab = 'all';
     public string $attentionTab = 'all';
-    public string $teamPeriod = 'this_week';
-    public string $teamCustomFrom = '';
-    public string $teamCustomTo = '';
+    public int $priorityPage = 1;
+
+    private const PRIORITY_PER_PAGE = 5;
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
         // Re-render the management dashboard when realtime state changes.
+        // Reset Priority Work so realtime removals cannot leave the user on an empty page.
+        $this->priorityPage = 1;
     }
 
     public function setRange(int $days): void
     {
         abort_unless(in_array($days, [1, 7, 30], true), 422);
         $this->rangeDays = $days;
+        $this->priorityPage = 1;
     }
 
     public function updatedClientFilter(): void
     {
+        $this->priorityPage = 1;
     }
 
     public function updatedTeamFilter(): void
     {
+        $this->priorityPage = 1;
     }
 
     public function updatedSearch(): void
     {
-    }
-
-    public function updatedTeamPeriod(string $period): void
-    {
-        if (!in_array($period, ['this_week', 'this_month', 'last_30_days', 'custom'], true)) {
-            $this->teamPeriod = 'this_week';
-        }
-
-        if ($this->teamPeriod === 'custom' && ($this->teamCustomFrom === '' || $this->teamCustomTo === '')) {
-            $today = app(\App\Services\WorkspaceSettingsService::class)->localToday();
-            $this->teamCustomFrom = $today->copy()->startOfWeek()->toDateString();
-            $this->teamCustomTo = $today->toDateString();
-        }
-
-    }
-
-    public function updatedTeamCustomFrom(): void
-    {
-    }
-
-    public function updatedTeamCustomTo(): void
-    {
+        $this->priorityPage = 1;
     }
 
     public function setDashboardFilter(string $property, mixed $value): void
@@ -86,7 +70,8 @@ class Index extends Component
             } else {
                 $this->teamFilter = '';
             }
-                return;
+            $this->priorityPage = 1;
+            return;
         }
 
         abort_unless(ctype_digit($raw), 422, 'Please choose a valid filter option.');
@@ -102,6 +87,7 @@ class Index extends Component
         } else {
             $this->teamFilter = (string) $id;
         }
+        $this->priorityPage = 1;
     }
 
     public function setFlowTab(string $tab): void
@@ -114,6 +100,17 @@ class Index extends Component
     {
         abort_unless(in_array($tab, ['orders', 'inquiries', 'tasks'], true), 422);
         $this->priorityTab = $tab;
+        $this->priorityPage = 1;
+    }
+
+    public function previousPriorityPage(): void
+    {
+        $this->priorityPage = max(1, $this->priorityPage - 1);
+    }
+
+    public function nextPriorityPage(): void
+    {
+        $this->priorityPage++;
     }
 
     public function setTaskStatusTab(string $tab): void
@@ -145,9 +142,6 @@ class Index extends Component
             $clientId,
             $departmentId,
             $this->rangeDays,
-            $this->teamPeriod,
-            $this->teamCustomFrom ?: null,
-            $this->teamCustomTo ?: null,
         );
         $filterOptions = app(\App\Services\FilterOptionService::class);
         $data['dashboardClientFilterOptions'] = $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6);
@@ -173,7 +167,6 @@ class Index extends Component
                 ? (int) $row->currentTask->assignee->department_id
                 : ($row->owner?->department_id ? (int) $row->owner->department_id : null),
         );
-        $data['priorityInquiries'] = $filteredPriorityInquiries->take(5)->values();
 
         $data['attentionTasks'] = $this->filterCollection(
             $data['attentionTasks'],
@@ -202,7 +195,6 @@ class Index extends Component
             fn ($row): ?int => $row->client_id ? (int) $row->client_id : null,
             fn ($row): ?int => $row->owner?->department_id ? (int) $row->owner->department_id : null,
         );
-        $data['priorityJobs'] = $filteredPriorityJobs->take(5)->values();
 
         $attentionOrders = $this->filterCollection(
             $data['attentionOrders'] ?? collect(),
@@ -213,6 +205,9 @@ class Index extends Component
                 $row->job_number, $row->title, $row->health, $row->attention_reason,
                 $row->client?->name, $row->owner?->name,
                 $row->flaggedTasks?->first()?->attention_reason,
+                $row->tasks?->pluck('title')->filter()->implode(' '),
+                $row->tasks?->pluck('status')->filter()->implode(' '),
+                $row->tasks?->pluck('attention_reason')->filter()->implode(' '),
             ],
             fn ($row): ?int => $row->client_id ? (int) $row->client_id : null,
             fn ($row): ?int => $row->owner?->department_id ? (int) $row->owner->department_id : null,
@@ -277,7 +272,7 @@ class Index extends Component
                 ->values(),
         };
 
-        $data['priorityTasks'] = $this->filterCollection(
+        $filteredPriorityTasks = $this->filterCollection(
             $data['priorityTasks'],
             $clientId,
             $departmentId,
@@ -289,7 +284,36 @@ class Index extends Component
             ],
             fn ($row): ?int => $row->job?->client_id ? (int) $row->job->client_id : null,
             fn ($row): ?int => $row->assignee?->department_id ? (int) $row->assignee->department_id : null,
-        )->take(5)->values();
+        );
+
+        $priorityCounts = [
+            'orders' => $filteredPriorityJobs->count(),
+            'inquiries' => $filteredPriorityInquiries->count(),
+            'tasks' => $filteredPriorityTasks->count(),
+        ];
+        $priorityTotal = (int) ($priorityCounts[$this->priorityTab] ?? 0);
+        $priorityLastPage = max(1, (int) ceil($priorityTotal / self::PRIORITY_PER_PAGE));
+        $priorityPage = min(max(1, $this->priorityPage), $priorityLastPage);
+        $priorityOffset = ($priorityPage - 1) * self::PRIORITY_PER_PAGE;
+
+        $data['priorityJobs'] = $filteredPriorityJobs
+            ->slice($priorityOffset, self::PRIORITY_PER_PAGE)
+            ->values();
+        $data['priorityInquiries'] = $filteredPriorityInquiries
+            ->slice($priorityOffset, self::PRIORITY_PER_PAGE)
+            ->values();
+        $data['priorityTasks'] = $filteredPriorityTasks
+            ->slice($priorityOffset, self::PRIORITY_PER_PAGE)
+            ->values();
+        $data['priorityPagination'] = [
+            'page' => $priorityPage,
+            'lastPage' => $priorityLastPage,
+            'total' => $priorityTotal,
+            'from' => $priorityTotal > 0 ? $priorityOffset + 1 : 0,
+            'to' => min($priorityOffset + self::PRIORITY_PER_PAGE, $priorityTotal),
+            'hasPrevious' => $priorityPage > 1,
+            'hasNext' => $priorityPage < $priorityLastPage,
+        ];
 
         $data['clientPortfolio'] = collect($data['clientPortfolio'])
             ->filter(fn ($row) => $clientId <= 0 || (int) $row->id === $clientId)

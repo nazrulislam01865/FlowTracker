@@ -6,8 +6,12 @@
     $completionRate = $person->completion_rate;
     $inquiryCount = (int) $person->inquiry_task_count;
     $orderCount = (int) $person->order_task_count;
+    $departmentColor = $person->department_color ?? null;
 @endphp
-<article {{ $attributes->class(['ft-mgmt-team-card']) }}>
+<article
+    {{ $attributes->class(['ft-mgmt-team-card', 'has-department-color' => filled($departmentColor)]) }}
+    style="{{ \App\Support\MasterColor::style($departmentColor) }}"
+>
     <div class="ft-mgmt-team-prototype-head">
         <div class="ft-mgmt-person ft-mgmt-team-person">
             <x-ui.avatar :user="$person" :name="$person->name" :size="44" />
@@ -39,9 +43,18 @@
     <div class="ft-mgmt-team-divider"></div>
 
     <div class="ft-mgmt-team-stat-list">
-        <div class="ft-mgmt-team-stat"><span>Total tasks</span><b>{{ $total }}</b></div>
-        <div class="ft-mgmt-team-stat"><span>Open tasks</span><b>{{ $open }}</b></div>
-        <div class="ft-mgmt-team-stat"><span>Completed tasks</span><b>{{ $completed }}</b></div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-total">
+            <span class="ft-mgmt-team-stat-chip">Total tasks</span>
+            <b>{{ $total }}</b>
+        </div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-open">
+            <span class="ft-mgmt-team-stat-chip">Open tasks</span>
+            <b>{{ $open }}</b>
+        </div>
+        <div class="ft-mgmt-team-stat ft-mgmt-team-stat-completed">
+            <span class="ft-mgmt-team-stat-chip">Completed tasks</span>
+            <b>{{ $completed }}</b>
+        </div>
     </div>
 
     <div class="ft-mgmt-team-divider"></div>

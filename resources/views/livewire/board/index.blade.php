@@ -28,7 +28,7 @@ body{background:#f3f6fb;color:#172033}
 #my-work-app .metric i{display:grid;width:27px;height:27px;flex:0 0 27px;place-items:center;border-radius:8px;background:#edf3ff;color:#2463eb;font-size:10px;font-style:normal}
 #my-work-app .metric.red i{background:#fff0f0;color:#c43f3f}
 #my-work-app .metric.amber i{background:#fff6e5;color:#9a6208}
-#my-work-app .toolbar{display:flex;align-items:center;gap:8px;margin-top:10px;margin-bottom:0;padding:10px;border:1px solid #dbe3ed;border-radius:11px;background:#fff;flex-wrap:nowrap}
+#my-work-app .toolbar{display:grid;grid-template-columns:1fr;gap:9px;align-items:stretch;margin-top:10px;margin-bottom:0;padding:10px;border:1px solid #dbe3ed;border-radius:11px;background:#fff}
 #my-work-app .search-wrap{position:relative;min-width:240px;flex:1}
 #my-work-app .search-icon{position:absolute;left:11px;top:50%;color:#718198;transform:translateY(-50%)}
 #my-work-app .search{position:static;display:block;max-width:none;width:100%;height:38px;padding:0 62px 0 34px;border:1px solid #ccd8e8;border-radius:9px;background:#fff;outline:0;font-size:9px;flex:none}
@@ -41,7 +41,7 @@ body{background:#f3f6fb;color:#172033}
 #my-work-app .load-state{display:flex;min-height:28px;align-items:center;justify-content:space-between;gap:8px;padding:0 3px;color:#758298;font-size:7.5px}
 #my-work-app .spinner{display:inline-block;width:12px;height:12px;border:2px solid #dce5f2;border-top-color:#2463eb;border-radius:50%;animation:spin .6s linear infinite}
 #my-work-app .loading-copy{display:flex;align-items:center;gap:6px}
-#my-work-app .list-shell{overflow:hidden;border:1px solid #d8e1ec;border-radius:11px;background:#fff}
+#my-work-app .list-shell{overflow-x:auto;overflow-y:hidden;overscroll-behavior-x:contain;-webkit-overflow-scrolling:touch;scrollbar-gutter:stable;border:1px solid #d8e1ec;border-radius:11px;background:#fff}
 #my-work-app .task-head,#my-work-app .task-row{display:grid;grid-template-columns:minmax(230px,1.7fr) minmax(105px,.68fr) minmax(130px,.82fr) 92px 124px minmax(95px,.65fr) minmax(92px,.62fr) 48px;align-items:center;gap:8px}
 #my-work-app .task-head{min-height:32px;padding:0 11px;border-bottom:1px solid #dce3ec;background:#f8fafc;color:#69778e;font-size:7px;font-weight:780;letter-spacing:.04em;text-transform:uppercase}
 #my-work-app .order-group{border-bottom:1px solid #dce3ec;content-visibility:auto;contain:layout paint style;contain-intrinsic-size:205px}
@@ -295,35 +295,53 @@ body{background:#f3f6fb;color:#172033}
     </div>
 
     <section class="work-view" aria-busy="false">
-        <div class="metrics" aria-label="All Tasks work summary">
-            <button type="button" class="metric amber {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')"><span><small>Needs my action</small><strong x-text="metrics.attention">{{ $taskPackMetrics['attention'] ?? 0 }}</strong></span><i>⚑</i></button>
-            <button type="button" class="metric red {{ $taskQuick === 'overdue' ? 'active' : '' }}" wire:click="setTaskQuick('overdue')"><span><small>Overdue</small><strong x-text="metrics.overdue">{{ $taskPackMetrics['overdue'] ?? 0 }}</strong></span><i>!</i></button>
-            <button type="button" class="metric amber {{ $taskQuick === 'today' ? 'active' : '' }}" wire:click="setTaskQuick('today')"><span><small>Due today</small><strong x-text="metrics.today">{{ $taskPackMetrics['today'] ?? 0 }}</strong></span><i>◷</i></button>
-            <button type="button" class="metric {{ $taskQuick === 'upcoming' ? 'active' : '' }}" wire:click="setTaskQuick('upcoming')"><span><small>Upcoming</small><strong x-text="metrics.upcoming">{{ $taskPackMetrics['upcoming'] ?? 0 }}</strong></span><i>→</i></button>
-            <button type="button" class="metric {{ $taskQuick === 'waiting' ? 'active' : '' }}" wire:click="setTaskQuick('waiting')"><span><small>Waiting</small><strong x-text="metrics.waiting">{{ $taskPackMetrics['waiting'] ?? 0 }}</strong></span><i>⌛</i></button>
+        <div class="metrics ft-summary-card-grid" aria-label="All Tasks summary filters">
+            <x-ui.summary-card label="Created Today" :value="$taskPackMetrics['createdToday'] ?? 0" value-expression="metrics.createdToday ?? '—'" icon="created" tone="blue" caption="Tasks created today" :active="$taskQuick === 'createdToday'" wire:click="setTaskMetricFilter('createdToday')" aria-pressed="{{ $taskQuick === 'createdToday' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Not Started" :value="$taskPackMetrics['notStarted'] ?? 0" value-expression="metrics.notStarted ?? '—'" icon="not-started" tone="slate" caption="Waiting for first action" :active="$taskQuick === 'notStarted'" wire:click="setTaskMetricFilter('notStarted')" aria-pressed="{{ $taskQuick === 'notStarted' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="In Progress" :value="$taskPackMetrics['inProgress'] ?? 0" value-expression="metrics.inProgress ?? '—'" icon="in-progress" tone="blue" caption="Work currently underway" :active="$taskQuick === 'inProgress'" wire:click="setTaskMetricFilter('inProgress')" aria-pressed="{{ $taskQuick === 'inProgress' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Due This Week" :value="$taskPackMetrics['dueThisWeek'] ?? 0" value-expression="metrics.dueThisWeek ?? '—'" icon="due-week" tone="amber" caption="Tasks due this week" :active="$taskQuick === 'dueThisWeek'" wire:click="setTaskMetricFilter('dueThisWeek')" aria-pressed="{{ $taskQuick === 'dueThisWeek' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Completed This Week" :value="$taskPackMetrics['completedThisWeek'] ?? 0" value-expression="metrics.completedThisWeek ?? '—'" icon="completed" tone="green" caption="Finished this week" :active="$taskQuick === 'completedThisWeek'" wire:click="setTaskMetricFilter('completedThisWeek')" aria-pressed="{{ $taskQuick === 'completedThisWeek' ? 'true' : 'false' }}" />
+            <x-ui.summary-card label="Needs Attention" :value="$taskPackMetrics['attention'] ?? 0" value-expression="metrics.attention ?? '—'" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$taskQuick === 'attention'" wire:click="setTaskMetricFilter('attention')" aria-pressed="{{ $taskQuick === 'attention' ? 'true' : 'false' }}" />
         </div>
 
         <div class="toolbar">
-            <label class="search-wrap">
-                <span class="search-icon">⌕</span>
-                <input class="search" type="search" wire:model.live.debounce.400ms="search" autocomplete="off" placeholder="Search my tasks, Orders, clients or flags" aria-label="Search All Tasks">
-                @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
-            </label>
-            <div class="quick-filters">
-                <button type="button" class="chip {{ $taskQuick === 'attention' ? 'active' : '' }}" wire:click="setTaskQuick('attention')">Needs action</button>
-                <button type="button" class="chip {{ $taskQuick === 'all' ? 'active' : '' }}" wire:click="setTaskQuick('all')">All tasks</button>
-                <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('mentions')">Mentions (<span x-text="metrics.mentions">{{ $taskPackMetrics['mentions'] ?? 0 }}</span>)</button>
+            <div class="toolbar-primary">
+                <label class="search-wrap">
+                    <span class="search-icon">⌕</span>
+                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search tasks, Orders, clients, assignees or flags" aria-label="Search All Tasks">
+                    @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
+                </label>
+                <div class="phase-filters" aria-label="Filter by Order workflow phase">
+                    @foreach($taskPackPhaseOptions as $phaseOption)
+                        <button
+                            type="button"
+                            class="phase-toggle {{ $taskPhaseFilter === $phaseOption ? 'active' : '' }}"
+                            wire:click="setTaskPhaseFilter({{ \Illuminate\Support\Js::from($phaseOption) }})"
+                            aria-pressed="{{ $taskPhaseFilter === $phaseOption ? 'true' : 'false' }}"
+                            title="{{ $phaseOption }}"
+                        >
+                            <span class="phase-check" aria-hidden="true">✓</span>
+                            <span>{{ $phaseOption }}</span>
+                        </button>
+                    @endforeach
+                </div>
             </div>
-            <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
-                <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
-                <span class="completed-check" aria-hidden="true">✓</span>
-                <span>Hide completed</span>
-            </label>
-            <select class="sort" wire:model.live="taskSort" aria-label="Sort All Tasks">
-                <option value="action">Sort: Action priority</option>
-                <option value="due">Sort: Due soon</option>
-                <option value="job">Sort: Order number</option>
-            </select>
+            <div class="toolbar-secondary">
+                <div class="quick-filters">
+                    <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('{{ $taskQuick === 'mentions' ? 'all' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $taskPackMetrics['mentions'] ?? '—' }}</span>)</button>
+                </div>
+                <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
+                    <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
+                    <span class="completed-check" aria-hidden="true">✓</span>
+                    <span>Hide completed</span>
+                </label>
+                <select class="sort" wire:model.live="taskSort" aria-label="Sort All Tasks">
+                    <option value="action">Sort: Action priority</option>
+                    <option value="due">Sort: Due soon</option>
+                    <option value="job">Sort: Order number</option>
+                </select>
+                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $taskPhaseFilter === '' && $taskQuick === 'all' && $hideCompleted && $assignee === '' && $job === '' && $client === '' && $status === '' && $due === '')>Clear filters</button>
+            </div>
         </div>
 
         <div class="load-state">
@@ -338,8 +356,8 @@ body{background:#f3f6fb;color:#172033}
             </span>
             <span class="load-actions">
                 <span class="loading-copy">
-                    <span wire:loading.remove wire:target="search,taskQuick,taskSort,hideCompleted,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 400 ms</span>
-                    <span wire:loading.delay.long wire:target="search,taskQuick,taskSort,hideCompleted,setTaskQuick,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+                    <span wire:loading.remove wire:target="search,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
+                    <span wire:loading.delay.long wire:target="search,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
                 </span>
                 <span class="group-controls" aria-label="Order group controls">
                     <button type="button" class="group-control" x-on:click="groupsExpanded = true" title="Expand all Orders" aria-label="Expand all Orders">
@@ -426,7 +444,7 @@ body{background:#f3f6fb;color:#172033}
                         </div>
                     </article>
                 @empty
-                    <div class="empty"><strong>No matching work</strong>Try another task, Order, client, or flag.</div>
+                    <div class="empty"><strong>No matching work</strong>Try another task, Order, client, assignee, or flag.</div>
                 @endforelse
             </div>
 

@@ -12,6 +12,7 @@ use App\Services\ProductOptionImageService;
 use App\Services\ProductPriceTableParser;
 use App\Services\ProductCategoryDeletionService;
 use App\Support\MasterColor;
+use App\Support\AttachmentUpload;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -1483,13 +1484,13 @@ Remote Area charge	".$remoteRow;
     public function updatedProductCertificateUpload(): void
     {
         $this->removeProductCertificate = false;
-        $this->validateOnly('productCertificateUpload', ['productCertificateUpload' => ['nullable', 'file', 'max:10240']]);
+        $this->validateOnly('productCertificateUpload', ['productCertificateUpload' => AttachmentUpload::nullableRules(AttachmentUpload::PRODUCT_SUPPORTING, 10240)]);
     }
 
     public function updatedProductTemplateUpload(): void
     {
         $this->removeProductTemplate = false;
-        $this->validateOnly('productTemplateUpload', ['productTemplateUpload' => ['nullable', 'file', 'max:10240']]);
+        $this->validateOnly('productTemplateUpload', ['productTemplateUpload' => AttachmentUpload::nullableRules(AttachmentUpload::PRODUCT_SUPPORTING, 10240)]);
     }
 
     public function clearProductCertificateUpload(): void
@@ -1731,8 +1732,8 @@ Remote Area charge	".$remoteRow;
             'productClientIds' => $this->group === 'product' && $this->productClientAvailabilityMode === 'specific' ? ['required', 'array', 'min:1'] : ['array'],
             'productClientIds.*' => ['integer', Rule::exists('clients', 'id')->where(fn ($q) => $q->where('is_active', true))],
             'productTestCertificateNumber' => $this->group === 'product' ? ['nullable', 'string', 'max:255'] : ['nullable'],
-            'productCertificateUpload' => $this->group === 'product' ? ['nullable', 'file', 'max:10240'] : ['nullable'],
-            'productTemplateUpload' => $this->group === 'product' ? ['nullable', 'file', 'max:10240'] : ['nullable'],
+            'productCertificateUpload' => $this->group === 'product' ? AttachmentUpload::nullableRules(AttachmentUpload::PRODUCT_SUPPORTING, 10240) : ['nullable'],
+            'productTemplateUpload' => $this->group === 'product' ? AttachmentUpload::nullableRules(AttachmentUpload::PRODUCT_SUPPORTING, 10240) : ['nullable'],
             'description' => ['nullable', 'string', 'max:5000'],
             'color' => in_array($this->group, MasterDataService::COLOR_TYPES, true)
                 ? ['required', 'regex:/^#[0-9A-Fa-f]{6}$/']

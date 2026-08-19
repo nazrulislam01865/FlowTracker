@@ -323,7 +323,7 @@ class MyWorkService
     }
 
     /** @return list<int> */
-    private function orderPhaseSourceIdsForName(string $phaseName): array
+    public function orderPhaseSourceIdsForName(string $phaseName): array
     {
         $normalizedPhase = mb_strtolower(trim($phaseName));
         if ($normalizedPhase === '') return [];

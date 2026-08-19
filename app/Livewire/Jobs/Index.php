@@ -29,6 +29,7 @@ use App\Services\ProductImageService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
 use App\Support\BoardLaneResolver;
+use App\Support\AttachmentUpload;
 use Illuminate\Validation\Rule;
 use Illuminate\Support\Facades\Mail;
 use Livewire\Component;
@@ -1144,7 +1145,7 @@ class Index extends Component
             'invoiceLineItems.*.description' => ['required', 'string', 'max:255'],
             'invoiceLineItems.*.quantity' => ['required', 'numeric', 'gt:0', 'max:99999999'],
             'invoiceLineItems.*.unit_price' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
-            'invoiceSupportingDocument' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,csv,txt'],
+            'invoiceSupportingDocument' => AttachmentUpload::nullableRules(AttachmentUpload::FINANCE, 10240),
         ]);
 
         try {
@@ -1241,7 +1242,7 @@ class Index extends Component
             'paymentAmount' => ['required', 'numeric', 'gt:0'],
             'paymentReference' => ['nullable', 'string', 'max:255'],
             'paymentReceivedAccount' => ['nullable', Rule::in($this->financeMasterNames('received_account'))],
-            'paymentReceipt' => ['nullable', 'file', 'max:10240', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,csv,txt'],
+            'paymentReceipt' => AttachmentUpload::nullableRules(AttachmentUpload::FINANCE, 10240),
             'paymentNotes' => ['nullable', 'string', 'max:3000'],
             'paymentMarkInvoicePaid' => ['boolean'],
         ]);
@@ -1638,7 +1639,7 @@ class Index extends Component
             'jobItems.*.quantity' => ['required','integer','min:1','max:999999999'],
             'jobItems.*.unit_price' => ['nullable','numeric','min:0','max:999999999999.99'],
             'jobItems.*.notes' => ['nullable','string','max:2000'],
-            'jobAttachments.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'jobAttachments.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS, 20480),
         ], [
             'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
             'jobItems.required' => 'Select at least one product for this Order.',
@@ -2145,11 +2146,10 @@ class Index extends Component
         try {
             $this->validate([
                 'jobDocumentTaskId' => ['required','integer','exists:tasks,id'],
-                'jobRequiredDocumentUpload' => ['required','file','max:20480','mimes:pdf,docx,xlsx,jpg,jpeg,png,zip'],
+                'jobRequiredDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::ORDER_REQUIRED, 20480),
             ], [
                 'jobDocumentTaskId.required' => 'Choose a document type before uploading a file.',
                 'jobRequiredDocumentUpload.max' => 'The file is too large. The maximum size is 20 MB.',
-                'jobRequiredDocumentUpload.mimes' => 'Use a PDF, DOCX, XLSX, JPG, PNG or ZIP file.',
             ]);
 
             $job = app(JobService::class)->findVisible(auth()->user(), $this->selectedJobId);
@@ -2446,10 +2446,9 @@ class Index extends Component
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
             $this->validate([
-                'overviewTaskDocumentUpload' => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv,ai'],
+                'overviewTaskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
             ], [
                 'overviewTaskDocumentUpload.max' => 'The file is too large. Maximum file size is 20 MB.',
-                'overviewTaskDocumentUpload.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT, CSV or AI.',
             ]);
 
             $storeData = [
@@ -2558,11 +2557,10 @@ class Index extends Component
         }
 
         $validator = validator(['overviewTaskUploads' => [$taskId => $upload]], [
-            $property => ['required', 'file', 'max:20480', 'mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            $property => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS, 20480),
         ], [
             $property.'.required' => 'Choose a file to upload.',
             $property.'.max' => 'The file is too large. Maximum file size is 20 MB.',
-            $property.'.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
         ]);
 
         if ($validator->fails()) {
@@ -2652,11 +2650,10 @@ class Index extends Component
         ], [
             'jobDocumentTaskId' => ['required','integer','exists:tasks,id'],
             'jobDocumentUploads' => ['required','array','min:1'],
-            'jobDocumentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'jobDocumentUploads.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS, 20480),
         ], [
             'jobDocumentUploads.required' => 'Choose at least one file to upload.',
             'jobDocumentUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
-            'jobDocumentUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
         ]);
 
         if ($validator->fails()) {
@@ -3088,11 +3085,10 @@ class Index extends Component
 
         $validator = validator(['taskDocumentUploads' => $this->taskDocumentUploads], [
             'taskDocumentUploads' => ['required','array','min:1'],
-            'taskDocumentUploads.*' => ['file','max:20480','mimes:pdf,doc,docx,xls,xlsx,jpg,jpeg,png,zip,txt,csv'],
+            'taskDocumentUploads.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS, 20480),
         ], [
             'taskDocumentUploads.required' => 'Choose at least one file to upload.',
             'taskDocumentUploads.*.max' => 'The file is too large. Maximum file size is 20 MB.',
-            'taskDocumentUploads.*.mimes' => 'Unsupported file type. Use PDF, DOC, DOCX, XLS, XLSX, JPG, PNG, ZIP, TXT or CSV.',
         ]);
 
         if ($validator->fails()) {

@@ -280,6 +280,35 @@
                 @endif
             </table>
         </div>
+        <div class="ft-mgmt-priority-pagination" aria-label="Priority work pagination">
+            <span class="ft-mgmt-priority-page-status">
+                @if(($priorityPagination['total'] ?? 0) > 0)
+                    {{ $priorityPagination['from'] }}–{{ $priorityPagination['to'] }} of {{ $priorityPagination['total'] }}
+                @else
+                    0 items
+                @endif
+            </span>
+            <button
+                type="button"
+                class="ft-mgmt-priority-page-btn"
+                wire:click="previousPriorityPage"
+                wire:loading.attr="disabled"
+                wire:target="previousPriorityPage,nextPriorityPage"
+                @disabled(!($priorityPagination['hasPrevious'] ?? false))
+                aria-label="Previous priority work page"
+                title="Previous page"
+            >←</button>
+            <button
+                type="button"
+                class="ft-mgmt-priority-page-btn"
+                wire:click="nextPriorityPage"
+                wire:loading.attr="disabled"
+                wire:target="previousPriorityPage,nextPriorityPage"
+                @disabled(!($priorityPagination['hasNext'] ?? false))
+                aria-label="Next priority work page"
+                title="Next page"
+            >→</button>
+        </div>
     </section>
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
@@ -333,7 +362,12 @@
             </div>
         </article>
 
-    <livewire:dashboard.tagged-comments />
+    <livewire:dashboard.tagged-comments
+        :range-days="$rangeDays"
+        :client-filter="$clientFilter"
+        :team-filter="$teamFilter"
+        :search="$search"
+    />
     </section>
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
@@ -391,9 +425,12 @@
     @if(auth()->user()->canAccess('reports.view'))
     @php
         $teamReportParams = array_filter([
-            'period' => $teamPeriod,
-            'from' => $teamPeriod === 'custom' ? $teamCustomFrom : null,
-            'to' => $teamPeriod === 'custom' ? $teamCustomTo : null,
+            // Keep "View all" aligned with the dashboard's global period. The
+            // full report still supports its own reporting-period controls after
+            // the user leaves the dashboard.
+            'period' => 'custom',
+            'from' => $teamReportingPeriod['from'] ?? null,
+            'to' => $teamReportingPeriod['to'] ?? null,
             'client' => $clientFilter,
             'department' => $teamFilter,
             'q' => $search,
@@ -403,39 +440,16 @@
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>
-                <p>Top 4 assignees ranked from actual Inquiry and Order task records in the selected reporting period.</p>
+                <p>Top 4 assignees from actual Inquiry and Order task records · {{ $teamReportingPeriod['label'] ?? 'Last 7 days' }}.</p>
             </div>
             <a class="ft-mgmt-btn ft-mgmt-team-view-all" href="{{ route('team-performance.report', $teamReportParams) }}" wire:navigate>View all</a>
         </div>
         <div class="ft-mgmt-panel-body">
-            <div class="ft-mgmt-team-filter-row">
-                <div class="ft-mgmt-team-controls">
-                    <label class="ft-mgmt-team-period">
-                        <span>Reporting period</span>
-                        <select wire:model.live="teamPeriod" aria-label="Team performance reporting period">
-                            <option value="this_week">This week</option>
-                            <option value="this_month">This month</option>
-                            <option value="last_30_days">Last 30 days</option>
-                            <option value="custom">Custom range</option>
-                        </select>
-                    </label>
-                    @if($teamPeriod === 'custom')
-                        <div class="ft-mgmt-team-custom-range">
-                            <label><span>From</span><input type="date" wire:model.live="teamCustomFrom" aria-label="Custom reporting period start"></label>
-                            <label><span>To</span><input type="date" wire:model.live="teamCustomTo" aria-label="Custom reporting period end"></label>
-                        </div>
-                    @endif
-                </div>
-                <div class="ft-mgmt-team-filter-note">
-                    <strong>{{ $teamReportingPeriod['label'] ?? 'This week' }}</strong>
-                    <span>Live task totals · current assignee · cancelled/deleted tasks excluded</span>
-                </div>
-            </div>
             <div class="ft-mgmt-team-grid">
                 @forelse($assigneePerformance as $person)
                     <x-dashboard.team-performance-card :person="$person" wire:key="mgmt-person-{{ $person->id }}" />
                 @empty
-                    <div class="ft-mgmt-empty">No team workload matches the current filters and reporting period.</div>
+                    <div class="ft-mgmt-empty">No team workload matches the current dashboard filters and period.</div>
                 @endforelse
             </div>
         </div>
@@ -445,7 +459,7 @@
 
     <section class="ft-mgmt-grid ft-mgmt-dashboard-pair-grid">
         <article class="ft-mgmt-panel ft-mgmt-client-panel">
-            <div class="ft-mgmt-panel-head"><div><h2>Client portfolio</h2><p>Active work, inquiry volume and completion</p></div><a class="ft-mgmt-link" href="{{ route('clients.index') }}" wire:navigate>All clients</a></div>
+            <div class="ft-mgmt-panel-head"><div><h2>Client portfolio</h2><p>Activity and completion in the selected dashboard period</p></div><a class="ft-mgmt-link" href="{{ route('clients.index') }}" wire:navigate>All clients</a></div>
             <div class="ft-mgmt-panel-body ft-mgmt-client-portfolio-body">
                 @if($clientPortfolio->isNotEmpty())
                     <div class="ft-mgmt-client-head" aria-hidden="true">

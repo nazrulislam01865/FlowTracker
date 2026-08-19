@@ -5,12 +5,25 @@ namespace App\Livewire\Dashboard;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Services\DashboardService;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Reactive;
 use Livewire\Component;
 
 class TaggedComments extends Component
 {
     use RefreshesFromWorkspace;
     public string $filter = 'all';
+
+    #[Reactive]
+    public int $rangeDays = 7;
+
+    #[Reactive]
+    public string $clientFilter = '';
+
+    #[Reactive]
+    public string $teamFilter = '';
+
+    #[Reactive]
+    public string $search = '';
 
     public function placeholder(): string
     {
@@ -32,7 +45,13 @@ class TaggedComments extends Component
 
     public function markAllRead(): void
     {
-        app(DashboardService::class)->markAllMentionsRead(auth()->user());
+        app(DashboardService::class)->markAllMentionsRead(
+            auth()->user(),
+            max(0, (int) $this->clientFilter),
+            max(0, (int) $this->teamFilter),
+            $this->rangeDays,
+            $this->search,
+        );
     }
 
     #[On('flowtrack-notification')]
@@ -45,13 +64,31 @@ class TaggedComments extends Component
     public function render()
     {
         $service = app(DashboardService::class);
-        // Apply the selected category in SQL before LIMIT. Filtering an already
-        // limited collection can incorrectly hide older matching mentions.
-        $mentions = $service->mentions(auth()->user(), $this->filter, 4);
+        $clientId = max(0, (int) $this->clientFilter);
+        $departmentId = max(0, (int) $this->teamFilter);
+
+        // Apply both the local mention tab and the parent dashboard controls in SQL
+        // before LIMIT. This keeps the feed synchronized with Today/7 days/30 days,
+        // Client, Team and Search instead of behaving like an isolated widget.
+        $mentions = $service->mentions(
+            auth()->user(),
+            $this->filter,
+            4,
+            $clientId,
+            $departmentId,
+            $this->rangeDays,
+            $this->search,
+        );
 
         return view('livewire.dashboard.tagged-comments', [
             'mentions' => $mentions,
-            'unreadMentionCount' => $service->unreadMentionCount(auth()->user()),
+            'unreadMentionCount' => $service->unreadMentionCount(
+                auth()->user(),
+                $clientId,
+                $departmentId,
+                $this->rangeDays,
+                $this->search,
+            ),
         ]);
     }
 }

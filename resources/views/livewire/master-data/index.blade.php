@@ -5,6 +5,7 @@
         $hasColor = in_array($group, \App\Services\MasterDataService::COLOR_TYPES, true);
         $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0) + ($group === 'task_pack_work_calendar' ? 2 : 0);
         $colorUsageLabel = match ($group) {
+            'department' => 'department and team performance',
             'task_status' => 'legacy task status',
             'task_flag' => 'legacy task flag',
             'order_task_status' => 'order task status',

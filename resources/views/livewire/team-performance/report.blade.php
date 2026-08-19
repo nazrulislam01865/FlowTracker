@@ -98,5 +98,36 @@
                 @endforelse
             </div>
         </div>
+
+        @if(($teamPagination['total'] ?? 0) > 0)
+            <div class="ft-mgmt-team-report-pagination" aria-label="Team performance pagination">
+                <span class="ft-mgmt-priority-page-status">
+                    Showing {{ $teamPagination['from'] }}–{{ $teamPagination['to'] }} of {{ $teamPagination['total'] }}
+                    @if(($teamPagination['lastPage'] ?? 1) > 1)
+                        · Page {{ $teamPagination['page'] }} of {{ $teamPagination['lastPage'] }}
+                    @endif
+                </span>
+                <button
+                    type="button"
+                    class="ft-mgmt-priority-page-btn"
+                    wire:click="previousTeamPage"
+                    wire:loading.attr="disabled"
+                    wire:target="previousTeamPage,nextTeamPage"
+                    @disabled(!($teamPagination['hasPrevious'] ?? false))
+                    aria-label="Previous team performance page"
+                    title="Previous page"
+                >←</button>
+                <button
+                    type="button"
+                    class="ft-mgmt-priority-page-btn"
+                    wire:click="nextTeamPage"
+                    wire:loading.attr="disabled"
+                    wire:target="previousTeamPage,nextTeamPage"
+                    @disabled(!($teamPagination['hasNext'] ?? false))
+                    aria-label="Next team performance page"
+                    title="Next page"
+                >→</button>
+            </div>
+        @endif
     </section>
 </x-ui.management-theme>
