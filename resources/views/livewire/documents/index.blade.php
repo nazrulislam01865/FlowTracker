@@ -52,12 +52,7 @@
                 <strong>{{ $formatBytes((int) $storageBytes) }} used</strong>
             </div>
         </div>
-        @if(auth()->user()->canModule('document_archive', 'create'))
-            <button type="button" class="ft-da-upload-button" wire:click="openUpload">
-                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
-                <span>Upload document</span>
-            </button>
-        @endif
+
     </header>
 
     @if(session('success'))
