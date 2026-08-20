@@ -9,23 +9,21 @@ class BoardTaskPackRefactorTest extends TestCase
     public function test_all_tasks_uses_the_literal_my_work_design_without_job_board_navigation(): void
     {
         $board = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
-        $css = file_get_contents(resource_path('css/modules/work/all-tasks.css'));
-        $this->assertStringNotContainsString('<style>', $board);
-        $this->assertStringContainsString('#my-work-app .list-shell{overflow-x:auto', $css);
+        $this->assertStringContainsString('<style>', $board);
         $this->assertStringContainsString('id="my-work-app"', $board);
         $this->assertStringContainsString('class="page-head"', $board);
         $this->assertStringContainsString('<h1>All Tasks</h1>', $board);
         $this->assertStringNotContainsString('Job Board', $board);
         $this->assertStringNotContainsString("setMode('jobs')", $board);
         $this->assertStringContainsString('class="metrics ft-summary-card-grid"', $board);
-        $this->assertStringContainsString('class="toolbar ft-list-filter-bar"', $board);
+        $this->assertStringContainsString('class="toolbar"', $board);
         $this->assertSame(6, substr_count($board, '<x-ui.summary-card '));
         $this->assertStringContainsString('class="phase-filters"', $board);
         $this->assertStringContainsString('class="phase-toggle', $board);
         $this->assertStringContainsString('Clear filters', $board);
         $this->assertStringContainsString('class="list-shell"', $board);
-        $this->assertStringContainsString('overflow-x:auto', $css);
-        $this->assertStringContainsString('-webkit-overflow-scrolling:touch', $css);
+        $this->assertStringContainsString('overflow-x:auto', $board);
+        $this->assertStringContainsString('-webkit-overflow-scrolling:touch', $board);
         $this->assertStringContainsString('class="task-head"', $board);
         $this->assertStringContainsString('class="order-head"', $board);
         $this->assertStringContainsString('class="task-row"', $board);
@@ -47,7 +45,7 @@ class BoardTaskPackRefactorTest extends TestCase
 
         $this->assertStringContainsString('applyTaskScope(Task::query(), $user)', $service);
         $this->assertStringContainsString("->select('tasks.flow_job_id')", $service);
-        $this->assertStringContainsString("->whereIn('flow_jobs.id', \$visibleTaskIds)", $service);
+        $this->assertStringContainsString("->whereIn('flow_jobs.id', $visibleTaskIds)", $service);
         $this->assertStringContainsString('Never hydrate sibling tasks outside the Tasks matrix scope', $service);
         $this->assertStringContainsString("Task::query()->whereIn('tasks.flow_job_id', \$jobIds)", $service);
         $this->assertStringContainsString("'assignee:id,name,department_id,profile_image_path'", $service);
@@ -101,8 +99,8 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringContainsString('setTaskPhaseFilter', $component);
         $this->assertStringContainsString("'phase' => \$this->taskPhaseFilter", $component);
         $this->assertStringContainsString('return app(MyWorkService::class)->metrics($user);', $service);
-        $this->assertStringContainsString("'createdToday' => \$query->whereBetween('tasks.created_at'", $service);
-        $this->assertStringContainsString("'completedThisWeek' => \$query", $service);
+        $this->assertStringContainsString("'createdToday' => $query->whereBetween('tasks.created_at'", $service);
+        $this->assertStringContainsString("'completedThisWeek' => $query", $service);
         $this->assertStringContainsString('orderPhaseSourceIdsForName', $service);
     }
 
@@ -114,10 +112,10 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertStringContainsString('Paginate Job groups first', $service);
         $this->assertStringContainsString("->groupBy('tasks.flow_job_id')", $service);
         $this->assertStringContainsString('->paginate(max(1, min(25, $perPage))', $service);
-        $this->assertStringContainsString("->whereIn('tasks.flow_job_id', \$jobIds)", $service);
+        $this->assertStringContainsString("->whereIn('tasks.flow_job_id', $jobIds)", $service);
         $this->assertStringContainsString('use WithPagination;', $component);
         $this->assertStringContainsString('BoardTaskPackService::JOBS_PER_PAGE', $component);
-        $this->assertStringContainsString('public const JOBS_PER_PAGE = 3;', $service);
+        $this->assertStringContainsString('public const JOBS_PER_PAGE = 5;', $service);
         $this->assertStringContainsString("resetPage('taskPackPage')", $component);
     }
 
@@ -129,7 +127,7 @@ class BoardTaskPackRefactorTest extends TestCase
         $this->assertMatchesRegularExpression('/#\[Renderless\]\s+public function updateTaskStatus\b/', $component);
         $this->assertStringContainsString('TaskService::class)->visibleQuery($actor)', $component);
         $this->assertStringContainsString('canEditTaskWithoutQuery', $service);
-        $this->assertStringContainsString('Mirror task-edit authorization using already eager-loaded fields', $service);
+        $this->assertStringContainsString('read-only context for the other Job tasks', $service);
     }
 
     public function test_task_pack_association_has_a_dedicated_database_index(): void

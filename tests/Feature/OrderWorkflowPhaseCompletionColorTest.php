@@ -12,7 +12,7 @@ class OrderWorkflowPhaseCompletionColorTest extends TestCase
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
         $workflow = file_get_contents(resource_path('views/components/jobs/detail-workflow.blade.php'));
         $css = file_get_contents(resource_path('css/flowtrack.css'));
-        $runtimeColors = $this->compatibilityCss('flowtrack-master-colors.css');
+        $runtimeColors = file_get_contents(public_path('css/flowtrack-master-colors.css'));
         $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
 
         $this->assertStringContainsString('public static function isPhaseComplete', $presenter);
@@ -32,7 +32,6 @@ class OrderWorkflowPhaseCompletionColorTest extends TestCase
         $this->assertStringContainsString('.ft-exact-job-detail .ft-workflow-step[style].done span{', $runtimeColors);
         $this->assertStringNotContainsString('.ft-workflow-mini-line button[style].current span', $runtimeColors);
         $this->assertStringNotContainsString('.ft-workflow-step[style].done span,.ft-workflow-step[style].current span', $runtimeColors);
-        $this->assertLayoutLoadsViteCss('resources/css/legacy/shell-b.css', $layout);
-        $this->assertStringContainsString("@import './compatibility/flowtrack-master-colors.css';", file_get_contents(resource_path('css/legacy/shell-b.css')));
+        $this->assertStringContainsString('flowtrack-master-colors.css?v=20260820-order-phase-completion-2', $layout);
     }
 }

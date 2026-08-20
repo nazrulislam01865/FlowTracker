@@ -92,47 +92,12 @@ function metrics(string $root): array
     $appText = readTextFiles($appPhpFiles);
 
     $allCssFiles = collectFiles($root . '/resources/css', '.css');
-
-    // Phase 3 relocated previously external/Blade-owned compatibility CSS into
-    // resources/css so Vite can own it. Those files are not new architectural
-    // debt and must not distort the Phase 0 ceilings simply because their path
-    // changed. Their bytes/colors/!important ceilings are enforced separately
-    // by scripts/quality/phase3-migration.php.
-    $phase3RelocatedLegacy = static function (string $file) use ($root): bool {
-        $relative = normalizePath($file, $root);
-
-        if (str_starts_with($relative, 'resources/css/legacy/compatibility/')) {
-            return true;
-        }
-
-        return in_array($relative, [
-            'resources/css/migration/components/summary-card.css',
-            'resources/css/migration/components/date-range-filter.css',
-            'resources/css/migration/components/export-period-modal.css',
-            'resources/css/modules/orders/list.css',
-            'resources/css/modules/work/all-tasks.css',
-        ], true);
-    };
-
-    $architectureCssFiles = array_values(array_filter(
-        $allCssFiles,
-        static fn (string $file): bool => ! $phase3RelocatedLegacy($file)
-    ));
-    $allCssText = readTextFiles($architectureCssFiles);
+    $allCssText = readTextFiles($allCssFiles);
     $canonicalCssFiles = array_values(array_filter(
-        $architectureCssFiles,
+        $allCssFiles,
         static fn (string $file): bool => !str_contains(str_replace('\\', '/', $file), '/resources/css/generated/')
     ));
     $canonicalCssText = readTextFiles($canonicalCssFiles);
-
-    // Phase 1 establishes tokens.css as the one allowed owner of static design
-    // values. Hard-coded color debt excludes that authoritative token source
-    // while continuing to count legacy/component/page stylesheets.
-    $hardcodedColorDebtFiles = array_values(array_filter(
-        $canonicalCssFiles,
-        static fn (string $file): bool => normalizePath($file, $root) !== 'resources/css/foundation/tokens.css'
-    ));
-    $hardcodedColorDebtText = readTextFiles($hardcodedColorDebtFiles);
 
     $flowtrackPath = $root . '/resources/css/flowtrack.css';
     $flowtrackText = is_file($flowtrackPath) ? (string) file_get_contents($flowtrackPath) : '';
@@ -172,7 +137,7 @@ function metrics(string $root): array
             'blade_hardcoded_hex_colors' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $bladeText),
             'css_important_all' => regexCount('/!important\b/', $allCssText),
             'css_important_canonical' => regexCount('/!important\b/', $canonicalCssText),
-            'css_hardcoded_hex_canonical' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $hardcodedColorDebtText),
+            'css_hardcoded_hex_canonical' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $canonicalCssText),
             'flowtrack_css_bytes' => is_file($flowtrackPath) ? filesize($flowtrackPath) : 0,
             'flowtrack_css_lines' => is_file($flowtrackPath) ? lineCount($flowtrackPath) : 0,
             'flowtrack_css_important' => regexCount('/!important\b/', $flowtrackText),

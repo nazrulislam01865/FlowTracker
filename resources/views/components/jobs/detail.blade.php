@@ -152,8 +152,7 @@
                 <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
                 @if($jobFlag)<span class="ft-soft-pill {{ $jobFlagColor ? 'ft-master-color' : 'amber' }}" style="{{ \App\Support\MasterColor::style($jobFlagColor) }}">⚑ {{ $jobFlag }}</span>@endif
                 <span class="ft-soft-pill {{ $jobPriorityColor ? 'ft-master-color' : 'red' }}" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}">{{ $job->priority }}</span>
-                <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::taskStatusClass((string) $job->status) }}" title="Order status">{{ $job->status ?: 'New' }}</span>
-                <x-ui.phase-label :phase="$job->phase" fallback="Unassigned phase" class="ft-soft-pill" title="Current phase" />
+                <x-ui.phase-label :phase="$job->phase" :fallback="$job->status" class="ft-soft-pill" />
             </div>
         </div>
         <div class="ft-detail-actions ft-exact-job-team" aria-label="Order team">

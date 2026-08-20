@@ -6,12 +6,12 @@ use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 
+use App\Models\Department;
 use App\Models\Role;
 use App\Models\RoleModuleAccess;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\AdminService;
-use App\Services\FilterOptionService;
 use App\Services\BrandingService;
 use App\Services\SetupContext;
 use Illuminate\Validation\Rule;
@@ -341,13 +341,6 @@ class Index extends Component
         return $this->redirectRoute('administration', ['tab' => 'branding']);
     }
 
-    public function setDepartmentSelection(string $property, string $value): void
-    {
-        abort_unless($property === 'departmentId', 422);
-        abort_unless(auth()->user()->isSuperAdmin(), 403);
-        $this->departmentId = $value !== '' ? (int) $value : null;
-    }
-
     public function render()
     {
         $service = app(AdminService::class);
@@ -407,14 +400,10 @@ class Index extends Component
         return [
             'users' => $service->paginateUsers(10, 'usersPage'),
             'roles' => $service->roleOptions(),
-            'departments' => app(FilterOptionService::class)->options(
-                auth()->user(),
-                'departments',
-                'administration',
-                '',
-                $this->departmentId,
-                FilterOptionService::COMPACT_PER_PAGE,
-            ),
+            'departments' => Department::query()
+                ->where('is_active', true)
+                ->orderBy('name')
+                ->get(['id', 'name']),
         ];
     }
 }

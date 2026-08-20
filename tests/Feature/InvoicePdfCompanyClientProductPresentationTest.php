@@ -19,7 +19,7 @@ class InvoicePdfCompanyClientProductPresentationTest extends TestCase
         $this->assertStringContainsString("'QTY'", $pdf);
         $this->assertStringContainsString("'UNIT PRICE'", $pdf);
         $this->assertStringContainsString("'TOTAL'", $pdf);
-        $this->assertStringContainsString("'client_snapshot' => app(ClientInvoiceProfileService::class)->invoiceSnapshot(\$lockedJob->client)", $finance);
+        $this->assertStringContainsString("'client_snapshot' => app(ClientInvoiceProfileService::class)->invoiceSnapshot($lockedJob->client)", $finance);
         $this->assertStringContainsString('public function image(string $path', $document);
     }
 

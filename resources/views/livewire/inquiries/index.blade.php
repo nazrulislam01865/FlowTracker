@@ -79,32 +79,22 @@
 
             <div class="shell inquiry-list-v2">
                 <div class="toolbar">
-                    <x-ui.search-input
-                        class="search ft-inquiry-search-control"
-                        property="search"
-                        :value="$search"
-                        label="Search inquiries"
-                        placeholder="Search inquiry, title, client, task or assignee"
-                        :debounce="350"
-                        :hide-label="true"
-                    />
-                    <x-ui.filter-bar class="filters inquiry-filter-controls" label="Inquiry filters">
-                        <x-ui.filter-chip class="chip" :active="$metricFilter === '' && $inquiryToolbarIsClear" wire:click="setQuick('all')">All</x-ui.filter-chip>
-                        <x-ui.filter-chip class="chip ft-inquiry-attention-filter" :active="$quick === 'attention'" wire:click="setQuick('attention')">
+                    <div class="search"><span>⌕</span><input wire:model.live.debounce.350ms="search" placeholder="Search inquiry, title, client, task or assignee"></div>
+                    <div class="filters inquiry-filter-controls">
+                        <button class="chip {{ $metricFilter === '' && $inquiryToolbarIsClear ? 'active' : '' }}" type="button" wire:click="setQuick('all')" aria-pressed="{{ $metricFilter === '' && $inquiryToolbarIsClear ? 'true' : 'false' }}">All</button>
+                        <button class="chip ft-inquiry-attention-filter {{ $quick === 'attention' ? 'active' : '' }}" type="button" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}">
                             <span aria-hidden="true">⚠</span> Attention needed
-                        </x-ui.filter-chip>
-                        <x-ui.search-select
-                            class="ft-inquiry-status-filter"
-                            label="Task status"
-                            property="listStatus"
-                            :value="$listStatus"
-                            placeholder="All task statuses"
-                            :options="collect($listStatusOptions)->map(fn ($statusOption) => ['id' => $statusOption, 'label' => $statusOption])"
-                            :hide-label="true"
-                            :fixed-menu="true"
-                            :menu-width="220"
-                        />
-                        <x-ui.search-select
+                        </button>
+                        <label class="ft-inquiry-status-filter">
+                            <select wire:model.live="listStatus" aria-label="Filter inquiries by task status">
+                                <option value="">All task statuses</option>
+                                @foreach($listStatusOptions as $statusOption)
+                                    <option value="{{ $statusOption }}">{{ $statusOption }}</option>
+                                @endforeach
+                            </select>
+                            <span class="ft-inquiry-status-filter-chevron" aria-hidden="true">⌄</span>
+                        </label>
+                        <x-ui.remote-filter
                             class="ft-inquiry-list-client-filter"
                             label="Client"
                             property="listClient"
@@ -124,7 +114,7 @@
                             <span class="completed-check" aria-hidden="true">✓</span>
                             <span>Hide completed</span>
                         </label>
-                        <x-ui.date-range
+                        <x-ui.date-range-filter
                             class="ft-inquiry-date-range"
                             from-property="dateFrom"
                             to-property="dateTo"
@@ -134,15 +124,16 @@
                             from-label="From"
                             to-label="To"
                         />
-                        <x-ui.filter-reset
+                        <button
                             class="chip ft-inquiry-clear-filter"
-                            action="clearFilters"
-                            label="Clear filter"
-                            icon="×"
-                            :disabled="! $inquiryAnyFilterActive"
+                            type="button"
+                            wire:click="clearFilters"
+                            @disabled(! $inquiryAnyFilterActive)
                             aria-label="Clear active inquiry filter"
-                        />
-                    </x-ui.filter-bar>
+                        >
+                            <span aria-hidden="true">×</span> Clear filter
+                        </button>
+                    </div>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
                     <div class="listhead">
@@ -362,7 +353,7 @@
                             <div class="ft-inquiry-create-field">
                                 <label>Client *</label>
                                 <div class="ft-inquiry-client-control-row">
-                                    <x-ui.search-select
+                                    <x-ui.remote-filter
                                         class="ft-create-remote-select inquiry-create-remote ft-inquiry-client-selector"
                                         label="Client"
                                         property="clientId"
@@ -412,7 +403,7 @@
 
                             <div class="ft-inquiry-create-field">
                                 <label>Assigned to *</label>
-                                <x-ui.search-select
+                                <x-ui.remote-filter
                                     class="ft-create-remote-select inquiry-create-remote ft-inquiry-owner-selector"
                                     label="Assigned to"
                                     property="createOwnerId"

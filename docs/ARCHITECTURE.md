@@ -1,6 +1,6 @@
 # FlowTrack architecture
 
-> **Current-state note (Phase 1):** This document contains target-state guidance that can be ahead of the executable archive. Use `docs/refactor/CURRENT_STATE.md`, `docs/refactor/PHASE_0_BASELINE.md`, `docs/refactor/PHASE_1_IMPLEMENTATION.md`, and `docs/ui-design-system.md` for what is implemented now; activate later target directories/rules only as their roadmap phase lands.
+> **Phase 0 current-state note:** This document contains target-state guidance that is ahead of the current executable archive. Use `docs/refactor/CURRENT_STATE.md` and `docs/refactor/PHASE_0_BASELINE.md` for what is actually implemented now; activate target directories/rules only as their roadmap phase lands.
 
 
 FlowTrack is a Laravel 13 and Livewire 4 modular monolith. It keeps one deployment unit and one transactional database while enforcing feature boundaries in source code. This is the appropriate operating model for the current team and an expected concurrent audience of roughly 50–60 people: it avoids distributed-system overhead while preserving a clean path to split workloads later.

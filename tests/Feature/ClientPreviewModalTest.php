@@ -26,7 +26,7 @@ class ClientPreviewModalTest extends TestCase
             ->assertDontSeeHtml('ft-client-preview-backdrop');
     }
 
-    public function test_clicking_a_client_opens_the_full_client_detail_directly(): void
+    public function test_clicking_a_client_opens_and_closes_the_summary_modal(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $client = $this->client();
@@ -35,25 +35,28 @@ class ClientPreviewModalTest extends TestCase
             ->test(Index::class)
             ->call('openClient', $client->id)
             ->assertSet('selectedClientId', $client->id)
-            ->assertSet('showClientPreview', false)
-            ->assertSet('showDetail', true)
+            ->assertSet('showClientPreview', true)
             ->assertSee('ActiveWear Sports')
-            ->assertSee('Overview')
-            ->assertSeeHtml('ft-client-prototype-page');
+            ->assertSeeHtml('role="dialog"')
+            ->assertSeeHtml('ft-client-preview-backdrop')
+            ->call('closeClientPreview')
+            ->assertSet('selectedClientId', null)
+            ->assertSet('showClientPreview', false)
+            ->assertDontSeeHtml('ft-client-preview-backdrop');
     }
 
-    public function test_view_client_action_keeps_preview_retired_and_full_detail_active(): void
+    public function test_open_client_action_switches_from_preview_to_full_detail(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $client = $this->client();
 
         Livewire::actingAs($user)
             ->test(Index::class)
+            ->call('openClient', $client->id)
             ->call('viewClient', $client->id)
             ->assertSet('showClientPreview', false)
             ->assertSet('showDetail', true)
-            ->assertSet('selectedClientId', $client->id)
-            ->assertSee('ActiveWear Sports');
+            ->assertSee('Client Details');
     }
 
     private function client(): Client

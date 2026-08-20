@@ -10,15 +10,11 @@ class InquirySingleFilterBehaviorTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
-        $reset = file_get_contents(resource_path('views/components/ui/filter-reset.blade.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
 
-        $this->assertStringContainsString('<x-ui.filter-reset', $view);
-        $this->assertStringContainsString('action="clearFilters"', $view);
-        $this->assertStringContainsString('label="Clear filter"', $view);
-        $this->assertStringContainsString(':disabled="! $inquiryAnyFilterActive"', $view);
-        $this->assertStringContainsString('wire:click="{{ $action }}"', $reset);
-        $this->assertStringContainsString('@disabled($disabled)', $reset);
+        $this->assertStringContainsString('wire:click="clearFilters"', $view);
+        $this->assertStringContainsString('Clear filter', $view);
+        $this->assertStringContainsString('@disabled(! $inquiryAnyFilterActive)', $view);
         $this->assertStringContainsString('public function clearFilters(): void', $component);
         $this->assertStringContainsString("\$this->clearListFiltersExcept('search');", $component);
         $this->assertStringContainsString("\$this->clearListFiltersExcept('status');", $component);

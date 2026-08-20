@@ -12,11 +12,11 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
-        $this->assertStringContainsString('public const JOBS_PER_PAGE = 3;', $service);
+        $this->assertStringContainsString('public const JOBS_PER_PAGE = 5;', $service);
         $this->assertStringContainsString('min(self::JOBS_PER_PAGE, $perPage)', $service);
         $this->assertStringContainsString('public int $perPage = MyWorkService::JOBS_PER_PAGE;', $component);
         $this->assertStringContainsString("previousPage('workPage')", $view);
-        $this->assertStringContainsString("gotoPage({{ \$pageNumber }}, 'workPage')", $view);
+        $this->assertStringContainsString("gotoPage({{ $pageNumber }}, 'workPage')", $view);
         $this->assertStringContainsString("nextPage('workPage')", $view);
     }
 
@@ -76,11 +76,11 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString("flow_notifications.inquiry_task_id", $dashboardService);
         $this->assertStringNotContainsString("flow_task_comments.body', 'flow_notifications.message'", $dashboardService);
         $this->assertStringContainsString('notifyInquiryMentionedUsers', $notificationService);
-        $this->assertStringContainsString("'inquiry_id' => \$inquiry?->id", $notificationService);
+        $this->assertStringContainsString("'inquiry_id' => $inquiry?->id", $notificationService);
         $this->assertStringContainsString('$this->notifyMentions($inquiry->refresh(), null, $newDisplay, $actor);', $inquiryService);
         $this->assertStringNotContainsString('if ((int) $recipient->id === (int) $actor->id) return;', $inquiryService);
-        $this->assertStringContainsString("'inquiries'", $tagged);
-        $this->assertStringContainsString(">Inquiries</button>", $taggedView);
+        $this->assertStringContainsString("'inquiry'", $tagged);
+        $this->assertStringContainsString("'inquiry' => 'Inquiries'", $taggedView);
     }
 
 }

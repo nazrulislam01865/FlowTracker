@@ -13,31 +13,19 @@ class DocumentArchiveActionMenuRegressionTest extends TestCase
         $this->assertStringContainsString('x-on:click.capture="', $view);
         $this->assertStringContainsString("const item = \$event.target.closest('[role=menuitem]');", $view);
         $this->assertStringContainsString("if (item && \$el.matches(':popover-open'))", $view);
-        $this->assertStringContainsString('$el.hidePopover();', $view);
+        $this->assertStringContainsString('\$el.hidePopover();', $view);
     }
     public function test_document_archive_columns_have_fixed_non_overlapping_layout(): void
     {
         $view = file_get_contents(resource_path('views/livewire/documents/index.blade.php'));
-        $css = $this->compatibilityCss('flowtrack-documents-archive.css');
+        $css = file_get_contents(public_path('css/flowtrack-documents-archive.css'));
 
         $this->assertStringContainsString('<colgroup>', $view);
         $this->assertStringContainsString('ft-da-col-task', $view);
         $this->assertStringContainsString('ft-da-col-client', $view);
-        $this->assertStringContainsString('min-width:1420px', $css);
+        $this->assertStringContainsString('min-width:1320px', $css);
         $this->assertStringContainsString('.ft-da-task-link{display:block;width:100%}', $css);
         $this->assertStringContainsString('.ft-da-record-cell a{display:block;flex:1 1 auto}', $css);
-    }
-
-    public function test_document_archive_user_type_hints_resolve_to_the_application_user_model(): void
-    {
-        $methods = ['archivePaginator', 'orderArchiveQuery', 'inquiryArchiveQuery', 'archiveTotals', 'canEditArchiveDocument'];
-
-        foreach ($methods as $method) {
-            $parameter = (new \ReflectionMethod(\App\Livewire\Documents\Index::class, $method))
-                ->getParameters()[0];
-
-            $this->assertSame(\App\Models\User::class, $parameter->getType()?->getName(), $method);
-        }
     }
 
 }

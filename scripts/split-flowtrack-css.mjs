@@ -3,6 +3,7 @@ import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const projectRoot = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const flowtrackPath = resolve(projectRoot, 'resources/css/flowtrack.css');
 const appPath = resolve(projectRoot, 'resources/css/app.css');
 const outputDirectory = resolve(projectRoot, 'resources/css/generated');
 
@@ -14,34 +15,6 @@ export const flowtrackCssInputs = [
 ];
 
 const byteLength = (value) => Buffer.byteLength(value, 'utf8');
-const localImportPattern = /@import\s+(?:url\(\s*)?['"]([^'"]+)['"]\s*\)?\s*;/g;
-
-const expandLocalImports = (filePath, stack = [], dependencies = new Set()) => {
-    const absolutePath = resolve(filePath);
-    if (stack.includes(absolutePath)) {
-        const cycle = [...stack, absolutePath]
-            .map((item) => item.replace(`${projectRoot}/`, ''))
-            .join(' -> ');
-        throw new Error(`Circular CSS import detected: ${cycle}`);
-    }
-
-    dependencies.add(absolutePath);
-    const source = readFileSync(absolutePath, 'utf8');
-    const nextStack = [...stack, absolutePath];
-
-    const expanded = source.replace(localImportPattern, (statement, importTarget) => {
-        if (!importTarget.startsWith('.')) {
-            throw new Error(`Only relative CSS imports are allowed in the FlowTrack composition root: ${statement}`);
-        }
-
-        const importedPath = resolve(dirname(absolutePath), importTarget);
-        return expandLocalImports(importedPath, nextStack, dependencies).css;
-    });
-
-    return { css: expanded, dependencies };
-};
-
-export const flowtrackCssDependencies = () => [...expandLocalImports(appPath).dependencies];
 
 const splitTopLevelUnits = (css) => {
     const units = [];
@@ -92,7 +65,7 @@ const splitTopLevelUnits = (css) => {
 
         if (character === '}') {
             depth -= 1;
-            if (depth < 0) throw new Error('The composed stylesheet has an unmatched closing brace.');
+            if (depth < 0) throw new Error('The source stylesheet has an unmatched closing brace.');
             if (depth === 0) {
                 units.push(css.slice(start, index + 1));
                 start = index + 1;
@@ -101,7 +74,7 @@ const splitTopLevelUnits = (css) => {
     }
 
     if (inComment || quote !== null || depth !== 0) {
-        throw new Error('The composed stylesheet ends inside a comment, string, or CSS block.');
+        throw new Error('The source stylesheet ends inside a comment, string, or CSS block.');
     }
 
     if (start < css.length) units.push(css.slice(start));
@@ -136,16 +109,25 @@ const balanceUnits = (units, chunkCount) => {
     if (chunks.length !== chunkCount || chunks.some((chunk) => chunk.length === 0)) {
         throw new Error(`Expected ${chunkCount} non-empty CSS chunks, generated ${chunks.length}.`);
     }
-
     return chunks;
 };
 
 export const splitFlowtrackCss = () => {
-    const { css: composedCss } = expandLocalImports(appPath);
-    const chunks = balanceUnits(splitTopLevelUnits(composedCss), flowtrackCssInputs.length);
+    const flowtrackCss = readFileSync(flowtrackPath, 'utf8');
+    const appCss = readFileSync(appPath, 'utf8');
+    const importPattern = /^@import\s+['"]\.\/flowtrack\.css['"];?\s*/;
 
-    if (chunks.join('') !== composedCss) {
-        throw new Error('Generated CSS does not reproduce the composed stylesheet byte-for-byte.');
+    if (!importPattern.test(appCss)) {
+        throw new Error('resources/css/app.css must begin with the flowtrack.css import.');
+    }
+
+    // This matches the original Vite cascade: flowtrack.css first, followed by
+    // the small app.css additions that appeared after its @import directive.
+    const combinedCss = `${flowtrackCss}\n${appCss.replace(importPattern, '')}`;
+    const chunks = balanceUnits(splitTopLevelUnits(combinedCss), flowtrackCssInputs.length);
+
+    if (chunks.join('') !== combinedCss) {
+        throw new Error('Generated CSS does not reproduce the canonical stylesheet byte-for-byte.');
     }
 
     mkdirSync(outputDirectory, { recursive: true });
@@ -153,10 +135,7 @@ export const splitFlowtrackCss = () => {
         writeFileSync(resolve(projectRoot, input), chunks[index], 'utf8');
     });
 
-    return chunks.map((chunk, index) => ({
-        input: flowtrackCssInputs[index],
-        bytes: byteLength(chunk),
-    }));
+    return chunks.map((chunk, index) => ({ input: flowtrackCssInputs[index], bytes: byteLength(chunk) }));
 };
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

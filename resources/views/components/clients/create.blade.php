@@ -30,8 +30,12 @@
 ])
 @php
     $isEdit = $mode === 'edit';
-    $accountManagerOptions = collect($users)->values();
-    $selectedManager = $accountManagerOptions->first(fn ($option) => (string) data_get($option, 'id') === (string) $accountManagerId);
+    $selectedManager = $users->firstWhere('id', (int) $accountManagerId);
+    $accountManagerOptions = collect($users)->map(fn ($user) => [
+        'id' => (string) $user->id,
+        'label' => (string) $user->name,
+        'meta' => (string) ($user->department?->name ?: ''),
+    ])->values();
     $countryOptions = collect($clientCountries)->map(fn ($country) => [
         'id' => (string) $country,
         'label' => (string) $country,
@@ -83,7 +87,7 @@
                             @endif
                         </div>
                         <div class="ft-client-logo-upload-copy">
-                            <b>Client logo <span class="ft-client-logo-optional">(Optional)</span></b>
+                            <b>Client logo <span style="font-weight:500;color:#71829a">(Optional)</span></b>
                             <p>Upload the company logo once and FlowTrack will reuse it anywhere this client is shown. JPG, PNG or WebP · max 5 MB.</p>
                             <div class="ft-client-logo-actions">
                                 <label class="ft-client-logo-file">
@@ -121,15 +125,13 @@
                     </label>
                     <div class="ft-proto-field">
                         <b>Account manager <em>*</em></b>
-                        <x-ui.search-select
+                        <x-ui.select-filter
                             label="Account manager"
                             property="accountManagerId"
                             :value="$accountManagerId ?? ''"
                             placeholder="Unassigned"
-                            type="users"
-                            context="client-account-manager"
-                            :initial-options="$accountManagerOptions"
-                            :selected-label="data_get($selectedManager, 'label', 'Unassigned')"
+                            :options="$accountManagerOptions"
+                            :selected-label="$selectedManager?->name ?? 'Unassigned'"
                             search-placeholder="Search account manager…"
                             :menu-width="360"
                             :fixed-menu="true"
@@ -255,7 +257,7 @@
 
                         <div class="ft-proto-field ft-shipping-country-field">
                             <b>Country / region <em>*</em></b>
-                            <x-ui.search-select
+                            <x-ui.select-filter
                                 label="Country / region"
                                 property="billingCountry"
                                 :value="$billingCountry"
@@ -290,7 +292,7 @@
 
                         <div class="ft-proto-field ft-shipping-state-field">
                             <b>State @if(count($billingStates))<em>*</em>@endif</b>
-                            <x-ui.search-select
+                            <x-ui.select-filter
                                 label="State"
                                 property="billingState"
                                 :value="$billingState"

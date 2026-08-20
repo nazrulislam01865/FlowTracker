@@ -46,7 +46,7 @@
                         <span>Main category <i>*</i></span>
                         <div class="ft-category-editor-readonly">{{ optional(collect($mainCategories)->firstWhere('id', (int)$selectedParentId))->name ?? '—' }}</div>
                     @else
-                        <x-ui.search-select
+                        <x-ui.select-filter
                             class="ft-product-search-select ft-taxonomy-search-select"
                             label="Main category"
                             property="categoryEditorParentId"
@@ -68,7 +68,7 @@
                         <span>Product category <i>*</i></span>
                         <div class="ft-category-editor-readonly">{{ optional(collect($productCategories)->firstWhere('id', (int)$selectedParentId))->name ?? '—' }}</div>
                     @else
-                        <x-ui.search-select
+                        <x-ui.select-filter
                             class="ft-product-search-select ft-taxonomy-search-select"
                             label="Product category"
                             property="categoryEditorParentId"

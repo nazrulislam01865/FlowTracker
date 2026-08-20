@@ -176,8 +176,8 @@ class DashboardTeamCompletionRateTest extends TestCase
         $this->assertStringContainsString('Custom range', $view);
         $this->assertStringContainsString('Team Performance Report', $reportView);
         $this->assertStringContainsString('View all', $dashboardView);
-        $this->assertStringContainsString('loadMoreTeamPerformance', $reportView);
-        $this->assertStringContainsString('hasMoreTeamPerformance', $reportView);
+        $this->assertStringContainsString('previousTeamPage', $reportView);
+        $this->assertStringContainsString('nextTeamPage', $reportView);
         $this->assertStringContainsString('has-department-color', $cardView);
         $this->assertStringNotContainsString('score / 100', strtolower($view));
         $this->assertStringContainsString("'completion_rate'", $service);

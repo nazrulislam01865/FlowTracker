@@ -54,7 +54,7 @@ class TaggedCommentIdentityDisplayTest extends TestCase
         $notification = file_get_contents(app_path('Models/FlowNotification.php'));
         $migration = file_get_contents(database_path('migrations/2026_08_12_063000_add_actor_to_flow_notifications.php'));
 
-        $this->assertStringContainsString('<x-ui.avatar class="ft-mgmt-mention-avatar"', $view);
+        $this->assertStringContainsString('<x-ui.avatar class="ft-avatar"', $view);
         $this->assertStringContainsString('MentionService::class)->displayText($mention->message)', $view);
         $this->assertStringContainsString("'actor:id,name,profile_image_path'", $dashboard);
         $this->assertStringContainsString('FlowNotification::supportsActorIdentity()', $dashboard);

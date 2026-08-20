@@ -1,7 +1,7 @@
 @foreach($inquiryGroups as $group)
-    <article class="order-group" wire:key="my-work-inquiry-{{ $group['id'] }}" x-data="{ open: true }">
+    <article class="order-group" wire:key="my-work-inquiry-{{ $group['id'] }}" x-data="{ open: false }">
         <header class="order-head">
-            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
+            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" x-bind:aria-label="open ? 'Collapse Order' : 'Expand Order'"><span x-text="open ? '⌄' : '›'">›</span></button>
             <span class="order-identity">
                 @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
                 <span class="order-title">{{ $group['title'] }}</span>
@@ -13,7 +13,7 @@
             <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
         </header>
 
-        <div class="task-rows" x-show="open">
+        <div class="task-rows" x-cloak x-show="open">
             @foreach($group['tasks'] as $task)
                 <div
                     class="task-row"

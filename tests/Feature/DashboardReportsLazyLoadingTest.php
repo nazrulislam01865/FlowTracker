@@ -135,12 +135,12 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $secondaryComponent = file_get_contents(app_path('Livewire/Dashboard/Secondary.php'));
         $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
         $appJs = file_get_contents(resource_path('js/app.js'));
-        $dashboardCss = $this->compatibilityCss('flowtrack-dashboard-prototype.css');
+        $dashboardCss = file_get_contents(public_path('css/flowtrack-dashboard-prototype.css'));
         $secondaryView = file_get_contents(resource_path('views/livewire/dashboard/secondary.blade.php'));
 
         $this->assertStringContainsString('<livewire:dashboard.index />', $page);
-        $this->assertStringContainsString('<livewire:dashboard.tagged-comments', $dashboard);
-        $this->assertStringNotContainsString('<livewire:dashboard.secondary', $dashboard);
+        $this->assertStringContainsString('<livewire:dashboard.tagged-comments lazy />', $dashboard);
+        $this->assertStringContainsString('<livewire:dashboard.secondary lazy />', $dashboard);
         $this->assertStringContainsString('public function placeholder(): string', $taggedComponent);
         $this->assertStringContainsString('Loading comments...', $taggedComponent);
         $this->assertStringNotContainsString('wire:init=', $dashboard);
@@ -161,17 +161,18 @@ class DashboardReportsLazyLoadingTest extends TestCase
         $this->assertStringContainsString(':client="$portfolioClient"', $secondaryView);
         $this->assertStringContainsString('@endforelse', $secondaryView);
         $this->assertStringNotContainsString('@foreach($clientPortfolio as $portfolioClient)', $secondaryView);
-        $this->assertStringContainsString("CACHE_VERSION = 'v19-shipping-phase-compat'", $dashboardService);
+        $this->assertStringNotContainsString('@else', $secondaryView);
+        $this->assertStringContainsString("CACHE_VERSION = 'v10-role-aware-tagged-comments'", $dashboardService);
         $this->assertStringContainsString('dashboard_cache_seconds', $dashboardService);
         $this->assertStringContainsString('isSafeCacheValue', $dashboardService);
         $this->assertStringContainsString('private ?int $clientLifecycleVersion = null;', $dashboardService);
         $this->assertStringContainsString('Cache::get($key, $missing)', $dashboardService);
         $this->assertStringContainsString('Cache::put(', $dashboardService);
         $this->assertStringNotContainsString('return Cache::remember(', $dashboardService);
-        $this->assertStringNotContainsString("return \$this->remember(\$user, 'mentions'", $dashboardService);
-        $this->assertStringNotContainsString("return \$this->remember(\$user, 'assignees'", $dashboardService);
-        $this->assertStringNotContainsString("return \$this->remember(\$user, 'ongoing-jobs'", $dashboardService);
-        $this->assertStringNotContainsString("return \$this->remember(\$user, 'ongoing-tasks'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'mentions'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'assignees'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'ongoing-jobs'", $dashboardService);
+        $this->assertStringNotContainsString("return $this->remember($user, 'ongoing-tasks'", $dashboardService);
     }
 
 }

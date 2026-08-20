@@ -30,7 +30,7 @@
             <div class="ft-create-fields">
                 <label class="ft-create-field"><b>Order code</b><div class="ft-locked-input">Generated automatically <span>♙</span></div></label>
                 <div class="ft-create-field">
-                    <x-ui.search-select
+                    <x-ui.remote-filter
                         class="ft-create-remote-select"
                         label="Client *"
                         property="clientId"
@@ -99,7 +99,7 @@
                 <div class="ft-create-field">
                     <b>Phone Number</b>
                     <div class="ft-order-phone-control">
-                        <x-ui.search-select
+                        <x-ui.remote-filter
                             class="ft-order-phone-code-filter"
                             label="Phone country code"
                             property="shippingPhoneCountryCode"
@@ -221,7 +221,7 @@
                     </div>
                 </div>
                 <div class="ft-create-field">
-                    <x-ui.search-select
+                    <x-ui.remote-filter
                         class="ft-create-remote-select"
                         label="Order owner *"
                         property="ownerId"

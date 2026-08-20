@@ -45,8 +45,7 @@ class ListExportService
             'shippingSourceAddress', 'items.updatedBy', 'members.user',
             'phaseHistories.phase', 'phaseHistories.actor',
             'tasks' => fn ($tasks) => $access->applyTaskScope($tasks, $user)->with([
-                'assignee.department', 'completionAssignee', 'phase', 'orderTaskStatus', 'orderTaskFlag',
-                'documentCategory',
+                'assignee', 'completionAssignee', 'phase', 'orderTaskStatus', 'orderTaskFlag',
                 'checklistItems', 'comments.user', 'documents.uploader', 'links.creator',
             ]),
             'documents.uploader', 'documents.task', 'activities.user',
@@ -89,10 +88,10 @@ class ListExportService
 
         /** @var Collection<int, Inquiry> $inquiries */
         $inquiries = $query->with([
-            'client', 'owner', 'creator', 'attentionRequester', 'sourceTaskPack', 'sourceWorkflow', 'convertedJob',
+            'client', 'owner', 'creator', 'sourceTaskPack', 'sourceWorkflow', 'convertedJob',
             'items',
             'tasks' => fn ($tasks) => $access->applyInquiryTaskScope($tasks, $user)->with([
-                'assignee.department', 'completionAssignee', 'setupAssignee', 'sourceTaskPackItem',
+                'assignee', 'completionAssignee', 'setupAssignee', 'sourceTaskPackItem',
                 'sourceWorkflowPhase', 'taskStatus', 'documents.uploader', 'comments.user', 'links.creator',
             ]),
             'documents.uploader', 'documents.task', 'activities.user',
@@ -115,17 +114,7 @@ class ListExportService
             ->setTitle('Order list export')
             ->setSubject('Orders and related details');
 
-        $this->fillSheet($book->getActiveSheet(), 'Order Details', [
-            'Order Number', 'Reference Order No.', 'Order Title', 'Client', 'Order Status', 'Current Phase',
-            'Order Priority', 'Order Progress %', 'Owner', 'Coordinator', 'Received Date',
-            'Customer Requested Delivery Date', 'Estimated Delivery Date', 'Products', 'Product Count',
-            'Total Quantity', 'Task Number', 'Task', 'Task Phase', 'Task Assignee', 'Assignee Email',
-            'Assignee Department', 'Current Task Status', 'Task Flag', 'Task Priority', 'Task Progress %',
-            'Task Start Date', 'Task Due Date', 'Required Document', 'Files', 'Links', 'Task Completed At',
-            'Task Last Updated At', 'Order Last Updated At',
-        ], $this->orderDetailRows($orders, $canViewFinance));
-
-        $this->fillSheet($book->createSheet(), 'Orders', [
+        $this->fillSheet($book->getActiveSheet(), 'Orders', [
             'Order ID', 'Order Number', 'Reference Order No.', 'Repeat Order?', 'Repeat Order No.',
             'Order Title', 'Order Description', 'Notes', 'Client ID', 'Client Code', 'Client Name',
             'Source Inquiry', 'Workflow', 'Current Phase', 'Started From Phase', 'Status', 'Health',
@@ -134,8 +123,7 @@ class ListExportService
             'Phone Country Code', 'Phone Number', 'Postal Code', 'Production Urgency', 'Shipment Urgency',
             'Primary Product', 'Category', 'Quantity', 'Commercial Value', 'Currency', 'Supplier', 'Warehouse',
             'Supplier Instruction', 'Source Row ID', 'Import Profile', 'Needs Attention?', 'Attention Requested?',
-            'Attention Reason', 'Attention By', 'Product Count', 'Task Count', 'Open Task Count',
-            'Completed Task Count', 'Latest Task Updated At', 'Completed At', 'Created At', 'Updated At',
+            'Attention Reason', 'Attention By', 'Completed At', 'Created At', 'Updated At',
         ], $orders->map(fn (FlowJob $order) => [
             $order->id,
             $order->displayOrderNumber(),
@@ -183,71 +171,59 @@ class ListExportService
             $this->yesNo($order->attention_requested),
             $this->plainText($order->attention_reason),
             $order->attentionRequester?->name,
-            $this->orderProductCount($order),
-            $order->tasks->count(),
-            $order->tasks->filter(fn ($task) => !$task->completed_at)->count(),
-            $order->tasks->filter(fn ($task) => (bool) $task->completed_at)->count(),
-            $this->dateTime($this->latestUpdatedAt($order->tasks)),
             $this->dateTime($order->completed_at),
             $this->dateTime($order->created_at),
             $this->dateTime($order->updated_at),
         ]));
 
         $this->fillSheet($book->createSheet(), 'Products', [
-            'Order Number', 'Item ID', 'Product', 'Category', 'Quantity', 'Unit Price', 'Notes', 'Updated By', 'Created At', 'Last Updated At',
+            'Order Number', 'Item ID', 'Product', 'Category', 'Quantity', 'Unit Price', 'Notes', 'Updated By', 'Updated At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->items->map(fn ($item) => [
             $order->displayOrderNumber(), $item->id, $item->product_name, $item->category_name, $item->quantity,
-            $canViewFinance ? $item->unit_price : '', $this->plainText($item->notes), $item->updatedBy?->name,
-            $this->dateTime($item->created_at), $this->dateTime($item->updated_at),
+            $item->unit_price, $this->plainText($item->notes), $item->updatedBy?->name, $this->dateTime($item->updated_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Tasks', [
-            'Order Number', 'Task ID', 'Task Number', 'Phase', 'Task', 'Description', 'Assignee', 'Assignee Email',
-            'Assignee Department', 'Current Task Status', 'Status Master', 'Flag', 'Priority', 'Progress %',
-            'Start Date', 'Due Date', 'Required Document Category', 'Document Requirement Source', 'File Count',
-            'Link Count', 'Needs Attention?', 'Attention Reason', 'Completed At', 'Completed By', 'Created At',
-            'Task Last Updated At',
+            'Order Number', 'Task Number', 'Phase', 'Task', 'Description', 'Assignee', 'Status', 'Status Master',
+            'Flag', 'Priority', 'Progress %', 'Start Date', 'Due Date', 'Needs Attention?', 'Attention Reason',
+            'Completed At', 'Completed By', 'Created At', 'Updated At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->tasks->map(fn ($task) => [
-            $order->displayOrderNumber(), $task->id, $task->task_number, $task->phase?->name, $task->title,
-            $this->plainText($task->description), $task->assignee?->name, $task->assignee?->email,
-            $task->assignee?->department?->name, $this->currentOrderTaskStatus($task), $task->orderTaskStatus?->name,
+            $order->displayOrderNumber(), $task->task_number, $task->phase?->name, $task->title,
+            $this->plainText($task->description), $task->assignee?->name, $task->status, $task->orderTaskStatus?->name,
             $task->orderTaskFlag?->name, $task->priority, $task->progress, $this->date($task->start_date),
-            $this->date($task->due_date), $task->documentCategory?->name, $task->document_requirement_source,
-            $task->documents->count(), $task->links->count(), $this->yesNo($task->needs_attention), $this->plainText($task->attention_reason),
+            $this->date($task->due_date), $this->yesNo($task->needs_attention), $this->plainText($task->attention_reason),
             $this->dateTime($task->completed_at), $task->completionAssignee?->name,
             $this->dateTime($task->created_at), $this->dateTime($task->updated_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Task Checklist', [
-            'Order Number', 'Task ID', 'Task Number', 'Task', 'Checklist Item', 'Completed?', 'Sort Order', 'Created At', 'Last Updated At',
+            'Order Number', 'Task Number', 'Task', 'Checklist Item', 'Completed?', 'Sort Order', 'Created At', 'Updated At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->tasks->flatMap(fn ($task) => $task->checklistItems->map(fn ($item) => [
-            $order->displayOrderNumber(), $task->id, $task->task_number, $task->title, $item->label,
+            $order->displayOrderNumber(), $task->task_number, $task->title, $item->label,
             $this->yesNo($item->is_completed), $item->sort_order, $this->dateTime($item->created_at), $this->dateTime($item->updated_at),
         ]))));
 
         $this->fillSheet($book->createSheet(), 'Task Comments', [
-            'Order Number', 'Task ID', 'Task Number', 'Task', 'Comment By', 'Comment', 'Created At', 'Last Updated At',
+            'Order Number', 'Task Number', 'Task', 'Comment By', 'Comment', 'Created At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->tasks->flatMap(fn ($task) => $task->comments->map(fn ($comment) => [
-            $order->displayOrderNumber(), $task->id, $task->task_number, $task->title, $comment->user?->name,
-            $this->plainText($comment->body), $this->dateTime($comment->created_at), $this->dateTime($comment->updated_at),
+            $order->displayOrderNumber(), $task->task_number, $task->title, $comment->user?->name,
+            $this->plainText($comment->body), $this->dateTime($comment->created_at),
         ]))));
 
         $this->fillSheet($book->createSheet(), 'Task Links', [
-            'Order Number', 'Task ID', 'Task Number', 'Task', 'URL', 'Created By', 'Created At', 'Last Updated At',
+            'Order Number', 'Task Number', 'Task', 'URL', 'Created By', 'Created At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->tasks->flatMap(fn ($task) => $task->links->map(fn ($link) => [
-            $order->displayOrderNumber(), $task->id, $task->task_number, $task->title, $link->url,
-            $link->creator?->name, $this->dateTime($link->created_at), $this->dateTime($link->updated_at),
+            $order->displayOrderNumber(), $task->task_number, $task->title, $link->url,
+            $link->creator?->name, $this->dateTime($link->created_at),
         ]))));
 
         $this->fillSheet($book->createSheet(), 'Documents', [
-            'Order Number', 'Document Number', 'Task ID', 'Task Number', 'Task', 'Category', 'Name', 'Note', 'MIME Type',
-            'Size Bytes', 'Version', 'Final?', 'Uploaded By', 'Created At', 'Last Updated At',
+            'Order Number', 'Document Number', 'Task', 'Category', 'Name', 'Note', 'MIME Type', 'Size Bytes',
+            'Version', 'Final?', 'Uploaded By', 'Created At',
         ], $orders->flatMap(fn (FlowJob $order) => $order->documents->map(fn ($document) => [
-            $order->displayOrderNumber(), $document->document_number, $document->task_id, $document->task?->task_number,
-            $document->task?->title, $document->category,
+            $order->displayOrderNumber(), $document->document_number, $document->task?->title, $document->category,
             $document->name, $this->plainText($document->note), $document->mime_type, $document->size,
-            $document->version, $this->yesNo($document->is_final), $document->uploader?->name,
-            $this->dateTime($document->created_at), $this->dateTime($document->updated_at),
+            $document->version, $this->yesNo($document->is_final), $document->uploader?->name, $this->dateTime($document->created_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Members', [
@@ -325,21 +301,12 @@ class ListExportService
             ->setTitle('Inquiry list export')
             ->setSubject('Inquiries and related details');
 
-        $this->fillSheet($book->getActiveSheet(), 'Inquiry Details', [
-            'Inquiry Number', 'Reference Number', 'Subject', 'Client', 'Inquiry Status', 'Priority', 'Owner',
-            'Received Date', 'Required Delivery Date', 'Products', 'Product Count', 'Total Quantity',
-            'Task ID', 'Task Sequence', 'Workflow Phase', 'Task', 'Task Assignee', 'Assignee Email',
-            'Assignee Department', 'Current Task Status', 'Due Date', 'Requires Submission?', 'Submission Label',
-            'Files', 'Links', 'Task Started At', 'Task Completed At', 'Task Last Updated At', 'Inquiry Last Updated At',
-        ], $this->inquiryDetailRows($inquiries, $canViewFinance));
-
-        $this->fillSheet($book->createSheet(), 'Inquiries', [
+        $this->fillSheet($book->getActiveSheet(), 'Inquiries', [
             'Inquiry ID', 'Inquiry Number', 'Reference Number', 'Subject', 'Requirement Notes', 'Client ID', 'Client Code',
             'Client Name', 'Client Contact', 'Owner', 'Created By', 'Request Source', 'Received Date', 'Required Delivery Date',
             'Initial Follow-up Date', 'Priority', 'Status', 'Result', 'Dead Reason', 'Dead Note', 'Target Price', 'Currency',
-            'Source Task Pack', 'Source Workflow', 'Converted Order', 'Needs Attention?', 'Attention Reason', 'Attention By',
-            'Attention At', 'Product Count', 'Task Count', 'Open Task Count', 'Completed Task Count', 'Latest Task Updated At',
-            'Started At', 'Completed At', 'Created At', 'Updated At',
+            'Source Task Pack', 'Source Workflow', 'Converted Order', 'Needs Attention?', 'Attention Reason', 'Started At',
+            'Completed At', 'Created At', 'Updated At',
         ], $inquiries->map(fn (Inquiry $inquiry) => [
             $inquiry->id, $inquiry->inquiry_number, $inquiry->reference_number, $inquiry->subject,
             $this->plainText($inquiry->requirement_notes), $inquiry->client_id, $inquiry->client?->code, $inquiry->client?->name,
@@ -350,57 +317,48 @@ class ListExportService
             $canViewFinance ? $inquiry->target_price : '', $canViewFinance ? $inquiry->currency : '',
             $inquiry->sourceTaskPack?->name, $inquiry->sourceWorkflow?->name,
             $inquiry->convertedJob?->displayOrderNumber(), $this->yesNo($inquiry->needs_attention),
-            $this->plainText($inquiry->attention_reason), $inquiry->attentionRequester?->name,
-            $this->dateTime($inquiry->attention_at), $inquiry->items->count(), $inquiry->tasks->count(),
-            $inquiry->tasks->filter(fn ($task) => !$task->completed_at)->count(),
-            $inquiry->tasks->filter(fn ($task) => (bool) $task->completed_at)->count(),
-            $this->dateTime($this->latestUpdatedAt($inquiry->tasks)), $this->dateTime($inquiry->started_at),
+            $this->plainText($inquiry->attention_reason), $this->dateTime($inquiry->started_at),
             $this->dateTime($inquiry->completed_at), $this->dateTime($inquiry->created_at), $this->dateTime($inquiry->updated_at),
         ]));
 
         $this->fillSheet($book->createSheet(), 'Products', [
-            'Inquiry Number', 'Item ID', 'Category', 'Product / Item', 'Quantity', 'Unit', 'Unit Price', 'Notes', 'Created At', 'Last Updated At',
+            'Inquiry Number', 'Item ID', 'Category', 'Product / Item', 'Quantity', 'Unit', 'Unit Price', 'Notes', 'Created At', 'Updated At',
         ], $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->items->map(fn ($item) => [
             $inquiry->inquiry_number, $item->id, $item->category, $item->item_name, $item->quantity, $item->unit,
-            $canViewFinance ? $item->unit_price : '', $this->plainText($item->notes), $this->dateTime($item->created_at), $this->dateTime($item->updated_at),
+            $item->unit_price, $this->plainText($item->notes), $this->dateTime($item->created_at), $this->dateTime($item->updated_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Tasks', [
             'Inquiry Number', 'Task ID', 'Sequence', 'Workflow Phase', 'Task', 'Description', 'Assignee', 'Setup Assignee',
-            'Assignee Email', 'Assignee Department', 'Current Task Status', 'Status Master', 'Due Date', 'Requires Submission?',
-            'Submission Label', 'File Count', 'Link Count', 'Needs Attention?', 'Attention Reason', 'Started At',
-            'Completed At', 'Completed By', 'Created At', 'Task Last Updated At',
+            'Status', 'Status Master', 'Due Date', 'Requires Submission?', 'Submission Label', 'Needs Attention?',
+            'Attention Reason', 'Started At', 'Completed At', 'Completed By', 'Created At', 'Updated At',
         ], $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->tasks->map(fn ($task) => [
             $inquiry->inquiry_number, $task->id, $task->sequence, $task->sourceWorkflowPhase?->name, $task->title,
-            $this->plainText($task->description), $task->assignee?->name, $task->setupAssignee?->name,
-            $task->assignee?->email, $task->assignee?->department?->name, $this->currentInquiryTaskStatus($task),
+            $this->plainText($task->description), $task->assignee?->name, $task->setupAssignee?->name, $task->status,
             $task->taskStatus?->name, $this->date($task->due_date), $this->yesNo($task->requires_submission),
-            $task->submission_label, $task->documents->count(), $task->links->count(), $this->yesNo($task->needs_attention), $this->plainText($task->attention_reason),
+            $task->submission_label, $this->yesNo($task->needs_attention), $this->plainText($task->attention_reason),
             $this->dateTime($task->started_at), $this->dateTime($task->completed_at), $task->completionAssignee?->name,
             $this->dateTime($task->created_at), $this->dateTime($task->updated_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Task Comments', [
-            'Inquiry Number', 'Task ID', 'Task', 'Comment By', 'Comment', 'Created At', 'Last Updated At',
+            'Inquiry Number', 'Task ID', 'Task', 'Comment By', 'Comment', 'Created At',
         ], $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->tasks->flatMap(fn ($task) => $task->comments->map(fn ($comment) => [
             $inquiry->inquiry_number, $task->id, $task->title, $comment->user?->name,
-            $this->plainText($comment->body), $this->dateTime($comment->created_at), $this->dateTime($comment->updated_at),
+            $this->plainText($comment->body), $this->dateTime($comment->created_at),
         ]))));
 
         $this->fillSheet($book->createSheet(), 'Task Links', [
-            'Inquiry Number', 'Task ID', 'Task', 'URL', 'Created By', 'Created At', 'Last Updated At',
+            'Inquiry Number', 'Task ID', 'Task', 'URL', 'Created By', 'Created At',
         ], $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->tasks->flatMap(fn ($task) => $task->links->map(fn ($link) => [
-            $inquiry->inquiry_number, $task->id, $task->title, $link->url, $link->creator?->name,
-            $this->dateTime($link->created_at), $this->dateTime($link->updated_at),
+            $inquiry->inquiry_number, $task->id, $task->title, $link->url, $link->creator?->name, $this->dateTime($link->created_at),
         ]))));
 
         $this->fillSheet($book->createSheet(), 'Documents', [
-            'Inquiry Number', 'Task ID', 'Task Sequence', 'Task', 'Name', 'MIME Type', 'Size Bytes', 'Uploaded By',
-            'Created At', 'Last Updated At',
+            'Inquiry Number', 'Task', 'Name', 'MIME Type', 'Size Bytes', 'Uploaded By', 'Created At',
         ], $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->documents->map(fn ($document) => [
-            $inquiry->inquiry_number, $document->inquiry_task_id, $document->task?->sequence, $document->task?->title,
-            $document->name, $document->mime_type, $document->size, $document->uploader?->name,
-            $this->dateTime($document->created_at), $this->dateTime($document->updated_at),
+            $inquiry->inquiry_number, $document->task?->title, $document->name, $document->mime_type,
+            $document->size, $document->uploader?->name, $this->dateTime($document->created_at),
         ])));
 
         $this->fillSheet($book->createSheet(), 'Activities', [
@@ -414,192 +372,9 @@ class ListExportService
         return $book;
     }
 
-    /**
-     * Operational Order export: one row per visible task, with the parent Order
-     * and its product context repeated so Excel users can filter/sort without
-     * joining sheets manually. Orders without tasks still receive one row.
-     */
-    private function orderDetailRows(Collection $orders, bool $canViewFinance): iterable
-    {
-        foreach ($orders as $order) {
-            $tasks = $order->tasks->isNotEmpty() ? $order->tasks : collect([null]);
-            $productSummary = $this->orderProductSummary($order, $canViewFinance);
-            $productCount = $this->orderProductCount($order);
-            $totalQuantity = $this->orderTotalQuantity($order);
-
-            foreach ($tasks as $task) {
-                yield [
-                    $order->displayOrderNumber(),
-                    $order->order_number,
-                    $order->title,
-                    $order->client?->name,
-                    $order->status,
-                    $order->phase?->name,
-                    $order->priority,
-                    $order->progress,
-                    $order->owner?->name,
-                    $order->coordinator?->name,
-                    $this->date($order->received_date),
-                    $this->date($order->delivery_date),
-                    $this->date($order->estimated_delivery_date),
-                    $productSummary,
-                    $productCount,
-                    $totalQuantity,
-                    $task?->task_number,
-                    $task?->title,
-                    $task?->phase?->name,
-                    $task?->assignee?->name,
-                    $task?->assignee?->email,
-                    $task?->assignee?->department?->name,
-                    $task ? $this->currentOrderTaskStatus($task) : '',
-                    $task?->orderTaskFlag?->name,
-                    $task?->priority,
-                    $task?->progress,
-                    $this->date($task?->start_date),
-                    $this->date($task?->due_date),
-                    $task?->documentCategory?->name ?: ($task?->document_requirement_source ?: ''),
-                    $task?->documents?->count() ?? 0,
-                    $task?->links?->count() ?? 0,
-                    $this->dateTime($task?->completed_at),
-                    $this->dateTime($task?->updated_at),
-                    $this->dateTime($order->updated_at),
-                ];
-            }
-        }
-    }
-
-    /**
-     * Operational Inquiry export: one row per visible task with Inquiry and
-     * product context. Inquiries without tasks still receive one row.
-     */
-    private function inquiryDetailRows(Collection $inquiries, bool $canViewFinance): iterable
-    {
-        foreach ($inquiries as $inquiry) {
-            $tasks = $inquiry->tasks->isNotEmpty() ? $inquiry->tasks : collect([null]);
-            $productSummary = $this->inquiryProductSummary($inquiry, $canViewFinance);
-            $totalQuantity = (float) $inquiry->items->sum(fn ($item) => (float) ($item->quantity ?? 0));
-
-            foreach ($tasks as $task) {
-                yield [
-                    $inquiry->inquiry_number,
-                    $inquiry->reference_number,
-                    $inquiry->subject,
-                    $inquiry->client?->name,
-                    $inquiry->status,
-                    $inquiry->priority,
-                    $inquiry->owner?->name,
-                    $this->date($inquiry->received_date),
-                    $this->date($inquiry->required_delivery_date),
-                    $productSummary,
-                    $inquiry->items->count(),
-                    $totalQuantity,
-                    $task?->id,
-                    $task?->sequence,
-                    $task?->sourceWorkflowPhase?->name,
-                    $task?->title,
-                    $task?->assignee?->name,
-                    $task?->assignee?->email,
-                    $task?->assignee?->department?->name,
-                    $task ? $this->currentInquiryTaskStatus($task) : '',
-                    $this->date($task?->due_date),
-                    $task ? $this->yesNo($task->requires_submission) : '',
-                    $task?->submission_label,
-                    $task?->documents?->count() ?? 0,
-                    $task?->links?->count() ?? 0,
-                    $this->dateTime($task?->started_at),
-                    $this->dateTime($task?->completed_at),
-                    $this->dateTime($task?->updated_at),
-                    $this->dateTime($inquiry->updated_at),
-                ];
-            }
-        }
-    }
-
-    private function orderProductSummary(FlowJob $order, bool $canViewFinance): string
-    {
-        if ($order->items->isNotEmpty()) {
-            return $order->items->map(function ($item) use ($order, $canViewFinance): string {
-                $parts = [trim((string) $item->product_name)];
-                if ($item->category_name) $parts[] = '['.trim((string) $item->category_name).']';
-                $parts[] = 'Qty: '.(string) ($item->quantity ?? 0);
-                if ($canViewFinance && $item->unit_price !== null) {
-                    $parts[] = 'Unit: '.$this->moneyText($item->unit_price, (string) $order->currency);
-                }
-                return implode(' · ', array_filter($parts, fn ($part) => $part !== ''));
-            })->implode("\n");
-        }
-
-        if (!$order->product && !$order->category && !$order->quantity) return '';
-
-        return implode(' · ', array_filter([
-            trim((string) $order->product),
-            $order->category ? '['.trim((string) $order->category).']' : '',
-            'Qty: '.(string) ($order->quantity ?? 0),
-        ], fn ($part) => $part !== ''));
-    }
-
-    private function inquiryProductSummary(Inquiry $inquiry, bool $canViewFinance): string
-    {
-        return $inquiry->items->map(function ($item) use ($inquiry, $canViewFinance): string {
-            $parts = [trim((string) $item->item_name)];
-            if ($item->category) $parts[] = '['.trim((string) $item->category).']';
-            $quantity = (string) ($item->quantity ?? 0);
-            if ($item->unit) $quantity .= ' '.trim((string) $item->unit);
-            $parts[] = 'Qty: '.$quantity;
-            if ($canViewFinance && $item->unit_price !== null) {
-                $parts[] = 'Unit: '.$this->moneyText($item->unit_price, (string) $inquiry->currency);
-            }
-            return implode(' · ', array_filter($parts, fn ($part) => $part !== ''));
-        })->implode("\n");
-    }
-
-    private function orderProductCount(FlowJob $order): int
-    {
-        if ($order->items->isNotEmpty()) return $order->items->count();
-        return ($order->product || $order->category || $order->quantity) ? 1 : 0;
-    }
-
-    private function orderTotalQuantity(FlowJob $order): float|int
-    {
-        if ($order->items->isNotEmpty()) {
-            return $order->items->sum(fn ($item) => (float) ($item->quantity ?? 0));
-        }
-        return (int) ($order->quantity ?? 0);
-    }
-
-    private function currentOrderTaskStatus(mixed $task): string
-    {
-        return trim((string) ($task->orderTaskStatus?->name ?: $task->status));
-    }
-
-    private function currentInquiryTaskStatus(mixed $task): string
-    {
-        return trim((string) ($task->taskStatus?->name ?: $task->status));
-    }
-
-    private function moneyText(mixed $amount, string $currency): string
-    {
-        $currency = trim($currency) ?: 'USD';
-        return $currency.' '.number_format((float) $amount, 2, '.', ',');
-    }
-
-    private function latestUpdatedAt(Collection $models): mixed
-    {
-        return $models->reduce(function (mixed $latest, mixed $model): mixed {
-            $updatedAt = $model?->updated_at;
-            if (!$updatedAt) return $latest;
-            if (!$latest) return $updatedAt;
-
-            return $updatedAt->greaterThan($latest) ? $updatedAt : $latest;
-        });
-    }
-
     private function fillSheet(Worksheet $sheet, string $title, array $headers, iterable $rows): void
     {
         $sheet->setTitle(mb_substr($title, 0, 31));
-        if (method_exists($sheet, 'setShowGridlines')) {
-            $sheet->setShowGridlines(false);
-        }
         $this->writeRow($sheet, 1, $headers, true);
 
         $rowNumber = 2;

@@ -7,17 +7,9 @@
         "build": "vite build",
         "dev": "vite",
         "quality:architecture": "php scripts/quality/architecture-budget.php --check",
-        "quality:css": "php scripts/quality/css-foundation-budget.php",
-        "quality:phase1": "npm run css:split && npm run quality:architecture && npm run quality:css",
         "quality:baseline": "bash scripts/quality/phase0-baseline.sh",
         "visual:update": "node tests/Visual/visual-regression.mjs update",
-        "visual:test": "node tests/Visual/visual-regression.mjs test",
-        "quality:components": "php scripts/quality/ui-component-library.php",
-        "quality:phase2": "npm run css:split && npm run quality:architecture && npm run quality:css && npm run quality:components",
-        "quality:phase3": "npm run css:split && npm run quality:architecture && npm run quality:css && npm run quality:components && php scripts/quality/phase3-migration.php",
-        "quality:filters": "php scripts/quality/phase4-shared-filters.php",
-        "quality:phase4": "npm run quality:phase3 && npm run quality:filters && npm run quality:test-contracts",
-        "quality:test-contracts": "php scripts/quality/test-contracts.php"
+        "visual:test": "node tests/Visual/visual-regression.mjs test"
     },
     "devDependencies": {
         "laravel-vite-plugin": "^3.1",

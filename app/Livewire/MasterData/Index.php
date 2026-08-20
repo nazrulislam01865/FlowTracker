@@ -6,7 +6,6 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Client;
 use App\Models\MasterRecord;
-use App\Support\Filters\ProductClientOptions;
 use App\Services\MasterDataService;
 use App\Services\ProductImageService;
 use App\Services\ProductOptionImageService;
@@ -300,25 +299,10 @@ Remote Area charge	".$remoteRow;
             $this->productClientAvailabilityMode = $r->hasSpecificProductAvailability() ? 'specific' : 'all';
             $storedClientIds = collect((array) data_get($r->metadata, 'client_ids', []))->map(fn ($value) => (int) $value)->filter()->values()->all();
             if (!$storedClientIds && $r->hasSpecificProductAvailability()) {
-                $labels = collect($r->productAvailabilityLabels())
-                    ->map(fn ($value) => mb_strtolower(trim((string) $value)))
-                    ->filter()
-                    ->unique()
-                    ->values();
-                $storedClientIds = $labels->isEmpty()
-                    ? []
-                    : Client::query()
-                        ->where('is_active', true)
-                        ->where(function ($query) use ($labels): void {
-                            foreach ($labels as $label) {
-                                $query->orWhereRaw('LOWER(TRIM(name)) = ?', [$label])
-                                    ->orWhereRaw('LOWER(TRIM(code)) = ?', [$label]);
-                            }
-                        })
-                        ->pluck('id')
-                        ->map(fn ($value) => (int) $value)
-                        ->values()
-                        ->all();
+                $labels = collect($r->productAvailabilityLabels())->map(fn ($value) => mb_strtolower(trim((string) $value)))->filter()->all();
+                $storedClientIds = Client::query()->where('is_active', true)->get(['id', 'name', 'code'])
+                    ->filter(fn (Client $client) => in_array(mb_strtolower((string) $client->name), $labels, true) || in_array(mb_strtolower((string) $client->code), $labels, true))
+                    ->pluck('id')->map(fn ($value) => (int) $value)->values()->all();
             }
             $this->productClientIds = $storedClientIds;
             $this->productTestCertificateNumber = trim((string) data_get($r->metadata, 'test_certificate_number'));
@@ -556,6 +540,24 @@ Remote Area charge	".$remoteRow;
             $this->productClientIds = [];
         }
         $this->resetValidation('productClientIds');
+    }
+
+    public function toggleProductClient(int $clientId): void
+    {
+        abort_unless($this->group === 'product' && $this->showModal, 404);
+        abort_unless(Client::query()->whereKey($clientId)->where('is_active', true)->exists(), 404);
+        $ids = collect($this->productClientIds)->map(fn ($value) => (int) $value);
+        $this->productClientIds = $ids->contains($clientId)
+            ? $ids->reject(fn ($value) => $value === $clientId)->values()->all()
+            : $ids->push($clientId)->unique()->values()->all();
+        $this->productClientAvailabilityMode = 'specific';
+        $this->resetValidation('productClientIds');
+    }
+
+    public function selectAllProductClients(): void
+    {
+        $this->productClientAvailabilityMode = 'specific';
+        $this->productClientIds = Client::query()->where('is_active', true)->orderBy('name')->pluck('id')->map(fn ($value) => (int) $value)->all();
     }
 
     private function productCodeReadyForCategory(): bool
@@ -3129,9 +3131,7 @@ Remote Area charge	".$remoteRow;
             'productMainCategories' => $productMainCategories,
             'productMainCategoryFilterOptions' => $productMainCategoryFilterOptions,
             'productSubcategories' => $productSubcategories,
-            'productClients' => $this->group === 'product' && $this->showModal && $this->productClientAvailabilityMode === 'specific' && auth()->user()
-                ? app(ProductClientOptions::class)->forEditor(auth()->user(), $this->productClientIds)
-                : collect(),
+            'productClients' => $this->group === 'product' ? Client::query()->where('is_active', true)->orderBy('name')->get(['id', 'name', 'code']) : collect(),
             'availableProductShipmentUrgencies' => $availableProductShipmentUrgencies,
             'viewProduct' => $viewProduct,
             'editProduct' => $editProduct,

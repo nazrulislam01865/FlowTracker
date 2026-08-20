@@ -54,7 +54,7 @@ class OrderTaskFlagAutomationImplementationTest extends TestCase
 
         $this->assertStringContainsString('Automatic flag', $view);
         $this->assertStringContainsString('Overdue overrides the status mapping', $view);
-        $this->assertStringContainsString("displayColorFor('order_flag', \$automaticFlag)", $table);
+        $this->assertStringContainsString("displayColorFor('order_flag', \$flag)", $table);
         $this->assertStringNotContainsString("displayColorFor('task_flag', \$flag)", $table);
     }
 }

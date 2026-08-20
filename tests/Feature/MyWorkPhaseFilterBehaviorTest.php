@@ -16,7 +16,7 @@ class MyWorkPhaseFilterBehaviorTest extends TestCase
         $this->assertStringContainsString("LOWER(TRIM(workflow_phases.name)) = ?", $service);
         $this->assertStringContainsString('orderPhaseSourceIdsForName', $service);
         $this->assertStringContainsString("orWhereIn('workflow_phases.source_workflow_phase_id'", $service);
-        $this->assertStringContainsString("'phase' => (string) (\$task->getAttribute('my_work_phase_short_name') ?: \$task->getAttribute('my_work_phase_name') ?: 'No phase')", $service);
+        $this->assertStringContainsString("'phase' => (string) ($task->getAttribute('my_work_phase_name') ?: $task->getAttribute('my_work_phase_short_name') ?: 'No phase')", $service);
     }
 
     public function test_metric_cards_and_toolbar_filters_are_mutually_exclusive(): void

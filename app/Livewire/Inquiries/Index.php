@@ -1821,7 +1821,7 @@ class Index extends Component
 
         // If a required submission was added by another request between renders,
         // complete immediately instead of opening an unnecessary modal.
-        if (! $task->requires_submission || $service->taskHasSubmissionEvidence($task)) {
+        if (! $task->requires_submission || $task->documents()->exists()) {
             $service->updateTaskStatus($task, InquiryService::AUTO_COMPLETED_STATUS, auth()->user());
             $this->metrics = $service->metrics(auth()->user());
             return;
@@ -2106,11 +2106,8 @@ class Index extends Component
         $service = app(InquiryService::class);
         $task = $service->findVisibleTask(auth()->user(), $taskId, ['inquiry']);
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
-        $reopened = $service->removeTaskLink($task, $linkId, auth()->user());
-        $this->metrics = $service->metrics(auth()->user());
-        session()->flash('success', $reopened
-            ? 'Task link removed. The required-submission task was reopened.'
-            : 'Task link removed.');
+        $service->removeTaskLink($task, $linkId, auth()->user());
+        session()->flash('success', 'Task link removed.');
     }
 
     public function deleteTaskDocument(int $taskId, int $documentId): void

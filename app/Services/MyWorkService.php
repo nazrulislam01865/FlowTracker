@@ -10,7 +10,7 @@ use Illuminate\Support\Facades\DB;
 
 class MyWorkService
 {
-    public const JOBS_PER_PAGE = 3;
+    public const JOBS_PER_PAGE = 5;
 
     private const INITIAL_TASK_STATUSES = ['not started', 'not start', 'ready', 'to do', 'todo'];
 

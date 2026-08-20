@@ -38,8 +38,8 @@ class InquiryTaskStatusMappingImplementationTest extends TestCase
         $this->assertStringContainsString('wire:model.boolean="requiresAttention"', $masterView);
 
         $this->assertStringContainsString('openTaskAttentionReason', $taskflowView);
-        $this->assertStringContainsString('class="ft-inquiry-task-flag-icon"', $taskflowView);
-        $this->assertStringContainsString("\$task->attention_reason ? 'View or update flag reason' : 'Add flag reason'", $taskflowView);
+        $this->assertStringContainsString('Requires attention</button>', $taskflowView);
+        $this->assertStringContainsString("\$task->attention_reason ?: 'Reason not added'", $taskflowView);
         $this->assertStringContainsString('showTaskAttentionModal', $inquiryView);
         $this->assertStringContainsString('Why is attention required?', $inquiryView);
         $this->assertStringContainsString('public function saveTaskAttentionReason(): void', $component);

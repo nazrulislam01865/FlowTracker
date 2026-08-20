@@ -6,7 +6,6 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Client;
 use App\Models\WorkflowTemplate;
-use App\Services\FilterOptionService;
 use App\Services\WorkflowService;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
@@ -27,6 +26,8 @@ class Form extends Component
     public string $workflowAppliesTo = 'orders';
     public string $clientAvailability = 'all';
     public array $selectedClientIds = [];
+    public string $clientSearch = '';
+    public bool $clientPickerOpen = false;
 
     public function mount(?int $workflowId = null, ?int $sourceWorkflowId = null): void
     {
@@ -56,6 +57,50 @@ class Form extends Component
                 ->where('workspace_id', $service->workspaceId())
                 ->findOrFail($sourceWorkflowId);
         }
+    }
+
+    public function updatedClientAvailability(string $value): void
+    {
+        if ($value === 'all') {
+            $this->clientPickerOpen = false;
+            $this->clientSearch = '';
+        }
+    }
+
+    public function toggleClientPicker(): void
+    {
+        if ($this->clientAvailability !== 'specific') return;
+        $this->clientPickerOpen = !$this->clientPickerOpen;
+    }
+
+    public function openClientPicker(): void
+    {
+        if ($this->clientAvailability === 'specific') $this->clientPickerOpen = true;
+    }
+
+    public function selectClient(int $clientId): void
+    {
+        abort_unless($this->clientAvailability === 'specific', 422);
+        abort_unless(Client::query()->where('is_active', true)->whereKey($clientId)->exists(), 422);
+
+        $this->selectedClientIds = collect($this->selectedClientIds)
+            ->push($clientId)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values()
+            ->all();
+        $this->clientSearch = '';
+        $this->resetValidation('selectedClientIds');
+        $this->resetValidation('selectedClientIds.*');
+    }
+
+    public function removeClient(int $clientId): void
+    {
+        $this->selectedClientIds = collect($this->selectedClientIds)
+            ->reject(fn ($id) => (int) $id === $clientId)
+            ->map(fn ($id) => (int) $id)
+            ->values()
+            ->all();
     }
 
     public function save(): void
@@ -127,29 +172,29 @@ class Form extends Component
 
     public function render()
     {
-        $clientOptions = collect();
+        $selectedIds = collect($this->selectedClientIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
+        $search = trim($this->clientSearch);
 
-        if ($this->clientAvailability === 'specific') {
-            $actor = auth()->user();
-            abort_unless($actor, 401);
+        $selectedClients = $selectedIds->isEmpty()
+            ? collect()
+            : Client::query()->whereIn('id', $selectedIds)->orderBy('name')->get(['id', 'name']);
 
-            $page = app(FilterOptionService::class)->searchPage(
-                user: $actor,
-                type: 'clients',
-                context: 'workflow-setup',
-                page: 1,
-                perPage: FilterOptionService::COMPACT_PER_PAGE,
-                selectedIds: $this->selectedClientIds,
-            );
-
-            $clientOptions = $page->selectedItems
-                ->concat($page->items)
-                ->unique(fn (array $item) => (string) ($item['id'] ?? ''))
-                ->values();
-        }
+        $clientOptions = $this->clientAvailability === 'specific' && $this->clientPickerOpen
+            ? Client::query()
+                ->where('is_active', true)
+                ->when($selectedIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $selectedIds))
+                ->when(strlen($search) >= 1, fn ($query) => $query->where(function ($match) use ($search): void {
+                    $match->whereLike('name', '%'.$search.'%')
+                        ->orWhereLike('code', $search.'%');
+                }))
+                ->orderBy('name')
+                ->limit(20)
+                ->get(['id', 'name', 'code'])
+            : collect();
 
         return view('livewire.workflow-setup.form', [
             'workflows' => app(WorkflowService::class)->all()->when($this->workflowId, fn ($rows) => $rows->where('id', '!=', $this->workflowId)),
+            'selectedClients' => $selectedClients,
             'clientOptions' => $clientOptions,
         ]);
     }

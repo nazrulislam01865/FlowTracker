@@ -40,11 +40,11 @@
             <div class="ft-section-title-row ft-doc-title-row ft-doc-ux-title">
                 <div>
                     <h2>Documents</h2>
-                    <p>Keep required files, document links, task attachments and existing client documents together.</p>
+                    <p>Keep required files, task attachments and existing client documents together.</p>
                 </div>
                 <div class="ft-doc-completion-copy">
                     <strong>{{ $receivedRequired }}/{{ $required->count() }}</strong>
-                    <span>requirements satisfied</span>
+                    <span>required received</span>
                 </div>
             </div>
 
@@ -63,12 +63,12 @@
                 </div>
                 <div class="ft-doc-summary-item">
                     <span class="ft-doc-summary-icon green">✓</span>
-                    <div><small>Satisfied</small><b>{{ $receivedRequired }}</b></div>
+                    <div><small>Received</small><b>{{ $receivedRequired }}</b></div>
                 </div>
             </div>
 
-            <div class="ft-doc-required-progress" aria-label="Required submission progress">
-                <div><span>Required submission progress</span><b>{{ $requiredProgress }}%</b></div>
+            <div class="ft-doc-required-progress" aria-label="Required document progress">
+                <div><span>Required document progress</span><b>{{ $requiredProgress }}%</b></div>
                 <span class="ft-doc-progress-track"><i style="width: {{ $requiredProgress }}%"></i></span>
             </div>
 
@@ -77,7 +77,7 @@
                     <span class="ft-proto-doc-heading-icon" aria-hidden="true">＋</span>
                     <div>
                         <h3>Add a required document</h3>
-                        <p>Choose the document type, then upload a file, select an existing file, or use the task Add link action.</p>
+                        <p>Choose the document type, then upload a new file or select one that already exists.</p>
                     </div>
                 </div>
 
@@ -341,7 +341,7 @@
                         <h3>Job documents</h3>
                         <p>Organized by workflow phase so you can see what is missing without scanning a table.</p>
                     </div>
-                    <span class="ft-soft-pill {{ $missingRequired ? 'amber' : 'green' }}">{{ $missingRequired ? $missingRequired.' required missing' : 'All requirements satisfied' }}</span>
+                    <span class="ft-soft-pill {{ $missingRequired ? 'amber' : 'green' }}">{{ $missingRequired ? $missingRequired.' required missing' : 'All required received' }}</span>
                 </div>
 
                 <div class="ft-doc-phase-list">
@@ -353,10 +353,9 @@
                             $phaseRequiredReceived = $phaseRequirements->where('complete', true)->count();
                             $phaseMissing = $phaseRequirements->where('complete', false)->count();
                             $requiredDocumentIds = $phaseRequirements->flatMap(function($requirement) use ($job) {
-                                // task_id is the authoritative requirement link; the
-                                // stored category label may be generic on legacy files.
                                 return $job->documents
                                     ->where('task_id', $requirement->task->id)
+                                    ->filter(fn($document) => strcasecmp(trim((string)$document->category), trim((string)$requirement->name)) === 0)
                                     ->pluck('id');
                             })->map(fn($id)=>(int)$id)->unique();
                             $phaseAttachments = $phaseDocuments->reject(fn($doc)=>$requiredDocumentIds->contains((int)$doc->id))->values();
@@ -369,7 +368,7 @@
                                 <b class="ft-doc-phase-number">{{ $phase->sequence }}</b>
                                 <span class="ft-doc-phase-copy">
                                     <strong>{{ $phase->name }}</strong>
-                                    <small>{{ $phaseRequiredReceived }} of {{ $phaseRequirements->count() }} requirements satisfied · {{ $phaseDocuments->count() }} file{{ $phaseDocuments->count()===1?'':'s' }}</small>
+                                    <small>{{ $phaseRequiredReceived }} of {{ $phaseRequirements->count() }} required received · {{ $phaseDocuments->count() }} file{{ $phaseDocuments->count()===1?'':'s' }}</small>
                                 </span>
                                 <?php if ($phaseMissing): ?>
                                     <span class="ft-soft-pill amber">{{ $phaseMissing }} needs action</span>
@@ -383,8 +382,7 @@
                             <div class="ft-doc-phase-body">
                                 @forelse($phaseRequirements as $requirement)
                                     @php
-                                        $docs = $job->documents->where('task_id',$requirement->task->id)->values();
-                                        $links = \App\Support\JobDetailPresenter::taskLinks($job, $requirement->task);
+                                        $docs = $job->documents->where('task_id',$requirement->task->id)->filter(fn($document)=>strcasecmp(trim((string)$document->category),trim((string)$requirement->name))===0)->values();
                                     @endphp
                                     <article class="ft-doc-requirement-card {{ $requirement->complete ? 'is-complete' : 'needs-action' }}">
                                         <div class="ft-doc-requirement-main">
@@ -392,18 +390,13 @@
                                             <div class="ft-doc-requirement-copy">
                                                 <div class="ft-doc-requirement-title-line">
                                                     <b>{{ $requirement->name }}</b>
-                                                    <span class="ft-soft-pill {{ $requirement->complete ? 'green' : 'amber' }}">{{ $requirement->complete ? 'Satisfied' : 'Required' }}</span>
+                                                    <span class="ft-soft-pill {{ $requirement->complete ? 'green' : 'amber' }}">{{ $requirement->complete ? 'Received' : 'Required' }}</span>
                                                 </div>
                                                 <small>Task: {{ $requirement->task->title }}</small>
-                                                <?php if ($docs->isEmpty() && $links->isEmpty()): ?>
-                                                    <p>No file or document link has been submitted for this requirement yet.</p>
+                                                <?php if ($docs->isEmpty()): ?>
+                                                    <p>No file has been received for this requirement yet.</p>
                                                 <?php else: ?>
-                                                    <p>
-                                                        @if($docs->isNotEmpty()){{ $docs->count() }} file{{ $docs->count()===1?'':'s' }}@endif
-                                                        @if($docs->isNotEmpty() && $links->isNotEmpty()) · @endif
-                                                        @if($links->isNotEmpty()){{ $links->count() }} link{{ $links->count()===1?'':'s' }}@endif
-                                                        submitted for this requirement.
-                                                    </p>
+                                                    <p>{{ $docs->count() }} file{{ $docs->count()===1?'':'s' }} linked to this requirement.</p>
                                                 <?php endif; ?>
                                             </div>
                                             <?php if (! $requirement->complete && $canUploadDocument): ?>
@@ -427,24 +420,6 @@
                                                             <?php if (auth()->user()->canModule('documents','delete')): ?>
                                                                 <button class="ft-doc-delete-button" type="button" wire:click="deleteJobDocument({{ $doc->id }})" wire:confirm="Delete this document link?" aria-label="Delete {{ $doc->name }}">×</button>
                                                             <?php endif; ?>
-                                                        </div>
-                                                    </div>
-                                                @endforeach
-                                            </div>
-                                        <?php endif; ?>
-
-                                        <?php if ($links->isNotEmpty()): ?>
-                                            <div class="ft-doc-linked-files">
-                                                @foreach($links as $taskLink)
-                                                    <div class="ft-doc-linked-file">
-                                                        <span class="ft-file-icon sheet">↗</span>
-                                                        <div class="ft-doc-linked-file-copy">
-                                                            <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer">{{ \Illuminate\Support\Str::limit($taskLink->url, 100) }}</a>
-                                                            <small>External document link · {{ $taskLink->created_at ? \App\Support\UserLocalTime::format($taskLink->created_at, 'M j, Y, g:i A') : '—' }}</small>
-                                                        </div>
-                                                        <span class="ft-soft-pill green">Accepted</span>
-                                                        <div class="ft-doc-linked-actions">
-                                                            <a class="ft-link-blue" href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer">Open ↗</a>
                                                         </div>
                                                     </div>
                                                 @endforeach

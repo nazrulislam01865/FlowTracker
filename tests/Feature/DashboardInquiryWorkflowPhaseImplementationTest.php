@@ -29,6 +29,6 @@ class DashboardInquiryWorkflowPhaseImplementationTest extends TestCase
         $this->assertStringContainsString('phasesByWorkflowPack', $dashboard);
         $this->assertStringContainsString('phaseRangesByWorkflow', $dashboard);
         $this->assertStringContainsString('compileWorkflowPhaseDistribution($definitions, $counts, $workflowIds, $activeClientsByWorkflow)', $dashboard);
-        $this->assertStringContainsString("private const CACHE_VERSION = 'v19-shipping-phase-compat'", $dashboard);
+        $this->assertStringContainsString("v15-dashboard-inquiry-source-phase", $dashboard);
     }
 }

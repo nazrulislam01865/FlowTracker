@@ -19,14 +19,8 @@ class MasterDataCodeGenerationTest extends TestCase
 
         $this->assertSame(array_keys(MasterDataService::LABELS), array_keys(MasterDataService::CODE_PREFIXES));
 
-        $workspaceId = $service->workspaceId();
         foreach (MasterDataService::CODE_PREFIXES as $type => $prefix) {
-            $next = $service->nextCode($type);
-            $this->assertMatchesRegularExpression('/^'.preg_quote($prefix, '/').'-\d{3,}$/', $next);
-            $this->assertFalse(
-                MasterRecord::withTrashed()->where('workspace_id', $workspaceId)->where('type', $type)->where('code', $next)->exists(),
-                "Generated code [$next] must be unused."
-            );
+            $this->assertSame($prefix.'-001', $service->nextCode($type));
         }
     }
 
@@ -56,18 +50,18 @@ class MasterDataCodeGenerationTest extends TestCase
         $this->assertSame('PRD-005', $service->nextCode('product'));
     }
 
-    public function test_product_code_is_generated_while_reference_code_remains_editable(): void
+    public function test_product_code_is_manual_while_other_master_codes_remain_generated_and_locked(): void
     {
         $view = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
-        $form = file_get_contents(resource_path('views/components/catalog/product-form.blade.php'));
         $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
 
-        $this->assertStringContainsString('Generated automatically after the product is created.', $form);
-        $this->assertStringContainsString('wire:model.blur="productReferenceCode"', $form);
-        $this->assertStringContainsString('Client or supplier reference used for search and matching.', $form);
-        $this->assertStringContainsString('$this->code = $service->nextCode($this->group);', $component);
+        // The dedicated Product create modal accepts a user-supplied SKU/code.
+        $this->assertStringContainsString('wire:model.live.debounce.220ms="code"', $view);
+        $this->assertStringContainsString('Enter product code, e.g. TS-SUB-001', $view);
+        $this->assertStringContainsString("\$this->group === 'product' ? '' : \$service->nextCode(\$this->group)", $component);
+        $this->assertStringContainsString("if (!\$this->editId && \$this->group !== 'product')", $component);
 
-        // Other Master Data types still use the generated locked-code UI.
+        // Other Master Data types still use the existing generated locked-code UI.
         $this->assertStringContainsString('<div class="ft-admin-locked">{{ $code }}</div>', $view);
         $this->assertStringContainsString('Automatically generated and permanently locked.', $view);
     }

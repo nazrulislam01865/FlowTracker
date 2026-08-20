@@ -121,77 +121,77 @@
 
     @if($showWorkflowDeleteModal)
         <div class="ft-reference-overlay" wire:click.self="closeWorkflowDelete"></div>
-        <div class="ft-phase-reference-modal ft-delete-impact-modal" role="alertdialog" aria-modal="true" aria-label="Delete Workflow permanently">
+        <div class="ft-phase-reference-modal" role="alertdialog" aria-modal="true" aria-label="Delete Workflow permanently" style="width:min(720px,calc(100vw - 32px))">
             <div class="ft-phase-modal-head">
                 <h2>Delete Workflow permanently?</h2>
                 <button type="button" wire:click="closeWorkflowDelete">×</button>
             </div>
             <div class="ft-phase-modal-body">
-                <div class="flash error ft-delete-impact-flush">
+                <div class="flash error" style="margin:0">
                     This permanently deletes this reusable Workflow setup. Existing Job snapshots and Job Tasks are not deleted.
                 </div>
 
                 <div>
-                    <b class="ft-delete-impact-title">{{ $workflowDeleteImpact['name'] ?? 'Workflow' }}</b>
-                    <span class="ft-delete-impact-subtitle">
+                    <b style="display:block;font-size:15px;color:#15263e">{{ $workflowDeleteImpact['name'] ?? 'Workflow' }}</b>
+                    <span style="display:block;margin-top:4px;color:#61748e;font-size:11px">
                         FlowTrack checked Jobs created from this Workflow. Existing Jobs use private snapshots and will not be deleted.
                     </span>
                 </div>
 
                 @if(!empty($workflowDeleteImpact['replacement_default']))
-                    <div class="flash success ft-delete-impact-flush">
+                    <div class="flash success" style="margin:0">
                         This is the current default Workflow. After deletion,
                         <b>{{ $workflowDeleteImpact['replacement_default']['name'] }}</b> will become the active default automatically.
                     </div>
                 @elseif($workflowDeleteImpact['will_leave_no_default'] ?? false)
-                    <div class="flash success ft-delete-impact-flush">
+                    <div class="flash success" style="margin:0">
                         This is the last Workflow. It can be deleted; the next Workflow you create will become the default automatically.
                     </div>
                 @endif
 
                 @if(!($workflowDeleteImpact['can_delete'] ?? true))
-                    <div class="flash error ft-delete-impact-flush">
+                    <div class="flash error" style="margin:0">
                         {{ $workflowDeleteImpact['blocked_reason'] ?? 'This Workflow cannot be deleted.' }}
                     </div>
                 @else
-                    <div class="ft-admin-stats ft-delete-impact-stats">
+                    <div class="ft-admin-stats" style="margin:0">
                         <div><span>Workflow phases</span><b>{{ $workflowDeleteImpact['phase_count'] ?? 0 }}</b></div>
                         <div><span>Jobs preserved</span><b>{{ $workflowDeleteImpact['job_count'] ?? 0 }}</b></div>
                         <div><span>Tasks preserved</span><b>{{ $workflowDeleteImpact['task_count'] ?? 0 }}</b></div>
                     </div>
 
                     @if(($workflowDeleteImpact['job_count'] ?? 0) > 0)
-                        <div class="ft-delete-impact-box ft-delete-impact-box--danger">
-                            <b class="ft-delete-impact-heading ft-delete-impact-heading--danger">Jobs that will remain unchanged</b>
-                            <div class="ft-delete-impact-list">
+                        <div style="border:1px solid #f0d2cf;background:#fffafa;border-radius:10px;padding:12px">
+                            <b style="display:block;font-size:12px;color:#a72822;margin-bottom:8px">Jobs that will remain unchanged</b>
+                            <div style="display:grid;gap:7px;max-height:190px;overflow:auto">
                                 @foreach(($workflowDeleteImpact['jobs'] ?? []) as $job)
-                                    <div class="ft-delete-impact-row">
-                                        <span class="ft-delete-impact-job"><b>{{ $job['job_number'] }}</b> · {{ $job['title'] }}</span>
-                                        @if($job['trashed'] ?? false)<small class="ft-delete-impact-muted">Already trashed</small>@endif
+                                    <div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f2e4e2;padding-bottom:6px">
+                                        <span style="font-size:11px"><b>{{ $job['job_number'] }}</b> · {{ $job['title'] }}</span>
+                                        @if($job['trashed'] ?? false)<small style="color:#8a6a67">Already trashed</small>@endif
                                     </div>
                                 @endforeach
                             </div>
                             @if(($workflowDeleteImpact['job_count'] ?? 0) > count($workflowDeleteImpact['jobs'] ?? []))
-                                <small class="ft-delete-impact-more">And {{ ($workflowDeleteImpact['job_count'] ?? 0) - count($workflowDeleteImpact['jobs'] ?? []) }} more linked Jobs.</small>
+                                <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($workflowDeleteImpact['job_count'] ?? 0) - count($workflowDeleteImpact['jobs'] ?? []) }} more linked Jobs.</small>
                             @endif
                         </div>
                     @endif
 
                     @if(($workflowDeleteImpact['task_count'] ?? 0) > 0)
-                        <div class="ft-delete-impact-box">
-                            <b class="ft-delete-impact-heading">Tasks included in those Jobs</b>
-                            <div class="ft-delete-impact-list ft-delete-impact-list--compact">
+                        <div style="border:1px solid #e1e7ef;border-radius:10px;padding:12px">
+                            <b style="display:block;font-size:12px;color:#263b58;margin-bottom:8px">Tasks included in those Jobs</b>
+                            <div style="display:grid;gap:6px">
                                 @foreach(($workflowDeleteImpact['tasks'] ?? []) as $task)
-                                    <span class="ft-delete-impact-item"><b >{{ $task['task_number'] }}</b> · {{ $task['title'] }} @if($task['job_number']) · {{ $task['job_number'] }} @endif</span>
+                                    <span style="font-size:10.5px;color:#526780"><b style="color:#24364f">{{ $task['task_number'] }}</b> · {{ $task['title'] }} @if($task['job_number']) · {{ $task['job_number'] }} @endif</span>
                                 @endforeach
                             </div>
                             @if(($workflowDeleteImpact['task_count'] ?? 0) > count($workflowDeleteImpact['tasks'] ?? []))
-                                <small class="ft-delete-impact-more">And {{ ($workflowDeleteImpact['task_count'] ?? 0) - count($workflowDeleteImpact['tasks'] ?? []) }} more Tasks.</small>
+                                <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($workflowDeleteImpact['task_count'] ?? 0) - count($workflowDeleteImpact['tasks'] ?? []) }} more Tasks.</small>
                             @endif
                         </div>
                     @endif
 
-                    <p class="ft-delete-impact-copy">
+                    <p style="margin:0;color:#526780;font-size:11px;line-height:1.5">
                         Continuing deletes only the reusable Workflow setup and its setup phases. Any older Job that still points directly to this Workflow is first converted to its own private snapshot. No Job, Task, document, comment, or history record is deleted.
                     </p>
                 @endif

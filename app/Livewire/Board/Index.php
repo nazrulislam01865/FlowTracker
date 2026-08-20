@@ -152,7 +152,7 @@ class Index extends Component
 
     public function updatedTaskPackPerPage(int|string $value): void
     {
-        // All Tasks is intentionally fixed at three Order groups per page so
+        // All Tasks is intentionally fixed at five Order groups per page so
         // each page stays compact and predictable regardless of task count.
         $this->taskPackPerPage = BoardTaskPackService::JOBS_PER_PAGE;
         $this->resetPage('taskPackPage');

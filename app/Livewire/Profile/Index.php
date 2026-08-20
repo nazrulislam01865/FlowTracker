@@ -30,7 +30,7 @@ class Index extends Component
         $user = auth()->user();
         $this->name = $user->name;
         $this->email = $user->email;
-        $this->locale = filled($user->locale) ? (string) $user->locale : 'en';
+        $this->locale = $user->locale;
     }
 
     public function saveProfile(): void

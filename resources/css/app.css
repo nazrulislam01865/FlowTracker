@@ -1,11 +1,7 @@
-/**
- * FlowTrack authenticated application stylesheet composition root.
- * Keep this file composition-only: imports and ownership comments, no selectors.
- */
-@import './foundation/tokens.css';
-@import './foundation/global.css';
-@import './components.css';
-@import './utilities.css';
+@import './flowtrack.css';
 
-/* Transitional compatibility layer. Keep last until Phase 3 removes it. */
-@import './legacy/historical-overrides.css';
+.ft-board-load-more {
+    display: flex;
+    justify-content: center;
+    padding: 18px 0 4px;
+}

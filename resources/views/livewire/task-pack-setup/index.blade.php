@@ -79,62 +79,62 @@
 
     @if($showPackDeleteModal)
         <div class="ft-reference-overlay" wire:click.self="closePackDelete"></div>
-        <div class="ft-phase-reference-modal ft-delete-impact-modal" role="alertdialog" aria-modal="true" aria-label="Delete Task Pack permanently">
+        <div class="ft-phase-reference-modal" role="alertdialog" aria-modal="true" aria-label="Delete Task Pack permanently" style="width:min(720px,calc(100vw - 32px))">
             <div class="ft-phase-modal-head">
                 <h2>Delete Task Pack permanently?</h2>
                 <button type="button" wire:click="closePackDelete">×</button>
             </div>
             <div class="ft-phase-modal-body">
-                <div class="flash error ft-delete-impact-flush">
+                <div class="flash error" style="margin:0">
                     This permanently deletes this reusable Task Pack setup. Existing Job snapshots and Job Tasks are not deleted.
                 </div>
 
                 <div>
-                    <b class="ft-delete-impact-title">{{ $packDeleteImpact['name'] ?? 'Task Pack' }}</b>
-                    <span class="ft-delete-impact-subtitle">
+                    <b style="display:block;font-size:15px;color:#15263e">{{ $packDeleteImpact['name'] ?? 'Task Pack' }}</b>
+                    <span style="display:block;margin-top:4px;color:#61748e;font-size:11px">
                         FlowTrack checked Workflow mappings and Jobs that originated from those Workflows before allowing deletion.
                     </span>
                 </div>
 
-                <div class="ft-admin-stats ft-delete-impact-stats">
+                <div class="ft-admin-stats" style="margin:0">
                     <div><span>Mapped phases</span><b>{{ $packDeleteImpact['mapped_phase_count'] ?? 0 }}</b></div>
                     <div><span>Jobs preserved</span><b>{{ $packDeleteImpact['job_count'] ?? 0 }}</b></div>
                     <div><span>Tasks preserved</span><b>{{ $packDeleteImpact['task_count'] ?? 0 }}</b></div>
                 </div>
 
                 @if(($packDeleteImpact['mapped_phase_count'] ?? 0) > 0)
-                    <div class="ft-delete-impact-box ft-delete-impact-box--info">
-                        <b class="ft-delete-impact-heading">Workflow phases using this Task Pack</b>
-                        <div class="ft-delete-impact-list ft-delete-impact-list--compact">
+                    <div style="border:1px solid #d9e4f2;background:#f8fbff;border-radius:10px;padding:12px">
+                        <b style="display:block;font-size:12px;color:#263b58;margin-bottom:8px">Workflow phases using this Task Pack</b>
+                        <div style="display:grid;gap:6px">
                             @foreach(($packDeleteImpact['mapped_phases'] ?? []) as $phase)
-                                <span class="ft-delete-impact-item"><b>{{ $phase['workflow_name'] }}</b> · Stage {{ $phase['sequence'] }} · <span class="ft-phase-color-label" style="{{ \App\Support\MasterColor::style($phase['color'] ?? null) }}">{{ $phase['name'] }}</span></span>
+                                <span style="font-size:10.5px;color:#526780"><b style="color:#24364f">{{ $phase['workflow_name'] }}</b> · Stage {{ $phase['sequence'] }} · <span class="ft-phase-color-label" style="{{ \App\Support\MasterColor::style($phase['color'] ?? null) }}">{{ $phase['name'] }}</span></span>
                             @endforeach
                         </div>
                         @if(($packDeleteImpact['mapped_phase_count'] ?? 0) > count($packDeleteImpact['mapped_phases'] ?? []))
-                            <small class="ft-delete-impact-more">And {{ ($packDeleteImpact['mapped_phase_count'] ?? 0) - count($packDeleteImpact['mapped_phases'] ?? []) }} more mapped phases.</small>
+                            <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($packDeleteImpact['mapped_phase_count'] ?? 0) - count($packDeleteImpact['mapped_phases'] ?? []) }} more mapped phases.</small>
                         @endif
-                        <small class="ft-delete-impact-note">These Workflow phases will remain, but their Task Pack assignment will be removed.</small>
+                        <small style="display:block;margin-top:9px;color:#526780">These Workflow phases will remain, but their Task Pack assignment will be removed.</small>
                     </div>
                 @endif
 
                 @if(($packDeleteImpact['job_count'] ?? 0) > 0)
-                    <div class="ft-delete-impact-box ft-delete-impact-box--danger">
-                        <b class="ft-delete-impact-heading ft-delete-impact-heading--danger">Jobs that remain independent of this Task Pack</b>
-                        <div class="ft-delete-impact-list">
+                    <div style="border:1px solid #f0d2cf;background:#fffafa;border-radius:10px;padding:12px">
+                        <b style="display:block;font-size:12px;color:#a72822;margin-bottom:8px">Jobs that remain independent of this Task Pack</b>
+                        <div style="display:grid;gap:7px;max-height:190px;overflow:auto">
                             @foreach(($packDeleteImpact['jobs'] ?? []) as $job)
-                                <div class="ft-delete-impact-row">
-                                    <span class="ft-delete-impact-job"><b>{{ $job['job_number'] }}</b> · {{ $job['title'] }}</span>
-                                    @if($job['trashed'] ?? false)<small class="ft-delete-impact-muted">Already trashed</small>@endif
+                                <div style="display:flex;justify-content:space-between;gap:12px;border-bottom:1px solid #f2e4e2;padding-bottom:6px">
+                                    <span style="font-size:11px"><b>{{ $job['job_number'] }}</b> · {{ $job['title'] }}</span>
+                                    @if($job['trashed'] ?? false)<small style="color:#8a6a67">Already trashed</small>@endif
                                 </div>
                             @endforeach
                         </div>
                         @if(($packDeleteImpact['job_count'] ?? 0) > count($packDeleteImpact['jobs'] ?? []))
-                            <small class="ft-delete-impact-more">And {{ ($packDeleteImpact['job_count'] ?? 0) - count($packDeleteImpact['jobs'] ?? []) }} more linked Jobs.</small>
+                            <small style="display:block;margin-top:8px;color:#6c7d92">And {{ ($packDeleteImpact['job_count'] ?? 0) - count($packDeleteImpact['jobs'] ?? []) }} more linked Jobs.</small>
                         @endif
                     </div>
                 @endif
 
-                <p class="ft-delete-impact-copy">
+                <p style="margin:0;color:#526780;font-size:11px;line-height:1.5">
                     Deleting this reusable Task Pack does not delete existing Job Tasks. Older Jobs are snapshotted first when needed, and each Job keeps its own copied phase/task definitions.
                 </p>
             </div>

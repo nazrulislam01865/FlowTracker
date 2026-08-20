@@ -103,23 +103,38 @@
             </fieldset>
 
             @if($clientAvailability === 'specific')
-                <div class="ft-admin-field ft-workflow-client-field">
-                    <x-ui.multi-select
-                        label="Select clients"
-                        property="selectedClientIds"
-                        type="clients"
-                        context="workflow-setup"
-                        :values="$selectedClientIds"
-                        :initial-options="$clientOptions"
-                        placeholder="Search and select clients"
-                        :fixed-menu="true"
-                        :menu-width="380"
-                        :max-selected="100"
-                        class="ft-workflow-client-multi-select"
-                    />
-                    <small>{{ count($selectedClientIds) }} {{ \Illuminate\Support\Str::plural('client', count($selectedClientIds)) }} selected. Search results are loaded in bounded pages.</small>
-                    @error('selectedClientIds')<x-ui.validation-message :message="$message" />@enderror
-                    @error('selectedClientIds.*')<x-ui.validation-message :message="$message" />@enderror
+                <div class="ft-admin-field ft-workflow-client-field" x-data x-on:click.outside="$wire.set('clientPickerOpen', false)">
+                    <label for="workflow-client-search">Select clients *</label>
+                    <div class="ft-workflow-client-picker {{ $clientPickerOpen ? 'is-open' : '' }}">
+                        <div class="ft-workflow-client-picker-control" wire:click="openClientPicker">
+                            @foreach($selectedClients as $client)
+                                <span class="ft-workflow-client-chip" wire:key="workflow-client-chip-{{ $client->id }}">
+                                    {{ $client->name }}
+                                    <button type="button" aria-label="Remove {{ $client->name }}" wire:click.stop="removeClient({{ $client->id }})">×</button>
+                                </span>
+                            @endforeach
+                            <input id="workflow-client-search" type="search" wire:model.live.debounce.250ms="clientSearch" wire:focus="openClientPicker" placeholder="Search clients..." autocomplete="off">
+                            <button type="button" class="ft-workflow-client-chevron" wire:click.stop="toggleClientPicker" aria-label="Toggle client list" aria-expanded="{{ $clientPickerOpen ? 'true' : 'false' }}">
+                                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m5.5 7.5 4.5 4.5 4.5-4.5"></path></svg>
+                            </button>
+                        </div>
+
+                        @if($clientPickerOpen)
+                            <div class="ft-workflow-client-menu">
+                                @forelse($clientOptions as $client)
+                                    <button type="button" wire:click="selectClient({{ $client->id }})" wire:key="workflow-client-option-{{ $client->id }}">
+                                        <span>{{ $client->name }}</span>
+                                        @if($client->code)<small>{{ $client->code }}</small>@endif
+                                    </button>
+                                @empty
+                                    <div class="ft-workflow-client-empty">{{ trim($clientSearch) !== '' ? 'No matching clients.' : 'No more active clients to select.' }}</div>
+                                @endforelse
+                            </div>
+                        @endif
+                    </div>
+                    <small>{{ count($selectedClientIds) }} {{ \Illuminate\Support\Str::plural('client', count($selectedClientIds)) }} selected. You can update this later.</small>
+                    @error('selectedClientIds')<div class="validation-error">{{ $message }}</div>@enderror
+                    @error('selectedClientIds.*')<div class="validation-error">{{ $message }}</div>@enderror
                 </div>
             @endif
         </section>

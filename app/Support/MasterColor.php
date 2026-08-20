@@ -101,15 +101,7 @@ final class MasterColor
         $text = self::textColor($r, $g, $b);
 
         return sprintf(
-            '--ft-dynamic-color:%s;--ft-dynamic-bg:rgba(%d,%d,%d,.12);--ft-dynamic-border:rgba(%d,%d,%d,.34);--ft-dynamic-text:%s;--ft-master-color:%s;--ft-master-bg:rgba(%d,%d,%d,.12);--ft-master-border:rgba(%d,%d,%d,.34);--ft-master-text:%s;',
-            $color,
-            $r,
-            $g,
-            $b,
-            $r,
-            $g,
-            $b,
-            $text,
+            '--ft-master-color:%s;--ft-master-bg:rgba(%d,%d,%d,.12);--ft-master-border:rgba(%d,%d,%d,.34);--ft-master-text:%s;',
             $color,
             $r,
             $g,

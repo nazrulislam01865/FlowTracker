@@ -13,12 +13,10 @@ use App\Models\Inquiry;
 use App\Models\MasterRecord;
 use App\Models\TaskPackItem;
 use App\Models\Task;
-use App\Models\TaskLink;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowTemplate;
 use App\Models\WorkflowPhase;
-use App\Support\BoardLaneResolver;
 use App\Support\JobDetailPresenter;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
@@ -680,6 +678,7 @@ class JobService
                         'template',
                         'documentCategory',
                         'setupTemplate.documentCategory',
+                        'links.creator:id,name',
                     ]),
                 // The restored Archive 10 Overview visibly renders attachments.
                 // Activity itself is paginated separately so opening an Order
@@ -693,7 +692,6 @@ class JobService
             }
 
             $job->load($relations);
-            $this->hydrateLoadedTaskLinks($job);
             return $job;
         }
 
@@ -718,7 +716,6 @@ class JobService
                 'documents:id,flow_job_id,task_id,category',
             ]);
 
-            $this->hydrateLoadedTaskLinks($job);
             return $job;
         }
 
@@ -767,47 +764,7 @@ class JobService
             'documents.task:id,title',
         ]);
 
-        $this->hydrateLoadedTaskLinks($job);
         return $job;
-    }
-
-    /**
-     * Attach external Order task links to the already-authorized task collection
-     * with one deterministic query. This avoids relying on nested relation state
-     * during Livewire DOM refreshes, so a just-saved link remains visible after
-     * the inline Add link form closes and after realtime workspace refreshes.
-     */
-    private function hydrateLoadedTaskLinks(FlowJob $job): void
-    {
-        if (! $job->relationLoaded('tasks') || $job->tasks->isEmpty()) {
-            return;
-        }
-
-        $taskIds = $job->tasks
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->filter()
-            ->values();
-
-        if ($taskIds->isEmpty()) {
-            return;
-        }
-
-        $visibleTaskLinks = TaskLink::query()
-            ->whereIn('task_id', $taskIds->all())
-            ->with('creator:id,name')
-            ->orderByDesc('id')
-            ->get(['id', 'task_id', 'created_by', 'url', 'created_at', 'updated_at']);
-
-        $linksByTask = $visibleTaskLinks
-            ->groupBy(fn (TaskLink $link) => (int) $link->task_id);
-
-        foreach ($job->tasks as $task) {
-            $task->setRelation(
-                'links',
-                collect($linksByTask->get((int) $task->id, collect()))->values(),
-            );
-        }
     }
 
     /**
@@ -864,7 +821,7 @@ class JobService
             'phase.documentCategory',
             'startedFromPhase','owner','coordinator','items','members.user',
             'phaseHistories.phase','phaseHistories.actor',
-            'tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user)->with(['assignee','phase','orderTaskStatus','orderTaskFlag','template','documentCategory','setupTemplate.documentCategory','checklistItems','comments.user','documents','links.creator']),
+            'tasks' => fn ($q) => app(AccessControlService::class)->applyTaskScope($q, $user)->with(['assignee','phase','orderTaskStatus','orderTaskFlag','template','documentCategory','setupTemplate.documentCategory','checklistItems','comments.user','documents']),
             'documents.uploader','activities.user',
         ])->findOrFail($id);
     }
@@ -1713,88 +1670,6 @@ class JobService
 
             return $task->refresh();
         });
-    }
-
-    /**
-     * Keep the parent Order working status synchronized with taskflow state.
-     *
-     * Order status is intentionally not a separately editable Master Data
-     * catalogue. Initial task states keep a genuinely untouched Order as New;
-     * once any task has started/completed the Order has an In Progress floor so
-     * activating the next Ready/Not Started task cannot regress it back to New.
-     * Working/special task states (for example Waiting for Client or Blocked)
-     * are reflected on the parent while that task is the active work item.
-     * Final Order states remain owned by the workflow/status actions.
-     */
-    public function syncAutomaticStatus(FlowJob $job, ?User $actor = null): FlowJob
-    {
-        $job->refresh();
-        $current = mb_strtolower(trim((string) $job->status));
-        if ($job->completed_at || in_array($current, ['draft', 'completed', 'cancelled', 'canceled', 'inactive'], true)) {
-            return $job;
-        }
-
-        $tasks = $job->tasks()
-            ->whereNull('deleted_at')
-            ->orderBy('id')
-            ->get(['id', 'workflow_phase_id', 'status', 'progress', 'completed_at', 'updated_at']);
-
-        if ($tasks->isEmpty()) return $job;
-
-        $isInitial = static function (string $status): bool {
-            $normalized = mb_strtolower(trim($status));
-            return BoardLaneResolver::isNotStarted($status)
-                || in_array($normalized, ['ready', 'to do', 'todo', 'new'], true);
-        };
-        $isCompleted = static fn (Task $task): bool => $task->completed_at !== null
-            || BoardLaneResolver::isCompleted((string) $task->status);
-
-        $hasProgress = $tasks->contains(function (Task $task) use ($isInitial, $isCompleted): bool {
-            return $isCompleted($task)
-                || (int) $task->progress > 0
-                || !$isInitial((string) $task->status);
-        });
-
-        $phaseId = (int) ($job->workflow_phase_id ?: 0);
-        $phaseTasks = $phaseId > 0
-            ? $tasks->filter(fn (Task $task): bool => (int) $task->workflow_phase_id === $phaseId)
-            : $tasks;
-
-        $openTasks = $phaseTasks->reject($isCompleted);
-        $currentTask = $openTasks
-            ->sortByDesc(function (Task $task) use ($isInitial): string {
-                $workingBucket = $isInitial((string) $task->status) ? '0' : '1';
-                $updated = $task->updated_at?->format('YmdHis.u') ?: '00000000000000000000';
-                return $workingBucket.'-'.$updated.'-'.str_pad((string) $task->id, 10, '0', STR_PAD_LEFT);
-            })
-            ->first();
-
-        if (!$currentTask) {
-            $nextStatus = $hasProgress ? 'In Progress' : 'New';
-        } elseif ($isInitial((string) $currentTask->status)) {
-            $nextStatus = $hasProgress ? 'In Progress' : 'New';
-        } else {
-            $taskStatus = trim((string) $currentTask->status);
-            $normalized = mb_strtolower($taskStatus);
-            $nextStatus = in_array($normalized, ['completed', 'complete', 'done', 'cancelled', 'canceled', 'inactive'], true)
-                ? 'In Progress'
-                : ($taskStatus !== '' ? $taskStatus : 'In Progress');
-        }
-
-        if ((string) $job->status !== $nextStatus) {
-            $oldStatus = (string) $job->status;
-            $job->update(['status' => $nextStatus]);
-
-            if ($actor) {
-                $job->activities()->create([
-                    'user_id' => $actor->id,
-                    'event' => 'job.status_auto_changed',
-                    'description' => 'Order status automatically changed from '.$oldStatus.' to '.$nextStatus.' based on task progress.',
-                ]);
-            }
-        }
-
-        return $job->refresh();
     }
 
     public function recalculateProgress(FlowJob $job): int

@@ -24,7 +24,7 @@ use Illuminate\Support\Facades\DB;
 
 class DashboardService
 {
-    private const CACHE_VERSION = 'v19-shipping-phase-compat';
+    private const CACHE_VERSION = 'v18-dashboard-attention-mentions';
 
     private ?int $clientLifecycleVersion = null;
 
@@ -142,7 +142,7 @@ class DashboardService
             $jobRow = (clone $jobs)
                 ->selectRaw('count(*) as active_jobs')
                 ->selectRaw("sum(case when flow_jobs.attention_requested = 1 or flow_jobs.needs_attention = 1 or flow_jobs.health in ('At Risk','Delayed','Blocked','Needs Attention') then 1 else 0 end) as attention_jobs")
-                ->selectRaw("sum(case when exists (select 1 from workflow_phases where (workflow_phases.id = flow_jobs.workflow_phase_id or workflow_phases.id = flow_jobs.source_workflow_phase_id) and (lower(workflow_phases.name) like '%ship%' or lower(workflow_phases.short_name) like '%ship%')) then 1 else 0 end) as shipping_jobs")
+                ->selectRaw("sum(case when exists (select 1 from workflow_phases where workflow_phases.id = flow_jobs.workflow_phase_id and (lower(workflow_phases.name) like '%ship%' or lower(workflow_phases.short_name) like '%ship%')) then 1 else 0 end) as shipping_jobs")
                 ->first();
 
             $taskRow = (clone $tasks)

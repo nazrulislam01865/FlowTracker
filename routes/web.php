@@ -87,14 +87,9 @@ Route::middleware('auth')->group(function () {
         ));
     })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
-
-    if (app()->environment('local', 'testing')) {
-        Route::view('/_dev/ui-kit', 'dev.ui-kit')->name('dev.ui-kit');
-    }
-
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/team-performance-report', TeamPerformanceReportController::class)->middleware('permission:reports.view')->name('team-performance.report');
-    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', '[a-z-]+')->name('filter-options.index');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|department-records|departments|countries|phone-country-codes|job-statuses|job-healths|phases')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
     Route::get('/inquiries/export', [ListExportController::class, 'inquiries'])->middleware(['permission:inquiries.view', 'permission:reports.export'])->name('inquiries.export');

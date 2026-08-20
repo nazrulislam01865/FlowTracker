@@ -16,7 +16,7 @@
 <div
     {{ $attributes->class(['ft-inline-remote-user', 'ft-inline-remote-user-'.$variant]) }}
     data-ft-inline-remote-picker
-    x-data="window.FlowTrackSearchSelect({
+    x-data="window.FlowTrackRemoteFilter({
         property: '',
         type: 'users',
         context: @js($context),
@@ -42,7 +42,6 @@
         x-on:click.stop="toggle()"
         :aria-expanded="open.toString()"
         aria-haspopup="listbox"
-        aria-controls="ft-inline-user-list-{{ substr(md5($context.'|'.$parentType.'|'.$parentId), 0, 10) }}"
     >
         <span x-text="selectedLabel">{{ $resolvedLabel }}</span>
         <span class="ft-filter-chevron" aria-hidden="true">⌄</span>
@@ -57,8 +56,6 @@
         x-on:click.outside="close()"
         x-on:keydown.arrow-down.prevent="moveOption(1)"
         x-on:keydown.arrow-up.prevent="moveOption(-1)"
-        x-on:keydown.home.prevent="focusBoundary('first')"
-        x-on:keydown.end.prevent="focusBoundary('last')"
     >
         <input
             x-ref="search"
@@ -82,14 +79,14 @@
             <span>{{ $placeholder }}</span><small>Clear</small>
         </button>
 
-        <div id="ft-inline-user-list-{{ substr(md5($context.'|'.$parentType.'|'.$parentId), 0, 10) }}" class="ft-remote-filter-list" role="listbox">
+        <div class="ft-remote-filter-list" role="listbox">
             <template x-if="loading">
                 <div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div>
             </template>
-            <template x-if="!loading && visibleItems.length === 0">
+            <template x-if="!loading && items.length === 0">
                 <div class="ft-remote-filter-message">No matching options</div>
             </template>
-            <template x-for="item in visibleItems" :key="item.id">
+            <template x-for="item in items" :key="item.id">
                 <button
                     type="button"
                     class="ft-remote-filter-option"
@@ -101,7 +98,6 @@
                 </button>
             </template>
         </div>
-        <button type="button" class="ft-search-select__load-more" x-show="hasMore && !loading" x-on:click="loadMore()">Load more</button>
         <div class="ft-remote-filter-message" x-text="message"></div>
     </div>
 </div>

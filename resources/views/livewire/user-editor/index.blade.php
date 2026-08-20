@@ -198,24 +198,107 @@
                                 @error('roleIds')<div class="validation-error">{{ $message }}</div>@enderror
                                 @error('roleIds.*')<div class="validation-error">{{ $message }}</div>@enderror
                             </div>
-                            <div class="field" x-on:flowtrack-selection-changed="if ($event.detail?.property === 'departmentId') dirty = true">
-                                <x-ui.search-select
-                                    class="ft-user-editor-department-picker"
-                                    label="Department"
-                                    property="departmentId"
-                                    required
-                                    type="departments"
-                                    context="user-editor"
-                                    action="setDepartmentSelection"
-                                    :value="$departmentId"
-                                    placeholder="No department"
-                                    :initial-options="$departmentOptions"
-                                    :disabled="!$isEditing || !$canManageAccess"
-                                    :menu-width="320"
-                                    :fixed-menu="true"
-                                    wire:key="user-editor-department-{{ $departmentId ?? 'none' }}-{{ (!$isEditing || !$canManageAccess) ? 'disabled' : 'enabled' }}"
-                                />
-                                @error('departmentId')<x-ui.validation-message :message="$message" />@enderror
+
+                            <div class="field">
+                                <label>Department *</label>
+                                @php
+                                    $selectedDepartment = collect($departmentOptions)->first(
+                                        fn ($department) => (string) ($department['id'] ?? '') === (string) ($departmentId ?? '')
+                                    );
+                                    $selectedDepartmentLabel = $selectedDepartment['name'] ?? 'No department';
+                                    $departmentPickerDisabled = !$isEditing || !$canManageAccess;
+                                @endphp
+                                <div
+                                    class="ft-user-editor-department-picker {{ $departmentPickerDisabled ? 'is-disabled' : '' }}"
+                                    wire:key="user-editor-department-{{ $departmentId ?? 'none' }}-{{ $departmentPickerDisabled ? 'disabled' : 'enabled' }}"
+                                    x-data="{
+                                        open: false,
+                                        query: '',
+                                        selectedValue: @js((string) ($departmentId ?? '')),
+                                        selectedLabel: @js($selectedDepartmentLabel),
+                                        options: @js(array_values($departmentOptions)),
+                                        get filteredOptions() {
+                                            const q = this.query.trim().toLowerCase();
+                                            if (!q) return this.options;
+                                            return this.options.filter((item) => String(item.name || '').toLowerCase().includes(q));
+                                        },
+                                        openMenu() {
+                                            if (@js($departmentPickerDisabled)) return;
+                                            this.open = true;
+                                            this.$nextTick(() => this.$refs.search?.focus());
+                                        },
+                                        closeMenu() {
+                                            this.open = false;
+                                            this.query = '';
+                                        },
+                                        choose(item) {
+                                            this.selectedValue = String(item.id);
+                                            this.selectedLabel = String(item.name);
+                                            this.closeMenu();
+                                            dirty = true;
+                                            $wire.$set('departmentId', Number(item.id));
+                                        },
+                                        clearSelection() {
+                                            this.selectedValue = '';
+                                            this.selectedLabel = 'No department';
+                                            this.closeMenu();
+                                            dirty = true;
+                                            $wire.$set('departmentId', null);
+                                        }
+                                    }"
+                                    x-on:keydown.escape.window="if (open) closeMenu()"
+                                >
+                                    <button
+                                        type="button"
+                                        class="ft-user-editor-department-trigger ft-inline-remote-user-trigger"
+                                        x-on:click.stop="open ? closeMenu() : openMenu()"
+                                        :aria-expanded="open.toString()"
+                                        aria-haspopup="listbox"
+                                        @disabled($departmentPickerDisabled)
+                                    >
+                                        <span x-text="selectedLabel">{{ $selectedDepartmentLabel }}</span>
+                                        <span class="ft-filter-chevron" aria-hidden="true">⌄</span>
+                                    </button>
+
+                                    <div
+                                        class="ft-remote-filter-menu ft-user-editor-department-menu"
+                                        x-cloak
+                                        x-show="open"
+                                        x-on:click.outside="closeMenu()"
+                                    >
+                                        <input
+                                            x-ref="search"
+                                            class="ft-remote-filter-search"
+                                            type="search"
+                                            x-model="query"
+                                            placeholder="Search department…"
+                                            autocomplete="off"
+                                        >
+                                        <button
+                                            type="button"
+                                            class="ft-remote-filter-option ft-remote-filter-clear"
+                                            x-show="selectedValue !== ''"
+                                            x-on:click="clearSelection()"
+                                        >
+                                            <span>No department</span><small>Clear</small>
+                                        </button>
+                                        <div class="ft-remote-filter-list" role="listbox">
+                                            <template x-for="department in filteredOptions" :key="department.id">
+                                                <button
+                                                    type="button"
+                                                    class="ft-remote-filter-option"
+                                                    :aria-selected="String(department.id) === selectedValue"
+                                                    x-on:click="choose(department)"
+                                                >
+                                                    <span x-text="department.name"></span>
+                                                    <small x-text="String(department.id) === selectedValue ? 'Selected' : ''"></small>
+                                                </button>
+                                            </template>
+                                            <div class="ft-remote-filter-message" x-show="filteredOptions.length === 0">No matching departments</div>
+                                        </div>
+                                    </div>
+                                </div>
+                                @error('departmentId')<div class="validation-error">{{ $message }}</div>@enderror
                             </div>
 
                             <div class="field">

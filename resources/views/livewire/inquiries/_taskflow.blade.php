@@ -1,5 +1,5 @@
 <section class="panel ft-inquiry-taskflow-panel">
-    <header class="panelhead"><div><h2>Inquiry Taskflow</h2><p>Task status can be changed at any time, including reopening a completed task.</p></div><div class="task-control-row"><span class="task-count-pill">{{ $totalTasks }} Tasks</span><span class="manage-badge">Taskflow</span>@if($canAddInquiryTask)<button class="primary ft-inquiry-taskflow-add" type="button" wire:click="openAddTaskForm">＋ Add Task</button>@endif</div></header>
+    <header class="panelhead"><div><h2>Inquiry Taskflow</h2><p>Task status can be changed at any time, including reopening a completed task.</p></div><div class="task-control-row"><span class="task-count-pill">{{ $totalTasks }} Tasks</span><span class="manage-badge">Taskflow</span>@if($canAddInquiryTask)<button class="primary" type="button" wire:click="openAddTaskForm" style="min-height:34px">＋ Add Task</button>@endif</div></header>
     <div class="ft-inquiry-task-grid-head" aria-hidden="true">
         <span>#</span><span>Task</span><span>Assignee</span><span>Due date</span><span>Status</span><span>Files</span><span>Action</span>
     </div>
@@ -7,13 +7,10 @@
         @forelse($inquiry->tasks as $i => $task)
             @php
                 $state = $task->completed_at ? 'done' : ($task->started_at ? 'active' : 'wait');
-                $taskLinkCount = $task->relationLoaded('links') ? $task->links->count() : 0;
-                $taskSubmissionCount = (int) $task->documents_count + (int) $taskLinkCount;
-                $submissionOk = !$task->requires_submission || $taskSubmissionCount > 0;
-                $submissionDoneLabel = (int) $task->documents_count > 0 ? '✓ File submitted' : '✓ Link submitted';
+                $fileOk = !$task->requires_submission || (int)$task->documents_count > 0;
                 $inquiryTaskService = app(\App\Services\InquiryService::class);
                 $completedStatus = \App\Services\InquiryService::AUTO_COMPLETED_STATUS;
-                $completionNeedsRequiredSubmission = (bool) $task->requires_submission && !$submissionOk;
+                $completionNeedsRequiredFile = (bool) $task->requires_submission && !$fileOk;
                 $taskAccess = app(\App\Services\AccessControlService::class);
                 $canChangeStatusThisTask = !$inquiry->result && app(\App\Services\InquiryService::class)->canEditTask(auth()->user(), $task);
                 // Editing a task and assigning a task are independent matrix permissions.
@@ -31,7 +28,7 @@
                 <div class="ft-inquiry-task-copy">
                     <strong>{{ $task->title }}</strong>
                     <div class="ft-rich-text-content ft-inquiry-task-description">@if($task->description)<x-ui.mention-text :text="$task->description" />@else No instructions added. @endif</div>
-                    @if($task->requires_submission)<span class="reqfile {{ $submissionOk ? 'ok' : '' }}">{{ $submissionOk ? $submissionDoneLabel : '□ Required file or link' }}</span>@endif
+                    @if($task->requires_submission)<span class="reqfile {{ $fileOk ? 'ok' : '' }}">{{ $fileOk ? '✓ File submitted' : '□ Required file' }}</span>@endif
                 </div>
 
                 <div class="ft-inquiry-assignee-inline ft-inline-edit-shell"
@@ -84,7 +81,7 @@
                             class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass((string) $task->status) }}"
                             style="{{ \App\Support\MasterColor::style($taskStatusColor) }}"
                             x-model="draftValue"
-                            x-on:change="const select=$event.target; const next=select.value; const needsRequiredSubmission=(select.selectedOptions?.[0]?.dataset?.completes === '1' && @js($completionNeedsRequiredSubmission)); if(needsRequiredSubmission){ draftValue=value; select.value=value; window.FlowTrackMasterColor?.applySelect(select); $wire.requestTaskCompletionFile({{ $task->id }}); return; } window.FlowTrackMasterColor?.applySelect(select); commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result?.inquiryColor) inquiryStatusColor=result.inquiryColor; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; }).then(() => window.FlowTrackMasterColor?.applyAll(document))"
+                            x-on:change="const select=$event.target; const next=select.value; const needsRequiredFile=(select.selectedOptions?.[0]?.dataset?.completes === '1' && @js($completionNeedsRequiredFile)); if(needsRequiredFile){ draftValue=value; select.value=value; window.FlowTrackMasterColor?.applySelect(select); $wire.requestTaskCompletionFile({{ $task->id }}); return; } window.FlowTrackMasterColor?.applySelect(select); commit(next, selectedLabel($event), async () => { const result=await $wire.updateTaskStatusInline({{ $task->id }}, draftValue); if(result?.inquiryStatus) inquiryStatus=result.inquiryStatus; if(result?.inquiryColor) inquiryStatusColor=result.inquiryColor; if(result && Object.prototype.hasOwnProperty.call(result,'inquiryStartValue')){ inquiryStartValue=result.inquiryStartValue || ''; inquiryStartDisplay=result.inquiryStartDisplay || '—'; window.dispatchEvent(new CustomEvent('flowtrack-inquiry-started',{detail:{value:inquiryStartValue,display:inquiryStartDisplay}})); } return result; }).then(() => window.FlowTrackMasterColor?.applyAll(document))"
                             :disabled="status === 'saving'"
                             @disabled(!$canChangeStatusThisTask)
                             aria-label="Change {{ $task->title }} status"
@@ -133,7 +130,7 @@
                             @endif
                         </div>
                     @endif
-                    <span class="ft-inquiry-task-resource-count"><b>{{ $task->documents_count }}</b> file{{ $task->documents_count === 1 ? '' : 's' }}@if($taskLinkCount > 0) · <b>{{ $taskLinkCount }}</b> link{{ $taskLinkCount === 1 ? '' : 's' }}@endif</span>
+                    <span class="ft-inquiry-task-resource-count"><b>{{ $task->documents_count }}</b> file{{ $task->documents_count === 1 ? '' : 's' }}@if($task->links->isNotEmpty()) · <b>{{ $task->links->count() }}</b> link{{ $task->links->count() === 1 ? '' : 's' }}@endif</span>
                 </div>
                 <div class="ft-inquiry-task-action">
                     @if($state === 'done')
@@ -147,7 +144,7 @@
                             @endif
                         </div>
                     @elseif($canCompleteThisTask)
-                        <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline({{ $task->id }})" wire:loading.attr="disabled" wire:target="completeTaskInline({{ $task->id }})" @disabled(!$canEditThisTask || !$submissionOk)>{{ !$submissionOk ? 'File/link required' : 'Complete' }}</button>
+                        <button class="ft-inquiry-action-button primary-action" type="button" wire:click="completeTaskInline({{ $task->id }})" wire:loading.attr="disabled" wire:target="completeTaskInline({{ $task->id }})" @disabled(!$canEditThisTask || !$fileOk)>{{ !$fileOk ? 'File required' : 'Complete' }}</button>
                     @else
                         <button class="ft-inquiry-action-button" type="button" disabled>{{ $task->status ?: app(\App\Services\InquiryService::class)->defaultTaskStatus() }}</button>
                     @endif
@@ -155,7 +152,7 @@
             </div>
 
             @if((int)$taskLinkFormTaskId === (int)$task->id || $task->documents->isNotEmpty() || $task->links->isNotEmpty())
-                <div class="ft-inquiry-task-document-list ft-inquiry-task-resource-list" wire:key="inquiry-task-resources-{{ $task->id }}-{{ (int) $task->documents_count }}-{{ $taskLinkCount }}">
+                <div class="ft-inquiry-task-document-list ft-inquiry-task-resource-list" wire:key="inquiry-task-resources-{{ $task->id }}">
                     @if((int)$taskLinkFormTaskId === (int)$task->id && $canChangeStatusThisTask)
                         <form class="ft-inquiry-task-link-form" wire:submit.prevent="saveTaskLink({{ $task->id }})" wire:key="inquiry-task-link-form-{{ $task->id }}">
                             <div class="ft-inquiry-task-link-input-wrap">
@@ -196,7 +193,7 @@
                                         wire:click="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})"
                                         wire:loading.attr="disabled"
                                         wire:target="deleteTaskDocument({{ $task->id }}, {{ $taskDocument->id }})"
-                                        wire:confirm="{{ $task->completed_at && $task->requires_submission && $taskSubmissionCount === 1 ? 'Remove the final required file/link evidence? The task will reopen to In Progress.' : 'Remove this attachment from the task?' }}"
+                                        wire:confirm="{{ $task->completed_at && $task->requires_submission && (int) $task->documents_count === 1 ? 'Remove this required file? The task will reopen to In Progress because a completed required-file task cannot remain complete without a file.' : 'Remove this attachment from the task?' }}"
                                         title="Remove attachment"
                                         aria-label="Remove {{ $taskDocument->name }}"
                                     >×</button>
@@ -223,7 +220,7 @@
                                         wire:click="deleteTaskLink({{ $task->id }}, {{ $taskLink->id }})"
                                         wire:loading.attr="disabled"
                                         wire:target="deleteTaskLink({{ $task->id }}, {{ $taskLink->id }})"
-                                        wire:confirm="{{ $task->completed_at && $task->requires_submission && $taskSubmissionCount === 1 ? 'Remove the final required file/link evidence? The task will reopen to In Progress.' : 'Remove this link from the task?' }}"
+                                        wire:confirm="Remove this link from the task?"
                                         title="Remove link"
                                         aria-label="Remove link"
                                     >×</button>
@@ -249,8 +246,8 @@
                 <label class="ft-inquiry-add-task-field"><span>Assignee</span><select wire:model="newTaskAssigneeId"><option value="">Unassigned</option>@foreach($userOptions as $userOption)<option value="{{ $userOption['id'] }}">{{ $userOption['name'] }}</option>@endforeach</select></label>
                 <label class="ft-inquiry-add-task-field"><span>Due date</span><input type="date" wire:model="newTaskDueDate" onclick="this.showPicker && this.showPicker()"></label>
                 <label class="ft-inquiry-add-task-field ft-inquiry-add-task-field-wide"><span>Instructions</span><textarea data-rich-text wire:model="newTaskDescription" placeholder="Describe what must be completed for this task or paste screenshots here."></textarea></label>
-                <label class="ft-inquiry-add-task-field"><span>Submission</span><select wire:model.live.boolean="newTaskRequiresSubmission"><option value="0">No required submission</option><option value="1">Required file or link</option></select></label>
-                @if($newTaskRequiresSubmission)<label class="ft-inquiry-add-task-field"><span>Required submission</span><input type="text" wire:model="newTaskSubmissionLabel" placeholder="Submission name"></label>@endif
+                <label class="ft-inquiry-add-task-field"><span>Submission</span><select wire:model.live.boolean="newTaskRequiresSubmission"><option value="0">No required file</option><option value="1">Required file</option></select></label>
+                @if($newTaskRequiresSubmission)<label class="ft-inquiry-add-task-field"><span>Required file</span><input type="text" wire:model="newTaskSubmissionLabel" placeholder="Submission name"></label>@endif
             </div>
             @error('newTaskName')<div class="ft-inquiry-add-task-error">{{ $message }}</div>@enderror
             <div class="ft-inquiry-add-task-actions"><button class="secondary" type="button" wire:click="cancelAddTask">Cancel</button><button class="primary" type="button" wire:click="addInquiryTask" wire:loading.attr="disabled" wire:target="addInquiryTask">Add Task</button></div>

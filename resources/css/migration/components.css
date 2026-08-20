@@ -1,8 +1,0 @@
-/**
- * Phase 3 component migration bridge.
- * These styles were previously emitted from Blade. Keep this composition-only.
- */
-@import './components/summary-card.css';
-@import './components/date-range-filter.css';
-@import './components/export-period-modal.css';
-@import './components/static-bridges.css';

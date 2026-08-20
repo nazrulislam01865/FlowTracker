@@ -12,7 +12,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
         $service = file_get_contents(app_path('Services/InquiryService.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
 
         $this->assertStringNotContainsString('wire:click="setQuick(\'active\')">Active</button>', $view);
         $this->assertStringNotContainsString('wire:click="setQuick(\'dead\')">Closed</button>', $view);
@@ -68,11 +68,11 @@ class InquiryPrototypeImplementationTest extends TestCase
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
         $service = file_get_contents(app_path('Services/InquiryService.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
 
         $this->assertStringContainsString('<h1>Create Inquiry</h1>', $view);
         $this->assertStringContainsString('How was this inquiry received? *', $view);
-        $this->assertStringContainsString('Add new client', $view);
+        $this->assertStringContainsString('＋ New client', $view);
         $this->assertStringContainsString('Client contact', $view);
         $this->assertStringContainsString('Reference number', $view);
         $this->assertStringContainsString('Assigned to', $view);
@@ -84,8 +84,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('Add new client', $view);
         $this->assertStringContainsString('Add &amp; select client', $view);
         $this->assertStringContainsString('wire:click="createClientAndSelect"', $view);
-        $this->assertStringContainsString('action="setCreateSelector"', $view);
-        $this->assertStringContainsString('selection-property="createWorkflowId"', $view);
+        $this->assertStringContainsString("wire:click=\"setCreateSelector('createWorkflowId'", $view);
         $this->assertStringContainsString("->availableFor('inquiries', \$this->clientId)", $component);
         $this->assertStringContainsString("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END", $component);
         $this->assertStringContainsString("'request_source' => \$data['requestSource']", $component);
@@ -94,7 +93,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('.ft-inquiry-prototype .ft-inquiry-create-v3', $css);
         $this->assertStringContainsString('.ft-inquiry-prototype .ft-inquiry-quick-client-modal', $css);
 
-        $this->assertStringContainsString('$service->workflowRows(', $component);
+        $this->assertStringContainsString('app(InquiryService::class)->workflowRows', $component);
         $this->assertStringContainsString("'source_workflow_template_id' => (int) \$data['createWorkflowId']", $component);
         $this->assertStringContainsString('public function workflowRows(int $workflowId', $service);
         $this->assertStringContainsString("'phases.taskPack.items.defaultAssignee:id,name'", $service);
@@ -112,7 +111,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("The separate Taskflow tab was removed", $component);
         $this->assertStringContainsString("in_array(\$tab, ['overview', 'workflow'], true)", $component);
         $this->assertStringContainsString('<button class="tab active" type="button">Overview</button>', $view);
-        $this->assertStringContainsString('<x-catalog.detail-products-card', $view);
+        $this->assertStringContainsString('Products &amp; quantities', $view);
         $this->assertStringNotContainsString("setDetailTab('products')", $view);
         $this->assertStringNotContainsString("setDetailTab('finance')", $view);
         $this->assertStringNotContainsString("setDetailTab('documents')", $view);
@@ -132,7 +131,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $service = file_get_contents(app_path('Services/InquiryService.php'));
         $taskModel = file_get_contents(app_path('Models/InquiryTask.php'));
         $migration = file_get_contents(database_path('migrations/2026_08_09_000200_add_started_at_to_inquiry_tasks.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
 
         $this->assertStringContainsString('id="tab-workflow"', $view);
         $this->assertStringContainsString("updateInquiryField('requirement_notes'", $view);
@@ -147,7 +146,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString('>Taskflow</button>', $view);
         $this->assertStringNotContainsString("@elseif(\$detailTab === 'workflow')", $view);
         $this->assertStringContainsString('<h2>Inquiry Taskflow</h2>', $taskflow);
-        $this->assertStringContainsString("<small>Assignee</small>", $view);
+        $this->assertStringNotContainsString("<small>Assignee</small>", $view);
         $this->assertStringNotContainsString("'inquiryStatusOptions' =>", $component);
         $this->assertStringContainsString("@include('livewire.inquiries._taskflow')", $view);
         $this->assertStringContainsString("\$canCompleteThisTask", $taskflow);
@@ -174,8 +173,8 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('public function linkExistingDocumentToTask', $service);
         $this->assertStringContainsString('class="inquiry-list-table"', $view);
         $this->assertStringContainsString('ft-inquiry-created-by', $view);
-        $this->assertStringContainsString('aria-label="Actions"', $view);
-        $this->assertStringContainsString('--ft-inquiry-list-min-width:', $css);
+        $this->assertStringContainsString('ft-inquiry-view-label-mobile">Details</span>', $view);
+        $this->assertStringContainsString('min-width:1420px', $css);
         $this->assertStringNotContainsString('<span class="sub">Assignee</span>', $view);
         $this->assertStringNotContainsString('<span class="sub">Due date</span>', $view);
         $this->assertStringContainsString('ft-inquiry-header-meta', $view);
@@ -195,7 +194,7 @@ class InquiryPrototypeImplementationTest extends TestCase
     public function test_inquiry_list_mobile_card_keeps_the_approved_prototype_fields_only(): void
     {
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
         $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
 
         $this->assertStringContainsString('2026-08-15: Final lightweight mobile Inquiry list authority.', $css);
@@ -204,9 +203,8 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('.ft-inquiry-list-flag-cell,', $css);
         $this->assertStringContainsString('.ft-inquiry-list-updated-cell{', $css);
         $this->assertStringContainsString('display:none!important;', $css);
-        $this->assertStringContainsString('aria-label="Actions"', $view);
-        $this->assertLayoutLoadsViteCss('resources/css/legacy/shell-b.css', $layout);
-        $this->assertStringContainsString("@import './compatibility/flowtrack-inquiries.css';", file_get_contents(resource_path('css/legacy/shell-b.css')));
+        $this->assertStringContainsString('ft-inquiry-view-label-mobile">Details</span>', $view);
+        $this->assertStringContainsString('flowtrack-inquiries.css?v=20260815-mobile-order-density-1', $layout);
     }
 
     public function test_inquiry_hide_completed_uses_actual_taskflow_completion(): void
@@ -217,22 +215,20 @@ class InquiryPrototypeImplementationTest extends TestCase
 
         $this->assertStringContainsString('private function applyUnfinishedListScope(Builder $query): Builder', $service);
         $this->assertStringContainsString("->whereDoesntHave('tasks')", $service);
-        $this->assertStringContainsString("->orWhereHas('tasks', fn (Builder \$task) => \$task->whereNull('completed_at'))", $service);
-        $this->assertStringContainsString("\$hideCompleted && \$metricFilter !== 'completedThisWeek'", $service);
+        $this->assertStringContainsString("->orWhereHas('tasks', fn (Builder $task) => $task->whereNull('completed_at'))", $service);
+        $this->assertStringContainsString("\$hideCompleted && \$metricFilter !== 'completed'", $service);
         $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
         $this->assertStringContainsString('public function updatedHideCompleted(): void', $component);
         $this->assertStringContainsString('wire:model.live="hideCompleted"', $view);
     }
 
-    public function test_inquiry_tasks_use_explicit_my_work_adapters_without_legacy_group_merging(): void
+    public function test_inquiry_tasks_are_not_merged_into_my_task(): void
     {
         $myWork = file_get_contents(app_path('Livewire/MyWork/Index.php'));
-        $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
         $this->assertStringNotContainsString('myTaskGroups(auth()->user()', $myWork);
-        $this->assertStringContainsString('updateInquiryTaskStatus', $myWork);
-        $this->assertStringContainsString('updateInquiryTaskDueDate', $myWork);
-        $this->assertStringContainsString("@include('livewire.my-work._inquiry-groups'", $view);
+        $this->assertStringNotContainsString('updateInquiryTaskStatus', $myWork);
+        $this->assertStringNotContainsString('updateInquiryTaskDueDate', $myWork);
     }
 
     public function test_inquiry_start_timestamp_is_persisted_auto_started_and_inline_editable(): void
@@ -245,7 +241,7 @@ class InquiryPrototypeImplementationTest extends TestCase
 
         $this->assertStringContainsString("'started_at' => 'datetime'", $model);
         $this->assertStringContainsString("timestamp('started_at')", $migration);
-        $this->assertStringContainsString('$this->isWorkingTaskStatus($nextStatus)', $service);
+        $this->assertStringContainsString("strcasecmp(\$nextStatus, 'In Progress') === 0", $service);
         $this->assertStringContainsString("whereNull('started_at')", $service);
         $this->assertStringContainsString('public function updateStartedAt(Inquiry $inquiry', $service);
         $this->assertStringContainsString('public function updateInquiryStartInline', $component);
@@ -260,16 +256,16 @@ class InquiryPrototypeImplementationTest extends TestCase
         $service = file_get_contents(app_path('Services/InquiryService.php'));
         $model = file_get_contents(app_path('Models/Inquiry.php'));
         $taskflow = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
-        $css = $this->compatibilityCss('flowtrack-inquiries.css');
+        $css = file_get_contents(public_path('css/flowtrack-inquiries.css'));
         $inlineUser = file_get_contents(resource_path('views/components/ui/inline-remote-user.blade.php'));
         $filterJs = file_get_contents(public_path('js/flowtrack-list-filters.js'));
 
-        $this->assertStringContainsString("currentTaskSubquery('sequence', \$currentTaskDueDate)", $service);
+        $this->assertStringContainsString("currentTaskSubquery('sequence')", $service);
         $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN 0 ELSE 1 END", $service);
         $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC", $service);
         $this->assertStringContainsString("'tasks as progressed_tasks_count'", $service);
-        $this->assertStringContainsString("'progress' => \$canViewTasks ? \$progress : 0", $service);
-        $this->assertStringContainsString("'taskCaption' => \$canViewTasks ? (\$done === \$total", $service);
+        $this->assertStringContainsString("'progress' => \$progress", $service);
+        $this->assertStringContainsString("'taskCaption' => \$done === \$total", $service);
         $this->assertStringContainsString("\$task->inquiry->touch();", $service);
         $this->assertStringContainsString("CASE WHEN inquiry_tasks.started_at IS NOT NULL THEN inquiry_tasks.sequence END DESC", $model);
         $this->assertStringContainsString('class="panel ft-inquiry-taskflow-panel"', $taskflow);
@@ -290,8 +286,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $service = file_get_contents(app_path('Services/InquiryService.php'));
 
         $this->assertStringContainsString('$canEditTaskFields = $canChangeStatusThisTask;', $taskflow);
-        $this->assertStringContainsString('@if($canAssignThisTask)<button x-show="!editing"', $taskflow);
-        $this->assertStringContainsString('@if($canEditTaskFields)<button', $taskflow);
+        $this->assertStringContainsString('@if($canEditTaskFields)<button x-show="!editing"', $taskflow);
         $this->assertStringContainsString('Edit task assignee', $taskflow);
         $this->assertStringContainsString('Edit task due date', $taskflow);
         $this->assertStringContainsString('updateTaskAssignee($task, $assigneeId, auth()->user())', $component);
@@ -308,22 +303,15 @@ class InquiryPrototypeImplementationTest extends TestCase
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
         $service = file_get_contents(app_path('Services/InquiryService.php'));
 
-        $this->assertStringContainsString('$canAttachThisTask = $canAttachFileThisTask;', $taskflow);
-        $this->assertStringContainsString('@if($canAttachFileThisTask || $canChangeStatusThisTask)', $taskflow);
-        $this->assertStringContainsString('@if($canAttachFileThisTask)', $taskflow);
+        $this->assertStringContainsString('@if($canAttachThisTask)', $taskflow);
         $this->assertStringContainsString('wire:click="deleteTaskDocument(', $taskflow);
         $this->assertStringContainsString('The task will reopen to In Progress', $taskflow);
         $this->assertStringContainsString('public function removeTaskDocument(InquiryTask $task, int $documentId, User $actor): bool', $service);
-        $this->assertStringContainsString("'status' => \$this->resumeTaskStatus()", $service);
+        $this->assertStringContainsString("'status' => 'In Progress'", $service);
         $this->assertStringContainsString("'completed_at' => null", $service);
-        $this->assertStringContainsString('final required file/link evidence was removed', $service);
+        $this->assertStringContainsString('final required file was removed', $service);
         $this->assertStringContainsString('$this->syncAutomaticStatus($lockedTask->inquiry, $actor);', $service);
         $this->assertStringContainsString('$this->metrics = $service->metrics(auth()->user());', $component);
-        $this->assertStringContainsString('public function taskHasSubmissionEvidence(InquiryTask $task): bool', $service);
-        $this->assertStringContainsString('$task->documents()->exists() || $task->links()->exists()', $service);
-        $this->assertStringContainsString('Required file or link', $taskflow);
-        $this->assertStringContainsString('✓ Link submitted', $taskflow);
-        $this->assertStringContainsString('public function removeTaskLink(InquiryTask $task, int $linkId, User $actor): bool', $service);
     }
 
 }

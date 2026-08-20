@@ -15,9 +15,9 @@
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <title><?php echo e(($title ?? null) ? $title.' — ' : ''); ?>STEP PROMO</title>
     <link rel="icon" href="<?php echo e($branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp')); ?>">
-    <?php echo app('Illuminate\Foundation\Vite')('resources/css/legacy/prelude.css'); ?>
+    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260815-order-urgency-dropdown-1">
     <script src="/js/flowtrack-inline-editing.js?v=20260817-assignee-immediate-1"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260820-select-autoclose-3"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260817-assignee-immediate-1"></script>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(auth()->guard()->check()): ?>
         <meta name="flowtrack-notification-count-url" content="<?php echo e(route('notifications.unread-count')); ?>">
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -37,38 +37,34 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ]); ?>
+    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260818-taskpack-task-prototype-1">
+    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260815-user-assignment-refine-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
+    <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
+    <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
+    <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260817-client-search-select-1">
+    <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard', 'team-performance.report')): ?><link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1"><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     
-    <?php echo app('Illuminate\Foundation\Vite')('resources/css/legacy/shell-a.css'); ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard', 'team-performance.report')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/dashboard/legacy-prototype.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php echo app('Illuminate\Foundation\Vite')('resources/css/legacy/shell-b.css'); ?>
-
+    <link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260818-searchable-report-filters-1">
     
-    <?php echo app('Illuminate\Foundation\Vite')('resources/css/migration/components.css'); ?>
-
+    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260818-inquiry-filter-align-1">
     
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('jobs.index')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/orders/index.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('all-tasks')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/work/index.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('workflow.*', 'task-pack.*')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/setup/index.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('dashboard', 'team-performance.report')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/dashboard/migration.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('documents.index')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/documents/filters.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('inquiries.*')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/inquiries/filters.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(request()->routeIs('clients.index')): ?>
-        <?php echo app('Illuminate\Foundation\Vite')('resources/css/modules/clients/filters.css'); ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260820-list-filterbar-1">
+    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260820-order-phase-completion-2">
+    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260818-taskpack-work-calendar-1">
+    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-column-width-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260815-inquiry-section-numbering-1">
+    <link rel="stylesheet" href="/css/flowtrack-create-order.css?v=20260817-shipping-address-3-optional">
+    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260815-order-attention-1">
+    <link rel="stylesheet" href="/css/flowtrack-task-detail-attachments.css?v=20260815-compact-doc-rows-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-products-detail.css?v=20260817-shared-detail-products-1">
+    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-pdf-1">
+    <link rel="stylesheet" href="/css/flowtrack-documents-archive.css?v=20260817-readable-table-1">
+    
+    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
+    
+    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260820-team-performance-lazy-1">
     <?php echo \Livewire\Mechanisms\FrontendAssets\FrontendAssets::styles(); ?>
 
 </head>

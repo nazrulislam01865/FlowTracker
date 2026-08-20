@@ -43,17 +43,13 @@
         </div>
     </header>
 
-    <x-ui.filter-bar as="section" class="ii-filters" label="Dashboard filters">
-        <x-ui.search-input
-            class="ii-field ii-search"
-            property="search"
-            :value="$search"
-            label="Search"
-            placeholder="Reference, title, product or assignee"
-            :debounce="400"
-        />
+    <section class="ii-filters" aria-label="Dashboard filters">
+        <div class="ii-field ii-search">
+            <label>Search</label>
+            <input type="search" wire:model.live.debounce.400ms="search" placeholder="Reference, title, product or assignee">
+        </div>
 
-        <x-ui.search-select
+        <x-ui.select-filter
             class="ii-field ii-searchable-filter"
             label="Period"
             property="period"
@@ -66,7 +62,7 @@
             wire:key="inquiry-intelligence-period-{{ $period }}"
         />
 
-        <x-ui.search-select
+        <x-ui.select-filter
             class="ii-field ii-searchable-filter"
             label="Status"
             property="status"
@@ -79,7 +75,7 @@
             wire:key="inquiry-intelligence-status-{{ $status ?: 'all' }}"
         />
 
-        <x-ui.search-select
+        <x-ui.select-filter
             class="ii-field ii-searchable-filter"
             label="Priority"
             property="priority"
@@ -92,7 +88,7 @@
             wire:key="inquiry-intelligence-priority-{{ $priority ?: 'all' }}"
         />
 
-        <x-ui.search-select
+        <x-ui.select-filter
             class="ii-field ii-searchable-filter"
             label="Assignee"
             property="assigneeId"
@@ -105,8 +101,8 @@
             wire:key="inquiry-intelligence-assignee-{{ $assigneeId }}"
         />
 
-        <x-ui.filter-reset class="ii-btn ii-filter-reset" action="resetFilters" label="Reset" />
-    </x-ui.filter-bar>
+        <button type="button" class="ii-btn ii-filter-reset" wire:click="resetFilters">Reset</button>
+    </section>
 
     <nav class="ii-tabs" aria-label="Inquiry intelligence sections">
         <button type="button" class="ii-tab {{ $activeTab === 'portfolio' ? 'active' : '' }}" wire:click="setTab('portfolio')">Portfolio overview</button>
@@ -117,7 +113,7 @@
     <section class="ii-panel {{ $activeTab === 'portfolio' ? 'active' : '' }}" @if($activeTab !== 'portfolio') hidden @endif>
         <div class="ii-sect"><div><h2>Inquiry performance at a glance</h2><p>Management indicators recalculated from the active filters</p></div><small>{{ $report['period']['label'] }}</small></div>
         <div class="ii-grid6">
-            <article class="ii-card ii-kpi"><div class="ii-label">Total inquiries</div><div class="ii-big">{{ number_format($pk['total']) }}</div><div class="ii-trend">Visible in the selected period</div><div class="ii-track"><i class="ft-report-track-full"></i></div></article>
+            <article class="ii-card ii-kpi"><div class="ii-label">Total inquiries</div><div class="ii-big">{{ number_format($pk['total']) }}</div><div class="ii-trend">Visible in the selected period</div><div class="ii-track"><i style="width:100%"></i></div></article>
             <article class="ii-card ii-kpi ii-warn"><div class="ii-label">Open inquiries</div><div class="ii-big">{{ number_format($pk['open']) }}</div><div class="ii-trend">Still moving through inquiry workflow</div><div class="ii-track"><i style="width:{{ $pk['total'] ? round($pk['open']/$pk['total']*100) : 0 }}%"></i></div></article>
             <article class="ii-card ii-kpi ii-good"><div class="ii-label">Completed inquiries</div><div class="ii-big">{{ number_format($pk['completed']) }}</div><div class="ii-trend">Workflow completed or final result recorded</div><div class="ii-track"><i style="width:{{ $pk['total'] ? round($pk['completed']/$pk['total']*100) : 0 }}%"></i></div></article>
             <article class="ii-card ii-kpi ii-good"><div class="ii-label">Task completion</div><div class="ii-big">{{ number_format($pk['task_completion'],1) }}<small>%</small></div><div class="ii-trend">{{ number_format($pk['task_done']) }} of {{ number_format($pk['task_total']) }} workflow tasks</div><div class="ii-track"><i style="width:{{ min(100,$pk['task_completion']) }}%"></i></div></article>
@@ -284,7 +280,7 @@
                 <button type="button" class="ii-subtab {{ $taskTab === 'longest' ? 'active' : '' }}" wire:click="setTaskTab('longest')">Longest tasks</button>
                 <button type="button" class="ii-subtab {{ $taskTab === 'reopened' ? 'active' : '' }}" wire:click="setTaskTab('reopened')">Reopened tasks</button>
             </div>
-            <x-ui.search-select
+            <x-ui.select-filter
                 class="ii-field ii-searchable-filter ii-focus-employee-filter"
                 label="Focus employee"
                 property="employeeFocus"

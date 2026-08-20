@@ -325,20 +325,16 @@
                     </div>
 
                     <div class="field">
-                        <x-ui.search-select
-                            label="Department"
-                            property="departmentId"
-                            type="departments"
-                            context="administration"
-                            action="setDepartmentSelection"
-                            :value="$departmentId"
-                            placeholder="No department"
-                            :initial-options="$departments"
-                            :menu-width="320"
-                            :fixed-menu="true"
-                            wire:key="administration-department-{{ $departmentId ?? 'none' }}"
-                        />
-                        @error('departmentId')<x-ui.validation-message :message="$message" />@enderror
+                        <label>Department</label>
+                        <select wire:model="departmentId">
+                            <option value="">No department</option>
+                            @foreach($departments as $d)
+                                <option value="{{ $d->id }}">{{ $d->name }}</option>
+                            @endforeach
+                        </select>
+                        @error('departmentId')
+                            <div class="validation-error">{{ $message }}</div>
+                        @enderror
                     </div>
 
                     <div class="field">

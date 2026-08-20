@@ -147,7 +147,7 @@
             <button type="button" wire:click="setRange(7)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 7 ? 'true' : 'false' }}" class="{{ $rangeDays === 7 ? 'active' : '' }}">7 days</button>
             <button type="button" wire:click="setRange(30)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 30 ? 'true' : 'false' }}" class="{{ $rangeDays === 30 ? 'active' : '' }}">30 days</button>
         </div>
-        <x-ui.search-select
+        <x-ui.remote-filter
             class="ft-mgmt-remote-filter ft-mgmt-client-filter"
             label="Client"
             property="clientFilter"
@@ -161,7 +161,7 @@
             :fixed-menu="true"
             wire:key="dashboard-client-filter-{{ $clientFilter ?: 'all' }}"
         />
-        <x-ui.search-select
+        <x-ui.remote-filter
             class="ft-mgmt-remote-filter ft-mgmt-team-filter"
             label="Team"
             property="teamFilter"
@@ -231,7 +231,7 @@
 
 
 
-    <section class="ft-mgmt-panel ft-mgmt-panel-spaced">
+    <section class="ft-mgmt-panel" style="margin-bottom:14px">
         <div class="ft-mgmt-panel-head">
             <div><h2>Priority work</h2><p>Top urgent Orders, Inquiries and Tasks ranked by attention, due date and priority</p></div>
             <div class="ft-mgmt-tabs">
@@ -451,7 +451,7 @@
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     @endphp
-    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced">
+    <section class="ft-mgmt-panel ft-mgmt-team-panel" style="margin-bottom:14px">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>

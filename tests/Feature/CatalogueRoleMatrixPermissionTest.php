@@ -41,7 +41,7 @@ class CatalogueRoleMatrixPermissionTest extends TestCase
         $this->assertStringContainsString("label=\"Products\" icon=\"products\"", $sidebar);
         $this->assertStringContainsString("label=\"Product Categories\" icon=\"categories\"", $sidebar);
         $this->assertStringContainsString("label=\"Suppliers\" icon=\"suppliers\"", $sidebar);
-        $this->assertStringContainsString("collect(\$masterLabels)->except([...\$catalogueGroups, ...\$financialGroups, ...\$taskPackMasterGroups, 'task_status', 'task_flag'])->all()", $sidebar);
+        $this->assertStringContainsString("collect(\$masterLabels)->except(\$catalogueGroups)->all()", $sidebar);
         $this->assertStringContainsString("canModule('catalog_products', 'view')", $sidebar);
         $this->assertStringContainsString("canModule('product_categories', 'view')", $sidebar);
         $this->assertStringContainsString("canModule('suppliers', 'view')", $sidebar);

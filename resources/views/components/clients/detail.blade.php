@@ -8,10 +8,6 @@
     'activities' => null,
     'orderStatusOptions' => null,
     'orderOwnerOptions' => null,
-    'clientOrderSearch' => '',
-    'clientOrderStatus' => '',
-    'clientOrderOwner' => '',
-    'clientOrderRange' => '3m',
     'documentCount' => 0,
     'orderMetrics' => [],
     'clientCode' => '',
@@ -325,44 +321,13 @@
                 <div><h2>Client orders</h2><p>All orders for {{ $client->name }}.</p></div>
                 <div><a href="{{ route('jobs.index', ['client'=>$client->id]) }}" wire:navigate><span>↗</span> Open in Orders</a><small>Opens the Orders workspace with<br>{{ $client->name }} filter applied.</small></div>
             </div>
-            <x-ui.filter-bar class="ft-client-order-filters" label="Client order filters">
-                <x-ui.search-input
-                    class="ft-client-order-search ft-client-order-search-shared"
-                    property="clientOrderSearch"
-                    :value="$clientOrderSearch"
-                    label="Search client orders"
-                    placeholder="Search order number or description..."
-                    :debounce="300"
-                    :hide-label="true"
-                />
-                <x-ui.search-select
-                    class="ft-client-order-selector"
-                    label="Status"
-                    property="clientOrderStatus"
-                    :value="$clientOrderStatus"
-                    placeholder="All statuses"
-                    :options="collect($orderStatusOptions ?? [])->map(fn ($status) => ['id' => $status, 'label' => $status])"
-                    :hide-label="true"
-                    :fixed-menu="true"
-                    :menu-width="220"
-                />
-                <x-ui.search-select
-                    class="ft-client-order-selector"
-                    label="Owner"
-                    property="clientOrderOwner"
-                    type="users"
-                    context="client-orders"
-                    :value="$clientOrderOwner"
-                    placeholder="All owners"
-                    :initial-options="$orderOwnerOptions ?? collect()"
-                    :params="['client_id' => $client->id]"
-                    :hide-label="true"
-                    :fixed-menu="true"
-                    :menu-width="260"
-                />
-                <select class="ft-client-order-range" wire:model.live="clientOrderRange" aria-label="Client order date range"><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m">Last 12 months</option><option value="all">All time</option></select>
-                <x-ui.filter-reset action="clearClientOrderFilters" label="Clear filters" />
-            </x-ui.filter-bar>
+            <div class="ft-client-order-filters">
+                <label class="ft-client-order-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search order number or description..." wire:model.live.debounce.300ms="clientOrderSearch"></label>
+                <select wire:model.live="clientOrderStatus"><option value="">All statuses</option>@foreach($orderStatusOptions ?? [] as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select>
+                <select wire:model.live="clientOrderOwner"><option value="">All owners</option>@foreach($orderOwnerOptions ?? [] as $owner)<option value="{{ $owner->id }}">{{ $owner->name }}</option>@endforeach</select>
+                <select wire:model.live="clientOrderRange"><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m">Last 12 months</option><option value="all">All time</option></select>
+                <button type="button" wire:click="clearClientOrderFilters">Clear filters</button>
+            </div>
             <div class="ft-client-order-filter-meta"><span>Client: {{ $client->name }} <b>×</b></span><em>{{ number_format($orders?->total() ?? 0) }} matching orders</em></div>
             <div class="ft-client-orders-table-wrap">
                 <table class="ft-client-orders-table">

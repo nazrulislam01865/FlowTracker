@@ -12,10 +12,10 @@ class MyWorkPrototypeImplementationTest extends TestCase
 
         $this->assertStringContainsString('My Tasks', $view);
         $this->assertStringNotContainsString('Needs my action', $view);
-        $this->assertStringContainsString('label="Created Today"', $view);
-        $this->assertStringContainsString('label="Not Started"', $view);
-        $this->assertStringContainsString('label="Due This Week"', $view);
-        $this->assertStringContainsString('label="Needs Attention"', $view);
+        $this->assertStringContainsString('Overdue', $view);
+        $this->assertStringContainsString('Due today', $view);
+        $this->assertStringContainsString('Upcoming', $view);
+        $this->assertStringContainsString('Waiting', $view);
         $this->assertStringNotContainsString('>All Tasks</a>', $view);
         $this->assertStringContainsString('class="phase-filters"', $view);
         $this->assertStringContainsString('class="phase-toggle', $view);
@@ -48,13 +48,12 @@ class MyWorkPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('->paginate(max(1, min(self::JOBS_PER_PAGE, $perPage))', $service);
         $this->assertStringContainsString("->whereIn('tasks.flow_job_id', \$jobIds)", $service);
         $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $service);
-        $this->assertStringContainsString('if (!$access->isAdministrator($user))', $service);
-        $this->assertStringContainsString('includeOpenConstraint: !$showCompleted', $service);
+        $this->assertStringContainsString('$administratorAllTasks', $service);
+        $this->assertStringContainsString('includeOpenConstraint: !$administratorAllTasks', $service);
         $this->assertStringNotContainsString('includeInactiveJobsForAdministrator', $service);
         $this->assertStringContainsString("->whereNull('completed_at')", $service);
         $this->assertStringContainsString("->whereNotIn('status', JobService::INACTIVE_STATUSES)", $service);
-        $this->assertStringContainsString("->where('my_work_mention_activity.event', 'task.comment')", $service);
-        $this->assertStringContainsString('mention_user_ids', $service);
+        $this->assertStringContainsString("flow_notifications.type', 'mention'", $service);
     }
 
     public function test_inline_status_update_is_renderless_and_uses_optimistic_concurrency(): void
@@ -76,8 +75,8 @@ class MyWorkPrototypeImplementationTest extends TestCase
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
         $this->assertStringContainsString('<span>Assignee</span>', $view);
-        $this->assertStringContainsString("'assignee' => (string) (\$task->getAttribute('my_work_assignee_name') ?: 'Unassigned')", $service);
-        $this->assertStringContainsString("->leftJoin('users as my_work_assignees'", $service);
+        $this->assertStringContainsString("'assignee' => (string) (\$task->assignee?->name ?: 'Unassigned')", $service);
+        $this->assertStringContainsString("'assignee:id,name,profile_image_path'", $service);
         $this->assertStringContainsString("'dueValue' => \$dueDate ?: ''", $service);
         $this->assertStringContainsString("'dueDisplay' => \$task->due_date?->format('M j, Y') ?? 'Set due date'", $service);
         $this->assertStringContainsString("window.FlowTrackInlineEdit({ key: @js('my-work-task-'", $view);

@@ -64,8 +64,10 @@ class InlineEditingMechanismTest extends TestCase
     public function test_all_known_inline_edit_views_use_the_shared_optimistic_runtime(): void
     {
         $views = [
+            resource_path('views/components/jobs/table.blade.php'),
             resource_path('views/components/jobs/detail.blade.php'),
             resource_path('views/components/jobs/detail-overview.blade.php'),
+            resource_path('views/components/jobs/detail-workflow.blade.php'),
             resource_path('views/components/jobs/task-detail.blade.php'),
             resource_path('views/components/board/task-card.blade.php'),
             resource_path('views/components/board/job-card.blade.php'),
@@ -91,10 +93,10 @@ class InlineEditingMechanismTest extends TestCase
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
         $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
         $service = file_get_contents(app_path('Services/JobService.php'));
-        $css = $this->compatibilityCss('flowtrack-inline-editing.css');
+        $css = file_get_contents(public_path('css/flowtrack-inline-editing.css'));
 
-        $this->assertStringContainsString("updateJobUrgencies({{ \$job->id }}, 'production'", $overview);
-        $this->assertStringContainsString("updateJobUrgencies({{ \$job->id }}, 'shipment'", $overview);
+        $this->assertStringContainsString("updateJobUrgencies({{ $job->id }}, 'production'", $overview);
+        $this->assertStringContainsString("updateJobUrgencies({{ $job->id }}, 'shipment'", $overview);
         $this->assertStringContainsString('ft-inline-urgency-editor', $overview);
         $this->assertStringContainsString('ft-inline-urgency-select', $overview);
         $this->assertStringContainsString('x-model="selectedId"', $overview);
@@ -131,15 +133,14 @@ class InlineEditingMechanismTest extends TestCase
         $profile = file_get_contents(app_path('Livewire/Profile/Index.php'));
         $runtime = file_get_contents(resource_path('js/app.js'));
 
-        $this->assertStringContainsString("\$isAssignment ? 'Task assigned: '", $tasks);
-        $this->assertStringContainsString("'Task assigned: '.\$task->title", $notifications);
+        $this->assertStringContainsString("$isAssignment ? 'Task assigned: '", $tasks);
+        $this->assertStringContainsString("'Task assigned: '.$task->title", $notifications);
         $this->assertStringNotContainsString('hide_task_assignment_notifications', $notificationModel);
         $this->assertStringContainsString("['Task assignments', 'When a task is assigned to you']", $profile);
         $this->assertStringNotContainsString('showRealtimeToast', $runtime);
         $this->assertStringNotContainsString('ft-realtime-toast', $runtime);
         $this->assertStringNotContainsString('isSuppressedRealtimeNotification', $runtime);
-        $this->assertStringContainsString('const markRealtimeUnread = (payload = {}) =>', $runtime);
-        $this->assertStringContainsString('syncUnreadCount();', $runtime);
+        $this->assertStringContainsString('markRealtimeUnread(payload);', $runtime);
         $this->assertStringContainsString("window.Livewire?.dispatch?.('flowtrack-notification');", $runtime);
     }
 }

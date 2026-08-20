@@ -23,8 +23,7 @@ class DashboardTaggedCommentsRoleScopeTest extends TestCase
         $this->assertStringContainsString('All mentions across Orders, Tasks and Inquiries', $tagged);
         $this->assertStringContainsString("\$mention->type === 'mention_admin' ? 'mentioned a user in' : 'mentioned you in'", $tagged);
         $this->assertStringNotContainsString("collect(\$data['attentionItems'])->take(4)", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
-        $this->assertStringContainsString("'orders' => \$attentionOrders", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
-        $this->assertStringContainsString('->take(6)', file_get_contents(app_path('Livewire/Dashboard/Index.php')));
+        $this->assertStringContainsString("collect(\$data['attentionItems'])->take(6)->values()", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
         $this->assertStringContainsString("['mention', 'mention_admin', 'comment']", $resolver);
         $this->assertStringContainsString("type === 'mention_admin'", $resolver);
         $this->assertStringContainsString("'type' => 'mention_admin'", $migration);

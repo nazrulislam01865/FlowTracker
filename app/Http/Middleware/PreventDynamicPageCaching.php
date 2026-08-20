@@ -12,27 +12,9 @@ use Symfony\Component\HttpFoundation\Response;
  */
 class PreventDynamicPageCaching
 {
-    /** Routes whose controllers own an explicit immutable asset cache policy. */
-    private const CACHE_MANAGED_ASSET_ROUTES = [
-        'branding-assets.show',
-        'profile-images.show',
-        'client-logos.show',
-        'master-data.product-image',
-        'master-data.product-option-image',
-        'rich-text-images.show',
-        'rich-text-images.download',
-    ];
-
     public function handle(Request $request, Closure $next): Response
     {
         $response = $next($request);
-        // Binary/media controllers define their own private/public immutable
-        // policy. Do not replace it when a fake/test filesystem reports an
-        // imprecise MIME type such as text/html.
-        if ($request->routeIs(self::CACHE_MANAGED_ASSET_ROUTES)) {
-            return $response;
-        }
-
         $contentType = strtolower((string) $response->headers->get('Content-Type'));
 
         if (str_contains($contentType, 'text/html')) {

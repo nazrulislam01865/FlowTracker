@@ -83,7 +83,7 @@
                         @if($optionsReady)
                             <div class="ft-task-prototype-grid" wire:key="task-pack-options-{{ $index }}">
                                 <div class="ft-admin-field">
-                                    <x-ui.search-select
+                                    <x-ui.remote-filter
                                         class="ft-taskpack-assignee-filter"
                                         label="Default assignee"
                                         property="tasks.{{ $index }}.default_assignee_id"
@@ -102,7 +102,7 @@
                                 </div>
 
                                 <div class="ft-admin-field">
-                                    <x-ui.search-select
+                                    <x-ui.remote-filter
                                         class="ft-taskpack-assignee-filter"
                                         label="Default department"
                                         property="tasks.{{ $index }}.default_department_id"
@@ -132,7 +132,7 @@
                                 </div>
 
                                 <div class="ft-admin-field">
-                                    <x-ui.search-select
+                                    <x-ui.remote-filter
                                         class="ft-taskpack-assignee-filter"
                                         label="Required document"
                                         property="tasks.{{ $index }}.document_category_id"
@@ -231,11 +231,11 @@
                                 </div>
 
                                 <div class="ft-efficiency-checks ft-efficiency-prototype-options" aria-label="Prototype-only efficiency options">
-                                    <label aria-disabled="true" class="ft-disabled-pointer">
+                                    <label aria-disabled="true" style="pointer-events:none">
                                         <input type="checkbox" checked tabindex="-1" aria-disabled="true">
                                         <span><b>Set the task due date from the standard duration</b><small>Calculated using the selected business calendar.</small></span>
                                     </label>
-                                    <label aria-disabled="true" class="ft-disabled-pointer">
+                                    <label aria-disabled="true" style="pointer-events:none">
                                         <input type="checkbox" tabindex="-1" aria-disabled="true">
                                         <span><b>Allow authorized users to override this benchmark</b></span>
                                     </label>

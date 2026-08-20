@@ -16,7 +16,7 @@ class BulkOrderImportImplementationTest extends TestCase
         $baseMigration = file_get_contents(database_path('migrations/2026_08_10_200000_add_bulk_order_import_support.php'));
         $refinedMigration = file_get_contents(database_path('migrations/2026_08_15_051500_refine_bulk_order_import_fields.php'));
         $controller = file_get_contents(app_path('Http/Controllers/BulkOrderImportController.php'));
-        $bulkCss = $this->compatibilityCss('flowtrack-bulk-order-import.css');
+        $bulkCss = file_get_contents(public_path('css/flowtrack-bulk-order-import.css'));
         $ordersTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
         $ordersIndex = file_get_contents(app_path('Livewire/Orders/Index.php'));
         $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
@@ -28,8 +28,7 @@ class BulkOrderImportImplementationTest extends TestCase
         $this->assertStringContainsString('Repeat Order No. becomes required only when Repeat Order? is Yes.', $view);
         $this->assertStringContainsString('Product ID may be blank.', $view);
         $this->assertStringContainsString('Normal, Urgent or Super Urgent', $view);
-        $this->assertStringContainsString('Reference already exists; this row will be skipped', $service);
-        $this->assertStringContainsString('Reference already exists; the matching order will be updated', $service);
+        $this->assertStringContainsString('If Reference Order No. already exists', $view);
         $this->assertStringContainsString('Client &amp; Product IDs validated', $view);
         $this->assertStringNotContainsString('Fallback Client ID', $view);
         $this->assertStringNotContainsString('Fallback Supplier ID', $view);
@@ -80,8 +79,7 @@ class BulkOrderImportImplementationTest extends TestCase
         $this->assertStringContainsString('.steps .step::before', $bulkCss);
         $this->assertStringContainsString('content:none!important', $bulkCss);
         $this->assertStringContainsString('ft-bulk-import-button', $ordersTable);
-        $this->assertLayoutLoadsViteCss('resources/css/legacy/shell-b.css', $layout);
-        $this->assertStringContainsString("@import './compatibility/flowtrack-bulk-order-import.css';", file_get_contents(resource_path('css/legacy/shell-b.css')));
+        $this->assertStringContainsString('/css/flowtrack-bulk-order-import.css', $layout);
         $this->assertStringContainsString('manual_workflows', $bulkJs);
         $this->assertStringContainsString('Client ID *', $bulkJs);
         $this->assertStringContainsString('Shipping Address *', $bulkJs);

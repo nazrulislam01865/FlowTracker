@@ -3,10 +3,10 @@
 namespace App\Livewire\UserEditor;
 
 use App\Livewire\Concerns\RefreshesFromWorkspace;
+use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AdminService;
-use App\Services\FilterOptionService;
 use App\Services\SetupContext;
 use App\Services\UserEditorService;
 use Carbon\Carbon;
@@ -274,24 +274,17 @@ class Index extends Component
             ->map(fn (Role $role) => ['id' => $role->id, 'name' => $role->name])
             ->all();
 
-        $this->departmentOptions = app(FilterOptionService::class)
-            ->options(
-                auth()->user(),
-                'departments',
-                'user-editor',
-                '',
-                $target->department_id,
-                FilterOptionService::COMPACT_PER_PAGE,
-            )
-            ->values()
+        $this->departmentOptions = Department::query()
+            ->where(function ($query) use ($target) {
+                $query->where('is_active', true);
+                if ($target->department_id) {
+                    $query->orWhere('id', $target->department_id);
+                }
+            })
+            ->orderBy('name')
+            ->get(['id', 'name'])
+            ->map(fn (Department $department) => ['id' => $department->id, 'name' => $department->name])
             ->all();
-    }
-
-    public function setDepartmentSelection(string $property, string $value): void
-    {
-        abort_unless($property === 'departmentId', 422);
-        abort_unless($this->canManageAccess, 403);
-        $this->departmentId = $value !== '' ? (int) $value : null;
     }
 
     private function loadStaticFacts(User $target): void

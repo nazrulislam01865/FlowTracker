@@ -15,19 +15,15 @@ class UserAssignmentPresentationRegressionTest extends TestCase
         $this->assertStringNotContainsString('ft-user-role-chips\">@forelse', $administration);
 
         $this->assertStringContainsString('ft-user-editor-department-picker', $editor);
-        $this->assertStringContainsString('<x-ui.search-select', $editor);
-        $this->assertStringContainsString('label="Department"', $editor);
-        $this->assertStringContainsString('property="departmentId"', $editor);
-        $this->assertStringContainsString('required', $editor);
-        $this->assertStringContainsString('type="departments"', $editor);
-        $this->assertStringContainsString('placeholder="No department"', $editor);
+        $this->assertStringContainsString('Search department…', $editor);
+        $this->assertStringContainsString("\$wire.\$set('departmentId'", $editor);
         $this->assertStringNotContainsString('id="ft-edit-department" wire:model="departmentId"', $editor);
 
         $this->assertStringContainsString("password: ''", $editor);
         $this->assertStringContainsString('syncPassword(value)', $editor);
         $this->assertStringContainsString('syncConfirmation(value)', $editor);
         $this->assertStringNotContainsString('Passwords do not match.', $editor);
-        $this->assertStringNotContainsString("\$wire.entangle('newPassword')", $editor);
+        $this->assertStringNotContainsString("$wire.entangle('newPassword')", $editor);
         $this->assertStringContainsString('data-1p-ignore', $editor);
     }
 }

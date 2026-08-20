@@ -27,7 +27,7 @@
                     </div>
                 @endif
 
-                <x-ui.search-select
+                <x-ui.remote-filter
                     class="ft-mgmt-remote-filter ft-mgmt-team-report-remote-filter"
                     label="Client"
                     property="clientFilter"
@@ -42,7 +42,7 @@
                     wire:key="team-report-client-filter-{{ $clientFilter ?: 'all' }}"
                 />
 
-                <x-ui.search-select
+                <x-ui.remote-filter
                     class="ft-mgmt-remote-filter ft-mgmt-team-report-remote-filter"
                     label="Team"
                     property="teamFilter"

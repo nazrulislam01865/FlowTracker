@@ -11,10 +11,8 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $view = file_get_contents(resource_path('views/components/jobs/detail-documents.blade.php'));
 
         $this->assertStringContainsString('Choose the document type, then upload a new file or select one that already exists.', $view);
-        $this->assertStringContainsString('$wire.upload(', $view);
-        $this->assertStringContainsString("'jobRequiredDocumentUpload'", $view);
-        $this->assertStringContainsString('event?.detail?.progress', $view);
-        $this->assertStringContainsString('persistJobRequiredDocumentUpload', $view);
+        $this->assertStringContainsString('wire:model="jobRequiredDocumentUpload"', $view);
+        $this->assertStringContainsString('livewire-upload-progress', $view);
         $this->assertStringContainsString('Retry upload', $view);
         $this->assertStringContainsString('Choose another file', $view);
         $this->assertStringContainsString('Upload complete', $view);

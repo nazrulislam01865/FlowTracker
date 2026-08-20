@@ -69,11 +69,8 @@ class TaskService
             throw ValidationException::withMessages(['overviewTaskLinkUrl' => 'Enter a valid http:// or https:// link.']);
         }
 
-        // Create through the task relation so the foreign key always belongs
-        // to the exact Order task that was authorized above. This also keeps the
-        // persistence path identical to the relation used when the taskflow is
-        // re-hydrated after Livewire closes the Add link form.
-        $link = $task->links()->create([
+        $link = TaskLink::create([
+            'task_id' => $task->id,
             'created_by' => $actor->id,
             'url' => $url,
         ]);
@@ -83,13 +80,7 @@ class TaskService
             'url' => $url,
         ]);
 
-        // The link is already persisted and the next render reads document
-        // evidence directly from task_links. Do not run the parent Order/phase
-        // lifecycle from inside this resource-save request: doing so can change
-        // the visible taskflow before Livewire renders the newly saved link.
-        // Task status/completion updates remain responsible for parent progress
-        // and phase advancement.
-        return $link->refresh();
+        return $link;
     }
 
     public function removeExternalLink(Task $task, int $linkId, User $actor): void
@@ -339,13 +330,14 @@ class TaskService
         $hasRequiredDocument = (bool) ($task->setupTemplate?->document_category_id ?: $task->document_category_id);
         if (! $hasRequiredDocument) return;
 
-        // The requirement belongs to the task itself. A file-backed Document or an
-        // external TaskLink is valid submission evidence. This lets users provide a
-        // cloud/document URL instead of uploading a duplicate file while keeping the
-        // Task Pack requirement attached to the same task. Fresh exists() queries are
-        // intentional so a previously-loaded empty relation cannot make newly-added
-        // evidence appear missing during the next inline status update.
-        if ($task->documents()->exists() || $task->links()->exists()) return;
+        // The requirement belongs to the task itself. Once a real Document row is
+        // linked to this task, the required-file gate is satisfied regardless of
+        // the document's legacy/category label. Older uploads may have been saved
+        // as "Task attachment" while newer uploads inherit the Task Pack category;
+        // both are valid evidence because task_id is the authoritative link. Use a
+        // fresh exists() query so a previously-loaded empty relation can never make
+        // an upload appear missing during the next inline status update.
+        if ($task->documents()->exists()) return;
 
         $name = $task->setupTemplate?->documentCategory?->name
             ?: $task->documentCategory?->name

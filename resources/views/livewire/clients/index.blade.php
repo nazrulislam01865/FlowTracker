@@ -40,10 +40,6 @@
         :activities="$clientActivities"
         :order-status-options="$clientOrderStatusOptions"
         :order-owner-options="$clientOrderOwnerOptions"
-        :client-order-search="$clientOrderSearch"
-        :client-order-status="$clientOrderStatus"
-        :client-order-owner="$clientOrderOwner"
-        :client-order-range="$clientOrderRange"
         :document-count="$clientDocumentCount"
         :order-metrics="$clientOrderMetrics"
         :client-code="$clientCode"
@@ -103,7 +99,7 @@
     <div class="ft-clients-layout ft-clients-layout-full">
         <section class="ft-clients-main">
             @if(!$showArchived)
-            <div class="ft-clients-metrics ft-summary-card-grid ft-summary-card-grid-4 ft-summary-card-grid--4" aria-label="Client summary filters">
+            <div class="ft-clients-metrics ft-summary-card-grid ft-summary-card-grid-4" style="--ft-summary-columns:4" aria-label="Client summary filters">
                 <x-ui.summary-card label="Total clients" :value="$summary['clients'] ?? 0" icon="clients" tone="blue" caption="Active client records" :active="$quick === 'all' && ! $clientListFieldFilterActive" wire:click="setQuick('all')" aria-pressed="{{ $quick === 'all' && ! $clientListFieldFilterActive ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="Active Jobs" :value="$summary['active_jobs'] ?? 0" icon="orders" tone="green" caption="Open client work" :active="$quick === 'active_jobs'" wire:click="setQuick('active_jobs')" aria-pressed="{{ $quick === 'active_jobs' ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="Needs attention" :value="$summary['attention'] ?? 0" icon="attention" tone="red" caption="Client work requiring action" :active="$quick === 'attention'" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}" />
@@ -114,8 +110,8 @@
             @if($showArchived)
                 <div class="ft-list-filter-shell is-archived ft-archived-prototype-toolbar">
                     <div class="ft-list-filter-grid ft-client-filter-grid ft-archived-prototype-filter-grid">
-                        <x-ui.search-input property="search" :value="$search" placeholder="Search archived clients" />
-                        <x-ui.search-select
+                        <x-ui.list-search property="search" :value="$search" placeholder="Search archived clients" />
+                        <x-ui.select-filter
                             label="Archived date"
                             property="archivedDate"
                             :value="$archivedDate"
@@ -127,7 +123,7 @@
                                 ['id'=>'year','label'=>'This year'],
                             ])"
                         />
-                        <x-ui.search-select label="Created by" property="createdBy" type="users" context="clients" :value="$createdBy" placeholder="Anyone" :initial-options="$createdByFilterOptions" />
+                        <x-ui.remote-filter label="Created by" property="createdBy" type="users" context="clients" :value="$createdBy" placeholder="Anyone" :initial-options="$createdByFilterOptions" />
                         <button type="button" class="ft-client-clear-filter" wire:click="clearFilters" @disabled(! $clientAnyFilterActive)>× Clear filter</button>
                     </div>
                     @php
@@ -145,11 +141,11 @@
             @else
                 <div class="ft-list-filter-shell">
                     <div class="ft-list-filter-grid ft-client-filter-grid">
-                        <x-ui.search-input property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
-                        <x-ui.search-select label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
-                        <x-ui.search-select label="Country" property="country" type="countries" context="clients" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
-                        <x-ui.search-select label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />
-                        <x-ui.search-select label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
+                        <x-ui.list-search property="search" :value="$search" placeholder="Client, Job ID, country or manager…" />
+                        <x-ui.remote-filter label="Account manager" property="manager" type="users" context="clients" :value="$manager" placeholder="Anyone" :initial-options="$managerFilterOptions" />
+                        <x-ui.remote-filter label="Country" property="country" type="countries" context="clients" :value="$country" placeholder="All countries" :initial-options="$countryFilterOptions" />
+                        <x-ui.select-filter label="Job health" property="jobHealth" :value="$jobHealth" placeholder="All health" :options="$healthOptions->map(fn($healthOption) => ['id'=>$healthOption,'label'=>$healthOption])" />
+                        <x-ui.select-filter label="Outstanding" property="outstanding" :value="$outstanding" placeholder="Any balance" :options="collect([['id'=>'positive','label'=>'Has balance'],['id'=>'high','label'=>'$10,000+'],['id'=>'zero','label'=>'No balance']])" />
                         <button type="button" class="ft-client-clear-filter" wire:click="clearFilters" @disabled(! $clientAnyFilterActive)>× Clear filter</button>
                     </div>
                     @php

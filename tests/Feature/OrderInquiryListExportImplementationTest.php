@@ -49,7 +49,6 @@ class OrderInquiryListExportImplementationTest extends TestCase
         $this->assertStringContainsString("'all_time' => ['', '']", $controller);
 
         $this->assertStringContainsString("'Orders'", $export);
-        $this->assertStringContainsString("'Order Details'", $export);
         $this->assertStringContainsString("'Products'", $export);
         $this->assertStringContainsString("'Tasks'", $export);
         $this->assertStringContainsString("'Task Comments'", $export);
@@ -58,18 +57,7 @@ class OrderInquiryListExportImplementationTest extends TestCase
         $this->assertStringContainsString("'Invoices'", $export);
         $this->assertStringContainsString("'Payments'", $export);
         $this->assertStringContainsString("'Inquiries'", $export);
-        $this->assertStringContainsString("'Inquiry Details'", $export);
-        $this->assertStringContainsString("'Current Task Status'", $export);
-        $this->assertStringContainsString("'Task Assignee'", $export);
-        $this->assertStringContainsString("'Assignee Email'", $export);
-        $this->assertStringContainsString("'Task Last Updated At'", $export);
-        $this->assertStringContainsString('orderProductSummary', $export);
-        $this->assertStringContainsString('inquiryProductSummary', $export);
-        $this->assertStringContainsString("\$canViewFinance ? \$item->unit_price : ''", $export);
         $this->assertStringContainsString("can(\$user, 'finance', 'view')", $export);
         $this->assertStringContainsString('application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', $export);
-        $this->assertStringContainsString("method_exists(\$sheet, 'setShowGridlines')", $export);
-        $this->assertStringContainsString("\$sheet->setShowGridlines(false)", $export);
-        $this->assertStringNotContainsString("getSheetView()->setShowGridlines", $export);
     }
 }
