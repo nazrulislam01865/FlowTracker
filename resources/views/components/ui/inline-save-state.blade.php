@@ -1,6 +1,7 @@
 @props(['compact' => false])
 <span
     {{ $attributes->class(['ft-inline-save-state', 'compact' => $compact]) }}
+    data-ft-ui-component="inline-save-state"
     :class="{
         'is-saving': status === 'saving',
         'is-saved': status === 'saved',

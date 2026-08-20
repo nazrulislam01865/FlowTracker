@@ -61,6 +61,13 @@ final class JobDetailPresenter
         return $tasks->filter(fn (Task $task) => $task->completed_at || $task->status === 'Completed')->count();
     }
 
+    public static function isPhaseComplete(FlowJob $job, WorkflowPhase $phase): bool
+    {
+        $tasks = self::phaseTasks($job, $phase);
+
+        return $tasks->isNotEmpty() && self::completedCount($tasks) === $tasks->count();
+    }
+
     public static function nextTask(FlowJob $job): ?Task
     {
         return BoardPresenter::nextTask($job);
@@ -93,17 +100,21 @@ final class JobDetailPresenter
                 ?: $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            // A required document is fulfilled by any real Document linked to
-            // this exact task. task_id is the authoritative relationship; the
-            // category label is presentation metadata and may differ on legacy
-            // uploads that were stored as generic task attachments.
-            $received = self::documentsForTask($job, $task)->count();
+            // A Task Pack document requirement can be satisfied either by a
+            // file-backed Document or by an external TaskLink attached to the same
+            // task. This mirrors TaskService's completion gate and makes cloud-file
+            // URLs a first-class replacement for uploading a duplicate document.
+            $documentCount = self::documentsForTask($job, $task)->count();
+            $linkCount = self::taskLinks($job, $task)->count();
+            $received = $documentCount + $linkCount;
 
             $requirements->push((object) [
                 'phase' => $phase,
                 'task' => $task,
                 'template' => $item,
                 'name' => $name,
+                'document_count' => $documentCount,
+                'link_count' => $linkCount,
                 'received' => $received,
                 'complete' => $received > 0,
                 'current' => (int) $phase->id === (int) $job->workflow_phase_id,
@@ -125,17 +136,17 @@ final class JobDetailPresenter
             $name = $task->documentCategory?->name
                 ?: $task->setupTemplate?->documentCategory?->name
                 ?: 'Required document';
-            // A required document is fulfilled by any real Document linked to
-            // this exact task. task_id is the authoritative relationship; the
-            // category label is presentation metadata and may differ on legacy
-            // uploads that were stored as generic task attachments.
-            $received = self::documentsForTask($job, $task)->count();
+            $documentCount = self::documentsForTask($job, $task)->count();
+            $linkCount = self::taskLinks($job, $task)->count();
+            $received = $documentCount + $linkCount;
 
             $requirements->push((object) [
                 'phase' => $phase,
                 'task' => $task,
                 'template' => $task->setupTemplate,
                 'name' => $name,
+                'document_count' => $documentCount,
+                'link_count' => $linkCount,
                 'received' => $received,
                 'complete' => $received > 0,
                 'current' => (int) $phase->id === (int) $job->workflow_phase_id,
@@ -160,6 +171,18 @@ final class JobDetailPresenter
         // lightweight detail tabs eager-load the Order document collection.
         return $task->relationLoaded('documents')
             ? $task->documents
+            : collect();
+    }
+
+    /**
+     * Return external links for one visible Order task without issuing a query.
+     * JobService hydrates the real Task::links relationship for the already
+     * authorized task collection before the Order detail view is rendered.
+     */
+    public static function taskLinks(FlowJob $job, Task $task): Collection
+    {
+        return $task->relationLoaded('links')
+            ? $task->links->values()
             : collect();
     }
 
@@ -198,7 +221,7 @@ final class JobDetailPresenter
             $blockers->push((object) [
                 'type' => 'document',
                 'label' => $missingDocs->count().' Task Pack document'.($missingDocs->count() === 1 ? '' : 's').' still required',
-                'description' => 'Upload the required document for '.$missingDocs->pluck('task.title')->filter()->implode(', ').' before moving forward.',
+                'description' => 'Upload a file or add a document link for '.$missingDocs->pluck('task.title')->filter()->implode(', ').' before moving forward.',
             ]);
         }
 

@@ -51,13 +51,14 @@ class ProfileImageTest extends TestCase
         Storage::disk('public')->put($path, $this->tinyPng());
         $user->update(['profile_image_path' => $path]);
 
-        $this->actingAs($user)
+        $response = $this->actingAs($user)
             ->get(route('profile-images.show', [
                 'user' => $user->id,
                 'filename' => 'avatar.png',
             ], false))
-            ->assertOk()
-            ->assertHeader('Cache-Control', 'private, max-age=31536000, immutable');
+            ->assertOk();
+
+        $this->assertCacheControlDirectives($response, ['private', 'max-age=31536000', 'immutable']);
     }
 
     public function test_profile_image_is_limited_to_two_megabytes(): void

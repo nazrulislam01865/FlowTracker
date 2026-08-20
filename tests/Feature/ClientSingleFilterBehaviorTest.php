@@ -10,12 +10,12 @@ class ClientSingleFilterBehaviorTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/livewire/clients/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Clients/Index.php'));
-        $css = file_get_contents(public_path('css/flowtrack-list-filters.css'));
+        $css = $this->compatibilityCss('flowtrack-list-filters.css');
 
         $this->assertStringContainsString('class="ft-client-clear-filter"', $view);
         $this->assertStringContainsString('× Clear filter', $view);
         $this->assertStringContainsString('@disabled(! $clientAnyFilterActive)', $view);
-        $this->assertStringContainsString("\$quick==='all' && !\$clientListFieldFilterActive", $view);
+        $this->assertStringContainsString("\$quick === 'all' && ! \$clientListFieldFilterActive", $view);
 
         $this->assertStringContainsString("\$this->activateSingleListFilter('search');", $component);
         $this->assertStringContainsString("\$this->activateSingleListFilter('manager');", $component);

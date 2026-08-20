@@ -13,7 +13,12 @@ class RoleMatrixPerformanceRegressionTest extends TestCase
 
         $this->assertStringContainsString('$roles = $service->roleOptions();', $component);
         $this->assertStringContainsString("\$selectedRole->load(['moduleAccess'", $component);
-        $this->assertStringContainsString("->withCount('users')", $service);
+        $this->assertStringContainsString("->withCount(['users', 'primaryUsers', 'memberships'])", $service);
+        $roleOptionsStart = strpos($service, 'public function roleOptions()');
+        $roleOptionsEnd = strpos($service, 'public function notificationRules()', $roleOptionsStart);
+        $this->assertNotFalse($roleOptionsStart);
+        $this->assertNotFalse($roleOptionsEnd);
+        $this->assertStringNotContainsString('withCount', substr($service, $roleOptionsStart, $roleOptionsEnd - $roleOptionsStart));
         $this->assertStringNotContainsString("Role::with(['moduleAccess','users'])", $service);
     }
 

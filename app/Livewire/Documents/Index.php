@@ -4,7 +4,6 @@ namespace App\Livewire\Documents;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
-use App\Models\Client;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\InquiryDocument;
@@ -12,6 +11,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\DocumentService;
+use App\Services\FilterOptionService;
 use App\Services\MasterDataService;
 use App\Support\AttachmentUpload;
 use Illuminate\Database\Eloquent\Builder;
@@ -369,16 +369,14 @@ class Index extends Component
         $documents->setCollection($rows);
 
         [$allCount, $storageBytes] = $this->archiveTotals($user);
-        [$clientOptions, $uploaderOptions] = $this->archiveFilterOptions($user);
+        $filterOptions = app(FilterOptionService::class);
+        $clientOptions = $filterOptions->options($user, 'clients', 'documents', '', $this->client, FilterOptionService::COMPACT_PER_PAGE);
+        $uploaderOptions = $filterOptions->options($user, 'users', 'documents', '', $this->uploader, FilterOptionService::COMPACT_PER_PAGE);
 
         $categories = $this->showUpload ? app(MasterDataService::class)->active('document_category') : collect();
         $access = app(AccessControlService::class);
         $jobs = $this->showUpload
-            ? $access->applyDocumentArchiveJobScope(FlowJob::query(), $user)
-                ->with('client:id,name,logo_path')
-                ->orderByDesc('id')
-                ->limit(250)
-                ->get(['id', 'job_number', 'order_number', 'title', 'client_id'])
+            ? $filterOptions->options($user, 'jobs', 'documents', '', $this->uploadJobId, FilterOptionService::COMPACT_PER_PAGE)
             : collect();
         $uploadTasks = $this->showUpload && $this->uploadJobId
             ? $access->applyDocumentArchiveTaskScope(Task::query(), $user)
@@ -512,32 +510,6 @@ class Index extends Component
         ];
     }
 
-    private function archiveFilterOptions(User $user): array
-    {
-        $order = app(DocumentService::class)->query($user, [], 'document_archive');
-        $inquiryArchive = app(AccessControlService::class)
-            ->applyInquiryDocumentArchiveScope(InquiryDocument::query(), $user);
-
-        $orderClientIds = (clone $order)->whereNotNull('documents.client_id')->distinct()->pluck('documents.client_id');
-        $inquiryClientIds = (clone $inquiryArchive)
-            ->join('inquiries', 'inquiries.id', '=', 'inquiry_documents.inquiry_id')
-            ->whereNotNull('inquiries.client_id')
-            ->distinct()
-            ->pluck('inquiries.client_id');
-        $clientIds = $orderClientIds->merge($inquiryClientIds)->map(fn ($id) => (int) $id)->unique()->values();
-
-        $orderUploaderIds = (clone $order)->whereNotNull('documents.uploaded_by')->distinct()->pluck('documents.uploaded_by');
-        $inquiryUploaderIds = (clone $inquiryArchive)
-            ->whereNotNull('uploaded_by')
-            ->distinct()
-            ->pluck('uploaded_by');
-        $uploaderIds = $orderUploaderIds->merge($inquiryUploaderIds)->map(fn ($id) => (int) $id)->unique()->values();
-
-        return [
-            Client::query()->whereIn('id', $clientIds)->orderBy('name')->get(['id', 'name']),
-            User::query()->whereIn('id', $uploaderIds)->orderBy('name')->get(['id', 'name', 'profile_image_path']),
-        ];
-    }
 
     private function archiveDetailData(string $source, int $id): ?array
     {

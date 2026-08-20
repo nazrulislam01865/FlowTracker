@@ -16,7 +16,7 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString('min(self::JOBS_PER_PAGE, $perPage)', $service);
         $this->assertStringContainsString('public int $perPage = MyWorkService::JOBS_PER_PAGE;', $component);
         $this->assertStringContainsString("previousPage('workPage')", $view);
-        $this->assertStringContainsString("gotoPage({{ $pageNumber }}, 'workPage')", $view);
+        $this->assertStringContainsString("gotoPage({{ \$pageNumber }}, 'workPage')", $view);
         $this->assertStringContainsString("nextPage('workPage')", $view);
     }
 
@@ -76,11 +76,11 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString("flow_notifications.inquiry_task_id", $dashboardService);
         $this->assertStringNotContainsString("flow_task_comments.body', 'flow_notifications.message'", $dashboardService);
         $this->assertStringContainsString('notifyInquiryMentionedUsers', $notificationService);
-        $this->assertStringContainsString("'inquiry_id' => $inquiry?->id", $notificationService);
+        $this->assertStringContainsString("'inquiry_id' => \$inquiry?->id", $notificationService);
         $this->assertStringContainsString('$this->notifyMentions($inquiry->refresh(), null, $newDisplay, $actor);', $inquiryService);
         $this->assertStringNotContainsString('if ((int) $recipient->id === (int) $actor->id) return;', $inquiryService);
-        $this->assertStringContainsString("'inquiry'", $tagged);
-        $this->assertStringContainsString("'inquiry' => 'Inquiries'", $taggedView);
+        $this->assertStringContainsString("'inquiries'", $tagged);
+        $this->assertStringContainsString(">Inquiries</button>", $taggedView);
     }
 
 }

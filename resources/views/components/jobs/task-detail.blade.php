@@ -213,7 +213,7 @@
             </section>
 
             <section class="ft-detail-card ft-attachment-card">
-                <h2>Attachments <span>{{ $task->documents->count() }}</span></h2>
+                <h2>Attachments <span>{{ $task->documents->count() + ($task->relationLoaded('links') ? $task->links->count() : 0) }}</span></h2>
                 <div class="ft-upload-zone compact ft-task-upload-zone">
                     @if($canUploadDocument && !$showTaskDocumentPicker)
                         <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadSelectedTaskDocuments" for="taskDocumentUpload-{{ $task->id }}">
@@ -260,7 +260,25 @@
                         @endforeach
                     </div>
                 @endif
-                <p class="ft-upload-note">Every file uploaded here is linked to this task and appears in Order Documents. A required document is counted only when this Task Pack task defines that document type.</p>
+                @if($task->relationLoaded('links') && $task->links->isNotEmpty())
+                    <div class="ft-task-attachment-list ft-task-external-link-list" aria-label="Task external links">
+                        @foreach($task->links as $taskLink)
+                            <div class="ft-order-task-link-row" wire:key="task-detail-link-{{ $taskLink->id }}">
+                                <span class="ft-order-task-link-type" aria-hidden="true">
+                                    <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+                                </span>
+                                <div class="ft-order-task-link-copy">
+                                    <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer" title="{{ $taskLink->url }}">{{ \Illuminate\Support\Str::limit($taskLink->url, 110) }}</a>
+                                    <small>External link · {{ $taskLink->created_at ? \App\Support\UserLocalTime::format($taskLink->created_at, 'M j, Y, g:i A') : '—' }}</small>
+                                </div>
+                                <div class="ft-order-task-link-actions">
+                                    <a href="{{ $taskLink->url }}" target="_blank" rel="noopener noreferrer">Open ↗</a>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+                @endif
+                <p class="ft-upload-note">Files and external links attached to this task remain available here and in the Order taskflow. Either can satisfy a Task Pack document requirement.</p>
             </section>
 
             <section class="ft-detail-card ft-task-activity-card ft-friendly-activity">
@@ -286,7 +304,7 @@
                         <article @if($entryAnchor) id="{{ $entryAnchor }}" @endif class="ft-activity-entry {{ $entry->kind==='comment' ? 'is-comment' : 'is-history' }} {{ $isFocusedComment ? 'is-focused-comment' : '' }}" @if($isFocusedComment) x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" @endif>
                             <div class="ft-activity-entry-avatar"><x-ui.avatar :user="$entry->user" :name="$actorName" :size="32"/><span>{{ $entry->kind==='comment' ? '💬' : '↻' }}</span></div>
                             <div class="ft-activity-entry-content">
-                                <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><div style="display:flex;align-items:center;gap:8px"><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time>@if($canModerateTaskActivity && $entry->event !== 'task.moderation_deleted')<button type="button" style="border:0;background:transparent;color:#c82424;font-size:11px;font-weight:700;padding:2px 4px" wire:click="{{ $entry->kind === 'comment' ? 'deleteTaskComment('.$entry->id.')' : 'deleteTaskActivity('.$entry->id.')' }}" wire:confirm="Delete this {{ $entry->kind === 'comment' ? 'comment/mention' : 'task activity' }}? The deletion itself will remain recorded in activity.">Delete</button>@endif</div></div>
+                                <div class="ft-activity-entry-head"><div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $entry->kind==='comment' ? 'comment' : 'history' }}">{{ $entry->kind==='comment' ? 'Comment' : 'Change' }}</span></div><div class="ft-activity-entry-actions"><time title="{{ $entryLocalTime?->format('M j, Y g:i A') }} {{ $displayTimezone }}">{{ $entry->created_at?->diffForHumans() }}</time>@if($canModerateTaskActivity && $entry->event !== 'task.moderation_deleted')<button type="button" class="ft-activity-delete-action" wire:click="{{ $entry->kind === 'comment' ? 'deleteTaskComment('.$entry->id.')' : 'deleteTaskActivity('.$entry->id.')' }}" wire:confirm="Delete this {{ $entry->kind === 'comment' ? 'comment/mention' : 'task activity' }}? The deletion itself will remain recorded in activity.">Delete</button>@endif</div></div>
                                 <div class="ft-rich-text-content"><x-ui.mention-text :text="$entry->body" /></div>
                                 <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ $entryLocalTime?->format('M j, Y · g:i A') }}</span></div>
                             </div>
@@ -313,7 +331,7 @@
                 <div class="ft-attention-row"><span>Required evidence</span><b><span class="{{ $taskDocumentName ? 'ft-red-doc-icon' : '' }}">▯</span> {{ $taskDocumentName ?: 'No required evidence' }}</b></div>
                 <div class="ft-attention-row ft-task-flag-row">
                     <span>Automatic flag</span>
-                    <b class="{{ $currentTaskFlagColor ? 'ft-master-color' : ($currentTaskFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="{{ $currentTaskFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentTaskFlag ?: 'No flag' }}</b>
+                    <b class="ft-runtime-flag-pill {{ $currentTaskFlagColor ? 'ft-master-color' : ($currentTaskFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentTaskFlagColor) }}"><span class="{{ $currentTaskFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentTaskFlag ?: 'No flag' }}</b>
                 </div>
                 <small class="ft-task-flag-help">Driven automatically by Order Task Status Master Data. Overdue overrides the status mapping after the due date passes.</small>
                 @if($currentTaskFlag && filled($task->attention_reason))
@@ -321,7 +339,7 @@
                 @endif
             </section>
 
-            <section class="ft-detail-card ft-job-context-card"><h2>Order context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Order health</span><b>{{ $job?->health ?: 'On Track' }}</b></div><div><span>Order flag</span><b class="{{ $currentOrderFlagColor ? 'ft-master-color' : ($currentOrderFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentOrderFlagColor) }};padding:4px 7px;border-radius:7px;border:1px solid transparent"><span class="{{ $currentOrderFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentOrderFlag ?: 'No flag' }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Order progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open order details ↗</button></section>
+            <section class="ft-detail-card ft-job-context-card"><h2>Order context</h2><b>{{ $job?->title }}</b><div><span>Client</span><b>{{ $job?->client?->name }}</b></div><div><span>Order health</span><b>{{ $job?->health ?: 'On Track' }}</b></div><div><span>Order flag</span><b class="ft-runtime-flag-pill {{ $currentOrderFlagColor ? 'ft-master-color' : ($currentOrderFlag ? 'danger-text' : '') }}" style="{{ \App\Support\MasterColor::style($currentOrderFlagColor) }}"><span class="{{ $currentOrderFlag ? 'ft-red-flag' : '' }}">⚑</span> {{ $currentOrderFlag ?: 'No flag' }}</b></div><div><span>Delivery</span><b>{{ $job?->delivery_date?->format('M j, Y') ?? '—' }}</b></div><div class="ft-context-progress"><span>Order progress</span><b>{{ $job?->progress }}%</b><div class="ft-line-progress"><span style="width:{{ $job?->progress ?? 0 }}%"></span></div></div><button class="ft-link-blue ft-open-job" wire:click="closeTask">Open order details ↗</button></section>
 
         </aside>
     </div>

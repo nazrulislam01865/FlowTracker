@@ -37,9 +37,10 @@
             @php
                 $phaseTasks = \App\Support\JobDetailPresenter::phaseTasks($job,$phase);
                 $phaseDone = \App\Support\JobDetailPresenter::completedCount($phaseTasks);
+                $phaseComplete = \App\Support\JobDetailPresenter::isPhaseComplete($job,$phase);
             @endphp
-            <div class="ft-workflow-step {{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" style="{{ \App\Support\MasterColor::style($phase->color) }}">
-                <span>{{ $phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence }}</span>
+            <div class="ft-workflow-step {{ $phaseComplete ? 'done' : '' }}" style="{{ \App\Support\MasterColor::style($phase->color) }}" @if((int) $phase->id === (int) $job->workflow_phase_id) aria-current="step" @endif>
+                <span>{{ $phaseComplete ? '✓' : $phase->sequence }}</span>
                 <small>{{ $phase->short_name }}</small>
                 @if($phase->id === $job->phase->id)<em>Current · {{ $phaseDone }}/{{ $phaseTasks->count() }}</em>@endif
             </div>

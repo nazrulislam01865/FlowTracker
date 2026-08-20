@@ -1,0 +1,8 @@
+/** Phase 3 post-app compatibility bundle A. */
+@import './compatibility/flowtrack-list-filters.css';
+@import './compatibility/flowtrack-user-editor.css';
+@import './compatibility/flowtrack-order-document-upload.css';
+@import './compatibility/flowtrack-attachment-auto-upload.css';
+@import './compatibility/flowtrack-client-logo.css';
+@import './compatibility/flowtrack-client-validation-focus.css';
+@import './compatibility/flowtrack-sidebar-template.css';

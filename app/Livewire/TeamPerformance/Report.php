@@ -14,7 +14,7 @@ class Report extends Component
     use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
 
-    private const TEAM_PER_PAGE = 8;
+    private const TEAM_LAZY_BATCH = 8;
 
     #[Url(as: 'period', history: true, except: 'this_week')]
     public string $teamPeriod = 'this_week';
@@ -37,7 +37,7 @@ class Report extends Component
     #[Url(as: 'sort', history: true, except: 'performance')]
     public string $sort = 'performance';
 
-    public int $teamPage = 1;
+    public int $teamLimit = self::TEAM_LAZY_BATCH;
 
     public function mount(): void
     {
@@ -62,22 +62,22 @@ class Report extends Component
             $this->teamCustomTo = $today->toDateString();
         }
 
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function updatedTeamCustomFrom(): void
     {
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function updatedTeamCustomTo(): void
     {
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function updatedSearch(): void
     {
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function updatedSort(string $sort): void
@@ -86,7 +86,7 @@ class Report extends Component
             $this->sort = 'performance';
         }
 
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function setReportFilter(string $property, mixed $value): void
@@ -97,7 +97,7 @@ class Report extends Component
         $raw = trim((string) $value);
         if ($raw === '') {
             $this->{$property} = '';
-            $this->teamPage = 1;
+            $this->resetTeamLazyLoad();
             return;
         }
 
@@ -110,7 +110,7 @@ class Report extends Component
         abort_unless($selected, 422, 'That filter option is no longer available.');
 
         $this->{$property} = (string) $id;
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
     public function clearFilters(): void
@@ -119,17 +119,17 @@ class Report extends Component
         $this->teamFilter = '';
         $this->search = '';
         $this->sort = 'performance';
-        $this->teamPage = 1;
+        $this->resetTeamLazyLoad();
     }
 
-    public function previousTeamPage(): void
+    public function loadMoreTeamPerformance(): void
     {
-        $this->teamPage = max(1, $this->teamPage - 1);
+        $this->teamLimit += self::TEAM_LAZY_BATCH;
     }
 
-    public function nextTeamPage(): void
+    private function resetTeamLazyLoad(): void
     {
-        $this->teamPage++;
+        $this->teamLimit = self::TEAM_LAZY_BATCH;
     }
 
     public function render()
@@ -162,12 +162,14 @@ class Report extends Component
         $teamPerformance = $service->sortTeamPerformance($teamPerformance, $this->sort);
 
         $resultCount = $teamPerformance->count();
-        $lastPage = max(1, (int) ceil($resultCount / self::TEAM_PER_PAGE));
-        $page = min(max(1, $this->teamPage), $lastPage);
-        $offset = ($page - 1) * self::TEAM_PER_PAGE;
+        $visibleLimit = min(
+            max(self::TEAM_LAZY_BATCH, $this->teamLimit),
+            max(self::TEAM_LAZY_BATCH, $resultCount),
+        );
         $visibleTeamPerformance = $teamPerformance
-            ->slice($offset, self::TEAM_PER_PAGE)
+            ->take($visibleLimit)
             ->values();
+        $visibleCount = $visibleTeamPerformance->count();
 
         $filterOptions = app(FilterOptionService::class);
 
@@ -181,15 +183,9 @@ class Report extends Component
             'reportClientFilterOptions' => $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6),
             'reportTeamFilterOptions' => $filterOptions->options($user, 'departments', 'dashboard', '', $departmentId ?: null, 6),
             'resultCount' => $resultCount,
-            'teamPagination' => [
-                'page' => $page,
-                'lastPage' => $lastPage,
-                'total' => $resultCount,
-                'from' => $resultCount > 0 ? $offset + 1 : 0,
-                'to' => min($offset + self::TEAM_PER_PAGE, $resultCount),
-                'hasPrevious' => $page > 1,
-                'hasNext' => $page < $lastPage,
-            ],
+            'visibleCount' => $visibleCount,
+            'hasMoreTeamPerformance' => $visibleCount < $resultCount,
+            'nextTeamBatchCount' => min(self::TEAM_LAZY_BATCH, max(0, $resultCount - $visibleCount)),
         ]);
     }
 }

@@ -170,7 +170,7 @@
                     ]);
                 @endphp
 
-                <x-ui.select-filter
+                <x-ui.search-select
                     class="ft-product-list-filter"
                     label="Main category"
                     property="productMainCategory"
@@ -184,7 +184,7 @@
                     footer-message="Options shown instantly. Type to search."
                 />
 
-                <x-ui.select-filter
+                <x-ui.search-select
                     class="ft-product-list-filter"
                     label="Product category"
                     property="productCategory"
@@ -198,7 +198,7 @@
                     footer-message="Options shown instantly. Type to search."
                 />
 
-                <x-ui.select-filter
+                <x-ui.search-select
                     class="ft-product-list-filter"
                     label="Client availability"
                     property="productClientAvailability"
@@ -211,7 +211,7 @@
                     search-placeholder="Search client availability…"
                 />
 
-                <x-ui.select-filter
+                <x-ui.search-select
                     class="ft-product-list-filter"
                     label="Status"
                     property="productStatus"
@@ -428,7 +428,7 @@
                         save-action="applyBulkProductCategory"
                     >
                         <div class="ft-product-bulk-category-grid">
-                            <x-ui.select-filter
+                            <x-ui.search-select
                                 label="Main category"
                                 property="bulkProductMainCategory"
                                 :value="$bulkProductMainCategory"
@@ -440,7 +440,7 @@
                                 :menu-width="360"
                                 search-placeholder="Search main category…"
                             />
-                            <x-ui.select-filter
+                            <x-ui.search-select
                                 label="Product category"
                                 property="bulkProductCategoryId"
                                 :value="$bulkProductCategoryId"
@@ -453,7 +453,7 @@
                                 :menu-width="380"
                                 search-placeholder="Search product category…"
                             />
-                            <x-ui.select-filter
+                            <x-ui.search-select
                                 label="Subcategory"
                                 property="bulkProductSubcategory"
                                 :value="$bulkProductSubcategory"

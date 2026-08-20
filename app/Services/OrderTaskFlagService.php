@@ -202,7 +202,9 @@ class OrderTaskFlagService
         if ($dirty) $task->update($updates);
 
         $task = $task->refresh();
-        $this->syncJob($task->job()->first());
+        $job = $task->job()->first();
+        $this->syncJob($job);
+        if ($job) app(JobService::class)->syncAutomaticStatus($job);
 
         return $task;
     }
@@ -210,6 +212,11 @@ class OrderTaskFlagService
     public function syncJob(?FlowJob $job): ?FlowJob
     {
         if (!$job) return null;
+
+        // Return a fresh model instead of refreshing the caller's hydrated
+        // instance in place. Order detail views attach permission-scoped task
+        // relations before rendering; refresh() would clear/reload those
+        // relations and can also try to resolve transient relation names.
 
         if ($job->completed_at || in_array(mb_strtolower(trim((string) $job->status)), ['completed', 'cancelled', 'canceled', 'inactive'], true)) {
             if ($job->order_flag_id || $job->needs_attention || (bool) ($job->attention_requested ?? false)) {
@@ -222,7 +229,7 @@ class OrderTaskFlagService
                     'attention_at' => null,
                 ]);
             }
-            return $job->refresh();
+            return $job->fresh();
         }
 
         $tasks = $job->tasks()
@@ -255,7 +262,7 @@ class OrderTaskFlagService
             ]);
         }
 
-        return $job->refresh();
+        return $job->fresh();
     }
 
     public function syncDueTransitions(bool $force = false): int

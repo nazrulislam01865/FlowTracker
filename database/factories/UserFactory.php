@@ -29,6 +29,12 @@ class UserFactory extends Factory
             'email' => fake()->unique()->safeEmail(),
             'email_verified_at' => now(),
             'password' => static::$password ??= Hash::make('password'),
+            // Mirror the production schema defaults explicitly so feature tests
+            // exercise normal active-user authorization instead of depending on
+            // database-driver/default-column behavior.
+            'is_super_admin' => false,
+            'is_active' => true,
+            'locale' => 'en',
             'remember_token' => Str::random(10),
         ];
     }

@@ -27,7 +27,7 @@
                     </div>
                 @endif
 
-                <x-ui.remote-filter
+                <x-ui.search-select
                     class="ft-mgmt-remote-filter ft-mgmt-team-report-remote-filter"
                     label="Client"
                     property="clientFilter"
@@ -42,7 +42,7 @@
                     wire:key="team-report-client-filter-{{ $clientFilter ?: 'all' }}"
                 />
 
-                <x-ui.remote-filter
+                <x-ui.search-select
                     class="ft-mgmt-remote-filter ft-mgmt-team-report-remote-filter"
                     label="Team"
                     property="teamFilter"
@@ -99,34 +99,26 @@
             </div>
         </div>
 
-        @if(($teamPagination['total'] ?? 0) > 0)
-            <div class="ft-mgmt-team-report-pagination" aria-label="Team performance pagination">
+        @if($resultCount > 0)
+            <div class="ft-mgmt-team-report-lazy" aria-label="Team performance lazy loading">
                 <span class="ft-mgmt-priority-page-status">
-                    Showing {{ $teamPagination['from'] }}–{{ $teamPagination['to'] }} of {{ $teamPagination['total'] }}
-                    @if(($teamPagination['lastPage'] ?? 1) > 1)
-                        · Page {{ $teamPagination['page'] }} of {{ $teamPagination['lastPage'] }}
-                    @endif
+                    Showing {{ $visibleCount }} of {{ $resultCount }} {{ $resultCount === 1 ? 'user' : 'users' }}
                 </span>
-                <button
-                    type="button"
-                    class="ft-mgmt-priority-page-btn"
-                    wire:click="previousTeamPage"
-                    wire:loading.attr="disabled"
-                    wire:target="previousTeamPage,nextTeamPage"
-                    @disabled(!($teamPagination['hasPrevious'] ?? false))
-                    aria-label="Previous team performance page"
-                    title="Previous page"
-                >←</button>
-                <button
-                    type="button"
-                    class="ft-mgmt-priority-page-btn"
-                    wire:click="nextTeamPage"
-                    wire:loading.attr="disabled"
-                    wire:target="previousTeamPage,nextTeamPage"
-                    @disabled(!($teamPagination['hasNext'] ?? false))
-                    aria-label="Next team performance page"
-                    title="Next page"
-                >→</button>
+
+                @if($hasMoreTeamPerformance)
+                    <button
+                        type="button"
+                        class="ft-mgmt-team-report-load-more"
+                        wire:click="loadMoreTeamPerformance"
+                        wire:loading.attr="disabled"
+                        wire:target="loadMoreTeamPerformance"
+                    >
+                        <span wire:loading.remove wire:target="loadMoreTeamPerformance">Load {{ $nextTeamBatchCount }} more</span>
+                        <span wire:loading wire:target="loadMoreTeamPerformance">Loading…</span>
+                    </button>
+                @else
+                    <span class="ft-mgmt-team-report-all-loaded">All users loaded</span>
+                @endif
             </div>
         @endif
     </section>

@@ -25,15 +25,17 @@ class ProductCreationSequenceTest extends TestCase
         $this->assertStringContainsString('private function newProductCodeReadyForCategory(): bool', $inquiryComponent);
     }
 
-    public function test_master_product_creation_uses_manual_code_and_progressive_fields(): void
+    public function test_master_product_creation_uses_generated_code_and_shared_taxonomy_fields(): void
     {
-        $view = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
+        $form = file_get_contents(resource_path('views/components/catalog/product-form.blade.php'));
         $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
 
-        $this->assertStringContainsString('wire:model.live.debounce.220ms="code"', $view);
-        $this->assertStringContainsString('Enter product code, e.g. TS-SUB-001', $view);
-        $this->assertStringContainsString('@disabled(!$productCodeReady)', $view);
-        $this->assertStringContainsString('private function productCodeReadyForCategory(): bool', $component);
-        $this->assertStringContainsString("\$this->code = \$this->group === 'product' ? '' : \$service->nextCode(\$this->group);", $component);
+        $this->assertStringContainsString('Generated automatically after the product is created.', $form);
+        $this->assertStringContainsString('wire:model.blur="productReferenceCode"', $form);
+        $this->assertSame(3, substr_count($form, '<x-ui.search-select'));
+        $this->assertStringContainsString('label="Main category"', $form);
+        $this->assertStringContainsString('label="Product category"', $form);
+        $this->assertStringContainsString('label="Subcategory"', $form);
+        $this->assertStringContainsString('$this->code = $service->nextCode($this->group);', $component);
     }
 }

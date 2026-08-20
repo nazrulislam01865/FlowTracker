@@ -281,7 +281,12 @@ class InquiryService
         return (int) $inquiry->owner_id === (int) $user->id;
     }
 
-    public function paginate(User $user, array $filters, int $perPage = 20, string $pageName = 'inquiryPage'): LengthAwarePaginator
+    /**
+     * Canonical Inquiry list builder shared by the paginated list and exports.
+     * Keeping the filters here guarantees exports never bypass the user's
+     * Inquiry record scope or silently ignore an active list filter.
+     */
+    public function listQuery(User $user, array $filters): Builder
     {
         $search = trim((string) ($filters['search'] ?? ''));
         $quick = (string) ($filters['quick'] ?? 'all');
@@ -302,7 +307,7 @@ class InquiryService
             $status = '';
         }
 
-        $query = $this->visibleQuery($user)
+        return $this->visibleQuery($user)
             // Completion on the list is taskflow-derived. A legacy/imported Inquiry
             // can still have status Ready/In Progress and completed_at = NULL even
             // though every active Inquiry task is complete. Filter by both the
@@ -330,6 +335,11 @@ class InquiryService
                             ->orWhereHas('assignee', fn (Builder $assignee) => $assignee->whereLike('name', $like)));
                 });
             });
+    }
+
+    public function paginate(User $user, array $filters, int $perPage = 20, string $pageName = 'inquiryPage'): LengthAwarePaginator
+    {
+        $query = $this->listQuery($user, $filters);
 
         // Inquiry tasks can be worked in parallel. The list must therefore show
         // the furthest task that has actually started, not simply the first open
@@ -1417,6 +1427,16 @@ class InquiryService
         return $task->refresh();
     }
 
+    /**
+     * A required Inquiry task submission may be either a stored/linked file or
+     * an external task link. Keep this business rule in one service method so
+     * completion, reopening, and the UI all agree on the same evidence.
+     */
+    public function taskHasSubmissionEvidence(InquiryTask $task): bool
+    {
+        return $task->documents()->exists() || $task->links()->exists();
+    }
+
     public function updateTaskStatus(InquiryTask $task, string $status, User $actor): InquiryTask
     {
         $task->loadMissing('inquiry');
@@ -1442,8 +1462,8 @@ class InquiryService
                 return $task;
             }
 
-            if ($willComplete && $task->requires_submission && !$task->documents()->exists()) {
-                throw ValidationException::withMessages(['task' => 'Required file must be uploaded before completion.']);
+            if ($willComplete && $task->requires_submission && ! $this->taskHasSubmissionEvidence($task)) {
+                throw ValidationException::withMessages(['task' => 'Add the required file or link before completion.']);
             }
 
             $updates = $this->taskStatusPayload($status, $task) + [
@@ -1906,8 +1926,7 @@ class InquiryService
             throw ValidationException::withMessages(['taskLinkUrl' => 'Enter a valid http:// or https:// link.']);
         }
 
-        $link = InquiryTaskLink::create([
-            'inquiry_task_id' => $task->id,
+        $link = $task->links()->create([
             'created_by' => $actor->id,
             'url' => $url,
         ]);
@@ -1920,25 +1939,71 @@ class InquiryService
             ['inquiry_task_id' => $task->id, 'inquiry_task_link_id' => $link->id, 'url' => $url],
         );
 
-        return $link;
+        return $link->refresh();
     }
 
-    public function removeTaskLink(InquiryTask $task, int $linkId, User $actor): void
+    public function removeTaskLink(InquiryTask $task, int $linkId, User $actor): bool
     {
         $task->loadMissing('inquiry');
         abort_unless($this->canEditTask($actor, $task), 403);
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change links.');
 
-        $link = $task->links()->whereKey($linkId)->firstOrFail();
-        $link->delete();
+        return DB::transaction(function () use ($task, $linkId, $actor): bool {
+            $lockedTask = InquiryTask::query()
+                ->whereKey($task->id)
+                ->lockForUpdate()
+                ->with('inquiry')
+                ->firstOrFail();
 
-        $this->activity(
-            $task->inquiry,
-            $actor,
-            'inquiry.task_link_removed',
-            'External link removed from '.$task->title.'.',
-            ['inquiry_task_id' => $task->id, 'inquiry_task_link_id' => $linkId],
-        );
+            abort_unless($this->canEditTask($actor, $lockedTask), 403);
+            abort_if($lockedTask->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change links.');
+
+            $link = $lockedTask->links()->whereKey($linkId)->firstOrFail();
+            $url = (string) $link->url;
+            $wasCompleted = $lockedTask->completed_at !== null
+                || $this->isCompletionTaskStatus((string) $lockedTask->status);
+
+            $link->delete();
+
+            $mustReopen = $wasCompleted
+                && (bool) $lockedTask->requires_submission
+                && ! $this->taskHasSubmissionEvidence($lockedTask);
+
+            if ($mustReopen) {
+                $lockedTask->update([
+                    'status' => $this->resumeTaskStatus(),
+                    'completed_at' => null,
+                ]);
+                $this->forgetMyTaskShell($lockedTask->assignee_id ? (int) $lockedTask->assignee_id : null);
+                $this->activity(
+                    $lockedTask->inquiry,
+                    $actor,
+                    'inquiry.task_reopened',
+                    $lockedTask->title.' reopened because its final required file/link was removed.',
+                    ['inquiry_task_id' => $lockedTask->id, 'removed_inquiry_task_link_id' => $linkId],
+                );
+            }
+
+            $lockedTask->inquiry->touch();
+            $this->activity(
+                $lockedTask->inquiry,
+                $actor,
+                'inquiry.task_link_removed',
+                'External link removed from '.$lockedTask->title.'.',
+                [
+                    'inquiry_task_id' => $lockedTask->id,
+                    'inquiry_task_link_id' => $linkId,
+                    'url' => $url,
+                    'task_reopened' => $mustReopen,
+                ],
+            );
+
+            if ($mustReopen) {
+                $this->syncAutomaticStatus($lockedTask->inquiry, $actor);
+            }
+
+            return $mustReopen;
+        });
     }
 
     public function removeDocument(Inquiry $inquiry, int $documentId, User $actor): void
@@ -1991,11 +2056,11 @@ class InquiryService
 
             $mustReopen = $wasCompleted
                 && (bool) $lockedTask->requires_submission
-                && ! $lockedTask->documents()->exists();
+                && ! $this->taskHasSubmissionEvidence($lockedTask);
 
             if ($mustReopen) {
-                // Required files are a completion invariant. Users may remove files
-                // after completion, but removing the final required file reopens the
+                // Required submission evidence is a completion invariant. Users may remove files
+                // after completion, but removing the final file/link evidence reopens the
                 // task so the UI and business state never disagree.
                 $lockedTask->update([
                     'status' => $this->resumeTaskStatus(),
@@ -2006,7 +2071,7 @@ class InquiryService
                     $lockedTask->inquiry,
                     $actor,
                     'inquiry.task_reopened',
-                    $lockedTask->title.' reopened because its final required file was removed.',
+                    $lockedTask->title.' reopened because its final required file/link evidence was removed.',
                     ['inquiry_task_id' => $lockedTask->id, 'removed_inquiry_document_id' => $documentId],
                 );
             }
@@ -2113,6 +2178,7 @@ class InquiryService
             'inquiry:id,inquiry_number,owner_id,status,result',
             'assignee:id,name,profile_image_path',
             'documents' => fn ($q) => $q->with('uploader:id,name')->limit(50),
+            'links:id,inquiry_task_id,created_by,url,created_at',
             'comments' => fn ($q) => $q->with('user:id,name,profile_image_path')->limit(50),
         ]);
     }
@@ -2461,18 +2527,22 @@ class InquiryService
             ->get(['id', 'status', 'sequence', 'started_at', 'completed_at']);
 
         $total = $tasks->count();
-        $completed = $tasks->whereNotNull('completed_at')->count();
-        $hasProgress = $tasks->contains(
-            fn (InquiryTask $task): bool => $task->started_at !== null || $task->completed_at !== null
+        $isCompleted = fn (InquiryTask $task): bool => $task->completed_at !== null
+            || $this->isCompletionTaskStatus((string) $task->status);
+        $completed = $tasks->filter($isCompleted)->count();
+        $openTasks = $tasks->reject($isCompleted)->values();
+        $workingTask = $openTasks->first(
+            fn (InquiryTask $task): bool => $this->isWorkingTaskStatus((string) $task->status)
         );
-        $currentTask = $tasks
-            ->whereNull('completed_at')
-            ->sortBy(function (InquiryTask $task): string {
-                $startedBucket = $task->started_at ? '0' : '1';
-                $sequence = $task->started_at ? (999999 - (int) $task->sequence) : (int) $task->sequence;
-                return $startedBucket.str_pad((string) $sequence, 6, '0', STR_PAD_LEFT);
-            })
-            ->first();
+
+        // Parent Inquiry progress must follow the task statuses that users can see,
+        // not historical started_at timestamps. A task keeps its first started_at
+        // timestamp for audit/history even after it is moved back to Not Started;
+        // therefore started_at alone must never keep the parent Inquiry In Progress.
+        // Completed tasks still count as real workflow progress so advancing to the
+        // next Not Started task does not incorrectly regress the parent to To do.
+        $hasProgress = $completed > 0 || $workingTask !== null;
+        $currentTask = $workingTask ?: $openTasks->sortBy('sequence')->first();
 
         if ($total > 0 && $completed === $total) {
             $lastTask = $tasks->sortByDesc('sequence')->first();
@@ -2486,7 +2556,7 @@ class InquiryService
             $nextStatus = $this->autoInquiryStatusForTaskStatus((string) $currentTask->status);
 
             // Parent Inquiry lifecycle is based on the whole taskflow, not only the
-            // next open task. After any task has started or completed, advancing to
+            // next open task. After any task is working or completed, advancing to
             // a new Not Started/Ready task must not send the Inquiry back to To do.
             // Keep special configured states (for example Blocked/Cancelled), but
             // apply an In Progress floor once the workflow has made real progress.

@@ -13,11 +13,12 @@ class ProductFormSearchableSelectorsTest extends TestCase
         $upload = file_get_contents(resource_path('views/components/catalog/file-upload.blade.php'));
         $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
 
-        $this->assertSame(3, substr_count($form, '<x-ui.select-filter'));
-        $this->assertSame(2, substr_count($creator, '<x-ui.select-filter'));
+        $this->assertSame(3, substr_count($form, '<x-ui.search-select'));
+        $this->assertSame(1, substr_count($form, '<x-ui.multi-select'));
+        $this->assertSame(2, substr_count($creator, '<x-ui.search-select'));
         $this->assertStringNotContainsString('<select', $form);
         $this->assertStringNotContainsString('<select', $creator);
-        $this->assertStringContainsString('Search clients…', $form);
+        $this->assertStringContainsString('placeholder="Search and select clients"', $form);
         $this->assertStringContainsString('Preview', $upload);
         $this->assertStringContainsString('removeCurrentAction', $upload);
         $this->assertStringContainsString('public function removeProductCertificate(): void', $component);

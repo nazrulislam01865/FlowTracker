@@ -212,7 +212,7 @@ class SpreadsheetRowReader
     {
         $headerIndex = $this->findHeaderRow($matrix);
         if ($headerIndex === null) {
-            throw new RuntimeException('Could not find the import header row. Use the FlowTrack bulk order template or keep the required column names intact.');
+            throw new RuntimeException('Could not find the import header row. Required columns are Client ID, Order Title, Shipping Address and Postal Code. Use the current FlowTrack bulk order template or keep those column names intact.');
         }
 
         $headers = array_map(fn ($value) => trim((string) $value), $matrix[$headerIndex]);
@@ -242,20 +242,19 @@ class SpreadsheetRowReader
         foreach (array_slice($matrix, 0, 30, true) as $index => $row) {
             $keys = array_map(fn ($value) => $this->normalizeHeader((string) $value), $row);
 
-            // Refined Bulk Order template: only Client ID and Order Title are
-            // mandatory. A valid file may therefore contain just those two
-            // columns, so header detection must not depend on optional fields.
-            if (in_array('clientid', $keys, true) && in_array('ordertitle', $keys, true)) {
+            // Current Bulk Order template requires Client ID, Order Title,
+            // Shipping Address and Postal Code. Detect the header only when
+            // those required columns are present so a shifted/old template is
+            // not silently accepted with missing shipping information.
+            if (in_array('clientid', $keys, true)
+                && in_array('ordertitle', $keys, true)
+                && in_array('shippingaddress', $keys, true)
+                && in_array('postalcode', $keys, true)) {
                 return (int) $index;
             }
 
-            // Keep older exports readable while users transition to the new
-            // template. Validation no longer requires these legacy fields.
-            $legacyScore = 0;
-            foreach (['referenceorderno', 'ordertitle', 'receiveddate', 'orderdescription'] as $legacy) {
-                if (in_array($legacy, $keys, true)) $legacyScore++;
-            }
-            if ($legacyScore >= 3 && in_array('referenceorderno', $keys, true)) return (int) $index;
+            // Do not fall back to the old 13-column layout: Shipping Address
+            // and Postal Code are now required for every new/updated Order.
         }
         return null;
     }

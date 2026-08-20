@@ -1,0 +1,5 @@
+/**
+ * Phase 3 pre-app compatibility bundle.
+ * Historically loaded before the generated FlowTrack stylesheet.
+ */
+@import './compatibility/flowtrack-inline-editing.css';

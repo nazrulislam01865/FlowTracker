@@ -30,7 +30,7 @@
             <div class="ft-create-fields">
                 <label class="ft-create-field"><b>Order code</b><div class="ft-locked-input">Generated automatically <span>♙</span></div></label>
                 <div class="ft-create-field">
-                    <x-ui.remote-filter
+                    <x-ui.search-select
                         class="ft-create-remote-select"
                         label="Client *"
                         property="clientId"
@@ -74,9 +74,8 @@
                     <div class="ft-create-section-title ft-order-shipping-title">
                         <span>2</span>
                         <h2>Shipping address</h2>
-                        <em class="ft-order-optional-badge">Optional</em>
                     </div>
-                    <p>Add the delivery address for this Order if needed.</p>
+                    <p>Add the delivery address for this Order.</p>
                 </div>
                 <button
                     type="button"
@@ -91,8 +90,8 @@
             </div>
 
             <label class="ft-create-field ft-order-shipping-address-field">
-                <b>Shipping Address</b>
-                <textarea wire:model="shippingAddress" rows="5" placeholder="Recipient name&#10;Street address&#10;City, State, Country"></textarea>
+                <b>Shipping Address *</b>
+                <textarea wire:model="shippingAddress" rows="5" required aria-required="true" placeholder="Recipient name&#10;Street address&#10;City, State, Country"></textarea>
                 @error('shippingAddress')<small class="validation-error">{{ $message }}</small>@enderror
             </label>
 
@@ -100,7 +99,7 @@
                 <div class="ft-create-field">
                     <b>Phone Number</b>
                     <div class="ft-order-phone-control">
-                        <x-ui.remote-filter
+                        <x-ui.search-select
                             class="ft-order-phone-code-filter"
                             label="Phone country code"
                             property="shippingPhoneCountryCode"
@@ -122,8 +121,8 @@
                 </div>
 
                 <label class="ft-create-field">
-                    <b>Postal Code</b>
-                    <input wire:model="shippingPostalCode" autocomplete="postal-code" placeholder="Enter postal code">
+                    <b>Postal Code *</b>
+                    <input wire:model="shippingPostalCode" autocomplete="postal-code" required aria-required="true" placeholder="Enter postal code">
                     @error('shippingPostalCode')<small class="validation-error">{{ $message }}</small>@enderror
                 </label>
             </div>
@@ -222,7 +221,7 @@
                     </div>
                 </div>
                 <div class="ft-create-field">
-                    <x-ui.remote-filter
+                    <x-ui.search-select
                         class="ft-create-remote-select"
                         label="Order owner *"
                         property="ownerId"

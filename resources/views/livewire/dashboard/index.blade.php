@@ -48,17 +48,32 @@
         return ['On track', 'green'];
     };
 
-    $attentionJobFlag = static function ($job) use ($today, $jobFlag): array {
+    $attentionOverdueLabel = static function ($dueDate) use ($today): string {
+        $overdueDays = (float) $dueDate->diffInDays($today);
+
+        return 'Overdue '.number_format($overdueDays, 2, '.', '').'d';
+    };
+
+    $attentionInquiryFlag = static function ($inquiry) use ($today, $inquiryFlag, $attentionOverdueLabel): array {
+        $task = $inquiry->currentTask;
+        if ($task?->due_date && $task->due_date->lt($today)) {
+            return [$attentionOverdueLabel($task->due_date), 'red'];
+        }
+
+        return $inquiryFlag($inquiry);
+    };
+
+    $attentionJobFlag = static function ($job) use ($today, $jobFlag, $attentionOverdueLabel): array {
         $task = $job->tasks?->first();
         if ($task?->due_date && $task->due_date->lt($today)) {
-            return ['Overdue '.$task->due_date->diffInDays($today).'d', 'red'];
+            return [$attentionOverdueLabel($task->due_date), 'red'];
         }
         if ($task?->due_date && $task->due_date->isSameDay($today)) return ['Due today', 'amber'];
         $taskStatus = mb_strtolower(trim((string) ($task?->status ?? '')));
         if (str_contains($taskStatus, 'block')) return ['Blocked', 'red'];
         if ($task?->needs_attention) return ['Needs attention', 'red'];
         if ($job->delivery_date && $job->delivery_date->lt($today)) {
-            return ['Overdue '.$job->delivery_date->diffInDays($today).'d', 'red'];
+            return [$attentionOverdueLabel($job->delivery_date), 'red'];
         }
         if ($job->delivery_date && $job->delivery_date->isSameDay($today)) return ['Due today', 'amber'];
         if (!$job->owner_id) return ['Unassigned', 'gray'];
@@ -132,7 +147,7 @@
             <button type="button" wire:click="setRange(7)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 7 ? 'true' : 'false' }}" class="{{ $rangeDays === 7 ? 'active' : '' }}">7 days</button>
             <button type="button" wire:click="setRange(30)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 30 ? 'true' : 'false' }}" class="{{ $rangeDays === 30 ? 'active' : '' }}">30 days</button>
         </div>
-        <x-ui.remote-filter
+        <x-ui.search-select
             class="ft-mgmt-remote-filter ft-mgmt-client-filter"
             label="Client"
             property="clientFilter"
@@ -146,7 +161,7 @@
             :fixed-menu="true"
             wire:key="dashboard-client-filter-{{ $clientFilter ?: 'all' }}"
         />
-        <x-ui.remote-filter
+        <x-ui.search-select
             class="ft-mgmt-remote-filter ft-mgmt-team-filter"
             label="Team"
             property="teamFilter"
@@ -216,7 +231,7 @@
 
 
 
-    <section class="ft-mgmt-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head">
             <div><h2>Priority work</h2><p>Top urgent Orders, Inquiries and Tasks ranked by attention, due date and priority</p></div>
             <div class="ft-mgmt-tabs">
@@ -328,7 +343,7 @@
                         $kind = $attentionItem['kind'];
                         $record = $attentionItem['record'];
                         $isOrder = $kind === 'orders';
-                        [$flagLabel, $flagTone] = $isOrder ? $attentionJobFlag($record) : $inquiryFlag($record);
+                        [$flagLabel, $flagTone] = $isOrder ? $attentionJobFlag($record) : $attentionInquiryFlag($record);
                         $reference = $isOrder ? $record->displayOrderNumber() : $record->inquiry_number;
                         $headline = trim((string) ($isOrder ? ($record->tasks?->first()?->title ?: $record->title) : ($record->currentTask?->title ?: $record->subject)));
                         $ownerName = $isOrder ? ($record->owner?->name ?? 'Unassigned') : ($record->owner?->name ?? 'Unassigned');
@@ -436,7 +451,7 @@
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     @endphp
-    <section class="ft-mgmt-panel ft-mgmt-team-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>

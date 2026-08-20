@@ -1613,7 +1613,7 @@ class Index extends Component
             'deliveryDate' => ['nullable','date'],
             'estimatedDeliveryDate' => ['nullable','date'],
             'description' => ['nullable','string'],
-            'shippingAddress' => ['nullable','string','max:2000'],
+            'shippingAddress' => ['required','string','max:2000'],
             'shippingPhoneCountryCode' => [
                 'nullable',
                 'string',
@@ -1626,7 +1626,7 @@ class Index extends Component
                     ->whereNull('deleted_at')),
             ],
             'shippingPhone' => ['nullable','string','max:60','regex:/^[0-9()\s.\-]{5,40}$/'],
-            'shippingPostalCode' => ['nullable','string','max:30'],
+            'shippingPostalCode' => ['required','string','max:30'],
             'shippingSourceAddressId' => [
                 'nullable',
                 'integer',
@@ -1644,6 +1644,8 @@ class Index extends Component
             'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
             'jobItems.required' => 'Select at least one product for this Order.',
             'jobItems.min' => 'Select at least one product for this Order.',
+            'shippingAddress.required' => 'Shipping address is required.',
+            'shippingPostalCode.required' => 'Postal code is required.',
             'shippingPhoneCountryCode.regex' => 'Choose a valid international phone code.',
             'shippingPhoneCountryCode.exists' => 'Choose an active phone country code from Master Data.',
             'shippingPhone.regex' => 'Enter a valid shipping contact phone number.',
@@ -1666,7 +1668,6 @@ class Index extends Component
         $workflowAvailable = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
-            ->where('applies_to', 'orders')
             ->availableForOrderCreation((int) $data['clientId'])
             ->whereKey((int) $data['workflowId'])
             ->exists();
@@ -2480,11 +2481,7 @@ class Index extends Component
 
     public function openOverviewTaskLinkForm(int $taskId): void
     {
-        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
-        $task = app(TaskService::class)->visibleQuery(auth()->user())
-            ->where('flow_job_id', $this->selectedJobId)
-            ->findOrFail($taskId);
-        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        $task = $this->editableOverviewTask($taskId);
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentUpload = null;
@@ -2518,22 +2515,37 @@ class Index extends Component
             'overviewTaskLinkUrl.max' => 'The link is too long.',
         ]);
 
-        $task = app(TaskService::class)->visibleQuery(auth()->user())
-            ->where('flow_job_id', $this->selectedJobId)
-            ->findOrFail($taskId);
-        app(TaskService::class)->addExternalLink($task, $this->overviewTaskLinkUrl, auth()->user());
-        $this->cancelOverviewTaskLinkForm();
+        $task = $this->editableOverviewTask($taskId);
+        $link = app(TaskService::class)->addExternalLink($task, $this->overviewTaskLinkUrl, auth()->user());
+
+        // Close the inline form only after persistence is confirmed. The next
+        // Livewire render then re-queries the task with its links relation and
+        // keeps the newly added resource visible instead of morphing it away.
+        abort_unless($task->links()->whereKey($link->id)->exists(), 500, 'The task link could not be saved.');
+        $this->overviewTaskLinkFormTaskId = null;
+        $this->overviewTaskLinkUrl = '';
+        $this->resetValidation(['overviewTaskLinkUrl']);
         session()->flash('success', 'Link added to '.$task->title.'.');
     }
 
     public function deleteOverviewTaskLink(int $taskId, int $linkId): void
     {
-        abort_unless($this->selectedJobId, 422);
+        $task = $this->editableOverviewTask($taskId);
+        app(TaskService::class)->removeExternalLink($task, $linkId, auth()->user());
+        session()->flash('success', 'Task link removed.');
+    }
+
+    private function editableOverviewTask(int $taskId): Task
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+
         $task = app(TaskService::class)->visibleQuery(auth()->user())
             ->where('flow_job_id', $this->selectedJobId)
             ->findOrFail($taskId);
-        app(TaskService::class)->removeExternalLink($task, $linkId, auth()->user());
-        session()->flash('success', 'Task link removed.');
+
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+        return $task;
     }
 
     public function updatedOverviewTaskUploads(mixed $value, string|int $key): void
@@ -3299,11 +3311,10 @@ class Index extends Component
         $preferred = WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
-            ->where('applies_to', 'orders')
             ->availableForOrderCreation($clientId)
-            // Create Order must never inherit an Inquiry workflow. Prefer a
-            // client-specific Order workflow, then the normal all-client Order
-            // workflow. Defaults win inside each availability tier.
+            // The shared availability scope intentionally exposes an exact
+            // client's specific Inquiry workflow alongside Order workflows.
+            // Generic Inquiry workflows remain excluded by the model scope.
             ->orderByRaw("CASE WHEN client_availability = 'specific' THEN 0 ELSE 1 END")
             ->orderByDesc('is_default')
             ->orderBy('name')
@@ -3317,7 +3328,6 @@ class Index extends Component
         return WorkflowTemplate::query()
             ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
             ->where('is_active', true)
-            ->where('applies_to', 'orders')
             ->availableForOrderCreation($clientId)
             ->whereKey($workflowId)
             ->exists();
@@ -3529,7 +3539,6 @@ class Index extends Component
                 ->with('phases.taskPack.templates')
                 ->where('workspace_id', app(\App\Services\WorkflowService::class)->workspaceId())
                 ->where('is_active', true)
-                ->where('applies_to', 'orders')
                 ->availableForOrderCreation($this->clientId)
                 ->whereKey($this->workflowId)
                 ->get()
@@ -3728,7 +3737,7 @@ class Index extends Component
                 ->select(['tasks.id', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.title'])
                 ->orderBy('tasks.id'),
             'assignee', 'phase', 'orderTaskStatus:id,type,name,color,status,sort_order,metadata', 'orderTaskFlag:id,type,name,color,status,sort_order,metadata', 'documentCategory', 'setupTemplate.documentCategory',
-            'checklistItems', 'comments.user', 'documents.uploader:id,name', 'activities.user',
+            'checklistItems', 'comments.user', 'documents.uploader:id,name', 'links.creator:id,name', 'activities.user',
         ])->findOrFail($this->selectedTaskId);
 
         $availableDocuments = $this->showTaskDocumentPicker

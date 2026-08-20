@@ -80,7 +80,7 @@
                     <span class="ftbi-section-number">2</span>
                     <div>
                         <h2>Template rules</h2>
-                        <p>Only Client ID and Order Title are mandatory.</p>
+                        <p>Client ID, Order Title, Shipping Address and Postal Code are mandatory.</p>
                     </div>
                 </div>
 
@@ -95,13 +95,17 @@
                     </div>
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
+                        <div><strong>Required shipping details</strong><span>Shipping Address and Postal Code are required. Phone Number is optional; when supplied it must start with an active Phone Country Code from Master Data, for example +880 1712345678.</span></div>
+                    </div>
+                    <div class="ftbi-client-workflow-note">
+                        <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
                         <div><strong>Urgency values</strong><span>Production Urgency and Shipment Urgent accept Normal, Urgent or Super Urgent. Blank is treated as Normal.</span></div>
                     </div>
                 </div>
 
                 <details class="ftbi-source-help">
                     <summary>Which fields are required?</summary>
-                    <p><b>Client ID *</b> and <b>Order Title *</b> are mandatory. Repeat Order No. becomes required only when Repeat Order? is Yes. All remaining template columns are optional.</p>
+                    <p><b>Client ID *</b>, <b>Order Title *</b>, <b>Shipping Address *</b> and <b>Postal Code *</b> are mandatory. Phone Number is optional. Repeat Order No. becomes required only when Repeat Order? is Yes.</p>
                 </details>
 
                 <details class="ftbi-test-tools">
@@ -151,7 +155,7 @@
         </div>
 
         <div class="footerbar">
-            <div class="checks"><span>✓ Client &amp; Product IDs validated</span><span>✓ Dates normalized</span><span>✓ Urgency mapped from Master Data</span></div>
+            <div class="checks"><span>✓ Client &amp; Product IDs validated</span><span>✓ Required shipping details validated</span><span>✓ Dates normalized</span><span>✓ Urgency mapped from Master Data</span></div>
             <div class="ftbi-footer-actions">
                 <a class="btn ftbi-compact-action ftbi-cancel-btn" href="{{ route('orders.bulk-import') }}">Cancel</a>
                 <button class="btn primary ftbi-import-btn ftbi-compact-action" type="button" id="importBtn">Import ready orders</button>
@@ -190,5 +194,5 @@
     </div>
 </div>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="/js/flowtrack-bulk-order-import.js?v=20260817-imported-orders-filter-1"></script>
+<script src="/js/flowtrack-bulk-order-import.js?v=20260820-shipping-required-1"></script>
 @endsection

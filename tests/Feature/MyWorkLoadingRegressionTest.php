@@ -19,7 +19,7 @@ class MyWorkLoadingRegressionTest extends TestCase
     public function test_updating_indicator_is_only_flex_while_livewire_is_really_loading(): void
     {
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
-        $css = file_get_contents(public_path('css/flowtrack-my-work.css'));
+        $css = $this->compatibilityCss('flowtrack-my-work.css');
 
         $this->assertStringContainsString('wire:loading.delay.long.flex', $view);
         $this->assertStringNotContainsString('#my-work-app .work-progress{display:flex;', $css);

@@ -30,6 +30,16 @@ class AdminService
 
     public function users()
     {
+        return $this->usersQuery()->get();
+    }
+
+    public function paginateUsers(int $perPage = 10, string $pageName = 'usersPage')
+    {
+        return $this->usersQuery()->paginate($perPage, ['*'], $pageName);
+    }
+
+    private function usersQuery()
+    {
         $workspaceId = $this->workspaceId();
 
         return User::with([
@@ -40,7 +50,7 @@ class AdminService
             ])
             ->whereHas('workspaceMemberships', fn ($q) => $q->where('workspace_id', $workspaceId))
             ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
-            ->orderBy('name')->get();
+            ->orderBy('name');
     }
 
     public function roles()

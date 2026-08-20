@@ -13,7 +13,8 @@ class OrderListInvoicePaymentActionTest extends TestCase
         $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
 
         $this->assertStringContainsString('$canViewFinance = $accessControl->can(auth()->user(), \'finance\', \'view\');', $view);
-        $this->assertStringContainsString('@if($canViewFinance || $canDeleteOrders)', $view);
+        $this->assertStringContainsString('@if($canViewFinance)', $view);
+        $this->assertStringContainsString('@if($canDeleteOrders)', $view);
         $this->assertStringContainsString('wire:click="openInvoiceAndPayment({{ $job->id }})"', $view);
         $this->assertStringContainsString('<span>Invoice and payment</span>', $view);
         $this->assertStringContainsString('<span>Delete order</span>', $view);

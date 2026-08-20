@@ -58,6 +58,7 @@ class InquiryIntelligenceService
                 ])->with([
                     'assignee:id,name,profile_image_path',
                     'documents:id,inquiry_id,inquiry_task_id',
+                    'links:id,inquiry_task_id,url',
                     'inquiry:id,inquiry_number,required_delivery_date',
                 ]),
                 'convertedJob:id,source_inquiry_id,job_number,order_number,status,created_at,completed_at',
@@ -117,11 +118,11 @@ class InquiryIntelligenceService
         $taskDone = $completedTasks->count();
 
         $submissionTasks = $completedTasks->where('requires_submission', true)->values();
-        $submissionWithFiles = $submissionTasks
-            ->filter(fn (InquiryTask $task) => $task->documents->isNotEmpty())
+        $submissionWithEvidence = $submissionTasks
+            ->filter(fn (InquiryTask $task) => $task->documents->isNotEmpty() || $task->links->isNotEmpty())
             ->count();
         $fileCompliance = $submissionTasks->count() > 0
-            ? round($submissionWithFiles / $submissionTasks->count() * 100, 1)
+            ? round($submissionWithEvidence / $submissionTasks->count() * 100, 1)
             : null;
 
         $structuredCount = $inquiries->filter(fn (Inquiry $inquiry) => $inquiry->items->isNotEmpty())->count();
@@ -237,7 +238,7 @@ class InquiryIntelligenceService
                 'task_done' => $taskDone,
                 'task_total' => $taskTotal,
                 'file_compliance' => $fileCompliance,
-                'evidenced' => $submissionWithFiles,
+                'evidenced' => $submissionWithEvidence,
                 'evidence_total' => $submissionTasks->count(),
                 'structured_products' => $structuredPct,
                 'structured_count' => $structuredCount,

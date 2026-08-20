@@ -18,6 +18,6 @@ class SearchPasteSupportTest extends TestCase
         $this->assertStringContainsString("replace(/[\\u200B-\\u200D\\uFEFF]/g, '')", $script);
         $this->assertStringContainsString("input.setRangeText", $script);
         $this->assertStringContainsString("input.dispatchEvent(inputEvent)", $script);
-        $this->assertStringContainsString('flowtrack-list-filters.js?v=20260810-client-selection-atomic-3', $layout);
+        $this->assertStringContainsString('flowtrack-list-filters.js?v=', $layout);
     }
 }

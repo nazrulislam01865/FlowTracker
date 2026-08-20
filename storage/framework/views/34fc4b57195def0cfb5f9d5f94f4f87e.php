@@ -48,17 +48,32 @@
         return ['On track', 'green'];
     };
 
-    $attentionJobFlag = static function ($job) use ($today, $jobFlag): array {
+    $attentionOverdueLabel = static function ($dueDate) use ($today): string {
+        $overdueDays = (float) $dueDate->diffInDays($today);
+
+        return 'Overdue '.number_format($overdueDays, 2, '.', '').'d';
+    };
+
+    $attentionInquiryFlag = static function ($inquiry) use ($today, $inquiryFlag, $attentionOverdueLabel): array {
+        $task = $inquiry->currentTask;
+        if ($task?->due_date && $task->due_date->lt($today)) {
+            return [$attentionOverdueLabel($task->due_date), 'red'];
+        }
+
+        return $inquiryFlag($inquiry);
+    };
+
+    $attentionJobFlag = static function ($job) use ($today, $jobFlag, $attentionOverdueLabel): array {
         $task = $job->tasks?->first();
         if ($task?->due_date && $task->due_date->lt($today)) {
-            return ['Overdue '.$task->due_date->diffInDays($today).'d', 'red'];
+            return [$attentionOverdueLabel($task->due_date), 'red'];
         }
         if ($task?->due_date && $task->due_date->isSameDay($today)) return ['Due today', 'amber'];
         $taskStatus = mb_strtolower(trim((string) ($task?->status ?? '')));
         if (str_contains($taskStatus, 'block')) return ['Blocked', 'red'];
         if ($task?->needs_attention) return ['Needs attention', 'red'];
         if ($job->delivery_date && $job->delivery_date->lt($today)) {
-            return ['Overdue '.$job->delivery_date->diffInDays($today).'d', 'red'];
+            return [$attentionOverdueLabel($job->delivery_date), 'red'];
         }
         if ($job->delivery_date && $job->delivery_date->isSameDay($today)) return ['Due today', 'amber'];
         if (!$job->owner_id) return ['Unassigned', 'gray'];
@@ -143,10 +158,10 @@
             <button type="button" wire:click="setRange(7)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="<?php echo e($rangeDays === 7 ? 'true' : 'false'); ?>" class="<?php echo e($rangeDays === 7 ? 'active' : ''); ?>">7 days</button>
             <button type="button" wire:click="setRange(30)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="<?php echo e($rangeDays === 30 ? 'true' : 'false'); ?>" class="<?php echo e($rangeDays === 30 ? 'active' : ''); ?>">30 days</button>
         </div>
-        <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-mgmt-remote-filter ft-mgmt-client-filter','label' => 'Client','property' => 'clientFilter','type' => 'clients','context' => 'dashboard','action' => 'setDashboardFilter','value' => $clientFilter,'placeholder' => 'All clients','initialOptions' => $dashboardClientFilterOptions,'menuWidth' => 300,'fixedMenu' => true,'wire:key' => 'dashboard-client-filter-'.e($clientFilter ?: 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.remote-filter'); ?>
+        <?php if (isset($component)) { $__componentOriginal655167214ff7da69eb027810b956fa88 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal655167214ff7da69eb027810b956fa88 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-mgmt-remote-filter ft-mgmt-client-filter','label' => 'Client','property' => 'clientFilter','type' => 'clients','context' => 'dashboard','action' => 'setDashboardFilter','value' => $clientFilter,'placeholder' => 'All clients','initialOptions' => $dashboardClientFilterOptions,'menuWidth' => 300,'fixedMenu' => true,'wire:key' => 'dashboard-client-filter-'.e($clientFilter ?: 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.search-select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
@@ -157,18 +172,18 @@
 
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
-<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
-<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
-<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php if (isset($__attributesOriginal655167214ff7da69eb027810b956fa88)): ?>
+<?php $attributes = $__attributesOriginal655167214ff7da69eb027810b956fa88; ?>
+<?php unset($__attributesOriginal655167214ff7da69eb027810b956fa88); ?>
 <?php endif; ?>
-<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
-<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
-<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php if (isset($__componentOriginal655167214ff7da69eb027810b956fa88)): ?>
+<?php $component = $__componentOriginal655167214ff7da69eb027810b956fa88; ?>
+<?php unset($__componentOriginal655167214ff7da69eb027810b956fa88); ?>
 <?php endif; ?>
-        <?php if (isset($component)) { $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.remote-filter','data' => ['class' => 'ft-mgmt-remote-filter ft-mgmt-team-filter','label' => 'Team','property' => 'teamFilter','type' => 'departments','context' => 'dashboard','action' => 'setDashboardFilter','value' => $teamFilter,'placeholder' => 'All teams','initialOptions' => $dashboardTeamFilterOptions,'menuWidth' => 300,'fixedMenu' => true,'wire:key' => 'dashboard-team-filter-'.e($teamFilter ?: 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.remote-filter'); ?>
+        <?php if (isset($component)) { $__componentOriginal655167214ff7da69eb027810b956fa88 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal655167214ff7da69eb027810b956fa88 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-mgmt-remote-filter ft-mgmt-team-filter','label' => 'Team','property' => 'teamFilter','type' => 'departments','context' => 'dashboard','action' => 'setDashboardFilter','value' => $teamFilter,'placeholder' => 'All teams','initialOptions' => $dashboardTeamFilterOptions,'menuWidth' => 300,'fixedMenu' => true,'wire:key' => 'dashboard-team-filter-'.e($teamFilter ?: 'all').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.search-select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
@@ -179,13 +194,13 @@
 
 <?php echo $__env->renderComponent(); ?>
 <?php endif; ?>
-<?php if (isset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
-<?php $attributes = $__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
-<?php unset($__attributesOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php if (isset($__attributesOriginal655167214ff7da69eb027810b956fa88)): ?>
+<?php $attributes = $__attributesOriginal655167214ff7da69eb027810b956fa88; ?>
+<?php unset($__attributesOriginal655167214ff7da69eb027810b956fa88); ?>
 <?php endif; ?>
-<?php if (isset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11)): ?>
-<?php $component = $__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11; ?>
-<?php unset($__componentOriginal8724aaa5ef3af2fc9ca32a1db6cf7e11); ?>
+<?php if (isset($__componentOriginal655167214ff7da69eb027810b956fa88)): ?>
+<?php $component = $__componentOriginal655167214ff7da69eb027810b956fa88; ?>
+<?php unset($__componentOriginal655167214ff7da69eb027810b956fa88); ?>
 <?php endif; ?>
         <input class="ft-mgmt-search" wire:model.live.debounce.300ms="search" type="search" placeholder="Search orders, inquiries or tasks" aria-label="Search dashboard">
     </section>
@@ -243,7 +258,7 @@
 
 
 
-    <section class="ft-mgmt-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head">
             <div><h2>Priority work</h2><p>Top urgent Orders, Inquiries and Tasks ranked by attention, due date and priority</p></div>
             <div class="ft-mgmt-tabs">
@@ -461,7 +476,7 @@
                         $kind = $attentionItem['kind'];
                         $record = $attentionItem['record'];
                         $isOrder = $kind === 'orders';
-                        [$flagLabel, $flagTone] = $isOrder ? $attentionJobFlag($record) : $inquiryFlag($record);
+                        [$flagLabel, $flagTone] = $isOrder ? $attentionJobFlag($record) : $attentionInquiryFlag($record);
                         $reference = $isOrder ? $record->displayOrderNumber() : $record->inquiry_number;
                         $headline = trim((string) ($isOrder ? ($record->tasks?->first()?->title ?: $record->title) : ($record->currentTask?->title ?: $record->subject)));
                         $ownerName = $isOrder ? ($record->owner?->name ?? 'Unassigned') : ($record->owner?->name ?? 'Unassigned');
@@ -589,7 +604,7 @@ unset($__split);
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     ?>
-    <section class="ft-mgmt-panel ft-mgmt-team-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>

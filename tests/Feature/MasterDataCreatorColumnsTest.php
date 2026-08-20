@@ -39,15 +39,14 @@ class MasterDataCreatorColumnsTest extends TestCase
         $this->assertSame($creator->id, $product->fresh()->created_by);
     }
 
-    public function test_product_table_exposes_created_by_and_created_at_columns(): void
+    public function test_product_list_and_detail_expose_update_and_creation_audit_metadata(): void
     {
         $view = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
+        $detail = file_get_contents(resource_path('views/components/catalog/product-view.blade.php'));
 
-        $this->assertStringContainsString('x-model="visible.createdBy"> Created by', $view);
-        $this->assertStringContainsString('x-model="visible.createdAt"> Created at', $view);
-        $this->assertStringContainsString('<th x-show="visible.createdBy">Created by</th>', $view);
-        $this->assertStringContainsString('<th x-show="visible.createdAt">Created at</th>', $view);
-        $this->assertStringContainsString("{{ \$r->creator?->name ?: 'System' }}", $view);
-        $this->assertStringContainsString("\$createdAt?->format('M j, Y g:i A')", $view);
+        $this->assertStringContainsString('<th>Updated</th>', $view);
+        $this->assertStringContainsString('ft-product-updated', $view);
+        $this->assertStringContainsString("Created by {{ \$product->creator?->name ?? '—' }}", $detail);
+        $this->assertStringContainsString("\$created?->format('M j, Y g:i A')", $detail);
     }
 }

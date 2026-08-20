@@ -25,8 +25,10 @@ class InquiryOrderTabPermissionTest extends TestCase
         $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
         $service = file_get_contents(app_path('Services/InquiryService.php'));
         $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $productCard = file_get_contents(resource_path('views/components/catalog/detail-products-card.blade.php'));
 
-        $this->assertStringContainsString('Products &amp; quantities', $view);
+        $this->assertStringContainsString('<x-catalog.detail-products-card', $view);
+        $this->assertStringContainsString("'title' => 'Products & quantities'", $productCard);
         $this->assertStringContainsString('@if($canViewInquiryProducts)', $view);
         $this->assertStringContainsString("can(\$user, 'catalog_products', 'view')", $component);
         $this->assertStringContainsString("can(\$actor, 'catalog_products', 'edit')", $service);
@@ -39,8 +41,10 @@ class InquiryOrderTabPermissionTest extends TestCase
     {
         $service = file_get_contents(app_path('Services/JobService.php'));
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
+        $productCard = file_get_contents(resource_path('views/components/catalog/detail-products-card.blade.php'));
 
-        $this->assertStringContainsString('Products &amp; quantities', $overview);
+        $this->assertStringContainsString('<x-catalog.detail-products-card', $overview);
+        $this->assertStringContainsString("'title' => 'Products & quantities'", $productCard);
         $this->assertStringContainsString("can(auth()->user(), 'catalog_products', 'view')", $overview);
         $this->assertStringContainsString("can(auth()->user(), 'catalog_products', 'edit')", $overview);
         $this->assertStringContainsString("can(\$actor, 'catalog_products', 'create')", $service);

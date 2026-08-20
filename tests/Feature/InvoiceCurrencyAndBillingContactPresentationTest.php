@@ -16,7 +16,7 @@ class InvoiceCurrencyAndBillingContactPresentationTest extends TestCase
         $this->assertStringContainsString('$currency->name,', $master);
         $this->assertStringContainsString('$master->currencyValue($currency)', $jobs);
         $this->assertStringContainsString("->unique('value')", $modal);
-        $this->assertStringContainsString("'USD' => '$'", $modal);
+        $this->assertStringContainsString("'USD' => '\$'", $modal);
         $this->assertStringNotContainsString('{{ $currencyCode }}', $modal);
         $this->assertStringNotContainsString('$option->code ?: $option->name', $modal);
     }

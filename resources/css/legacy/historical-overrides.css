@@ -1,0 +1,17 @@
+/**
+ * FlowTrack legacy compatibility boundary.
+ * --------------------------------------------------------------------------
+ * Phase 1 policy:
+ * - This import MUST remain after foundation/utilities in app.css.
+ * - flowtrack.css is frozen compatibility CSS; its debt budget may only fall.
+ * - No new feature styling may be added here.
+ * - Existing selectors move out only in controlled Phase 2/3 migration batches.
+ */
+@import '../flowtrack.css';
+
+/* Preserved from the pre-Phase-1 app.css tail; no behavior change. */
+.ft-board-load-more {
+    display: flex;
+    justify-content: center;
+    padding: 18px 0 4px;
+}

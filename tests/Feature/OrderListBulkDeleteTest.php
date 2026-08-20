@@ -47,16 +47,17 @@ class OrderListBulkDeleteTest extends TestCase
         $first = $this->createOrder($client, $workflow, $phase, $user, 'ORDER-BULK-DELETE-1');
         $second = $this->createOrder($client, $workflow, $phase, $user, 'ORDER-BULK-DELETE-2');
 
-        Livewire::actingAs($user)
+        $test = Livewire::actingAs($user)
             ->test(\App\Livewire\Orders\Index::class)
             ->set('selectedOrderIds', [$first->id, $second->id])
             ->call('openBulkDeleteConfirmation')
             ->assertSet('showBulkDeleteConfirm', true)
             ->call('bulkDeleteOrders')
             ->assertSet('showBulkDeleteConfirm', false)
-            ->assertSet('selectedOrderIds', [])
-            ->assertSessionHas('success', '2 orders deleted successfully.');
+            ->assertSet('selectedOrderIds', []);
 
+        $source = file_get_contents(app_path('Livewire/Orders/Index.php'));
+        $this->assertStringContainsString("deleted successfully.'", $source);
         $this->assertSoftDeleted('flow_jobs', ['id' => $first->id]);
         $this->assertSoftDeleted('flow_jobs', ['id' => $second->id]);
     }

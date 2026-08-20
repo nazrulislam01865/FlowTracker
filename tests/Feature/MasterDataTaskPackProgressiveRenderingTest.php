@@ -39,9 +39,9 @@ class MasterDataTaskPackProgressiveRenderingTest extends TestCase
 
         $this->assertStringContainsString('public bool $optionsReady = false;', $component);
         $this->assertStringContainsString('function loadTaskPackOptions()', $component);
-        $this->assertStringContainsString('$master->active(\'department\')', $component);
+        $this->assertStringContainsString("app(FilterOptionService::class)->options(\$user, 'department-records', 'task-pack-setup'", $component);
         $this->assertStringContainsString('$master->active(\'priority\')', $component);
-        $this->assertStringContainsString('$master->active(\'document_category\')', $component);
+        $this->assertStringContainsString("app(FilterOptionService::class)->options(\$user, 'document-category-records', 'task-pack-setup'", $component);
         $this->assertStringContainsString('wire:init="loadTaskPackOptions"', $view);
         $this->assertStringContainsString('@if($optionsReady)', $view);
         $this->assertStringContainsString('context="task-pack-setup"', $view);

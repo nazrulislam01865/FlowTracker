@@ -236,6 +236,14 @@
             </tr>
         @endforeach
         </tbody></table></div>
+        <div class="ft-list-pagination ft-user-pagination" aria-label="Users pagination">
+            <span>Showing <b>{{ $users->firstItem() ?? 0 }}–{{ $users->lastItem() ?? 0 }}</b> of {{ $users->total() }} users</span>
+            <div class="ft-page-actions">
+                <button type="button" wire:click="previousPage('usersPage')" @disabled($users->onFirstPage())>Previous</button>
+                <span>Page {{ $users->currentPage() }} of {{ max(1, $users->lastPage()) }}</span>
+                <button type="button" wire:click="nextPage('usersPage')" @disabled(!$users->hasMorePages())>Next</button>
+            </div>
+        </div>
     @elseif($tab==='audit')
         <section class="card ft-access-panel"><div class="section-head"><div><h3>Access audit log</h3><div class="small muted">Role, permission, scope, security and assignment changes.</div></div></div>
             <div class="ft-access-audit">@forelse($auditLog as $event)<div class="ft-audit-row"><div class="ft-audit-dot">{{ strtoupper(substr($event->user?->name ?? 'S',0,1)) }}</div><div><b>{{ $event->description }}</b><span>{{ $event->user?->name ?? 'System' }} · {{ \App\Support\UserLocalTime::format($event->created_at, 'M j, Y g:i A') }}</span></div><code>{{ $event->event }}</code></div>@empty<div class="empty">No access changes recorded yet.</div>@endforelse</div>
@@ -317,16 +325,20 @@
                     </div>
 
                     <div class="field">
-                        <label>Department</label>
-                        <select wire:model="departmentId">
-                            <option value="">No department</option>
-                            @foreach($departments as $d)
-                                <option value="{{ $d->id }}">{{ $d->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('departmentId')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
+                        <x-ui.search-select
+                            label="Department"
+                            property="departmentId"
+                            type="departments"
+                            context="administration"
+                            action="setDepartmentSelection"
+                            :value="$departmentId"
+                            placeholder="No department"
+                            :initial-options="$departments"
+                            :menu-width="320"
+                            :fixed-menu="true"
+                            wire:key="administration-department-{{ $departmentId ?? 'none' }}"
+                        />
+                        @error('departmentId')<x-ui.validation-message :message="$message" />@enderror
                     </div>
 
                     <div class="field">

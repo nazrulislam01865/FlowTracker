@@ -15,9 +15,9 @@
     @endauth
     <title>{{ ($title ?? null) ? $title.' — ' : '' }}STEP PROMO</title>
     <link rel="icon" href="{{ $branding['favicon_url'] ?? asset('images/step-promo/step-promo-icon.webp') }}">
-    <link rel="stylesheet" href="/css/flowtrack-inline-editing.css?v=20260815-order-urgency-dropdown-1">
+    @vite('resources/css/legacy/prelude.css')
     <script src="/js/flowtrack-inline-editing.js?v=20260817-assignee-immediate-1"></script>
-    <script src="/js/flowtrack-list-filters.js?v=20260817-assignee-immediate-1"></script>
+    <script src="/js/flowtrack-list-filters.js?v=20260820-select-autoclose-3"></script>
     @auth
         <meta name="flowtrack-notification-count-url" content="{{ route('notifications.unread-count') }}">
     @endauth
@@ -37,43 +37,38 @@
         'resources/css/generated/flowtrack-04.css',
         'resources/js/app.js',
     ])
-    <link rel="stylesheet" href="/css/flowtrack-list-filters.css?v=20260818-taskpack-task-prototype-1">
-    <link rel="stylesheet" href="/css/flowtrack-user-editor.css?v=20260815-user-assignment-refine-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-document-upload.css?v=20260810-1">
-    <link rel="stylesheet" href="/css/flowtrack-attachment-auto-upload.css?v=20260811-2">
-    <link rel="stylesheet" href="/css/flowtrack-client-logo.css?v=20260811-1">
-    <link rel="stylesheet" href="/css/flowtrack-client-validation-focus.css?v=20260817-client-search-select-1">
-    <link rel="stylesheet" href="/css/flowtrack-sidebar-template.css?v=20260811-3">
-    @if(request()->routeIs('dashboard', 'team-performance.report'))<link rel="stylesheet" href="/css/flowtrack-dashboard-prototype.css?v=20260812-1">@endif
-    {{-- Inquiry Intelligence CSS is deliberately loaded with the authenticated shell.
-         The sidebar uses Livewire wire:navigate, so loading this stylesheet only on the
-         reports route can briefly paint the new page before its route-specific CSS
-         finishes loading. The stylesheet is scoped to #inquiry-intelligence-app, so
-         keeping it warm globally prevents that FOUC without affecting other pages. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiry-intelligence.css?v=20260818-searchable-report-filters-1">
-    {{-- Inquiry CSS is deliberately loaded for the authenticated shell, not only
-         after entering /inquiries. Livewire wire:navigate swaps pages SPA-style;
-         keeping this scoped stylesheet warm prevents the first Inquiry visit from
-         rendering unstyled and then flashing into place a moment later. --}}
-    <link rel="stylesheet" href="/css/flowtrack-inquiries.css?v=20260818-inquiry-filter-align-1">
-    {{-- My Work CSS is preloaded with the authenticated shell. It is scoped to #my-work-app,
-         which avoids resending a large inline stylesheet on every Livewire render/navigation. --}}
-    <link rel="stylesheet" href="/css/flowtrack-my-work.css?v=20260817-inline-assignee-1">
-    <link rel="stylesheet" href="/css/flowtrack-master-colors.css?v=20260818-dashboard-portfolio-statuses-1">
-    <link rel="stylesheet" href="/css/flowtrack-master-data.css?v=20260818-taskpack-work-calendar-1">
-    <link rel="stylesheet" href="/css/flowtrack-product-categories.css?v=20260815-category-column-width-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-create-products.css?v=20260815-inquiry-section-numbering-1">
-    <link rel="stylesheet" href="/css/flowtrack-create-order.css?v=20260817-shipping-address-3-optional">
-    <link rel="stylesheet" href="/css/flowtrack-order-detail-header.css?v=20260815-order-attention-1">
-    <link rel="stylesheet" href="/css/flowtrack-task-detail-attachments.css?v=20260815-compact-doc-rows-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-products-detail.css?v=20260817-shared-detail-products-1">
-    <link rel="stylesheet" href="/css/flowtrack-order-finance.css?v=20260814-invoice-pdf-1">
-    <link rel="stylesheet" href="/css/flowtrack-documents-archive.css?v=20260817-readable-table-1">
-    {{-- Bulk Order Import CSS is loaded with the shell because wire:navigate can otherwise
-         paint the page before a body-level stylesheet finishes loading, causing a visible FOUC. --}}
-    <link rel="stylesheet" href="/css/flowtrack-bulk-order-import.css?v=20260815-review-compact-1">
-    {{-- Reusable management theme is loaded last for dashboard content only; the shared sidebar remains system-wide. --}}
-    <link rel="stylesheet" href="/css/flowtrack-management-theme.css?v=20260819-team-department-colors-1">
+    {{-- Phase 3: former /public/css assets are now Vite-managed source bundles. --}}
+    @vite('resources/css/legacy/shell-a.css')
+    @if(request()->routeIs('dashboard', 'team-performance.report'))
+        @vite('resources/css/modules/dashboard/legacy-prototype.css')
+    @endif
+    @vite('resources/css/legacy/shell-b.css')
+
+    {{-- CSS extracted from Blade style blocks; loaded after compatibility CSS to preserve cascade. --}}
+    @vite('resources/css/migration/components.css')
+
+    {{-- Incremental feature batches. Keep each route family independently reversible. --}}
+    @if(request()->routeIs('jobs.index'))
+        @vite('resources/css/modules/orders/index.css')
+    @endif
+    @if(request()->routeIs('all-tasks'))
+        @vite('resources/css/modules/work/index.css')
+    @endif
+    @if(request()->routeIs('workflow.*', 'task-pack.*'))
+        @vite('resources/css/modules/setup/index.css')
+    @endif
+    @if(request()->routeIs('dashboard', 'team-performance.report'))
+        @vite('resources/css/modules/dashboard/migration.css')
+    @endif
+    @if(request()->routeIs('documents.index'))
+        @vite('resources/css/modules/documents/filters.css')
+    @endif
+    @if(request()->routeIs('inquiries.*'))
+        @vite('resources/css/modules/inquiries/filters.css')
+    @endif
+    @if(request()->routeIs('clients.index'))
+        @vite('resources/css/modules/clients/filters.css')
+    @endif
     @livewireStyles
 </head>
 <body class="{{ request()->routeIs('dashboard', 'team-performance.report') ? 'ft-management-dashboard-page' : '' }}">

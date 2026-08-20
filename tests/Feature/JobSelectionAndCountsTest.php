@@ -7,6 +7,7 @@ use App\Models\FlowJob;
 use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
+use App\Models\WorkflowTemplate;
 use App\Services\JobService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Livewire\Livewire;
@@ -18,7 +19,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_filtered_ids_include_every_matching_job_across_pages(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         foreach (range(1, 11) as $index) {
@@ -35,7 +36,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_jobs_component_select_all_includes_later_pages(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         foreach (range(1, 11) as $index) {
@@ -50,7 +51,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_jobs_list_does_not_initialize_or_render_the_create_form(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
 
         Livewire::actingAs($user)
             ->test(\App\Livewire\Jobs\Index::class)
@@ -65,7 +66,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_open_create_switches_from_the_list_to_create_only_data(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [, $workflow, $phase] = $this->jobDependencies();
 
         Livewire::actingAs($user)
@@ -103,7 +104,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_orders_list_includes_active_and_completed_but_not_inactive_records(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         $active = $this->createJob($client, $workflow, $phase, 'JOB-ORDER-ACTIVE');
@@ -120,7 +121,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_order_search_ignores_one_and_two_character_free_text(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         $this->createJob($client, $workflow, $phase, 'JOB-SHORT-ONE');
@@ -135,7 +136,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_find_visible_base_does_not_hydrate_the_full_order_graph(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
         $job = $this->createJob($client, $workflow, $phase, 'JOB-LIGHTWEIGHT-DETAIL');
 
@@ -158,7 +159,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_order_detail_relations_are_loaded_per_active_tab(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
         $job = $this->createJob($client, $workflow, $phase, 'JOB-TAB-SPLIT');
         $service = app(JobService::class);
@@ -197,7 +198,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_order_prefix_search_finds_legacy_job_numbers(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         $job = $this->createJob($client, $workflow, $phase, 'JOB-2026-00999');
@@ -211,7 +212,7 @@ class JobSelectionAndCountsTest extends TestCase
 
     public function test_active_job_query_does_not_count_hidden_or_deleted_jobs(): void
     {
-        $user = User::factory()->create(['is_super_admin' => true]);
+        $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         [$client, $workflow, $phase] = $this->jobDependencies();
 
         $active = $this->createJob($client, $workflow, $phase, 'JOB-ACTIVE');
@@ -238,7 +239,19 @@ class JobSelectionAndCountsTest extends TestCase
             'slug' => 'test-workflow',
             'is_active' => true,
         ]);
+        WorkflowTemplate::create([
+            'id' => $workflow->id,
+            'workspace_id' => 1,
+            'name' => 'Test Workflow',
+            'code' => 'TEST-WF',
+            'applies_to' => 'orders',
+            'client_availability' => 'all',
+            'is_active' => true,
+            'is_default' => true,
+            'version' => 1,
+        ]);
         $phase = WorkflowPhase::create([
+            'workflow_template_id' => $workflow->id,
             'workflow_id' => $workflow->id,
             'sequence' => 1,
             'name' => 'Request',

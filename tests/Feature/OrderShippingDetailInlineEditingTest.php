@@ -18,7 +18,7 @@ class OrderShippingDetailInlineEditingTest extends TestCase
         $css = file_get_contents(resource_path('css/flowtrack.css'));
 
         $planningPosition = strpos($overview, 'Planning &amp; ownership');
-        $shippingPosition = strpos($overview, 'ft-order-shipping-detail-card');
+        $shippingPosition = strpos($overview, 'ft-order-shipping-side-panel');
         $productsPosition = strpos($overview, 'order-products-card');
 
         $this->assertNotFalse($planningPosition);
@@ -37,9 +37,9 @@ class OrderShippingDetailInlineEditingTest extends TestCase
         $this->assertStringContainsString(':clearable="true"', $overview);
         $this->assertStringContainsString('ft-inline-remote-sync', $picker);
         $this->assertStringContainsString("ofType('phone_country_code')", $service);
-        $this->assertStringContainsString('phone-country-codes', $routes);
+        $this->assertStringContainsString("Route::get('/filter-options/{type}', FilterOptionController::class)", $routes);
         $this->assertStringContainsString('phone-country-codes', $controller);
-        $this->assertStringContainsString("'phone-country-codes' => $this->phoneCountryCodes", $filterOptions);
+        $this->assertStringContainsString("'phone-country-codes' => \$this->phoneCountryCodes(\$search, \$limit, \$offset)", $filterOptions);
         $this->assertStringContainsString('@media (max-width:640px)', $css);
         $this->assertStringContainsString('.ft-order-shipping-detail-grid', $css);
         $this->assertMatchesRegularExpression('/#\\[Renderless\\]\\s+public function updateJobShippingField\\b/', $jobs);

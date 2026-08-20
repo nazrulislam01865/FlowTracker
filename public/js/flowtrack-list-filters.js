@@ -5,6 +5,16 @@
         .replace(/[_-]+/g, ' ')
         .replace(/\s+/g, ' ');
 
+    const uniqueOptions = (items = []) => {
+        const seen = new Set();
+        return items.filter((item) => {
+            const id = String(item?.id ?? '');
+            if (!id || seen.has(id)) return false;
+            seen.add(id);
+            return true;
+        });
+    };
+
     const normalisePastedSearchText = (value) => String(value ?? '')
         .replace(/[\u200B-\u200D\uFEFF]/g, '')
         .replace(/\u00A0/g, ' ')
@@ -263,6 +273,11 @@
             selectedValue: String(config.value || ''),
             selectedLabel: config.selectedLabel || config.placeholder,
             message: 'Recent options shown instantly. Type 2 characters to search.',
+            page: 1,
+            perPage: 0,
+            hasMore: false,
+            nextPage: null,
+            minSearchLength: 2,
             controller: null,
             cache: initialCache,
             knownLabels: initialLabels,
@@ -273,6 +288,9 @@
             pendingPreviousValue: '',
             pendingPreviousLabel: '',
             pendingAt: 0,
+            get visibleItems() {
+                return this.items;
+            },
             rememberItems(items = []) {
                 if (!Array.isArray(items)) return;
                 items.forEach((item) => {
@@ -299,7 +317,25 @@
             close() {
                 this.open = false;
                 this.query = '';
+                this.loading = false;
+                this.requestSequence++;
                 this.controller?.abort();
+                this.controller = null;
+            },
+            closeAfterSelection() {
+                // A searched option can still have a debounced search response or
+                // a Livewire morph queued behind the click. close() invalidates and
+                // aborts that work before the Livewire value update is started.
+                this.close();
+                this.$nextTick(() => {
+                    this.open = false;
+                    this.query = '';
+                    try {
+                        this.$refs.trigger?.focus({preventScroll: true});
+                    } catch (_) {
+                        this.$refs.trigger?.focus();
+                    }
+                });
             },
             focusFirst() {
                 this.$refs.menu?.querySelector('.ft-remote-filter-list .ft-remote-filter-option')?.focus();
@@ -311,23 +347,35 @@
                 const next = index < 0 ? 0 : Math.max(0, Math.min(buttons.length - 1, index + direction));
                 buttons[next]?.focus();
             },
-            async searchOptions(force = false) {
+            focusBoundary(boundary) {
+                const buttons = [...(this.$refs.menu?.querySelectorAll('.ft-remote-filter-list .ft-remote-filter-option') || [])];
+                if (!buttons.length) return;
+                (boundary === 'last' ? buttons[buttons.length - 1] : buttons[0])?.focus();
+            },
+            async searchOptions(force = false, append = false) {
                 const q = this.query.trim();
-                if (q.length > 0 && q.length < 2) {
+                if (q.length > 0 && q.length < this.minSearchLength) {
                     this.controller?.abort();
                     this.loading = false;
-                    this.items = this.cache.get('') || [];
-                    this.message = 'Type at least 2 characters to search.';
+                    this.items = [];
+                    this.page = 1;
+                    this.hasMore = false;
+                    this.nextPage = null;
+                    this.message = `Type at least ${this.minSearchLength} characters to search.`;
                     this.reposition();
                     return;
                 }
 
-                const key = q.toLowerCase();
+                const requestedPage = append ? Math.max(1, Number(this.nextPage || (this.page + 1))) : 1;
+                const key = `${q.toLowerCase()}|${requestedPage}`;
                 if (!force && this.cache.has(key)) {
-                    this.items = this.cache.get(key);
-                    this.message = q
-                        ? `${this.items.length} result${this.items.length === 1 ? '' : 's'}`
-                        : 'Recent options shown instantly. Type 2 characters to search.';
+                    const cached = this.cache.get(key);
+                    this.items = append ? uniqueOptions([...this.items, ...cached.items]) : cached.items;
+                    this.page = cached.page;
+                    this.perPage = cached.perPage;
+                    this.hasMore = cached.hasMore;
+                    this.nextPage = cached.nextPage;
+                    this.message = this.resultMessage(q);
                     this.reposition();
                     return;
                 }
@@ -336,13 +384,16 @@
                 this.controller = new AbortController();
                 const sequence = ++this.requestSequence;
                 this.loading = true;
-                this.message = q ? 'Searching…' : 'Loading recent options…';
+                this.message = append ? 'Loading more…' : (q ? 'Searching…' : 'Loading recent options…');
 
                 try {
                     const url = new URL(config.endpoint, window.location.origin);
                     if (q) url.searchParams.set('q', q);
                     if (config.context) url.searchParams.set('context', config.context);
-                    if (this.selectedValue) url.searchParams.set('selected', this.selectedValue);
+                    url.searchParams.set('page', String(requestedPage));
+                    if (q) url.searchParams.set('per_page', '20');
+                    else if (this.perPage > 0) url.searchParams.set('per_page', String(this.perPage));
+                    if (this.selectedValue) url.searchParams.append('selected[]', this.selectedValue);
                     Object.entries(this.params || {}).forEach(([name, value]) => {
                         if (value !== null && value !== undefined && String(value) !== '') {
                             url.searchParams.set(name, String(value));
@@ -359,13 +410,24 @@
                     const payload = await response.json();
                     if (sequence !== this.requestSequence) return;
 
-                    this.items = Array.isArray(payload.items) ? payload.items : [];
-                    this.rememberItems(this.items);
-                    this.cache.set(key, this.items);
+                    const pageItems = Array.isArray(payload.items) ? payload.items : [];
+                    const selectedItems = Array.isArray(payload.selected_items) ? payload.selected_items : [];
+                    this.rememberItems([...selectedItems, ...pageItems]);
+                    this.items = append ? uniqueOptions([...this.items, ...pageItems]) : pageItems;
+                    this.page = Number(payload.pagination?.page || requestedPage);
+                    this.perPage = Number(payload.pagination?.per_page || (q ? 20 : this.perPage || 5));
+                    this.hasMore = payload.pagination?.has_more === true;
+                    this.nextPage = payload.pagination?.next_page ? Number(payload.pagination.next_page) : null;
+                    this.minSearchLength = Number(payload.query?.min_length || this.minSearchLength || 2);
+                    this.cache.set(key, {
+                        items: pageItems,
+                        page: this.page,
+                        perPage: this.perPage,
+                        hasMore: this.hasMore,
+                        nextPage: this.nextPage,
+                    });
                     if (!q) this.recentLoaded = true;
-                    this.message = q
-                        ? `${this.items.length} result${this.items.length === 1 ? '' : 's'} · max 20`
-                        : 'Recent options shown instantly. Type 2 characters to search.';
+                    this.message = this.resultMessage(q);
                     this.reposition();
                 } catch (error) {
                     if (error?.name !== 'AbortError') {
@@ -374,6 +436,17 @@
                 } finally {
                     if (sequence === this.requestSequence) this.loading = false;
                 }
+            },
+            resultMessage(q = this.query.trim()) {
+                if (q && this.items.length === 0) return 'No matching options.';
+                if (q) return `${this.items.length} result${this.items.length === 1 ? '' : 's'}${this.hasMore ? ' · more available' : ''}`;
+                return this.hasMore
+                    ? `${this.items.length} recent options · more available`
+                    : 'Recent options shown instantly. Type 2 characters to search.';
+            },
+            loadMore() {
+                if (!this.hasMore || this.loading || !this.nextPage) return;
+                return this.searchOptions(true, true);
             },
             sync(value, label) {
                 this.syncSelection({ value, label }, this.params, this.items);
@@ -398,6 +471,10 @@
                     this.cache = new Map();
                     if (freshItems.length) this.cache.set('', freshItems);
                     this.recentLoaded = freshItems.length > 0;
+                    this.page = 1;
+                    this.perPage = 0;
+                    this.hasMore = false;
+                    this.nextPage = null;
                     this.query = '';
                     this.message = 'Recent options shown instantly. Type 2 characters to search.';
                 }
@@ -491,8 +568,7 @@
                 this.beginPendingSelection('', config.placeholder);
                 this.selectedValue = '';
                 this.selectedLabel = config.placeholder;
-                this.open = false;
-                this.query = '';
+                this.closeAfterSelection();
             },
             select(item) {
                 const next = String(item.id);
@@ -501,9 +577,169 @@
                 this.knownLabels.set(next, nextLabel);
                 this.selectedValue = next;
                 this.selectedLabel = nextLabel;
+                this.closeAfterSelection();
+            },
+        };
+    };
+
+
+    // Phase 4 official single-select name. Keep FlowTrackRemoteFilter as a
+    // compatibility alias for existing inline editors until Phase 13 modularizes JS.
+    window.FlowTrackSearchSelect = (config) => window.FlowTrackRemoteFilter(config);
+
+    window.FlowTrackMultiSelect = (config) => {
+        const initialItems = Array.isArray(config.initialItems) ? config.initialItems : [];
+        const initialSelected = Array.isArray(config.values) ? config.values.map((value) => String(value)) : [];
+
+        return {
+            ...positioningMethods,
+            menuWidth: Number(config.menuWidth || 320),
+            fixedMenu: config.fixedMenu === true,
+            remote: config.remote === true,
+            disabled: config.disabled === true,
+            maxSelected: Math.max(1, Math.min(100, Number(config.maxSelected || 100))),
+            open: false,
+            query: '',
+            loading: false,
+            items: initialItems,
+            selected: [...new Set(initialSelected)],
+            params: config.params && typeof config.params === 'object' ? {...config.params} : {},
+            page: 1,
+            perPage: 0,
+            hasMore: false,
+            nextPage: null,
+            minSearchLength: 2,
+            controller: null,
+            requestSequence: 0,
+            knownItems: new Map(initialItems.map((item) => [String(item?.id ?? ''), item])),
+            get visibleItems() {
+                if (this.remote) return this.items;
+                const q = normaliseOptionValue(this.query);
+                if (!q) return this.items;
+                return this.items.filter((item) => normaliseOptionValue(item.label).includes(q) || normaliseOptionValue(item.meta).includes(q));
+            },
+            get selectedItems() {
+                return this.selected.map((id) => this.knownItems.get(String(id)) || {id, label: id, meta: ''});
+            },
+            remember(items = []) {
+                items.forEach((item) => {
+                    const id = String(item?.id ?? '');
+                    if (id) this.knownItems.set(id, item);
+                });
+            },
+            toggle() {
+                if (this.disabled) return;
+                this.open ? this.close() : this.openMenu();
+            },
+            openMenu() {
+                if (this.disabled) return;
+                this.openPositionedMenu();
+                if (this.remote) this.searchOptions(true);
+                this.$nextTick(() => { this.reposition(); this.$refs.search?.focus(); });
+            },
+            close() {
                 this.open = false;
                 this.query = '';
+                this.controller?.abort();
             },
+            isSelected(id) {
+                return this.selected.includes(String(id));
+            },
+            toggleValue(item) {
+                const id = String(item?.id ?? '');
+                if (!id) return;
+                this.remember([item]);
+                if (this.isSelected(id)) {
+                    this.selected = this.selected.filter((value) => value !== id);
+                    return;
+                }
+                if (this.selected.length >= this.maxSelected) {
+                    this.message = `Select up to ${this.maxSelected} options.`;
+                    return;
+                }
+                this.selected = [...this.selected, id];
+            },
+            syncValues(values = [], items = [], params = {}) {
+                const nextParams = params && typeof params === 'object' ? {...params} : {};
+                if (JSON.stringify(this.params) !== JSON.stringify(nextParams)) {
+                    this.params = nextParams;
+                    this.items = Array.isArray(items) ? items : [];
+                    this.knownItems = new Map();
+                    this.remember(this.items);
+                    this.page = 1;
+                    this.perPage = 0;
+                    this.hasMore = false;
+                    this.nextPage = null;
+                } else {
+                    this.remember(Array.isArray(items) ? items : []);
+                }
+                this.selected = [...new Set((Array.isArray(values) ? values : []).map((value) => String(value)))];
+            },
+            async searchOptions(force = false, append = false) {
+                if (!this.remote) return;
+                const q = this.query.trim();
+                if (q.length > 0 && q.length < this.minSearchLength) {
+                    this.controller?.abort();
+                    this.loading = false;
+                    this.items = [];
+                    this.hasMore = false;
+                    this.nextPage = null;
+                    this.message = `Type at least ${this.minSearchLength} characters to search.`;
+                    return;
+                }
+
+                this.controller?.abort();
+                this.controller = new AbortController();
+                const sequence = ++this.requestSequence;
+                const requestedPage = append ? Math.max(1, Number(this.nextPage || (this.page + 1))) : 1;
+                this.loading = true;
+                this.message = append ? 'Loading more…' : (q ? 'Searching…' : 'Loading recent options…');
+
+                try {
+                    const url = new URL(config.endpoint, window.location.origin);
+                    if (q) url.searchParams.set('q', q);
+                    if (config.context) url.searchParams.set('context', config.context);
+                    url.searchParams.set('page', String(requestedPage));
+                    if (q) url.searchParams.set('per_page', '20');
+                    else if (this.perPage > 0) url.searchParams.set('per_page', String(this.perPage));
+                    this.selected.forEach((value) => url.searchParams.append('selected[]', value));
+                    Object.entries(this.params || {}).forEach(([name, value]) => {
+                        if (value !== null && value !== undefined && String(value) !== '') url.searchParams.set(name, String(value));
+                    });
+
+                    const response = await fetch(url, {
+                        headers: {'Accept': 'application/json', 'X-Requested-With': 'XMLHttpRequest'},
+                        credentials: 'same-origin',
+                        signal: this.controller.signal,
+                    });
+                    if (!response.ok) throw new Error('option-search-failed');
+                    const payload = await response.json();
+                    if (sequence !== this.requestSequence) return;
+
+                    const pageItems = Array.isArray(payload.items) ? payload.items : [];
+                    const selectedItems = Array.isArray(payload.selected_items) ? payload.selected_items : [];
+                    this.remember([...selectedItems, ...pageItems]);
+                    this.items = append ? uniqueOptions([...this.items, ...pageItems]) : pageItems;
+                    this.page = Number(payload.pagination?.page || requestedPage);
+                    this.perPage = Number(payload.pagination?.per_page || (q ? 20 : this.perPage || 5));
+                    this.hasMore = payload.pagination?.has_more === true;
+                    this.nextPage = payload.pagination?.next_page ? Number(payload.pagination.next_page) : null;
+                    this.minSearchLength = Number(payload.query?.min_length || 2);
+                    this.message = q
+                        ? (this.items.length ? `${this.items.length} result${this.items.length === 1 ? '' : 's'}${this.hasMore ? ' · more available' : ''}` : 'No matching options.')
+                        : (this.hasMore ? `${this.items.length} recent options · more available` : 'Recent options shown instantly. Type 2 characters to search.');
+                    this.reposition();
+                } catch (error) {
+                    if (error?.name !== 'AbortError') this.message = 'Could not load options. Try again.';
+                } finally {
+                    if (sequence === this.requestSequence) this.loading = false;
+                }
+            },
+            loadMore() {
+                if (!this.remote || !this.hasMore || this.loading || !this.nextPage) return;
+                return this.searchOptions(true, true);
+            },
+            message: config.remote === true ? 'Recent options shown instantly. Type 2 characters to search.' : '',
         };
     };
 
@@ -518,6 +754,9 @@
         disabled: config.disabled === true,
         open: false,
         query: '',
+        loading: false,
+        message: '',
+        hasMore: false,
         items: Array.isArray(config.items) ? config.items : [],
         selectedValue: String(config.value || ''),
         selectedLabel: config.selectedLabel || config.placeholder,
@@ -527,6 +766,9 @@
             return this.items.filter((item) =>
                 normaliseOptionValue(item.label).includes(q) || normaliseOptionValue(item.meta).includes(q)
             );
+        },
+        get visibleItems() {
+            return this.filteredItems;
         },
         toggle() {
             if (this.disabled) return;
@@ -554,6 +796,11 @@
             const index = buttons.indexOf(document.activeElement);
             const next = index < 0 ? 0 : Math.max(0, Math.min(buttons.length - 1, index + direction));
             buttons[next]?.focus();
+        },
+        focusBoundary(boundary) {
+            const buttons = [...(this.$refs.menu?.querySelectorAll('.ft-remote-filter-list .ft-remote-filter-option') || [])];
+            if (!buttons.length) return;
+            (boundary === 'last' ? buttons[buttons.length - 1] : buttons[0])?.focus();
         },
         choose(value, label) {
             this.selectedValue = String(value || '');

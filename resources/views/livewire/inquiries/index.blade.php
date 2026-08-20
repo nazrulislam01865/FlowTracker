@@ -34,6 +34,17 @@
         && $dateTo === ''
         && ! $hideCompleted;
     $inquiryAnyFilterActive = $metricFilter !== '' || ! $inquiryToolbarIsClear;
+    $canDeleteInquiries = auth()->user()->canModule('inquiries', 'delete');
+    $inquiryExportQuery = array_filter([
+        'search' => filled($search) ? $search : null,
+        'quick' => $quick !== 'all' ? $quick : null,
+        'metric' => filled($metricFilter) ? $metricFilter : null,
+        'client' => filled($listClient) ? $listClient : null,
+        'status' => filled($listStatus) ? $listStatus : null,
+        'hide_completed' => $hideCompleted ? 1 : null,
+        'date_from' => filled($dateFrom) ? $dateFrom : null,
+        'date_to' => filled($dateTo) ? $dateTo : null,
+    ], static fn ($value) => $value !== null && $value !== '');
 @endphp
 
 <div class="ft-inquiry-prototype">
@@ -45,6 +56,14 @@
             <div class="pagehead">
                 <div><h1>Inquiries</h1><p>Manage client requests from first inquiry through tasks, conversion, or closure.</p></div>
                 <div class="actions">
+                    @if(auth()->user()->canModule('reports', 'export'))
+                        <x-ui.list-export-period-modal
+                            :action="route('inquiries.export')"
+                            :filters="$inquiryExportQuery"
+                            button-class="secondary ft-list-export-button"
+                            entity-label="inquiries"
+                        />
+                    @endif
                     @if(auth()->user()->canModule('inquiries','create'))<button class="primary" type="button" wire:click="openCreate">＋ New Inquiry</button>@endif
                 </div>
             </div>
@@ -60,22 +79,32 @@
 
             <div class="shell inquiry-list-v2">
                 <div class="toolbar">
-                    <div class="search"><span>⌕</span><input wire:model.live.debounce.350ms="search" placeholder="Search inquiry, title, client, task or assignee"></div>
-                    <div class="filters inquiry-filter-controls">
-                        <button class="chip {{ $metricFilter === '' && $inquiryToolbarIsClear ? 'active' : '' }}" type="button" wire:click="setQuick('all')" aria-pressed="{{ $metricFilter === '' && $inquiryToolbarIsClear ? 'true' : 'false' }}">All</button>
-                        <button class="chip ft-inquiry-attention-filter {{ $quick === 'attention' ? 'active' : '' }}" type="button" wire:click="setQuick('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}">
+                    <x-ui.search-input
+                        class="search ft-inquiry-search-control"
+                        property="search"
+                        :value="$search"
+                        label="Search inquiries"
+                        placeholder="Search inquiry, title, client, task or assignee"
+                        :debounce="350"
+                        :hide-label="true"
+                    />
+                    <x-ui.filter-bar class="filters inquiry-filter-controls" label="Inquiry filters">
+                        <x-ui.filter-chip class="chip" :active="$metricFilter === '' && $inquiryToolbarIsClear" wire:click="setQuick('all')">All</x-ui.filter-chip>
+                        <x-ui.filter-chip class="chip ft-inquiry-attention-filter" :active="$quick === 'attention'" wire:click="setQuick('attention')">
                             <span aria-hidden="true">⚠</span> Attention needed
-                        </button>
-                        <label class="ft-inquiry-status-filter">
-                            <select wire:model.live="listStatus" aria-label="Filter inquiries by task status">
-                                <option value="">All task statuses</option>
-                                @foreach($listStatusOptions as $statusOption)
-                                    <option value="{{ $statusOption }}">{{ $statusOption }}</option>
-                                @endforeach
-                            </select>
-                            <span class="ft-inquiry-status-filter-chevron" aria-hidden="true">⌄</span>
-                        </label>
-                        <x-ui.remote-filter
+                        </x-ui.filter-chip>
+                        <x-ui.search-select
+                            class="ft-inquiry-status-filter"
+                            label="Task status"
+                            property="listStatus"
+                            :value="$listStatus"
+                            placeholder="All task statuses"
+                            :options="collect($listStatusOptions)->map(fn ($statusOption) => ['id' => $statusOption, 'label' => $statusOption])"
+                            :hide-label="true"
+                            :fixed-menu="true"
+                            :menu-width="220"
+                        />
+                        <x-ui.search-select
                             class="ft-inquiry-list-client-filter"
                             label="Client"
                             property="listClient"
@@ -95,7 +124,7 @@
                             <span class="completed-check" aria-hidden="true">✓</span>
                             <span>Hide completed</span>
                         </label>
-                        <x-ui.date-range-filter
+                        <x-ui.date-range
                             class="ft-inquiry-date-range"
                             from-property="dateFrom"
                             to-property="dateTo"
@@ -105,16 +134,15 @@
                             from-label="From"
                             to-label="To"
                         />
-                        <button
+                        <x-ui.filter-reset
                             class="chip ft-inquiry-clear-filter"
-                            type="button"
-                            wire:click="clearFilters"
-                            @disabled(! $inquiryAnyFilterActive)
+                            action="clearFilters"
+                            label="Clear filter"
+                            icon="×"
+                            :disabled="! $inquiryAnyFilterActive"
                             aria-label="Clear active inquiry filter"
-                        >
-                            <span aria-hidden="true">×</span> Clear filter
-                        </button>
-                    </div>
+                        />
+                    </x-ui.filter-bar>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">
                     <div class="listhead">
@@ -131,7 +159,6 @@
                         <div>Started At</div>
                         <div>Progress</div>
                         <div>Updated At</div>
-                        <div>View</div>
                         <div aria-label="Actions"></div>
                     </div>
                     <div class="inquiry-list-body">
@@ -217,9 +244,7 @@
                                     <span class="sub">{{ $row['updatedTime'] }}</span>
                                 </div>
                                 <div class="ft-inquiry-mobile-separator ft-inquiry-mobile-separator-before-footer" aria-hidden="true"></div>
-                                <div class="cell ft-inquiry-list-view-cell" data-label="View"><a class="openbtn openbtn-link" href="{{ route('inquiries.index', ['open' => $row['id']]) }}" aria-label="View details for {{ $row['number'] }}" wire:navigate><span class="ft-inquiry-view-label-desktop">View</span><span class="ft-inquiry-view-label-mobile">Details</span><span aria-hidden="true">→</span></a></div>
-                                @if(auth()->user()->canModule('inquiries', 'delete'))
-                                    <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
+                                <div class="cell ft-inquiry-list-actions-cell" data-label="Actions" x-data="{ open: false }">
                                         <button
                                             class="ft-inquiry-row-action-trigger"
                                             type="button"
@@ -232,7 +257,7 @@
                                                 if (menu.matches(':popover-open')) { menu.hidePopover(); return; }
                                                 const rect = $el.getBoundingClientRect();
                                                 const menuWidth = 166;
-                                                const menuHeight = 46;
+                                                const menuHeight = {{ $canDeleteInquiries ? 88 : 46 }};
                                                 const edge = 10;
                                                 const gap = 6;
                                                 const left = Math.min(window.innerWidth - menuWidth - edge, Math.max(edge, rect.right - menuWidth));
@@ -251,15 +276,25 @@
                                             role="menu"
                                             x-on:toggle="open = $event.newState === 'open'"
                                         >
-                                            <button type="button" role="menuitem" wire:click="deleteInquiry({{ $row['id'] }})" wire:confirm="Delete {{ $row['number'] }}? This removes the inquiry from active lists. Any converted order remains available.">
-                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>
-                                                <span>Delete inquiry</span>
-                                            </button>
+                                            <a
+                                                class="ft-inquiry-row-action-view"
+                                                href="{{ route('inquiries.index', ['open' => $row['id']]) }}"
+                                                role="menuitem"
+                                                wire:navigate
+                                                x-on:click="$refs.menu.hidePopover()"
+                                                aria-label="View details for {{ $row['number'] }}"
+                                            >
+                                                <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 12s3.5-6 9.5-6 9.5 6 9.5 6-3.5 6-9.5 6-9.5-6-9.5-6Z"/><circle cx="12" cy="12" r="2.5"/></svg>
+                                                <span>View</span>
+                                            </a>
+                                            @if($canDeleteInquiries)
+                                                <button class="ft-inquiry-row-action-danger" type="button" role="menuitem" x-on:click="$refs.menu.hidePopover()" wire:click="deleteInquiry({{ $row['id'] }})" wire:confirm="Delete {{ $row['number'] }}? This removes the inquiry from active lists. Any converted order remains available.">
+                                                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3m-8 0 1 13h8l1-13M10 11v5m4-5v5"/></svg>
+                                                    <span>Delete inquiry</span>
+                                                </button>
+                                            @endif
                                         </div>
                                     </div>
-                                @else
-                                    <div class="cell ft-inquiry-list-actions-cell" aria-hidden="true"></div>
-                                @endif
                             </article>
                         @empty
                             <div class="ft-inquiry-list-empty">No matching inquiries.</div>
@@ -327,7 +362,7 @@
                             <div class="ft-inquiry-create-field">
                                 <label>Client *</label>
                                 <div class="ft-inquiry-client-control-row">
-                                    <x-ui.remote-filter
+                                    <x-ui.search-select
                                         class="ft-create-remote-select inquiry-create-remote ft-inquiry-client-selector"
                                         label="Client"
                                         property="clientId"
@@ -377,7 +412,7 @@
 
                             <div class="ft-inquiry-create-field">
                                 <label>Assigned to *</label>
-                                <x-ui.remote-filter
+                                <x-ui.search-select
                                     class="ft-create-remote-select inquiry-create-remote ft-inquiry-owner-selector"
                                     label="Assigned to"
                                     property="createOwnerId"

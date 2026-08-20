@@ -37,12 +37,15 @@ class ProgressivePageRenderingTest extends TestCase
         $component = file_get_contents(app_path('Livewire/Jobs/Index.php'));
         $view = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
         $placeholder = file_get_contents(resource_path('views/components/jobs/create-section-placeholder.blade.php'));
+        $products = file_get_contents(resource_path('views/components/jobs/create-products.blade.php'));
 
         $this->assertStringContainsString('function loadCreateSection(string $section)', $component);
         $this->assertStringContainsString('createCatalogReady', $component);
         $this->assertStringContainsString('createAssignmentReady', $component);
         $this->assertStringContainsString('createWorkflowReady', $component);
-        $this->assertStringContainsString('@if($catalogReady)', $view);
+        $this->assertStringContainsString("@include('components.jobs.create-products')", $view);
+        $this->assertStringContainsString('@if($catalogReady && $canUseOrderProductSelector)', $products);
+        $this->assertStringContainsString('@elseif(!$catalogReady)', $products);
         $this->assertStringContainsString('@if($assignmentReady)', $view);
         $this->assertStringContainsString('@if($workflowReady)', $view);
         $this->assertStringContainsString('IntersectionObserver', $placeholder);

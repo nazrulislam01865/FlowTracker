@@ -1,0 +1,6 @@
+/**
+ * Dashboard compatibility entry.
+ * Kept route-scoped because the old layout loaded this stylesheet only for
+ * Dashboard / Team Performance routes.
+ */
+@import '../../legacy/compatibility/flowtrack-dashboard-prototype.css';

@@ -620,8 +620,11 @@
 
     <section class="ft-workflow-mini-line ft-overview-workflow-line">
         @foreach($job->workflow->phases as $phase)
-            <button type="button" class="{{ $phase->sequence < $job->phase->sequence ? 'done' : ($phase->id === $job->phase->id ? 'current' : '') }}" style="{{ \App\Support\MasterColor::style($phase->color) }}" disabled aria-disabled="true" title="{{ $phase->name }}">
-                <span>{{ $phase->sequence < $job->phase->sequence ? '✓' : $phase->sequence }}</span><small>{{ $phase->short_name }}</small>
+            @php
+                $phaseComplete = \App\Support\JobDetailPresenter::isPhaseComplete($job, $phase);
+            @endphp
+            <button type="button" class="{{ $phaseComplete ? 'done' : '' }}" style="{{ \App\Support\MasterColor::style($phase->color) }}" disabled aria-disabled="true" @if((int) $phase->id === (int) $job->workflow_phase_id) aria-current="step" @endif title="{{ $phase->name }}{{ $phaseComplete ? ' · Complete' : '' }}">
+                <span>{{ $phaseComplete ? '✓' : $phase->sequence }}</span><small>{{ $phase->short_name }}</small>
             </button>
         @endforeach
     </section>
@@ -753,7 +756,7 @@
                                 $canAssignTask = $taskAccess->canAssignTask(auth()->user(), $task);
                                 $canDeleteTask = $taskAccess->can(auth()->user(), 'tasks', 'delete');
                                 $taskDocuments = $job->documents->where('task_id', $task->id)->sortByDesc('created_at')->values();
-                                $taskLinks = $task->relationLoaded('links') ? $task->links : collect();
+                                $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
                                 $taskRequirement = $requiredDocuments->first(fn ($requirement) => (int) ($requirement->task?->id ?? 0) === (int) $task->id);
                                 $effectiveTaskDescription = $task->description ?: $task->setupTemplate?->description;
                                 $taskStripeClass = $loop->odd ? 'is-green' : 'is-white';
@@ -764,7 +767,12 @@
                                     <button class="ft-inline-task-link" type="button" wire:click="openTask({{ $task->id }})">{{ $task->title }}</button>
                                     <span class="ft-order-task-description">{{ $effectiveTaskDescription ? \Illuminate\Support\Str::limit(strip_tags((string) $effectiveTaskDescription), 110) : 'No instructions added.' }}</span>
                                     @if($taskRequirement)
-                                        <span class="ft-order-task-required-file {{ $taskRequirement->complete ? 'is-complete' : '' }}">{{ $taskRequirement->complete ? '✓ File submitted' : '□ Required file: '.$taskRequirement->name }}</span>
+                                        @php
+                                            $requirementLabel = $taskRequirement->complete
+                                                ? (((int) ($taskRequirement->document_count ?? 0)) > 0 ? '✓ File submitted' : '✓ Link submitted')
+                                                : '□ Required file or link: '.$taskRequirement->name;
+                                        @endphp
+                                        <span class="ft-order-task-required-file {{ $taskRequirement->complete ? 'is-complete' : '' }}">{{ $requirementLabel }}</span>
                                     @endif
                                 </div>
                                 <span
@@ -830,7 +838,7 @@
                                         $taskStatusColor = app(\App\Services\MasterDataService::class)->colorFor('order_task_status', (string) $task->status);
                                     @endphp
                                     <select data-master-color-select class="ft-inline-task-status {{ $taskStatusColor ? 'ft-master-color' : \App\Support\JobDetailPresenter::taskStatusClass($task->status) }}" style="{{ \App\Support\MasterColor::style($taskStatusColor) }}" x-model="draftValue"
-                                        x-on:change="window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue))"
+                                        x-on:change="window.FlowTrackMasterColor?.applySelect($event.target); commit($event.target.value, selectedLabel($event), () => $wire.updateTaskStatusFromJob({{ $task->id }}, draftValue)).then(ok => { if(ok) $wire.$refresh(); })"
                                         :disabled="status === 'saving'" @disabled(!$canEditTask)>
                                         @foreach($taskStatuses as $status)<option value="{{ $status }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $status) }}">{{ $status }}</option>@endforeach
                                     </select>
@@ -845,7 +853,7 @@
                                                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><path d="M14 2v6h6"/><path d="M8 13h8M8 17h6"/></svg>
                                                 </button>
                                             @endif
-                                            <button class="ft-order-task-resource-add-icon {{ (int) $overviewTaskLinkFormTaskId === (int) $task->id ? 'is-active' : '' }}" type="button" wire:click="openOverviewTaskLinkForm({{ $task->id }})" title="Add link" aria-label="Add external link to {{ $task->title }}">
+                                            <button class="ft-order-task-resource-add-icon {{ (int) $overviewTaskLinkFormTaskId === (int) $task->id ? 'is-active' : '' }}" type="button" wire:click.stop="openOverviewTaskLinkForm({{ $task->id }})" wire:loading.attr="disabled" wire:target="openOverviewTaskLinkForm({{ $task->id }})" title="Add link" aria-label="Add external link to {{ $task->title }}">
                                                 <span class="ft-order-task-resource-plus">+</span>
                                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
                                             </button>
@@ -868,12 +876,12 @@
                             </div>
 
                             @if((int) $overviewTaskLinkFormTaskId === (int) $task->id || $taskDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
-                                <div class="ft-order-task-resource-list {{ $taskStripeClass }}" wire:key="job-task-resources-{{ $task->id }}">
+                                <div class="ft-order-task-resource-list {{ $taskStripeClass }}" wire:key="job-task-resources-{{ $task->id }}-{{ $taskDocuments->count() }}-{{ $taskLinks->count() }}">
                                     @if((int) $overviewTaskLinkFormTaskId === (int) $task->id && $canEditTask)
                                         <form class="ft-order-task-link-form" wire:submit.prevent="saveOverviewTaskLink({{ $task->id }})" wire:key="job-task-link-form-{{ $task->id }}">
                                             <div class="ft-order-task-link-input-wrap">
                                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
-                                                <input type="text" inputmode="url" wire:model="overviewTaskLinkUrl" placeholder="Paste link, e.g. https://drive.google.com/..." autocomplete="url" autofocus aria-label="External link">
+                                                <input type="text" inputmode="url" wire:model="overviewTaskLinkUrl" placeholder="Paste link, e.g. https://drive.google.com/..." autocomplete="url" autofocus aria-label="External link" x-on:keydown.escape.prevent="$wire.cancelOverviewTaskLinkForm()">
                                             </div>
                                             <div class="ft-order-task-link-form-actions">
                                                 <button class="secondary" type="button" wire:click="cancelOverviewTaskLinkForm">Cancel</button>

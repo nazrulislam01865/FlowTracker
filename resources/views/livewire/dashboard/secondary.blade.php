@@ -41,7 +41,7 @@
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Assignee performance</h2><div class="ft-panel-note">Open and completed Inquiry + Order tasks for the selected reporting cohort</div></div>{{-- Reports Details link disabled with the Reports page. --}}</div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-assignee-table">
-                    <colgroup><col style="width:29%"><col style="width:16%"><col style="width:18%"><col style="width:19%"><col style="width:18%"></colgroup>
+                    <colgroup><col class="ft-dashboard-col--29"><col class="ft-dashboard-col--16"><col class="ft-dashboard-col--18"><col class="ft-dashboard-col--19"><col class="ft-dashboard-col--18"></colgroup>
                     <thead><tr><th>Assignee</th><th>Open</th><th>Completed</th><th>On time</th><th>Workload</th></tr></thead>
                     <tbody>
                         @forelse($assigneePerformance as $person)
@@ -95,7 +95,7 @@
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing Orders</h2><div class="ft-panel-note">Current stage, health and exception flags</div></div><a class="ft-link" href="{{ route('jobs.index') }}" wire:navigate>View orders</a></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-jobs-table">
-                    <colgroup><col style="width:31%"><col style="width:18%"><col style="width:23%"><col style="width:18%"><col style="width:10%"></colgroup>
+                    <colgroup><col class="ft-dashboard-col--31"><col class="ft-dashboard-col--18"><col class="ft-dashboard-col--23"><col class="ft-dashboard-col--18"><col class="ft-dashboard-col--10"></colgroup>
                     <thead><tr><th>Order</th><th>Client</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
                     <tbody>
                         @forelse($ongoingJobs as $job)
@@ -121,7 +121,7 @@
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Ongoing tasks</h2><div class="ft-panel-note">Tasks before Done with current work status and flags</div></div>@if($administrator)<a class="ft-link" href="{{ route('all-tasks') }}" wire:navigate>Open all tasks</a>@endif</div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-tasks-table">
-                    <colgroup><col style="width:29%"><col style="width:13%"><col style="width:17%"><col style="width:20%"><col style="width:13%"><col style="width:8%"></colgroup>
+                    <colgroup><col class="ft-dashboard-col--29"><col class="ft-dashboard-col--13"><col class="ft-dashboard-col--17"><col class="ft-dashboard-col--20"><col class="ft-dashboard-col--13"><col class="ft-dashboard-col--8"></colgroup>
                     <thead><tr><th>Task</th><th>Order</th><th>Assignee</th><th>Status</th><th>Flag</th><th>View</th></tr></thead>
                     <tbody>
                         @forelse($ongoingTasks as $task)
@@ -165,7 +165,7 @@
             <div class="ft-panel-head"><div><h2 class="ft-panel-title">Client portfolio</h2><div class="ft-panel-note">Active work, inquiry volume and delivery health</div></div><a class="ft-link" href="{{ route('clients.index') }}" wire:navigate>All clients</a></div>
             <div class="ft-table-wrap">
                 <table class="ft-table responsive ft-dashboard-clients-table">
-                    <colgroup><col style="width:28%"><col style="width:15%"><col style="width:18%"><col style="width:19%"><col style="width:20%"></colgroup>
+                    <colgroup><col class="ft-dashboard-col--28"><col class="ft-dashboard-col--15"><col class="ft-dashboard-col--18"><col class="ft-dashboard-col--19"><col class="ft-dashboard-col--20"></colgroup>
                     <thead><tr><th>Client</th><th>Orders</th><th>Inquiries</th><th>At risk</th><th>On time</th></tr></thead>
                     <tbody>
                         @forelse($clientPortfolio as $portfolioClient)

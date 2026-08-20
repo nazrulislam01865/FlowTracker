@@ -53,7 +53,7 @@
                 </label>
             @elseif($level === 'product')
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select ft-taxonomy-search-select"
                         label="Main category"
                         property="newProductCategoryMain"
@@ -81,7 +81,7 @@
                 </label>
             @elseif($level === 'sub')
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select ft-taxonomy-search-select"
                         label="Product category"
                         property="newSubcategoryProductCategoryId"

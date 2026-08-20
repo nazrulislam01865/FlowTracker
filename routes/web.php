@@ -14,6 +14,7 @@ use App\Http\Controllers\FilterOptionController;
 use App\Http\Controllers\JobsController;
 use App\Http\Controllers\InquiriesController;
 use App\Http\Controllers\InvoicePdfController;
+use App\Http\Controllers\ListExportController;
 use App\Http\Controllers\FinanceAttachmentController;
 use App\Http\Controllers\MasterDataController;
 use App\Http\Controllers\MyWorkController;
@@ -86,16 +87,23 @@ Route::middleware('auth')->group(function () {
         ));
     })->name('realtime.auth');
     Route::redirect('/', '/dashboard');
+
+    if (app()->environment('local', 'testing')) {
+        Route::view('/_dev/ui-kit', 'dev.ui-kit')->name('dev.ui-kit');
+    }
+
     Route::get('/dashboard', DashboardController::class)->middleware('permission:dashboard.view')->name('dashboard');
     Route::get('/team-performance-report', TeamPerformanceReportController::class)->middleware('permission:reports.view')->name('team-performance.report');
-    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', 'clients|jobs|users|product-categories|products|workflows|priorities|task-statuses|document-categories|document-category-records|department-records|departments|countries|phone-country-codes|job-statuses|job-healths|phases')->name('filter-options.index');
+    Route::get('/filter-options/{type}', FilterOptionController::class)->where('type', '[a-z-]+')->name('filter-options.index');
     Route::get('/my-work', MyWorkController::class)->middleware('permission:tasks.view')->name('my-work');
     Route::get('/inquiries', InquiriesController::class)->middleware('permission:inquiries.view')->name('inquiries.index');
+    Route::get('/inquiries/export', [ListExportController::class, 'inquiries'])->middleware(['permission:inquiries.view', 'permission:reports.export'])->name('inquiries.export');
     Route::get('/orders/bulk-import', [BulkOrderImportController::class, 'index'])->middleware('permission:jobs.create')->name('orders.bulk-import');
     Route::post('/orders/bulk-import/validate', [BulkOrderImportController::class, 'validateUpload'])->middleware('permission:jobs.create')->name('orders.bulk-import.validate');
     Route::post('/orders/bulk-import/revalidate', [BulkOrderImportController::class, 'revalidate'])->middleware('permission:jobs.create')->name('orders.bulk-import.revalidate');
     Route::post('/orders/bulk-import/import', [BulkOrderImportController::class, 'import'])->middleware('permission:jobs.create')->name('orders.bulk-import.import');
     Route::get('/orders/bulk-import/template', [BulkOrderImportController::class, 'template'])->middleware('permission:jobs.create')->name('orders.bulk-import.template');
+    Route::get('/orders/export', [ListExportController::class, 'orders'])->middleware(['permission:jobs.view', 'permission:reports.export'])->name('orders.export');
     Route::get('/orders', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/jobs', function (\Illuminate\Http\Request $request) {
         return redirect()->route('jobs.index', $request->query());

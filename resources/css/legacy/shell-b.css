@@ -1,0 +1,16 @@
+/** Phase 3 post-dashboard compatibility bundle B. */
+@import './compatibility/flowtrack-inquiry-intelligence.css';
+@import './compatibility/flowtrack-inquiries.css';
+@import './compatibility/flowtrack-my-work.css';
+@import './compatibility/flowtrack-master-colors.css';
+@import './compatibility/flowtrack-master-data.css';
+@import './compatibility/flowtrack-product-categories.css';
+@import './compatibility/flowtrack-order-create-products.css';
+@import './compatibility/flowtrack-create-order.css';
+@import './compatibility/flowtrack-order-detail-header.css';
+@import './compatibility/flowtrack-task-detail-attachments.css';
+@import './compatibility/flowtrack-order-products-detail.css';
+@import './compatibility/flowtrack-order-finance.css';
+@import './compatibility/flowtrack-documents-archive.css';
+@import './compatibility/flowtrack-bulk-order-import.css';
+@import './compatibility/flowtrack-management-theme.css';

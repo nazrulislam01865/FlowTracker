@@ -47,7 +47,8 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('rich-text-images/([A-Za-z0-9-]+', $richText);
         $this->assertStringContainsString("route('rich-text-images.show', ['filename' => \$imageMatch[1]], false)", $richText);
         $this->assertStringContainsString('RichTextService::class)->plainText', $mentions);
-        $this->assertStringContainsString('RichTextService::class)->safeHtml', $mentions);
+        $this->assertStringContainsString('$richText = app(RichTextService::class);', $mentions);
+        $this->assertStringContainsString('$richText->safeHtml($text)', $mentions);
     }
 
     public function test_rich_mention_notifications_keep_the_original_comment_for_existing_deep_links(): void
@@ -83,9 +84,9 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('richTextOverrideHtml', $inlineEditing);
         $this->assertStringContainsString('displayHtml', $jobsIndex);
         $this->assertStringContainsString('displayHtml', $inquiriesIndex);
-        $this->assertStringNotContainsString("saveRichText($refs.descriptionEditor, 'No order description recorded.', (clean) => $wire.updateJobTextField({{ $job->id }}, 'description', clean)).then", $jobOverview);
-        $this->assertStringNotContainsString("saveRichText($refs.description, 'No description has been provided for this task.', (clean) => $wire.updateSelectedTaskField('description', clean)).then", $taskDetail);
-        $this->assertStringNotContainsString("saveRichText($refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => $wire.updateInquiryField('requirement_notes', clean)).then", $inquiries);
+        $this->assertStringNotContainsString("saveRichText(\$refs.descriptionEditor, 'No order description recorded.', (clean) => \$wire.updateJobTextField({{ \$job->id }}, 'description', clean)).then", $jobOverview);
+        $this->assertStringNotContainsString("saveRichText(\$refs.description, 'No description has been provided for this task.', (clean) => \$wire.updateSelectedTaskField('description', clean)).then", $taskDetail);
+        $this->assertStringNotContainsString("saveRichText(\$refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => \$wire.updateInquiryField('requirement_notes', clean)).then", $inquiries);
         $this->assertStringNotContainsString('x-ref="descriptionEditor" x-model="draftValue"', $jobOverview);
         $this->assertStringNotContainsString('x-ref="description" x-model="draftValue"', $taskDetail);
         $this->assertStringNotContainsString('x-ref="inquiryDescription" x-model="draftValue"', $inquiries);
@@ -114,7 +115,7 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('data-rich-image-zoom-out', $runtime);
         $this->assertStringContainsString("Route::get('/rich-text-images/{filename}/download'", $routes);
         $this->assertStringContainsString('public function download(string $filename)', $controller);
-        $this->assertStringContainsString("->download($path, $filename", $controller);
+        $this->assertStringContainsString("->download(\$path, \$filename", $controller);
         $this->assertStringContainsString('.ft-rich-image-viewer', $css);
         $this->assertStringContainsString('cursor:zoom-in', $css);
     }

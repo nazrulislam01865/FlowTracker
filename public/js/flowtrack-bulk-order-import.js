@@ -315,11 +315,11 @@
 
     const demoRows = (withError = false) => {
         const rows = [
-            ['CL-011', 'REF-10001', 'No', '', 'Sample merchandise order', 'Conference merchandise for August event.', '', '', '2026-08-25', '2026-08-23', 'Normal', 'Urgent', 'Confirm packing before dispatch.'],
-            ['CL-014', 'REF-10002', 'Yes', 'REF-09940', 'Repeat lanyard order', 'Repeat the previous approved design.', '', '', '2026-08-28', '2026-08-26', 'Super Urgent', 'Normal', 'Keep colors identical to prior order.'],
+            ['CL-011', 'REF-10001', 'No', '', 'Sample merchandise order', 'Conference merchandise for August event.', '123 Main Street, Los Angeles, CA, USA', '+1 213 555 0198', '90012', '', '', '2026-08-25', '2026-08-23', 'Normal', 'Urgent', 'Confirm packing before dispatch.'],
+            ['CL-014', 'REF-10002', 'Yes', 'REF-09940', 'Repeat lanyard order', 'Repeat the previous approved design.', '88 Market Road, Toronto, ON, Canada', '', 'M5V 2T6', '', '', '2026-08-28', '2026-08-26', 'Super Urgent', 'Normal', 'Keep colors identical to prior order.'],
         ];
-        if (withError) rows.push(['', '', 'Yes', '', '', '', '', 'abc', '2026-08-40', '', 'Extreme', '', 'This row intentionally demonstrates validation.']);
-        const header = ['Client ID *', 'Reference Order No.', 'Repeat Order? Yes / No', 'Repeat Order No.', 'Order Title *', 'Order Description', 'Product ID', 'Product Quantity', 'Customer Requested Delivery Date', 'Estimated Delivery Date', 'Production Urgency', 'Shipment Urgent', 'Notes'];
+        if (withError) rows.push(['', '', 'Yes', '', '', '', '', '+999 12345', '', '', 'abc', '2026-08-40', '', 'Extreme', '', 'This row intentionally demonstrates validation.']);
+        const header = ['Client ID *', 'Reference Order No.', 'Repeat Order? Yes / No', 'Repeat Order No.', 'Order Title *', 'Order Description', 'Shipping Address *', 'Phone Number (with country code)', 'Postal Code *', 'Product ID', 'Product Quantity', 'Customer Requested Delivery Date', 'Estimated Delivery Date', 'Production Urgency', 'Shipment Urgent', 'Notes'];
         const csv = [header, ...rows].map((row) => row.map(csvCell).join(',')).join('\r\n');
         return new File([csv], withError ? 'Order-import-with-errors.csv' : 'FlowTrack-bulk-order-sample.csv', { type: 'text/csv' });
     };

@@ -26,6 +26,9 @@ class BulkOrderImportService
         'repeat_order_no' => ['repeatorderno', 'repeatordernumber', 'previousreferencenumber'],
         'title' => ['ordertitle'],
         'description' => ['orderdescription', 'description'],
+        'shipping_address' => ['shippingaddress', 'deliveryaddress'],
+        'shipping_phone' => ['phonenumberwithcountrycode', 'shippingphonewithcountrycode', 'shippingphonenumber', 'shippingphone', 'phonenumber'],
+        'shipping_postal_code' => ['postalcode', 'shippingpostalcode', 'shippingzipcode', 'zipcode', 'zip'],
         'product_id' => ['productid', 'productcode', 'sku'],
         'product_quantity' => ['productquantity', 'quantity', 'qty'],
         'customer_delivery' => ['customerrequesteddeliverydate', 'customerrequireddeliverydate', 'requireddeliverydate', 'deliverydate'],
@@ -82,27 +85,37 @@ class BulkOrderImportService
         $referenceCounts = $rows->pluck('ref')->map(fn ($value) => trim((string) $value))->filter()->countBy();
         $clientMaps = $this->clientMaps($actor);
         $productMaps = $this->productMaps();
+        $phoneCountryCodes = $this->activePhoneCountryCodes();
         $productionUrgencyMap = $this->urgencyMap('production_urgency');
         $shipmentUrgencyMap = $this->urgencyMap('shipment_urgency');
         $templates = $this->workflowTemplates();
         $existingByReference = $this->existingJobsByReferences($rows->pluck('ref')->map(fn ($value) => trim((string) $value))->filter()->unique()->all());
 
-        $validated = $rows->map(function (array $row) use ($actor, $config, $referenceCounts, $clientMaps, $productMaps, $productionUrgencyMap, $shipmentUrgencyMap, $templates, $existingByReference): array {
+        $validated = $rows->map(function (array $row) use ($actor, $config, $referenceCounts, $clientMaps, $productMaps, $phoneCountryCodes, $productionUrgencyMap, $shipmentUrgencyMap, $templates, $existingByReference): array {
             $errors = [];
             $warnings = [];
             $action = 'create';
 
-            foreach (['client_id', 'ref', 'is_repeat', 'repeat_order_no', 'title', 'description', 'product_id', 'product_quantity', 'customer_delivery', 'estimated_delivery', 'production_urgency', 'shipment_urgency', 'notes'] as $field) {
+            foreach (['client_id', 'ref', 'is_repeat', 'repeat_order_no', 'title', 'description', 'shipping_address', 'shipping_phone', 'shipping_postal_code', 'product_id', 'product_quantity', 'customer_delivery', 'estimated_delivery', 'production_urgency', 'shipment_urgency', 'notes'] as $field) {
                 $row[$field] = trim((string) ($row[$field] ?? ''));
             }
 
             if ($row['client_id'] === '') $errors[] = 'Client ID is required';
             if ($row['title'] === '') $errors[] = 'Order Title is required';
+            if ($row['shipping_address'] === '') $errors[] = 'Shipping Address is required';
+            if ($row['shipping_postal_code'] === '') $errors[] = 'Postal Code is required';
             if (mb_strlen($row['title']) > 255) $errors[] = 'Order Title must be 255 characters or fewer';
             if (mb_strlen($row['ref']) > 255) $errors[] = 'Reference Order No. must be 255 characters or fewer';
             if (mb_strlen($row['repeat_order_no']) > 255) $errors[] = 'Repeat Order No. must be 255 characters or fewer';
             if (mb_strlen($row['description']) > 10000) $errors[] = 'Order Description is too long';
+            if (mb_strlen($row['shipping_address']) > 2000) $errors[] = 'Shipping Address must be 2,000 characters or fewer';
+            if (mb_strlen($row['shipping_postal_code']) > 30) $errors[] = 'Postal Code must be 30 characters or fewer';
             if (mb_strlen($row['notes']) > 10000) $errors[] = 'Notes must be 10,000 characters or fewer';
+
+            $phone = $this->resolveShippingPhone($row['shipping_phone'], $phoneCountryCodes);
+            if ($phone['error']) $errors[] = $phone['error'];
+            $row['shipping_phone_country_code_resolved'] = $phone['country_code'];
+            $row['shipping_phone_resolved'] = $phone['phone'];
 
             $repeatRaw = $row['is_repeat'];
             if ($repeatRaw === '') {
@@ -396,6 +409,12 @@ class BulkOrderImportService
         if (blank($row['workflow_resolved_id'] ?? null) || blank($row['workflow_phase_id'] ?? null)) {
             throw new RuntimeException('An Order workflow must be resolved before this order can be imported.');
         }
+        if (blank($row['shipping_address'] ?? null)) {
+            throw new RuntimeException('Shipping Address is required before this order can be imported.');
+        }
+        if (blank($row['shipping_postal_code'] ?? null)) {
+            throw new RuntimeException('Postal Code is required before this order can be imported.');
+        }
 
         $items = [];
         if (filled($row['product_resolved_id'] ?? null)) {
@@ -428,6 +447,11 @@ class BulkOrderImportService
             'production_urgency_ids' => $row['production_urgency_ids'],
             'shipment_urgency_ids' => $row['shipment_urgency_ids'],
             'description' => blank($row['description']) ? null : $row['description'],
+            'shipping_address' => $row['shipping_address'],
+            'shipping_phone_country_code' => $row['shipping_phone_country_code_resolved'] ?? null,
+            'shipping_phone' => $row['shipping_phone_resolved'] ?? null,
+            'shipping_postal_code' => $row['shipping_postal_code'],
+            'shipping_source_address_id' => null,
             'notes' => blank($row['notes']) ? null : $row['notes'],
             'received_date' => null,
             'supplier_id' => null,
@@ -461,6 +485,11 @@ class BulkOrderImportService
                 'delivery_date' => $row['customer_delivery_normalized'],
                 'estimated_delivery_date' => $row['estimated_delivery_normalized'],
                 'description' => app(RichTextService::class)->normalize($row['description'], 10000, 'description'),
+                'shipping_address' => $row['shipping_address'],
+                'shipping_phone_country_code' => $row['shipping_phone_country_code_resolved'] ?? null,
+                'shipping_phone' => $row['shipping_phone_resolved'] ?? null,
+                'shipping_postal_code' => $row['shipping_postal_code'],
+                'shipping_source_address_id' => null,
                 'notes' => blank($row['notes']) ? null : trim((string) $row['notes']),
                 'import_profile' => $row['import_profile_resolved'] ?? null,
                 'bulk_import_id' => $importNumber,
@@ -618,6 +647,67 @@ class BulkOrderImportService
             ?? $maps['by_code'][$key]
             ?? $maps['by_reference'][$key]
             ?? null;
+    }
+
+    /** @return array<int,string> */
+    private function activePhoneCountryCodes(): array
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType('phone_country_code')
+            ->active()
+            ->pluck('name')
+            ->map(fn ($value) => trim((string) $value))
+            ->filter(fn (string $value) => preg_match('/^\+[0-9]{1,4}$/', $value) === 1)
+            ->unique()
+            ->sortByDesc(fn (string $value) => strlen($value))
+            ->values()
+            ->all();
+    }
+
+    /** @return array{country_code:?string,phone:?string,error:?string} */
+    private function resolveShippingPhone(string $value, array $activeCodes): array
+    {
+        $value = trim($value);
+        if ($value === '') {
+            return ['country_code' => null, 'phone' => null, 'error' => null];
+        }
+
+        if (!str_starts_with($value, '+')) {
+            return [
+                'country_code' => null,
+                'phone' => null,
+                'error' => 'Phone Number must include an international country code, for example +880 1712345678',
+            ];
+        }
+
+        $countryCode = null;
+        foreach ($activeCodes as $code) {
+            if (str_starts_with($value, $code)) {
+                $countryCode = $code;
+                break;
+            }
+        }
+
+        if ($countryCode === null) {
+            return [
+                'country_code' => null,
+                'phone' => null,
+                'error' => 'Phone Number country code is not active in Phone Country Code Master Data',
+            ];
+        }
+
+        $phone = ltrim(trim(substr($value, strlen($countryCode))), " \t-");
+        $phoneDigits = preg_replace('/\D+/', '', $phone) ?? '';
+        if ($phone === '' || strlen($phoneDigits) < 5 || preg_match('/^[0-9()\s.\-]{5,40}$/', $phone) !== 1) {
+            return [
+                'country_code' => $countryCode,
+                'phone' => null,
+                'error' => 'Phone Number must contain a valid phone number after the country code',
+            ];
+        }
+
+        return ['country_code' => $countryCode, 'phone' => $phone, 'error' => null];
     }
 
     /** @return array<string,MasterRecord> */

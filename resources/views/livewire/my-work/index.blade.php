@@ -21,7 +21,7 @@
 
     @if($sourceFilter === 'inquiries' && $statusFilter !== '')
     <section class="work-view" aria-busy="false">
-        <div class="toolbar">
+        <div class="toolbar ft-list-filter-bar">
             <div class="toolbar-primary">
                 <label class="search-wrap">
                     <span class="search-icon">⌕</span>
@@ -79,7 +79,7 @@
             <x-ui.summary-card label="Needs Attention" :value="$metrics['attention'] ?? 0" value-expression="metrics.attention ?? '—'" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$quick === 'attention'" wire:click="setMetricFilter('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}" />
         </div>
 
-        <div class="toolbar">
+        <div class="toolbar ft-list-filter-bar">
             <div class="toolbar-primary">
                 <label class="search-wrap">
                     <span class="search-icon">⌕</span>

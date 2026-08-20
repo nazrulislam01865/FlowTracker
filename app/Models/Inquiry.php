@@ -32,6 +32,7 @@ class Inquiry extends Model
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function attentionRequester(): BelongsTo { return $this->belongsTo(User::class, 'attention_by'); }
     public function sourceTaskPack(): BelongsTo { return $this->belongsTo(TaskPack::class, 'source_task_pack_id'); }
     public function sourceWorkflow(): BelongsTo { return $this->belongsTo(WorkflowTemplate::class, 'source_workflow_template_id'); }
     public function convertedJob(): BelongsTo { return $this->belongsTo(FlowJob::class, 'converted_job_id'); }

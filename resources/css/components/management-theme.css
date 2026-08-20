@@ -1673,19 +1673,46 @@
     text-align: right
 }
 
-.ft-mgmt-team-report-pagination {
+.ft-mgmt-team-report-lazy {
     display: flex;
     align-items: center;
-    justify-content: flex-end;
-    gap: 8px;
+    justify-content: space-between;
+    gap: 12px;
+    min-height: 58px;
     padding: 11px 16px 13px;
     border-top: 1px solid #edf1f5;
     background: #fff;
     border-radius: 0 0 15px 15px
 }
 
-.ft-mgmt-team-report-pagination .ft-mgmt-priority-page-status {
-    margin-right: 2px
+.ft-mgmt-team-report-load-more {
+    min-width: 112px;
+    height: 34px;
+    padding: 0 14px;
+    border: 1px solid #cfdcf0;
+    border-radius: 9px;
+    background: #fff;
+    color: #155ce9;
+    font: inherit;
+    font-size: 9px;
+    font-weight: 800;
+    cursor: pointer
+}
+
+.ft-mgmt-team-report-load-more:hover {
+    border-color: #9cb9ec;
+    background: #f7faff
+}
+
+.ft-mgmt-team-report-load-more:disabled {
+    cursor: wait;
+    opacity: .58
+}
+
+.ft-mgmt-team-report-all-loaded {
+    color: var(--mgmt-muted);
+    font-size: 9px;
+    font-weight: 700
 }
 
 @media(max-width:1450px) {
@@ -1783,14 +1810,13 @@
         min-width: 0
     }
 
-    .ft-mgmt-team-report-pagination {
-        justify-content: space-between;
-        flex-wrap: wrap
+    .ft-mgmt-team-report-lazy {
+        align-items: stretch;
+        flex-direction: column
     }
 
-    .ft-mgmt-team-report-pagination .ft-mgmt-priority-page-status {
-        flex: 1 1 100%;
-        margin-right: 0
+    .ft-mgmt-team-report-load-more {
+        width: 100%
     }
 
     .ft-mgmt-team-filter-note {

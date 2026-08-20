@@ -47,5 +47,5 @@ unset($__defined_vars, $__key, $__value); ?>
         $color = $phase->color ?? null;
     }
 ?>
-<span <?php echo e($attributes->class(['ft-phase-color-label'])->merge(['style' => \App\Support\MasterColor::style($color), 'title' => $fullLabel])); ?>><?php echo e($label); ?></span>
+<span <?php echo e($attributes->class(['ft-phase-color-label', 'ft-badge--dynamic'])->merge(['style' => \App\Support\MasterColor::style($color), 'title' => $fullLabel])); ?>><?php echo e($label); ?></span>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/ui/phase-label.blade.php ENDPATH**/ ?>

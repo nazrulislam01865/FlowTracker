@@ -26,6 +26,7 @@
     $totalUnits = collect($rows)->sum(fn ($item) => (int) ($item['quantity'] ?? 0));
     $createProductUrl = route('master-data', ['group' => 'product', 'create' => 1]);
     $sectionError = $requiredErrorField ? $errors->first($requiredErrorField) : null;
+    $showCreateProductSuggestion = $productSearchValue !== '' && (int) $productResultTotal === 0;
 @endphp
 
 <section
@@ -139,23 +140,26 @@
                         </div>
                     @empty
                         <div class="ft-order-product-no-results">
-                            <strong>No products found</strong>
-                            <span>Try another product name or SKU.</span>
+                            <strong>{{ $showCreateProductSuggestion ? 'No matching product found.' : 'No products found' }}</strong>
+                            <span>{{ $showCreateProductSuggestion ? 'You can create a new product from this search.' : 'Try another product name or SKU.' }}</span>
+                            @if($showCreateProductSuggestion && $canCreateCatalogProduct)
+                                <button type="button" class="ft-order-product-select-button" wire:click="openCreateOrderProductModalFromSearch">Create new product</button>
+                            @endif
                         </div>
                     @endforelse
                 </div>
 
                 <div class="ft-order-product-results-footer">
                     <span>Use &uarr; &darr; to navigate &nbsp;&middot;&nbsp; Enter to select</span>
-                    @if($canCreateCatalogProduct)
-                        <a href="{{ $createProductUrl }}">Can't find it? <b>Create new product</b></a>
+                    @if($showCreateProductSuggestion && $canCreateCatalogProduct)
+                        <button type="button" class="ft-order-product-create-from-search" wire:click="openCreateOrderProductModalFromSearch">Can't find it? <b>Create new product</b></button>
                     @endif
                 </div>
             </div>
         </div>
 
         @if($canViewProductCategories)
-            <x-ui.select-filter
+            <x-ui.search-select
                 class="ft-order-product-category-search-filter"
                 label="Product category"
                 property="createProductCategoryFilter"
@@ -170,11 +174,6 @@
             />
         @endif
 
-        <div class="ft-order-product-top-actions">
-            @if($canCreateCatalogProduct)
-                <a href="{{ $createProductUrl }}" class="ft-order-product-action-link"><span>+</span> Create Product</a>
-            @endif
-        </div>
     </div>
 
     @if(count($rows))

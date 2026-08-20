@@ -1154,15 +1154,14 @@ class Index extends Component
         })->all();
 
         return [
-            'users' => User::query()
-                ->where('is_active', true)
-                ->with('department:id,name')
-                ->when(
-                    ! ($user->canModule('clients','assign') || $user->canModule('clients','edit_all')),
-                    fn ($query) => $query->whereKey($user->id)
-                )
-                ->orderBy('name')
-                ->get(['id','department_id','name','profile_image_path']),
+            'users' => app(\App\Services\FilterOptionService::class)->options(
+                $user,
+                'users',
+                'client-account-manager',
+                '',
+                $this->accountManagerId ?: $user->id,
+                \App\Services\FilterOptionService::COMPACT_PER_PAGE,
+            ),
             'detail' => null,
             'clientCountries' => $countries->pluck('name')->values()->all(),
             'clientCountryFlags' => $countryFlags,
@@ -1210,14 +1209,17 @@ class Index extends Component
                 ->orderBy('status')
                 ->pluck('status');
 
-            $ownerIds = (clone $jobQuery)
-                ->reorder()
-                ->whereNotNull('owner_id')
-                ->distinct()
-                ->pluck('owner_id');
-            $clientOrderOwnerOptions = $ownerIds->isEmpty()
-                ? collect()
-                : User::query()->whereIn('id', $ownerIds)->orderBy('name')->get(['id','name','profile_image_path']);
+            $clientOrderOwnerOptions = $this->clientOrderOwner !== ''
+                ? app(\App\Services\FilterOptionService::class)->options(
+                    $user,
+                    'users',
+                    'client-orders',
+                    '',
+                    (int) $this->clientOrderOwner,
+                    \App\Services\FilterOptionService::COMPACT_PER_PAGE,
+                    ['client_id' => (int) $client->id],
+                )
+                : collect();
 
             $orders = (clone $jobQuery)
                 ->with(['phase:id,name,short_name,color','owner:id,name,profile_image_path'])
@@ -1266,9 +1268,7 @@ class Index extends Component
 
         $pageData = [
             'detail' => $detail,
-            'users' => $this->showEdit && ($user->canModule('clients','assign') || $user->canModule('clients','edit_all'))
-                ? User::where('is_active', true)->orderBy('name')->get(['id','name','profile_image_path'])
-                : collect([$user]),
+            'users' => collect(),
             'clientDetailTab' => $this->clientDetailTab,
             'clientOrders' => $clientOrders,
             'clientDocuments' => $clientDocuments,
