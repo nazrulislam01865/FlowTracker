@@ -15,6 +15,7 @@ use App\Queries\Orders\VisibleOrderQuery;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
 /**
@@ -26,7 +27,7 @@ use Livewire\Attributes\Renderless;
  */
 trait ManagesOrderDetail
 {
-    #[Renderless]
+    #[Json]
     public function updateJobUrgencies(int $jobId, string $type, array $ids): array
     {
         $config = match ($type) {
@@ -63,7 +64,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobOwner(int $jobId, mixed $ownerId): array
     {
         $owner = null;
@@ -83,7 +84,7 @@ trait ManagesOrderDetail
         return $result;
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobCoordinator(int $jobId, mixed $coordinatorId): array
     {
         return $this->persistInlineEdit('Order coordinator', function () use ($jobId, $coordinatorId) {
@@ -92,7 +93,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobDeliveryDate(int $jobId, mixed $date): array
     {
         return $this->persistInlineEdit('delivery date', function () use ($jobId, $date) {
@@ -100,7 +101,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobPriority(int $jobId, mixed $priority): array
     {
         return $this->persistInlineEdit('priority', function () use ($jobId, $priority) {
@@ -108,7 +109,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobShippingField(int $jobId, string $field, mixed $value): array
     {
         $labels = [
@@ -122,7 +123,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobShippingPhone(int $jobId, mixed $countryCode, mixed $phone): array
     {
         return $this->persistInlineEdit('shipping phone number', function () use ($jobId, $countryCode, $phone) {
@@ -133,7 +134,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobOverviewDetails(int $jobId, mixed $title, mixed $description): array
     {
         return $this->persistInlineEdit('Order overview', function () use ($jobId, $title, $description) {
@@ -141,7 +142,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobShippingDetails(int $jobId, mixed $address, mixed $countryCode, mixed $phone, mixed $postalCode): array
     {
         return $this->persistInlineEdit('shipping details', function () use ($jobId, $address, $countryCode, $phone, $postalCode) {
@@ -154,7 +155,7 @@ trait ManagesOrderDetail
         });
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobTextField(int $jobId, string $field, mixed $value): array
     {
         $label = $field === 'title' ? 'Order name' : 'Order description';

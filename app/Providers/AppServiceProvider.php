@@ -61,6 +61,15 @@ class AppServiceProvider extends ServiceProvider
 
     public function boot(): void
     {
+        // FlowTrack's Alpine component factories are installed by the Vite module in
+        // <head>. Livewire ships its own Alpine runtime and otherwise starts it from a
+        // classic script at the end of <body>, which can run before that module has
+        // executed. Defer Livewire so window.FlowTrack.ui.inlineEdit is registered
+        // before Alpine evaluates x-data on Order/Inquiry detail pages.
+        app('livewire')->useScriptTagAttributes([
+            'defer' => true,
+        ]);
+
         if ((bool) config('performance.detect_lazy_loading', true) && app()->environment('local', 'testing')) {
             Model::preventLazyLoading();
             Model::handleLazyLoadingViolationUsing(function (Model $model, string $relation): void {

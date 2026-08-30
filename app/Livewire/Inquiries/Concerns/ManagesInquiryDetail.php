@@ -6,6 +6,7 @@ use App\Models\Inquiry;
 use App\Services\MentionService;
 use App\Services\MasterDataService;
 use Livewire\Attributes\On;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
 trait ManagesInquiryDetail
@@ -125,7 +126,7 @@ trait ManagesInquiryDetail
         $this->resetPage('inquiryActivityPage');
     }
 
-    #[Renderless]
+    #[Json]
     public function updateInquiryField(string $field, mixed $value): array
     {
         abort_unless(in_array($field, ['subject', 'owner_id', 'priority', 'requirement_notes'], true), 422);
@@ -160,7 +161,7 @@ trait ManagesInquiryDetail
         return $result;
     }
 
-    #[Renderless]
+    #[Json]
     public function updateInquiryStartInline(?string $value): array
     {
         $saved = app(\App\Actions\Inquiries\UpdateInquiryStartedAt::class)->handle($this->selectedInquiry(), $value, auth()->user());
@@ -173,7 +174,7 @@ trait ManagesInquiryDetail
         ];
     }
 
-    #[Renderless]
+    #[Json]
     public function updateInquiryStatus(string $status): array
     {
         $inquiry = $this->selectedInquiry();

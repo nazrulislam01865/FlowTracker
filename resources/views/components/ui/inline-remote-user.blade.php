@@ -15,13 +15,21 @@
 ])
 @php
     $resolvedLabel = $selectedLabel ?: $placeholder;
-    $listboxKey = $instanceKey !== '' ? $instanceKey : $context.'|'.$parentType.'|'.$parentId;
-    $listboxId = 'ft-inline-user-list-'.substr(md5($listboxKey), 0, 10);
+    $pickerKey = $instanceKey !== ''
+        ? preg_replace('/[^A-Za-z0-9_-]+/', '-', $instanceKey)
+        : 'inline';
+    // Each rendered picker needs its own physical origin. The menu is teleported
+    // to <body>, so events fired from menu options cannot rely on normal DOM
+    // bubbling to reach the inline editor that owns this picker.
+    $pickerId = 'ft-inline-user-picker-'.$pickerKey.'-'.\Illuminate\Support\Str::uuid();
+    $listboxId = $pickerId.'-listbox';
 @endphp
 <div
+    id="{{ $pickerId }}"
     {{ $attributes->class(['ft-inline-remote-user', 'ft-inline-remote-user-'.$variant]) }}
     data-ft-inline-remote-picker
-    x-data="window.FlowTrack.ui.searchSelect({
+    x-data="(() => {
+        const picker = window.FlowTrack.ui.searchSelect({
         property: '',
         type: 'users',
         context: @js($context),
@@ -34,7 +42,36 @@
         disabled: false,
         menuWidth: @js((int) $menuWidth),
         fixedMenu: @js((bool) $fixedMenu),
-    })"
+        });
+
+        picker.emitSelection = function (value, label, avatarUrl) {
+            // The option menu lives under <body> because of x-teleport. Dispatch
+            // from this component's ORIGINAL root instead of the teleported menu
+            // so the owning inline editor receives ft-inline-remote-selected.
+            // This is the persistence bridge for Order owner, Inquiry assignee,
+            // task assignee, and every other shared inline user picker.
+            this.pendingValue = '';
+            this.pendingLabel = '';
+            this.pendingPreviousValue = '';
+            this.pendingPreviousLabel = '';
+            this.pendingAt = 0;
+
+            const origin = document.getElementById(@js($pickerId));
+            if (!origin) return;
+
+            origin.dispatchEvent(new CustomEvent('ft-inline-remote-selected', {
+                bubbles: true,
+                composed: true,
+                detail: {
+                    value: String(value ?? ''),
+                    label: String(label ?? @js($placeholder)),
+                    avatarUrl: String(avatarUrl ?? ''),
+                },
+            }));
+        };
+
+        return picker;
+    })()"
     x-on:ft-inline-remote-open.stop="externalAnchorEl = $event.detail?.anchor || null; externalAnchorRect = $event.detail?.rect || null; sync(String($event.detail?.value ?? ''), String($event.detail?.label ?? @js($placeholder))); openMenu()"
     x-on:keydown.escape.window="if (open) { close(); $dispatch('ft-inline-remote-cancel') }"
     x-on:resize.window="open && reposition()"
@@ -93,7 +130,7 @@
             type="button"
             class="ft-remote-filter-option ft-remote-filter-clear"
             x-show="selectedValue"
-            x-on:click="clearSelection(); $dispatch('ft-inline-remote-selected', { value: '', label: @js($placeholder), avatarUrl: '' })"
+            x-on:click.stop="clearSelection(); emitSelection('', @js($placeholder), '')"
         >
             <span>{{ $placeholder }}</span><small>Clear</small>
         </button>
@@ -110,7 +147,7 @@
                     type="button"
                     class="ft-remote-filter-option"
                     :aria-selected="String(item.id) === String(selectedValue)"
-                    x-on:click="select(item); $dispatch('ft-inline-remote-selected', { value: String(item.id), label: item.label, avatarUrl: String(item.avatarUrl || '') })"
+                    x-on:click.stop="select(item); emitSelection(String(item.id), item.label, String(item.avatarUrl || ''))"
                 >
                     <span x-text="item.label"></span>
                     <small x-text="item.meta || (String(item.id) === String(selectedValue) ? 'Selected' : '')"></small>

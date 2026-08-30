@@ -13,6 +13,7 @@ use App\Models\MasterRecord;
 use App\Services\AccessControlService;
 use App\Services\MasterDataService;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
 /**
@@ -300,7 +301,7 @@ trait ManagesOrderProducts
         return $category !== '' ? $category : 'Uncategorized';
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobItemSupplierFromSelector(string $property, mixed $supplierId): array
     {
         abort_unless(preg_match('/^job-item-supplier:(\d+)$/', $property, $matches) === 1, 422, 'Invalid product supplier target.');
@@ -308,7 +309,7 @@ trait ManagesOrderProducts
         return $this->updateJobItem((int) $matches[1], 'supplier_id', $supplierId);
     }
 
-    #[Renderless]
+    #[Json]
     public function updateJobItem(int $itemId, string $field, mixed $value): array
     {
         $label = match ($field) {

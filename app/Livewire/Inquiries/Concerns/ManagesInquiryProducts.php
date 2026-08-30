@@ -6,6 +6,7 @@ use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Services\AccessControlService;
 use App\Services\MasterDataService;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
 trait ManagesInquiryProducts
@@ -268,7 +269,7 @@ trait ManagesInquiryProducts
         return $category !== '' ? $category : 'Uncategorized';
     }
 
-    #[Renderless]
+    #[Json]
     public function updateInquiryItem(int $itemId, string $field, mixed $value): array
     {
         $label = match ($field) {

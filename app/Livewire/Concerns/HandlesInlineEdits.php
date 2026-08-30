@@ -15,8 +15,8 @@ trait HandlesInlineEdits
     /**
      * Execute a narrow inline edit without leaking technical exceptions to the UI.
      *
-     * The public Livewire action should be marked #[Renderless], so the caller can
-     * optimistically update only the edited field while this method persists it.
+     * JavaScript-consumed persistence actions should be marked #[Json], so the caller
+     * receives an explicit confirmation payload without morphing the component.
      */
     protected function persistInlineEdit(string $label, Closure $callback): array
     {

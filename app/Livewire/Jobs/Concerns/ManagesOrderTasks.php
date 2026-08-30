@@ -16,6 +16,7 @@ use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 use Throwable;
 
@@ -28,7 +29,7 @@ use Throwable;
  */
 trait ManagesOrderTasks
 {
-    #[Renderless]
+    #[Json]
     public function updateTaskAssigneeFromJob(int $taskId, mixed $assigneeId): array
     {
         $assignee = null;
@@ -47,7 +48,7 @@ trait ManagesOrderTasks
         return $result;
     }
 
-    #[Renderless]
+    #[Json]
     public function updateTaskDueDateFromJob(int $taskId, mixed $date): array
     {
         return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
@@ -157,7 +158,7 @@ trait ManagesOrderTasks
         session()->flash('success', 'Order task added.');
     }
 
-    #[Renderless]
+    #[Json]
     public function updateTaskStatusFromJob(int $taskId, mixed $status): array
     {
         return $this->persistInlineEdit('task status', function () use ($taskId, $status) {

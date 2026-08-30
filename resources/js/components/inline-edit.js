@@ -34,6 +34,16 @@ const state = {
         if (typeof responseMessage === 'string' && responseMessage.trim() !== '') {
             return responseMessage.trim();
         }
+
+        // Livewire 4 #[Json] actions reject validation failures with a structured
+        // `errors` object. Surface the first useful validation message instead of
+        // hiding the real persistence failure behind a generic network message.
+        const validationErrors = error?.errors;
+        if (validationErrors && typeof validationErrors === 'object') {
+            const firstMessages = Object.values(validationErrors).flat().filter((message) => typeof message === 'string' && message.trim() !== '');
+            if (firstMessages.length > 0) return firstMessages[0].trim();
+        }
+
         return friendlyNetworkMessage(label);
     };
 
@@ -341,23 +351,27 @@ export const createInlineEdit = (config = {}) => {
                     const response = await requestFactory();
                     if (sequence !== this.requestSequence) return false;
 
-                    if (response && typeof response === 'object' && response.ok === false) {
-                        const inlineError = new Error(response.message || friendlyNetworkMessage(this.label));
-                        inlineError.flowtrackMessage = response.message;
+                    // Never mark an optimistic edit as saved unless the server
+                    // explicitly confirms persistence. Previously null/undefined (or
+                    // any non-object Livewire result) silently fell through as success,
+                    // leaving a new value visible even when it was never confirmed.
+                    if (!response || typeof response !== 'object' || response.ok !== true) {
+                        const message = response && typeof response === 'object'
+                            ? response.message
+                            : friendlyNetworkMessage(this.label);
+                        const inlineError = new Error(message || friendlyNetworkMessage(this.label));
+                        inlineError.flowtrackMessage = message;
                         throw inlineError;
                     }
 
-                    const responseHasAvatar = response && typeof response === 'object'
-                        && Object.prototype.hasOwnProperty.call(response, 'avatarUrl');
+                    const responseHasAvatar = Object.prototype.hasOwnProperty.call(response, 'avatarUrl');
                     const confirmedAvatarUrl = responseHasAvatar ? normalize(response.avatarUrl) : nextAvatarUrl;
-                    const responseHasValue = response && typeof response === 'object'
-                        && Object.prototype.hasOwnProperty.call(response, 'value');
+                    const responseHasValue = Object.prototype.hasOwnProperty.call(response, 'value');
                     const confirmedValue = responseHasValue ? normalize(response.value) : normalizedValue;
-                    const responseHasDisplay = response && typeof response === 'object'
-                        && Object.prototype.hasOwnProperty.call(response, 'display');
+                    const responseHasDisplay = Object.prototype.hasOwnProperty.call(response, 'display');
                     const confirmedDisplay = responseHasDisplay ? normalize(response.display) : normalizedDisplay;
 
-                    this.lastResponse = response && typeof response === 'object' ? response : null;
+                    this.lastResponse = response;
                     this.value = confirmedValue;
                     this.display = confirmedDisplay;
                     this.draftValue = confirmedValue;

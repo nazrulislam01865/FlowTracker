@@ -9,6 +9,7 @@ use App\Services\AccessControlService;
 use App\Services\MasterDataService;
 use App\Services\WorkspaceSettingsService;
 use Illuminate\Validation\Rule;
+use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
 trait ManagesInquiryTasks
@@ -87,7 +88,7 @@ trait ManagesInquiryTasks
         session()->flash('success', 'Attention reason saved and added to comments.');
     }
 
-    #[Renderless]
+    #[Json]
     public function updateTaskDueInline(int $taskId, ?string $date): array
     {
         $task = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->task(auth()->user(), $taskId);
@@ -95,7 +96,7 @@ trait ManagesInquiryTasks
         return ['ok' => true, 'date' => $saved->due_date?->toDateString()];
     }
 
-    #[Renderless]
+    #[Json]
     public function updateTaskAssigneeInline(int $taskId, mixed $assigneeId): array
     {
         $task = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->task(auth()->user(), $taskId);
