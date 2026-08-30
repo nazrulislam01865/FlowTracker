@@ -14,7 +14,7 @@
         if ($route === 'jobs.index') $isActive = $isActive || request()->routeIs('orders.bulk-import*');
     }
 @endphp
-<a href="{{ route($route, $params) }}" wire:navigate class="nav-btn {{ $child ? 'ft-sidebar-child-link' : '' }} {{ $isActive ? 'active' : '' }}" @if($isActive) aria-current="page" @endif>
+<a href="{{ route($route, $params) }}" wire:navigate data-ft-nav-route="{{ $route }}" class="nav-btn {{ $child ? 'ft-sidebar-child-link' : '' }} {{ $isActive ? 'active' : '' }}" @if($isActive) aria-current="page" @endif>
     @switch($icon)
         @case('dashboard')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>@break
         @case('work')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>@break
@@ -33,6 +33,7 @@
         @case('dot')<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="2.1" fill="currentColor" stroke="none"/></svg>@break
         @case('plus')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="8"/><path d="M12 8v8M8 12h8"/></svg>@break
         @case('upload')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 16V4M7 9l5-5 5 5"/><path d="M5 13v6h14v-6"/></svg>@break
+        @case('cancelled')<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="4" width="16" height="16" rx="2"/><path d="m9 9 6 6M15 9l-6 6"/></svg>@break
         @default<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M12 2v4M12 18v4M2 12h4M18 12h4"/></svg>
     @endswitch
     <span>{{ $label }}</span>

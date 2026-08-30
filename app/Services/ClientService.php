@@ -88,7 +88,7 @@ class ClientService
             ->withCount([
                 'jobs as total_jobs_count' => fn ($q) => $access->applyJobScope($q, $user),
                 'jobs as active_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES), $user),
-                'jobs as attention_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)->orWhereIn('flow_jobs.health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user),
+                'jobs as attention_jobs_count' => fn ($q) => $access->applyJobScope($q->whereNull('flow_jobs.completed_at')->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('flow_jobs.attention_requested', true)->orWhere('flow_jobs.needs_attention', true)), $user),
                 'tasks as open_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at'), $user),
                 'tasks as overdue_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where('tasks.due_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()), $user),
                 'tasks as blocked_tasks_count' => fn ($q) => $access->applyTaskScope($q->whereNull('tasks.completed_at')->where(fn ($x) => $x->where('tasks.status', 'Blocked')->orWhere('tasks.needs_attention', true)), $user),
@@ -104,12 +104,11 @@ class ClientService
             })
             ->when($filters['country'] ?? null, fn ($q, $v) => $q->where('country', $v))
             ->when($filters['manager'] ?? null, fn ($q, $v) => $q->where('account_manager_id', $v))
-            ->when($filters['health'] ?? null, fn ($q, $v) => $q->whereHas('jobs', fn ($j) => $access->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where('health', $v), $user)))
             ->when(($filters['outstanding'] ?? null) === 'positive', fn ($q) => $q->where('outstanding_balance', '>', 0))
             ->when(($filters['outstanding'] ?? null) === 'high', fn ($q) => $q->where('outstanding_balance', '>=', 10000))
             ->when(($filters['outstanding'] ?? null) === 'zero', fn ($q) => $q->where('outstanding_balance', '<=', 0))
             ->when($quick === 'active_jobs', fn ($q) => $q->whereHas('jobs', fn ($j) => $access->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES), $user)))
-            ->when($quick === 'attention', fn ($q) => $q->whereHas('jobs', fn ($j) => $access->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user)))
+            ->when($quick === 'attention', fn ($q) => $q->whereHas('jobs', fn ($j) => $access->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('needs_attention', true)->orWhere('attention_requested', true)), $user)))
             ->when($quick === 'outstanding', fn ($q) => $q->where('outstanding_balance', '>', 0))
             ->orderBy('name');
     }
@@ -134,7 +133,7 @@ class ClientService
         $jobMetrics = (clone $jobs)
             ->reorder()
             ->selectRaw("sum(case when completed_at is null and status not in ('Inactive','Cancelled') then 1 else 0 end) as active_job_count")
-            ->selectRaw("sum(case when completed_at is null and status not in ('Inactive','Cancelled') and (needs_attention = 1 or health in ('Needs Attention','At Risk','Delayed','Blocked')) then 1 else 0 end) as attention_job_count")
+            ->selectRaw("sum(case when completed_at is null and status not in ('Inactive','Cancelled') and (needs_attention = 1 or attention_requested = 1) then 1 else 0 end) as attention_job_count")
             ->first();
 
         return [
@@ -143,7 +142,7 @@ class ClientService
             'attention' => (int) ($jobMetrics?->attention_job_count ?? 0),
             'outstanding' => (float) ($clientMetrics?->outstanding_total ?? 0),
             'clients_active' => (clone $clients)->whereHas('jobs', fn ($j) => app(AccessControlService::class)->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES), $user))->count(),
-            'clients_attention' => (clone $clients)->whereHas('jobs', fn ($j) => app(AccessControlService::class)->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('needs_attention', true)->orWhereIn('health', ['Needs Attention','At Risk','Delayed','Blocked'])), $user))->count(),
+            'clients_attention' => (clone $clients)->whereHas('jobs', fn ($j) => app(AccessControlService::class)->applyJobScope($j->whereNull('completed_at')->whereNotIn('status', JobService::INACTIVE_STATUSES)->where(fn ($x) => $x->where('needs_attention', true)->orWhere('attention_requested', true)), $user))->count(),
             'clients_outstanding' => (int) ($clientMetrics?->outstanding_client_count ?? 0),
             'archived' => $this->visibleQuery($user)->where('clients.is_active', false)->count(),
         ];
@@ -284,6 +283,28 @@ class ClientService
         Cache::increment('flowtrack:clients:lifecycle-version');
     }
 
+    public function detailShell(User $user, int $clientId, bool $loadAddresses = false, bool $loadContacts = false): array
+    {
+        $relations = ['accountManager'];
+        if ($loadAddresses) $relations[] = 'shippingAddresses';
+        if ($loadContacts) $relations[] = 'contacts';
+
+        $client = $this->visibleQuery($user)
+            ->with($relations)
+            ->withCount('contacts')
+            ->findOrFail($clientId);
+
+        $orderCount = app(JobService::class)->visibleQuery($user)
+            ->where('client_id', $client->id)
+            ->count();
+
+        return [
+            'client' => $client,
+            'jobs' => collect(),
+            'orderCount' => $orderCount,
+        ];
+    }
+
     public function detail(User $user, int $clientId): array
     {
         $client = $this->visibleQuery($user)->with(['accountManager','shippingAddresses','contacts'])->findOrFail($clientId);
@@ -313,10 +334,6 @@ class ClientService
             ->whereHas('job', fn ($q) => $q->where('client_id', $client->id))
             ->whereNull('completed_at')->count();
 
-        $health = 'On Track';
-        if ($active->contains(fn ($job) => (bool) ($job->attention_requested ?? false) || $job->needs_attention || in_array($job->health, ['Needs Attention','Blocked','Delayed'], true))) $health = 'Needs Attention';
-        elseif ($overdue > 0 || $active->contains(fn ($job) => $job->health === 'At Risk')) $health = 'At Risk';
-
-        return compact('client','jobs','tasks','active','overdue','openTasks','health');
+        return compact('client','jobs','tasks','active','overdue','openTasks');
     }
 }

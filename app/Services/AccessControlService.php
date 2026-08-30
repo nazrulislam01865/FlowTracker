@@ -599,9 +599,12 @@ class AccessControlService
     }
 
     /** Authorization for a Task already loaded through visibleQuery(). */
-    public function canEditVisibleTask(User $user, object $task): bool
+    public function canEditVisibleTask(User $user, object $task, ?object $parentJob = null): bool
     {
-        if ($this->isAdministrator($user) || $this->isTaskParentCreator($user, $task)) return true;
+        $parentCreator = $parentJob
+            ? $this->isJobCreator($user, $parentJob)
+            : $this->isTaskParentCreator($user, $task);
+        if ($this->isAdministrator($user) || $parentCreator) return true;
         if (!$this->can($user, 'tasks', 'edit')) return false;
         if ($this->canEditAll($user, 'tasks')) return true;
 
@@ -653,6 +656,18 @@ class AccessControlService
         if (!$this->can($user, 'tasks', 'assign')) return false;
 
         return $this->taskWithinScope($task, $user, $this->scopes($user, 'tasks'));
+    }
+
+
+    /** Assignment authorization for a Task already loaded through visibleQuery(). */
+    public function canAssignVisibleTask(User $user, object $task, ?object $parentJob = null): bool
+    {
+        $parentCreator = $parentJob
+            ? $this->isJobCreator($user, $parentJob)
+            : $this->isTaskParentCreator($user, $task);
+        if ($this->isAdministrator($user) || $parentCreator) return true;
+
+        return $this->can($user, 'tasks', 'assign');
     }
 
     /**

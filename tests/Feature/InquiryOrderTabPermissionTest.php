@@ -22,11 +22,13 @@ class InquiryOrderTabPermissionTest extends TestCase
 
     public function test_inquiry_detail_product_rows_use_products_matrix(): void
     {
-        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
-        $service = file_get_contents(app_path('Services/InquiryService.php'));
-        $view = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $component = $this->inquiryLivewireSource();
+        $service = $this->inquiryServiceSource();
+        $view = $this->inquiryViewSource();
+        $productCard = file_get_contents(resource_path('views/components/catalog/detail-products-card.blade.php'));
 
-        $this->assertStringContainsString('Products &amp; quantities', $view);
+        $this->assertStringContainsString('<x-inquiries.product-rfq-overview', $view);
+        $this->assertStringContainsString("'title' => 'Products & quantities'", $productCard);
         $this->assertStringContainsString('@if($canViewInquiryProducts)', $view);
         $this->assertStringContainsString("can(\$user, 'catalog_products', 'view')", $component);
         $this->assertStringContainsString("can(\$actor, 'catalog_products', 'edit')", $service);
@@ -37,15 +39,19 @@ class InquiryOrderTabPermissionTest extends TestCase
 
     public function test_order_detail_product_rows_use_products_matrix(): void
     {
-        $service = file_get_contents(app_path('Services/JobService.php'));
+        $service = $this->jobServiceSource();
+        $viewService = file_get_contents(app_path('Services/OrderDetailViewService.php'));
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
+        $products = file_get_contents(resource_path('views/components/jobs/order-detail/products.blade.php'));
 
-        $this->assertStringContainsString('Products &amp; quantities', $overview);
-        $this->assertStringContainsString("can(auth()->user(), 'catalog_products', 'view')", $overview);
-        $this->assertStringContainsString("can(auth()->user(), 'catalog_products', 'edit')", $overview);
+        $this->assertStringContainsString('<x-jobs.order-detail.products', $overview);
+        $this->assertStringContainsString('Products &amp; quantities', $products);
+        $this->assertStringContainsString("can(\$user, 'catalog_products', 'view')", $viewService);
+        $this->assertStringContainsString("can(\$user, 'catalog_products', 'edit')", $viewService);
         $this->assertStringContainsString("can(\$actor, 'catalog_products', 'create')", $service);
         $this->assertStringContainsString("can(\$actor, 'catalog_products', 'delete')", $service);
-        $this->assertStringNotContainsString("canEditParentRecordModule(\$actor, 'products'", $service);
+        $this->assertStringNotContainsString('AccessControlService::class', $products);
+        $this->assertStringNotContainsString('::query(', $products);
     }
 
     public function test_cleanup_migration_removes_obsolete_product_lines_rows(): void

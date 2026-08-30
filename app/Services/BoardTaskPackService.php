@@ -6,12 +6,13 @@ use App\Models\FlowJob;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\BoardLaneResolver;
+use App\Support\OrderStageResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\DB;
 
 class BoardTaskPackService
 {
-    public const JOBS_PER_PAGE = 5;
+    public const JOBS_PER_PAGE = 3;
 
     private const INITIAL_TASK_STATUSES = ['not started', 'not start', 'ready', 'to do', 'todo'];
 
@@ -125,7 +126,7 @@ class BoardTaskPackService
             ->whereIn('id', $jobIds)
             ->select([
                 'id', 'job_number', 'title', 'client_id', 'workflow_phase_id', 'created_by',
-                'health', 'progress', 'status', 'updated_at',
+                'progress', 'status', 'updated_at',
             ])
             ->with([
                 'client:id,name,logo_path',
@@ -170,13 +171,14 @@ class BoardTaskPackService
         }
 
         $tasks->select([
-                'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id',
+                'tasks.id', 'tasks.task_number', 'tasks.flow_job_id', 'tasks.workflow_phase_id', 'tasks.task_pack_task_id',
                 'tasks.assignee_id', 'tasks.title', 'tasks.status', 'tasks.priority', 'tasks.progress',
                 'tasks.due_date', 'tasks.needs_attention', 'tasks.order_task_flag_id', 'tasks.attention_reason',
                 'tasks.completed_at', 'tasks.updated_at',
             ])
             ->with([
                 'phase:id,name,short_name,sequence,color',
+                'setupTemplate:id,color,automation_key',
                 'assignee:id,name,department_id,profile_image_path',
                 'orderTaskFlag:id,type,name,color,status,sort_order,metadata',
             ]);
@@ -224,15 +226,20 @@ class BoardTaskPackService
             // behind without an exact matching task row.
             if ($taskLevelFilter && $taskRows->isEmpty()) return null;
 
+            $jobStage = OrderStageResolver::resolve(
+                $job->phase?->name,
+                $job->phase?->short_name,
+                $job->phase?->sequence,
+                (string) $job->status,
+            );
+
             return [
                 'id' => (int) $job->id,
                 'number' => (string) $job->displayOrderNumber(),
                 'title' => (string) $job->title,
                 'client' => (string) ($job->client?->name ?: 'No client'),
-                'stage' => (string) ($job->phase?->short_name ?: $job->phase?->name ?: 'No phase'),
-                'stageColor' => $job->phase?->color,
-                'health' => (string) ($job->health ?: 'On Track'),
-                'healthTone' => $this->tone((string) ($job->health ?: 'On Track')),
+                'stage' => (string) $jobStage['name'],
+                'stageColor' => $job->phase?->color ?: $jobStage['color'],
                 'progress' => max(0, min(100, (int) $job->progress)),
                 'taskCount' => $taskRows->count(),
                 'route' => $canOpenJob ? route('jobs.index', ['open' => $job->id]) : null,
@@ -531,6 +538,13 @@ class BoardTaskPackService
         $master = app(MasterDataService::class);
         $statusColor = $master->colorFor('order_task_status', (string) $task->status);
         $flagColor = (!$completed && $flag !== 'No flag') ? $master->colorFor('order_task_flag', $flag) : null;
+        $taskStage = OrderStageResolver::resolve(
+            $task->phase?->name,
+            $task->phase?->short_name,
+            $task->phase?->sequence,
+            (string) $task->status,
+            $task->setupTemplate?->automation_key,
+        );
 
         return [
             'id' => (int) $task->id,
@@ -544,8 +558,12 @@ class BoardTaskPackService
                 ], false)
                 : null,
             'isMine' => (int) ($task->assignee_id ?: 0) === (int) $user->id,
-            'phase' => (string) ($task->phase?->short_name ?: $task->phase?->name ?: 'No phase'),
-            'phaseColor' => $task->phase?->color,
+            'phase' => (string) $taskStage['short_name'],
+            'phaseSequence' => (int) $taskStage['sequence'],
+            'phaseColor' => $task->phase?->color ?: $taskStage['color'],
+            'taskColor' => \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? ''))
+                ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
+                ?: '#2563EB',
             'due' => $dueLabel,
             'dueTone' => $dueTone,
             'status' => (string) $task->status,

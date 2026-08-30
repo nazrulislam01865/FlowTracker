@@ -29,9 +29,9 @@ class WorkflowService
             ->orderByDesc('is_default')->orderBy('name')->get();
     }
 
-    public function saveWorkflow(array $data, ?int $id = null): WorkflowTemplate
+    public function saveWorkflow(array $data, ?int $id = null, bool $authorize = true): WorkflowTemplate
     {
-        $this->assertAction($id ? 'edit' : 'create');
+        if ($authorize) $this->assertAction($id ? 'edit' : 'create');
         $workspaceId = $this->workspaceId();
         $code = strtoupper(trim($data['code']));
         if (WorkflowTemplate::where('workspace_id', $workspaceId)->where('code', $code)->when($id, fn ($q) => $q->whereKeyNot($id))->exists()) {

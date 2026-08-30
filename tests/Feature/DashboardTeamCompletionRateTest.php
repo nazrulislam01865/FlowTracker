@@ -166,7 +166,7 @@ class DashboardTeamCompletionRateTest extends TestCase
         $cardView = file_get_contents(resource_path('views/components/dashboard/team-performance-card.blade.php'));
         $reportView = file_get_contents(resource_path('views/livewire/team-performance/report.blade.php'));
         $view = $dashboardView.$cardView.$reportView;
-        $service = file_get_contents(app_path('Services/DashboardService.php'));
+        $service = file_get_contents(app_path('Services/LegacyDashboardService.php'));
 
         $this->assertStringContainsString('Completion rate', $view);
         $this->assertStringContainsString('Total tasks', $view);
@@ -176,8 +176,8 @@ class DashboardTeamCompletionRateTest extends TestCase
         $this->assertStringContainsString('Custom range', $view);
         $this->assertStringContainsString('Team Performance Report', $reportView);
         $this->assertStringContainsString('View all', $dashboardView);
-        $this->assertStringContainsString('previousTeamPage', $reportView);
-        $this->assertStringContainsString('nextTeamPage', $reportView);
+        $this->assertStringContainsString('loadMoreTeamPerformance', $reportView);
+        $this->assertStringContainsString('hasMoreTeamPerformance', $reportView);
         $this->assertStringContainsString('has-department-color', $cardView);
         $this->assertStringNotContainsString('score / 100', strtolower($view));
         $this->assertStringContainsString("'completion_rate'", $service);

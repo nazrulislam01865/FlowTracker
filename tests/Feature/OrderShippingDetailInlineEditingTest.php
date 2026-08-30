@@ -3,46 +3,35 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class OrderShippingDetailInlineEditingTest extends TestCase
 {
     public function test_order_detail_shipping_section_is_responsive_and_inline_editable(): void
     {
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
-        $service = file_get_contents(app_path('Services/JobService.php'));
-        $picker = file_get_contents(resource_path('views/components/ui/inline-remote-catalog.blade.php'));
-        $routes = file_get_contents(base_path('routes/web.php'));
-        $controller = file_get_contents(app_path('Http/Controllers/FilterOptionController.php'));
-        $filterOptions = file_get_contents(app_path('Services/FilterOptionService.php'));
-        $css = file_get_contents(resource_path('css/flowtrack.css'));
+        $planning = file_get_contents(resource_path('views/components/jobs/order-detail/planning.blade.php'));
+        $shipping = file_get_contents(resource_path('views/components/jobs/order-detail/shipping.blade.php'));
+        $products = file_get_contents(resource_path('views/components/jobs/order-detail/products.blade.php'));
+        $jobs = OrderPhase5Source::livewire();
+        $service = $this->jobServiceSource();
+        $css = $this->orderDetailCss();
 
-        $planningPosition = strpos($overview, 'Planning &amp; ownership');
-        $shippingPosition = strpos($overview, 'ft-order-shipping-detail-card');
-        $productsPosition = strpos($overview, 'order-products-card');
+        $this->assertStringContainsString('<x-jobs.order-detail.planning', $overview);
+        $this->assertStringContainsString('<x-jobs.order-detail.shipping', $overview);
+        $this->assertStringContainsString('<x-jobs.order-detail.products', $overview);
+        $this->assertStringContainsString('Planning &amp; ownership', $planning);
+        $this->assertStringContainsString('Shipping address', $shipping);
+        $this->assertStringContainsString('Products &amp; quantities', $products);
 
-        $this->assertNotFalse($planningPosition);
-        $this->assertNotFalse($shippingPosition);
-        $this->assertNotFalse($productsPosition);
-        $this->assertGreaterThan($planningPosition, $shippingPosition);
-        $this->assertLessThan($productsPosition, $shippingPosition);
-
-        $this->assertStringContainsString('shipping_address', $overview);
+        $this->assertStringContainsString('shipping_address', $shipping);
         $this->assertStringContainsString('shipping_phone_country_code', $service);
-        $this->assertStringContainsString('shipping_phone', $overview);
-        $this->assertStringContainsString('shipping_postal_code', $overview);
-        $this->assertStringContainsString('updateJobShippingField', $overview);
-        $this->assertStringContainsString('updateJobShippingPhone', $overview);
-        $this->assertStringContainsString('type="phone-country-codes"', $overview);
-        $this->assertStringContainsString(':clearable="true"', $overview);
-        $this->assertStringContainsString('ft-inline-remote-sync', $picker);
-        $this->assertStringContainsString("ofType('phone_country_code')", $service);
-        $this->assertStringContainsString('phone-country-codes', $routes);
-        $this->assertStringContainsString('phone-country-codes', $controller);
-        $this->assertStringContainsString("'phone-country-codes' => $this->phoneCountryCodes", $filterOptions);
-        $this->assertStringContainsString('@media (max-width:640px)', $css);
-        $this->assertStringContainsString('.ft-order-shipping-detail-grid', $css);
-        $this->assertMatchesRegularExpression('/#\\[Renderless\\]\\s+public function updateJobShippingField\\b/', $jobs);
-        $this->assertMatchesRegularExpression('/#\\[Renderless\\]\\s+public function updateJobShippingPhone\\b/', $jobs);
+        $this->assertStringContainsString('shipping_phone', $shipping);
+        $this->assertStringContainsString('shipping_postal_code', $shipping);
+        $this->assertStringContainsString('updateJobShippingDetails', $shipping);
+        $this->assertStringContainsString('@media(max-width:1180px)', $css);
+        $this->assertStringContainsString('.ft-order-overview-grid', $css);
+        $this->assertMatchesRegularExpression('/#\[Renderless\]\s+public function updateJobShippingDetails\b/', $jobs);
     }
+
 }

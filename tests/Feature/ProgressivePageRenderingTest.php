@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class ProgressivePageRenderingTest extends TestCase
 {
@@ -34,15 +35,18 @@ class ProgressivePageRenderingTest extends TestCase
 
     public function test_create_job_uses_viewport_loaded_sections(): void
     {
-        $component = file_get_contents(app_path('Livewire/Jobs/Index.php'));
+        $component = OrderPhase5Source::livewire();
         $view = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
         $placeholder = file_get_contents(resource_path('views/components/jobs/create-section-placeholder.blade.php'));
+        $products = OrderPhase5Source::createProductsView();
 
         $this->assertStringContainsString('function loadCreateSection(string $section)', $component);
         $this->assertStringContainsString('createCatalogReady', $component);
         $this->assertStringContainsString('createAssignmentReady', $component);
         $this->assertStringContainsString('createWorkflowReady', $component);
-        $this->assertStringContainsString('@if($catalogReady)', $view);
+        $this->assertStringContainsString("@include('components.jobs.create-products')", $view);
+        $this->assertStringContainsString('@if($catalogReady && $canUseOrderProductSelector)', $products);
+        $this->assertStringContainsString('@elseif(!$catalogReady)', $products);
         $this->assertStringContainsString('@if($assignmentReady)', $view);
         $this->assertStringContainsString('@if($workflowReady)', $view);
         $this->assertStringContainsString('IntersectionObserver', $placeholder);

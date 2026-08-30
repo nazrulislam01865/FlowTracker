@@ -1,6 +1,6 @@
 @props(['users'=>collect()])
 <div class="ft-finance-modal-backdrop" wire:key="collection-update-modal" wire:click.self="closeCollectionUpdate">
-    <section class="ft-finance-modal ft-finance-small-modal" role="dialog" aria-modal="true" aria-labelledby="collectionUpdateTitle">
+    <section class="ft-finance-modal ft-finance-small-modal" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="collectionUpdateTitle">
         <header class="ft-finance-modal-head"><div><h2 id="collectionUpdateTitle">Add collection update</h2><p>Record the latest follow-up and schedule the next collection action.</p></div><button type="button" wire:click="closeCollectionUpdate" aria-label="Close">×</button></header>
         @error('collectionForm')<div class="ft-finance-form-alert">{{ $message }}</div>@enderror
         <div class="ft-finance-small-grid">

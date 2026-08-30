@@ -9,6 +9,7 @@
     'productImagePreview' => null,
     'clientAvailabilityMode' => 'all',
     'clientIds' => [],
+    'productSupplierId' => null,
     'certificateUpload' => null,
     'templateUpload' => null,
     'removeCertificate' => false,
@@ -27,11 +28,12 @@
     'shipmentUrgencyPickerSelection' => [],
     'newProductCategoryMain' => '',
     'newSubcategoryProductCategoryId' => null,
+    'taxonomyReady' => true,
+    'shipmentOptionsReady' => true,
 ])
 @php
     $isEdit = (bool) $editProduct;
     $displayCode = $editProduct?->productDisplayCode() ?? 'Generated after creation';
-    $selectedClients = collect($clients)->whereIn('id', collect($clientIds)->map(fn($v)=>(int)$v)->all());
     $existingDocs = collect($editProduct?->productDocuments() ?? []);
     $certificateDoc = $removeCertificate ? null : $existingDocs->firstWhere('kind', 'certificate');
     $templateDoc = $removeTemplate ? null : $existingDocs->firstWhere('kind', 'template');
@@ -41,10 +43,10 @@
         'meta' => $category->code,
     ]);
 @endphp
-<div class="ft-product-page ft-product-form-page" x-data="{clientOpen:false, clientSearch:'', dragging:false}">
+<div class="ft-product-page ft-product-form-page ft-form-standard ft-form-standard--product" data-ft-feedback-scope="form" x-data="{dragging:false}">
     <div class="ft-product-page-breadcrumb"><button type="button" wire:click="close">Products</button><span>/</span><strong>{{ $isEdit ? 'Edit product' : 'Create product' }}</strong></div>
     <header class="ft-product-form-header">
-        <div><h1>{{ $isEdit ? 'Edit product' : 'Create product' }}</h1><p>{{ $isEdit ? 'Update the product information, availability and supporting documents.' : 'Add a product and link its category, image and supporting documents.' }}</p></div>
+        <div><h1>{{ $isEdit ? 'Edit product' : 'Create product' }}</h1><p>{{ $isEdit ? 'Update the product information, default supplier, availability and supporting documents.' : 'Add a product and link its category, default supplier, image and supporting documents.' }}</p></div>
         @if($isEdit)
             <div class="ft-product-form-top-actions"><button type="button" class="ft-product-page-btn is-secondary" wire:click="close">Cancel</button><button type="button" class="ft-product-page-btn is-primary" wire:click="save" wire:loading.attr="disabled" wire:target="save,productImage,productCertificateUpload,productTemplateUpload">Save changes</button></div>
         @endif
@@ -59,38 +61,45 @@
                         <label class="ft-product-field"><span>Reference product code <em>Optional</em></span><input wire:model.blur="productReferenceCode" placeholder="Client or supplier reference"><small>Client or supplier reference used for search and matching.</small>@error('productReferenceCode')<b class="validation-error">{{ $message }}</b>@enderror</label>
                         <label class="ft-product-field"><span>Product name <i>*</i></span><input wire:model.blur="name" placeholder="Enter product name">@error('name')<b class="validation-error">{{ $message }}</b>@enderror</label>
                     </div>
+                    <div class="ft-product-search-select-wrap ft-product-default-supplier">
+                        <x-ui.search-select
+                            class="ft-product-search-select"
+                            label="Default supplier"
+                            property="productSupplierId"
+                            type="suppliers"
+                            context="master-product"
+                            :value="$productSupplierId"
+                            placeholder="No default supplier"
+                            :clearable="true"
+                            :optional="true"
+                            :fixed-menu="true"
+                            :menu-width="360"
+                            search-placeholder="Search supplier…"
+                        />
+                        <small class="ft-product-help">When set, Create Order automatically uses this supplier for the product.</small>
+                        @error('productSupplierId')<b class="validation-error">{{ $message }}</b>@enderror
+                    </div>
                     <label class="ft-product-field ft-product-size-field"><span>Product size</span><textarea wire:model.blur="productSize" rows="4" placeholder='Add size/specification details. Use a new line for each item, e.g. width, finished length, material, capacity or dimensions.'></textarea><small>Enter multiple size/specification details on separate lines so the information stays easy to read.</small>@error('productSize')<b class="validation-error">{{ $message }}</b>@enderror</label>
                     <div class="ft-product-client-scope">
                         <span class="ft-product-field-title">Client availability</span>
                         <div class="ft-product-radio-row"><label><input type="radio" value="all" wire:model.live="productClientAvailabilityMode"> All clients</label><label><input type="radio" value="specific" wire:model.live="productClientAvailabilityMode"> Selected clients</label></div>
                         @if($clientAvailabilityMode === 'specific')
-                            <div class="ft-product-client-picker ft-product-assignee-style-picker" x-on:click.outside="clientOpen=false" x-on:keydown.escape.window="clientOpen=false">
-                                <div role="button" tabindex="0" class="ft-product-client-input ft-product-client-trigger" x-on:click="clientOpen=!clientOpen" x-on:keydown.enter.prevent="clientOpen=!clientOpen" x-on:keydown.space.prevent="clientOpen=!clientOpen" :aria-expanded="clientOpen.toString()" aria-haspopup="listbox">
-                                    <span class="ft-product-client-trigger-copy">
-                                        @forelse($selectedClients as $client)
-                                            <span class="ft-product-client-chip">{{ $client->name }} <button type="button" wire:click.stop="toggleProductClient({{ $client->id }})" aria-label="Remove {{ $client->name }}">×</button></span>
-                                        @empty
-                                            <span class="ft-product-client-placeholder">Select clients</span>
-                                        @endforelse
-                                    </span>
-                                    <b class="ft-filter-chevron">⌄</b>
-                                </div>
-                                <div class="ft-product-client-menu ft-remote-filter-menu" x-cloak x-show="clientOpen">
-                                    <input class="ft-remote-filter-search" type="text" role="searchbox" inputmode="search" x-model="clientSearch" placeholder="Search clients…" autocomplete="off">
-                                    <div class="ft-remote-filter-list" role="listbox" aria-multiselectable="true">
-                                        @foreach($clients as $client)
-                                            @php $clientSelected = in_array((int)$client->id, collect($clientIds)->map(fn($v)=>(int)$v)->all(), true); @endphp
-                                            <button type="button" class="ft-remote-filter-option" :aria-selected="@js($clientSelected).toString()" x-show="!clientSearch || @js(mb_strtolower($client->name.' '.$client->code)).includes(clientSearch.toLowerCase())" wire:click="toggleProductClient({{ $client->id }})">
-                                                <span>{{ $client->name }}</span><small>{{ $client->code }}{{ $clientSelected ? ' · Selected' : '' }}</small>
-                                            </button>
-                                        @endforeach
-                                    </div>
-                                    <div class="ft-remote-filter-message">Search by client name or code. Multiple clients can be selected.</div>
-                                </div>
-                            </div>
-                            <small class="ft-product-help">Only selected clients can find and use this product.</small>
-                            <button type="button" class="ft-product-inline-link" wire:click="selectAllProductClients">Select all clients</button>
-                            @error('productClientIds')<b class="validation-error">{{ $message }}</b>@enderror
+                            <x-ui.multi-select
+                                label="Select clients"
+                                property="productClientIds"
+                                type="clients"
+                                context="master-product"
+                                :values="$clientIds"
+                                :initial-options="$clients"
+                                placeholder="Search and select clients"
+                                :fixed-menu="true"
+                                :menu-width="380"
+                                :max-selected="100"
+                                class="ft-product-client-multi-select"
+                            />
+                            <small class="ft-product-help">Only selected clients can find and use this product. Results are loaded in bounded pages.</small>
+                            @error('productClientIds')<x-ui.validation-message :message="$message" />@enderror
+                            @error('productClientIds.*')<x-ui.validation-message :message="$message" />@enderror
                         @endif
                     </div>
                 </div>
@@ -106,10 +115,11 @@
             </div>
         </x-catalog.product-section>
 
+        @if($taxonomyReady)
         <x-catalog.product-section number="2" title="Category hierarchy" subtitle="Select from top to bottom. Each list is filtered by the selection above.">
             <div class="ft-form-grid ft-form-grid-3 ft-category-grid">
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select"
                         wire:key="product-main-category-filter-{{ $isEdit ? 'edit' : 'create' }}"
                         label="Main category"
@@ -130,7 +140,7 @@
                 </div>
 
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select"
                         wire:key="product-category-filter-{{ $isEdit ? 'edit' : 'create' }}-{{ md5((string) $selectedMainCategory) }}"
                         label="Product category"
@@ -152,7 +162,7 @@
                 </div>
 
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select"
                         wire:key="product-subcategory-filter-{{ $isEdit ? 'edit' : 'create' }}-{{ (int) ($selectedProductCategoryId ?? 0) }}"
                         label="Subcategory"
@@ -175,6 +185,12 @@
             </div>
             <small class="ft-product-help">Missing a category? Create it here without leaving the product form. Codes are generated automatically.</small>
         </x-catalog.product-section>
+
+        @else
+            <x-catalog.product-section number="2" title="Category hierarchy" subtitle="Category options load only when this section is needed.">
+                <x-ui.progressive-section-loader section="product-taxonomy" :rows="4" />
+            </x-catalog.product-section>
+        @endif
 
         <x-catalog.product-section number="3" title="Product pricing" subtitle="Paste the complete Quantity and Product price table directly from Excel.">
             <label class="ft-product-field ft-product-price-table-field">
@@ -266,13 +282,19 @@
             @error('productOptions')<b class="validation-error">{{ $message }}</b>@enderror
         </x-catalog.product-section>
 
-        <x-catalog.product-shipment-urgencies
-            number="5"
-            :shipment-urgencies="$shipmentUrgencies"
-            :selected-urgencies="$productShipmentUrgencies"
-            :picker-open="$shipmentUrgencyPickerOpen"
-            :picker-selection="$shipmentUrgencyPickerSelection"
-        />
+        @if($shipmentOptionsReady)
+            <x-catalog.product-shipment-urgencies
+                number="5"
+                :shipment-urgencies="$shipmentUrgencies"
+                :selected-urgencies="$productShipmentUrgencies"
+                :picker-open="$shipmentUrgencyPickerOpen"
+                :picker-selection="$shipmentUrgencyPickerSelection"
+            />
+        @else
+            <x-catalog.product-section number="5" title="Shipping urgencies" subtitle="Shipping urgency master data loads only when this section is needed." class="ft-product-shipping-section">
+                <x-ui.progressive-section-loader section="product-shipping-urgencies" :rows="3" />
+            </x-catalog.product-section>
+        @endif
 
         <x-catalog.product-section number="6" title="Supporting documents" subtitle="Add the product files now or replace them later while editing.">
             <div class="ft-product-support-grid is-friendly">

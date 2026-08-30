@@ -2,7 +2,7 @@
             $logoPreview = $logoUpload && in_array(strtolower((string) $logoUpload->getClientOriginalExtension()), ['jpg','jpeg','png','webp'], true) ? $logoUpload->temporaryUrl() : null;
             $faviconPreview = $faviconUpload && in_array(strtolower((string) $faviconUpload->getClientOriginalExtension()), ['jpg','jpeg','png','webp'], true) ? $faviconUpload->temporaryUrl() : null;
         @endphp
-        <div class="ft-branding-grid">
+        <div class="ft-branding-grid" data-ft-feedback-scope="form">
             <section class="card ft-branding-card">
                 <div class="ft-branding-card-head">
                     <div>

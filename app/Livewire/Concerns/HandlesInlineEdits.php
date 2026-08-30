@@ -35,6 +35,9 @@ trait HandlesInlineEdits
                 'ok' => false,
                 'message' => collect($exception->errors())->flatten()->first()
                     ?: 'Please check the '.$label.' value and try again.',
+                // Preserve Laravel's keyed error bag so Alpine/Livewire popup
+                // clients can place each message directly under its field.
+                'errors' => $exception->errors(),
             ];
         } catch (AuthorizationException $exception) {
             return [

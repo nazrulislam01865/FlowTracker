@@ -16,13 +16,13 @@ class MyWorkLoadingRegressionTest extends TestCase
         $this->assertStringContainsString('$this->metrics = $service->metrics($user);', $component);
     }
 
-    public function test_updating_indicator_is_only_flex_while_livewire_is_really_loading(): void
+    public function test_updating_indicator_is_bound_to_real_livewire_targets(): void
     {
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
-        $css = file_get_contents(public_path('css/flowtrack-my-work.css'));
 
-        $this->assertStringContainsString('wire:loading.delay.long.flex', $view);
-        $this->assertStringNotContainsString('#my-work-app .work-progress{display:flex;', $css);
+        $this->assertStringContainsString('wire:loading.delay.long', $view);
+        $this->assertStringContainsString('wire:loading.class="is-loading"', $view);
+        $this->assertStringContainsString('wire:loading.remove', $view);
     }
 
     public function test_my_work_metrics_use_direct_index_friendly_aggregate(): void

@@ -1,6 +1,6 @@
-@props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1,'focusComment'=>null])
+@props(['job','compact'=>false,'mentionUsers'=>collect(),'activityTab'=>'all','activityPage'=>1,'focusComment'=>null,'canComment'=>null])
 @php
-    $canComment = app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job);
+    $canComment = $canComment === null ? false : (bool) $canComment;
     // JobService already applies the selected activity filter and database
     // pagination. Keeping only the visible page here prevents large Orders
     // from hydrating their complete activity history on every render.

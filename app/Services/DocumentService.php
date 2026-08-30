@@ -7,8 +7,6 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
-use Illuminate\Support\Str;
 
 class DocumentService
 {
@@ -75,22 +73,21 @@ class DocumentService
             }
         }
 
-        $disk = (string) config('flowtrack.document_disk', 'public');
         $jobId = $task?->flow_job_id ?: ($data['flow_job_id'] ?? 'general');
-        $extension = strtolower(trim((string) $file->getClientOriginalExtension()));
-        $storedName = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
-        $path = $file->storeAs('flowtrack/documents/'.$jobId, $storedName, $disk);
-        abort_if(!$path, 500, 'The document could not be stored.');
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/'.$jobId);
+        $path = $stored['path'];
 
         $category = $task?->documentCategory?->name
             ?: $task?->setupTemplate?->documentCategory?->name
             ?: ($data['category'] ?? ($task ? 'Task attachment' : 'Other'));
 
-        $versionQuery = Document::where('flow_job_id', $task?->flow_job_id ?: ($data['flow_job_id'] ?? null))
-            ->where('task_id', $task?->id ?: ($data['task_id'] ?? null))
-            ->where('category', $category)
-            ->where('name', $file->getClientOriginalName());
-        $version = max(1, ((int) $versionQuery->max('version')) + 1);
+        $version = $this->nextDocumentVersion(
+            $task,
+            $task?->flow_job_id ?: ($data['flow_job_id'] ?? null),
+            $task?->id ?: ($data['task_id'] ?? null),
+            $category,
+            $file->getClientOriginalName(),
+        );
 
         $document = Document::create([
             'document_number' => $this->nextNumber(),
@@ -102,8 +99,8 @@ class DocumentService
             'name' => $file->getClientOriginalName(),
             'note' => filled($data['note'] ?? null) ? trim((string) $data['note']) : null,
             'path' => $path,
-            'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $file->getMimeType()),
-            'size' => $file->getSize(),
+            'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $stored['mime']),
+            'size' => $stored['size'],
             'version' => $version,
             'is_final' => false,
         ]);
@@ -125,7 +122,13 @@ class DocumentService
         $existing = Document::where('task_id', $task->id)->where('path', $source->path)->first();
         if ($existing) return $existing;
         $category = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name ?: 'Task attachment';
-        $version = ((int) Document::where('task_id', $task->id)->where('category', $category)->where('name', $source->name)->max('version')) + 1;
+        $version = $this->nextDocumentVersion(
+            $task,
+            $task->flow_job_id,
+            $task->id,
+            $category,
+            $source->name,
+        );
 
         $document = Document::create([
             'document_number' => $this->nextNumber(), 'flow_job_id' => $task->flow_job_id, 'client_id' => $task->job?->client_id,
@@ -151,7 +154,7 @@ class DocumentService
             $this->notifyDocumentChange($document, $actor, 'removed');
         }
         $document->delete();
-        if ($path && !Document::where('path', $path)->exists()) Storage::disk((string) config('flowtrack.document_disk', 'public'))->delete($path);
+        if ($path && !Document::where('path', $path)->exists()) app(SecureDocumentStorage::class)->delete($path);
     }
 
     public function taskHasRequirement(Task $task): bool
@@ -221,20 +224,17 @@ class DocumentService
             }
         }
 
-        $disk = (string) config('flowtrack.document_disk', 'public');
-        $extension = strtolower(trim((string) $file->getClientOriginalExtension()));
-        if ($extension === '') $extension = strtolower(pathinfo((string) $document->name, PATHINFO_EXTENSION));
-        $storedName = Str::uuid()->toString().($extension !== '' ? '.'.$extension : '');
         $jobId = $document->flow_job_id ?: 'general';
-        $path = $file->storeAs('flowtrack/documents/'.$jobId, $storedName, $disk);
-        abort_if(!$path, 500, 'The document version could not be stored.');
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/'.$jobId);
+        $path = $stored['path'];
 
-        $version = ((int) Document::query()
-            ->where('flow_job_id', $document->flow_job_id)
-            ->where('task_id', $document->task_id)
-            ->where('category', $document->category)
-            ->where('name', $document->name)
-            ->max('version')) + 1;
+        $version = $this->nextDocumentVersion(
+            $document->task,
+            $document->flow_job_id,
+            $document->task_id,
+            (string) $document->category,
+            (string) $document->name,
+        );
 
         $created = Document::create([
             'document_number' => $this->nextNumber(),
@@ -246,8 +246,8 @@ class DocumentService
             'name' => $document->name,
             'note' => $document->note,
             'path' => $path,
-            'mime_type' => StoredFileResponse::mimeType($document->name, $file->getMimeType()),
-            'size' => $file->getSize(),
+            'mime_type' => StoredFileResponse::mimeType($document->name, $stored['mime']),
+            'size' => $stored['size'],
             'version' => max(1, $version),
             'is_final' => false,
         ]);
@@ -260,13 +260,50 @@ class DocumentService
 
     public function versions(Document $document, User $user, string $permissionModule = 'documents')
     {
-        return app(AccessControlService::class)->applyDocumentScope(Document::query(), $user, $permissionModule)
+        $document->loadMissing('task.setupTemplate');
+
+        $query = app(AccessControlService::class)->applyDocumentScope(Document::query(), $user, $permissionModule)
             ->with('uploader')
             ->where('flow_job_id', $document->flow_job_id)
             ->where('task_id', $document->task_id)
-            ->where('category', $document->category)
-            ->where('name', $document->name)
-            ->orderByDesc('version')->get();
+            ->where('category', $document->category);
+
+        // Artwork revisions may be uploaded with completely different original
+        // filenames. They still belong to one version history, so show every
+        // artwork upload for the same Artwork task. Other document types keep
+        // the existing filename-based version grouping.
+        $isArtworkTask = $document->task
+            && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD';
+
+        if (! $isArtworkTask) {
+            $query->where('name', $document->name);
+        }
+
+        return $query
+            ->orderByDesc('version')
+            ->orderByDesc('id')
+            ->get();
+    }
+
+    private function nextDocumentVersion(?Task $task, mixed $flowJobId, mixed $taskId, string $category, string $name): int
+    {
+        $query = Document::query()
+            ->where('flow_job_id', $flowJobId)
+            ->where('task_id', $taskId)
+            ->where('category', $category);
+
+        // Artwork revisions are one continuous version history even when the
+        // designer uploads a revised file with a different original filename.
+        // Other document categories keep the existing filename-based version
+        // grouping so this change is isolated to the Artwork upload task.
+        $isArtworkTask = $task
+            && app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+
+        if (! $isArtworkTask) {
+            $query->where('name', $name);
+        }
+
+        return max(1, ((int) $query->max('version')) + 1);
     }
 
     private function recordDocumentActivity(Document $document, User $user, string $action): void

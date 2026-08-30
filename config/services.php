@@ -39,7 +39,7 @@ return [
     'realtime' => [
         'enabled' => env('REVERB_ENABLED', true),
         'queue' => env('REALTIME_QUEUE', 'realtime'),
-        'queue_connection' => env('REALTIME_QUEUE_CONNECTION', 'database'),
+        'queue_connection' => env('REALTIME_QUEUE_CONNECTION', env('FLOWTRACK_HORIZONTAL_SCALING', false) ? 'redis' : env('QUEUE_CONNECTION', 'database')),
         // Laravel publishes to the Reverb HTTP API through this internal address.
         // In production this can stay on loopback even though browsers use WSS
         // through the public REVERB_HOST / Nginx endpoint.

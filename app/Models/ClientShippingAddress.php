@@ -7,7 +7,19 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClientShippingAddress extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'client_id',
+        'label',
+        'recipient',
+        'address_line1',
+        'suite',
+        'city',
+        'state',
+        'zip',
+        'country',
+        'is_default',
+        'sort_order',
+    ];
 
     protected function casts(): array
     {

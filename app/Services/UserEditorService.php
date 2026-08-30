@@ -36,6 +36,53 @@ class UserEditorService
         return app(AccessControlService::class)->isAdministrator($actor);
     }
 
+    public function create(array $data, User $actor): User
+    {
+        abort_unless($this->canManageAccess($actor), 403);
+
+        $status = (string) ($data['account_status'] ?? 'active');
+        abort_unless(in_array($status, ['active', 'inactive', 'suspended'], true), 422);
+
+        $businessUnit = (string) ($data['business_unit'] ?? 'both');
+        abort_unless(in_array($businessUnit, ['iid', 'nep', 'both'], true), 422);
+
+        $user = app(AdminService::class)->createUser([
+            'name' => trim((string) $data['name']),
+            'position' => $this->nullableString($data['position'] ?? null),
+            'email' => trim((string) $data['email']),
+            'wechat_id' => $this->nullableString($data['wechat_id'] ?? null),
+            'phone' => $this->nullableString($data['phone'] ?? null),
+            'role_ids' => array_values($data['role_ids'] ?? []),
+            'department_id' => $data['department_id'] ?? null,
+            'password' => (string) $data['password'],
+        ]);
+
+        DB::transaction(function () use ($user, $status, $businessUnit): void {
+            $user->forceFill([
+                'account_status' => $status,
+                'is_active' => $status === 'active',
+            ])->save();
+
+            $membership = WorkspaceMembership::query()
+                ->where('workspace_id', $this->workspaceId())
+                ->where('user_id', $user->id)
+                ->firstOrFail();
+
+            $membership->status = $status;
+            if (Schema::hasColumn('workspace_memberships', 'business_unit')) {
+                $membership->business_unit = $businessUnit;
+            }
+            $membership->save();
+        });
+
+        $fresh = $user->refresh()->loadMissing(['role', 'roles', 'department']);
+        app(DashboardService::class)->forget($fresh);
+        app(ShellDataService::class)->forget((int) $fresh->id);
+        app(WorkspaceRefreshService::class)->touch('role-access');
+
+        return $fresh;
+    }
+
     public function update(User $target, array $data, User $actor): User
     {
         abort_unless($this->canEdit($actor, $target), 403);

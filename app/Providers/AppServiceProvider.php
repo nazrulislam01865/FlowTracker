@@ -2,6 +2,18 @@
 
 namespace App\Providers;
 
+use App\Models\Client;
+use App\Models\Document;
+use App\Models\FlowJob;
+use App\Models\Inquiry;
+use App\Models\InquiryTask;
+use App\Models\Task;
+use App\Policies\ClientPolicy;
+use App\Policies\DocumentPolicy;
+use App\Policies\FlowJobPolicy;
+use App\Policies\InquiryPolicy;
+use App\Policies\InquiryTaskPolicy;
+use App\Policies\TaskPolicy;
 use App\Observers\WorkspaceDataObserver;
 use App\Services\AccessControlService;
 use App\Services\BrandingService;
@@ -9,17 +21,24 @@ use App\Services\MentionService;
 use App\Services\MasterDataService;
 use App\Services\ShellDataService;
 use App\Services\SetupContext;
+use App\Services\WorkspaceContext;
 use App\Support\Performance\RequestPerformanceMonitor;
+use App\Services\Observability\OperationsMetrics;
 use Illuminate\Cache\Events\CacheFailedOver;
 use Illuminate\Cache\Events\CacheHit;
 use Illuminate\Cache\Events\CacheMissed;
 use Illuminate\Cache\Events\KeyForgotten;
 use Illuminate\Cache\Events\KeyWritten;
+use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Client\Events\ConnectionFailed;
 use Illuminate\Http\Client\Events\RequestSending;
 use Illuminate\Http\Client\Events\ResponseReceived;
+use Illuminate\Queue\Events\JobFailed;
+use Illuminate\Queue\Events\QueueBusy;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\View;
 use Illuminate\Support\ServiceProvider;
 use RuntimeException;
@@ -35,12 +54,31 @@ class AppServiceProvider extends ServiceProvider
         $this->app->scoped(BrandingService::class);
         $this->app->scoped(RequestPerformanceMonitor::class);
         $this->app->scoped(ShellDataService::class);
+        $this->app->scoped(WorkspaceContext::class);
         $this->app->scoped(SetupContext::class);
         $this->app->scoped(\App\Services\WorkspaceRefreshService::class);
     }
 
     public function boot(): void
     {
+        if ((bool) config('performance.detect_lazy_loading', true) && app()->environment('local', 'testing')) {
+            Model::preventLazyLoading();
+            Model::handleLazyLoadingViolationUsing(function (Model $model, string $relation): void {
+                Log::warning('flowtrack.performance.lazy_loading', [
+                    'model' => $model::class,
+                    'id' => $model->getKey(),
+                    'relation' => $relation,
+                ]);
+            });
+        }
+
+        Gate::policy(FlowJob::class, FlowJobPolicy::class);
+        Gate::policy(Inquiry::class, InquiryPolicy::class);
+        Gate::policy(Task::class, TaskPolicy::class);
+        Gate::policy(InquiryTask::class, InquiryTaskPolicy::class);
+        Gate::policy(Document::class, DocumentPolicy::class);
+        Gate::policy(Client::class, ClientPolicy::class);
+
         foreach (WorkspaceDataObserver::observedModels() as $modelClass) {
             $modelClass::observe(WorkspaceDataObserver::class);
         }
@@ -68,6 +106,28 @@ class AppServiceProvider extends ServiceProvider
                 ? $event->exception
                 : new RuntimeException('HTTP connection failed.');
             app(RequestPerformanceMonitor::class)->finishOutgoing($event->request, null, $exception);
+        });
+
+        // Queue failures/depth are infrastructure signals, not page concerns.
+        // Keep them centrally logged so Supervisor/Redis failures can be
+        // alerted from the normal application log pipeline.
+        Event::listen(JobFailed::class, function (JobFailed $event): void {
+            app(OperationsMetrics::class)->recordQueueFailure($event->job->resolveName(), $event->job->getQueue());
+            Log::error('flowtrack.queue.failed', [
+                'connection' => $event->connectionName,
+                'queue' => $event->job->getQueue(),
+                'job' => $event->job->resolveName(),
+                'exception' => $event->exception->getMessage(),
+            ]);
+        });
+
+        Event::listen(QueueBusy::class, function (QueueBusy $event): void {
+            Log::warning('flowtrack.queue.busy', [
+                'connection' => $event->connectionName,
+                'queue' => $event->queue,
+                'size' => $event->size,
+                'max_depth' => (int) config('scalability.queues.max_depth', 100),
+            ]);
         });
 
         View::composer(['layouts.app', 'auth.login'], function ($view): void {

@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class OrderListInvoicePaymentActionTest extends TestCase
 {
@@ -10,10 +11,11 @@ class OrderListInvoicePaymentActionTest extends TestCase
     {
         $view = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
         $orders = file_get_contents(app_path('Livewire/Orders/Index.php'));
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
+        $jobs = OrderPhase5Source::livewire();
 
         $this->assertStringContainsString('$canViewFinance = $accessControl->can(auth()->user(), \'finance\', \'view\');', $view);
-        $this->assertStringContainsString('@if($canViewFinance || $canDeleteOrders)', $view);
+        $this->assertStringContainsString('@if($canViewFinance)', $view);
+        $this->assertStringContainsString('@if($canDeleteOrders)', $view);
         $this->assertStringContainsString('wire:click="openInvoiceAndPayment({{ $job->id }})"', $view);
         $this->assertStringContainsString('<span>Invoice and payment</span>', $view);
         $this->assertStringContainsString('<span>Delete order</span>', $view);

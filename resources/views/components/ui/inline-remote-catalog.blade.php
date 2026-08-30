@@ -18,7 +18,7 @@
 <div
     {{ $attributes->class(['ft-inline-remote-catalog', 'is-disabled' => $disabled]) }}
     data-ft-inline-remote-picker
-    x-data="window.FlowTrackRemoteFilter({
+    x-data="window.FlowTrack.ui.remoteFilter({
         property: '',
         type: @js($type),
         context: @js($context),

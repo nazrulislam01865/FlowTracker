@@ -3,14 +3,15 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class OrderTaskFlagAutomationImplementationTest extends TestCase
 {
     public function test_order_status_task_flag_and_order_flag_use_separate_master_catalogues(): void
     {
         $master = file_get_contents(app_path('Services/MasterDataService.php'));
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
-        $view = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
+        $view = \Tests\Support\AdministrationPhase7Source::masterDataView();
 
         $this->assertStringContainsString("'order_task_status' => 'Order Task Statuses'", $master);
         $this->assertStringContainsString("'order_task_flag' => 'Order Task Flags'", $master);
@@ -49,12 +50,12 @@ class OrderTaskFlagAutomationImplementationTest extends TestCase
 
     public function test_order_task_ui_no_longer_offers_manual_flag_selection(): void
     {
-        $view = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
+        $view = OrderPhase5Source::taskDetailView();
         $table = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
 
         $this->assertStringContainsString('Automatic flag', $view);
         $this->assertStringContainsString('Overdue overrides the status mapping', $view);
-        $this->assertStringContainsString("displayColorFor('order_flag', \$flag)", $table);
+        $this->assertStringContainsString("displayColorFor('order_flag', \$automaticFlag)", $table);
         $this->assertStringNotContainsString("displayColorFor('task_flag', \$flag)", $table);
     }
 }

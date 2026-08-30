@@ -4,7 +4,8 @@ namespace App\Livewire\TeamPerformance;
 
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Livewire\Concerns\UsesPagePlaceholder;
-use App\Services\DashboardService;
+use App\Queries\Dashboard\DashboardTeamPerformanceQuery;
+use App\DTOs\Dashboard\DashboardFilterData;
 use App\Services\FilterOptionService;
 use Livewire\Attributes\Url;
 use Livewire\Component;
@@ -138,15 +139,15 @@ class Report extends Component
         $clientId = max(0, (int) $this->clientFilter);
         $departmentId = max(0, (int) $this->teamFilter);
         $query = mb_strtolower(trim($this->search));
-        $service = app(DashboardService::class);
+        $teamQuery = app(DashboardTeamPerformanceQuery::class);
 
-        $teamPerformance = $service->assigneePerformance(
+        $teamPerformance = $teamQuery->rows(
             $user,
-            $clientId,
-            $departmentId,
+            new DashboardFilterData($clientId, $departmentId),
             $this->teamPeriod,
             $this->teamCustomFrom ?: null,
             $this->teamCustomTo ?: null,
+            $this->sort,
         )
             ->filter(fn ($row) => $departmentId <= 0 || (int) ($row->department_id ?? 0) === $departmentId)
             ->filter(function ($row) use ($query): bool {
@@ -158,8 +159,6 @@ class Report extends Component
                 return str_contains(mb_strtolower((string) $row->name), $query);
             });
 
-        $teamPerformance = $service->decorateTeamPerformance($teamPerformance);
-        $teamPerformance = $service->sortTeamPerformance($teamPerformance, $this->sort);
 
         $resultCount = $teamPerformance->count();
         $visibleLimit = min(
@@ -175,7 +174,8 @@ class Report extends Component
 
         return view('livewire.team-performance.report', [
             'assigneePerformance' => $visibleTeamPerformance,
-            'teamReportingPeriod' => $service->teamReportingPeriod(
+            'teamReportingPeriod' => $teamQuery->reportingPeriod(
+                $user,
                 $this->teamPeriod,
                 $this->teamCustomFrom ?: null,
                 $this->teamCustomTo ?: null,

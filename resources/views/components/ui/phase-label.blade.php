@@ -15,4 +15,4 @@
         $color = $phase->color ?? null;
     }
 @endphp
-<span {{ $attributes->class(['ft-phase-color-label'])->merge(['style' => \App\Support\MasterColor::style($color), 'title' => $fullLabel]) }}>{{ $label }}</span>
+<span {{ $attributes->class(['ft-phase-color-label', 'ft-badge--dynamic'])->merge(['style' => \App\Support\MasterColor::style($color), 'title' => $fullLabel]) }}>{{ $label }}</span>

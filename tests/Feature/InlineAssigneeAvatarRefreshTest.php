@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class InlineAssigneeAvatarRefreshTest extends TestCase
 {
@@ -16,8 +17,8 @@ class InlineAssigneeAvatarRefreshTest extends TestCase
 
     public function test_assignee_inline_actions_return_the_confirmed_avatar_url(): void
     {
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
-        $inquiries = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $jobs = OrderPhase5Source::livewire();
+        $inquiries = $this->inquiryLivewireSource();
 
         $this->assertStringContainsString('$result[\'avatarUrl\'] = $assignee?->profileImageUrl()', $jobs);
         $this->assertStringContainsString('$result[\'avatarUrl\'] = $updatedTask->assignee?->profileImageUrl()', $jobs);
@@ -26,7 +27,7 @@ class InlineAssigneeAvatarRefreshTest extends TestCase
 
     public function test_inline_runtime_keeps_avatar_state_in_sync_without_a_page_refresh(): void
     {
-        $runtime = file_get_contents(public_path('js/flowtrack-inline-editing.js'));
+        $runtime = file_get_contents(resource_path('js/components/inline-edit.js'));
         $picker = file_get_contents(resource_path('views/components/ui/inline-remote-user.blade.php'));
         $liveAvatar = file_get_contents(resource_path('views/components/ui/inline-live-avatar.blade.php'));
 

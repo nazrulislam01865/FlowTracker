@@ -12,7 +12,19 @@ class MasterRecord extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'workspace_id',
+        'parent_id',
+        'type',
+        'code',
+        'name',
+        'description',
+        'metadata',
+        'status',
+        'sort_order',
+        'color',
+        'created_by',
+    ];
 
     protected function casts(): array
     {
@@ -149,6 +161,65 @@ class MasterRecord extends Model
         if ($this->type !== 'product') return trim((string) $this->code);
 
         return 'PRD-'.str_pad((string) $this->id, 6, '0', STR_PAD_LEFT);
+    }
+
+    /**
+     * Default supplier configured on the Product master record.
+     *
+     * Products can be linked to multiple suppliers through metadata.supplier_ids.
+     * supplier_id remains the explicit default used by Create Order/Inquiry, while
+     * default_supplier_id is retained as a legacy read fallback only.
+     */
+    public function productSupplierId(): ?int
+    {
+        if ($this->type !== 'product') return null;
+
+        $id = (int) (
+            data_get($this->metadata, 'supplier_id')
+            ?: data_get($this->metadata, 'default_supplier_id')
+            ?: 0
+        );
+
+        return $id > 0 ? $id : null;
+    }
+
+    /** @return array<int,int> */
+    public function productSupplierIds(): array
+    {
+        if ($this->type !== 'product') return [];
+
+        $raw = data_get($this->metadata, 'supplier_ids', []);
+
+        // Be tolerant of older/imported records where the nested supplier list
+        // was stored as a JSON string or a comma/space separated scalar instead
+        // of a decoded JSON array. This keeps supplier counts and filters truthful
+        // without requiring a database migration just to read existing links.
+        if (is_string($raw)) {
+            $trimmed = trim($raw);
+            $decoded = $trimmed !== '' ? json_decode($trimmed, true) : null;
+            $raw = is_array($decoded)
+                ? $decoded
+                : (preg_split('/[\s,;|]+/', $trimmed, -1, PREG_SPLIT_NO_EMPTY) ?: []);
+        } elseif (is_int($raw) || is_float($raw)) {
+            $raw = [$raw];
+        } elseif (! is_array($raw)) {
+            $raw = [];
+        }
+
+        $linked = collect($raw)
+            ->flatten()
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0);
+
+        $defaultId = $this->productSupplierId();
+        if ($defaultId) $linked->prepend($defaultId);
+
+        return $linked->unique()->values()->all();
+    }
+
+    public function hasProductSupplier(int $supplierId): bool
+    {
+        return $supplierId > 0 && in_array($supplierId, $this->productSupplierIds(), true);
     }
 
     /** @return array<int, array{quantity:int, price:float}> */

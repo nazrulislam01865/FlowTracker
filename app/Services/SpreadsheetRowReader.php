@@ -212,7 +212,7 @@ class SpreadsheetRowReader
     {
         $headerIndex = $this->findHeaderRow($matrix);
         if ($headerIndex === null) {
-            throw new RuntimeException('Could not find the import header row. Required columns are Client ID, Order Title, Shipping Address and Postal Code. Use the current FlowTrack bulk order template or keep those column names intact.');
+            throw new RuntimeException('Could not find the import header row. Required columns are Client ID, Client Reference Number, Shipping Address, Postal Code and Product ID. Use the current FlowTrack bulk order template or keep those column names intact.');
         }
 
         $headers = array_map(fn ($value) => trim((string) $value), $matrix[$headerIndex]);
@@ -242,14 +242,19 @@ class SpreadsheetRowReader
         foreach (array_slice($matrix, 0, 30, true) as $index => $row) {
             $keys = array_map(fn ($value) => $this->normalizeHeader((string) $value), $row);
 
-            // Current Bulk Order template requires Client ID, Order Title,
-            // Shipping Address and Postal Code. Detect the header only when
-            // those required columns are present so a shifted/old template is
-            // not silently accepted with missing shipping information.
+            // Current Bulk Order template mirrors Create Order: Client ID,
+            // Client Reference Number, Shipping Address, Postal Code and
+            // Product ID are required. The legacy Reference Order No. header is
+            // still recognized so older files can be reviewed under the new
+            // validation rules, but Order Title is no longer an input column.
+            $hasClientReference = in_array('clientreferencenumber', $keys, true)
+                || in_array('referenceorderno', $keys, true);
+
             if (in_array('clientid', $keys, true)
-                && in_array('ordertitle', $keys, true)
+                && $hasClientReference
                 && in_array('shippingaddress', $keys, true)
-                && in_array('postalcode', $keys, true)) {
+                && in_array('postalcode', $keys, true)
+                && in_array('productid', $keys, true)) {
                 return (int) $index;
             }
 

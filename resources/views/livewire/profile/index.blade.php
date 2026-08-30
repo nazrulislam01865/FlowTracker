@@ -1,4 +1,4 @@
-<div class="ft-profile-page">
+<div class="ft-profile-page" data-ft-feedback-scope="form">
     <x-ui.page-head title="Edit Profile" subtitle="Update your account details, profile photo and security settings" />
 
     @if(session('success'))

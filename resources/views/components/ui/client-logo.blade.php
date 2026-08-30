@@ -14,7 +14,7 @@
 @endphp
 <span {{ $attributes->class(['ft-client-logo-mark', $shapeClass, 'is-archived' => $archived])->merge(['style' => "--ft-client-logo-size:{$size}px"]) }} aria-hidden="true">
     @if($imageUrl)
-        <img src="{{ $imageUrl }}" alt="" loading="lazy" decoding="async" onerror="this.hidden=true;this.nextElementSibling.hidden=false">
+        <img src="{{ $imageUrl }}" alt="" loading="lazy" decoding="async" data-ft-image-fallback="icon">
         <span class="ft-client-logo-fallback" hidden>{{ $initials }}</span>
     @else
         <span class="ft-client-logo-fallback">{{ $initials }}</span>

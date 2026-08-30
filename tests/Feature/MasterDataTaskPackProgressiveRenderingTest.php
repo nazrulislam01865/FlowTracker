@@ -8,8 +8,8 @@ class MasterDataTaskPackProgressiveRenderingTest extends TestCase
 {
     public function test_master_data_loads_only_the_selected_group_rows_after_the_shell(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
-        $view = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
+        $view = \Tests\Support\AdministrationPhase7Source::masterDataView();
 
         $this->assertStringContainsString('public bool $recordsReady = false;', $component);
         $this->assertStringContainsString('function loadMasterRecords()', $component);
@@ -39,9 +39,9 @@ class MasterDataTaskPackProgressiveRenderingTest extends TestCase
 
         $this->assertStringContainsString('public bool $optionsReady = false;', $component);
         $this->assertStringContainsString('function loadTaskPackOptions()', $component);
-        $this->assertStringContainsString('$master->active(\'department\')', $component);
+        $this->assertStringContainsString("app(FilterOptionService::class)->options(\$user, 'department-records', 'task-pack-setup'", $component);
         $this->assertStringContainsString('$master->active(\'priority\')', $component);
-        $this->assertStringContainsString('$master->active(\'document_category\')', $component);
+        $this->assertStringContainsString("app(FilterOptionService::class)->options(\$user, 'document-category-records', 'task-pack-setup'", $component);
         $this->assertStringContainsString('wire:init="loadTaskPackOptions"', $view);
         $this->assertStringContainsString('@if($optionsReady)', $view);
         $this->assertStringContainsString('context="task-pack-setup"', $view);

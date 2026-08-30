@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\FlowJob;
 use App\Models\FlowJobMember;
 use App\Models\FlowTaskChecklistItem;
 use App\Models\FlowTaskComment;
@@ -11,6 +12,7 @@ use App\Models\User;
 use App\Support\BoardLaneResolver;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Arr;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
 class TaskService
@@ -49,13 +51,22 @@ class TaskService
 
     public function moveStatus(Task $task, string $status, User $actor): Task
     {
-        return $this->update($task, [
-            'status' => $status,
-            'assignee_id' => $task->assignee_id,
-            'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : max($task->progress, 35)),
-            'needs_attention' => $task->needs_attention,
-            'attention_reason' => $task->attention_reason,
-        ], $actor);
+        // Order workflow status changes are serialized at the database level.
+        // This prevents two browser sessions from completing the same task and
+        // unlocking/advancing the same phase twice. The Livewire component only
+        // submits an intent; the service remains authoritative.
+        return DB::transaction(function () use ($task, $status, $actor): Task {
+            FlowJob::query()->whereKey($task->flow_job_id)->lockForUpdate()->firstOrFail();
+            $lockedTask = Task::query()->whereKey($task->id)->lockForUpdate()->firstOrFail();
+
+            return $this->update($lockedTask, [
+                'status' => $status,
+                'assignee_id' => $lockedTask->assignee_id,
+                'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : max($lockedTask->progress, 35)),
+                'needs_attention' => $lockedTask->needs_attention,
+                'attention_reason' => $lockedTask->attention_reason,
+            ], $actor);
+        }, 3);
     }
 
 
@@ -69,8 +80,11 @@ class TaskService
             throw ValidationException::withMessages(['overviewTaskLinkUrl' => 'Enter a valid http:// or https:// link.']);
         }
 
-        $link = TaskLink::create([
-            'task_id' => $task->id,
+        // Create through the task relation so the foreign key always belongs
+        // to the exact Order task that was authorized above. This also keeps the
+        // persistence path identical to the relation used when the taskflow is
+        // re-hydrated after Livewire closes the Add link form.
+        $link = $task->links()->create([
             'created_by' => $actor->id,
             'url' => $url,
         ]);
@@ -80,7 +94,13 @@ class TaskService
             'url' => $url,
         ]);
 
-        return $link;
+        // The link is already persisted and the next render reads document
+        // evidence directly from task_links. Do not run the parent Order/phase
+        // lifecycle from inside this resource-save request: doing so can change
+        // the visible taskflow before Livewire renders the newly saved link.
+        // Task status/completion updates remain responsible for parent progress
+        // and phase advancement.
+        return $link->refresh();
     }
 
     public function removeExternalLink(Task $task, int $linkId, User $actor): void
@@ -139,6 +159,8 @@ class TaskService
             abort_if($new === '', 422, ucfirst(str_replace('_', ' ', $field)).' is required.');
         }
 
+        if ($field === 'status') app(OrderTaskSequenceService::class)->assertStatusActionable($task);
+
         $updates = [$field => $new];
         if ($field === 'status' && BoardLaneResolver::isCompleted($new)) $this->ensureCompletionRequirements($task);
         if ($field === 'status') {
@@ -195,6 +217,7 @@ class TaskService
         $statusRecord = app(OrderTaskFlagService::class)->statusRecord($status, false);
         if ($statusRecord) $status = (string) $statusRecord->name;
 
+        app(OrderTaskSequenceService::class)->assertStatusActionable($task);
         if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
 
         $updates = [
@@ -328,16 +351,25 @@ class TaskService
     {
         $task->loadMissing(['documentCategory','setupTemplate.documentCategory']);
         $hasRequiredDocument = (bool) ($task->setupTemplate?->document_category_id ?: $task->document_category_id);
-        if (! $hasRequiredDocument) return;
+        $mustUploadBeforeCompletion = $task->setupTemplate
+            ? (bool) ($task->setupTemplate->document_required_before_completion ?? true)
+            : true;
+        if (! $hasRequiredDocument || ! $mustUploadBeforeCompletion) return;
 
-        // The requirement belongs to the task itself. Once a real Document row is
-        // linked to this task, the required-file gate is satisfied regardless of
-        // the document's legacy/category label. Older uploads may have been saved
-        // as "Task attachment" while newer uploads inherit the Task Pack category;
-        // both are valid evidence because task_id is the authoritative link. Use a
-        // fresh exists() query so a previously-loaded empty relation can never make
-        // an upload appear missing during the next inline status update.
-        if ($task->documents()->exists()) return;
+        // Courier labels and invoices are generated by their dedicated workflow
+        // actions. Requiring a separately uploaded file here would make the
+        // prototype action impossible to complete and prevent stage progression.
+        // The generated action is audit-logged by OrderWorkflowActionService.
+        $automationKey = app(OrderWorkflowActionService::class)->automationKey($task);
+        if (in_array($automationKey, ['SHIP_LABEL', 'BILL_PREPARE'], true)) return;
+
+        // The requirement belongs to the task itself. A file-backed Document or an
+        // external TaskLink is valid submission evidence. This lets users provide a
+        // cloud/document URL instead of uploading a duplicate file while keeping the
+        // Task Pack requirement attached to the same task. Fresh exists() queries are
+        // intentional so a previously-loaded empty relation cannot make newly-added
+        // evidence appear missing during the next inline status update.
+        if ($task->documents()->exists() || $task->links()->exists()) return;
 
         $name = $task->setupTemplate?->documentCategory?->name
             ?: $task->documentCategory?->name
@@ -362,9 +394,12 @@ class TaskService
         $task = $task->refresh();
         $job = $task->job()->first();
         if (!$job) return;
-        app(JobService::class)->recalculateProgress($job);
         if ((int) $task->workflow_phase_id === (int) $job->workflow_phase_id) {
-            app(JobService::class)->maybeAutoAdvance($job, $actor);
+            app(OrderTaskSequenceService::class)->synchronizeCurrentPhase($job, $actor);
+        }
+        app(JobService::class)->recalculateProgress($job->refresh());
+        if ((int) $task->workflow_phase_id === (int) $job->workflow_phase_id) {
+            app(JobService::class)->maybeAutoAdvance($job->refresh(), $actor);
         }
     }
 

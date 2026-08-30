@@ -10,4 +10,10 @@ return [
     'navigate' => [
         'show_progress_bar' => false,
     ],
+
+    // Central placeholder used only by page/section components that are safe
+    // to defer or lazy-load. Route-sensitive Create/Detail/editor components
+    // mount immediately and progressively load only their heavy inner sections.
+    'component_placeholder' => 'livewire.shared.page-placeholder',
+
 ];

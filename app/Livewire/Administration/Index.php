@@ -6,7 +6,6 @@ use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 
-use App\Models\Department;
 use App\Models\Role;
 use App\Models\RoleModuleAccess;
 use App\Models\User;
@@ -14,7 +13,6 @@ use App\Services\AccessControlService;
 use App\Services\AdminService;
 use App\Services\BrandingService;
 use App\Services\SetupContext;
-use Illuminate\Validation\Rule;
 use Livewire\Attributes\Renderless;
 use Livewire\Component;
 use Livewire\WithFileUploads;
@@ -30,22 +28,17 @@ class Index extends Component
     public string $tab = 'dashboard';
     public ?int $selectedRoleId = null;
 
-    public bool $showUserModal = false;
-    public ?int $editingUserId = null;
-    public string $name = '';
-    public string $position = '';
-    public string $email = '';
-    public string $password = '';
-    public string $passwordConfirmation = '';
-    public array $roleIds = [];
-    public ?int $departmentId = null;
-    public bool $userActive = true;
+    // CHANGE 2026-08-24: Users & Assignments search state.
+    public string $userSearch = '';
 
     public $logoUpload = null;
     public $faviconUpload = null;
 
     public bool $showRoleModal = false;
     public ?int $editingRoleId = null;
+
+    // Friendly confirmation state for disabling module email delivery.
+    public ?string $pendingEmailServiceModule = null;
     public string $roleName = '';
     public string $roleCode = '';
     public string $roleDescription = '';
@@ -71,6 +64,18 @@ class Index extends Component
         $this->tab = in_array($tab, $allowed, true) ? $tab : 'dashboard';
     }
 
+    // CHANGE 2026-08-24: keep user search pagination correct while typing.
+    public function updatedUserSearch(): void
+    {
+        $this->resetPage('usersPage');
+    }
+
+    public function clearUserSearch(): void
+    {
+        $this->userSearch = '';
+        $this->resetPage('usersPage');
+    }
+
     public function selectRole(int $roleId): void
     {
         $role = Role::query()
@@ -92,73 +97,12 @@ class Index extends Component
 
     public function openUser(?int $id = null): void
     {
-        $this->tab = 'users';
-        $this->resetValidation();
-        $this->editingUserId = $id;
-        $this->password = '';
-        $this->passwordConfirmation = '';
-
         if ($id) {
-            $user = User::findOrFail($id);
-            $this->name = $user->name;
-            $this->position = app(AdminService::class)->positionFor($user) ?? '';
-            $this->email = $user->email;
-            $this->roleIds = $user->assignedRoleIds();
-            $this->departmentId = $user->department_id;
-            $this->userActive = (bool) $user->is_active;
-        } else {
-            $this->reset(['name','position','email','roleIds','departmentId']);
-            $this->userActive = true;
+            $this->redirectRoute('users.edit', ['user' => $id, 'from' => 'administration'], navigate: true);
+            return;
         }
 
-        $this->showUserModal = true;
-    }
-
-    public function closeUser(): void
-    {
-        $this->showUserModal = false;
-        $this->editingUserId = null;
-        $this->resetValidation();
-        $this->reset(['name','position','email','password','passwordConfirmation','roleIds','departmentId']);
-        $this->userActive = true;
-    }
-
-    public function saveUser(): void
-    {
-        $editing = $this->editingUserId !== null;
-        $rules = [
-            'name' => ['required','string','max:255'],
-            'position' => ['nullable','string','max:120'],
-            'email' => ['required','email', $editing ? 'unique:users,email,'.$this->editingUserId : 'unique:users,email'],
-            'roleIds' => ['required','array','min:1'],
-            'roleIds.*' => ['distinct', Rule::exists('roles', 'id')->where('workspace_id', app(SetupContext::class)->workspaceId())],
-            'departmentId' => ['nullable','exists:departments,id'],
-            'userActive' => ['boolean'],
-            'password' => $editing ? ['nullable','string','min:10'] : ['required','string','min:10'],
-            'passwordConfirmation' => $editing ? ['required_with:password','same:password'] : ['required','same:password'],
-        ];
-        $data = $this->validate($rules, [
-            'passwordConfirmation.same' => 'The password confirmation does not match.',
-        ]);
-
-        $payload = [
-            'name' => $data['name'],
-            'position' => filled(trim((string) ($data['position'] ?? ''))) ? trim($data['position']) : null,
-            'email' => $data['email'],
-            'role_ids' => array_values($data['roleIds']),
-            'department_id' => $data['departmentId'],
-            'is_active' => $data['userActive'],
-        ];
-        if (filled($data['password'] ?? null)) $payload['password'] = $data['password'];
-
-        if ($editing) {
-            app(AdminService::class)->updateUser(User::findOrFail($this->editingUserId), $payload, auth()->user());
-        } else {
-            app(AdminService::class)->createUser($payload);
-        }
-
-        session()->flash('success', $editing ? 'User updated.' : 'User created.');
-        $this->closeUser();
+        $this->redirectRoute('users.create', navigate: true);
     }
 
     public function deleteUser(int $userId): void
@@ -166,8 +110,6 @@ class Index extends Component
         app(AdminService::class)->deleteUser(User::findOrFail($userId), auth()->user());
         session()->flash('success', 'User deleted.');
     }
-
-    public function createUser(): void { $this->saveUser(); }
 
     public function openRole(?int $id = null): void
     {
@@ -295,6 +237,51 @@ class Index extends Component
         app(AdminService::class)->toggleSecurity($code, auth()->user());
     }
 
+    public function toggleEmailService(string $module): void
+    {
+        $enabled = app(AdminService::class)->toggleEmailService($module, auth()->user());
+        session()->flash('success', ucfirst($module).' email service '.($enabled ? 'enabled' : 'disabled').'.');
+    }
+
+    public function requestDisableEmailService(string $module): void
+    {
+        $setting = collect(app(AdminService::class)->emailServiceSettings())
+            ->firstWhere('module', $module);
+
+        abort_unless($setting, 422, 'Unknown email service.');
+
+        // If another administrator already disabled it, simply refresh the UI
+        // instead of opening a stale confirmation dialog.
+        if (! (bool) ($setting['enabled'] ?? false)) {
+            $this->pendingEmailServiceModule = null;
+            return;
+        }
+
+        $this->pendingEmailServiceModule = $module;
+    }
+
+    public function cancelDisableEmailService(): void
+    {
+        $this->pendingEmailServiceModule = null;
+    }
+
+    public function confirmDisableEmailService(): void
+    {
+        $module = $this->pendingEmailServiceModule;
+        abort_unless(filled($module), 422, 'No email service is waiting for confirmation.');
+
+        $enabled = app(AdminService::class)->setEmailService($module, false, auth()->user());
+        $this->pendingEmailServiceModule = null;
+
+        session()->flash('success', ucfirst($module).' email service '.($enabled ? 'enabled' : 'disabled').'.');
+    }
+
+    public function setEmailService(string $module, bool $enabled): void
+    {
+        $enabled = app(AdminService::class)->setEmailService($module, $enabled, auth()->user());
+        session()->flash('success', ucfirst($module).' email service '.($enabled ? 'enabled' : 'disabled').'.');
+    }
+
     public function toggleRule(int $id): void { app(AdminService::class)->toggleRule($id); }
 
     public function saveLogo()
@@ -351,7 +338,7 @@ class Index extends Component
             'users' => $this->usersPageData($service),
             'audit' => ['auditLog' => $service->auditLog()],
             'security' => ['securitySettings' => $service->securitySettings()],
-            'settings' => [],
+            'settings' => ['emailServiceSettings' => $service->emailServiceSettings()],
             'branding' => ['branding' => app(BrandingService::class)->current()],
             default => $this->dashboardPageData($service),
         });
@@ -398,12 +385,8 @@ class Index extends Component
     private function usersPageData(AdminService $service): array
     {
         return [
-            'users' => $service->paginateUsers(10, 'usersPage'),
-            'roles' => $service->roleOptions(),
-            'departments' => Department::query()
-                ->where('is_active', true)
-                ->orderBy('name')
-                ->get(['id', 'name']),
+            // CHANGE 2026-08-24: search stays server-side and workspace scoped.
+            'users' => $service->paginateUsers(10, 'usersPage', $this->userSearch),
         ];
     }
 }

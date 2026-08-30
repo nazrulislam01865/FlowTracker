@@ -9,11 +9,11 @@ class InquiryTaskStatusMappingImplementationTest extends TestCase
     public function test_inquiry_task_status_master_data_drives_inquiry_status_and_attention_flags(): void
     {
         $masterService = file_get_contents(app_path('Services/MasterDataService.php'));
-        $inquiryService = file_get_contents(app_path('Services/InquiryService.php'));
-        $masterView = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
+        $inquiryService = $this->inquiryServiceSource();
+        $masterView = \Tests\Support\AdministrationPhase7Source::masterDataView();
         $taskflowView = file_get_contents(resource_path('views/livewire/inquiries/_taskflow.blade.php'));
-        $inquiryView = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
-        $component = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $inquiryView = $this->inquiryViewSource();
+        $component = $this->inquiryLivewireSource();
         $migration = file_get_contents(database_path('migrations/2026_08_13_101500_convert_inquiry_status_to_task_status_mapping.php'));
 
         $this->assertStringContainsString("'inquiry_task_status' => 'Inquiry Task Statuses'", $masterService);
@@ -38,8 +38,8 @@ class InquiryTaskStatusMappingImplementationTest extends TestCase
         $this->assertStringContainsString('wire:model.boolean="requiresAttention"', $masterView);
 
         $this->assertStringContainsString('openTaskAttentionReason', $taskflowView);
-        $this->assertStringContainsString('Requires attention</button>', $taskflowView);
-        $this->assertStringContainsString("\$task->attention_reason ?: 'Reason not added'", $taskflowView);
+        $this->assertStringContainsString('class="ft-inquiry-task-flag-icon"', $taskflowView);
+        $this->assertStringContainsString("\$task->attention_reason ? 'View or update flag reason' : 'Add flag reason'", $taskflowView);
         $this->assertStringContainsString('showTaskAttentionModal', $inquiryView);
         $this->assertStringContainsString('Why is attention required?', $inquiryView);
         $this->assertStringContainsString('public function saveTaskAttentionReason(): void', $component);

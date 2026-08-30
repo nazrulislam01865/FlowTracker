@@ -5,7 +5,9 @@ namespace App\Livewire\Dashboard;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Services\AccessControlService;
-use App\Services\DashboardService;
+use App\DTOs\Dashboard\DashboardFilterData;
+use App\Queries\Dashboard\DashboardPrimaryQuery;
+use App\Queries\Orders\OrderListQuery;
 use Illuminate\Support\Collection;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -137,12 +139,14 @@ class Index extends Component
         $clientId = max(0, (int) $this->clientFilter);
         $departmentId = max(0, (int) $this->teamFilter);
         $query = mb_strtolower(trim($this->search));
-        $data = app(DashboardService::class)->primaryData(
+        $data = app(DashboardPrimaryQuery::class)->handle(
             $user,
-            $clientId,
-            $departmentId,
-            $this->rangeDays,
+            new DashboardFilterData($clientId, $departmentId, $this->rangeDays, $query),
         );
+
+        // Reuse the exact Orders-page workflow-stage source so Dashboard and
+        // Orders always show the same stage names, colors and current counts.
+        $data['orderStages'] = app(OrderListQuery::class)->stages($user);
         $filterOptions = app(\App\Services\FilterOptionService::class);
         $data['dashboardClientFilterOptions'] = $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6);
         $data['dashboardTeamFilterOptions'] = $filterOptions->options($user, 'departments', 'dashboard', '', $departmentId ?: null, 6);
@@ -188,7 +192,7 @@ class Index extends Component
             $departmentId,
             $query,
             fn ($row): array => [
-                $row->job_number, $row->title, $row->health, $row->priority,
+                $row->job_number, $row->title, $row->priority,
                 $row->client?->name, $row->phase?->short_name, $row->phase?->name,
                 $row->owner?->name,
             ],
@@ -202,7 +206,7 @@ class Index extends Component
             $departmentId,
             $query,
             fn ($row): array => [
-                $row->job_number, $row->title, $row->health, $row->attention_reason,
+                $row->job_number, $row->title, $row->attention_reason,
                 $row->client?->name, $row->owner?->name,
                 $row->flaggedTasks?->first()?->attention_reason,
                 $row->tasks?->pluck('title')->filter()->implode(' '),
@@ -330,9 +334,7 @@ class Index extends Component
                 ]))), $query);
             });
 
-        $dashboardService = app(DashboardService::class);
-        $teamPerformance = $dashboardService->decorateTeamPerformance($teamPerformance);
-        $teamPerformance = $dashboardService->sortTeamPerformance($teamPerformance, 'performance');
+        // Phase 12: the Team Performance query owns decoration/sorting.
 
         $data['teamUserTotal'] = $teamPerformance->count();
         $data['teamHiddenCount'] = max(0, $data['teamUserTotal'] - 4);

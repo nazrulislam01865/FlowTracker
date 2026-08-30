@@ -3,20 +3,22 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class RichTextImagePasteSupportTest extends TestCase
 {
     public function test_operational_descriptions_and_comments_use_the_shared_rich_text_editor(): void
     {
         $jobCreate = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
-        $jobOverview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
-        $taskDetail = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
+        $jobOverview = file_get_contents(resource_path('views/components/jobs/order-detail/overview-card.blade.php'));
+        $taskDetail = OrderPhase5Source::taskDetailView();
         $jobActivity = file_get_contents(resource_path('views/components/jobs/detail-activity.blade.php'));
-        $inquiries = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $inquiries = $this->inquiryViewSource();
         $inquiryActivity = file_get_contents(resource_path('views/livewire/inquiries/_activity.blade.php'));
 
         $this->assertStringContainsString('data-rich-text wire:model="description"', $jobCreate);
-        $this->assertStringContainsString('data-rich-text autocomplete="off"', $jobOverview);
+        $this->assertStringContainsString('data-rich-text', $jobOverview);
+        $this->assertStringContainsString('autocomplete="off"', $jobOverview);
         $this->assertGreaterThanOrEqual(2, substr_count($taskDetail, 'data-rich-text'));
         $this->assertStringContainsString('data-rich-text data-rich-text-compact wire:model="jobComment"', $jobActivity);
         $this->assertGreaterThanOrEqual(3, substr_count($inquiries, 'data-rich-text'));
@@ -25,7 +27,7 @@ class RichTextImagePasteSupportTest extends TestCase
 
     public function test_rich_text_runtime_uploads_clipboard_images_instead_of_storing_base64_html(): void
     {
-        $runtime = file_get_contents(resource_path('js/rich-text.js'));
+        $runtime = file_get_contents(resource_path('js/components/rich-text.js'));
         $routes = file_get_contents(base_path('routes/web.php'));
 
         $this->assertStringContainsString("meta[name=\"flowtrack-rich-text-upload-url\"]", $runtime);
@@ -47,13 +49,14 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('rich-text-images/([A-Za-z0-9-]+', $richText);
         $this->assertStringContainsString("route('rich-text-images.show', ['filename' => \$imageMatch[1]], false)", $richText);
         $this->assertStringContainsString('RichTextService::class)->plainText', $mentions);
-        $this->assertStringContainsString('RichTextService::class)->safeHtml', $mentions);
+        $this->assertStringContainsString('$richText = app(RichTextService::class);', $mentions);
+        $this->assertStringContainsString('$richText->safeHtml($text)', $mentions);
     }
 
     public function test_rich_mention_notifications_keep_the_original_comment_for_existing_deep_links(): void
     {
         $notifications = file_get_contents(app_path('Services/NotificationService.php'));
-        $dashboard = file_get_contents(app_path('Services/DashboardService.php'));
+        $dashboard = file_get_contents(app_path('Services/LegacyDashboardService.php'));
 
         $this->assertGreaterThanOrEqual(2, substr_count($notifications, "'message' => \$message"));
         $this->assertStringContainsString('dashboardMentionQuery', $dashboard);
@@ -64,29 +67,29 @@ class RichTextImagePasteSupportTest extends TestCase
     }
     public function test_inline_description_saves_wait_for_images_and_use_one_rich_text_source_of_truth(): void
     {
-        $runtime = file_get_contents(resource_path('js/rich-text.js'));
-        $inlineEditing = file_get_contents(public_path('js/flowtrack-inline-editing.js'));
-        $jobOverview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
-        $taskDetail = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
-        $inquiries = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
-        $jobsIndex = file_get_contents(app_path('Livewire/Jobs/Index.php'));
-        $inquiriesIndex = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $runtime = file_get_contents(resource_path('js/components/rich-text.js'));
+        $inlineEditing = file_get_contents(resource_path('js/components/inline-edit.js'));
+        $jobOverview = file_get_contents(resource_path('views/components/jobs/order-detail/overview-card.blade.php'));
+        $taskDetail = OrderPhase5Source::taskDetailView();
+        $inquiries = $this->inquiryViewSource();
+        $jobsIndex = OrderPhase5Source::livewire();
+        $inquiriesIndex = $this->inquiryLivewireSource();
 
         $this->assertStringContainsString('source.__flowtrackRichTextValueAsync = async () =>', $runtime);
         $this->assertStringContainsString('await Promise.allSettled(Array.from(pendingUploads))', $runtime);
         $this->assertStringContainsString('source.__flowtrackRichTextSetValue = (value) =>', $runtime);
         $this->assertStringContainsString('async saveRichText(source, emptyDisplay, requestFactory)', $inlineEditing);
-        $this->assertStringContainsString('saveRichText($refs.descriptionEditor', $jobOverview);
+        $this->assertMatchesRegularExpression('/saveRichText\(\s*\$refs\.orderOverviewDescription/s', $jobOverview);
         $this->assertStringContainsString('saveRichText($refs.description', $taskDetail);
         $this->assertStringContainsString('saveRichText($refs.inquiryDescription', $inquiries);
         $this->assertStringContainsString('hasRichTextOverride', $inlineEditing);
         $this->assertStringContainsString('richTextOverrideHtml', $inlineEditing);
         $this->assertStringContainsString('displayHtml', $jobsIndex);
         $this->assertStringContainsString('displayHtml', $inquiriesIndex);
-        $this->assertStringNotContainsString("saveRichText($refs.descriptionEditor, 'No order description recorded.', (clean) => $wire.updateJobTextField({{ $job->id }}, 'description', clean)).then", $jobOverview);
-        $this->assertStringNotContainsString("saveRichText($refs.description, 'No description has been provided for this task.', (clean) => $wire.updateSelectedTaskField('description', clean)).then", $taskDetail);
-        $this->assertStringNotContainsString("saveRichText($refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => $wire.updateInquiryField('requirement_notes', clean)).then", $inquiries);
-        $this->assertStringNotContainsString('x-ref="descriptionEditor" x-model="draftValue"', $jobOverview);
+        $this->assertStringNotContainsString("saveRichText(\$refs.descriptionEditor, 'No order description recorded.', (clean) => \$wire.updateJobTextField({{ \$job->id }}, 'description', clean)).then", $jobOverview);
+        $this->assertStringNotContainsString("saveRichText(\$refs.description, 'No description has been provided for this task.', (clean) => \$wire.updateSelectedTaskField('description', clean)).then", $taskDetail);
+        $this->assertStringNotContainsString("saveRichText(\$refs.inquiryDescription, 'No description has been provided for this Inquiry.', (clean) => \$wire.updateInquiryField('requirement_notes', clean)).then", $inquiries);
+        $this->assertStringNotContainsString('x-ref="orderOverviewDescription" x-model="draftValue"', $jobOverview);
         $this->assertStringNotContainsString('x-ref="description" x-model="draftValue"', $taskDetail);
         $this->assertStringNotContainsString('x-ref="inquiryDescription" x-model="draftValue"', $inquiries);
     }
@@ -102,10 +105,10 @@ class RichTextImagePasteSupportTest extends TestCase
 
     public function test_saved_rich_text_images_have_zoom_preview_and_download_support(): void
     {
-        $runtime = file_get_contents(resource_path('js/rich-text.js'));
+        $runtime = file_get_contents(resource_path('js/components/rich-text.js'));
         $routes = file_get_contents(base_path('routes/web.php'));
         $controller = file_get_contents(app_path('Http/Controllers/RichTextImageController.php'));
-        $css = file_get_contents(resource_path('css/flowtrack.css'));
+        $css = $this->applicationCss();
 
         $this->assertStringContainsString(".ft-rich-text-content img", $runtime);
         $this->assertStringContainsString('bootRichTextImageViewer', $runtime);
@@ -114,21 +117,22 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('data-rich-image-zoom-out', $runtime);
         $this->assertStringContainsString("Route::get('/rich-text-images/{filename}/download'", $routes);
         $this->assertStringContainsString('public function download(string $filename)', $controller);
-        $this->assertStringContainsString("->download($path, $filename", $controller);
+        $this->assertStringContainsString("StoredFileResponse::download(\$path, \$filename", $controller);
         $this->assertStringContainsString('.ft-rich-image-viewer', $css);
-        $this->assertStringContainsString('cursor:zoom-in', $css);
+        $this->assertMatchesRegularExpression('/cursor\s*:\s*zoom-in/', $css);
     }
 
     public function test_rich_text_survives_livewire_navigation_and_viewer_body_replacement(): void
     {
-        $runtime = file_get_contents(resource_path('js/rich-text.js'));
+        $runtime = file_get_contents(resource_path('js/components/rich-text.js'));
         $app = file_get_contents(resource_path('js/app.js'));
 
         $this->assertStringContainsString("'morph.added'", $runtime);
         $this->assertStringContainsString("'morphed'", $runtime);
         $this->assertStringContainsString('state.observedBody === document.body', $runtime);
         $this->assertStringContainsString('state.imageViewerController.ensureOverlay()', $runtime);
-        $this->assertStringContainsString("document.addEventListener('livewire:navigating'", $app);
+        $navigation = file_get_contents(resource_path('js/core/navigation.js'));
+        $this->assertStringContainsString("document.addEventListener('livewire:navigating'", $navigation);
         $this->assertStringContainsString('event.detail?.onSwap?.(() => {', $app);
         $this->assertStringContainsString('scheduleRichTextRefresh();', $app);
     }
@@ -136,7 +140,7 @@ class RichTextImagePasteSupportTest extends TestCase
 
     public function test_enter_posts_compact_comments_and_shift_enter_keeps_a_new_line(): void
     {
-        $runtime = file_get_contents(resource_path('js/rich-text.js'));
+        $runtime = file_get_contents(resource_path('js/components/rich-text.js'));
 
         $this->assertStringContainsString('const shouldSubmitComment = compactComment', $runtime);
         $this->assertStringContainsString("event.key === 'Enter'", $runtime);

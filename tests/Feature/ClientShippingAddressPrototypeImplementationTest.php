@@ -9,16 +9,14 @@ class ClientShippingAddressPrototypeImplementationTest extends TestCase
     public function test_client_form_uses_reusable_prototype_shipping_components(): void
     {
         $clientForm = file_get_contents(resource_path('views/components/clients/create.blade.php'));
-        $section = file_get_contents(resource_path('views/components/ui/prototype-form-section.blade.php'));
         $address = file_get_contents(resource_path('views/components/ui/shipping-address-editor.blade.php'));
 
         $this->assertStringContainsString('ft-reusable-form-theme', $clientForm);
-        $this->assertStringContainsString('<x-ui.prototype-form-section', $clientForm);
-        $this->assertStringContainsString('title="Shipping address"', $clientForm);
+        $this->assertStringContainsString('ft-client-shipping-aligned-section', $clientForm);
+        $this->assertStringContainsString('<h3>Shipping address</h3>', $clientForm);
         $this->assertStringContainsString('<x-ui.shipping-address-editor', $clientForm);
         $this->assertStringContainsString('Use saved address', $clientForm);
 
-        $this->assertStringContainsString('ft-form-required-badge', $section);
         $this->assertStringContainsString('Recipient name', $address);
         $this->assertStringContainsString('Country / region', $address);
         $this->assertStringContainsString('Address line 1', $address);
@@ -29,7 +27,7 @@ class ClientShippingAddressPrototypeImplementationTest extends TestCase
 
     public function test_shipping_address_no_longer_requires_a_visible_location_label(): void
     {
-        $component = file_get_contents(app_path('Livewire/Clients/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::clients();
 
         $this->assertStringContainsString("\$requiredShippingFields = ['address_line1','city','zip'];", $component);
         $this->assertStringContainsString("\$requiredShippingFields[] = 'recipient';", $component);

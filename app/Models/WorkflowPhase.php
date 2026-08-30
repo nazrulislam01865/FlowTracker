@@ -7,7 +7,29 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WorkflowPhase extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'id',
+        'workflow_id',
+        'task_pack_id',
+        'sequence',
+        'name',
+        'short_name',
+        'allow_job_start',
+        'can_skip',
+        'requires_approval',
+        'required_document',
+        'entry_rule',
+        'exit_rule',
+        'workflow_template_id',
+        'document_category_id',
+        'is_skippable',
+        'auto_advance_on_ready',
+        'is_active',
+        'entry_condition',
+        'exit_condition',
+        'source_workflow_phase_id',
+        'color',
+    ];
 
     protected function casts(): array
     {

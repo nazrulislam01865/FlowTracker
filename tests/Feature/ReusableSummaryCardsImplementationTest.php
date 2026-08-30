@@ -11,7 +11,7 @@ class ReusableSummaryCardsImplementationTest extends TestCase
         $component = file_get_contents(resource_path('views/components/ui/summary-card.blade.php'));
         $myWork = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
         $allTasks = file_get_contents(resource_path('views/livewire/board/index.blade.php'));
-        $clients = file_get_contents(resource_path('views/livewire/clients/index.blade.php'));
+        $clients = \Tests\Support\AdministrationPhase7Source::clientsView();
 
         $this->assertStringContainsString("'displayValue' => null", $component);
         $this->assertStringContainsString("'clients' =>", $component);

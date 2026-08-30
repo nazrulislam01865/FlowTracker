@@ -7,7 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class InquiryTaskLink extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'inquiry_task_id',
+        'created_by',
+        'url',
+    ];
 
     public function task(): BelongsTo
     {

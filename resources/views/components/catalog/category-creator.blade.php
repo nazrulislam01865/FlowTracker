@@ -30,7 +30,7 @@
     });
 @endphp
 <div class="ft-taxonomy-modal-backdrop" wire:click.self="closeCategoryCreator" wire:keydown.escape="closeCategoryCreator" role="presentation">
-    <section class="ft-taxonomy-modal" role="dialog" aria-modal="true" aria-labelledby="ft-taxonomy-title" x-data x-on:click.stop>
+    <section class="ft-taxonomy-modal" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="ft-taxonomy-title" x-data x-on:click.stop>
         <header class="ft-taxonomy-modal-header">
             <div>
                 <h3 id="ft-taxonomy-title">{{ $title }}</h3>
@@ -53,7 +53,7 @@
                 </label>
             @elseif($level === 'product')
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select ft-taxonomy-search-select"
                         label="Main category"
                         property="newProductCategoryMain"
@@ -81,7 +81,7 @@
                 </label>
             @elseif($level === 'sub')
                 <div class="ft-product-search-select-wrap">
-                    <x-ui.select-filter
+                    <x-ui.search-select
                         class="ft-product-search-select ft-taxonomy-search-select"
                         label="Product category"
                         property="newSubcategoryProductCategoryId"

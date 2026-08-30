@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\AccessControlService;
 use App\Services\MasterDataService;
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class CatalogueRoleMatrixPermissionTest extends TestCase
 {
@@ -41,7 +42,7 @@ class CatalogueRoleMatrixPermissionTest extends TestCase
         $this->assertStringContainsString("label=\"Products\" icon=\"products\"", $sidebar);
         $this->assertStringContainsString("label=\"Product Categories\" icon=\"categories\"", $sidebar);
         $this->assertStringContainsString("label=\"Suppliers\" icon=\"suppliers\"", $sidebar);
-        $this->assertStringContainsString("collect(\$masterLabels)->except(\$catalogueGroups)->all()", $sidebar);
+        $this->assertStringContainsString("collect(\$masterLabels)->except([...\$catalogueGroups, ...\$financialGroups, ...\$taskPackMasterGroups, 'task_status', 'task_flag'])->all()", $sidebar);
         $this->assertStringContainsString("canModule('catalog_products', 'view')", $sidebar);
         $this->assertStringContainsString("canModule('product_categories', 'view')", $sidebar);
         $this->assertStringContainsString("canModule('suppliers', 'view')", $sidebar);
@@ -49,9 +50,9 @@ class CatalogueRoleMatrixPermissionTest extends TestCase
 
     public function test_inline_catalogue_creation_uses_product_and_category_permissions_separately(): void
     {
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
-        $inquiries = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
-        $master = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $jobs = OrderPhase5Source::livewire();
+        $inquiries = $this->inquiryLivewireSource();
+        $master = \Tests\Support\AdministrationPhase7Source::masterData();
         $service = file_get_contents(app_path('Services/MasterDataService.php'));
 
         foreach ([$jobs, $inquiries] as $component) {
@@ -68,11 +69,11 @@ class CatalogueRoleMatrixPermissionTest extends TestCase
     public function test_create_inquiry_and_order_catalogue_access_is_controlled_by_products_not_product_lines(): void
     {
         $filterOptions = file_get_contents(app_path('Services/FilterOptionService.php'));
-        $inquiries = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
+        $inquiries = $this->inquiryLivewireSource();
+        $jobs = OrderPhase5Source::livewire();
         $jobTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
         $inquiryProducts = file_get_contents(resource_path('views/components/inquiries/create-products.blade.php'));
-        $orderProducts = file_get_contents(resource_path('views/components/jobs/create-products.blade.php'));
+        $orderProducts = OrderPhase5Source::createProductsView();
         $imageController = file_get_contents(app_path('Http/Controllers/ProductImageController.php'));
 
         $this->assertStringContainsString("'create-job' => \$user->canModule('jobs', 'create')", $filterOptions);

@@ -1,0 +1,677 @@
+/* Create Order single-select urgency controls.
+   Kept outside the Vite bundle so deployments with prebuilt assets receive the fix immediately. */
+.ft-create-job-page .ft-create-urgency-check input[type="radio"]{
+    width:17px!important;
+    height:17px!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    flex:0 0 17px;
+    accent-color:var(--ft-theme-primary);
+}
+
+/* Create Order shipping-address section.
+   Prototype-faithful layout using FlowTrack's existing blue/navy theme. */
+.ft-create-job-page .ft-order-shipping-section{
+    padding:18px 20px 20px;
+}
+.ft-create-job-page .ft-order-shipping-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:18px;
+    margin-bottom:18px;
+}
+.ft-create-job-page .ft-order-shipping-heading{
+    min-width:0;
+}
+.ft-create-job-page .ft-order-shipping-title{
+    margin-bottom:4px;
+    flex-wrap:wrap;
+}
+.ft-create-job-page .ft-order-shipping-title h2{
+    color:#172235;
+}
+.ft-create-job-page .ft-order-shipping-heading>p{
+    margin:0 0 0 35px;
+    color:#66758b;
+    font-size:.75rem;
+    line-height:1.45;
+}
+.ft-create-job-page .ft-order-required-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    margin-left:2px;
+    padding:2px 9px;
+    border:1px solid #f1b8b5;
+    border-radius:6px;
+    background:#fff7f6;
+    color:#c2413a;
+    font-size:.65625rem;
+    font-style:normal;
+    font-weight:800;
+    line-height:1;
+}
+.ft-create-job-page .ft-order-optional-badge{
+    display:inline-flex;
+    align-items:center;
+    min-height:24px;
+    margin-left:2px;
+    padding:2px 9px;
+    border:1px solid var(--ft-theme-primary-100);
+    border-radius:6px;
+    background:var(--ft-theme-surface-subtle);
+    color:var(--ft-theme-primary);
+    font-size:.65625rem;
+    font-style:normal;
+    font-weight:800;
+    line-height:1;
+}
+.ft-create-job-page .ft-order-required-star{
+    color:#c2413a;
+    font-weight:800;
+}
+.ft-create-job-page .ft-order-saved-address-button{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    min-height:40px;
+    padding:0 14px;
+    border:1px solid var(--ft-theme-primary);
+    border-radius:8px;
+    background:#fff;
+    color:var(--ft-theme-primary);
+    font-size:.71875rem;
+    font-weight:800;
+    cursor:pointer;
+    transition:background .15s ease,border-color .15s ease,color .15s ease,box-shadow .15s ease;
+}
+.ft-create-job-page .ft-order-saved-address-button svg{
+    width:17px;
+    height:17px;
+    flex:0 0 17px;
+}
+.ft-create-job-page .ft-order-saved-address-button:hover:not(:disabled){
+    background:var(--ft-theme-primary-soft);
+    border-color:var(--ft-theme-primary);
+    color:var(--ft-theme-primary);
+    box-shadow:0 4px 12px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+.ft-create-job-page .ft-order-saved-address-button:disabled{
+    border-color:#d9e3ef;
+    background:#f8fafc;
+    color:#94a3b8;
+    cursor:not-allowed;
+    box-shadow:none;
+}
+.ft-create-job-page .ft-order-shipping-address-field{
+    display:block;
+    margin-bottom:14px;
+}
+.ft-create-job-page .ft-order-shipping-address-field>b,
+.ft-create-job-page .ft-order-shipping-contact-grid .ft-create-field>b{
+    display:block;
+    margin-bottom:7px;
+    color:#172235;
+    font-size:.75rem;
+}
+.ft-create-job-page .ft-order-shipping-address-field textarea{
+    width:100%;
+    min-height:132px;
+    resize:vertical;
+    padding:13px 14px;
+    border:1px solid #cfd9e6;
+    border-radius:8px;
+    background:#fff;
+    color:#172235;
+    font:inherit;
+    font-size:.8125rem;
+    line-height:1.55;
+    outline:none;
+    transition:border-color .15s ease,box-shadow .15s ease;
+}
+.ft-create-job-page .ft-order-shipping-address-field textarea:focus,
+.ft-create-job-page .ft-order-shipping-contact-grid input:focus,
+.ft-create-job-page .ft-order-phone-control:focus-within{
+    border-color:var(--ft-theme-primary);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+.ft-create-job-page .ft-order-shipping-contact-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.12fr) minmax(0,.88fr);
+    gap:16px;
+    align-items:start;
+}
+.ft-create-job-page .ft-order-shipping-contact-grid .ft-create-field{
+    min-width:0;
+}
+.ft-create-job-page .ft-order-shipping-contact-grid input{
+    width:100%;
+    min-height:44px;
+    padding:0 13px;
+    border:1px solid #cfd9e6;
+    border-radius:8px;
+    background:#fff;
+    color:#172235;
+    font-size:.8125rem;
+    outline:none;
+    transition:border-color .15s ease,box-shadow .15s ease;
+}
+.ft-create-job-page .ft-order-phone-control{
+    display:grid;
+    grid-template-columns:92px minmax(0,1fr);
+    min-height:44px;
+    overflow:hidden;
+    border:1px solid #cfd9e6;
+    border-radius:8px;
+    background:#fff;
+    transition:border-color .15s ease,box-shadow .15s ease;
+}
+.ft-create-job-page .ft-order-phone-control input{
+    width:100%;
+    min-height:42px!important;
+    margin:0;
+    padding:0 13px;
+    border:0!important;
+    border-radius:0!important;
+    background:#fff;
+    color:#172235;
+    font-size:.8125rem;
+    outline:0;
+    box-shadow:none!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter{
+    position:relative;
+    min-width:0;
+    border-right:1px solid #dbe3ed;
+}
+.ft-create-job-page .ft-order-phone-code-filter>label{
+    position:absolute!important;
+    width:1px!important;
+    height:1px!important;
+    padding:0!important;
+    margin:-1px!important;
+    overflow:hidden!important;
+    clip:rect(0,0,0,0)!important;
+    white-space:nowrap!important;
+    border:0!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-button{
+    width:100%!important;
+    min-height:42px!important;
+    height:42px!important;
+    margin:0!important;
+    padding:0 25px 0 12px!important;
+    border:0!important;
+    border-radius:0!important;
+    background:#fff!important;
+    color:#172235!important;
+    font-size:.8125rem!important;
+    font-weight:600!important;
+    text-align:left!important;
+    box-shadow:none!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-filter-chevron{
+    right:9px!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-menu{
+    width:min(310px,calc(100vw - 24px))!important;
+    min-width:min(260px,calc(100vw - 24px))!important;
+    max-width:calc(100vw - 24px)!important;
+    padding:8px!important;
+    border-radius:10px!important;
+    box-shadow:0 14px 34px rgba(15,35,65,.16)!important;
+    z-index:1400!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-search{
+    min-height:38px!important;
+    margin:0 0 7px!important;
+    padding:0 10px!important;
+    border:1px solid #cfd9e6!important;
+    border-radius:8px!important;
+    font-size:.75rem!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-option{
+    min-height:36px!important;
+    padding:8px 9px!important;
+    border-radius:7px!important;
+    font-size:.75rem!important;
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-option>small{
+    font-size:.625rem!important;
+    text-align:right!important;
+}
+.ft-create-job-page .ft-order-shipping-section .validation-error{
+    display:block;
+    margin-top:5px;
+}
+
+.ft-order-saved-address-overlay{
+    z-index:1190!important;
+}
+.ft-order-saved-address-modal{
+    z-index:1200!important;
+    position:fixed!important;
+    top:50%!important;
+    left:50%!important;
+    width:min(650px,calc(100vw - 28px))!important;
+    max-height:min(720px,calc(100vh - 42px));
+    overflow:hidden;
+    transform:translate(-50%,-50%)!important;
+    border:1px solid #dbe3ed;
+    border-radius:13px;
+    background:#fff;
+    box-shadow:0 24px 70px rgba(15,35,65,.24);
+}
+.ft-order-saved-address-modal-head{
+    display:flex;
+    align-items:flex-start;
+    justify-content:space-between;
+    gap:16px;
+    padding:18px 20px 15px;
+    border-bottom:1px solid #e5ebf2;
+}
+.ft-order-saved-address-modal-head h3{
+    margin:0;
+    color:#172235;
+    font-size:1.0625rem;
+    letter-spacing:-.015em;
+}
+.ft-order-saved-address-modal-head p{
+    margin:5px 0 0;
+    color:#66758b;
+    font-size:.71875rem;
+}
+.ft-order-saved-address-modal-head>button{
+    display:grid;
+    place-items:center;
+    width:32px;
+    height:32px;
+    padding:0;
+    border:0;
+    border-radius:8px;
+    background:#f3f6fa;
+    color:#536985;
+    font-size:1.375rem;
+    line-height:1;
+    cursor:pointer;
+}
+.ft-order-saved-address-modal-head>button:hover{
+    background:var(--ft-theme-primary-soft);
+    color:var(--ft-theme-primary);
+}
+.ft-order-saved-address-list{
+    display:grid;
+    gap:10px;
+    max-height:560px;
+    overflow:auto;
+    padding:14px 16px 18px;
+}
+.ft-order-saved-address-card{
+    display:grid;
+    grid-template-columns:34px minmax(0,1fr) auto;
+    gap:12px;
+    align-items:start;
+    width:100%;
+    padding:13px 14px;
+    border:1px solid #dbe3ed;
+    border-radius:10px;
+    background:#fff;
+    color:#172235;
+    text-align:left;
+    cursor:pointer;
+    transition:border-color .15s ease,background .15s ease,box-shadow .15s ease;
+}
+.ft-order-saved-address-card:hover,
+.ft-order-saved-address-card.is-selected{
+    border-color:var(--ft-theme-primary);
+    background:var(--ft-theme-surface-subtle);
+    box-shadow:0 5px 16px color-mix(in srgb, var(--ft-theme-primary) 8%, transparent);
+}
+.ft-order-saved-address-card-icon{
+    display:grid;
+    place-items:center;
+    width:32px;
+    height:32px;
+    border-radius:8px;
+    background:var(--ft-theme-primary-soft);
+    color:var(--ft-theme-primary);
+}
+.ft-order-saved-address-card-icon svg{
+    width:17px;
+    height:17px;
+}
+.ft-order-saved-address-copy{
+    display:flex;
+    min-width:0;
+    flex-direction:column;
+    gap:2px;
+    color:#52647b;
+    font-size:.71875rem;
+    line-height:1.4;
+}
+.ft-order-saved-address-label{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    margin-bottom:2px;
+}
+.ft-order-saved-address-label strong{
+    color:#172235;
+    font-size:.78125rem;
+}
+.ft-order-saved-address-label em{
+    padding:2px 6px;
+    border-radius:999px;
+    background:var(--ft-theme-primary-soft);
+    color:var(--ft-theme-primary);
+    font-size:.5625rem;
+    font-style:normal;
+    font-weight:800;
+}
+.ft-order-saved-address-use{
+    align-self:center;
+    color:var(--ft-theme-primary);
+    font-size:.65625rem;
+    font-weight:800;
+    white-space:nowrap;
+}
+.ft-order-saved-address-empty{
+    padding:28px 18px;
+    border:1px dashed #cfd9e6;
+    border-radius:10px;
+    color:#66758b;
+    text-align:center;
+    font-size:.75rem;
+}
+
+@media (max-width:760px){
+    .ft-create-job-page .ft-order-shipping-section{padding:14px 12px 15px}
+    .ft-create-job-page .ft-order-shipping-head{align-items:stretch;flex-direction:column;gap:12px;margin-bottom:15px}
+    .ft-create-job-page .ft-order-shipping-heading>p{margin-left:35px}
+    .ft-create-job-page .ft-order-saved-address-button{align-self:flex-start;min-height:38px}
+    .ft-create-job-page .ft-order-shipping-contact-grid{grid-template-columns:1fr;gap:12px}
+    .ft-create-job-page .ft-order-phone-control{grid-template-columns:84px minmax(0,1fr)}
+    .ft-order-saved-address-card{grid-template-columns:32px minmax(0,1fr)}
+    .ft-order-saved-address-use{grid-column:2;justify-self:start;align-self:auto}
+}
+
+/* 2026-08-22 Create Order green theme parity with Order Details.
+   Presentation only: keeps Order creation/workflow logic unchanged while
+   matching the Order Details teal/green action language. */
+.ft-create-job-page{
+    --ft-order-create-accent:var(--ft-theme-primary);
+    --ft-order-create-accent-hover:var(--ft-theme-primary-hover);
+    --ft-order-create-accent-strong:#159a68;
+    --ft-order-create-accent-soft:var(--ft-theme-primary-soft);
+    --ft-order-create-accent-soft-hover:var(--ft-theme-primary-soft-hover);
+    --ft-order-create-accent-border:var(--ft-theme-primary-300);
+    --ft-color-brand-primary:var(--ft-theme-primary);
+    --ft-color-brand-primary-hover:var(--ft-theme-primary-hover);
+    --ft-color-brand-primary-soft:var(--ft-theme-primary-soft);
+    --ft-text-link:var(--ft-theme-primary);
+    --ft-text-link-hover:var(--ft-theme-primary-hover);
+    --ft-focus-border:#58a99f;
+    --ft-focus-ring:0 0 0 3px color-mix(in srgb, var(--ft-theme-primary) 12%, transparent);
+    --blue:var(--ft-theme-primary);
+    --blue2:var(--ft-theme-primary-soft);
+}
+
+/* Numbered section markers and primary page actions. */
+.ft-create-job-page .ft-create-section-title>span{
+    background:var(--ft-order-create-accent);
+    color:#fff;
+}
+.ft-create-job-page .ft-create-primary{
+    border-color:var(--ft-order-create-accent);
+    background:var(--ft-order-create-accent);
+    color:#fff;
+    transition:background .15s ease,border-color .15s ease,box-shadow .15s ease,transform .15s ease;
+}
+.ft-create-job-page .ft-create-primary:hover:not(:disabled),
+.ft-create-job-page .ft-create-primary:focus-visible:not(:disabled){
+    border-color:var(--ft-order-create-accent-hover);
+    background:var(--ft-order-create-accent-hover);
+    box-shadow:0 5px 14px color-mix(in srgb, var(--ft-theme-primary) 16%, transparent);
+}
+.ft-create-job-page .ft-create-primary:focus-visible{
+    outline:0;
+    box-shadow:var(--ft-focus-ring);
+}
+
+/* Native fields and the repeated/urgency controls. */
+.ft-create-job-page .ft-create-field input:focus,
+.ft-create-job-page .ft-create-field select:focus,
+.ft-create-job-page .ft-create-field textarea:focus,
+.ft-create-job-page .ft-product-row input:focus,
+.ft-create-job-page .ft-product-row select:focus,
+.ft-create-job-page .ft-create-urgency-control:focus-within{
+    border-color:var(--ft-focus-border);
+    box-shadow:0 0 0 2px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+.ft-create-job-page .ft-repeat-order-check input[type="checkbox"],
+.ft-create-job-page .ft-create-urgency-check input[type="checkbox"],
+.ft-create-job-page .ft-create-urgency-check input[type="radio"]{
+    accent-color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-urgency-check:has(input:checked){
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-product-row-footer button{
+    border-color:var(--ft-order-create-accent-border);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-product-row-footer button:hover:not(:disabled){
+    border-color:var(--ft-order-create-accent);
+    background:var(--ft-order-create-accent-soft);
+}
+.ft-create-job-page .ft-create-upload label{
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-workflow-summary{
+    border-color:var(--ft-order-create-accent-border);
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-workflow-summary a{color:var(--ft-order-create-accent)}
+
+/* Shared searchable selectors inherit the green focus/selection theme only
+   inside Create Order; other pages remain untouched. */
+.ft-create-job-page .ft-search-select__trigger:hover:not(:disabled),
+.ft-create-job-page .ft-search-select__trigger[aria-expanded="true"],
+.ft-create-job-page .ft-search-select__trigger:focus-visible,
+.ft-create-job-page .ft-search-select__search:focus-visible{
+    border-color:var(--ft-focus-border);
+}
+.ft-create-job-page .ft-search-select__option[aria-selected="true"]{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent-hover);
+}
+.ft-create-job-page .ft-search-select__load-more{
+    color:var(--ft-order-create-accent);
+}
+
+/* Shipping-address actions use the same Order Details primary teal. */
+.ft-create-job-page .ft-order-saved-address-button{
+    border-color:var(--ft-order-create-accent);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-order-saved-address-button:hover:not(:disabled){
+    border-color:var(--ft-order-create-accent-hover);
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent-hover);
+    box-shadow:0 4px 12px color-mix(in srgb, var(--ft-theme-primary) 12%, transparent);
+}
+.ft-create-job-page .ft-order-shipping-address-field textarea:focus,
+.ft-create-job-page .ft-order-shipping-contact-grid input:focus,
+.ft-create-job-page .ft-order-phone-control:focus-within{
+    border-color:var(--ft-focus-border);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-button:hover,
+.ft-create-job-page .ft-order-phone-code-filter .ft-remote-filter-button[aria-expanded="true"]{
+    color:var(--ft-order-create-accent)!important;
+}
+
+/* Saved-address picker is rendered under the Create Order tree, so scope its
+   interactive state through the page to avoid recolouring unrelated modals. */
+.ft-create-job-page .ft-order-saved-address-modal-head>button:hover{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-order-saved-address-card:hover,
+.ft-create-job-page .ft-order-saved-address-card.is-selected{
+    border-color:var(--ft-order-create-accent);
+    background:#f5fbfa;
+    box-shadow:0 5px 16px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+.ft-create-job-page .ft-order-saved-address-card-icon,
+.ft-create-job-page .ft-order-saved-address-label em{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-order-saved-address-use{
+    color:var(--ft-order-create-accent);
+}
+
+/* Products selector and Create Product modal previously declared their own
+   blue component token. Override it only for Create Order. */
+.ft-create-job-page .ft-order-products-prototype,
+.ft-create-job-page .ft-order-create-product-modal{
+    --blue:var(--ft-order-create-accent);
+    --blue2:var(--ft-order-create-accent-soft);
+}
+.ft-create-job-page .ft-order-product-result:hover,
+.ft-create-job-page .ft-order-product-result:focus-visible{
+    border-color:var(--ft-order-create-accent-border);
+    background:#f5fbfa;
+}
+.ft-create-job-page .ft-order-product-result.is-selected{
+    border-color:var(--ft-order-create-accent-border);
+    background:var(--ft-order-create-accent-soft);
+}
+.ft-create-job-page .ft-order-product-supplier-icon{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-product-step-number{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-order-create-product-modal .primary:not(:disabled),
+.ft-create-job-page .ft-product-create-actions .primary:not(:disabled){
+    border-color:var(--ft-order-create-accent);
+    background:var(--ft-order-create-accent);
+    color:#fff;
+}
+.ft-create-job-page .ft-order-create-product-modal .primary:not(:disabled):hover,
+.ft-create-job-page .ft-order-create-product-modal .primary:not(:disabled):focus-visible,
+.ft-create-job-page .ft-product-create-actions .primary:not(:disabled):hover,
+.ft-create-job-page .ft-product-create-actions .primary:not(:disabled):focus-visible{
+    border-color:var(--ft-order-create-accent-hover);
+    background:var(--ft-order-create-accent-hover);
+    color:#fff;
+}
+
+/* Order workflow picker is shared with Inquiry, therefore every selector is
+   intentionally scoped to .ft-create-job-page. */
+.ft-create-job-page .ft-create-workflow-heading>span,
+.ft-create-job-page .ft-create-workflow-heading em{
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-workflow-card{
+    border-color:var(--ft-order-create-accent-border);
+    background:#f7fbfa;
+    box-shadow:inset 0 0 0 1px color-mix(in srgb, var(--ft-theme-primary) 2.5%, transparent);
+}
+.ft-create-job-page .ft-create-workflow-selected:hover,
+.ft-create-job-page .ft-create-workflow-option:hover,
+.ft-create-job-page .ft-create-workflow-option.is-selected{
+    background:#f2faf8;
+}
+.ft-create-job-page .ft-create-workflow-selected:focus-visible,
+.ft-create-job-page .ft-create-workflow-option:focus-visible{
+    outline-color:color-mix(in srgb, var(--ft-theme-primary) 30%, transparent);
+}
+.ft-create-job-page .ft-create-workflow-icon{
+    border-color:#75b9b0;
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-workflow-options{
+    border-top-color:#d7e9e6;
+}
+.ft-create-job-page .ft-create-workflow-option.is-selected .ft-create-workflow-radio{
+    border-color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-workflow-start-phase select:focus{
+    border-color:var(--ft-focus-border);
+    box-shadow:0 0 0 2px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+
+/* Create Order workflow preview responsive polish. */
+.ft-create-job-page .ft-create-workflow-preview-toggle{
+    border-color:#c9e1dd;
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-workflow-preview-toggle:hover,
+.ft-create-job-page .ft-create-workflow-preview-toggle:focus-visible{
+    border-color:var(--ft-order-create-accent-border);
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-workflow-preview{
+    border-top-color:#d7e9e6;
+}
+
+/* Create Order attachment upload progress - 2026-08-28.
+   Keep Purchase Order and Other document feedback local to each dropzone. */
+.ft-create-job-page .ft-create-upload-wrap{
+    display:grid;
+    gap:8px;
+}
+.ft-create-job-page .ft-create-upload-progress{
+    width:100%;
+    padding:0 2px 2px;
+}
+.ft-create-job-page .ft-create-upload-progress-meta{
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:12px;
+    margin-bottom:5px;
+    color:#52677f;
+    font-size:.625rem;
+    font-weight:700;
+    line-height:1.3;
+}
+.ft-create-job-page .ft-create-upload-progress-meta b{
+    flex:0 0 auto;
+    color:var(--ft-order-create-accent);
+    font-size:.625rem;
+    font-weight:800;
+}
+.ft-create-job-page .ft-create-upload-progress-track{
+    width:100%;
+    height:6px;
+    overflow:hidden;
+    border-radius:999px;
+    background:color-mix(in srgb, var(--ft-order-create-accent) 12%, #edf2f6);
+}
+.ft-create-job-page .ft-create-upload-progress-track>span{
+    display:block;
+    width:0;
+    height:100%;
+    border-radius:inherit;
+    background:var(--ft-order-create-accent);
+    transition:width .12s linear;
+}
+@media(max-width:700px){
+    .ft-create-job-page .ft-create-upload-progress-meta{
+        font-size:.6875rem;
+    }
+}

@@ -49,7 +49,6 @@
 
                     <span class="ft-board-taskpack-job-client">{{ $group['client'] }}</span>
                     <span class="ft-board-taskpack-job-stage">{{ $group['stage'] }}</span>
-                    <span class="ft-board-taskpack-health {{ $group['healthTone'] }}">{{ $group['health'] }}</span>
                     <span class="ft-board-taskpack-progress"><i><i style="width:{{ $group['progress'] }}%"></i></i>{{ $group['progress'] }}%</span>
                     <span class="ft-board-taskpack-task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
                 </header>
@@ -58,6 +57,7 @@
                     @foreach($group['tasks'] as $task)
                         <div
                             class="ft-board-taskpack-task-row"
+                            style="{{ \App\Support\MasterColor::style($task['taskColor'] ?? null) }}border-left:4px solid var(--ft-master-color,#2563EB)"
                             wire:key="board-task-pack-task-{{ $task['id'] }}"
                             x-data="{
                                 saving:false,
@@ -72,10 +72,10 @@
                                     select.disabled=true;
                                     try{
                                         const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                        if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
+                                        if(!result?.ok){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);return;}
                                         this.currentStatus=result.status||next;
                                         this.version=result.version||this.version;
-                                    }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
+                                    }catch(error){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);}
                                     finally{this.saving=false;select.disabled={{ $task['canEdit'] ? 'false' : 'true' }};}
                                 }
                             }"
@@ -102,7 +102,7 @@
                                 data-master-color-select
                                 class="ft-board-taskpack-status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}"
                                 style="{{ \App\Support\MasterColor::style($task['statusColor']) }}"
-                                @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled title="Read only" @endif
+                                @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrack.ui.masterColor?.applySelect($event.currentTarget)" @else disabled title="Read only" @endif
                                 aria-label="Status for {{ $task['title'] }}"
                             >
                                 @if(!in_array($task['status'], $statusOptions, true))

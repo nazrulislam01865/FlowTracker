@@ -25,7 +25,7 @@ return [
             ],
             'max_request_size' => env('REVERB_MAX_REQUEST_SIZE', 10_000),
             'scaling' => [
-                'enabled' => env('REVERB_SCALING_ENABLED', false),
+                'enabled' => env('REVERB_SCALING_ENABLED', env('FLOWTRACK_HORIZONTAL_SCALING', false)),
                 'channel' => env('REVERB_SCALING_CHANNEL', 'reverb'),
                 'server' => [
                     'url' => env('REDIS_URL'),
@@ -33,7 +33,7 @@ return [
                     'port' => env('REDIS_PORT', '6379'),
                     'username' => env('REDIS_USERNAME'),
                     'password' => env('REDIS_PASSWORD'),
-                    'database' => env('REDIS_DB', '0'),
+                    'database' => env('REVERB_SCALING_REDIS_DB', env('REDIS_DB', '0')),
                     'timeout' => env('REDIS_TIMEOUT', 60),
                 ],
             ],

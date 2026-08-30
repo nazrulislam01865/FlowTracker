@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\DTOs\Orders\OrderCreateData;
 use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
@@ -21,17 +22,16 @@ class BulkOrderImportService
 {
     private const ALIASES = [
         'client_id' => ['clientid', 'clientcode'],
-        'ref' => ['referenceorderno', 'referenceorder', 'orderno'],
+        'ref' => ['clientreferencenumber', 'clientreference', 'referenceorderno', 'referenceorder', 'orderno'],
         'is_repeat' => ['repeatorderyesno', 'repeatorder', 'isrepeatorder', 'repeatedorder'],
         'repeat_order_no' => ['repeatorderno', 'repeatordernumber', 'previousreferencenumber'],
-        'title' => ['ordertitle'],
-        'description' => ['orderdescription', 'description'],
+        'description' => ['requestdescription', 'orderdescription', 'description'],
         'shipping_address' => ['shippingaddress', 'deliveryaddress'],
         'shipping_phone' => ['phonenumberwithcountrycode', 'shippingphonewithcountrycode', 'shippingphonenumber', 'shippingphone', 'phonenumber'],
         'shipping_postal_code' => ['postalcode', 'shippingpostalcode', 'shippingzipcode', 'zipcode', 'zip'],
         'product_id' => ['productid', 'productcode', 'sku'],
         'product_quantity' => ['productquantity', 'quantity', 'qty'],
-        'customer_delivery' => ['customerrequesteddeliverydate', 'customerrequireddeliverydate', 'requireddeliverydate', 'deliverydate'],
+        'customer_delivery' => ['orderhanddate', 'customerrequesteddeliverydate', 'customerrequireddeliverydate', 'requireddeliverydate', 'deliverydate'],
         'estimated_delivery' => ['estimateddeliverydate'],
         'production_urgency' => ['productionurgency', 'orderproductionurgency'],
         'shipment_urgency' => ['shipmenturgency', 'shipmenturgent', 'ordershipmenturgency'],
@@ -96,18 +96,20 @@ class BulkOrderImportService
             $warnings = [];
             $action = 'create';
 
-            foreach (['client_id', 'ref', 'is_repeat', 'repeat_order_no', 'title', 'description', 'shipping_address', 'shipping_phone', 'shipping_postal_code', 'product_id', 'product_quantity', 'customer_delivery', 'estimated_delivery', 'production_urgency', 'shipment_urgency', 'notes'] as $field) {
+            foreach (['client_id', 'ref', 'is_repeat', 'repeat_order_no', 'description', 'shipping_address', 'shipping_phone', 'shipping_postal_code', 'product_id', 'product_quantity', 'customer_delivery', 'estimated_delivery', 'production_urgency', 'shipment_urgency', 'notes'] as $field) {
                 $row[$field] = trim((string) ($row[$field] ?? ''));
             }
 
+            $row['title'] = '';
+
             if ($row['client_id'] === '') $errors[] = 'Client ID is required';
-            if ($row['title'] === '') $errors[] = 'Order Title is required';
+            if ($row['ref'] === '') $errors[] = 'Client Reference Number is required';
             if ($row['shipping_address'] === '') $errors[] = 'Shipping Address is required';
             if ($row['shipping_postal_code'] === '') $errors[] = 'Postal Code is required';
-            if (mb_strlen($row['title']) > 255) $errors[] = 'Order Title must be 255 characters or fewer';
-            if (mb_strlen($row['ref']) > 255) $errors[] = 'Reference Order No. must be 255 characters or fewer';
-            if (mb_strlen($row['repeat_order_no']) > 255) $errors[] = 'Repeat Order No. must be 255 characters or fewer';
-            if (mb_strlen($row['description']) > 10000) $errors[] = 'Order Description is too long';
+            if ($row['product_id'] === '') $errors[] = 'Product ID is required';
+            if (mb_strlen($row['ref']) > 255) $errors[] = 'Client Reference Number must be 255 characters or fewer';
+            if (mb_strlen($row['repeat_order_no']) > 255) $errors[] = 'Previous Reference Number must be 255 characters or fewer';
+            if (mb_strlen($row['description']) > 10000) $errors[] = 'Request Description is too long';
             if (mb_strlen($row['shipping_address']) > 2000) $errors[] = 'Shipping Address must be 2,000 characters or fewer';
             if (mb_strlen($row['shipping_postal_code']) > 30) $errors[] = 'Postal Code must be 30 characters or fewer';
             if (mb_strlen($row['notes']) > 10000) $errors[] = 'Notes must be 10,000 characters or fewer';
@@ -129,10 +131,10 @@ class BulkOrderImportService
                 $row['is_repeat'] = $row['is_repeat_resolved'] ? 'Yes' : 'No';
             }
             if ($row['is_repeat_resolved'] && $row['repeat_order_no'] === '') {
-                $errors[] = 'Repeat Order No. is required when Repeat Order? is Yes';
+                $errors[] = 'Previous Reference Number is required when Repeat Order? is Yes';
             }
             if (!$row['is_repeat_resolved'] && $row['repeat_order_no'] !== '') {
-                $warnings[] = 'Repeat Order No. is ignored because Repeat Order? is No';
+                $warnings[] = 'Previous Reference Number is ignored because Repeat Order? is No';
             }
 
             $client = $row['client_id'] !== '' ? $this->lookupClient($row['client_id'], $clientMaps) : null;
@@ -144,6 +146,10 @@ class BulkOrderImportService
             $row['product_resolved_name'] = null;
             $row['product_resolved_category'] = null;
             $row['product_quantity_resolved'] = 0;
+            $row['product_supplier_resolved_id'] = null;
+            $row['product_supplier_resolved_name'] = null;
+            $row['product_unit_price_resolved'] = null;
+            $product = null;
             if ($row['product_id'] !== '') {
                 $product = $this->lookupProduct($row['product_id'], $productMaps);
                 if (!$product || !$product->parent || $product->parent->status !== 'active') {
@@ -168,9 +174,41 @@ class BulkOrderImportService
                 $row['product_quantity_resolved'] = 1;
             }
 
+            // Create Order no longer accepts a manually typed title. Bulk import
+            // follows the same rule: derive the human-readable title from the
+            // required Client Reference Number and the resolved Product name.
+            // FlowTrack's generated job_number / Order Code remains separate.
+            if ($row['ref'] !== '' && $row['product_resolved_name']) {
+                $row['title'] = OrderCreateData::generateTitle($row['ref'], [[
+                    'product' => $row['product_resolved_name'],
+                ]]);
+            }
+
+            // Bulk import must mirror Create Order: once the Product is resolved,
+            // derive its active default Supplier and quantity-based Product Master
+            // price instead of persisting an unlinked supplier and a 0.00 price.
+            // The spreadsheet intentionally does not carry supplier/price columns;
+            // Product Master remains authoritative for both values.
+            if ($product && (int) $row['product_quantity_resolved'] > 0) {
+                $supplierId = $product->productSupplierId();
+                $supplier = $supplierId
+                    ? ($productMaps['active_suppliers_by_id'][(int) $supplierId] ?? null)
+                    : null;
+
+                if ($supplier) {
+                    $row['product_supplier_resolved_id'] = (int) $supplier->id;
+                    $row['product_supplier_resolved_name'] = (string) $supplier->name;
+                }
+
+                $basePrice = $product->productPriceForQuantity((int) $row['product_quantity_resolved']);
+                $row['product_unit_price_resolved'] = $basePrice !== null
+                    ? round((float) $basePrice, 2)
+                    : null;
+            }
+
             $row['customer_delivery_normalized'] = $row['customer_delivery'] === '' ? null : $this->normalizeDate($row['customer_delivery']);
             if ($row['customer_delivery'] !== '' && !$row['customer_delivery_normalized']) {
-                $errors[] = 'Invalid Customer Requested Delivery Date';
+                $errors[] = 'Invalid Order Hand Date';
             }
             $row['estimated_delivery_normalized'] = $row['estimated_delivery'] === '' ? null : $this->normalizeDate($row['estimated_delivery']);
             if ($row['estimated_delivery'] !== '' && !$row['estimated_delivery_normalized']) {
@@ -183,7 +221,7 @@ class BulkOrderImportService
             $row['production_urgency_ids'] = $production['id'] ? [$production['id']] : [];
 
             $shipment = $this->resolveUrgency($row['shipment_urgency'], $shipmentUrgencyMap);
-            if ($shipment['error']) $errors[] = 'Shipment Urgent '.$shipment['error'];
+            if ($shipment['error']) $errors[] = 'Shipment Urgency '.$shipment['error'];
             $row['shipment_urgency_resolved'] = $shipment['label'];
             $row['shipment_urgency_ids'] = $shipment['id'] ? [$shipment['id']] : [];
 
@@ -238,7 +276,7 @@ class BulkOrderImportService
                 }
             }
 
-            if ($row['ref'] !== '' && ($referenceCounts[$row['ref']] ?? 0) > 1) $warnings[] = 'Duplicate Reference Order No. in this file';
+            if ($row['ref'] !== '' && ($referenceCounts[$row['ref']] ?? 0) > 1) $warnings[] = 'Duplicate Client Reference Number in this file';
             $referenceExisting = $row['ref'] !== '' ? ($existingByReference[$row['ref']] ?? collect()) : collect();
 
             if ($referenceExisting->isNotEmpty()) {
@@ -406,6 +444,12 @@ class BulkOrderImportService
         if (blank($row['client_resolved_id'] ?? null)) {
             throw new RuntimeException('Client ID is required before this order can be imported.');
         }
+        if (blank($row['ref'] ?? null)) {
+            throw new RuntimeException('Client Reference Number is required before this order can be imported.');
+        }
+        if (blank($row['product_resolved_id'] ?? null)) {
+            throw new RuntimeException('Product ID is required before this order can be imported.');
+        }
         if (blank($row['workflow_resolved_id'] ?? null) || blank($row['workflow_phase_id'] ?? null)) {
             throw new RuntimeException('An Order workflow must be resolved before this order can be imported.');
         }
@@ -420,15 +464,19 @@ class BulkOrderImportService
         if (filled($row['product_resolved_id'] ?? null)) {
             $items[] = [
                 'product_id' => (int) $row['product_resolved_id'],
+                'supplier_id' => filled($row['product_supplier_resolved_id'] ?? null)
+                    ? (int) $row['product_supplier_resolved_id']
+                    : null,
                 'product' => $row['product_resolved_name'],
                 'category' => $row['product_resolved_category'],
                 'quantity' => max(1, (int) ($row['product_quantity_resolved'] ?? 1)),
+                'unit_price' => $row['product_unit_price_resolved'] ?? 0,
                 'notes' => null,
             ];
         }
 
         return app(JobService::class)->create([
-            'order_number' => blank($row['ref']) ? null : $row['ref'],
+            'order_number' => $row['ref'],
             'is_repeat_order' => (bool) ($row['is_repeat_resolved'] ?? false),
             'repeat_order_number' => ($row['is_repeat_resolved'] ?? false) ? $row['repeat_order_no'] : null,
             'client_id' => $row['client_resolved_id'],
@@ -471,7 +519,7 @@ class BulkOrderImportService
 
         DB::transaction(function () use ($job, $row, $actor, $importNumber): void {
             $job->update([
-                'order_number' => blank($row['ref']) ? null : $row['ref'],
+                'order_number' => $row['ref'],
                 'is_repeat_order' => (bool) ($row['is_repeat_resolved'] ?? false),
                 'repeat_order_number' => ($row['is_repeat_resolved'] ?? false) ? $row['repeat_order_no'] : null,
                 'client_id' => $row['client_resolved_id'],
@@ -498,10 +546,14 @@ class BulkOrderImportService
             $job->items()->delete();
             if (filled($row['product_resolved_id'] ?? null)) {
                 $job->items()->create([
+                    'catalog_product_id' => (int) $row['product_resolved_id'],
+                    'supplier_id' => filled($row['product_supplier_resolved_id'] ?? null)
+                        ? (int) $row['product_supplier_resolved_id']
+                        : null,
                     'product_name' => $row['product_resolved_name'],
                     'category_name' => $row['product_resolved_category'],
                     'quantity' => max(1, (int) ($row['product_quantity_resolved'] ?? 1)),
-                    'unit_price' => 0,
+                    'unit_price' => round(max(0, (float) ($row['product_unit_price_resolved'] ?? 0)), 2),
                     'notes' => null,
                     'updated_by' => $actor->id,
                     'sort_order' => 0,
@@ -615,12 +667,37 @@ class BulkOrderImportService
         return $maps['by_name'][mb_strtolower($value)] ?? null;
     }
 
-    /** @return array{by_id:array<int,MasterRecord>,by_code:array<string,MasterRecord>,by_display:array<string,MasterRecord>,by_reference:array<string,MasterRecord>} */
+    /**
+     * @return array{
+     *   by_id:array<int,MasterRecord>,
+     *   by_code:array<string,MasterRecord>,
+     *   by_display:array<string,MasterRecord>,
+     *   by_reference:array<string,MasterRecord>,
+     *   active_suppliers_by_id:array<int,MasterRecord>
+     * }
+     */
     private function productMaps(): array
     {
         $products = app(ProductCatalogService::class)->activeProductsQuery()
             ->with('parent:id,type,name,status')
             ->get(['id', 'type', 'parent_id', 'code', 'name', 'metadata', 'status']);
+
+        $defaultSupplierIds = $products
+            ->map(fn (MasterRecord $product) => $product->productSupplierId())
+            ->filter()
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+
+        $activeSuppliers = $defaultSupplierIds->isEmpty()
+            ? collect()
+            : MasterRecord::query()
+                ->forWorkspace(app(SetupContext::class)->workspaceId())
+                ->ofType('supplier')
+                ->active()
+                ->whereIn('id', $defaultSupplierIds->all())
+                ->get(['id', 'name', 'code', 'status'])
+                ->keyBy('id');
 
         $byReference = [];
         foreach ($products as $product) {
@@ -633,6 +710,7 @@ class BulkOrderImportService
             'by_code' => $products->filter(fn ($product) => filled($product->code))->keyBy(fn ($product) => strtoupper(trim((string) $product->code)))->all(),
             'by_display' => $products->keyBy(fn ($product) => strtoupper($product->productDisplayCode()))->all(),
             'by_reference' => $byReference,
+            'active_suppliers_by_id' => $activeSuppliers->all(),
         ];
     }
 
@@ -812,6 +890,7 @@ class BulkOrderImportService
     private function workflowAvailableForClient(WorkflowTemplate $workflow, ?int $clientId): bool
     {
         if ($workflow->applies_to !== 'orders') return false;
+        if (! app(OrderWorkflowSetupService::class)->isReadyForOrderCreation((int) $workflow->id)) return false;
         if ($workflow->client_availability === 'all') return true;
 
         return $clientId

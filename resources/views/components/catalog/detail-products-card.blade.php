@@ -30,11 +30,12 @@
                     @else
                         <th>Product</th>
                         <th>Category</th>
+                        <th>Supplier</th>
                         <th>Quantity</th>
-                        <th>Unit price</th>
+                        <th>Unit<br>price</th>
                         <th>Notes</th>
                         <th>Updated</th>
-                        <th class="ft-order-product-actions-heading">Actions</th>
+                        <th class="ft-order-product-actions-heading" aria-label="Actions"></th>
                     @endisset
                 </tr>
             </thead>

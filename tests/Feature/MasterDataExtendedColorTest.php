@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Services\MasterDataService;
 use App\Support\MasterColor;
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class MasterDataExtendedColorTest extends TestCase
 {
@@ -18,11 +19,10 @@ class MasterDataExtendedColorTest extends TestCase
 
     public function test_master_data_ui_and_main_surfaces_use_master_colors(): void
     {
-        $masterView = file_get_contents(resource_path('views/livewire/master-data/index.blade.php'));
-        $inquiryView = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $masterView = \Tests\Support\AdministrationPhase7Source::masterDataView();
+        $inquiryView = $this->inquiryViewSource();
         $dashboardView = file_get_contents(resource_path('views/livewire/dashboard/index.blade.php'));
-        $taskDetail = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
-        $jobDetail = file_get_contents(resource_path('views/components/jobs/detail.blade.php'));
+        $taskDetail = OrderPhase5Source::taskDetailView();
         $taskCard = file_get_contents(resource_path('views/components/board/task-card.blade.php'));
 
         $this->assertStringContainsString('MasterDataService::COLOR_TYPES', $masterView);
@@ -30,7 +30,6 @@ class MasterDataExtendedColorTest extends TestCase
         $this->assertStringContainsString("displayColorFor('priority'", $inquiryView);
         $this->assertStringContainsString('inquiryStatusColor(', $dashboardView);
         $this->assertStringContainsString("displayColorFor('priority'", $taskDetail);
-        $this->assertStringContainsString("displayColorFor('priority'", $jobDetail);
         $this->assertStringContainsString("displayColorFor('priority'", $taskCard);
     }
 

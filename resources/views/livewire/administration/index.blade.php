@@ -2,7 +2,7 @@
     <div class="ft-access-head">
         <div>
             <h1>{{ $tab === 'branding' ? 'System Branding' : ($tab === 'settings' ? 'System Settings' : 'Access Roles & Permissions') }}</h1>
-            <p>{{ $tab === 'branding' ? 'Manage the logo and browser favicon used across FlowTrack.' : ($tab === 'settings' ? 'Configure workspace-wide display settings used throughout FlowTrack.' : 'Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.') }}</p>
+            <p>{{ $tab === 'branding' ? 'Manage the logo and browser favicon used across FlowTrack.' : ($tab === 'settings' ? 'Configure workspace-wide operational settings used throughout FlowTrack.' : 'Control who can view, create, edit, assign, delete, link, export or manage every FlowTrack module.') }}</p>
         </div>
         @if(!in_array($tab, ['branding','settings'], true))
             <div class="ft-access-actions"><button class="ghost" wire:click="setTab('audit')">Audit Log</button><button class="primary" wire:click="openRole">＋ New Role</button></div>
@@ -135,7 +135,7 @@
                                 <td
                                     data-label="{{ ucwords(str_replace('_',' ',$action)) }}"
                                     class="ft-inline-edit-shell"
-                                    x-data="window.FlowTrackInlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-'.$action), label: @js(str_replace('_',' ',$action).' permission'), value: @js($permissionEnabled ? '1' : '0'), display: @js($permissionEnabled ? 'Enabled' : 'Disabled') })"
+                                    x-data="window.FlowTrack.ui.inlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-'.$action), label: @js(str_replace('_',' ',$action).' permission'), value: @js($permissionEnabled ? '1' : '0'), display: @js($permissionEnabled ? 'Enabled' : 'Disabled') })"
                                     x-on:matrix-permission-synced.window="
                                         if (Number($event.detail.roleId) === {{ (int) $selectedRole->id }} && $event.detail.module === '{{ $code }}') {
                                             const enabled = Array.isArray($event.detail.actions) && $event.detail.actions.includes('{{ $action }}');
@@ -171,7 +171,7 @@
                             <td
                                 data-label="Record scope"
                                 class="ft-inline-edit-shell"
-                                x-data="window.FlowTrackInlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-scope'), label: 'record scope', value: @js($effectiveScope), display: @js(str_replace('_',' ',$effectiveScope)) })"
+                                x-data="window.FlowTrack.ui.inlineEdit({ key: @js('role-'.$selectedRole->id.'-'.$code.'-scope'), label: 'record scope', value: @js($effectiveScope), display: @js(str_replace('_',' ',$effectiveScope)) })"
                                 x-on:matrix-permission-synced.window="
                                     if (Number($event.detail.roleId) === {{ (int) $selectedRole->id }} && $event.detail.module === '{{ $code }}' && $event.detail.recordScope) {
                                         value = String($event.detail.recordScope); savedValue = value; draftValue = value; display = value.replaceAll('_', ' '); savedDisplay = display;
@@ -215,9 +215,37 @@
             </div>
         @endif
     @elseif($tab==='users')
-        <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><button class="primary" wire:click="openUser">＋ Add User</button></div>
+        <div class="section-head"><div><h3>Users & role assignments</h3><div class="small muted">Create, edit, assign roles, change passwords or remove users from FlowTrack.</div></div><a class="primary" href="{{ route('users.create') }}" wire:navigate>＋ Add User</a></div>
+
+        {{-- CHANGE 2026-08-24: searchable Users & Assignments list. --}}
+        <div class="ft-user-assignment-toolbar">
+            <label class="ft-user-assignment-search" aria-label="Search users">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                    <circle cx="11" cy="11" r="6.5"></circle>
+                    <path d="m16 16 4 4"></path>
+                </svg>
+                <input
+                    type="search"
+                    wire:model.live.debounce.500ms="userSearch"
+                    placeholder="Search user by name, email or position"
+                    autocomplete="off"
+                >
+                @if(filled($userSearch))
+                    <button type="button" wire:click="clearUserSearch" aria-label="Clear user search">×</button>
+                @endif
+            </label>
+
+            <span class="ft-user-assignment-search-result">
+                @if(filled($userSearch))
+                    {{ $users->total() }} matching user{{ $users->total() === 1 ? '' : 's' }}
+                @else
+                    {{ $users->total() }} user{{ $users->total() === 1 ? '' : 's' }}
+                @endif
+            </span>
+        </div>
+
         <div class="card table-wrap"><table class="data-table ft-user-access-table"><thead><tr><th>User</th><th>Department</th><th>Roles</th><th>Effective scope</th><th>Open tasks</th><th>Status</th><th>Actions</th></tr></thead><tbody>
-        @foreach($users as $u)
+        @forelse($users as $u)
             @php
                 $adminUserStatus = in_array((string) ($u->account_status ?? ''), ['active','inactive','suspended'], true)
                     ? (string) $u->account_status
@@ -234,7 +262,19 @@
                 <td><button class="mini-btn" wire:click="toggleUserActive({{ $u->id }})" @disabled($u->isSuperAdmin())><span class="badge {{ $adminUserStatusClass }}">{{ ucfirst($adminUserStatus) }}</span></button></td>
                 <td data-label="Actions"><div class="ft-user-row-actions"><a class="ghost ft-user-edit-link" href="{{ route('users.edit', ['user' => $u->id, 'from' => 'administration']) }}" wire:navigate>Edit</a><button type="button" class="ft-user-delete-btn" wire:click="deleteUser({{ $u->id }})" wire:confirm="Delete {{ addslashes($u->name) }}? Existing Job/Task history will be preserved, but this user account will be removed." @disabled($u->isSuperAdmin() || $u->id === auth()->id())>Delete</button></div></td>
             </tr>
-        @endforeach
+        @empty
+            <tr>
+                <td colspan="7">
+                    <div class="ft-user-assignment-empty">
+                        <b>No users found</b>
+                        <span>Try another name, email or position.</span>
+                        @if(filled($userSearch))
+                            <button type="button" class="ghost" wire:click="clearUserSearch">Clear search</button>
+                        @endif
+                    </div>
+                </td>
+            </tr>
+        @endforelse
         </tbody></table></div>
         <div class="ft-list-pagination ft-user-pagination" aria-label="Users pagination">
             <span>Showing <b>{{ $users->firstItem() ?? 0 }}–{{ $users->lastItem() ?? 0 }}</b> of {{ $users->total() }} users</span>
@@ -259,6 +299,56 @@
         <div class="ft-access-grid-2 ft-system-settings-grid">
             <section class="card ft-access-panel ft-workspace-settings-card">
                 <div class="section-head">
+                    <div><h3>Email service controls</h3><div class="small muted">Enable or disable Inquiry and Order business emails independently. Only Admin and Super Admin can change these switches.</div></div>
+                </div>
+                @foreach($emailServiceSettings as $emailSetting)
+                    <div class="ft-security-row ft-email-service-row" wire:key="email-service-{{ $emailSetting['module'] }}">
+                        <div>
+                            <b>{{ $emailSetting['label'] }}</b>
+                            <span>{{ $emailSetting['description'] }}</span>
+                        </div>
+                        <div class="ft-email-service-toggle">
+                            <div class="ft-email-service-state {{ $emailSetting['enabled'] ? 'is-enabled' : 'is-disabled' }}" aria-live="polite">
+                                <span class="ft-email-service-state-dot" aria-hidden="true"></span>
+                                <span>{{ $emailSetting['enabled'] ? 'Email sending is on' : 'Email sending is off' }}</span>
+                            </div>
+                            <div class="ft-email-service-segmented" role="group" aria-label="{{ $emailSetting['label'] }}">
+                                <button
+                                    type="button"
+                                    class="ft-email-service-option is-on {{ $emailSetting['enabled'] ? 'is-active' : '' }}"
+                                    wire:click="setEmailService('{{ $emailSetting['module'] }}', true)"
+                                    wire:loading.attr="disabled"
+                                    wire:target="setEmailService('{{ $emailSetting['module'] }}')"
+                                    aria-pressed="{{ $emailSetting['enabled'] ? 'true' : 'false' }}"
+                                    @disabled($emailSetting['enabled'])
+                                >
+                                    <span class="ft-email-service-option-icon" aria-hidden="true">✓</span>
+                                    <span>On</span>
+                                </button>
+                                <button
+                                    type="button"
+                                    class="ft-email-service-option is-off {{ ! $emailSetting['enabled'] ? 'is-active' : '' }}"
+                                    wire:click="requestDisableEmailService('{{ $emailSetting['module'] }}')"
+                                    wire:loading.attr="disabled"
+                                    wire:target="requestDisableEmailService('{{ $emailSetting['module'] }}')"
+                                    aria-pressed="{{ ! $emailSetting['enabled'] ? 'true' : 'false' }}"
+                                    @disabled(! $emailSetting['enabled'])
+                                >
+                                    <span class="ft-email-service-option-icon" aria-hidden="true">×</span>
+                                    <span>Off</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                @endforeach
+                <div class="ft-control-note ft-email-service-note">
+                    <b>Safe workflow behavior</b>
+                    <span>Turning a module off blocks outbound email only. Inquiry RFQ records and Order workflow tasks continue normally, and each skipped delivery is recorded for audit.</span>
+                </div>
+            </section>
+
+            <section class="card ft-access-panel ft-workspace-settings-card">
+                <div class="section-head">
                     <div><h3>Company & invoice identity</h3><div class="small muted">Legal company, address, tax, contact and payment details used on newly generated invoices.</div></div>
                 </div>
                 <div class="ft-workspace-setting-row">
@@ -276,109 +366,103 @@
                 </div>
             </section>
         </div>
+
+    @endif
+
+    @if($tab === 'settings' && $pendingEmailServiceModule)
+        <div
+            class="overlay livewire-overlay ft-email-service-confirm-overlay"
+            wire:click.self="cancelDisableEmailService"
+            wire:key="email-service-disable-overlay-{{ $pendingEmailServiceModule }}"
+        ></div>
+        <section
+            class="modal livewire-modal ft-email-service-confirm-modal"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="ft-email-service-confirm-title"
+            aria-describedby="ft-email-service-confirm-description"
+            wire:key="email-service-disable-modal-{{ $pendingEmailServiceModule }}"
+            x-data
+            x-on:keydown.escape.window="$wire.cancelDisableEmailService()"
+        >
+            <div class="ft-email-service-confirm-head">
+                <div class="ft-email-service-confirm-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none">
+                        <path d="M4.75 6.75h14.5v10.5H4.75z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/>
+                        <path d="m5.4 7.4 6.6 5 6.6-5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/>
+                        <path d="M5 5 19 19" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <button
+                    type="button"
+                    class="ft-email-service-confirm-close"
+                    wire:click="cancelDisableEmailService"
+                    aria-label="Close confirmation"
+                >×</button>
+            </div>
+
+            <div class="ft-email-service-confirm-body">
+                <span class="ft-email-service-confirm-eyebrow">Email service control</span>
+                <h2 id="ft-email-service-confirm-title">
+                    Turn off {{ $pendingEmailServiceModule === 'inquiry' ? 'Inquiry email service' : 'Order email service' }}?
+                </h2>
+                <p id="ft-email-service-confirm-description">
+                    Outbound {{ ucfirst($pendingEmailServiceModule) }} emails will pause immediately and remain paused until an Admin or Super Admin turns the service back on.
+                </p>
+
+                <div class="ft-email-service-confirm-impact">
+                    <div class="ft-email-service-confirm-impact-icon" aria-hidden="true">!</div>
+                    <div>
+                        <b>Emails affected</b>
+                        <span>
+                            {{ $pendingEmailServiceModule === 'inquiry'
+                                ? 'RFQ invitations, quotation acknowledgements and supplier award notifications.'
+                                : 'Order workflow handoffs, invoice emails and payment reminders.' }}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="ft-email-service-confirm-safe">
+                    <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <path d="m7.5 12.2 2.9 2.9 6.2-6.2" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        <circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.7"/>
+                    </svg>
+                    <div>
+                        <b>Workflow remains active</b>
+                        <span>Inquiry and Order records, tasks and workflow actions continue normally. Only outbound email delivery for this module is blocked.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="ft-email-service-confirm-actions">
+                <button
+                    type="button"
+                    class="ft-email-service-confirm-cancel"
+                    wire:click="cancelDisableEmailService"
+                    wire:loading.attr="disabled"
+                    wire:target="confirmDisableEmailService"
+                >Keep email on</button>
+                <button
+                    type="button"
+                    class="ft-email-service-confirm-danger"
+                    wire:click="confirmDisableEmailService"
+                    wire:loading.attr="disabled"
+                    wire:target="confirmDisableEmailService"
+                >
+                    <span wire:loading.remove wire:target="confirmDisableEmailService">Turn off email service</span>
+                    <span wire:loading wire:target="confirmDisableEmailService">Turning off…</span>
+                </button>
+            </div>
+        </section>
     @endif
 
     @if($tab === 'branding')
         @include('livewire.administration.partials.branding')
     @endif
 
-    @if($showUserModal)
-        <div class="overlay livewire-overlay" wire:click.self="closeUser"></div>
-        <div class="modal livewire-modal ft-user-modal">
-            <div class="modal-head">
-                <h2>{{ $editingUserId ? 'Edit User' : 'Add User' }}</h2>
-                <button class="close-btn" wire:click="closeUser">×</button>
-            </div>
-
-            <div class="modal-body">
-                <div class="form-grid">
-                    <div class="field">
-                        <label>Full name *</label>
-                        <input wire:model="name">
-                        @error('name')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Position / job title</label>
-                        <input wire:model="position" placeholder="e.g. Production Manager" maxlength="120">
-                        @error('position')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Email *</label>
-                        <input wire:model="email" type="email">
-                        @error('email')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Roles *</label>
-                        <x-ui.multi-role-select model="roleIds" :options="$roles->filter(fn($r) => $r->is_active || in_array((string) $r->id, array_map('strval', $roleIds), true))->map(fn($r) => ['id' => $r->id, 'name' => $r->name])->values()->all()" :disabled="$editingUserId && optional($users->firstWhere('id', $editingUserId))->isSuperAdmin()" placeholder="Select one or more roles" />
-                        <div class="small muted">Effective permissions are combined from all selected roles.</div>
-                        @error('roleIds')<div class="validation-error">{{ $message }}</div>@enderror
-                        @error('roleIds.*')<div class="validation-error">{{ $message }}</div>@enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Department</label>
-                        <select wire:model="departmentId">
-                            <option value="">No department</option>
-                            @foreach($departments as $d)
-                                <option value="{{ $d->id }}">{{ $d->name }}</option>
-                            @endforeach
-                        </select>
-                        @error('departmentId')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Password {{ $editingUserId ? '' : '*' }}</label>
-                        <input wire:model="password" type="password" autocomplete="new-password" placeholder="{{ $editingUserId ? 'Leave blank to keep current password' : 'Enter password' }}">
-                        @error('password')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    <div class="field">
-                        <label>Confirm password {{ $editingUserId ? '' : '*' }}</label>
-                        <input wire:model="passwordConfirmation" type="password" autocomplete="new-password" placeholder="Confirm password">
-                        @error('passwordConfirmation')
-                            <div class="validation-error">{{ $message }}</div>
-                        @enderror
-                    </div>
-
-                    @if($editingUserId)
-                        <div class="field full">
-                            <label>Status</label>
-                            <select wire:model="userActive" @disabled(optional($users->firstWhere('id', $editingUserId))->isSuperAdmin())>
-                                <option value="1">Active</option>
-                                <option value="0">Inactive</option>
-                            </select>
-                        </div>
-                    @endif
-                </div>
-
-                @if($editingUserId)
-                    <div class="ft-access-info">Enter a new password only when you want to change this user's password. Leaving both password fields blank keeps the current password.</div>
-                @endif
-            </div>
-
-            <div class="modal-foot">
-                <button class="ghost" wire:click="closeUser">Cancel</button>
-                <button class="primary" wire:click="saveUser">{{ $editingUserId ? 'Save Changes' : 'Create User' }}</button>
-            </div>
-        </div>
-    @endif
-
     @if($showRoleModal)
         <div class="overlay livewire-overlay" wire:click.self="closeRole"></div>
-        <div class="modal livewire-modal">
+        <div class="modal livewire-modal" data-ft-feedback-scope="form">
             <div class="modal-head">
                 <h2>{{ $editingRoleId ? 'Edit Role' : 'Create Role' }}</h2>
                 <button class="close-btn" wire:click="closeRole">×</button>

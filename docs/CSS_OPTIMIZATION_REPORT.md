@@ -46,3 +46,11 @@ New feature styles must be placed in a component/domain module and imported by t
 - JavaScript source passes syntax validation.
 - Production npm audit reports zero vulnerabilities.
 - Source scans still reject embedded Blade styles and raw DOM event handlers.
+
+---
+
+## 2026-08-24 — Phase 3 CSS finalization
+
+The source-level monolith/compatibility migration is complete. `resources/css/flowtrack.css`, `resources/css/legacy/`, and `resources/css/migration/` were removed. Their active rules were split into bounded component/module owners while preserving cascade order. The largest source CSS file is now below 90 KB and a 100 KB hard ceiling is enforced by `npm run quality:css-modularization`.
+
+See `docs/refactor/PHASE_3_CSS_FINALIZATION.md` and `quality/css-finalization-report.json` for the migration map and measurements.

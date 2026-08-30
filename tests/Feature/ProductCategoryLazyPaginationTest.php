@@ -8,7 +8,7 @@ class ProductCategoryLazyPaginationTest extends TestCase
 {
     public function test_product_category_hierarchy_matches_prototype_pagination_and_lazy_batches(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
         $view = file_get_contents(resource_path('views/components/catalog/category-list.blade.php'));
 
         $this->assertStringContainsString('public int $categoryPerPage = 6;', $component);
@@ -34,15 +34,16 @@ class ProductCategoryLazyPaginationTest extends TestCase
 
     public function test_category_table_does_not_preload_product_or_subcategory_rows(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
+        $navigation = file_get_contents(app_path('Livewire/MasterData/Concerns/ManagesMasterNavigation.php'));
 
         $this->assertStringNotContainsString('$categoryProductIndex =', $component);
         $this->assertStringContainsString('Product Category rows are the first true lazy level', $component);
         $this->assertStringContainsString('Subcategory rows are the second true lazy level', $component);
 
-        $loadStart = strpos($component, 'public function loadMasterRecords(): void');
-        $loadEnd = strpos($component, 'public function updatedCategoryLevelFilter()', $loadStart);
-        $loadMethod = substr($component, $loadStart, $loadEnd - $loadStart);
+        $loadStart = strpos($navigation, 'public function loadMasterRecords(): void');
+        $loadEnd = strpos($navigation, 'private function authorizeGroupAction', $loadStart);
+        $loadMethod = substr($navigation, $loadStart, $loadEnd - $loadStart);
 
         $this->assertStringNotContainsString('synchronizeLegacyTaxonomy()', $loadMethod);
         $this->assertStringNotContainsString('productCategories()->pluck', $loadMethod);

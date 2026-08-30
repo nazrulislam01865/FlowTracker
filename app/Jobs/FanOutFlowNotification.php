@@ -11,6 +11,8 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Foundation\Bus\Dispatchable;
 use Illuminate\Queue\InteractsWithQueue;
 use Illuminate\Queue\SerializesModels;
+use App\Services\Infrastructure\QueueTelemetry;
+use Throwable;
 
 class FanOutFlowNotification implements ShouldQueue
 {
@@ -19,6 +21,8 @@ class FanOutFlowNotification implements ShouldQueue
     public int $tries = 3;
     public array $backoff = [5, 20, 60];
     public int $timeout = 30;
+    public bool $failOnTimeout = true;
+    public readonly int $enqueuedAt;
 
     public function __construct(
         public readonly array $recipientIds,
@@ -29,11 +33,13 @@ class FanOutFlowNotification implements ShouldQueue
         public readonly ?int $taskId = null,
         public readonly ?int $actorId = null,
     ) {
+        $this->enqueuedAt = time();
         $this->onQueue('notifications');
     }
 
-    public function handle(NotificationService $notifications): void
+    public function handle(NotificationService $notifications, QueueTelemetry $telemetry): void
     {
+        $telemetry->recordStart(self::class, $this->enqueuedAt, ['recipients' => count($this->recipientIds)]);
         $job = $this->jobId ? FlowJob::withTrashed()->find($this->jobId) : null;
         $task = $this->taskId ? Task::withTrashed()->find($this->taskId) : null;
         $actor = $this->actorId ? User::find($this->actorId) : null;
@@ -55,4 +61,14 @@ class FanOutFlowNotification implements ShouldQueue
                 );
             });
     }
+    public function failed(?Throwable $exception): void
+    {
+        logger()->error('flowtrack.queue.notification_fanout_failed', [
+            'job_id' => $this->jobId,
+            'task_id' => $this->taskId,
+            'recipient_count' => count($this->recipientIds),
+            'error' => $exception?->getMessage(),
+        ]);
+    }
+
 }

@@ -10,7 +10,8 @@ class DashboardGlobalPeriodSectionsTest extends TestCase
     {
         $dashboard = file_get_contents(resource_path('views/livewire/dashboard/index.blade.php'));
         $component = file_get_contents(app_path('Livewire/Dashboard/Index.php'));
-        $service = file_get_contents(app_path('Services/DashboardService.php'));
+        $service = file_get_contents(app_path('Services/LegacyDashboardService.php'));
+        $primaryQuery = file_get_contents(app_path('Queries/Dashboard/DashboardPrimaryQuery.php'));
 
         $this->assertStringContainsString('wire:click="setRange(1)"', $dashboard);
         $this->assertStringContainsString('wire:click="setRange(7)"', $dashboard);
@@ -21,8 +22,9 @@ class DashboardGlobalPeriodSectionsTest extends TestCase
         $this->assertStringNotContainsString('Team performance reporting period', $dashboard);
 
         $this->assertStringContainsString('$this->rangeDays,', $component);
-        $this->assertStringContainsString("'clientPortfolio' => \$this->clientPortfolio(\$user, \$clientId, \$departmentId, \$rangeDays)", $service);
-        $this->assertStringContainsString("'teamReportingPeriod' => \$dashboardPeriod", $service);
+        $this->assertStringContainsString('DashboardClientPortfolioQuery', $primaryQuery);
+        $this->assertStringContainsString('DashboardTeamPerformanceQuery', $primaryQuery);
+        $this->assertStringContainsString('dashboardPeriod($actor, $filters->rangeDays)', $primaryQuery);
         $this->assertStringContainsString("whereBetween('flow_jobs.updated_at', \$rangeBounds)", $service);
         $this->assertStringContainsString("whereBetween('inquiries.updated_at', \$rangeBounds)", $service);
     }

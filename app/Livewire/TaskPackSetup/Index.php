@@ -9,6 +9,7 @@ use App\Models\TaskPack;
 use App\Models\TaskPackItem;
 use App\Models\WorkflowPhase;
 use App\Services\TaskPackService;
+use App\Support\MasterColor;
 use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
@@ -30,6 +31,7 @@ class Index extends Component
 
     public string $itemTitle = '';
     public string $itemDescription = '';
+    public string $itemColor = '#2563EB';
     public ?int $defaultAssigneeId = null;
     public ?int $defaultDepartmentId = null;
     public ?int $priorityId = null;
@@ -71,7 +73,7 @@ class Index extends Component
         $data = $this->validate([
             'packCode' => ['required','string','max:40'], 'packName' => ['required','string','max:255'], 'packDescription' => ['nullable','string','max:5000'], 'packActive' => ['boolean'],
         ]);
-        $pack = app(TaskPackService::class)->savePack(['code'=>$data['packCode'],'name'=>$data['packName'],'description'=>$data['packDescription'],'is_active'=>$data['packActive']], $this->editPackId);
+        $pack = app(\App\Actions\Setup\SaveTaskPackAction::class)->execute(['code'=>$data['packCode'],'name'=>$data['packName'],'description'=>$data['packDescription'],'is_active'=>$data['packActive']], $this->editPackId);
         $this->selectedPackId = $pack->id; $this->showPackModal = false; session()->flash('success','Task Pack saved.');
         app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack updated', $pack->name.' was saved.', 'update', null, null, auth()->user());
     }
@@ -79,7 +81,7 @@ class Index extends Component
     public function togglePack(int $id): void
     {
         $this->packsReady = true;
-        try { $pack = TaskPack::where('is_snapshot', false)->findOrFail($id); app(TaskPackService::class)->togglePack($id); session()->flash('success','Task Pack status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack status updated', $pack->name.' status was changed.', 'update', null, null, auth()->user()); }
+        try { $pack = TaskPack::where('is_snapshot', false)->findOrFail($id); app(\App\Actions\Setup\ToggleTaskPackAction::class)->execute($id); session()->flash('success','Task Pack status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack status updated', $pack->name.' status was changed.', 'update', null, null, auth()->user()); }
         catch (ValidationException $e) { $this->addError('pack', collect($e->errors())->flatten()->first()); }
     }
 
@@ -118,7 +120,7 @@ class Index extends Component
         $this->packsReady = true;
 
         try {
-            $result = app(TaskPackService::class)->deletePack($this->deletePackId);
+            $result = app(\App\Actions\Setup\DeleteTaskPackAction::class)->execute($this->deletePackId);
             $this->closePackDelete();
             $this->selectedPackId = TaskPack::query()
                 ->where('workspace_id', app(TaskPackService::class)->workspaceId())
@@ -171,9 +173,9 @@ class Index extends Component
         $this->showItemModal = true; $this->editItemId = $id; $this->resetValidation();
         if ($id) {
             $i = TaskPackItem::where('task_pack_id',$this->selectedPackId)->findOrFail($id);
-            $this->itemTitle=$i->title; $this->itemDescription=(string)$i->description; $this->defaultAssigneeId=$i->default_assignee_id; $this->defaultDepartmentId=$i->default_department_id; $this->priorityId=$i->priority_id; $this->documentCategoryId=$i->document_category_id; $this->dueOffsetDays=(int)$i->due_offset_days; $this->itemRequired=(bool)$i->is_required;
+            $this->itemTitle=$i->title; $this->itemDescription=(string)$i->description; $this->itemColor=MasterColor::normalize((string)($i->color ?? '')) ?: '#2563EB'; $this->defaultAssigneeId=$i->default_assignee_id; $this->defaultDepartmentId=$i->default_department_id; $this->priorityId=$i->priority_id; $this->documentCategoryId=$i->document_category_id; $this->dueOffsetDays=(int)$i->due_offset_days; $this->itemRequired=(bool)$i->is_required;
         } else {
-            $this->reset(['itemTitle','itemDescription','defaultAssigneeId','defaultDepartmentId','priorityId','documentCategoryId']); $this->dueOffsetDays=1; $this->itemRequired=true;
+            $this->reset(['itemTitle','itemDescription','defaultAssigneeId','defaultDepartmentId','priorityId','documentCategoryId']); $this->itemColor='#2563EB'; $this->dueOffsetDays=1; $this->itemRequired=true;
         }
     }
 
@@ -182,13 +184,13 @@ class Index extends Component
     public function saveItem(): void
     {
         $data = $this->validate([
-            'itemTitle'=>['required','string','max:255'], 'itemDescription'=>['nullable','string','max:5000'], 'defaultAssigneeId'=>['nullable','exists:users,id'],
+            'itemTitle'=>['required','string','max:255'], 'itemDescription'=>['nullable','string','max:5000'], 'itemColor'=>['required','regex:/^#[0-9A-Fa-f]{6}$/'], 'defaultAssigneeId'=>['nullable','exists:users,id'],
             'defaultDepartmentId'=>['nullable','exists:master_records,id'], 'priorityId'=>['nullable','exists:master_records,id'], 'documentCategoryId'=>['nullable','exists:master_records,id'],
             'dueOffsetDays'=>['required','integer','min:0','max:3650'], 'itemRequired'=>['boolean'],
         ]);
         $pack=TaskPack::where('is_snapshot', false)->findOrFail($this->selectedPackId);
-        app(TaskPackService::class)->saveItem($pack,[
-            'title'=>$data['itemTitle'],'description'=>$data['itemDescription'],'default_assignee_id'=>$data['defaultAssigneeId'],'default_department_id'=>$data['defaultDepartmentId'],
+        app(\App\Actions\Setup\SaveTaskPackItemAction::class)->execute($pack,[
+            'title'=>$data['itemTitle'],'description'=>$data['itemDescription'],'color'=>MasterColor::normalize($data['itemColor']) ?: '#2563EB','default_assignee_id'=>$data['defaultAssigneeId'],'default_department_id'=>$data['defaultDepartmentId'],
             'priority_id'=>$data['priorityId'],'document_category_id'=>$data['documentCategoryId'],'due_offset_days'=>$data['dueOffsetDays'],'is_required'=>$data['itemRequired'],
         ],$this->editItemId);
         $this->showItemModal=false; session()->flash('success','Task Pack item saved.');
@@ -198,11 +200,11 @@ class Index extends Component
     public function deleteItem(int $id): void
     {
         $this->packsReady = true;
-        try { app(TaskPackService::class)->deleteItem($id); session()->flash('success','Task Pack item deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack task deleted', 'A Task Pack task was deleted.', 'update', null, null, auth()->user()); }
+        try { app(\App\Actions\Setup\DeleteTaskPackItemAction::class)->execute($id); session()->flash('success','Task Pack item deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Task Pack task deleted', 'A Task Pack task was deleted.', 'update', null, null, auth()->user()); }
         catch (ValidationException $e) { $this->addError('item', collect($e->errors())->flatten()->first()); }
     }
 
-    public function moveItem(int $id, int $direction): void { app(TaskPackService::class)->moveItem($id,$direction); }
+    public function moveItem(int $id, int $direction): void { app(\App\Actions\Setup\MoveTaskPackItemAction::class)->execute($id, $direction); }
 
     public function render()
     {

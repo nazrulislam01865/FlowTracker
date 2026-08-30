@@ -24,7 +24,7 @@
     @endif
 
     @if($isEditing)
-        <form wire:submit="save" class="ft-company-form">
+        <form wire:submit="save" class="ft-company-form" data-ft-feedback-scope="form">
             <section class="card ft-company-card">
                 <div class="ft-company-card-head">
                     <div><h2>Company identity</h2><p>These details identify the seller / issuing company on the invoice.</p></div>

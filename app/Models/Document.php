@@ -7,7 +7,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Document extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'document_number',
+        'flow_job_id',
+        'client_id',
+        'task_id',
+        'uploaded_by',
+        'category',
+        'name',
+        'path',
+        'mime_type',
+        'size',
+        'version',
+        'is_final',
+        'note',
+    ];
     protected function casts(): array { return ['is_final' => 'boolean']; }
     public function job(): BelongsTo { return $this->belongsTo(FlowJob::class, 'flow_job_id'); }
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }

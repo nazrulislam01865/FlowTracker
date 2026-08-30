@@ -49,7 +49,8 @@ unset($__defined_vars, $__key, $__value); ?>
         ->map(fn ($part) => mb_substr($part, 0, 1))
         ->take(2)
         ->implode('');
-    $style = $size ? "width:{$size}px;height:{$size}px;font-size:".max(9, round($size / 3.4)).'px' : null;
+    $fontSizeRem = $size ? max(9, round($size / 3.4)) / 16 : null;
+    $style = $size ? "width:{$size}px;height:{$size}px;font-size:{$fontSizeRem}rem" : null;
 ?>
 <span <?php echo e($attributes->class(['avatar', 'dark' => $dark])->merge(['style' => $style])); ?>>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($imageUrl): ?>
@@ -59,7 +60,7 @@ unset($__defined_vars, $__key, $__value); ?>
             aria-hidden="true"
             loading="lazy"
             decoding="async"
-            onerror="this.hidden=true;this.nextElementSibling.hidden=false"
+            data-ft-image-fallback="sibling"
         >
         <span class="avatar-initials" hidden aria-hidden="true"><?php echo e($initials ?: 'FT'); ?></span>
     <?php else: ?>

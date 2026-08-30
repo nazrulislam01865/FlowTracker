@@ -42,10 +42,10 @@ class ClientArchiveRestoreTest extends TestCase
 
     public function test_active_and_archived_rows_do_not_depend_on_a_blade_local_initials_variable(): void
     {
-        $view = file_get_contents(resource_path('views/livewire/clients/index.blade.php'));
+        $view = \Tests\Support\AdministrationPhase7Source::clientsView();
 
         $this->assertStringNotContainsString('$rowInitials', $view);
-        $this->assertSame(2, substr_count($view, 'BoardPresenter::initials($clientRow->name)'));
+        $this->assertSame(2, substr_count($view, '<x-ui.client-logo :client="$clientRow"'));
     }
 
     public function test_archived_client_can_be_permanently_erased_without_deleting_linked_history(): void

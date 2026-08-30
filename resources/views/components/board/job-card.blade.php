@@ -5,17 +5,15 @@
     $nextTask = \App\Support\BoardPresenter::nextTask($job);
     $team = \App\Support\BoardPresenter::team($job);
     $completedCurrent = $currentTasks->filter(fn($task) => $task->completed_at || $task->status === 'Completed')->count();
-    $healthKey = str($job->health)->lower()->replace(' ', '-');
     $attentionActive = (bool) ($job->attention_requested ?? false) || (bool) $job->needs_attention;
 @endphp
-<article {{ $attributes->class(['ft-job-card', 'is-expanded' => $expanded, 'health-'.$healthKey]) }}>
-    <span class="ft-job-health-line" aria-hidden="true"></span>
+<article {{ $attributes->class(['ft-job-card', 'is-expanded' => $expanded]) }}>
 
     <div class="ft-job-card-top">
         <div class="ft-job-card-signals">
-            <span class="ft-health-pill {{ $attentionActive ? 'red' : (in_array($job->health, ['On Track','Completed']) ? 'green' : (in_array($job->health, ['Blocked']) ? 'purple' : 'red')) }}">
-                <span class="ft-health-dot"></span>{{ $attentionActive ? 'Needs Attention' : $job->health }}
-            </span>
+            @if($attentionActive)
+                <span class="ft-health-pill red"><span class="ft-health-dot"></span>Needs Attention</span>
+            @endif
             <span class="ft-phase-age">
                 <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
                 {{ \App\Support\BoardPresenter::phaseDays($job) }}d in phase
@@ -127,7 +125,7 @@
             <div><span>Delivery</span>
                 <span
                     class="ft-inline-date ft-job-inline-date ft-inline-edit-shell {{ ($job->delivery_date && \App\Support\UserLocalTime::isDatePast($job->delivery_date)) && !$job->completed_at ? 'overdue' : '' }}"
-                    x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'Job delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set due date') })"
+                    x-data="window.FlowTrack.ui.inlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'Job delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j') ?? 'Set due date') })"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                 >
                     <span class="ft-inline-date-display" x-show="!editing"><b x-text="display">{{ $job->delivery_date?->format('M j') ?? 'Set due date' }}</b></span>

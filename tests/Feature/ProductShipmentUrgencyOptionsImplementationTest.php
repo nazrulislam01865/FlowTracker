@@ -8,7 +8,7 @@ class ProductShipmentUrgencyOptionsImplementationTest extends TestCase
 {
     public function test_product_shipping_urgencies_are_master_data_backed_and_reusable(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
         $model = file_get_contents(app_path('Models/MasterRecord.php'));
         $form = file_get_contents(resource_path('views/components/catalog/product-form.blade.php'));
         $shipping = file_get_contents(resource_path('views/components/catalog/product-shipment-urgencies.blade.php'));

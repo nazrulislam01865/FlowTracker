@@ -40,7 +40,7 @@
         <div class="ft-task-assignee"><x-ui.avatar :user="$task->assignee" :name="$task->assignee?->name ?? 'Unassigned'" :size="38" /><b>{{ $task->assignee?->name ?? 'Unassigned' }}</b></div>
         <span
             class="ft-inline-date ft-inline-edit-shell {{ ($task->due_date && \App\Support\UserLocalTime::isDatePast($task->due_date)) && !$task->completed_at ? 'overdue' : '' }}"
-            x-data="window.FlowTrackInlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j') ?? 'Set due date') })"
+            x-data="window.FlowTrack.ui.inlineEdit({ key: @js('task-'.$task->id.'-due-date'), label: 'task due date', value: @js($task->due_date?->format('Y-m-d') ?? ''), display: @js($task->due_date?->format('M j') ?? 'Set due date') })"
             :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         >
             <button type="button" class="ft-inline-date-display" x-show="!editing" :disabled="status === 'saving'" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.dateInput.showPicker ? $refs.dateInput.showPicker() : $refs.dateInput.focus())" title="Set due date">

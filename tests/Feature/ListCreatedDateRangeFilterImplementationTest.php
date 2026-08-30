@@ -8,14 +8,14 @@ class ListCreatedDateRangeFilterImplementationTest extends TestCase
 {
     public function test_inquiry_and_order_lists_share_created_date_range_filter(): void
     {
-        $dateComponent = file_get_contents(resource_path('views/components/ui/date-range-filter.blade.php'));
-        $inquiryView = file_get_contents(resource_path('views/livewire/inquiries/index.blade.php'));
+        $dateComponent = file_get_contents(resource_path('views/components/ui/date-range.blade.php'));
+        $inquiryView = $this->inquiryViewSource();
         $orderView = file_get_contents(resource_path('views/livewire/orders/index.blade.php'));
-        $orderTable = file_get_contents(resource_path('views/components/jobs/table.blade.php'));
-        $inquiryComponent = file_get_contents(app_path('Livewire/Inquiries/Index.php'));
+        $orderFilters = file_get_contents(resource_path('views/components/orders/list/filters.blade.php'));
+        $inquiryComponent = $this->inquiryLivewireSource();
         $orderComponent = file_get_contents(app_path('Livewire/Orders/Index.php'));
-        $inquiryService = file_get_contents(app_path('Services/InquiryService.php'));
-        $jobService = file_get_contents(app_path('Services/JobService.php'));
+        $inquiryService = $this->inquiryServiceSource();
+        $jobService = $this->jobServiceSource();
         $workspaceSettings = file_get_contents(app_path('Services/WorkspaceSettingsService.php'));
 
         $this->assertStringContainsString('Date from', $dateComponent);
@@ -23,18 +23,21 @@ class ListCreatedDateRangeFilterImplementationTest extends TestCase
         $this->assertStringContainsString('Date to', $dateComponent);
         $this->assertStringContainsString('type="date"', $dateComponent);
         $this->assertStringContainsString('lang="en-GB"', $dateComponent);
-        $this->assertStringContainsString('<x-ui.date-range-filter', $inquiryView);
+        $this->assertStringContainsString('<x-ui.date-range', $inquiryView);
         $this->assertStringContainsString('class="ft-inquiry-date-range"', $inquiryView);
         $hideCompletedPosition = strpos($inquiryView, '<label class="completed-toggle');
-        $dateRangePosition = strpos($inquiryView, '<x-ui.date-range-filter');
+        $dateRangePosition = strpos($inquiryView, '<x-ui.date-range');
         $clearFilterPosition = strpos($inquiryView, 'class="chip ft-inquiry-clear-filter"');
         $this->assertNotFalse($hideCompletedPosition);
         $this->assertNotFalse($dateRangePosition);
         $this->assertNotFalse($clearFilterPosition);
         $this->assertGreaterThan($hideCompletedPosition, $dateRangePosition);
         $this->assertGreaterThan($dateRangePosition, $clearFilterPosition);
-        $this->assertStringContainsString(':date-range-enabled="true"', $orderView);
-        $this->assertStringContainsString('<x-ui.date-range-filter', $orderTable);
+        $this->assertStringContainsString(':date-from="$dateFrom"', $orderView);
+        $this->assertStringContainsString(':date-to="$dateTo"', $orderView);
+        $this->assertStringContainsString('<x-ui.date-range', $orderFilters);
+        $this->assertStringContainsString('from-property="dateFrom"', $orderFilters);
+        $this->assertStringContainsString('to-property="dateTo"', $orderFilters);
 
         foreach ([$inquiryComponent, $orderComponent] as $component) {
             $this->assertStringContainsString("public string \$dateFrom = '';", $component);

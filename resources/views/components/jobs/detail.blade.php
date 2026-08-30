@@ -6,14 +6,34 @@
     'users'=>collect(),
     'mentionUsers'=>collect(),
     'priorities'=>collect(),
+    'shipmentUrgencyOptions'=>collect(),
+    'overviewPhaseId'=>null,
+    'orderDetailContext'=>[],
+    'orderDetailSectionsReady'=>[],
+    'orderRedoContext'=>[],
+    'orderRedoForm'=>[],
     'products'=>collect(),
     'categories'=>collect(),
     'showAddJobProductForm'=>false,
     'jobProductSearch'=>'',
     'jobProductSearchResults'=>collect(),
+    'jobProductSearchSuppliers'=>collect(),
     'jobProductResultTotal'=>0,
+    'jobProductShowAllResults'=>false,
     'jobProductSelectedProduct'=>null,
+    'jobProductSelectedSupplier'=>null,
     'jobProductCategory'=>'',
+    'jobProductQuantity'=>'1000',
+    'jobProductUnitPrice'=>'0.00',
+    'jobProductSupplierId'=>null,
+    'jobProductSupplierLabel'=>'',
+    'jobProductSupplierLocked'=>false,
+    'showEditOrderProductModal'=>false, 'editOrderProductItemId'=>null, 'editOrderProductName'=>'', 'editOrderProductCode'=>'',
+    'editOrderProductCategory'=>'', 'editOrderProductSearch'=>'', 'editOrderProductSearchResults'=>collect(),
+    'editOrderProductSearchSuppliers'=>collect(), 'editOrderProductResultTotal'=>0, 'editOrderProductSelectedProduct'=>null,
+    'editOrderProductSelectedSupplier'=>null, 'editOrderProductShowAllResults'=>false,
+    'editOrderProductSupplierId'=>null, 'editOrderProductSupplierLabel'=>'', 'editOrderProductQuantity'=>'1',
+    'editOrderProductUnitPrice'=>'0.00', 'editOrderProductNotes'=>'',
     'availableDocuments'=>collect(),
     'overviewTaskDocumentModalTask'=>null,
     'overviewTaskAvailableDocuments'=>collect(),
@@ -24,13 +44,14 @@
     'overviewTaskDocumentUpload'=>null,
     'overviewTaskExistingDocumentId'=>null,
     'overviewTaskLinkFormTaskId'=>null,
-    'healthOptions'=>collect(),
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
     'activityPage'=>1,
     'focusComment'=>null,
     'showOrderAttentionModal'=>false,
     'orderAttentionReason'=>'',
+    'showOrderCancelModal'=>false,
+    'orderCancellationReason'=>'',
     'jobDocumentUploads'=>[],
     'jobRequiredDocumentUpload'=>null,
     'jobDocumentTaskId'=>null,
@@ -54,6 +75,7 @@
     'financeReceivedAccounts'=>collect(),
     'canCreateFinance'=>false,
     'canEditFinance'=>false,
+    'canViewFinance'=>false,
     'showCreateInvoiceModal'=>false,
     'invoiceType'=>'Final invoice',
     'invoiceCurrency'=>'USD',
@@ -80,106 +102,37 @@
     'collectionFollowUpDate'=>'',
     'collectionNextFollowUpDate'=>'',
     'collectionNote'=>'',
+    'showOrderWorkflowActionModal'=>false,
+    'orderWorkflowActionTaskId'=>null,
+    'orderWorkflowActionStep'=>'main',
+    'orderWorkflowActionPayload'=>[],
+    'orderWorkflowEmailFallback'=>false,
+    'orderWorkflowEmailFallbackMessage'=>'',
+    'orderWorkflowEmailFallbackAttempts'=>0,
 ])
 @php
-    $team = \App\Support\JobDetailPresenter::team($job);
-    $tabs = ['overview'=>'Overview','inquiry'=>'Inquiry'];
-    if (app(\App\Services\AccessControlService::class)->can(auth()->user(), 'finance', 'view')) $tabs['finance'] = 'Invoices & Payments';
-    $masterData = app(\App\Services\MasterDataService::class);
-    $jobPriorityColor = $masterData->displayColorFor('priority', (string) $job->priority);
-    $jobFlag = app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job);
-    $jobFlagColor = $jobFlag ? $masterData->displayColorFor('order_flag', $jobFlag) : null;
     $manualAttention = (bool) ($job->attention_requested ?? false);
-    $manualAttentionReason = trim((string) ($job->attention_reason ?? ''));
-    $orderAttentionLocked = (bool) $job->completed_at || in_array((string) $job->status, \App\Services\JobService::INACTIVE_STATUSES, true);
 @endphp
-<div {{ $attributes->class('ft-job-detail-page ft-exact-job-detail ft-detail-products-scope') }}>
-    <div class="ft-detail-toolbar ft-exact-job-header">
-        <div class="ft-job-heading-copy">
-            <div class="ft-detail-breadcrumb ft-id-breadcrumb">
-                <span>Orders</span><span>/</span>
-                <a class="ft-copyable-id-link" href="{{ route('jobs.index', ['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a>
-                <button type="button" class="ft-copy-id-btn" title="Copy Order ID" aria-label="Copy {{ $job->displayOrderNumber() }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->displayOrderNumber())); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
-            </div>
-            <h1
-                class="ft-editable-job-title ft-inline-edit-shell"
-                x-data="window.FlowTrackInlineEdit({ key: @js('job-'.$job->id.'-title'), label: 'Order name', value: @js($job->title), display: @js($job->title) })"
-                :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
-            >
-                <span x-show="!editing" x-text="display">{{ $job->title }}</span>
-                @if(app(\App\Services\AccessControlService::class)->canEditVisibleJob(auth()->user(), $job))
-                    <button x-show="!editing" :disabled="status === 'saving'" type="button" class="ft-pencil" aria-label="Edit order title" title="Edit order name" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.jobTitle.focus())">✎</button>
-                    <input x-ref="jobTitle" x-cloak x-show="editing" x-model="draftValue" type="text" maxlength="255"
-                        x-on:keydown.escape.prevent="cancelEdit()"
-                        x-on:keydown.enter.prevent="$event.target.blur()"
-                        x-on:blur="if (editing) { draftValue.trim() === value ? cancelEdit() : commit(draftValue.trim(), draftValue.trim(), () => $wire.updateJobTextField({{ $job->id }}, 'title', draftValue.trim())) }">
-                    <x-ui.inline-save-state />
-                @endif
-            </h1>
-            <div class="ft-order-header-meta" aria-label="Order information">
-                <span class="ft-order-header-meta-item">
-                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span>
-                    <span class="ft-client-inline-identity"><x-ui.client-logo :client="$job->client" :name="$job->client?->name ?: 'Client'" :size="20" /><span>Client <strong>{{ $job->client?->name ?: '—' }}</strong></span></span>
-                </span>
-                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
-                <span class="ft-order-header-meta-item ft-order-header-reference">
-                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 3.5h7l4 4V20.5H7z"></path><path d="M14 3.5v4h4"></path></svg></span>
-                    <span>Reference <strong>{{ $job->order_number ?: '—' }}</strong></span>
-                    @if($job->order_number)
-                        <button type="button" class="ft-copy-id-btn ft-order-header-copy" title="Copy Reference Number" aria-label="Copy reference number {{ $job->order_number }}" onclick="event.preventDefault(); event.stopPropagation(); navigator.clipboard?.writeText(@js($job->order_number)); this.classList.add('copied'); setTimeout(()=>this.classList.remove('copied'),900)">⧉</button>
-                    @endif
-                </span>
-                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
-                <span class="ft-order-header-meta-item">
-                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="8" r="3.5"></circle><path d="M5.5 19c.8-3.4 3-5.2 6.5-5.2s5.7 1.8 6.5 5.2"></path></svg></span>
-                    <span>Created by <strong>{{ $job->creator?->name ?: 'System' }}</strong></span>
-                </span>
-                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
-                <span class="ft-order-header-meta-item">
-                    <span class="ft-order-header-meta-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="5.5" width="16" height="14" rx="2"></rect><path d="M8 3.5v4M16 3.5v4M4 10h16"></path></svg></span>
-                    <span>Created <strong>{{ $job->created_at ? \App\Support\UserLocalTime::format($job->created_at, 'M j, Y') : '—' }}@if($job->created_at) at {{ \App\Support\UserLocalTime::format($job->created_at, 'g:i A') }}@endif</strong></span>
-                </span>
-                <span class="ft-order-header-meta-separator" aria-hidden="true">•</span>
-                <span class="ft-order-header-meta-item ft-order-header-attention-action" title="{{ $manualAttentionReason ?: 'Request attention from the Order creator and administrators' }}">
-                    <span>Action:</span>
-                    <button type="button" class="ft-order-header-attention-button {{ $manualAttention ? 'is-flagged' : '' }}" wire:click="openOrderAttentionReason" @disabled($orderAttentionLocked) aria-label="Request attention" title="{{ $manualAttention ? 'View or update attention request' : 'Request attention' }}">
-                        <svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M6 21V4"></path><path d="M7 5h10l-2 4 2 4H7"></path></svg>
-                    </button>
-                    @if($manualAttention)<strong class="ft-order-header-attention-label">Requires attention</strong>@endif
-                </span>
-            </div>
-            <div class="ft-exact-job-meta ft-order-status-row" aria-label="Order status">
-                <span class="ft-soft-pill {{ \App\Support\JobDetailPresenter::healthClass($job->health) }}">{{ $job->health }}</span>
-                @if($jobFlag)<span class="ft-soft-pill {{ $jobFlagColor ? 'ft-master-color' : 'amber' }}" style="{{ \App\Support\MasterColor::style($jobFlagColor) }}">⚑ {{ $jobFlag }}</span>@endif
-                <span class="ft-soft-pill {{ $jobPriorityColor ? 'ft-master-color' : 'red' }}" style="{{ \App\Support\MasterColor::style($jobPriorityColor) }}">{{ $job->priority }}</span>
-                <x-ui.phase-label :phase="$job->phase" :fallback="$job->status" class="ft-soft-pill" />
-            </div>
-        </div>
-        <div class="ft-detail-actions ft-exact-job-team" aria-label="Order team">
-            <div class="ft-team-stack">
-                @foreach($team->take(4) as $member)<x-ui.avatar :user="$member" :name="$member->name" :size="28"/>@endforeach
-                @if($team->count()>4)<span class="ft-avatar-more small">+{{ $team->count()-4 }}</span>@endif
-            </div>
-        </div>
-    </div>
+<div
+    {{ $attributes->class('ft-job-detail-page ft-order-prototype-detail ft-detail-products-scope') }}
+    x-data="{ redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } }"
+    x-on:order-redo-notice.window="showRedoNotice($event.detail.message ?? 'Redo update saved.')"
+>
+    <x-jobs.order-detail.header
+        :job="$job"
+        :context="$orderDetailContext"
+        :shipment-urgency-options="$shipmentUrgencyOptions"
+        :redo-context="$orderRedoContext"
+    />
+    <x-jobs.order-detail.tabs
+        :job="$job"
+        :detail-tab="$detailTab"
+        :can-view-finance="$canViewFinance"
+        :can-create-finance="$canCreateFinance"
+        :redo-context="$orderRedoContext"
+    />
 
-    <div class="{{ $detailTab==='finance' ? 'ft-finance-tab-action-row' : '' }}">
-        <nav class="ft-detail-tabs ft-exact-tabs">
-            @foreach($tabs as $key=>$label)
-                <button class="{{ $detailTab===$key ? 'active' : '' }}" wire:click="setDetailTab('{{ $key }}')">
-                    {{ $label }}
-                    @if($key==='documents')<span>{{ $job->relationLoaded('documents') ? $job->documents->count() : (int) ($job->documents_count ?? 0) }}</span>@endif
-                    @if($key==='inquiry')<span>{{ $job->source_inquiry_id ? 1 : 0 }}</span>@endif
-                </button>
-            @endforeach
-        </nav>
-        @if($detailTab==='finance' && $canCreateFinance)
-            <div class="ft-finance-tab-actions">
-                <button type="button" class="ft-finance-btn secondary" wire:click="openRecordPayment">Record Payment</button>
-                <button type="button" class="ft-finance-btn primary" wire:click="openCreateInvoice"><span>＋</span> Create Invoice</button>
-            </div>
-        @endif
-    </div>
+    <x-jobs.order-detail.redo-banner :job="$job" :context="$orderRedoContext" />
 
     @if($detailTab==='overview')
         <x-jobs.detail-overview
@@ -189,14 +142,43 @@
             :users="$users"
             :mention-users="$mentionUsers"
             :priorities="$priorities"
+            :shipment-urgency-options="$shipmentUrgencyOptions"
+            :overview-phase-id="$overviewPhaseId"
+            :order-detail-context="$orderDetailContext"
+            :detail-sections-ready="$orderDetailSectionsReady"
             :products="$products"
             :categories="$categories"
             :show-add-job-product-form="$showAddJobProductForm"
             :job-product-search="$jobProductSearch"
             :job-product-search-results="$jobProductSearchResults"
+            :job-product-search-suppliers="$jobProductSearchSuppliers"
             :job-product-result-total="$jobProductResultTotal"
+            :job-product-show-all-results="$jobProductShowAllResults"
             :job-product-selected-product="$jobProductSelectedProduct"
+            :job-product-selected-supplier="$jobProductSelectedSupplier"
             :job-product-category="$jobProductCategory"
+            :job-product-quantity="$jobProductQuantity"
+            :job-product-unit-price="$jobProductUnitPrice"
+            :job-product-supplier-id="$jobProductSupplierId"
+            :job-product-supplier-label="$jobProductSupplierLabel"
+            :job-product-supplier-locked="$jobProductSupplierLocked"
+            :show-edit-order-product-modal="$showEditOrderProductModal"
+            :edit-order-product-item-id="$editOrderProductItemId"
+            :edit-order-product-name="$editOrderProductName"
+            :edit-order-product-code="$editOrderProductCode"
+            :edit-order-product-category="$editOrderProductCategory"
+            :edit-order-product-search="$editOrderProductSearch"
+            :edit-order-product-search-results="$editOrderProductSearchResults"
+            :edit-order-product-search-suppliers="$editOrderProductSearchSuppliers"
+            :edit-order-product-result-total="$editOrderProductResultTotal"
+            :edit-order-product-selected-product="$editOrderProductSelectedProduct"
+            :edit-order-product-selected-supplier="$editOrderProductSelectedSupplier"
+            :edit-order-product-show-all-results="$editOrderProductShowAllResults"
+            :edit-order-product-supplier-id="$editOrderProductSupplierId"
+            :edit-order-product-supplier-label="$editOrderProductSupplierLabel"
+            :edit-order-product-quantity="$editOrderProductQuantity"
+            :edit-order-product-unit-price="$editOrderProductUnitPrice"
+            :edit-order-product-notes="$editOrderProductNotes"
             :job-task-search="$jobTaskSearch"
             :activity-tab="$activityTab"
             :activity-page="$activityPage"
@@ -211,6 +193,13 @@
             :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
             :show-add-order-task-form="$showAddOrderTaskForm"
             :new-order-task-assignee-id="$newOrderTaskAssigneeId"
+            :show-order-workflow-action-modal="$showOrderWorkflowActionModal"
+            :order-workflow-action-task-id="$orderWorkflowActionTaskId"
+            :order-workflow-action-step="$orderWorkflowActionStep"
+            :order-workflow-action-payload="$orderWorkflowActionPayload"
+            :order-workflow-email-fallback="$orderWorkflowEmailFallback"
+            :order-workflow-email-fallback-message="$orderWorkflowEmailFallbackMessage"
+            :order-workflow-email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"
         />
     @elseif($detailTab==='inquiry')
         <x-jobs.detail-inquiry
@@ -223,10 +212,28 @@
             :can-manage="$canManageInquiryLink"
             :linked-inquiry-can-open="$linkedInquiryCanOpen"
         />
+    @elseif($detailTab==='redo' && (bool) ($orderRedoContext['hasRedo'] ?? false))
+        <x-jobs.order-detail.redo-panel :job="$job" :context="$orderRedoContext" />
+
+        {{--
+            Keep the standard Order Activity feed beneath the Redo cards,
+            matching the approved Redo prototype. This is the same source used
+            on Overview, so comments/history stay in one authoritative audit
+            stream instead of creating a separate Redo-only activity store.
+        --}}
+        <x-jobs.order-detail.activity
+            :job="$job"
+            :mention-users="$mentionUsers"
+            :activity-tab="$activityTab"
+            :activity-page="$activityPage"
+            :focus-comment="$focusComment"
+            :can-comment="(bool) ($orderDetailContext['canComment'] ?? false)"
+        />
     @elseif($detailTab==='finance')
         <x-jobs.finance.detail
             :job="$job"
             :summary="$financeSummary"
+            :redo-context="$orderRedoContext"
             :contacts="$financeContacts ?? collect()"
             :users="$financeUsers ?? collect()"
             :invoice-types="$financeInvoiceTypes ?? collect()"
@@ -266,9 +273,133 @@
     @endif
 
 
+    <x-jobs.order-detail.redo-modal :job="$job" :context="$orderRedoContext" :form="$orderRedoForm" :mention-users="$mentionUsers" />
+
+    <div class="ft-redo-toast" x-cloak x-show="redoNoticeOpen" x-transition x-text="redoNotice" role="status" aria-live="polite"></div>
+
+    @if($showOrderCancelModal)
+        <div
+            class="ft-order-modal-backdrop"
+            wire:key="order-cancel-modal"
+            wire:click.self="closeOrderCancelModal"
+        >
+            <section
+                class="ft-order-modal"
+                role="dialog"
+                aria-modal="true"
+                aria-labelledby="order-cancel-modal-title"
+                x-data="{ cancelling: false }"
+            >
+                <header>
+                    <div>
+                        <h2 id="order-cancel-modal-title">Cancel Order</h2>
+
+                        <p>
+                            {{ $job->displayOrderNumber() }}
+                            · cancellation is available through the QC stage.
+                        </p>
+                    </div>
+
+                    <button
+                        type="button"
+                        wire:click="closeOrderCancelModal"
+                        aria-label="Close"
+                    >
+                        ×
+                    </button>
+                </header>
+
+                <div class="ft-order-modal-body ft-mention-host">
+                    <div class="ft-order-critical-note">
+                        <strong>This stops workflow progression.</strong>
+
+                        <span>
+                            Open tasks are marked cancelled.
+                            Existing documents, products, history,
+                            and audit records are retained.
+                        </span>
+                    </div>
+
+                    <label for="order-cancellation-reason">
+                        Cancellation reason *
+                    </label>
+
+                    <textarea
+                        id="order-cancellation-reason"
+                        x-ref="cancelReason"
+                        class="ft-mention-input"
+                        data-rich-text
+                        wire:model="orderCancellationReason"
+                        rows="5"
+                        autocomplete="off"
+                        data-mention-users="{{ json_encode(
+                            collect($mentionUsers)->values()->all(),
+                            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                        ) }}"
+                        placeholder="Explain why this Order is being cancelled. Type @ to mention someone, paste text, or paste an image..."
+                    ></textarea>
+
+                    @error('orderCancellationReason')
+                        <p class="validation-error">
+                            {{ $message }}
+                        </p>
+                    @enderror
+                </div>
+
+                <footer>
+                    <button
+                        type="button"
+                        class="secondary"
+                        wire:click="closeOrderCancelModal"
+                        x-bind:disabled="cancelling"
+                    >
+                        Keep Order
+                    </button>
+
+                    <button
+                        type="button"
+                        class="danger"
+                        x-bind:disabled="cancelling"
+                        x-on:click="
+                            if (cancelling) return;
+
+                            cancelling = true;
+
+                            (async () => {
+                                try {
+                                    const input = $refs.cancelReason;
+
+                                    const value =
+                                        input?.__flowtrackRichTextValueAsync
+                                            ? await input.__flowtrackRichTextValueAsync()
+                                            : (input?.value ?? '');
+
+                                    await $wire.confirmOrderCancellation(value);
+                                } finally {
+                                    cancelling = false;
+                                }
+                            })();
+                        "
+                    >
+                        <span x-show="!cancelling">
+                            Cancel Order
+                        </span>
+
+                        <span
+                            x-cloak
+                            x-show="cancelling"
+                        >
+                            Cancelling...
+                        </span>
+                    </button>
+                </footer>
+            </section>
+        </div>
+    @endif
+
     @if($showOrderAttentionModal)
         <div class="ft-inquiry-attention-modal-backdrop" wire:key="order-attention-modal" wire:click.self="closeOrderAttentionReason">
-            <section class="ft-inquiry-attention-modal" role="dialog" aria-modal="true" aria-labelledby="order-attention-modal-title">
+            <section class="ft-inquiry-attention-modal" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-attention-modal-title">
                 <header class="ft-inquiry-attention-modal-head">
                     <div>
                         <h2 id="order-attention-modal-title">Request attention</h2>

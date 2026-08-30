@@ -3,20 +3,21 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class InvoiceCurrencyAndBillingContactPresentationTest extends TestCase
 {
     public function test_invoice_uses_business_currency_value_instead_of_master_record_code(): void
     {
         $master = file_get_contents(app_path('Services/MasterDataService.php'));
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
+        $jobs = OrderPhase5Source::livewire();
         $modal = file_get_contents(resource_path('views/components/jobs/finance/create-invoice-modal.blade.php'));
 
         $this->assertStringContainsString('public function currencyValue(MasterRecord $currency): string', $master);
         $this->assertStringContainsString('$currency->name,', $master);
         $this->assertStringContainsString('$master->currencyValue($currency)', $jobs);
         $this->assertStringContainsString("->unique('value')", $modal);
-        $this->assertStringContainsString("'USD' => '$'", $modal);
+        $this->assertStringContainsString("'USD' => '\$'", $modal);
         $this->assertStringNotContainsString('{{ $currencyCode }}', $modal);
         $this->assertStringNotContainsString('$option->code ?: $option->name', $modal);
     }

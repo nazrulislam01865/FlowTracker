@@ -13,26 +13,22 @@
 @endphp
 
 @if($catalogReady)
-    <x-catalog.create-product-quantity
+    <x-inquiries.create-product-rfq-section
         :rows="$createProductRows"
-        rows-property="createProductRows"
-        remove-method="removeCreateProductRow"
-        :required="false"
+        :rfq-rows="$createProductRfqRows"
         :active-product-count="$activeProductCount"
         :product-search-results="$productSearchResults"
+        :product-search-suppliers="$productSearchSuppliers"
         :product-result-total="$productResultTotal"
         :create-product-search="$createProductSearch"
-        :create-product-category-filter="$createProductCategoryFilter"
         :create-product-show-all-results="$createProductShowAllResults"
-        :product-categories="$productCategories"
         :selected-product-details="$selectedProductDetails"
-        :can-view-product-categories="$canViewProductCategories"
+        :selected-product-suppliers="$selectedProductSuppliers"
+        :selected-rfq-suppliers="$createProductRfqSelectedSuppliers"
         :can-create-catalog-product="$canCreateCatalogProduct"
-        wire-key="create-inquiry-products-ready"
-        row-key-prefix="selected-inquiry-product"
     />
 @else
-    <x-jobs.create-section-placeholder number="2" title="Products & quantities" section="catalog" :rows="3" />
+    <x-jobs.create-section-placeholder number="2" title="Products, suppliers & RFQ invitations" section="catalog" :rows="3" />
 @endif
 
 @if($showCreateOrderProductModal)

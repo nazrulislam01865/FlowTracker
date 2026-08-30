@@ -2,12 +2,16 @@
 
 namespace App\Livewire\MyWork;
 
+use App\Actions\Inquiries\UpdateInquiryTaskDueDate;
+use App\Actions\Inquiries\UpdateInquiryTaskStatus;
+use App\Queries\Inquiries\InquiryDetailQuery;
+use App\Queries\Inquiries\InquiryWorkQuery;
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\InquiryTask;
 use App\Models\Task;
 use App\Models\User;
-use App\Services\InquiryService;
+use App\Services\FilterOptionService;
 use App\Services\MyWorkService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
@@ -43,6 +47,9 @@ class Index extends Component
 
     #[Url(as: 'status', history: true)]
     public string $statusFilter = '';
+
+    public string $stageSupplier = '';
+    public string $stageAssignee = '';
 
     public array $metrics = [
         'my_tasks' => null,
@@ -104,13 +111,57 @@ class Index extends Component
         $this->resetPage('workPage');
     }
 
+    public function updatedStatusFilter(): void
+    {
+        // A status selected directly on My Tasks belongs to the Order-task
+        // view. The special Inquiry source is only entered from the Dashboard.
+        $this->sourceFilter = 'orders';
+        $this->clearMetricFilterForToolbar();
+        $this->resetPage('workPage');
+    }
+
+    public function updatedStageSupplier(): void
+    {
+        $this->stageSupplier = $this->normalizeStageEntityFilter($this->stageSupplier);
+        $this->clearMetricFilterForToolbar();
+        $this->resetPage('workPage');
+    }
+
+    public function updatedStageAssignee(): void
+    {
+        $this->stageAssignee = $this->normalizeStageEntityFilter($this->stageAssignee);
+        $this->clearMetricFilterForToolbar();
+        $this->resetPage('workPage');
+    }
+
     public function setPhaseFilter(string $phase): void
     {
         $phase = trim($phase);
         abort_unless($phase === '' || in_array($phase, $this->phaseOptions, true), 422);
 
         $this->clearMetricFilterForToolbar();
-        $this->phaseFilter = $this->phaseFilter === $phase ? '' : $phase;
+        $nextPhase = $this->phaseFilter === $phase ? '' : $phase;
+
+        // Task-status chips belong to the selected workflow stage. Changing or
+        // clearing the stage must not carry a stale status into another stage.
+        if ($nextPhase !== $this->phaseFilter) {
+            $this->statusFilter = '';
+            $this->stageSupplier = '';
+            $this->stageAssignee = '';
+        }
+
+        $this->phaseFilter = $nextPhase;
+        $this->resetPage('workPage');
+    }
+
+    public function setTaskStatusFilter(string $status): void
+    {
+        $status = trim($status);
+        abort_unless($status === '' || in_array($status, $this->statusOptions, true), 422);
+
+        $this->sourceFilter = 'orders';
+        $this->clearMetricFilterForToolbar();
+        $this->statusFilter = $status !== '' && $this->statusFilter === $status ? '' : $status;
         $this->resetPage('workPage');
     }
 
@@ -141,6 +192,8 @@ class Index extends Component
         $this->phaseFilter = '';
         $this->sourceFilter = 'orders';
         $this->statusFilter = '';
+        $this->stageSupplier = '';
+        $this->stageAssignee = '';
         $this->hideCompleted = false;
         // Summary cards are shortcuts over the same personal task scope. Clicking
         // the active card again returns to the normal My Tasks view.
@@ -160,6 +213,8 @@ class Index extends Component
         $this->phaseFilter = '';
         $this->sourceFilter = 'orders';
         $this->statusFilter = '';
+        $this->stageSupplier = '';
+        $this->stageAssignee = '';
         $this->quick = 'my_tasks';
         $this->hideCompleted = false;
         $this->resetPage('workPage');
@@ -180,6 +235,16 @@ class Index extends Component
         if (in_array($this->quick, self::METRIC_FILTERS, true)) {
             $this->quick = 'my_tasks';
         }
+    }
+
+    private function normalizeStageEntityFilter(string $value): string
+    {
+        $value = trim($value);
+        if ($value === '' || ! ctype_digit($value) || (int) $value < 1) {
+            return '';
+        }
+
+        return (string) ((int) $value);
     }
 
     #[Renderless]
@@ -219,6 +284,10 @@ class Index extends Component
             $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
             $result['status'] = (string) $updatedTask->status;
             $result['completed'] = BoardLaneResolver::isCompleted($updatedTask->status);
+            // Every role now sees active tasks only. A status change can complete
+            // the current task, unlock the next one or advance the Order phase, so
+            // always refresh the grouped table, including for Admin/Super Admin.
+            $result['refresh'] = true;
             // Keep the counters accurate without launching a second background
             // Livewire request. The optimized aggregate is fast and bounded.
             $this->refreshMetricsSnapshot(true);
@@ -311,7 +380,7 @@ class Index extends Component
 
         $result = $this->persistInlineEdit('inquiry task status', function () use ($taskId, $status, $version, &$updatedTask): void {
             $actor = auth()->user();
-            $visibleTask = app(InquiryService::class)->findVisibleTask($actor, $taskId);
+            $visibleTask = app(InquiryDetailQuery::class)->task($actor, $taskId);
             $task = InquiryTask::query()->whereKey($visibleTask->id)->lockForUpdate()->firstOrFail();
 
             if ((string) $task->getRawOriginal('updated_at') !== $version) {
@@ -320,7 +389,7 @@ class Index extends Component
                 ]);
             }
 
-            $updatedTask = app(InquiryService::class)->updateTaskStatus($task, $status, $actor);
+            $updatedTask = app(UpdateInquiryTaskStatus::class)->handle($task, $status, $actor);
         });
 
         if (($result['ok'] ?? false) && $updatedTask instanceof InquiryTask) {
@@ -344,8 +413,8 @@ class Index extends Component
                 validator(['date' => $date], ['date' => ['date']])->validate();
             }
 
-            $task = app(InquiryService::class)->findVisibleTask($actor, $taskId);
-            $updatedTask = app(InquiryService::class)->updateTaskDueDate($task, $date ?: null, $actor);
+            $task = app(InquiryDetailQuery::class)->task($actor, $taskId);
+            $updatedTask = app(UpdateInquiryTaskDueDate::class)->handle($task, $date ?: null, $actor);
         });
 
         if (($result['ok'] ?? false) && $updatedTask instanceof InquiryTask) {
@@ -395,7 +464,7 @@ class Index extends Component
         $user = auth()->user();
 
         if ($this->sourceFilter === 'inquiries' && $this->statusFilter !== '') {
-            $inquiryGroups = app(InquiryService::class)->myTaskGroups($user, [
+            $inquiryGroups = app(InquiryWorkQuery::class)->groups($user, [
                 'search' => $this->search,
                 'quick' => $this->quick,
                 'sort' => $this->sort,
@@ -413,14 +482,30 @@ class Index extends Component
         }
 
         $service = app(MyWorkService::class);
+
+        // Required by the workflow-stage cards that remain above the restored
+        // previous table/filter layout. Each card continues to filter the same
+        // My Tasks result set through setPhaseFilter().
+        $taskStages = $service->orderPhaseCards($user);
+
         $page = $service->paginate($user, [
             'search' => $this->search,
             'quick' => $this->quick,
             'sort' => $this->sort,
             'phase' => $this->phaseFilter,
             'status' => $this->statusFilter,
+            'stage_supplier_id' => $this->stageSupplier !== '' ? (int) $this->stageSupplier : null,
+            'stage_assignee_id' => $this->stageAssignee !== '' ? (int) $this->stageAssignee : null,
             'hide_completed' => $this->hideCompleted,
         ], $this->perPage, 'workPage');
+
+        $filterOptions = app(FilterOptionService::class);
+        $stageSupplierOptions = $this->phaseFilter !== ''
+            ? $filterOptions->options($user, 'suppliers', 'order-list', '', $this->stageSupplier !== '' ? (int) $this->stageSupplier : null, 20)
+            : collect();
+        $stageAssigneeOptions = $this->phaseFilter !== ''
+            ? $filterOptions->options($user, 'users', 'order-list-user-filter', '', $this->stageAssignee !== '' ? (int) $this->stageAssignee : null, 20)
+            : collect();
 
         return view('livewire.my-work.index', [
             'inquiryGroups' => collect(),
@@ -428,7 +513,10 @@ class Index extends Component
             'workGroups' => $page['groups'],
             'workPaginator' => $page['paginator'],
             'visibleTaskCount' => $page['visibleTaskCount'],
-            'searchNeedsMoreCharacters' => trim($this->search) !== '' && ! app(MyWorkService::class)->searchIsUsable($this->search),
+            'searchNeedsMoreCharacters' => trim($this->search) !== '' && ! $service->searchIsUsable($this->search),
+            'taskStages' => $taskStages,
+            'stageSupplierOptions' => $stageSupplierOptions,
+            'stageAssigneeOptions' => $stageAssigneeOptions,
         ]);
     }
 }

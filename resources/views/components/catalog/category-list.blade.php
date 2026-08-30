@@ -93,7 +93,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <input type="search" wire:model.live.debounce.300ms="search" placeholder="Search category name or code" aria-label="Search category name or code">
         </label>
-        <x-ui.select-filter
+        <x-ui.search-select
             class="ft-category-filter-select"
             label="Category level"
             property="categoryLevelFilter"
@@ -104,7 +104,7 @@
             :menu-width="250"
             search-placeholder="Search level…"
         />
-        <x-ui.select-filter
+        <x-ui.search-select
             class="ft-category-filter-select"
             label="Parent category"
             property="categoryParentFilter"
@@ -115,7 +115,7 @@
             :menu-width="320"
             search-placeholder="Search parent category…"
         />
-        <x-ui.select-filter
+        <x-ui.search-select
             class="ft-category-filter-select"
             label="Status"
             property="categoryStatusFilter"

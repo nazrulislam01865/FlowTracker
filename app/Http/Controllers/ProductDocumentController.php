@@ -6,7 +6,6 @@ use App\Models\MasterRecord;
 use App\Services\MasterDataService;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 
 class ProductDocumentController extends Controller
 {
@@ -27,18 +26,12 @@ class ProductDocumentController extends Controller
         $prefix = 'product-documents/'.$product->workspace_id.'/'.$product->id.'/';
         abort_unless($path !== '' && str_starts_with($path, $prefix), 404);
         abort_unless(basename($path) === $filename, 404);
-        abort_unless(Storage::disk('public')->exists($path), 404);
 
         $originalName = trim((string) data_get($product->metadata, $labelKey));
         $originalName = $originalName !== '' ? basename(str_replace('\\', '/', $originalName)) : $filename;
 
-        $headers = [
-            'Content-Type' => StoredFileResponse::mimeType($originalName) ?: 'application/octet-stream',
-            'X-Content-Type-Options' => 'nosniff',
-        ];
-
         return $request->boolean('download')
-            ? Storage::disk('public')->download($path, $originalName, $headers)
-            : Storage::disk('public')->response($path, $originalName, $headers);
+            ? StoredFileResponse::download($path, $originalName)
+            : StoredFileResponse::inline($path, $originalName);
     }
 }

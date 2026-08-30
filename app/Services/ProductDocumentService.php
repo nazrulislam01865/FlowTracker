@@ -4,7 +4,6 @@ namespace App\Services;
 
 use App\Models\MasterRecord;
 use Illuminate\Http\UploadedFile;
-use Illuminate\Support\Facades\Storage;
 
 class ProductDocumentService
 {
@@ -42,35 +41,29 @@ class ProductDocumentService
             $changed = true;
         }
 
-        if ($changed) {
-            $product->update(['metadata' => $metadata]);
-        }
-
+        if ($changed) $product->update(['metadata' => $metadata]);
         return $product->refresh();
     }
 
     private function replace(MasterRecord $product, array &$metadata, UploadedFile $file, string $labelKey, string $pathKey): void
     {
-        $disk = Storage::disk('public');
         $oldPath = trim((string) ($metadata[$pathKey] ?? ''));
         $folder = 'product-documents/'.$product->workspace_id.'/'.$product->id;
-        $path = $file->storePublicly($folder, 'public');
+        $stored = app(SecureDocumentStorage::class)->store($file, $folder);
+        $path = $stored['path'];
 
         $metadata[$labelKey] = $file->getClientOriginalName();
         $metadata[$pathKey] = $path;
 
         if ($oldPath !== '' && $oldPath !== $path) {
-            $disk->delete($oldPath);
+            app(SecureDocumentStorage::class)->delete($oldPath);
         }
     }
 
     private function removeDocument(array &$metadata, string $labelKey, string $pathKey, string $urlKey): void
     {
         $path = trim((string) ($metadata[$pathKey] ?? ''));
-        if ($path !== '') {
-            Storage::disk('public')->delete($path);
-        }
-
+        if ($path !== '') app(SecureDocumentStorage::class)->delete($path);
         unset($metadata[$labelKey], $metadata[$pathKey], $metadata[$urlKey]);
     }
 }

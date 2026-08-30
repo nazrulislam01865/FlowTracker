@@ -8,7 +8,17 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Role extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'slug',
+        'is_system',
+        'workspace_id',
+        'code',
+        'description',
+        'default_scope',
+        'is_active',
+        'sensitive_fields',
+    ];
 
     protected function casts(): array
     {

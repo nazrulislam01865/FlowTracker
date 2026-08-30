@@ -7,7 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Activity extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'subject_type',
+        'subject_id',
+        'user_id',
+        'event',
+        'description',
+        'meta',
+    ];
     protected function casts(): array { return ['meta' => 'array']; }
     public function subject() { return $this->morphTo(); }
     public function user(): BelongsTo { return $this->belongsTo(User::class); }

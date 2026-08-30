@@ -92,6 +92,31 @@ final class MasterColor
         return '#2563EB';
     }
 
+    /**
+     * CSS variables used by operational tables that tint a whole row from a
+     * configured task color. The RGB fallback avoids depending on CSS
+     * color-mix(), which previously made task colors effectively invisible in
+     * some browser/table rendering combinations.
+     */
+    public static function taskRowStyle(?string $value): string
+    {
+        $color = self::normalize($value);
+        if (!$color) return '';
+
+        [$r, $g, $b] = self::rgb($color);
+
+        return sprintf(
+            '--task-row-color:%s;--task-row-bg:rgba(%d,%d,%d,.11);--task-row-hover-bg:rgba(%d,%d,%d,.17);',
+            $color,
+            $r,
+            $g,
+            $b,
+            $r,
+            $g,
+            $b,
+        );
+    }
+
     public static function style(?string $value): string
     {
         $color = self::normalize($value);
@@ -101,7 +126,15 @@ final class MasterColor
         $text = self::textColor($r, $g, $b);
 
         return sprintf(
-            '--ft-master-color:%s;--ft-master-bg:rgba(%d,%d,%d,.12);--ft-master-border:rgba(%d,%d,%d,.34);--ft-master-text:%s;',
+            '--ft-dynamic-color:%s;--ft-dynamic-bg:rgba(%d,%d,%d,.12);--ft-dynamic-border:rgba(%d,%d,%d,.34);--ft-dynamic-text:%s;--ft-master-color:%s;--ft-master-bg:rgba(%d,%d,%d,.12);--ft-master-border:rgba(%d,%d,%d,.34);--ft-master-text:%s;',
+            $color,
+            $r,
+            $g,
+            $b,
+            $r,
+            $g,
+            $b,
+            $text,
             $color,
             $r,
             $g,

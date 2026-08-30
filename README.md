@@ -120,3 +120,9 @@ No database migration is required for this fix. After deployment run:
 ```bash
 php artisan optimize:clear
 ```
+
+## Enterprise refactor status (Phase 15)
+
+The executable source is at Phase 15 of the FlowTrack enterprise refactor. Run `npm run quality:phase15` for the complete architecture chain. Production release additionally requires a clean `composer install`/`npm ci`, Pint, PHPUnit, Vite build + bundle budget, dependency audits, and approved browser/visual/load checks as documented in `docs/ci-cd.md` and `docs/ENTERPRISE_READINESS_REPORT.md`.
+
+`public/build` is generated output and must be rebuilt from this revision; do not reuse an older Vite manifest.

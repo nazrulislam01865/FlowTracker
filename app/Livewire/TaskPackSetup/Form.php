@@ -11,7 +11,8 @@ use App\Models\User;
 use App\Services\FilterOptionService;
 use App\Services\MasterDataService;
 use App\Services\TaskPackService;
-use Illuminate\Validation\Rule;
+use App\Support\MasterColor;
+use Illuminate\Validation\ValidationException;
 use Livewire\Component;
 
 class Form extends Component
@@ -46,8 +47,10 @@ class Form extends Component
             $this->packStatus = $pack->is_active ? 'active' : 'inactive';
             $this->tasks = $pack->items->map(fn ($item) => [
                 'id' => $item->id,
+                'automation_key' => (string) ($item->automation_key ?? ''),
                 'title' => (string) $item->title,
                 'description' => (string) $item->description,
+                'color' => MasterColor::normalize((string) ($item->color ?? '')) ?: '#2563EB',
                 'default_assignee_id' => $item->default_assignee_id,
                 'default_assignee_label' => (string) ($item->defaultAssignee?->name ?: 'Unassigned'),
                 'default_department_id' => $item->default_department_id,
@@ -82,8 +85,19 @@ class Form extends Component
 
     public function loadTaskPackOptions(): void
     {
+        if ($this->optionsReady) return;
         app(TaskPackService::class)->ensureTaskPackMasterDataDefaults();
         $this->optionsReady = true;
+    }
+
+    public function loadCreateSection(string $section): void
+    {
+        if ($section === 'task-options') {
+            $this->loadTaskPackOptions();
+            return;
+        }
+
+        abort(422, 'Unknown Create Task Pack section.');
     }
 
     public function setTaskPackAssignee(string $property, mixed $value): void
@@ -171,6 +185,10 @@ class Form extends Component
     public function removeTask(int $index): void
     {
         if (!array_key_exists($index, $this->tasks)) return;
+        if (filled($this->tasks[$index]['automation_key'] ?? null)) {
+            $this->addError('tasks', 'Core Order automation tasks cannot be removed. Edit their task settings instead.');
+            return;
+        }
         if (!empty($this->tasks[$index]['id'])) {
             abort_unless(auth()->user()?->canModule('taskpacks', 'delete'), 403);
         }
@@ -184,29 +202,27 @@ class Form extends Component
     {
         $target = $index + $direction;
         if (!isset($this->tasks[$index], $this->tasks[$target])) return;
+        if (filled($this->tasks[$index]['automation_key'] ?? null) && filled($this->tasks[$target]['automation_key'] ?? null)) {
+            $this->addError('tasks', 'Core Order automation tasks must keep their relative order.');
+            return;
+        }
         [$this->tasks[$index], $this->tasks[$target]] = [$this->tasks[$target], $this->tasks[$index]];
         $this->tasks = array_values($this->tasks);
     }
 
     public function save(): void
     {
+        // If the user submits before the below-the-fold option area reached the
+        // viewport, hydrate the bounded reference sets just-in-time and continue.
         if (!$this->optionsReady) {
-            $this->addError('options', 'Please wait for Task Pack options to finish loading.');
-            return;
+            $this->loadTaskPackOptions();
         }
 
         $workspaceId = app(TaskPackService::class)->workspaceId();
-        $masterRule = fn (string $type) => Rule::exists('master_records', 'id')->where(
-            fn ($query) => $query->where('workspace_id', $workspaceId)->where('type', $type)->whereNull('deleted_at')
-        );
-        $masterCodeRule = fn (string $type) => Rule::exists('master_records', 'code')->where(
-            fn ($query) => $query
-                ->where('workspace_id', $workspaceId)
-                ->where('type', $type)
-                ->where('status', 'active')
-                ->whereNull('deleted_at')
-        );
 
+        // Validate scalar shape first. Reference integrity is validated below in
+        // three bounded queries instead of executing one EXISTS query for every
+        // wildcard field on every Task Pack row.
         $data = $this->validate([
             'packName' => ['required','string','max:255'],
             'packDescription' => ['nullable','string','max:5000'],
@@ -215,22 +231,25 @@ class Form extends Component
             'tasks.*.id' => ['nullable','integer'],
             'tasks.*.title' => ['required','string','max:255'],
             'tasks.*.description' => ['nullable','string','max:5000'],
-            'tasks.*.default_assignee_id' => ['nullable','integer','exists:users,id'],
-            'tasks.*.default_department_id' => ['nullable','integer', $masterRule('department')],
-            'tasks.*.priority_id' => ['nullable','integer', $masterRule('priority')],
-            'tasks.*.document_category_id' => ['nullable','integer', $masterRule('document_category')],
+            'tasks.*.color' => ['required','regex:/^#[0-9A-Fa-f]{6}$/'],
+            'tasks.*.default_assignee_id' => ['nullable','integer'],
+            'tasks.*.default_department_id' => ['nullable','integer'],
+            'tasks.*.priority_id' => ['nullable','integer'],
+            'tasks.*.document_category_id' => ['nullable','integer'],
             'tasks.*.due_offset_days' => ['nullable','integer','min:0','max:3650'],
             'tasks.*.standard_duration_value' => ['required','numeric','min:0.01','max:10000'],
-            'tasks.*.standard_duration_unit' => ['required','string','max:40', $masterCodeRule('task_pack_duration_unit')],
-            'tasks.*.timer_start_rule' => ['required','string','max:40', $masterCodeRule('task_pack_timer_start')],
-            'tasks.*.timer_stop_rule' => ['required','string','max:40', $masterCodeRule('task_pack_timer_stop')],
-            'tasks.*.work_calendar' => ['required','string','max:40', $masterCodeRule('task_pack_work_calendar')],
+            'tasks.*.standard_duration_unit' => ['required','string','max:40'],
+            'tasks.*.timer_start_rule' => ['required','string','max:40'],
+            'tasks.*.timer_stop_rule' => ['required','string','max:40'],
+            'tasks.*.work_calendar' => ['required','string','max:40'],
             'tasks.*.set_due_from_standard_duration' => ['boolean'],
             'tasks.*.allow_efficiency_override' => ['boolean'],
             'tasks.*.is_required' => ['boolean'],
         ]);
 
-        $savedPack = app(TaskPackService::class)->savePackWithItems([
+        $this->validateTaskReferences($data['tasks'], $workspaceId);
+
+        $savedPack = app(\App\Actions\Setup\SaveTaskPackWithItemsAction::class)->execute([
             'code' => $this->packCode,
             'name' => $data['packName'],
             'description' => $data['packDescription'],
@@ -250,6 +269,91 @@ class Form extends Component
         $this->redirectRoute('task-pack.setup', navigate: true);
     }
 
+    private function validateTaskReferences(array $tasks, int $workspaceId): void
+    {
+        $errors = [];
+
+        $assigneeIds = collect($tasks)
+            ->pluck('default_assignee_id')
+            ->filter(fn ($id) => filled($id))
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
+        $validAssigneeIds = $assigneeIds->isEmpty()
+            ? collect()
+            : User::query()->whereIn('id', $assigneeIds)->pluck('id')->map(fn ($id) => (int) $id);
+        $validAssigneeLookup = $validAssigneeIds->flip();
+
+        $masterIdFields = [
+            'default_department_id' => 'department',
+            'priority_id' => 'priority',
+            'document_category_id' => 'document_category',
+        ];
+        $allMasterIds = collect($masterIdFields)
+            ->flatMap(function (string $type, string $field) use ($tasks) {
+                return collect($tasks)->pluck($field)->filter(fn ($id) => filled($id))->map(fn ($id) => (int) $id);
+            })
+            ->unique()
+            ->values();
+        $validMasterRows = $allMasterIds->isEmpty()
+            ? collect()
+            : MasterRecord::query()
+                ->where('workspace_id', $workspaceId)
+                ->whereIn('id', $allMasterIds)
+                ->whereIn('type', array_values($masterIdFields))
+                ->get(['id', 'type']);
+        $validMasterLookup = $validMasterRows
+            ->mapWithKeys(fn (MasterRecord $row) => [$row->type.'|'.(int) $row->id => true]);
+
+        $masterCodeFields = [
+            'standard_duration_unit' => 'task_pack_duration_unit',
+            'timer_start_rule' => 'task_pack_timer_start',
+            'timer_stop_rule' => 'task_pack_timer_stop',
+            'work_calendar' => 'task_pack_work_calendar',
+        ];
+        $allCodes = collect($masterCodeFields)
+            ->flatMap(function (string $type, string $field) use ($tasks) {
+                return collect($tasks)->pluck($field)->filter(fn ($code) => filled($code))->map(fn ($code) => trim((string) $code));
+            })
+            ->unique()
+            ->values();
+        $validCodeRows = $allCodes->isEmpty()
+            ? collect()
+            : MasterRecord::query()
+                ->where('workspace_id', $workspaceId)
+                ->whereIn('type', array_values($masterCodeFields))
+                ->whereIn('code', $allCodes)
+                ->where('status', 'active')
+                ->get(['type', 'code']);
+        $validCodeLookup = $validCodeRows
+            ->mapWithKeys(fn (MasterRecord $row) => [$row->type.'|'.trim((string) $row->code) => true]);
+
+        foreach ($tasks as $index => $task) {
+            $assigneeId = filled($task['default_assignee_id'] ?? null) ? (int) $task['default_assignee_id'] : null;
+            if ($assigneeId && ! $validAssigneeLookup->has($assigneeId)) {
+                $errors["tasks.$index.default_assignee_id"] = 'The selected assignee is invalid.';
+            }
+
+            foreach ($masterIdFields as $field => $type) {
+                $id = filled($task[$field] ?? null) ? (int) $task[$field] : null;
+                if ($id && ! $validMasterLookup->has($type.'|'.$id)) {
+                    $errors["tasks.$index.$field"] = 'The selected option is invalid.';
+                }
+            }
+
+            foreach ($masterCodeFields as $field => $type) {
+                $code = trim((string) ($task[$field] ?? ''));
+                if ($code !== '' && ! $validCodeLookup->has($type.'|'.$code)) {
+                    $errors["tasks.$index.$field"] = 'The selected option is invalid.';
+                }
+            }
+        }
+
+        if ($errors) {
+            throw ValidationException::withMessages($errors);
+        }
+    }
+
     public function cancel(): void
     {
         $this->redirectRoute('task-pack.setup', navigate: true);
@@ -259,8 +363,10 @@ class Form extends Component
     {
         return [
             'id' => null,
+            'automation_key' => '',
             'title' => '',
             'description' => '',
+            'color' => $this->defaultTaskColor(count($this->tasks)),
             'default_assignee_id' => null,
             'default_assignee_label' => 'Unassigned',
             'default_department_id' => null,
@@ -278,6 +384,17 @@ class Form extends Component
             'allow_efficiency_override' => false,
             'is_required' => true,
         ];
+    }
+
+    private function defaultTaskColor(int $index): string
+    {
+        $palette = [
+            '#2563EB', '#7C3AED', '#0891B2', '#0F766E',
+            '#16A34A', '#CA8A04', '#EA580C', '#DC2626',
+            '#DB2777', '#4F46E5', '#0369A1', '#27855A',
+        ];
+
+        return $palette[$index % count($palette)];
     }
 
     public function render()

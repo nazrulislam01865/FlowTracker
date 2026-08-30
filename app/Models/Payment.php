@@ -7,7 +7,21 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Payment extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_job_id',
+        'invoice_id',
+        'sequence',
+        'payment_number',
+        'payment_date',
+        'method',
+        'amount',
+        'reference',
+        'notes',
+        'recorded_by',
+        'received_account',
+        'receipt_path',
+        'receipt_name',
+    ];
 
     protected function casts(): array
     {

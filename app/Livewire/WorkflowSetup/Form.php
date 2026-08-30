@@ -6,7 +6,10 @@ use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Client;
 use App\Models\WorkflowTemplate;
+use App\Services\FilterOptionService;
+use App\Services\OrderWorkflowSetupService;
 use App\Services\WorkflowService;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
 use Livewire\Component;
 
@@ -26,14 +29,14 @@ class Form extends Component
     public string $workflowAppliesTo = 'orders';
     public string $clientAvailability = 'all';
     public array $selectedClientIds = [];
-    public string $clientSearch = '';
-    public bool $clientPickerOpen = false;
+    public bool $sourceOptionsReady = false;
 
     public function mount(?int $workflowId = null, ?int $sourceWorkflowId = null): void
     {
         $service = app(WorkflowService::class);
         $this->workflowId = $workflowId;
         $this->sourceWorkflowId = $sourceWorkflowId;
+        $this->sourceOptionsReady = (bool) $sourceWorkflowId;
 
         if ($workflowId) {
             $workflow = WorkflowTemplate::query()
@@ -53,54 +56,25 @@ class Form extends Component
             $this->selectedClientIds = $workflow->clients->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
             $this->sourceWorkflowId = null;
         } elseif ($sourceWorkflowId) {
-            WorkflowTemplate::query()
+            $source = WorkflowTemplate::query()
                 ->where('workspace_id', $service->workspaceId())
                 ->findOrFail($sourceWorkflowId);
+            if (in_array($source->applies_to, ['inquiries', 'orders'], true)) {
+                $this->workflowAppliesTo = (string) $source->applies_to;
+            }
         }
     }
 
-    public function updatedClientAvailability(string $value): void
+    public function loadCreateSection(string $section): void
     {
-        if ($value === 'all') {
-            $this->clientPickerOpen = false;
-            $this->clientSearch = '';
+        abort_unless(! $this->workflowId, 422);
+
+        if ($section === 'source-workflows') {
+            $this->sourceOptionsReady = true;
+            return;
         }
-    }
 
-    public function toggleClientPicker(): void
-    {
-        if ($this->clientAvailability !== 'specific') return;
-        $this->clientPickerOpen = !$this->clientPickerOpen;
-    }
-
-    public function openClientPicker(): void
-    {
-        if ($this->clientAvailability === 'specific') $this->clientPickerOpen = true;
-    }
-
-    public function selectClient(int $clientId): void
-    {
-        abort_unless($this->clientAvailability === 'specific', 422);
-        abort_unless(Client::query()->where('is_active', true)->whereKey($clientId)->exists(), 422);
-
-        $this->selectedClientIds = collect($this->selectedClientIds)
-            ->push($clientId)
-            ->map(fn ($id) => (int) $id)
-            ->unique()
-            ->values()
-            ->all();
-        $this->clientSearch = '';
-        $this->resetValidation('selectedClientIds');
-        $this->resetValidation('selectedClientIds.*');
-    }
-
-    public function removeClient(int $clientId): void
-    {
-        $this->selectedClientIds = collect($this->selectedClientIds)
-            ->reject(fn ($id) => (int) $id === $clientId)
-            ->map(fn ($id) => (int) $id)
-            ->values()
-            ->all();
+        abort(422, 'Unknown Create Workflow section.');
     }
 
     public function save(): void
@@ -134,7 +108,27 @@ class Form extends Component
         }
 
         $service = app(WorkflowService::class);
-        $workflow = $service->saveWorkflow([
+        $existingWorkflow = $this->workflowId
+            ? WorkflowTemplate::query()->where('workspace_id', $service->workspaceId())->findOrFail($this->workflowId)
+            : null;
+
+        if ($existingWorkflow && (string) $existingWorkflow->applies_to !== (string) $data['workflowAppliesTo']) {
+            $this->addError('workflowAppliesTo', 'Workflow scope cannot be changed after creation.');
+            return;
+        }
+
+        $source = null;
+        if (! $this->workflowId && ! empty($data['sourceWorkflowId'])) {
+            $source = WorkflowTemplate::query()
+                ->where('workspace_id', $service->workspaceId())
+                ->findOrFail((int) $data['sourceWorkflowId']);
+            if ((string) $source->applies_to !== (string) $data['workflowAppliesTo']) {
+                $this->addError('sourceWorkflowId', 'Choose a source workflow with the same scope.');
+                return;
+            }
+        }
+
+        $workflow = app(\App\Actions\Setup\SaveWorkflowDefinitionAction::class)->execute([
             'code' => $data['workflowCode'],
             'name' => $data['workflowName'],
             'description' => $data['workflowDescription'],
@@ -143,14 +137,7 @@ class Form extends Component
             'applies_to' => $data['workflowAppliesTo'],
             'client_availability' => $data['clientAvailability'],
             'client_ids' => $data['clientAvailability'] === 'specific' ? $clientIds->all() : [],
-        ], $this->workflowId);
-
-        if (!$this->workflowId && $data['sourceWorkflowId']) {
-            $source = WorkflowTemplate::query()
-                ->where('workspace_id', $service->workspaceId())
-                ->findOrFail((int) $data['sourceWorkflowId']);
-            $service->copyPhases($source, $workflow);
-        }
+        ], $this->workflowId, $source);
 
         session()->flash('success', $this->workflowId ? 'Workflow updated.' : 'Workflow created.');
         app(\App\Services\NotificationService::class)->notifyUser(
@@ -172,29 +159,33 @@ class Form extends Component
 
     public function render()
     {
-        $selectedIds = collect($this->selectedClientIds)->map(fn ($id) => (int) $id)->filter()->unique()->values();
-        $search = trim($this->clientSearch);
+        $clientOptions = collect();
 
-        $selectedClients = $selectedIds->isEmpty()
-            ? collect()
-            : Client::query()->whereIn('id', $selectedIds)->orderBy('name')->get(['id', 'name']);
+        if ($this->clientAvailability === 'specific') {
+            $actor = auth()->user();
+            abort_unless($actor, 401);
 
-        $clientOptions = $this->clientAvailability === 'specific' && $this->clientPickerOpen
-            ? Client::query()
-                ->where('is_active', true)
-                ->when($selectedIds->isNotEmpty(), fn ($query) => $query->whereNotIn('id', $selectedIds))
-                ->when(strlen($search) >= 1, fn ($query) => $query->where(function ($match) use ($search): void {
-                    $match->whereLike('name', '%'.$search.'%')
-                        ->orWhereLike('code', $search.'%');
-                }))
-                ->orderBy('name')
-                ->limit(20)
-                ->get(['id', 'name', 'code'])
-            : collect();
+            $page = app(FilterOptionService::class)->searchPage(
+                user: $actor,
+                type: 'clients',
+                context: 'workflow-setup',
+                page: 1,
+                perPage: FilterOptionService::COMPACT_PER_PAGE,
+                selectedIds: $this->selectedClientIds,
+            );
+
+            $clientOptions = $page->selectedItems
+                ->concat($page->items)
+                ->unique(fn (array $item) => (string) ($item['id'] ?? ''))
+                ->values();
+        }
 
         return view('livewire.workflow-setup.form', [
-            'workflows' => app(WorkflowService::class)->all()->when($this->workflowId, fn ($rows) => $rows->where('id', '!=', $this->workflowId)),
-            'selectedClients' => $selectedClients,
+            'workflows' => $this->sourceOptionsReady
+                ? app(WorkflowService::class)->all()
+                    ->where('applies_to', $this->workflowAppliesTo)
+                    ->when($this->workflowId, fn ($rows) => $rows->where('id', '!=', $this->workflowId))
+                : collect(),
             'clientOptions' => $clientOptions,
         ]);
     }

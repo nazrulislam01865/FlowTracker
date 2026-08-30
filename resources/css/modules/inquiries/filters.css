@@ -1,0 +1,37 @@
+/**
+ * Phase 4 Inquiry filter adapters.
+ * Keeps the approved inquiry toolbar geometry while the shared SearchSelect,
+ * SearchInput and FilterBar own interaction behavior.
+ */
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter .ft-search-select__trigger {
+    width: 100%;
+    height: 36px;
+    min-height: 36px;
+    padding-inline: var(--ft-space-3);
+    border-color: var(--ft-border-strong);
+    border-radius: var(--ft-radius-md);
+    background: var(--ft-bg-surface);
+    color: var(--ft-text-secondary);
+    box-shadow: none;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter .ft-search-select__trigger:hover,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter .ft-search-select__trigger[aria-expanded="true"] {
+    border-color: var(--ft-border-focus);
+    background: var(--ft-bg-surface-subtle);
+    color: var(--ft-text-link-hover);
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-status-filter .ft-search-select__menu {
+    min-width: 100%;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-search-control>.ft-search-input__control {
+    min-width: 0;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-clear-filter .ft-filter-reset__icon {
+    font-size: var(--ft-font-size-sm);
+    font-weight: var(--ft-font-weight-medium);
+    line-height: 1;
+}

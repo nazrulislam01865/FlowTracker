@@ -8,7 +8,7 @@ class SearchPasteSupportTest extends TestCase
 {
     public function test_search_inputs_normalize_external_clipboard_text_and_emit_input(): void
     {
-        $script = file_get_contents(public_path('js/flowtrack-list-filters.js'));
+        $script = file_get_contents(resource_path('js/components/list-filters.js'));
         $layout = file_get_contents(resource_path('views/layouts/app.blade.php'));
 
         $this->assertStringContainsString("document.addEventListener('paste'", $script);
@@ -18,6 +18,7 @@ class SearchPasteSupportTest extends TestCase
         $this->assertStringContainsString("replace(/[\\u200B-\\u200D\\uFEFF]/g, '')", $script);
         $this->assertStringContainsString("input.setRangeText", $script);
         $this->assertStringContainsString("input.dispatchEvent(inputEvent)", $script);
-        $this->assertStringContainsString('flowtrack-list-filters.js?v=20260810-client-selection-atomic-3', $layout);
+        $this->assertStringContainsString('resources/js/app.js', $layout);
+        $this->assertStringNotContainsString('/js/flowtrack-list-filters.js', $layout);
     }
 }

@@ -15,7 +15,7 @@ return [
     |
     */
 
-    'default' => env('CACHE_STORE', 'database'),
+    'default' => env('CACHE_STORE', env('FLOWTRACK_HORIZONTAL_SCALING', false) ? 'redis' : 'database'),
 
     /*
     |--------------------------------------------------------------------------

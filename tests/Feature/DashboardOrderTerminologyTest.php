@@ -12,12 +12,12 @@ class DashboardOrderTerminologyTest extends TestCase
         $secondary = file_get_contents(resource_path('views/livewire/dashboard/secondary.blade.php'));
         $tagged = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
 
-        $this->assertStringContainsString('Pre-order opportunities', $primary);
-        $this->assertStringContainsString('Current order health', $primary);
-        $this->assertStringContainsString('<small>active orders</small>', $primary);
+        $this->assertStringContainsString('Needs attention', $primary);
+        $this->assertStringContainsString('Orders and Inquiries ranked by urgency and impact', $primary);
+        $this->assertStringContainsString('Work moving through FlowTrack', $primary);
+        $this->assertStringContainsString('Latest changes from Orders, Inquiries and Tasks', $primary);
         $this->assertStringNotContainsString('Pre-job opportunities', $primary);
         $this->assertStringNotContainsString('Current job health', $primary);
-        $this->assertStringNotContainsString('<small>active jobs</small>', $primary);
 
         foreach ([
             'Highest-priority tasks across current orders',
@@ -44,19 +44,20 @@ class DashboardOrderTerminologyTest extends TestCase
         }
 
         $this->assertStringContainsString('$orderTerminology($notification->title)', $secondary);
-        $this->assertStringContainsString('$orderTerminology($mention->title)', $tagged);
+        $this->assertStringContainsString("displayOrderNumber() ?: 'Order'", $tagged);
+        $this->assertStringNotContainsString('Job activity', $tagged);
     }
 
     public function test_dashboard_remains_record_driven_and_workspace_versioned(): void
     {
-        $service = file_get_contents(app_path('Services/DashboardService.php'));
+        $service = file_get_contents(app_path('Services/LegacyDashboardService.php'));
 
         $this->assertStringContainsString('app(JobService::class)->activeQuery($user)', $service);
         $this->assertStringContainsString('app(TaskService::class)->visibleQuery($user)', $service);
         $this->assertStringContainsString('app(InquiryService::class)->visibleQuery($user)', $service);
         $this->assertStringContainsString("'jobs as active_jobs_count'", $service);
         $this->assertStringContainsString('WorkspaceRefreshService::class)->version()', $service);
-        $this->assertStringContainsString("->latest('flow_jobs.updated_at')", $service);
+        $this->assertStringContainsString("->orderByDesc('flow_jobs.updated_at')", $service);
         $this->assertStringContainsString("->latest('inquiries.updated_at')", $service);
     }
 }

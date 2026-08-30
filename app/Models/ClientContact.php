@@ -7,7 +7,15 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ClientContact extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'client_id',
+        'name',
+        'job_title',
+        'email',
+        'phone',
+        'is_primary',
+        'sort_order',
+    ];
 
     protected function casts(): array
     {

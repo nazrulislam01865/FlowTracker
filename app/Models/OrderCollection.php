@@ -9,7 +9,13 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 class OrderCollection extends Model
 {
     protected $table = 'flow_job_collections';
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_job_id',
+        'collection_owner_id',
+        'last_follow_up_at',
+        'next_follow_up_at',
+        'latest_note',
+    ];
 
     protected function casts(): array
     {

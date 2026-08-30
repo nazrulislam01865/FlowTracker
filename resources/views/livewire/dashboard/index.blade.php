@@ -30,9 +30,7 @@
         if ((bool) ($job->attention_requested ?? false) || (bool) ($job->needs_attention ?? false)) return ['Needs attention', 'red'];
         $label = $taskFlagService->labelForOrder($job);
         if ($label) return [$label, $badgeTone($label)];
-        $health = trim((string) ($job->health ?? ''));
-        if ($health !== '' && !in_array(mb_strtolower($health), ['on track', 'healthy'], true)) return [$health, $badgeTone($health)];
-        return ['On track', 'green'];
+        return ['No flag', 'gray'];
     };
 
     $inquiryFlag = static function ($inquiry) use ($today): array {
@@ -147,7 +145,7 @@
             <button type="button" wire:click="setRange(7)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 7 ? 'true' : 'false' }}" class="{{ $rangeDays === 7 ? 'active' : '' }}">7 days</button>
             <button type="button" wire:click="setRange(30)" wire:loading.attr="disabled" wire:target="setRange" aria-pressed="{{ $rangeDays === 30 ? 'true' : 'false' }}" class="{{ $rangeDays === 30 ? 'active' : '' }}">30 days</button>
         </div>
-        <x-ui.remote-filter
+        <x-ui.search-select
             class="ft-mgmt-remote-filter ft-mgmt-client-filter"
             label="Client"
             property="clientFilter"
@@ -161,7 +159,7 @@
             :fixed-menu="true"
             wire:key="dashboard-client-filter-{{ $clientFilter ?: 'all' }}"
         />
-        <x-ui.remote-filter
+        <x-ui.search-select
             class="ft-mgmt-remote-filter ft-mgmt-team-filter"
             label="Team"
             property="teamFilter"
@@ -178,60 +176,15 @@
         <input class="ft-mgmt-search" wire:model.live.debounce.300ms="search" type="search" placeholder="Search orders, inquiries or tasks" aria-label="Search dashboard">
     </section>
 
-    <section class="ft-mgmt-kpis" aria-label="Key metrics">
-        <a class="ft-mgmt-kpi tone-blue" href="{{ route('jobs.index', ['metric' => 'dashboardActive']) }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Active orders</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><rect x="3" y="6" width="18" height="14" rx="2"/><path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 11h18M10 11v2h4v-2"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ $metrics['activeJobs'] }}</strong>
-            <span class="ft-mgmt-kpi-meta">Across active workflow stages</span>
-        </a>
-        <a class="ft-mgmt-kpi tone-red" href="{{ route('jobs.index', ['metric' => 'dashboardAttention']) }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Needs attention</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M5 4v16m0-14h10l-1.5 3L15 12H5"/><path d="M19 6v4"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ $metrics['needsAttention'] }}</strong>
-            <span class="ft-mgmt-kpi-meta">Risk, delay or blocker</span>
-        </a>
-        <a class="ft-mgmt-kpi tone-amber" href="{{ route('my-work', ['filter' => 'overdue']) }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Overdue tasks</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ $metrics['overdueTasks'] }}</strong>
-            <span class="ft-mgmt-kpi-meta">Require immediate update</span>
-        </a>
-        <a class="ft-mgmt-kpi tone-blue" href="{{ route('inquiries.index', ['metric' => 'dashboardOpen']) }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Open inquiries</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3v6m-3-3h6"/><path d="M5 3h3m8 0h3a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ $metrics['openInquiries'] }}</strong>
-            <span class="ft-mgmt-kpi-meta">Current open inquiry records</span>
-        </a>
-        <a class="ft-mgmt-kpi tone-green" href="{{ route('clients.index') }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Active clients</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ $metrics['activeClients'] }}</strong>
-            <span class="ft-mgmt-kpi-meta">Current active client records</span>
-        </a>
-        <a class="ft-mgmt-kpi tone-blue" href="{{ route('master-data', ['group' => 'product', 'product_status' => 'active']) }}" wire:navigate>
-            <span class="ft-mgmt-kpi-label">Active products</span>
-            <i class="ft-mgmt-kpi-icon" aria-hidden="true">
-                <svg viewBox="0 0 24 24"><path d="M12 3 4.5 8.25v7.5L12 21l7.5-5.25v-7.5L12 3Z"/><path d="M4.5 8.25 12 13.5l7.5-5.25"/></svg>
-            </i>
-            <strong class="ft-mgmt-kpi-value">{{ number_format($metrics['activeProducts'] ?? 0) }}</strong>
-            <span class="ft-mgmt-kpi-meta">Available in product catalogue</span>
-        </a>
-    </section>
+    <x-orders.workflow-stage-overview
+        :stages="$orderStages"
+        mode="navigate"
+        :show-header="false"
+    />
 
 
 
-    <section class="ft-mgmt-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head">
             <div><h2>Priority work</h2><p>Top urgent Orders, Inquiries and Tasks ranked by attention, due date and priority</p></div>
             <div class="ft-mgmt-tabs">
@@ -348,7 +301,7 @@
                         $headline = trim((string) ($isOrder ? ($record->tasks?->first()?->title ?: $record->title) : ($record->currentTask?->title ?: $record->subject)));
                         $ownerName = $isOrder ? ($record->owner?->name ?? 'Unassigned') : ($record->owner?->name ?? 'Unassigned');
                         $reason = trim((string) ($isOrder
-                            ? ($record->attention_reason ?: $record->tasks?->first()?->attention_reason ?: $record->flaggedTasks?->first()?->attention_reason ?: $record->health)
+                            ? ($record->attention_reason ?: $record->tasks?->first()?->attention_reason ?: $record->flaggedTasks?->first()?->attention_reason ?: 'Attention required')
                             : ($record->currentTask?->attention_reason ?: ($record->needs_attention ? 'Attention required' : $record->currentTask?->status))));
                         $rowRoute = $isOrder
                             ? route('jobs.index', ['open' => $record->id])
@@ -382,6 +335,7 @@
         :client-filter="$clientFilter"
         :team-filter="$teamFilter"
         :search="$search"
+        lazy
     />
     </section>
 
@@ -451,7 +405,7 @@
             'q' => $search,
         ], static fn ($value) => $value !== null && $value !== '');
     @endphp
-    <section class="ft-mgmt-panel ft-mgmt-team-panel" style="margin-bottom:14px">
+    <section class="ft-mgmt-panel ft-mgmt-team-panel ft-mgmt-panel-spaced">
         <div class="ft-mgmt-panel-head ft-mgmt-team-panel-head">
             <div>
                 <h2>Team performance &amp; workload</h2>

@@ -28,6 +28,7 @@
                     <button type="button" wire:click="bulkSetProductStatus('inactive')" x-on:click="statusOpen=false"><span class="ft-bulk-dot is-inactive"></span>Inactive</button>
                 </div>
             </div>
+            <button type="button" class="ft-product-bulk-btn is-bulk-secondary is-supplier" wire:click="openProductSupplierAssignment">Assign supplier</button>
             <button type="button" class="ft-product-bulk-btn is-bulk-secondary" wire:click="openProductBulkPanel('clients')">Assign clients</button>
             <button type="button" class="ft-product-bulk-btn is-bulk-secondary" wire:click="openProductBulkPanel('category')">Change category</button>
         @endif
@@ -41,6 +42,7 @@
             </button>
             <div class="ft-product-bulk-menu ft-product-bulk-more-menu" x-cloak x-show="moreOpen" x-on:click.outside="moreOpen=false">
                 @if($canEdit)
+                    <button type="button" class="ft-product-bulk-mobile-only" wire:click="openProductSupplierAssignment" x-on:click="moreOpen=false">Assign supplier</button>
                     <button type="button" class="ft-product-bulk-mobile-only" wire:click="openProductBulkPanel('clients')" x-on:click="moreOpen=false">Assign clients</button>
                     <button type="button" class="ft-product-bulk-mobile-only" wire:click="openProductBulkPanel('category')" x-on:click="moreOpen=false">Change category</button>
                 @endif

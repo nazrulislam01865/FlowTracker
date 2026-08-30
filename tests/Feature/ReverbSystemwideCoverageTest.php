@@ -186,15 +186,16 @@ class ReverbSystemwideCoverageTest extends TestCase
     public function test_known_mass_mutations_publish_workspace_invalidation_explicitly(): void
     {
         $documents = file_get_contents(app_path('Services/DocumentService.php'));
-        $masterData = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $masterData = \Tests\Support\AdministrationPhase7Source::masterData();
         $permanentDelete = file_get_contents(app_path('Services/PermanentJobDeleteService.php'));
-        $inquiryService = file_get_contents(app_path('Services/InquiryService.php'));
+        $inquiryService = $this->inquiryServiceSource();
         $notificationService = file_get_contents(app_path('Services/NotificationService.php'));
         $board = file_get_contents(app_path('Services/BoardService.php'));
         $reports = file_get_contents(app_path('Services/ReportService.php'));
         $workflow = file_get_contents(app_path('Services/WorkflowService.php'));
         $masterDataService = file_get_contents(app_path('Services/MasterDataService.php'));
-        $reverbClient = file_get_contents(public_path('js/flowtrack-reverb-client.js'));
+        $reverbClient = file_get_contents(resource_path('js/core/realtime.js'));
+        $notificationRuntime = file_get_contents(resource_path('js/features/notifications.js'));
 
         $this->assertStringContainsString("touch('Document:renamed')", $documents);
         $this->assertStringContainsString("touch('MasterRecord:bulk-product-status')", $masterData);
@@ -205,7 +206,8 @@ class ReverbSystemwideCoverageTest extends TestCase
         $this->assertStringNotContainsString('FlowNotification::create([', $inquiryService);
         $this->assertStringContainsString('public function notifyInquiryUser(', $notificationService);
         $this->assertStringContainsString('public function broadcastRealtimeState(', $notificationService);
-        $this->assertStringContainsString("bind('flowtrack.notification-state'", $reverbClient);
+        $this->assertStringContainsString('REALTIME_EVENTS.NOTIFICATION_STATE', $notificationRuntime);
+        $this->assertStringContainsString('state.notificationChannel.bind(REALTIME_EVENTS.NOTIFICATION_STATE', $notificationRuntime);
         $this->assertStringContainsString("':data-'.app(WorkspaceRefreshService::class)->version()", $board);
         $this->assertStringContainsString("':data-'.app(WorkspaceRefreshService::class)->version()", $reports);
     }

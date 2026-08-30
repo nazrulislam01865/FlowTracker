@@ -8,7 +8,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FlowTaskComment extends Model
 {
     protected $table = 'flow_task_comments';
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_task_id',
+        'user_id',
+        'body',
+    ];
 
     public function task(): BelongsTo
     {

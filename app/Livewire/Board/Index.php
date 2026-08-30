@@ -2,6 +2,9 @@
 
 namespace App\Livewire\Board;
 
+use App\Actions\Orders\MoveOrderPhase;
+use App\Actions\Orders\UpdateOrderDeliveryDate;
+use App\Queries\Orders\VisibleOrderQuery;
 use App\Livewire\Concerns\HandlesInlineEdits;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
@@ -9,7 +12,6 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\BoardService;
 use App\Services\BoardTaskPackService;
-use App\Services\JobService;
 use App\Services\MasterDataService;
 use App\Services\TaskService;
 use App\Support\BoardLaneResolver;
@@ -152,7 +154,7 @@ class Index extends Component
 
     public function updatedTaskPackPerPage(int|string $value): void
     {
-        // All Tasks is intentionally fixed at five Order groups per page so
+        // All Tasks is intentionally fixed at three Order groups per page so
         // each page stays compact and predictable regardless of task count.
         $this->taskPackPerPage = BoardTaskPackService::JOBS_PER_PAGE;
         $this->resetPage('taskPackPage');
@@ -297,8 +299,8 @@ class Index extends Component
     {
         return $this->persistInlineEdit('Job delivery date', function () use ($jobId, $date) {
             abort_unless(auth()->user()->canAccess('jobs.update'), 403);
-            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-            app(JobService::class)->updateDeliveryDate($job, $date ?: null, auth()->user());
+            $job = app(VisibleOrderQuery::class)->detail(auth()->user(), $jobId);
+            app(UpdateOrderDeliveryDate::class)->handle(auth()->user(), (int) $job->id, (string) ($date ?: ''));
         });
     }
 
@@ -306,8 +308,8 @@ class Index extends Component
     {
         abort_unless(auth()->user()->canAccess('jobs.update'), 403);
         try {
-            $job = app(JobService::class)->findVisible(auth()->user(), $jobId);
-            app(JobService::class)->moveToPhase($job, $phaseId, auth()->user());
+            $job = app(VisibleOrderQuery::class)->detail(auth()->user(), $jobId);
+            app(MoveOrderPhase::class)->handle($job, $phaseId, auth()->user());
             $this->message = 'Board updated successfully.';
         } catch (Throwable $e) {
             $this->message = $e->getMessage();

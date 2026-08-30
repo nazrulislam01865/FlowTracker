@@ -13,32 +13,28 @@ use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
 use App\Services\JobService;
+use App\Services\OrderWorkflowSetupService;
 use App\Services\TaskPackService;
 use App\Services\WorkflowService;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Validation\ValidationException;
 use Tests\TestCase;
 
 class SafeSetupDeletionTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_new_job_copies_workflow_phases_and_all_task_pack_tasks_into_a_private_snapshot(): void
+    public function test_new_order_uses_the_published_seven_stage_workflow_and_materializes_all_tasks(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $this->actingAs($user);
         $client = Client::query()->create(['name' => 'Snapshot Client', 'code' => 'SNAP-1', 'is_active' => true]);
-        [$legacy, $template] = $this->workflowPair('WF-SNAP', 'Snapshot Workflow', false);
-
-        $packA = $this->taskPack('PACK-A', 'Pack A', ['Prepare artwork', 'Approve proof']);
-        $packB = $this->taskPack('PACK-B', 'Pack B', ['Arrange shipment']);
-
-        $phaseA = $this->phase($legacy, $template, 1, 'Artwork', $packA, true);
-        $this->phase($legacy, $template, 2, 'Shipping', $packB, false);
+        [$legacy, $template, $phase] = $this->readyOrderWorkflow('WF-SNAP', 'Snapshot Workflow', false);
 
         $job = app(JobService::class)->create([
             'client_id' => $client->id,
             'workflow_id' => $legacy->id,
-            'workflow_phase_id' => $phaseA->id,
+            'workflow_phase_id' => $phase->id,
             'owner_id' => $user->id,
             'coordinator_id' => $user->id,
             'title' => 'Independent Job',
@@ -52,27 +48,27 @@ class SafeSetupDeletionTest extends TestCase
         ], $user);
 
         $job->refresh()->load('workflow.phases.taskPack.items', 'tasks');
+        $expectedTaskCount = collect(OrderWorkflowSetupService::fixedStages())
+            ->sum(fn (array $stage): int => count($stage['tasks'] ?? []));
 
-        $this->assertNotSame($legacy->id, $job->workflow_id);
-        $this->assertSame($legacy->id, $job->source_workflow_id);
-        $this->assertTrue((bool) $job->workflow->is_snapshot);
-        $this->assertSame($job->id, (int) $job->workflow->snapshot_job_id);
-        $this->assertCount(2, $job->workflow->phases);
-        $this->assertCount(3, $job->tasks);
-        $this->assertTrue($job->workflow->phases->every(fn ($phase) => $phase->workflow_template_id === null));
-        $this->assertTrue($job->workflow->phases->every(fn ($phase) => $phase->taskPack?->is_snapshot === true));
-        $this->assertTrue($job->tasks->every(fn ($task) => $task->workflow_phase_id !== $phaseA->id));
+        // Order workflows are live operational definitions at creation time.
+        // Safe-delete snapshots them later if an administrator removes setup.
+        $this->assertSame($legacy->id, (int) $job->workflow_id);
+        $this->assertSame($legacy->id, (int) $job->source_workflow_id);
+        $this->assertFalse((bool) $job->workflow->is_snapshot);
+        $this->assertCount(count(OrderWorkflowSetupService::fixedStages()), $template->phases()->where('is_active', true)->get());
+        $this->assertCount($expectedTaskCount, $job->tasks);
+        $publishedPhaseIds = $template->phases()->pluck('id')->map(fn ($id) => (int) $id)->all();
+        $this->assertTrue($job->tasks->every(fn ($task) => in_array((int) $task->workflow_phase_id, $publishedPhaseIds, true)));
     }
 
-    public function test_deleting_reusable_setup_after_new_job_creation_keeps_the_job_snapshot_unchanged(): void
+    public function test_deleting_reusable_setup_snapshots_existing_order_without_losing_tasks(): void
     {
         $user = User::factory()->create(['is_super_admin' => true, 'is_active' => true]);
         $this->actingAs($user);
         $client = Client::query()->create(['name' => 'Independent Setup Client', 'code' => 'IND-1', 'is_active' => true]);
-        [$legacy, $template] = $this->workflowPair('WF-IND', 'Independent Workflow', false);
-
-        $pack = $this->taskPack('PACK-IND', 'Independent Pack', ['Copied Task A', 'Copied Task B']);
-        $phase = $this->phase($legacy, $template, 1, 'Independent Phase', $pack, true);
+        [$legacy, $template, $phase] = $this->readyOrderWorkflow('WF-IND', 'Independent Workflow', false);
+        $pack = $phase->taskPack()->firstOrFail();
 
         $job = app(JobService::class)->create([
             'client_id' => $client->id,
@@ -91,30 +87,32 @@ class SafeSetupDeletionTest extends TestCase
         ], $user);
 
         $job->refresh()->load('tasks');
-        $snapshotWorkflowId = (int) $job->workflow_id;
-        $snapshotPhaseId = (int) $job->workflow_phase_id;
         $taskIds = $job->tasks->pluck('id')->sort()->values()->all();
         $taskTitles = $job->tasks->pluck('title')->sort()->values()->all();
+        $this->assertSame($legacy->id, (int) $job->workflow_id);
 
+        // Safe workflow deletion snapshots the linked Order first; after the
+        // mapping is removed, its reusable Task Pack can be deleted safely.
         $workflowResult = app(WorkflowService::class)->deleteWorkflow($template->id);
         $packResult = app(TaskPackService::class)->deletePack($pack->id);
 
-        $this->assertSame(0, $workflowResult['job_count']);
+        $this->assertSame(1, $workflowResult['job_count']);
         $this->assertSame(0, $workflowResult['task_count']);
         $this->assertSame(0, $packResult['job_count']);
         $this->assertSame(0, $packResult['task_count']);
 
-        $preserved = FlowJob::query()->with('tasks')->findOrFail($job->id);
-        $this->assertSame($snapshotWorkflowId, (int) $preserved->workflow_id);
-        $this->assertSame($snapshotPhaseId, (int) $preserved->workflow_phase_id);
+        $preserved = FlowJob::query()->with(['workflow', 'tasks'])->findOrFail($job->id);
+        $this->assertNotSame($legacy->id, (int) $preserved->workflow_id);
         $this->assertSame($legacy->id, (int) $preserved->source_workflow_id);
+        $this->assertTrue((bool) $preserved->workflow->is_snapshot);
+        $this->assertSame($job->id, (int) $preserved->workflow->snapshot_job_id);
         $this->assertSame($taskIds, $preserved->tasks->pluck('id')->sort()->values()->all());
         $this->assertSame($taskTitles, $preserved->tasks->pluck('title')->sort()->values()->all());
 
         $this->assertDatabaseMissing('workflow_templates', ['id' => $template->id]);
         $this->assertDatabaseMissing('workflows', ['id' => $legacy->id]);
         $this->assertDatabaseMissing('task_packs', ['id' => $pack->id]);
-        $this->assertDatabaseHas('workflows', ['id' => $snapshotWorkflowId, 'is_snapshot' => 1, 'snapshot_job_id' => $job->id]);
+        $this->assertDatabaseHas('workflows', ['id' => $preserved->workflow_id, 'is_snapshot' => 1, 'snapshot_job_id' => $job->id]);
         foreach ($taskIds as $taskId) {
             $this->assertDatabaseHas('tasks', ['id' => $taskId, 'flow_job_id' => $job->id]);
         }
@@ -264,62 +262,54 @@ class SafeSetupDeletionTest extends TestCase
         $this->assertDatabaseMissing('workflows', ['id' => $legacy->id]);
     }
 
-    public function test_task_pack_delete_keeps_existing_job_tasks_using_copied_pack_data(): void
+    public function test_task_pack_delete_is_blocked_while_mapped_to_an_order_workflow(): void
     {
         $this->actingAs(User::factory()->create(['is_super_admin' => true, 'is_active' => true]));
-        $client = Client::query()->create(['name' => 'Task Pack Client', 'code' => 'SAFE-2', 'is_active' => true]);
-        [$legacy, $template] = $this->workflowPair('WF-TP', 'Task Pack Workflow', true);
-
-        $pack = $this->taskPack('TP-SAFE', 'Task Pack To Delete', ['Generated Task']);
-        $item = $pack->items()->firstOrFail();
-        $phase = $this->phase($legacy, $template, 1, 'Packed Phase', $pack, true);
-
-        $job = FlowJob::query()->create([
-            'job_number' => 'JOB-SAFE-002',
-            'client_id' => $client->id,
-            'workflow_id' => $legacy->id,
-            'workflow_phase_id' => $phase->id,
-            'started_from_phase_id' => $phase->id,
-            'title' => 'Task Pack Job',
-        ]);
-        $generated = Task::query()->create([
-            'task_number' => 'TASK-SAFE-002',
-            'flow_job_id' => $job->id,
-            'workflow_phase_id' => $phase->id,
-            'task_pack_task_id' => $item->id,
-            'title' => 'Generated Task',
-        ]);
-        $otherTask = Task::query()->create([
-            'task_number' => 'TASK-SAFE-003',
-            'flow_job_id' => $job->id,
-            'workflow_phase_id' => $phase->id,
-            'title' => 'Other Task In Same Job',
-        ]);
+        [, , $phase] = $this->readyOrderWorkflow('WF-TP', 'Task Pack Workflow', true);
+        $pack = $phase->taskPack()->firstOrFail();
 
         $service = app(TaskPackService::class);
         $impact = $service->packDeleteImpact($pack->id);
-        $this->assertSame(1, $impact['mapped_phase_count']);
-        $this->assertSame(1, $impact['job_count']);
-        $this->assertSame(2, $impact['task_count']);
 
-        $result = $service->deletePack($pack->id);
+        $this->assertFalse($impact['can_delete']);
+        $this->assertGreaterThanOrEqual(1, $impact['mapped_phase_count']);
+        $this->assertStringContainsString('mapped to an Order workflow', (string) $impact['blocked_reason']);
 
-        $this->assertSame(1, $result['job_count']);
-        $this->assertSame(0, $result['task_count']);
-        $this->assertDatabaseHas('flow_jobs', ['id' => $job->id]);
-        $this->assertDatabaseHas('tasks', ['id' => $generated->id]);
-        $this->assertDatabaseHas('tasks', ['id' => $otherTask->id]);
-        $this->assertDatabaseMissing('task_packs', ['id' => $pack->id]);
-        $this->assertDatabaseMissing('task_pack_items', ['id' => $item->id]);
-        $this->assertDatabaseMissing('task_pack_tasks', ['id' => $item->id]);
-        $this->assertDatabaseHas('workflow_phases', ['id' => $phase->id, 'task_pack_id' => null]);
+        try {
+            $service->deletePack($pack->id);
+            $this->fail('Mapped Order workflow Task Packs must not be deleted directly.');
+        } catch (ValidationException $exception) {
+            $this->assertStringContainsString('mapped to an Order workflow', $exception->getMessage());
+        }
 
-        $preservedJob = FlowJob::query()->findOrFail($job->id);
-        $preservedGenerated = Task::query()->findOrFail($generated->id);
-        $this->assertNotSame($legacy->id, $preservedJob->workflow_id);
-        $this->assertNotSame($phase->id, $preservedGenerated->workflow_phase_id);
-        $this->assertNotSame($item->id, $preservedGenerated->task_pack_task_id);
-        $this->assertDatabaseHas('task_pack_items', ['id' => $preservedGenerated->task_pack_task_id]);
+        $this->assertDatabaseHas('task_packs', ['id' => $pack->id]);
+        $this->assertDatabaseHas('workflow_phases', ['id' => $phase->id, 'task_pack_id' => $pack->id]);
+    }
+
+    private function readyOrderWorkflow(string $code, string $name, bool $default): array
+    {
+        $template = WorkflowTemplate::query()->create([
+            'workspace_id' => 1,
+            'code' => $code,
+            'name' => $name,
+            'applies_to' => 'orders',
+            'client_availability' => 'all',
+            'is_active' => true,
+            'is_default' => $default,
+            'version' => 1,
+        ]);
+
+        $setup = app(OrderWorkflowSetupService::class);
+        $setup->initializeWorkflowTemplate($template);
+        $legacy = Workflow::query()->findOrFail($template->id);
+        $phase = WorkflowPhase::query()
+            ->where('workflow_template_id', $template->id)
+            ->where('is_active', true)
+            ->orderBy('sequence')
+            ->with('taskPack')
+            ->firstOrFail();
+
+        return [$legacy, $template->refresh(), $phase];
     }
 
     private function workflowPair(string $code, string $name, bool $default): array

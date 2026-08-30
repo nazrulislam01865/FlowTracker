@@ -11,7 +11,7 @@ This build replaces Pusher Cloud with a self-hosted Laravel Reverb transport whi
   - `private-flowtrack.user.{id}`
   - `private-flowtrack.workspace.{workspaceId}`
 - The authorization endpoint is now `/realtime/auth`.
-- The existing `realtime` database queue remains in place for phase 1.
+- Single-node compatibility may still use the database queue; the Phase 14 horizontal profile moves realtime delivery to the shared Redis queue.
 - The existing HTTP polling fallback remains active whenever the WebSocket is disconnected.
 
 ## Systemwide realtime architecture
@@ -145,6 +145,6 @@ If Reverb is stopped or temporarily unavailable:
 - the browser automatically falls back to the existing polling path;
 - no realtime popup is introduced; FlowTrack keeps its current notification-center behavior.
 
-## Phase 2 (not enabled in this build)
+## Phase 14 horizontal scaling
 
-Do not add Redis/Tair and Horizon at the same time as this transport migration. After Reverb is stable, move the queues to Alibaba Tair/Redis and add Horizon in a separate deployment. `REVERB_SCALING_ENABLED` remains `false` because 50-100 users do not need multiple Reverb servers.
+Redis/Tair/Valkey is now an explicit horizontal-production option. Set `FLOWTRACK_HORIZONTAL_SCALING=true`, use `deploy/env.horizontal.example`, and run `php artisan flowtrack:infrastructure:check --prepare-storage` before adding a node to the load balancer. `REVERB_SCALING_ENABLED` defaults on in that profile so multiple Reverb processes coordinate through Redis; single-node deployments remain compatible with scaling disabled.

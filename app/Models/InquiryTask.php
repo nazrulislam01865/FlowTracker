@@ -13,7 +13,28 @@ class InquiryTask extends Model
 {
     use SoftDeletes, TracksTaskAssigneePerformance;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'inquiry_id',
+        'source_task_pack_item_id',
+        'assignee_id',
+        'title',
+        'description',
+        'sequence',
+        'due_date',
+        'status',
+        'requires_submission',
+        'submission_label',
+        'completed_at',
+        'started_at',
+        'setup_assignee_id',
+        'inquiry_task_status_id',
+        'needs_attention',
+        'attention_reason',
+        'source_workflow_phase_id',
+        'assignee_assigned_at',
+        'assignee_at_completion',
+        'assignee_assigned_at_completion',
+    ];
 
     protected function casts(): array
     {

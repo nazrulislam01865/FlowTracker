@@ -6,7 +6,7 @@
 ])
 
 @php
-    $actionCount = 1 + ($canEdit ? 2 : 0) + ($canDelete ? 1 : 0);
+    $actionCount = 1 + ($canEdit ? 3 : 0) + ($canDelete ? 1 : 0);
     $estimatedMenuHeight = 10 + ($actionCount * 33) + ($canDelete ? 3 : 0);
     $menuId = 'product-actions-'.$productId;
 @endphp
@@ -79,6 +79,11 @@
                 role="menuitem"
                 x-on:click="$refs.menu.hidePopover(); $wire.editProduct({{ $productId }})"
             >Edit product</button>
+            <button
+                type="button"
+                role="menuitem"
+                x-on:click="$refs.menu.hidePopover(); $wire.openProductSupplierAssignmentFor({{ $productId }})"
+            >Assign supplier</button>
             <button
                 type="button"
                 role="menuitem"

@@ -7,7 +7,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class TaskPack extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'slug',
+        'description',
+        'is_active',
+        'workspace_id',
+        'code',
+        'is_snapshot',
+        'source_task_pack_id',
+        'snapshot_job_id',
+        'color',
+    ];
 
     protected function casts(): array
     {

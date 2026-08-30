@@ -9,6 +9,7 @@ use App\Models\TaskPack;
 use App\Models\WorkflowPhase;
 use App\Models\WorkflowTemplate;
 use App\Services\MasterDataService;
+use App\Services\OrderWorkflowSetupService;
 use App\Services\TaskPackService;
 use App\Services\WorkflowService;
 use App\Support\MasterColor;
@@ -72,15 +73,15 @@ class Index extends Component
         $data=$this->validate([
             'workflowCode'=>['required','string','max:40'], 'workflowName'=>['required','string','max:255'], 'workflowDescription'=>['nullable','string','max:5000'], 'workflowActive'=>['boolean'], 'workflowVersion'=>['required','integer','min:1','max:9999'],
         ]);
-        $workflow=app(WorkflowService::class)->saveWorkflow(['code'=>$data['workflowCode'],'name'=>$data['workflowName'],'description'=>$data['workflowDescription'],'is_active'=>$data['workflowActive'],'version'=>$data['workflowVersion']],$this->editWorkflowId);
+        $workflow=app(\App\Actions\Setup\SaveWorkflowAction::class)->execute(['code'=>$data['workflowCode'],'name'=>$data['workflowName'],'description'=>$data['workflowDescription'],'is_active'=>$data['workflowActive'],'version'=>$data['workflowVersion']],$this->editWorkflowId);
         $this->selectedWorkflowId=$workflow->id; $this->showWorkflowModal=false; session()->flash('success','Workflow saved.');
         app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow updated', $workflow->name.' was saved.', 'update', null, null, auth()->user());
     }
 
-    public function setDefault(int $id): void { $workflow=WorkflowTemplate::findOrFail($id); app(WorkflowService::class)->setDefault($id); session()->flash('success','Default workflow updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Default workflow updated', $workflow->name.' is now the default workflow.', 'update', null, null, auth()->user()); }
+    public function setDefault(int $id): void { $workflow=WorkflowTemplate::findOrFail($id); app(\App\Actions\Setup\SetDefaultWorkflowAction::class)->execute($id); session()->flash('success','Default workflow updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Default workflow updated', $workflow->name.' is now the default workflow.', 'update', null, null, auth()->user()); }
     public function toggleWorkflow(int $id): void
     {
-        try { $workflow=WorkflowTemplate::findOrFail($id); app(WorkflowService::class)->toggleWorkflow($id); session()->flash('success','Workflow status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow status updated', $workflow->name.' status was changed.', 'update', null, null, auth()->user()); }
+        try { $workflow=WorkflowTemplate::findOrFail($id); app(\App\Actions\Setup\ToggleWorkflowAction::class)->execute($id); session()->flash('success','Workflow status updated.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow status updated', $workflow->name.' status was changed.', 'update', null, null, auth()->user()); }
         catch(ValidationException $e){ $this->addError('workflow',collect($e->errors())->flatten()->first()); }
     }
     public function requestDeleteWorkflow(int $id): void
@@ -115,7 +116,7 @@ class Index extends Component
         }
 
         try {
-            $result = app(WorkflowService::class)->deleteWorkflow($this->deleteWorkflowId);
+            $result = app(\App\Actions\Setup\DeleteWorkflowAction::class)->execute($this->deleteWorkflowId);
             $this->closeWorkflowDelete();
             $this->selectedWorkflowId = WorkflowTemplate::query()
                 ->where('workspace_id', app(WorkflowService::class)->workspaceId())
@@ -156,12 +157,24 @@ class Index extends Component
         }
     }
 
-    public function move(int $id,int $direction):void { app(WorkflowService::class)->move(WorkflowPhase::findOrFail($id),$direction); }
+    public function move(int $id,int $direction):void
+    {
+        $phase = WorkflowPhase::findOrFail($id);
+        if ($this->selectedWorkflowIsOrder()) {
+            $this->addError('phase', 'Order workflow stage order is fixed because the runtime logic depends on the seven-stage sequence.');
+            return;
+        }
+        app(\App\Actions\Setup\MoveWorkflowPhaseAction::class)->execute($phase, $direction);
+    }
 
     public function openPhase(?int $id=null):void
     {
         abort_unless(auth()->user()?->canModule('workflow', 'edit'), 403);
         abort_unless($this->selectedWorkflowId,422);
+        if (! $id && $this->selectedWorkflowIsOrder()) {
+            $this->addError('phase', 'Order workflows always use the fixed seven stages. Edit an existing stage instead.');
+            return;
+        }
         $this->resetValidation(); $this->showPhaseModal=true; $this->editPhaseId=$id;
         if($id){
             $p=WorkflowPhase::where('workflow_template_id',$this->selectedWorkflowId)->findOrFail($id);
@@ -180,12 +193,50 @@ class Index extends Component
 
     public function savePhase():void
     {
+        $isOrder = $this->selectedWorkflowIsOrder();
         $data=$this->validate([
-            'phaseName'=>['required','string','max:255'], 'shortName'=>['required','string','max:50'], 'phaseColor'=>['required','regex:/^#[0-9A-Fa-f]{6}$/'], 'taskPackId'=>['nullable','exists:task_packs,id'],
-            'entryCondition'=>['nullable','string','max:255'], 'exitCondition'=>['nullable','string','max:255'], 'requiresApproval'=>['boolean'], 'phaseActive'=>['boolean'],
+            'phaseName'=>['required','string','max:255'],
+            'shortName'=>['required','string','max:50'],
+            'phaseColor'=>['required','regex:/^#[0-9A-Fa-f]{6}$/'],
+            'taskPackId'=>$isOrder ? ['required','exists:task_packs,id'] : ['nullable','exists:task_packs,id'],
+            'entryCondition'=>['nullable','string','max:255'],
+            'exitCondition'=>['nullable','string','max:255'],
+            'requiresApproval'=>['boolean'],
+            'phaseActive'=>['boolean'],
         ]);
-        $workflow=WorkflowTemplate::findOrFail($this->selectedWorkflowId);
-        app(WorkflowService::class)->savePhase($workflow,[
+
+        $workflow=WorkflowTemplate::query()
+            ->where('workspace_id', app(WorkflowService::class)->workspaceId())
+            ->findOrFail($this->selectedWorkflowId);
+
+        if ($isOrder) {
+            $phase = WorkflowPhase::query()
+                ->where('workflow_template_id', $workflow->id)
+                ->findOrFail($this->editPhaseId);
+            $sequence = (int) $phase->sequence;
+            $fixed = OrderWorkflowSetupService::fixedStages()[$sequence - 1] ?? null;
+            if (! $fixed) {
+                $this->addError('phase', 'This Order stage is outside the supported seven-stage runtime.');
+                return;
+            }
+
+            $synced = app(\App\Actions\Setup\SaveOrderWorkflowPhaseAction::class)->execute($workflow, $phase, [
+                'name'=>$fixed['name'],
+                'short_name'=>$fixed['short'],
+                'color'=>MasterColor::normalize($data['phaseColor']),
+                'task_pack_id'=>(int) $data['taskPackId'],
+                'requires_approval'=>false,
+                'is_active'=>true,
+                'entry_condition'=>$sequence === 1 ? 'Order created' : 'Previous stage complete',
+                'exit_condition'=>'Required tasks complete',
+                'sequence'=>$sequence,
+            ]);
+            $this->showPhaseModal=false;
+            session()->flash('success', $fixed['name'].' stage saved. '.number_format($synced).' active '.\Illuminate\Support\Str::plural('order', $synced).' synchronized.');
+            return;
+        }
+
+        app(\App\Actions\Setup\SaveWorkflowPhaseAction::class)->execute($workflow,[
             'name'=>$data['phaseName'],'short_name'=>$data['shortName'],'color'=>MasterColor::normalize($data['phaseColor']),'task_pack_id'=>$data['taskPackId'],
             'requires_approval'=>$data['requiresApproval'],'is_active'=>$data['phaseActive'],
             'entry_condition'=>$data['entryCondition'],'exit_condition'=>$data['exitCondition'],
@@ -196,7 +247,11 @@ class Index extends Component
 
     public function deletePhase(int $id):void
     {
-        try { app(WorkflowService::class)->delete(WorkflowPhase::findOrFail($id)); session()->flash('success','Workflow phase deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow phase deleted', 'A workflow phase was deleted.', 'update', null, null, auth()->user()); }
+        if ($this->selectedWorkflowIsOrder()) {
+            $this->addError('phase', 'Order workflows always keep all seven fixed stages.');
+            return;
+        }
+        try { app(\App\Actions\Setup\DeleteWorkflowPhaseAction::class)->execute(WorkflowPhase::findOrFail($id)); session()->flash('success','Workflow phase deleted.'); app(\App\Services\NotificationService::class)->notifyUser(auth()->user(), 'Workflow phase deleted', 'A workflow phase was deleted.', 'update', null, null, auth()->user()); }
         catch(ValidationException $e){ $this->addError('phase',collect($e->errors())->flatten()->first()); }
     }
 
@@ -219,6 +274,11 @@ class Index extends Component
         $selected = $all->firstWhere('id', $this->selectedWorkflowId);
         $workspaceId = app(MasterDataService::class)->workspaceId();
         $selectedPhases = $selected?->phases ?? collect();
+        $selectedIsOrderWorkflow = (string) ($selected?->applies_to ?? '') === 'orders';
+        $editingPhase = $this->editPhaseId ? $selectedPhases->firstWhere('id', $this->editPhaseId) : null;
+        $orderWorkflowReady = $selectedIsOrderWorkflow && $selected
+            ? app(OrderWorkflowSetupService::class)->isReadyForOrderCreation((int) $selected->id)
+            : false;
 
         return [
             'workflows' => $all,
@@ -227,8 +287,12 @@ class Index extends Component
             'selectedPhaseCount' => $selectedPhases->count(),
             'allowedStartingStages' => $selectedPhases->where('is_active', true)->where('allow_job_start', true)->count(),
             'automaticTransitions' => $selectedPhases->where('is_active', true)->where('auto_advance_on_ready', true)->count(),
+            'selectedIsOrderWorkflow' => $selectedIsOrderWorkflow,
+            'orderWorkflowReady' => $orderWorkflowReady,
             'taskPacks' => $this->showPhaseModal
-                ? TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where('is_active', true)->orderBy('name')->get(['id', 'name'])
+                ? ($selectedIsOrderWorkflow && $editingPhase
+                    ? app(OrderWorkflowSetupService::class)->compatibleTaskPacksForStage((int) $editingPhase->sequence)
+                    : TaskPack::query()->where('workspace_id', $workspaceId)->where('is_snapshot', false)->where('is_active', true)->orderBy('name')->get(['id', 'name']))
                 : collect(),
         ];
     }
@@ -242,7 +306,20 @@ class Index extends Component
             'selectedPhaseCount' => 0,
             'allowedStartingStages' => 0,
             'automaticTransitions' => 0,
+            'selectedIsOrderWorkflow' => false,
+            'orderWorkflowReady' => false,
             'taskPacks' => collect(),
         ];
+    }
+
+    private function selectedWorkflowIsOrder(): bool
+    {
+        if (! $this->selectedWorkflowId) return false;
+
+        return WorkflowTemplate::query()
+            ->where('workspace_id', app(WorkflowService::class)->workspaceId())
+            ->whereKey($this->selectedWorkflowId)
+            ->where('applies_to', 'orders')
+            ->exists();
     }
 }

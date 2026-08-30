@@ -4,7 +4,7 @@ namespace App\Livewire\Reports;
 
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
-use App\Services\InquiryIntelligenceService;
+use App\Queries\Reports\InquiryIntelligenceReportQuery;
 use Livewire\Attributes\Computed;
 use Livewire\Attributes\On;
 use Livewire\Component;
@@ -99,12 +99,12 @@ class Index extends Component
     #[Computed]
     public function report(): array
     {
-        return app(InquiryIntelligenceService::class)->data(auth()->user(), $this->filters());
+        return app(InquiryIntelligenceReportQuery::class)->data(auth()->user(), $this->filters());
     }
 
     public function exportVisible()
     {
-        $rows = app(InquiryIntelligenceService::class)->exportRows(auth()->user(), $this->filters());
+        $rows = app(InquiryIntelligenceReportQuery::class)->exportRows(auth()->user(), $this->filters());
         $filename = 'StepPromo-inquiry-intelligence-'.now()->format('Ymd-His').'.csv';
 
         return response()->streamDownload(function () use ($rows): void {

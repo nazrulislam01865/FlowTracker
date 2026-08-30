@@ -1,4 +1,4 @@
 @extends('layouts.app')
 @section('content')
-<livewire:notifications.index />
+<livewire:notifications.index defer />
 @endsection

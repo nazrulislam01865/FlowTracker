@@ -3,10 +3,10 @@
 namespace App\Livewire\UserEditor;
 
 use App\Livewire\Concerns\RefreshesFromWorkspace;
-use App\Models\Department;
 use App\Models\Role;
 use App\Models\User;
 use App\Services\AdminService;
+use App\Services\FilterOptionService;
 use App\Services\SetupContext;
 use App\Services\UserEditorService;
 use Carbon\Carbon;
@@ -22,7 +22,7 @@ class Index extends Component
     use RefreshesFromWorkspace;
     use WithFileUploads;
 
-    public int $userId;
+    public ?int $userId = null;
     public string $name = '';
     public string $position = '';
     public string $email = '';
@@ -40,6 +40,7 @@ class Index extends Component
 
     // Profile route starts in read-only mode. Administration opens directly in edit mode.
     public bool $profileMode = false;
+    public bool $createMode = false;
     public bool $isEditing = true;
     public bool $canManageAccess = false;
     public bool $targetIsSuperAdmin = false;
@@ -55,18 +56,37 @@ class Index extends Component
     public string $userReference = '';
     public string $cancelUrl = '';
 
-    public function mount(int $userId, bool $profileMode = false): void
+    public function mount(?int $userId = null, bool $profileMode = false, bool $createMode = false): void
     {
         $this->userId = $userId;
         $this->profileMode = $profileMode;
-        $this->isEditing = ! $profileMode;
+        $this->createMode = $createMode;
+        $this->isEditing = $createMode || ! $profileMode;
 
-        $target = $this->targetUser();
         $actor = auth()->user();
         $service = app(UserEditorService::class);
+        $this->canManageAccess = $service->canManageAccess($actor);
+
+        if ($this->createMode) {
+            abort_unless($this->canManageAccess, 403);
+            $this->returnToAdministration = true;
+            $this->cancelUrl = route('administration', ['tab' => 'users']);
+            $this->targetIsSuperAdmin = false;
+            $this->businessUnit = 'both';
+            $this->accountStatus = 'active';
+            $this->lastActiveLabel = 'Not yet';
+            $this->openTasks = 0;
+            $this->createdLabel = 'On save';
+            $this->userReference = 'NEW';
+            $this->profileImageUrl = '';
+            $this->loadAccessOptions();
+            return;
+        }
+
+        abort_unless($this->userId !== null, 404);
+        $target = $this->targetUser();
         abort_unless($service->canEdit($actor, $target), 403);
 
-        $this->canManageAccess = $service->canManageAccess($actor);
         $this->targetIsSuperAdmin = $target->isSuperAdmin();
         $this->returnToAdministration = ! $profileMode && (
             request()->query('from') === 'administration'
@@ -133,20 +153,25 @@ class Index extends Component
     {
         abort_unless($this->isEditing, 403);
 
-        $target = $this->targetUser();
         $actor = auth()->user();
         $service = app(UserEditorService::class);
-        abort_unless($service->canEdit($actor, $target), 403);
         $canManageAccess = $service->canManageAccess($actor);
+        $target = $this->createMode ? null : $this->targetUser();
+
+        if ($this->createMode) {
+            abort_unless($canManageAccess, 403);
+        } else {
+            abort_unless($target && $service->canEdit($actor, $target), 403);
+        }
 
         $rules = [
             'name' => ['required', 'string', 'max:255'],
             'position' => ['nullable', 'string', 'max:120'],
-            'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($target->id)],
+            'email' => ['required', 'email', $this->createMode ? Rule::unique('users', 'email') : Rule::unique('users', 'email')->ignore($target->id)],
             'wechatId' => ['nullable', 'string', 'max:80'],
             'phone' => ['nullable', 'string', 'max:60'],
-            'newPassword' => ['nullable', 'string', 'min:12'],
-            'newPasswordConfirmation' => ['required_with:newPassword', 'same:newPassword'],
+            'newPassword' => $this->createMode ? ['required', 'string', 'min:12'] : ['nullable', 'string', 'min:12'],
+            'newPasswordConfirmation' => $this->createMode ? ['required', 'same:newPassword'] : ['required_with:newPassword', 'same:newPassword'],
             'signOutSessions' => ['boolean'],
             'profileImage' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:250'],
         ];
@@ -163,7 +188,7 @@ class Index extends Component
 
         $this->validate($rules, [
             'newPasswordConfirmation.same' => 'The password confirmation does not match.',
-            'newPassword.min' => 'Use at least 12 characters for the new password.',
+            'newPassword.min' => 'Use at least 12 characters for the password.',
             'profileImage.max' => 'The profile image must not be larger than 250 KB.',
         ]);
 
@@ -186,7 +211,11 @@ class Index extends Component
             ];
         }
 
-        $service->update($target, $payload, $actor);
+        if ($this->createMode) {
+            $target = $service->create($payload, $actor);
+        } else {
+            $service->update($target, $payload, $actor);
+        }
 
         if ($this->profileImage) {
             $service->updateProfileImage($target, $this->profileImage, $actor);
@@ -194,8 +223,8 @@ class Index extends Component
 
         $this->reset(['newPassword', 'newPasswordConfirmation', 'profileImage']);
 
-        if ($this->returnToAdministration) {
-            session()->flash('success', 'User updated successfully.');
+        if ($this->returnToAdministration || $this->createMode) {
+            session()->flash('success', $this->createMode ? 'User created successfully.' : 'User updated successfully.');
             $this->redirectRoute('administration', ['tab' => 'users'], navigate: true);
             return;
         }
@@ -245,9 +274,10 @@ class Index extends Component
         $this->profileImageUrl = $this->profileUrl($target);
     }
 
-    private function loadAccessOptions(User $target): void
+    private function loadAccessOptions(?User $target = null): void
     {
         if (! $this->canManageAccess) {
+            abort_unless($target, 403);
             $this->roleOptions = $target->assignedRoles()
                 ->map(fn (Role $role) => ['id' => $role->id, 'name' => $role->name])
                 ->values()->all();
@@ -263,7 +293,7 @@ class Index extends Component
             ->where('workspace_id', $workspaceId)
             ->where(function ($query) use ($target) {
                 $query->where('is_active', true);
-                $assignedRoleIds = $target->assignedRoleIds();
+                $assignedRoleIds = $target?->assignedRoleIds() ?? [];
                 if ($assignedRoleIds !== []) {
                     $query->orWhereIn('id', $assignedRoleIds);
                 }
@@ -274,17 +304,24 @@ class Index extends Component
             ->map(fn (Role $role) => ['id' => $role->id, 'name' => $role->name])
             ->all();
 
-        $this->departmentOptions = Department::query()
-            ->where(function ($query) use ($target) {
-                $query->where('is_active', true);
-                if ($target->department_id) {
-                    $query->orWhere('id', $target->department_id);
-                }
-            })
-            ->orderBy('name')
-            ->get(['id', 'name'])
-            ->map(fn (Department $department) => ['id' => $department->id, 'name' => $department->name])
+        $this->departmentOptions = app(FilterOptionService::class)
+            ->options(
+                auth()->user(),
+                'departments',
+                'user-editor',
+                '',
+                $target?->department_id,
+                FilterOptionService::COMPACT_PER_PAGE,
+            )
+            ->values()
             ->all();
+    }
+
+    public function setDepartmentSelection(string $property, string $value): void
+    {
+        abort_unless($property === 'departmentId', 422);
+        abort_unless($this->canManageAccess, 403);
+        $this->departmentId = $value !== '' ? (int) $value : null;
     }
 
     private function loadStaticFacts(User $target): void
@@ -318,6 +355,8 @@ class Index extends Component
 
     private function targetUser(): User
     {
+        abort_unless($this->userId !== null, 404);
+
         return User::query()->with(['role:id,name,slug,is_active', 'roles:id,name,slug,is_active', 'department:id,name'])->findOrFail($this->userId);
     }
 }

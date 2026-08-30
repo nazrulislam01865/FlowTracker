@@ -9,8 +9,8 @@ class ProductTaxonomySelectorSyncTest extends TestCase
     public function test_product_form_taxonomy_selectors_use_server_authoritative_action(): void
     {
         $form = file_get_contents(resource_path('views/components/catalog/product-form.blade.php'));
-        $select = file_get_contents(resource_path('views/components/ui/select-filter.blade.php'));
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $select = file_get_contents(resource_path('views/components/ui/search-select.blade.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
 
         $this->assertSame(3, substr_count($form, 'action="setProductTaxonomySelection"'));
         $this->assertStringContainsString("'action' => null", $select);
@@ -20,7 +20,7 @@ class ProductTaxonomySelectorSyncTest extends TestCase
 
     public function test_product_form_reads_children_from_canonical_product_taxonomy(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
 
         $this->assertStringContainsString('$canonicalMainCategories = $productTaxonomy ? $productTaxonomy->mainCategories(true) : collect();', $component);
         $this->assertStringContainsString('$canonicalProductCategories = $productTaxonomy ? $productTaxonomy->productCategories(true) : collect();', $component);

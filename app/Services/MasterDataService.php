@@ -201,6 +201,8 @@ class MasterDataService
         $parentId = (int) ($filters['parent_id'] ?? 0);
         $mainCategory = trim((string) ($filters['main_category'] ?? ''));
         $clientAvailability = trim((string) ($filters['client_availability'] ?? ''));
+        $supplierId = (int) ($filters['supplier_id'] ?? 0);
+        $supplierState = trim((string) ($filters['supplier_state'] ?? ''));
 
         return MasterRecord::query()
             ->forWorkspace($this->workspaceId())
@@ -224,6 +226,56 @@ class MasterDataService
             })
             ->when(in_array($status, ['active', 'inactive'], true), fn ($q) => $q->where('status', $status))
             ->when($type === 'product' && $parentId > 0, fn ($q) => $q->where('parent_id', $parentId))
+            ->when($type === 'product' && $supplierId > 0, function ($q) use ($supplierId) {
+                $hasPivot = Schema::hasTable('product_supplier_links');
+                $q->where(function ($supplier) use ($supplierId, $hasPivot) {
+                    $supplier->where('metadata->supplier_id', $supplierId)
+                        ->orWhere('metadata->default_supplier_id', $supplierId)
+                        ->orWhereJsonContains('metadata->supplier_ids', $supplierId);
+
+                    if ($hasPivot) {
+                        $supplier->orWhereExists(function ($link) use ($supplierId): void {
+                            $link->selectRaw('1')
+                                ->from('product_supplier_links')
+                                ->whereColumn('product_supplier_links.product_id', 'master_records.id')
+                                ->where('product_supplier_links.supplier_id', $supplierId);
+                        });
+                    }
+                });
+            })
+            ->when($type === 'product' && $supplierState === 'assigned', function ($q) {
+                $hasPivot = Schema::hasTable('product_supplier_links');
+                $q->where(function ($assigned) use ($hasPivot) {
+                    $assigned->whereNotNull('metadata->supplier_id')
+                        ->orWhereNotNull('metadata->default_supplier_id')
+                        ->orWhereJsonLength('metadata->supplier_ids', '>', 0);
+
+                    if ($hasPivot) {
+                        $assigned->orWhereExists(function ($link): void {
+                            $link->selectRaw('1')
+                                ->from('product_supplier_links')
+                                ->whereColumn('product_supplier_links.product_id', 'master_records.id');
+                        });
+                    }
+                });
+            })
+            ->when($type === 'product' && $supplierState === 'unassigned', function ($q) {
+                $hasPivot = Schema::hasTable('product_supplier_links');
+                $q->whereNull('metadata->supplier_id')
+                    ->whereNull('metadata->default_supplier_id')
+                    ->where(function ($links) {
+                        $links->whereNull('metadata->supplier_ids')
+                            ->orWhereJsonLength('metadata->supplier_ids', 0);
+                    });
+
+                if ($hasPivot) {
+                    $q->whereNotExists(function ($link): void {
+                        $link->selectRaw('1')
+                            ->from('product_supplier_links')
+                            ->whereColumn('product_supplier_links.product_id', 'master_records.id');
+                    });
+                }
+            })
             ->when($type === 'product' && $mainCategory !== '', function ($q) use ($mainCategory) {
                 $q->where(function ($match) use ($mainCategory) {
                     $match->where('metadata->main_category', $mainCategory)

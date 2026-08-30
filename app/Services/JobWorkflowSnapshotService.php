@@ -11,6 +11,7 @@ use App\Models\TaskPackTask;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 
 class JobWorkflowSnapshotService
@@ -169,7 +170,7 @@ class JobWorkflowSnapshotService
             ->values() as $index => $sourceItem) {
             $sharedId = $nextSharedId++;
 
-            TaskPackTask::query()->create([
+            $legacyTask = [
                 'id' => $sharedId,
                 'task_pack_id' => $snapshotPack->id,
                 'source_task_pack_task_id' => (int) ($sourceItem->source_task_pack_item_id ?: $sourceItem->id),
@@ -177,7 +178,11 @@ class JobWorkflowSnapshotService
                 'sequence' => $index + 1,
                 'is_required' => (bool) $sourceItem->is_required,
                 'default_department_id' => null,
-            ]);
+            ];
+            if (Schema::hasColumn('task_pack_tasks', 'color')) {
+                $legacyTask['color'] = \App\Support\MasterColor::normalize((string) ($sourceItem->color ?? '')) ?: '#2563EB';
+            }
+            TaskPackTask::query()->create($legacyTask);
 
             $snapshotItem = $sourceItem->replicate();
             $snapshotItem->id = $sharedId;

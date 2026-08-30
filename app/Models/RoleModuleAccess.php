@@ -8,7 +8,12 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class RoleModuleAccess extends Model
 {
     protected $table = 'role_module_access';
-    protected $guarded = [];
+    protected $fillable = [
+        'role_id',
+        'module_code',
+        'record_scope',
+        'actions',
+    ];
 
     protected function casts(): array
     {

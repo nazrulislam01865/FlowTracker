@@ -11,6 +11,7 @@
     $orderCreate = $user->canAccess('jobs.create');
     $taskView = $user->canAccess('tasks.view');
     $orderGroupActive = request()->routeIs('jobs.*', 'orders.*', 'all-tasks', 'my-work');
+    $cancelledOrderCount = $orderView ? (int) ($shellData['cancelled_orders'] ?? 0) : 0;
 
     $clientView = $user->canAccess('clients.view');
     $clientCreate = $user->canAccess('clients.create');
@@ -29,9 +30,11 @@
     $productCategoryView = $user->canModule('product_categories', 'view');
     $productCategoryCreate = $user->canModule('product_categories', 'create');
     $supplierView = $user->canModule('suppliers', 'view');
+    $supplierCreate = $user->canModule('suppliers', 'create');
     $financeMasterView = $user->canModule('finance', 'view');
     $catalogueGroupActive = request()->routeIs('master-data') && in_array($masterGroup, $catalogueGroups, true);
     $productMenuActive = request()->routeIs('master-data') && in_array($masterGroup, ['product', 'product_category'], true);
+    $supplierMenuActive = request()->routeIs('master-data') && $masterGroup === 'supplier';
     $financialGroupActive = request()->routeIs('financial-master-data')
         || (request()->routeIs('master-data') && in_array($masterGroup, $financialGroups, true));
     $taskPackMasterGroupActive = request()->routeIs('master-data')
@@ -49,7 +52,7 @@
     $administrator = app(\App\Services\AccessControlService::class)->isAdministrator($user);
     $settingsGroupActive = request()->routeIs('company.setup', 'administration');
     $reportView = $user->canAccess('reports.view');
-    $reportGroupActive = request()->routeIs('reports', 'team-performance.report');
+    $reportGroupActive = request()->routeIs('reports', 'team-performance.report', 'order-summary.report');
 @endphp
 <aside id="sidebar" class="sidebar ft-sidebar-template">
     <a class="brand ft-system-brand" href="{{ route('dashboard') }}" wire:navigate aria-label="Open Dashboard">
@@ -60,7 +63,7 @@
         @endif
     </a>
 
-    <nav class="ft-sidebar-nav" aria-label="Primary navigation">
+    <nav class="ft-sidebar-nav" aria-label="Primary navigation" wire:navigate:scroll>
         @if($user->canAccess('dashboard.view'))
             <x-ui.nav-link route="dashboard" label="Dashboard" icon="dashboard" :active="request()->routeIs('dashboard')" />
         @endif
@@ -107,6 +110,9 @@
                     @if($orderCreate)
                         <x-ui.nav-link route="jobs.index" label="Create Order" icon="plus" child :params="['create' => 1]" :active="request()->routeIs('jobs.index') && request()->boolean('create')" />
                         <x-ui.nav-link route="orders.bulk-import" label="Create Bulk Order" icon="upload" child />
+                    @endif
+                    @if($orderView)
+                        <x-ui.nav-link route="orders.cancelled" label="Cancelled Orders" icon="cancelled" :badge="$cancelledOrderCount" child :active="request()->routeIs('orders.cancelled')" />
                     @endif
                 </div>
             </details>
@@ -157,8 +163,24 @@
                 </div>
             </details>
         @endif
-        @if($supplierView)
-            <x-ui.nav-link route="master-data" label="Suppliers" icon="suppliers" :params="['group' => 'supplier']" :active="$catalogueGroupActive && $masterGroup === 'supplier'" />
+        @if($supplierView || $supplierCreate)
+            <details class="ft-sidebar-group" @if($supplierMenuActive) open @endif>
+                <summary class="ft-sidebar-group-toggle {{ $supplierMenuActive ? 'is-active' : '' }}">
+                    <span class="ft-sidebar-group-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h11v10H3zM14 10h4l3 3v4h-7z"/><circle cx="7" cy="18" r="2"/><circle cx="17" cy="18" r="2"/></svg>
+                    </span>
+                    <span>Suppliers</span>
+                    <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
+                </summary>
+                <div class="ft-sidebar-children">
+                    @if($supplierView)
+                        <x-ui.nav-link route="master-data" label="Supplier list" icon="suppliers" child :params="['group' => 'supplier']" :active="$supplierMenuActive && !request()->boolean('create')" />
+                    @endif
+                    @if($supplierCreate)
+                        <x-ui.nav-link route="master-data" label="Create supplier" icon="plus" child :params="['group' => 'supplier', 'create' => 1]" :active="$supplierMenuActive && request()->boolean('create')" />
+                    @endif
+                </div>
+            </details>
         @endif
 
         @if($user->canAccess('document_archive.view'))
@@ -175,6 +197,9 @@
                     <svg class="ft-sidebar-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m8 10 4 4 4-4"/></svg>
                 </summary>
                 <div class="ft-sidebar-children">
+                    @if($orderView)
+                        <x-ui.nav-link route="order-summary.report" label="Order Summary" icon="reports" child :active="request()->routeIs('order-summary.report')" />
+                    @endif
                     <x-ui.nav-link route="reports" label="Inquiry Intelligence" icon="reports" child :active="request()->routeIs('reports')" />
                     <x-ui.nav-link route="team-performance.report" label="Team Performance Report" icon="work" child :active="request()->routeIs('team-performance.report')" />
                 </div>
@@ -183,6 +208,7 @@
 
         <div class="sidebar-section ft-sidebar-section-line"><span>Administration</span></div>
         @if($user->canAccess('notifications.view'))<x-ui.nav-link route="notifications" label="Notifications" :badge="$unread" icon="notifications" />@endif
+        {{-- Inquiry and Order workflows share Workflow Setup; reusable Task Packs remain a separate administration screen. --}}
         @if($user->canAccess('workflow.view'))<x-ui.nav-link route="workflow.setup" label="Workflow Setup" icon="settings" />@endif
         @if($user->canAccess('taskpacks.view'))<x-ui.nav-link route="task-pack.setup" label="Task Pack Setup" icon="settings" />@endif
         @if($masterView)

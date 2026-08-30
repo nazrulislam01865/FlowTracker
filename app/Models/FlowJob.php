@@ -13,7 +13,63 @@ class FlowJob extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'job_number',
+        'order_number',
+        'client_id',
+        'workflow_id',
+        'workflow_phase_id',
+        'started_from_phase_id',
+        'owner_id',
+        'coordinator_id',
+        'title',
+        'product',
+        'category',
+        'quantity',
+        'commercial_value',
+        'currency',
+        'status',
+        'health',
+        'priority',
+        'progress',
+        'delivery_date',
+        'description',
+        'next_action',
+        'start_handling',
+        'start_reason',
+        'needs_attention',
+        'completed_at',
+        'source_workflow_id',
+        'source_workflow_phase_id',
+        'source_inquiry_id',
+        'received_date',
+        'supplier_id',
+        'warehouse',
+        'supplier_instruction',
+        'source_row_id',
+        'import_profile',
+        'bulk_import_id',
+        'created_by',
+        'is_repeat_order',
+        'repeat_order_number',
+        'estimated_delivery_date',
+        'production_urgency_ids',
+        'shipment_urgency_ids',
+        'notes',
+        'order_flag_id',
+        'attention_requested',
+        'attention_reason',
+        'attention_by',
+        'attention_at',
+        'cancellation_reason',
+        'cancelled_at',
+        'cancelled_by',
+        'shipping_address',
+        'shipping_phone_country_code',
+        'shipping_phone',
+        'shipping_postal_code',
+        'shipping_source_address_id',
+    ];
 
     protected function casts(): array
     {
@@ -28,6 +84,7 @@ class FlowJob extends Model
             'production_urgency_ids' => 'array',
             'shipment_urgency_ids' => 'array',
             'completed_at' => 'datetime',
+            'cancelled_at' => 'datetime',
             'commercial_value' => 'decimal:2',
         ];
     }
@@ -43,6 +100,7 @@ class FlowJob extends Model
     public function coordinator(): BelongsTo { return $this->belongsTo(User::class, 'coordinator_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
     public function attentionRequester(): BelongsTo { return $this->belongsTo(User::class, 'attention_by'); }
+    public function cancelledBy(): BelongsTo { return $this->belongsTo(User::class, 'cancelled_by'); }
     public function orderFlag(): BelongsTo { return $this->belongsTo(MasterRecord::class, 'order_flag_id'); }
     public function tasks(): HasMany { return $this->hasMany(Task::class); }
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->whereNotNull('order_task_flag_id')->whereNull('completed_at')->orderBy('id'); }
@@ -54,8 +112,33 @@ class FlowJob extends Model
     public function members(): HasMany { return $this->hasMany(FlowJobMember::class, 'flow_job_id'); }
     public function phaseHistories(): HasMany { return $this->hasMany(FlowJobPhaseHistory::class, 'flow_job_id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
+    public function redoRecords(): HasMany { return $this->hasMany(OrderRedo::class, 'original_order_id')->orderBy('sequence'); }
+    public function redoRecord(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderRedo::class, 'redo_order_id'); }
     public function createdActivity(): MorphOne { return $this->morphOne(Activity::class, 'subject')->oldestOfMany(); }
     public function latestActivity(): MorphOne { return $this->morphOne(Activity::class, 'subject')->latestOfMany(); }
+    public function latestShipmentActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.package_shipped'));
+    }
+
+    public function latestWorkflowInvoiceActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.workflow_invoice_prepared'));
+    }
+
+    public function latestQcActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->whereIn('activities.event', ['job.qc_passed', 'job.qc_issue_reported']));
+    }
+
+    public function latestArtworkRevisionActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.artwork_revision_requested'));
+    }
 
     /**
      * The database keeps the legacy job_number column for backwards

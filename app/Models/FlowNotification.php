@@ -8,7 +8,18 @@ use Illuminate\Support\Facades\Schema;
 
 class FlowNotification extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'user_id',
+        'flow_job_id',
+        'type',
+        'title',
+        'message',
+        'read_at',
+        'flow_task_id',
+        'inquiry_id',
+        'inquiry_task_id',
+        'actor_id',
+    ];
 
     protected $table = 'flow_notifications';
 

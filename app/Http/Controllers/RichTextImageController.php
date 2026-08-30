@@ -2,9 +2,10 @@
 
 namespace App\Http\Controllers;
 
+use App\Services\SecureDocumentStorage;
+use App\Support\StoredFileResponse;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
@@ -24,9 +25,16 @@ class RichTextImageController extends Controller
             default => 'png',
         };
 
+        // Preserve the existing route filename contract while storing the
+        // physical object privately after quarantine/inspection.
         $filename = Str::uuid().'.'.$extension;
-        $disk = (string) config('flowtrack.document_disk', 'public');
-        Storage::disk($disk)->putFileAs('rich-text-images', $file, $filename);
+        $stored = app(SecureDocumentStorage::class)->store($file, 'rich-text-images');
+        $storedPath = $stored['path'];
+        if (basename($storedPath) !== $filename) {
+            // The secure storage service intentionally owns randomized physical
+            // names, so return that generated name rather than exposing input.
+            $filename = basename($storedPath);
+        }
 
         return response()->json([
             'url' => route('rich-text-images.show', ['filename' => $filename], false),
@@ -35,31 +43,21 @@ class RichTextImageController extends Controller
 
     public function show(string $filename): StreamedResponse
     {
-        [$disk, $path] = $this->resolvedImage($filename);
-
-        return Storage::disk($disk)->response($path, $filename, [
-            'Cache-Control' => 'private, max-age=31536000, immutable',
-            'Content-Disposition' => 'inline; filename="'.$filename.'"',
-        ]);
+        $path = $this->resolvedImagePath($filename);
+        return StoredFileResponse::inline($path, $filename);
     }
 
     public function download(string $filename): StreamedResponse
     {
-        [$disk, $path] = $this->resolvedImage($filename);
-
-        return Storage::disk($disk)->download($path, $filename, [
-            'Cache-Control' => 'private, max-age=31536000, immutable',
-        ]);
+        $path = $this->resolvedImagePath($filename);
+        return StoredFileResponse::download($path, $filename);
     }
 
-    private function resolvedImage(string $filename): array
+    private function resolvedImagePath(string $filename): string
     {
         abort_unless(preg_match('/^[A-Za-z0-9-]+\.(?:png|jpe?g|webp|gif)$/i', $filename) === 1, 404);
-
-        $disk = (string) config('flowtrack.document_disk', 'public');
         $path = 'rich-text-images/'.$filename;
-        abort_unless(Storage::disk($disk)->exists($path), 404);
-
-        return [$disk, $path];
+        abort_unless(app(SecureDocumentStorage::class)->locate($path) !== null, 404);
+        return $path;
     }
 }

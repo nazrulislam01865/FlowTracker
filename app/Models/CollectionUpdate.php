@@ -7,7 +7,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class CollectionUpdate extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_job_collection_id',
+        'actor_id',
+        'follow_up_date',
+        'next_follow_up_at',
+        'note',
+        'type',
+    ];
 
     protected function casts(): array
     {

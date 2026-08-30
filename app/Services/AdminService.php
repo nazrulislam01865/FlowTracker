@@ -10,6 +10,7 @@ use App\Models\RoleModuleAccess;
 use App\Models\TaskPack;
 use App\Models\User;
 use App\Models\WorkspaceMembership;
+use App\Services\Email\ModuleEmailControlService;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
 use Illuminate\Support\Facades\Schema;
@@ -33,24 +34,44 @@ class AdminService
         return $this->usersQuery()->get();
     }
 
-    public function paginateUsers(int $perPage = 10, string $pageName = 'usersPage')
+    public function paginateUsers(int $perPage = 10, string $pageName = 'usersPage', string $search = '')
     {
-        return $this->usersQuery()->paginate($perPage, ['*'], $pageName);
+        return $this->usersQuery($search)->paginate($perPage, ['*'], $pageName);
     }
 
-    private function usersQuery()
+    private function usersQuery(string $search = '')
     {
         $workspaceId = $this->workspaceId();
+        $search = trim($search);
 
-        return User::with([
+        $query = User::with([
                 'role', 'roles', 'department',
                 'workspaceMemberships' => fn ($q) => $q
                     ->where('workspace_id', $workspaceId)
                     ->select(['id', 'workspace_id', 'user_id', 'job_title']),
             ])
             ->whereHas('workspaceMemberships', fn ($q) => $q->where('workspace_id', $workspaceId))
-            ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')])
-            ->orderBy('name');
+            ->withCount(['assignedTasks as open_tasks_count' => fn ($q) => $q->whereNull('completed_at')]);
+
+        // CHANGE 2026-08-24:
+        // Search only direct user identity fields. This prevents a name search
+        // such as "ina" from returning unrelated users merely because their
+        // department is "Finance Department" or their role contains the text.
+        // A row is returned only when the user name, email or own position matches.
+        if ($search !== '') {
+            $like = '%'.$search.'%';
+
+            $query->where(function ($userQuery) use ($like, $workspaceId): void {
+                $userQuery
+                    ->where('name', 'like', $like)
+                    ->orWhere('email', 'like', $like)
+                    ->orWhereHas('workspaceMemberships', fn ($membershipQuery) => $membershipQuery
+                        ->where('workspace_id', $workspaceId)
+                        ->where('job_title', 'like', $like));
+            });
+        }
+
+        return $query->orderBy('name');
     }
 
     public function roles()
@@ -111,7 +132,7 @@ class AdminService
 
         $currentRoleIds = $user->assignedRoleIds();
         if ($user->isSuperAdmin()) {
-            $roles = Role::query()->whereIn('id', $currentRoleIds)->get();
+            $roles = Role::query()->whereIn('id', $currentRoleIds)->cursor()->collect();
             $isActive = true;
         }
         $primaryRole = $roles->firstWhere('id', $user->role_id) ?: $roles->first();
@@ -455,7 +476,7 @@ class AdminService
 
     public function auditLog()
     {
-        return Activity::with('user')->where('event', 'like', 'access.%')->latest()->limit(100)->get();
+        return Activity::with('user')->where('event', 'like', 'access.%')->latest()->limit(100)->lazy(100)->collect();
     }
 
     public function securitySettings(): array
@@ -488,6 +509,27 @@ class AdminService
         $this->audit($actor, 'access.security_changed', $current['label'].' '.(!$current['enabled'] ? 'enabled' : 'disabled'), $actor);
     }
 
+
+    /** @return array<int,array{module:string,code:string,label:string,description:string,enabled:bool}> */
+    public function emailServiceSettings(): array
+    {
+        return app(ModuleEmailControlService::class)->settings();
+    }
+
+    public function toggleEmailService(string $module, User $actor): bool
+    {
+        $this->assertAdministrator($actor);
+
+        return app(ModuleEmailControlService::class)->toggle($module, $actor);
+    }
+
+    public function setEmailService(string $module, bool $enabled, User $actor): bool
+    {
+        $this->assertAdministrator($actor);
+
+        return app(ModuleEmailControlService::class)->setEnabled($module, $enabled, $actor);
+    }
+
     public function toggleRule(int $id): void
     {
         $this->assertAdministrator(auth()->user());
@@ -509,7 +551,8 @@ class AdminService
         $roles = Role::query()
             ->where('workspace_id', $this->workspaceId())
             ->whereIn('id', $ids)
-            ->get()
+            ->cursor()
+            ->collect()
             ->keyBy('id');
 
         abort_unless($roles->count() === $ids->count(), 422, 'One or more selected roles are invalid for this workspace.');

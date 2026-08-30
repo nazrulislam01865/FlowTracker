@@ -2,19 +2,36 @@
 
 namespace App\Livewire\Orders;
 
+use App\Actions\Orders\DeleteOrder;
+use App\Actions\Orders\DeleteOrders;
+use App\Exceptions\EmailDeliveryException;
+use App\Queries\Orders\OrderListQuery;
+use App\Queries\Orders\VisibleOrderQuery;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
+use App\Models\Document;
+use App\Models\Task;
 use App\Models\User;
 use App\Services\AccessControlService;
 use App\Services\FilterOptionService;
-use App\Services\JobService;
+use App\Services\DocumentService;
+use App\Services\OrderDetailViewService;
+use App\Services\OrderListPrototypeService;
+use App\Services\OrderTaskSequenceService;
+use App\Services\OrderWorkflowActionService;
+use App\Services\Orders\OrderWorkflowEmailService;
+use App\Services\TaskService;
+use App\Support\AttachmentUpload;
 use Illuminate\Support\Collection;
+use Illuminate\Validation\Rule;
 use Livewire\Attributes\Url;
 use Livewire\Component;
+use Livewire\WithFileUploads;
 use Livewire\WithPagination;
 
 class Index extends Component
 {
     use RefreshesFromWorkspace;
+    use WithFileUploads;
     use WithPagination;
 
     public string $search = '';
@@ -28,9 +45,36 @@ class Index extends Component
     #[Url(as: 'import', history: true, except: 0)]
     public int $importBatchId = 0;
     public string $importBatchLabel = '';
-    public int $perPage = 25;
+    public int $perPage = 10;
+    public string $stageQuick = 'all';
+    public string $stageSupplier = '';
+    public string $stageAssignee = '';
+    public string $stageUrgency = '';
+    public string $stageCarrier = '';
+    public string $stageClient = '';
     public array $selectedOrderIds = [];
     public bool $showBulkDeleteConfirm = false;
+
+    // CHANGE 2026-08-24: phase-wise list actions now reuse the exact Order
+    // Details workflow engine and modal components instead of redirecting to
+    // the Order Details page before the user can perform the required action.
+    public ?int $listActionOrderId = null;
+    public bool $showOrderWorkflowActionModal = false;
+    public ?int $orderWorkflowActionTaskId = null;
+    public string $orderWorkflowActionComment = '';
+    public string $orderWorkflowActionStep = 'main';
+    /** @var array<string,mixed> */
+    public array $orderWorkflowActionPayload = [];
+    public bool $orderWorkflowEmailFallback = false;
+    public string $orderWorkflowEmailFallbackMessage = '';
+    public int $orderWorkflowEmailFallbackAttempts = 0;
+
+    public bool $showOverviewTaskDocumentModal = false;
+    public ?int $overviewTaskDocumentModalTaskId = null;
+    public string $overviewTaskDocumentSource = 'upload';
+    public $overviewTaskDocumentUpload = null;
+    public ?int $overviewTaskExistingDocumentId = null;
+    public string $overviewTaskDocumentNote = '';
 
     public function mount(): void
     {
@@ -48,24 +92,21 @@ class Index extends Component
 
         $this->importBatchId = max(0, (int) request('import', $this->importBatchId));
         if ($this->importBatchId > 0) {
-            $this->importBatchLabel = app(JobService::class)->bulkImportNumber($this->importBatchId) ?? '';
+            $this->importBatchLabel = app(OrderListQuery::class)->bulkImportNumber($this->importBatchId) ?? '';
             if ($this->importBatchLabel === '') {
                 $this->importBatchId = 0;
             }
         }
 
         if ($this->importBatchId > 0) {
-            // The import batch behaves as one dedicated filter. It takes
-            // precedence over any stale query-string filters on entry.
+            // A completed import opens as its own deterministic result set.
             $this->clearListFiltersExcept('importBatch');
-        } elseif ($this->dateFrom !== '' || $this->dateTo !== '') {
-            $this->clearListFiltersExcept('dateRange');
         }
     }
 
     public function updatedSearch(): void
     {
-        $this->clearListFiltersExcept('search');
+        $this->metricFilter = '';
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -73,7 +114,7 @@ class Index extends Component
     public function updatedClient(): void
     {
         $this->client = $this->normalizeNumericFilter($this->client);
-        $this->clearListFiltersExcept('client');
+        $this->metricFilter = '';
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -81,7 +122,8 @@ class Index extends Component
     public function updatedPhase(): void
     {
         $this->phase = $this->normalizeNumericFilter($this->phase);
-        $this->clearListFiltersExcept('phase');
+        $this->metricFilter = '';
+        $this->resetStageSpecificFilters();
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -89,7 +131,27 @@ class Index extends Component
     public function updatedOwner(): void
     {
         $this->owner = $this->normalizeNumericFilter($this->owner);
-        $this->clearListFiltersExcept('owner');
+        $this->metricFilter = '';
+        $this->resetOrderSelection();
+        $this->resetPage();
+    }
+
+    /**
+     * Commit the Orders-list owner filter through an explicit Livewire action.
+     *
+     * The shared remote selector updates its label optimistically. On this
+     * high-traffic list that optimistic Alpine state could survive even when a
+     * deferred/stale Livewire property update lost the race with another list
+     * request, leaving the dropdown showing a user while the query still used
+     * owner = "".  Use a deterministic action for this filter so the visible
+     * selection and the server-side query state are always committed together.
+     */
+    public function applyOwnerFilter(string $property, string|int|null $value = null): void
+    {
+        abort_unless($property === 'owner', 422);
+
+        $this->owner = $this->normalizeNumericFilter((string) ($value ?? ''));
+        $this->metricFilter = '';
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -108,6 +170,37 @@ class Index extends Component
         $this->dateTo = $this->normalizeDateFilter($this->dateTo);
         $this->clearListFiltersExcept('dateRange');
         $this->normalizeDateRange('to');
+        $this->resetOrderSelection();
+        $this->resetPage();
+    }
+
+    public function updatedStageSupplier(): void { $this->stageSupplier = $this->normalizeNumericFilter($this->stageSupplier); $this->resetPage(); }
+    public function updatedStageAssignee(): void { $this->stageAssignee = $this->normalizeNumericFilter($this->stageAssignee); $this->resetPage(); }
+    public function updatedStageUrgency(): void { $this->stageUrgency = $this->normalizeNumericFilter($this->stageUrgency); $this->resetPage(); }
+    public function updatedStageClient(): void { $this->stageClient = $this->normalizeNumericFilter($this->stageClient); $this->resetPage(); }
+    public function updatedStageCarrier(): void { $this->stageCarrier = trim($this->stageCarrier); $this->resetPage(); }
+
+    public function selectStage(?int $phaseId = null): void
+    {
+        $this->phase = $phaseId && $phaseId > 0 ? (string) $phaseId : '';
+        $this->metricFilter = '';
+        $this->resetStageSpecificFilters();
+        $this->resetOrderSelection();
+        $this->resetPage();
+    }
+
+    public function setStageQuick(string $quick): void
+    {
+        $allowed = collect(OrderListPrototypeService::QUICK_FILTERS)->flatMap(fn ($filters) => array_keys($filters));
+        if (! $allowed->contains($quick)) return;
+        $this->stageQuick = $quick;
+        $this->resetOrderSelection();
+        $this->resetPage();
+    }
+
+    public function clearStageSpecificFilters(): void
+    {
+        $this->resetStageSpecificFilters();
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -151,6 +244,7 @@ class Index extends Component
         $this->dateTo = '';
         $this->importBatchId = 0;
         $this->importBatchLabel = '';
+        $this->resetStageSpecificFilters();
         $this->resetOrderSelection();
         $this->resetPage();
     }
@@ -162,7 +256,7 @@ class Index extends Component
 
         // Confirm the Order is inside the current user's visible Order scope
         // before navigating to its finance section.
-        $job = app(JobService::class)->visibleQuery($user)->findOrFail($id);
+        $job = app(OrderListQuery::class)->visible($user, $id);
 
         $this->redirectRoute('jobs.index', [
             'open' => $job->id,
@@ -172,10 +266,7 @@ class Index extends Component
 
     public function deleteOrder(int $id): void
     {
-        $service = app(JobService::class);
-        $job = $service->visibleQuery(auth()->user())->findOrFail($id);
-
-        $service->delete($job, auth()->user());
+        $job = app(DeleteOrder::class)->handle(auth()->user(), $id);
         $this->selectedOrderIds = collect($this->selectedOrderIds)
             ->map(fn ($value) => (int) $value)
             ->reject(fn ($value) => $value === $id)
@@ -189,7 +280,7 @@ class Index extends Component
     public function toggleOrderSelection(int $id): void
     {
         $id = (int) $id;
-        if ($id < 1 || ! app(JobService::class)->visibleQuery(auth()->user())->whereKey($id)->exists()) {
+        if ($id < 1 || ! app(OrderListQuery::class)->exists(auth()->user(), $id)) {
             return;
         }
 
@@ -216,12 +307,7 @@ class Index extends Component
             return;
         }
 
-        $visibleIds = app(JobService::class)
-            ->visibleQuery(auth()->user())
-            ->whereIn('id', $ids)
-            ->pluck('id')
-            ->map(fn ($value) => (int) $value)
-            ->values();
+        $visibleIds = app(OrderListQuery::class)->visibleIds(auth()->user(), $ids);
 
         $selected = collect($this->selectedOrderIds)
             ->map(fn ($value) => (int) $value)
@@ -255,12 +341,7 @@ class Index extends Component
         }
 
         // Keep only Orders that are still inside the user's current visible scope.
-        $visibleIds = app(JobService::class)
-            ->visibleQuery($user)
-            ->whereIn('id', $ids)
-            ->pluck('id')
-            ->map(fn ($value) => (int) $value)
-            ->values();
+        $visibleIds = app(OrderListQuery::class)->visibleIds($user, $ids);
 
         $this->selectedOrderIds = $visibleIds->all();
         $this->showBulkDeleteConfirm = $visibleIds->isNotEmpty();
@@ -287,23 +368,13 @@ class Index extends Component
             return;
         }
 
-        $service = app(JobService::class);
-        $orders = $service->visibleQuery($user)
-            ->whereIn('id', $ids)
-            ->orderBy('id')
-            ->get();
+        $deletedCount = app(DeleteOrders::class)->handle($user, $ids);
 
-        if ($orders->isEmpty()) {
+        if ($deletedCount === 0) {
             $this->resetOrderSelection();
             $this->showBulkDeleteConfirm = false;
             return;
         }
-
-        foreach ($orders as $order) {
-            $service->delete($order, $user);
-        }
-
-        $deletedCount = $orders->count();
         $this->showBulkDeleteConfirm = false;
         $this->resetOrderSelection();
         $this->resetPage();
@@ -314,31 +385,462 @@ class Index extends Component
         );
     }
 
+    /**
+     * CHANGE 2026-08-24:
+     * Execute the phase-list Next Action in place. The descriptor, sequence
+     * validation and workflow mutation all come from the same services used by
+     * Order Details, so list actions cannot drift from the detail-page logic.
+     */
+    public function openListWorkflowAction(int $orderId, int $taskId): void
+    {
+        $task = $this->editableListWorkflowTask($orderId, $taskId, [
+            'job.client',
+            'job.items',
+            'job.phase',
+            'setupTemplate',
+            'documents',
+            'links',
+        ]);
+
+        app(OrderTaskSequenceService::class)->assertStatusActionable($task);
+
+        $workflowActions = app(OrderWorkflowActionService::class);
+        $hasEvidence = $task->documents->isNotEmpty() || $task->links->isNotEmpty();
+        $descriptor = $workflowActions->descriptor($task, $hasEvidence);
+        $interaction = (string) ($descriptor['interaction'] ?? $descriptor['type'] ?? 'modal');
+
+        $this->listActionOrderId = $orderId;
+
+        if ($interaction === 'document') {
+            $this->openListTaskDocumentModal($task);
+            return;
+        }
+
+        if ($interaction === 'direct') {
+            $decision = ($descriptor['key'] ?? null) === 'SHIP_LABEL' ? 'generate' : 'confirm';
+            $workflowActions->perform($task, auth()->user(), $decision);
+            $this->listActionOrderId = null;
+            session()->flash('success', 'Order workflow updated.');
+            return;
+        }
+
+        $this->showOverviewTaskDocumentModal = false;
+        $this->orderWorkflowActionTaskId = $taskId;
+        $this->orderWorkflowActionComment = '';
+        $this->orderWorkflowActionStep = 'main';
+        $this->orderWorkflowActionPayload = $workflowActions->initialPayload($task, $task->job);
+        $this->resetOrderWorkflowEmailFallbackState();
+
+        if (in_array($descriptor['key'] ?? null, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
+            $failure = $this->orderWorkflowEmailFallbackMarker($task);
+            if ($failure) {
+                $this->showOrderWorkflowEmailFallback($descriptor['key'], (int) ($failure['attempts'] ?? 3));
+            }
+        }
+
+        $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+        $this->showOrderWorkflowActionModal = true;
+    }
+
+    public function closeOrderWorkflowAction(): void
+    {
+        $this->showOrderWorkflowActionModal = false;
+        $this->orderWorkflowActionTaskId = null;
+        $this->orderWorkflowActionComment = '';
+        $this->orderWorkflowActionStep = 'main';
+        $this->orderWorkflowActionPayload = [];
+        $this->listActionOrderId = null;
+        $this->resetOrderWorkflowEmailFallbackState();
+        $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+    }
+
+    public function submitOrderWorkflowAction(string $decision = 'confirm'): void
+    {
+        abort_unless($this->listActionOrderId && $this->orderWorkflowActionTaskId, 422);
+
+        $task = $this->editableListWorkflowTask(
+            (int) $this->listActionOrderId,
+            (int) $this->orderWorkflowActionTaskId,
+            ['job.client', 'job.items', 'job.phase', 'setupTemplate'],
+        );
+
+        $workflowActions = app(OrderWorkflowActionService::class);
+        $key = $workflowActions->automationKey($task);
+
+        // Keep the same nested Artwork / issue dialogs used by Order Details.
+        if ($this->orderWorkflowActionStep === 'main' && $decision === 'revise'
+            && in_array($key, ['ART_INTERNAL_REVIEW', 'ART_CLIENT_ERP_DECISION'], true)) {
+            $this->orderWorkflowActionStep = 'revision';
+            $this->orderWorkflowActionComment = '';
+            $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+            return;
+        }
+
+        if ($this->orderWorkflowActionStep === 'main' && $decision === 'issue'
+            && in_array($key, ['PROD_ISSUE', 'QC_CHECK'], true)) {
+            $this->orderWorkflowActionStep = 'issue';
+            $this->orderWorkflowActionComment = '';
+            $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+            return;
+        }
+
+        if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'approved' && $this->orderWorkflowActionStep === 'main') {
+            $this->orderWorkflowActionStep = 'sample';
+            $this->orderWorkflowActionComment = '';
+            $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+            return;
+        }
+
+        if ($key === 'ART_CLIENT_ERP_DECISION' && $this->orderWorkflowActionStep === 'sample') {
+            $decision = $decision === 'sample_yes' ? 'sample' : 'confirm';
+        }
+
+        if (in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
+            $this->resetOrderWorkflowEmailFallbackState();
+            $this->forgetOrderWorkflowEmailFallbackMarker($task);
+        }
+
+        try {
+            $workflowActions->perform(
+                $task,
+                auth()->user(),
+                $decision,
+                $this->orderWorkflowActionComment,
+                $this->orderWorkflowActionPayload,
+            );
+        } catch (EmailDeliveryException $exception) {
+            if (! in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
+                throw $exception;
+            }
+
+            $preview = app(OrderWorkflowEmailService::class)->preview($task, auth()->user());
+            $trackingId = '';
+            if (preg_match('/Reference:\s*([A-Za-z0-9-]+)/', $exception->getMessage(), $matches) === 1) {
+                $trackingId = (string) ($matches[1] ?? '');
+            }
+            $failure = [
+                'task_id' => (int) $task->id,
+                'flow_job_id' => (int) $task->flow_job_id,
+                'handoff_key' => (string) $key,
+                'document_id' => (int) ($preview['document_id'] ?? 0),
+                'document_name' => (string) ($preview['document_name'] ?? ''),
+                'attempts' => 3,
+                'tracking_id' => $trackingId,
+                'failed_at' => now()->toIso8601String(),
+            ];
+            session()->put($this->orderWorkflowEmailFallbackSessionKey($task), $failure);
+
+            $this->showOrderWorkflowEmailFallback($key, 3);
+            $this->resetValidation('orderWorkflowActionEmail');
+            return;
+        }
+
+        if (in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
+            $this->forgetOrderWorkflowEmailFallbackMarker($task);
+        }
+
+        $successMessage = match ($key) {
+            'NEW_SEND_PO_ARTWORK' => 'Purchase Order emailed to the Artwork Team.',
+            'ART_SEND_ORDER_TEAM' => 'Artwork emailed to the Order Team.',
+            default => 'Order workflow updated.',
+        };
+
+        $this->closeOrderWorkflowAction();
+        session()->flash('success', $successMessage);
+    }
+
+    public function completeOrderWorkflowEmailTaskAfterFailure(): void
+    {
+        abort_unless($this->listActionOrderId && $this->orderWorkflowActionTaskId, 422);
+
+        $task = $this->editableListWorkflowTask(
+            (int) $this->listActionOrderId,
+            (int) $this->orderWorkflowActionTaskId,
+            ['job.client', 'job.items', 'job.phase', 'setupTemplate'],
+        );
+
+        $workflowActions = app(OrderWorkflowActionService::class);
+        $key = $workflowActions->automationKey($task);
+        abort_unless(in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true), 422);
+
+        $failure = $this->orderWorkflowEmailFallbackMarker($task);
+        if (! $failure) {
+            $this->resetOrderWorkflowEmailFallbackState();
+            $this->addError('orderWorkflowActionEmail', 'Manual completion is available only after the email service has failed three delivery attempts.');
+            return;
+        }
+
+        $workflowActions->completeEmailHandoffAfterFailure($task, auth()->user(), $failure);
+        $this->forgetOrderWorkflowEmailFallbackMarker($task);
+
+        $attachmentLabel = $key === 'ART_SEND_ORDER_TEAM' ? 'artwork' : 'Purchase Order';
+        $this->closeOrderWorkflowAction();
+        session()->flash('success', 'Task completed manually. Please send the '.$attachmentLabel.' outside FlowTrack using the downloaded file.');
+    }
+
+    private function showOrderWorkflowEmailFallback(?string $key, int $attempts = 3): void
+    {
+        $attempts = max(3, $attempts);
+        $attachmentLabel = $key === 'ART_SEND_ORDER_TEAM' ? 'artwork' : 'Purchase Order';
+
+        $this->orderWorkflowEmailFallback = true;
+        $this->orderWorkflowEmailFallbackAttempts = $attempts;
+        $this->orderWorkflowEmailFallbackMessage = 'Due to some technical issue, the email could not be sent after '.$attempts.' attempts. Please download the '.$attachmentLabel.' and send it manually. After sending it manually, you can complete this task to continue the workflow.';
+    }
+
+    /** @return array<string,mixed>|null */
+    private function orderWorkflowEmailFallbackMarker(Task $task): ?array
+    {
+        $value = session()->get($this->orderWorkflowEmailFallbackSessionKey($task));
+        return is_array($value) ? $value : null;
+    }
+
+    private function forgetOrderWorkflowEmailFallbackMarker(Task $task): void
+    {
+        session()->forget($this->orderWorkflowEmailFallbackSessionKey($task));
+    }
+
+    private function orderWorkflowEmailFallbackSessionKey(Task $task): string
+    {
+        return 'order_workflow_email_fallback.'.(int) auth()->id().'.'.(int) $task->id;
+    }
+
+    private function resetOrderWorkflowEmailFallbackState(): void
+    {
+        $this->orderWorkflowEmailFallback = false;
+        $this->orderWorkflowEmailFallbackMessage = '';
+        $this->orderWorkflowEmailFallbackAttempts = 0;
+    }
+
+    /** Initialize the same file-upload action modal used on Order Details. */
+    private function openListTaskDocumentModal(Task $task): void
+    {
+        $canCreate = auth()->user()->canModule('documents', 'create');
+        $canLink = auth()->user()->canModule('documents', 'link');
+        abort_unless($canCreate || $canLink, 403, 'Your role cannot add documents.');
+
+        $this->showOrderWorkflowActionModal = false;
+        $this->orderWorkflowActionTaskId = null;
+        $this->overviewTaskDocumentModalTaskId = (int) $task->id;
+        $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->resetValidation([
+            'overviewTaskDocumentUpload',
+            'overviewTaskExistingDocumentId',
+            'overviewTaskDocumentNote',
+        ]);
+        $this->showOverviewTaskDocumentModal = true;
+    }
+
+    public function closeOverviewTaskDocumentModal(): void
+    {
+        $this->showOverviewTaskDocumentModal = false;
+        $this->overviewTaskDocumentModalTaskId = null;
+        $this->overviewTaskDocumentSource = 'upload';
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->overviewTaskDocumentNote = '';
+        $this->listActionOrderId = null;
+        $this->resetValidation([
+            'overviewTaskDocumentUpload',
+            'overviewTaskExistingDocumentId',
+            'overviewTaskDocumentNote',
+        ]);
+    }
+
+    public function setOverviewTaskDocumentSource(string $source): void
+    {
+        abort_unless(in_array($source, ['upload', 'existing'], true), 422);
+
+        if ($source === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+        } else {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+        }
+
+        $this->overviewTaskDocumentSource = $source;
+        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskExistingDocumentId = null;
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskExistingDocumentId']);
+    }
+
+    public function saveOverviewTaskDocument(): void
+    {
+        abort_unless($this->listActionOrderId && $this->overviewTaskDocumentModalTaskId, 422);
+
+        $task = $this->editableListWorkflowTask(
+            (int) $this->listActionOrderId,
+            (int) $this->overviewTaskDocumentModalTaskId,
+            ['job', 'documentCategory', 'setupTemplate.documentCategory'],
+        );
+
+        $this->validate([
+            'overviewTaskDocumentSource' => ['required', Rule::in(['upload', 'existing'])],
+            'overviewTaskDocumentNote' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        $note = trim($this->overviewTaskDocumentNote);
+        $note = $note !== '' ? $note : null;
+        $documentService = app(DocumentService::class);
+
+        if ($this->overviewTaskDocumentSource === 'upload') {
+            abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+            $this->validate([
+                'overviewTaskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+            ], [
+                'overviewTaskDocumentUpload.max' => 'The file is too large. Maximum file size is 20 MB.',
+            ]);
+
+            $storeData = [
+                'flow_job_id' => $task->flow_job_id,
+                'client_id' => $task->job?->client_id,
+                'task_id' => $task->id,
+                'note' => $note,
+            ];
+
+            if ($documentService->taskHasRequirement($task)) {
+                $storeData['require_task_pack_requirement'] = true;
+            } else {
+                $storeData['category'] = 'Task attachment';
+            }
+
+            $documentService->store($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+        } else {
+            abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+            $this->validate([
+                'overviewTaskExistingDocumentId' => ['required', 'integer', 'exists:documents,id'],
+            ]);
+
+            $source = app(AccessControlService::class)
+                ->applyDocumentScope(
+                    Document::query()->whereKey((int) $this->overviewTaskExistingDocumentId),
+                    auth()->user(),
+                )
+                ->firstOrFail();
+
+            abort_unless(
+                (int) $source->client_id === (int) $task->job?->client_id,
+                403,
+                'The selected document does not belong to this client.',
+            );
+
+            $documentService->linkExisting($source, $task, auth()->user(), true, $note);
+        }
+
+        // File-backed workflow actions complete/advance through the same hook
+        // as the Order Details page after the document has persisted.
+        app(OrderWorkflowActionService::class)->afterDocumentAdded($task->refresh(), auth()->user());
+
+        $title = (string) $task->title;
+        $this->closeOverviewTaskDocumentModal();
+        session()->flash('success', 'Document added to '.$title.'.');
+    }
+
+    private function editableListWorkflowTask(int $orderId, int $taskId, array $with = []): Task
+    {
+        abort_unless($orderId > 0 && $taskId > 0, 422);
+
+        // Verify the Order itself remains in the current user's list scope.
+        app(OrderListQuery::class)->visible(auth()->user(), $orderId);
+
+        $task = app(TaskService::class)
+            ->visibleQuery(auth()->user())
+            ->with($with)
+            ->where('flow_job_id', $orderId)
+            ->findOrFail($taskId);
+
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+        return $task;
+    }
+
     public function render()
     {
         $user = auth()->user();
         $options = app(FilterOptionService::class);
+        $list = app(OrderListQuery::class);
+        $stages = $list->stages($user);
+        $urgencies = $list->urgencyOptions();
 
-        $service = app(JobService::class);
+        $jobs = $list->paginate($user, [
+            'search' => $this->search,
+            'client_id' => $this->filterId($this->client),
+            'phase_id' => $this->filterId($this->phase),
+            'owner_id' => $this->filterId($this->owner),
+            'metric' => $this->metricFilter,
+            'date_from' => $this->dateFrom,
+            'date_to' => $this->dateTo,
+            'import_id' => $this->importBatchId > 0 ? $this->importBatchId : null,
+            'stage_quick' => $this->stageQuick,
+            'stage_supplier_id' => $this->filterId($this->stageSupplier),
+            'stage_assignee_id' => $this->filterId($this->stageAssignee),
+            'stage_urgency_id' => $this->filterId($this->stageUrgency),
+            'stage_carrier' => $this->stageCarrier,
+            'stage_client_id' => $this->filterId($this->stageClient),
+        ], $stages, $this->perPage);
+
+        $selectedStage = $this->phase !== '' ? $stages->firstWhere('id', (int) $this->phase) : null;
+        $stageSequence = (int) data_get($selectedStage, 'sequence', 0);
+
+        // CHANGE 2026-08-24: hydrate one Order only while an inline list action
+        // modal is open. Normal list renders keep the existing bounded queries.
+        $listActionOrder = null;
+        $listActionTask = null;
+        $listActionContext = [];
+        $listActionWorkflowModal = [];
+        $listActionAvailableDocuments = collect();
+
+        if ($this->listActionOrderId && ($this->showOrderWorkflowActionModal || $this->showOverviewTaskDocumentModal)) {
+            $orderQuery = app(VisibleOrderQuery::class);
+            $listActionOrder = $orderQuery->base($user, (int) $this->listActionOrderId);
+            $orderQuery->loadTab($listActionOrder, $user, 'overview');
+
+            $actionTaskId = $this->showOrderWorkflowActionModal
+                ? $this->orderWorkflowActionTaskId
+                : $this->overviewTaskDocumentModalTaskId;
+
+            $listActionTask = $actionTaskId
+                ? $listActionOrder->tasks->firstWhere('id', (int) $actionTaskId)
+                : null;
+
+            if ($listActionTask) {
+                $listActionContext = app(OrderDetailViewService::class)->build($listActionOrder, $user, $urgencies);
+                $listActionWorkflowModal = data_get(
+                    $listActionContext,
+                    'taskActionModals.'.(int) $listActionTask->id,
+                    [],
+                );
+
+                if ($this->showOverviewTaskDocumentModal && $this->overviewTaskDocumentSource === 'existing') {
+                    $listActionAvailableDocuments = app(DocumentService::class)
+                        ->query($user, ['client' => $listActionOrder->client_id])
+                        ->with(['job:id,job_number', 'task:id,title'])
+                        ->latest('id')
+                        ->limit(60)
+                        ->get();
+                }
+            }
+        }
 
         return view('livewire.orders.index', [
-            'jobs' => $service->paginateOrders(
-                $user,
-                $this->search,
-                $this->perPage,
-                $this->filterId($this->client),
-                $this->filterId($this->phase),
-                null,
-                $this->filterId($this->owner),
-                $this->metricFilter,
-                $this->dateFrom,
-                $this->dateTo,
-                $this->importBatchId > 0 ? $this->importBatchId : null,
-            ),
-            'metrics' => $service->summaryCounts($user),
-            'clientFilterOptions' => $this->selectedFilterOptions($options, $user, 'clients', 'jobs', $this->client),
-            'phaseFilterOptions' => $this->selectedFilterOptions($options, $user, 'phases', 'order-list', $this->phase),
-            'ownerFilterOptions' => $this->selectedFilterOptions($options, $user, 'users', 'order-list-owner', $this->owner),
+            'jobs' => $jobs,
+            'orderRows' => $list->rows($jobs, $urgencies),
+            'orderStages' => $stages,
+            'selectedStage' => $selectedStage,
+            'stageQuickFilters' => OrderListPrototypeService::QUICK_FILTERS[$stageSequence] ?? ['all' => 'All'],
+            'clientFilterOptions' => $options->options($user, 'clients', 'jobs', '', $this->filterId($this->client), 20),
+            'ownerFilterOptions' => $options->options($user, 'users', 'order-list-user-filter', '', $this->filterId($this->owner), 20),
+            'stageAssigneeOptions' => $options->options($user, 'users', 'order-list-user-filter', '', $this->filterId($this->stageAssignee), 20),
+            'stageClientFilterOptions' => $options->options($user, 'clients', 'jobs', '', $this->filterId($this->stageClient), 20),
+            'supplierFilterOptions' => $options->options($user, 'suppliers', 'order-list', '', $this->filterId($this->stageSupplier), 20),
+            'shipmentUrgencyOptions' => $urgencies,
+            'listActionOrder' => $listActionOrder,
+            'listActionTask' => $listActionTask,
+            'listActionContext' => $listActionContext,
+            'listActionWorkflowModal' => $listActionWorkflowModal,
+            'listActionAvailableDocuments' => $listActionAvailableDocuments,
         ]);
     }
 
@@ -422,6 +924,16 @@ class Index extends Component
         return $id
             ? $options->options($user, $type, $context, '', $id, 5)
             : collect();
+    }
+
+    private function resetStageSpecificFilters(): void
+    {
+        $this->stageQuick = 'all';
+        $this->stageSupplier = '';
+        $this->stageAssignee = '';
+        $this->stageUrgency = '';
+        $this->stageCarrier = '';
+        $this->stageClient = '';
     }
 
     private function resetOrderSelection(): void

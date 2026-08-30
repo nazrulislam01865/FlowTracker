@@ -76,18 +76,22 @@
             <p>Search includes file names, linked records and extracted text from supported documents.</p>
         </div>
 
-        <div class="ft-da-filter-row">
+        <x-ui.filter-bar class="ft-da-filter-row" label="Document filters">
             <div class="ft-da-filter-group">
-                <label class="ft-da-select-wrap">
-                    <span class="sr-only">Client</span>
-                    <select wire:model.live="client">
-                        <option value="">All clients</option>
-                        @foreach($clientOptions as $option)
-                            <option value="{{ $option->id }}">{{ $option->name }}</option>
-                        @endforeach
-                    </select>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
-                </label>
+                <x-ui.search-select
+                    class="ft-da-select-wrap ft-da-search-select"
+                    label="Client"
+                    property="client"
+                    type="clients"
+                    context="documents"
+                    :value="$client"
+                    placeholder="All clients"
+                    :initial-options="$clientOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="280"
+                    wire:key="documents-client-filter-{{ $client ?: 'all' }}"
+                />
 
                 <label class="ft-da-select-wrap">
                     <span class="sr-only">Linked record</span>
@@ -102,16 +106,20 @@
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
                 </label>
 
-                <label class="ft-da-select-wrap">
-                    <span class="sr-only">Uploaded by</span>
-                    <select wire:model.live="uploader">
-                        <option value="">Uploaded by</option>
-                        @foreach($uploaderOptions as $option)
-                            <option value="{{ $option->id }}">{{ $option->name }}</option>
-                        @endforeach
-                    </select>
-                    <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
-                </label>
+                <x-ui.search-select
+                    class="ft-da-select-wrap ft-da-search-select"
+                    label="Uploaded by"
+                    property="uploader"
+                    type="users"
+                    context="documents"
+                    :value="$uploader"
+                    placeholder="Uploaded by"
+                    :initial-options="$uploaderOptions"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="280"
+                    wire:key="documents-uploader-filter-{{ $uploader ?: 'all' }}"
+                />
 
                 <label class="ft-da-select-wrap ft-da-date-select">
                     <svg class="ft-da-calendar-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
@@ -139,7 +147,7 @@
                 </select>
                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m8 10 4 4 4-4"/></svg>
             </label>
-        </div>
+        </x-ui.filter-bar>
 
         <div class="ft-da-result-count">{{ number_format($documents->total()) }} documents</div>
 
@@ -366,7 +374,7 @@
 
     @if($showUpload)
         <div class="overlay livewire-overlay" wire:click.self="closeUpload"></div>
-        <div class="modal livewire-modal ft-doc-upload-modal" wire:key="document-upload-modal">
+        <div class="modal livewire-modal ft-doc-upload-modal" data-ft-feedback-scope="form" wire:key="document-upload-modal">
             <div class="modal-head">
                 <div><h2>Upload document</h2><div class="small muted">Link the file to a visible Order and optionally to one of your assigned tasks.</div></div>
                 <button type="button" class="close-btn" wire:click="closeUpload">×</button>
@@ -374,12 +382,20 @@
             <div class="modal-body">
                 <div class="form-grid">
                     <div class="field">
-                        <label>Order *</label>
-                        <select wire:model.live="uploadJobId">
-                            <option value="">Select Order</option>
-                            @foreach($jobs as $j)<option value="{{ $j->id }}">{{ $j->displayOrderNumber() }} · {{ $j->title }}</option>@endforeach
-                        </select>
-                        @error('uploadJobId')<div class="validation-error">{{ $message }}</div>@enderror
+                        <x-ui.search-select
+                            label="Order *"
+                            property="uploadJobId"
+                            type="jobs"
+                            context="documents"
+                            :value="$uploadJobId"
+                            placeholder="Select Order"
+                            :initial-options="$jobs"
+                            :clearable="false"
+                            :menu-width="420"
+                            :fixed-menu="true"
+                            wire:key="document-upload-order-{{ $uploadJobId ?: 'none' }}"
+                        />
+                        @error('uploadJobId')<x-ui.validation-message :message="$message" />@enderror
                     </div>
                     <div class="field">
                         <label>Task</label>
@@ -436,7 +452,7 @@
 
     @if($showRename)
         <div class="overlay livewire-overlay" wire:click.self="closeRename"></div>
-        <div class="modal livewire-modal ft-da-small-modal" wire:key="document-rename-modal">
+        <div class="modal livewire-modal ft-da-small-modal" data-ft-feedback-scope="form" wire:key="document-rename-modal">
             <div class="modal-head"><div><h2>Rename document</h2><div class="small muted">Change the display name without moving the stored file.</div></div><button type="button" class="close-btn" wire:click="closeRename">×</button></div>
             <div class="modal-body"><div class="field"><label>File name *</label><input type="text" wire:model="renameName" maxlength="255">@error('renameName')<div class="validation-error">{{ $message }}</div>@enderror</div></div>
             <div class="modal-foot"><button type="button" class="ghost" wire:click="closeRename">Cancel</button><button type="button" class="primary" wire:click="renameDocument">Rename</button></div>
@@ -445,7 +461,7 @@
 
     @if($showVersionUpload)
         <div class="overlay livewire-overlay" wire:click.self="closeVersionUpload"></div>
-        <div class="modal livewire-modal ft-da-small-modal" wire:key="document-version-upload-modal">
+        <div class="modal livewire-modal ft-da-small-modal" data-ft-feedback-scope="form" wire:key="document-version-upload-modal">
             <div class="modal-head"><div><h2>Upload new version</h2><div class="small muted">The new file is added to the same document history.</div></div><button type="button" class="close-btn" wire:click="closeVersionUpload">×</button></div>
             <div class="modal-body">
                 <label class="upload-zone ft-livewire-upload-zone" data-file-dropzone for="document-version-upload-input">
@@ -465,7 +481,14 @@
             <div class="modal-body">
                 <div class="ft-da-version-list">
                     @forelse($versions as $version)
-                        <div class="ft-da-version-row"><strong>v{{ $version->version }}</strong><span>{{ $version->uploader?->name ?? 'FlowTrack' }}</span><time>{{ \App\Support\UserLocalTime::format($version->created_at, 'M j, Y g:i A') }}</time><span>{{ $formatBytes((int) $version->size) }}</span><a href="{{ route('documents.open', $version) }}" target="_blank" rel="noopener">Open</a></div>
+                        <div class="ft-da-version-row">
+                            <strong>{{ $version->name }} · Version {{ max(1, (int) $version->version) }}</strong>
+                            <em class="ft-da-version-state {{ $loop->first ? 'is-latest' : 'is-archived' }}">{{ $loop->first ? 'Latest' : 'Archived' }}</em>
+                            <span>{{ $version->uploader?->name ?? 'FlowTrack' }}</span>
+                            <time>{{ \App\Support\UserLocalTime::format($version->created_at, 'M j, Y g:i A') }}</time>
+                            <span>{{ $formatBytes((int) $version->size) }}</span>
+                            <a href="{{ route('documents.open', $version) }}" target="_blank" rel="noopener">Open</a>
+                        </div>
                     @empty
                         <div class="ft-da-empty">No versions found.</div>
                     @endforelse

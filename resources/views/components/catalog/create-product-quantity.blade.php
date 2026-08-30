@@ -5,18 +5,20 @@
     'required' => false,
     'activeProductCount' => 0,
     'productSearchResults' => collect(),
+    'productSearchSuppliers' => collect(),
     'productResultTotal' => 0,
     'createProductSearch' => '',
-    'createProductCategoryFilter' => '',
     'createProductShowAllResults' => false,
-    'productCategories' => collect(),
     'selectedProductDetails' => collect(),
-    'canViewProductCategories' => false,
+    'selectedProductSuppliers' => collect(),
+    'supplierSkippedProductIds' => [],
     'canCreateCatalogProduct' => false,
     'wireKey' => 'shared-create-products',
     'rowKeyPrefix' => 'shared-selected-product',
     'requiredErrorField' => null,
     'step' => 2,
+    'supplierRequired' => false,
+    'context' => 'order',
 ])
 
 @php
@@ -24,34 +26,21 @@
     $resultCount = $productSearchResults->count();
     $productSearchValue = trim((string) $createProductSearch);
     $totalUnits = collect($rows)->sum(fn ($item) => (int) ($item['quantity'] ?? 0));
-    $createProductUrl = route('master-data', ['group' => 'product', 'create' => 1]);
     $sectionError = $requiredErrorField ? $errors->first($requiredErrorField) : null;
+    $showCreateProductSuggestion = $productSearchValue !== '' && (int) $productResultTotal === 0;
 @endphp
 
 <section
-    class="section ft-inquiry-create-section ft-create-section ft-order-products-prototype ft-inquiry-prototype"
+    class="section ft-inquiry-create-section ft-create-section ft-order-products-prototype ft-inquiry-prototype ft-product-quantity-prototype-match ft-product-quantity-prototype-exact"
     wire:key="{{ $wireKey }}"
     x-data="{
-        resultsOpen: false,
-        resultsMaxHeight: 420,
-        fitProductResults() {
-            this.$nextTick(() => {
-                const host = this.$refs.productSearchHost;
-                if (!host) return;
-                const resultsTop = host.getBoundingClientRect().top + 42;
-                const available = window.innerHeight - resultsTop - 14;
-                this.resultsMaxHeight = Math.max(120, Math.min(520, available));
-            });
-        },
-        openProductResults() {
-            this.resultsOpen = true;
-            this.fitProductResults();
-        }
+        resultsOpen: @js($productSearchValue !== ''),
+        openProductResults() { this.resultsOpen = true },
+        closeProductResults() { if (!@js($productSearchValue !== '')) this.resultsOpen = false }
     }"
-    x-on:create-order-product-selected.window="resultsOpen = false"
+    x-on:create-order-product-selected.window="resultsOpen = true"
     x-on:focus-create-order-product-search.window="$nextTick(() => { openProductResults(); $refs.productSearch?.focus(); })"
     x-on:open-create-order-product-results.window="$nextTick(() => openProductResults())"
-    x-on:resize.window="if (resultsOpen) fitProductResults()"
 >
     <div class="ft-order-products-title-row">
         <div class="ft-create-section-title ft-order-products-title">
@@ -63,172 +52,127 @@
                 <em>Optional</em>
             @endif
         </div>
-        <p>
-            Search all {{ number_format((int) $activeProductCount) }} products &mdash;
-            {{ $required ? 'at least one product is required.' : 'no category selection required.' }}
-        </p>
+        <p>Search all {{ number_format((int) $activeProductCount) }} products &mdash; the default supplier is shown before selection.</p>
         @if($sectionError)
             <div class="validation-error ft-order-products-section-error">{{ $sectionError }}</div>
         @endif
     </div>
 
-    <div class="ft-order-product-search-label">Search product</div>
-    <div class="ft-order-product-search-row">
-        <div class="ft-order-product-search-host" x-ref="productSearchHost" x-on:click.outside="resultsOpen = false">
-            <div class="ft-order-product-search-input" :class="resultsOpen ? 'is-open' : ''">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-                <input
-                    x-ref="productSearch"
-                    type="search"
-                    wire:model.live.debounce.220ms="createProductSearch"
-                    x-on:focus="openProductResults()"
-                    x-on:keydown.escape="resultsOpen = false"
-                    placeholder="Search product name, product code or reference code"
-                    autocomplete="off"
-                    aria-label="Search product"
-                >
-                <span class="ft-order-product-search-tools">
-                    @if($productSearchValue !== '')
-                        <button type="button" class="ft-order-product-search-clear" wire:click="$set('createProductSearch', '')" x-on:click="openProductResults()" aria-label="Clear product search">&times;</button>
-                    @endif
-                    <span class="ft-order-product-shortcut">&#8984; K</span>
-                </span>
-            </div>
-
-            <div class="ft-order-product-results" x-cloak x-show="resultsOpen" x-transition.origin.top :style="`max-height:${resultsMaxHeight}px`">
-                <div class="ft-order-product-results-head">
-                    <span>Top matches <b>{{ number_format((int) $productResultTotal) }} {{ \Illuminate\Support\Str::plural('result', (int) $productResultTotal) }}</b></span>
-                    @if(!$createProductShowAllResults && $productResultTotal > $resultCount)
-                        <button type="button" wire:click="showAllCreateProductResults">View all results <span>&nearr;</span></button>
-                    @endif
-                </div>
-
-                <div class="ft-order-product-result-list">
-                    @forelse($productSearchResults as $product)
-                        @continue($product->type !== 'product')
-                        @php
-                            $isSelected = in_array((int) $product->id, $selectedIds, true);
-                            $detailText = $product->productCatalogSummary();
-                            $imageUrl = $product->productImageUrl();
-                            $referenceCode = $product->productReferenceCode();
-                            $displayCode = $product->productDisplayCode();
-                            $mainCategory = $product->productMainCategory();
-                            $productCategory = trim((string) ($product->parent?->name ?? ''));
-                            $subCategory = trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category') ?: $detailText));
-                            $classification = collect([$mainCategory, $productCategory, $subCategory])->filter()->unique()->values();
-                        @endphp
-                        <div class="ft-order-product-result {{ $isSelected ? 'is-selected' : '' }}">
-                            <span class="ft-order-product-thumb">
-                                @if($imageUrl)
-                                    <img src="{{ $imageUrl }}" alt="">
-                                @else
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
-                                @endif
-                            </span>
-                            <span class="ft-order-product-result-copy">
-                                <strong>{{ $product->name }}</strong>
-                                <span class="ft-order-product-code-line">Product code: {{ $displayCode }} <i>&bull;</i> Ref: {{ $referenceCode ?: '—' }}</span>
-                                @if($classification->isNotEmpty())
-                                    <small class="ft-order-product-classification">
-                                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
-                                        @foreach($classification as $part)<span>{{ $part }}</span>@if(!$loop->last)<i>&rsaquo;</i>@endif @endforeach
-                                    </small>
-                                @endif
-                            </span>
-                            <button type="button" class="ft-order-product-select-button {{ $isSelected ? 'is-selected' : '' }}" wire:click="selectCreateProduct({{ $product->id }})" @disabled($isSelected)>{{ $isSelected ? 'Selected' : 'Select' }}</button>
-                        </div>
-                    @empty
-                        <div class="ft-order-product-no-results">
-                            <strong>No products found</strong>
-                            <span>Try another product name or SKU.</span>
-                        </div>
-                    @endforelse
-                </div>
-
-                <div class="ft-order-product-results-footer">
-                    <span>Use &uarr; &darr; to navigate &nbsp;&middot;&nbsp; Enter to select</span>
-                    @if($canCreateCatalogProduct)
-                        <a href="{{ $createProductUrl }}">Can't find it? <b>Create new product</b></a>
-                    @endif
-                </div>
-            </div>
+    <label class="ft-order-product-search-label" for="{{ $wireKey }}-search">Search product</label>
+    <div class="ft-order-product-search-host" x-on:click.outside="closeProductResults()">
+        <div class="ft-order-product-search-input" :class="resultsOpen ? 'is-open' : ''">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+            <input
+                id="{{ $wireKey }}-search"
+                x-ref="productSearch"
+                type="search"
+                wire:model.live.debounce.220ms="createProductSearch"
+                x-on:focus="openProductResults()"
+                x-on:input="openProductResults()"
+                x-on:keydown.escape="resultsOpen = false"
+                placeholder="Search product name, product code or reference code"
+                autocomplete="off"
+                aria-label="Search product"
+            >
+            @if($productSearchValue !== '')
+                <button type="button" class="ft-order-product-search-clear" wire:click="$set('createProductSearch', '')" x-on:click="resultsOpen = false" aria-label="Clear product search">&times;</button>
+            @endif
         </div>
 
-        @if($canViewProductCategories)
-            <x-ui.select-filter
-                class="ft-order-product-category-search-filter"
-                label="Product category"
-                property="createProductCategoryFilter"
-                :value="$createProductCategoryFilter"
-                placeholder="All categories"
-                :options="$productCategories"
-                :clearable="true"
-                :hide-label="true"
-                :fixed-menu="true"
-                :menu-width="320"
-                search-placeholder="Search product category…"
-            />
-        @endif
+        <div class="ft-order-product-results" x-cloak x-show="resultsOpen" x-transition.opacity.duration.120ms>
+            <div class="ft-order-product-results-head">
+                <span>Top matches <i>&middot;</i> {{ number_format((int) $resultCount) }} {{ \Illuminate\Support\Str::plural('result', (int) $resultCount) }}</span>
+                @if(!$createProductShowAllResults && $productResultTotal > 0)
+                    <button type="button" wire:click="showAllCreateProductResults">View all results <span>&nearr;</span></button>
+                @endif
+            </div>
 
-        <div class="ft-order-product-top-actions">
-            @if($canCreateCatalogProduct)
-                <a href="{{ $createProductUrl }}" class="ft-order-product-action-link"><span>+</span> Create Product</a>
-            @endif
+            <div class="ft-order-product-result-list">
+                @forelse($productSearchResults as $product)
+                    @continue($product->type !== 'product')
+                    @php
+                        $resultSupplier = $productSearchSuppliers->get((int) $product->id);
+                        $supplierWords = preg_split('/\s+/', trim((string) ($resultSupplier?->name ?? ''))) ?: [];
+                        $supplierInitials = strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
+                        $previewPrice = $product->productPriceForQuantity(1000);
+                        $leadDays = (int) (data_get($product->metadata, 'lead_time_days') ?: data_get($product->metadata, 'supplier_lead_time_days') ?: 0);
+                        $isPreferred = (bool) (data_get($product->metadata, 'supplier_preferred') ?: data_get($product->metadata, 'preferred_supplier'));
+                        $referenceCode = $product->productReferenceCode();
+                        $displayCode = $product->productDisplayCode();
+                        $imageUrl = $product->productImageUrl();
+                    @endphp
+                    <div class="ft-order-product-result">
+                        <span class="ft-order-product-thumb">
+                            @if($imageUrl)
+                                <img src="{{ $imageUrl }}" alt="">
+                            @else
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
+                            @endif
+                        </span>
+                        <span class="ft-order-product-result-copy">
+                            <strong>{{ $product->name }}</strong>
+                            <span class="ft-order-product-code-line">Product code {{ $displayCode }} <i>&middot;</i> Ref {{ $referenceCode ?: '—' }}</span>
+                            <small class="ft-order-product-result-supplier">
+                                @if($resultSupplier)
+                                    <b class="ft-order-product-result-supplier-badge">{{ $supplierInitials ?: 'S' }}</b>
+                                    <strong>{{ $resultSupplier->name }}</strong>
+                                    <span>Default</span>
+                                    @if($leadDays > 0)<i>&middot;</i><span>{{ number_format($leadDays) }} days</span>@endif
+                                    @if($isPreferred)<i>&middot;</i><span>Preferred</span>@endif
+                                    @if($previewPrice !== null)<i>&middot;</i><span>${{ number_format((float) $previewPrice, 2) }} last price</span>@endif
+                                @else
+                                    <b class="ft-order-product-result-supplier-badge is-empty">—</b>
+                                    <strong>No default supplier</strong>
+                                @endif
+                            </small>
+                        </span>
+                        <button type="button" class="ft-order-product-select-button {{ in_array((int) $product->id, $selectedIds, true) ? 'is-selected' : '' }}" wire:click="selectCreateProduct({{ $product->id }})">Select</button>
+                    </div>
+                @empty
+                    <div class="ft-order-product-no-results {{ $showCreateProductSuggestion && $canCreateCatalogProduct ? 'has-create-action' : '' }}">
+                        <span class="ft-order-product-empty-icon" aria-hidden="true">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/><path d="M11 8v6M8 11h6"/></svg>
+                        </span>
+                        <strong>{{ $showCreateProductSuggestion ? 'No matching product found' : 'No products found' }}</strong>
+                        <span>{{ $showCreateProductSuggestion ? 'Nothing in the catalog matches “'.$productSearchValue.'”.' : 'Try another product name, product code or reference code.' }}</span>
+                        @if($showCreateProductSuggestion && $canCreateCatalogProduct)
+                            <button type="button" class="ft-order-product-create-cta" wire:click="openCreateOrderProductModalFromSearch">
+                                <span class="ft-order-product-create-cta-icon" aria-hidden="true">+</span>
+                                <span class="ft-order-product-create-cta-copy">
+                                    <strong>Create “{{ $productSearchValue }}”</strong>
+                                    <small>Add it to the catalog and this Order</small>
+                                </span>
+                                <svg class="ft-order-product-create-cta-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="m9 18 6-6-6-6"/></svg>
+                            </button>
+                        @endif
+                    </div>
+                @endforelse
+            </div>
         </div>
     </div>
 
     @if(count($rows))
-        <div class="ft-order-selected-products">
-            <div class="ft-order-selected-products-title">Selected products ({{ count($rows) }})</div>
-            <div class="ft-order-selected-products-table">
-                <div class="ft-order-selected-products-head">
-                    <span>Product</span><span>Quantity</span><span>Unit price <small>(optional)</small></span><span>Notes</span><span>Action</span>
-                </div>
+        <div class="ft-order-selected-products ft-order-selected-products--cards">
+            <div class="ft-order-selected-product-cards">
                 @foreach($rows as $index => $item)
                     @php
-                        $detail = $selectedProductDetails->get((int) ($item['product_id'] ?? 0));
-                        $itemImage = $detail?->productImageUrl();
-                        $itemCode = (string) ($detail?->code ?? '');
-                        $itemCategory = (string) ($detail?->parent?->name ?? ($item['category'] ?? ''));
-                        $itemName = (string) ($detail?->name ?? ($item['product'] ?? 'Product'));
-                        $quantityError = $errors->first("{$rowsProperty}.{$index}.quantity");
-                        $unitPriceError = $errors->first("{$rowsProperty}.{$index}.unit_price");
-                        $notesError = $errors->first("{$rowsProperty}.{$index}.notes");
-                        $productError = $errors->first("{$rowsProperty}.{$index}.product");
+                        $productId = (int) ($item['product_id'] ?? 0);
+                        $detail = $selectedProductDetails->get($productId);
+                        $supplier = $selectedProductSuppliers->get($productId);
+                        $supplierSkipped = in_array($productId, array_map('intval', (array) $supplierSkippedProductIds), true);
                     @endphp
-                    <div class="ft-order-selected-product-row" wire:key="{{ $rowKeyPrefix }}-{{ $item['product_id'] ?? $index }}-{{ $index }}">
-                        <div class="ft-order-selected-product-info">
-                            <span class="ft-order-product-thumb">
-                                @if($itemImage)
-                                    <img src="{{ $itemImage }}" alt="">
-                                @else
-                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="M20 12 12 20 4 12V4h8l8 8Z"/><circle cx="8.5" cy="8.5" r="1.2"/></svg>
-                                @endif
-                            </span>
-                            <span>
-                                <strong>{{ $itemName }}</strong>
-                                <small>SKU: {{ $itemCode ?: 'N/A' }} <i>&bull;</i> {{ $itemCategory ?: 'Uncategorized' }}</small>
-                            </span>
-                        </div>
-                        <div class="ft-order-product-quantity-control">
-                            <button type="button" wire:click="decrementCreateProductQuantity({{ $index }})" aria-label="Decrease quantity">&minus;</button>
-                            <input type="number" min="1" max="999999999" wire:model.live.debounce.300ms="{{ $rowsProperty }}.{{ $index }}.quantity" aria-label="Quantity for {{ $itemName }}">
-                            <button type="button" wire:click="incrementCreateProductQuantity({{ $index }})" aria-label="Increase quantity">+</button>
-                            @if($quantityError)<small class="validation-error">{{ $quantityError }}</small>@endif
-                        </div>
-                        <div class="ft-order-product-unit-price">
-                            <input type="number" min="0" max="999999999999.99" step="0.01" wire:model.blur="{{ $rowsProperty }}.{{ $index }}.unit_price" placeholder="0.00" aria-label="Unit price for {{ $itemName }}">
-                            @if($unitPriceError)<small class="validation-error">{{ $unitPriceError }}</small>@endif
-                        </div>
-                        <div class="ft-order-product-notes">
-                            <input type="text" maxlength="2000" wire:model.blur="{{ $rowsProperty }}.{{ $index }}.notes" placeholder="Optional notes..." aria-label="Notes for {{ $itemName }}">
-                            @if($notesError)<small class="validation-error">{{ $notesError }}</small>@endif
-                            @if($productError)<small class="validation-error">{{ $productError }}</small>@endif
-                        </div>
-                        <button type="button" class="ft-order-selected-product-remove" wire:click="{{ $removeMethod }}({{ $index }})" aria-label="Remove {{ $itemName }}">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M4 7h16M9 7V4h6v3M8 10v7M12 10v7M16 10v7M6 7l1 14h10l1-14"/></svg>
-                        </button>
-                    </div>
+                    <x-catalog.create-product-card
+                        :item="$item"
+                        :detail="$detail"
+                        :supplier="$supplier"
+                        :supplier-skipped="$supplierSkipped"
+                        :supplier-required="$supplierRequired"
+                        :context="$context"
+                        :index="$index"
+                        :rows-property="$rowsProperty"
+                        :remove-method="$removeMethod"
+                        :row-key-prefix="$rowKeyPrefix"
+                    />
                 @endforeach
             </div>
         </div>

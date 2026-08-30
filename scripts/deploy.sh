@@ -24,6 +24,14 @@ php artisan migrate --force
 if [[ ! -L public/storage && ! -e public/storage ]]; then
     php artisan storage:link
 fi
+
+# Phase 14 release gate. In horizontal mode this fails the deployment before
+# traffic is returned if Redis, MySQL, queue connectivity or shared storage
+# is unavailable/misconfigured. The storage sentinel is safe and idempotent.
+if php artisan list --raw | grep -q '^flowtrack:infrastructure:check'; then
+    php artisan flowtrack:infrastructure:check --prepare-storage
+fi
+
 php artisan optimize
 php artisan queue:restart
 

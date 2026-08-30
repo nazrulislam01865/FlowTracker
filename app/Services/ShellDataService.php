@@ -15,6 +15,9 @@ class ShellDataService
                 'open_my_work' => $user->canModule('tasks', 'view')
                     ? app(MyWorkService::class)->openTaskCount($user)
                     : 0,
+                'cancelled_orders' => $user->canModule('jobs', 'view')
+                    ? app(CancelledOrderService::class)->sidebarCount($user)
+                    : 0,
             ];
         });
     }

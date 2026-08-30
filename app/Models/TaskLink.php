@@ -7,7 +7,11 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class TaskLink extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'task_id',
+        'created_by',
+        'url',
+    ];
 
     public function task(): BelongsTo
     {

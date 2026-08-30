@@ -50,7 +50,7 @@
         ->map->count();
 @endphp
 <div class="ft-finance-modal-backdrop" wire:key="create-invoice-modal" wire:click.self="closeCreateInvoice">
-    <section class="ft-finance-modal ft-create-invoice-modal" role="dialog" aria-modal="true" aria-labelledby="createInvoiceTitle">
+    <section class="ft-finance-modal ft-create-invoice-modal" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="createInvoiceTitle">
         <header class="ft-finance-modal-head">
             <div><h2 id="createInvoiceTitle">Create invoice</h2><p>Create and issue an invoice for this order.</p></div>
             <button type="button" wire:click="closeCreateInvoice" aria-label="Close">×</button>

@@ -17,7 +17,7 @@
     });
 @endphp
 <div class="ft-category-editor-backdrop" wire:click.self="closeCategoryEditor" wire:keydown.escape="closeCategoryEditor">
-    <section class="ft-category-editor" role="dialog" aria-modal="true" aria-labelledby="ft-category-editor-title" x-data x-on:click.stop>
+    <section class="ft-category-editor" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="ft-category-editor-title" x-data x-on:click.stop>
         <header class="ft-category-editor-head">
             <div>
                 <h2 id="ft-category-editor-title">{{ $readOnly ? 'View' : ($editing ? 'Edit' : 'Add') }} {{ $titleLevel }}</h2>
@@ -46,7 +46,7 @@
                         <span>Main category <i>*</i></span>
                         <div class="ft-category-editor-readonly">{{ optional(collect($mainCategories)->firstWhere('id', (int)$selectedParentId))->name ?? '—' }}</div>
                     @else
-                        <x-ui.select-filter
+                        <x-ui.search-select
                             class="ft-product-search-select ft-taxonomy-search-select"
                             label="Main category"
                             property="categoryEditorParentId"
@@ -68,7 +68,7 @@
                         <span>Product category <i>*</i></span>
                         <div class="ft-category-editor-readonly">{{ optional(collect($productCategories)->firstWhere('id', (int)$selectedParentId))->name ?? '—' }}</div>
                     @else
-                        <x-ui.select-filter
+                        <x-ui.search-select
                             class="ft-product-search-select ft-taxonomy-search-select"
                             label="Product category"
                             property="categoryEditorParentId"

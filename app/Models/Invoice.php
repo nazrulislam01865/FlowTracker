@@ -8,7 +8,37 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Invoice extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_job_id',
+        'sequence',
+        'invoice_number',
+        'type',
+        'currency',
+        'issue_date',
+        'due_date',
+        'billing_contact_id',
+        'billing_contact_name',
+        'billing_contact_email',
+        'purchase_order_reference',
+        'notes',
+        'supporting_document_path',
+        'supporting_document_name',
+        'subtotal',
+        'tax_rate',
+        'tax_amount',
+        'previously_invoiced',
+        'total',
+        'status',
+        'sent_at',
+        'emailed_at',
+        'created_by',
+        'pdf_path',
+        'pdf_name',
+        'pdf_generated_at',
+        'company_snapshot',
+        'client_snapshot',
+        'pdf_layout_version',
+    ];
 
     protected function casts(): array
     {

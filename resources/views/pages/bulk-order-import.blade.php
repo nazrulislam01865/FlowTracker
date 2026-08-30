@@ -80,7 +80,7 @@
                     <span class="ftbi-section-number">2</span>
                     <div>
                         <h2>Template rules</h2>
-                        <p>Client ID, Order Title, Shipping Address and Postal Code are mandatory.</p>
+                        <p>Client ID, Client Reference Number, Shipping Address, Postal Code and Product ID are mandatory.</p>
                     </div>
                 </div>
 
@@ -91,7 +91,7 @@
                     </div>
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
-                        <div><strong>Optional Product</strong><span>Product ID may be blank. When Product ID is supplied, FlowTrack validates it against active Products and uses Product Quantity, defaulting to 1 when quantity is blank.</span></div>
+                        <div><strong>Required Product</strong><span>Product ID is required so FlowTrack can generate the Order Title automatically from the Client Reference Number and Product name. Product Quantity defaults to 1 when left blank.</span></div>
                     </div>
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
@@ -99,13 +99,13 @@
                     </div>
                     <div class="ftbi-client-workflow-note">
                         <span class="ftbi-auto-icon" aria-hidden="true">✓</span>
-                        <div><strong>Urgency values</strong><span>Production Urgency and Shipment Urgent accept Normal, Urgent or Super Urgent. Blank is treated as Normal.</span></div>
+                        <div><strong>Schedule &amp; urgency</strong><span>Order Hand Date is optional. Shipment Urgency accepts Normal, Urgent or Super Urgent; blank is treated as Normal.</span></div>
                     </div>
                 </div>
 
                 <details class="ftbi-source-help">
                     <summary>Which fields are required?</summary>
-                    <p><b>Client ID *</b>, <b>Order Title *</b>, <b>Shipping Address *</b> and <b>Postal Code *</b> are mandatory. Phone Number is optional. Repeat Order No. becomes required only when Repeat Order? is Yes.</p>
+                    <p><b>Client ID *</b>, <b>Client Reference Number *</b>, <b>Shipping Address *</b>, <b>Postal Code *</b> and <b>Product ID *</b> are mandatory. Order Title is generated automatically. Order Hand Date and Phone Number are optional. Previous Reference Number becomes required only when Repeat Order? is Yes.</p>
                 </details>
 
                 <details class="ftbi-test-tools">
@@ -149,13 +149,13 @@
 
         <div class="tablewrap">
             <table>
-                <thead><tr><th>Row</th><th>Order</th><th>Client</th><th>Repeat</th><th>Product / Qty</th><th>Delivery</th><th>Urgency</th><th>Workflow</th><th>Validation</th></tr></thead>
+                <thead><tr><th>Row</th><th>Order</th><th>Client</th><th>Repeat</th><th>Product / Qty</th><th>Order hand date</th><th>Shipment urgency</th><th>Workflow</th><th>Validation</th></tr></thead>
                 <tbody id="rows"></tbody>
             </table>
         </div>
 
         <div class="footerbar">
-            <div class="checks"><span>✓ Client &amp; Product IDs validated</span><span>✓ Required shipping details validated</span><span>✓ Dates normalized</span><span>✓ Urgency mapped from Master Data</span></div>
+            <div class="checks"><span>✓ Client &amp; Product IDs validated</span><span>✓ Client Reference Number validated</span><span>✓ Required shipping details validated</span><span>✓ Order hand date normalized</span><span>✓ Shipment urgency mapped from Master Data</span></div>
             <div class="ftbi-footer-actions">
                 <a class="btn ftbi-compact-action ftbi-cancel-btn" href="{{ route('orders.bulk-import') }}">Cancel</a>
                 <button class="btn primary ftbi-import-btn ftbi-compact-action" type="button" id="importBtn">Import ready orders</button>
@@ -186,13 +186,11 @@
                 <span class="ftbi-loader-mark" aria-hidden="true"></span>
                 <div>
                     <b id="loadTitle">Validating rows…</b>
-                    <div class="sub" id="loadText">Checking clients, products, repeat-order rules, dates, urgencies and workflows. No orders have been created yet.</div>
+                    <div class="sub" id="loadText">Checking clients, references, products, repeat-order rules, order hand dates, shipment urgency and workflows. No orders have been created yet.</div>
                 </div>
             </div>
             <div class="bar"><i id="progress"></i></div>
         </div>
     </div>
 </div>
-<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-<script src="/js/flowtrack-bulk-order-import.js?v=20260820-shipping-required-1"></script>
 @endsection

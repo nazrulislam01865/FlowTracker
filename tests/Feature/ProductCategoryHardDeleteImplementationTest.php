@@ -8,7 +8,7 @@ class ProductCategoryHardDeleteImplementationTest extends TestCase
 {
     public function test_category_deletion_is_previewed_and_executes_as_hard_delete(): void
     {
-        $component = file_get_contents(app_path('Livewire/MasterData/Index.php'));
+        $component = \Tests\Support\AdministrationPhase7Source::masterData();
         $service = file_get_contents(app_path('Services/ProductCategoryDeletionService.php'));
         $bulk = file_get_contents(resource_path('views/components/catalog/category-bulk-actions.blade.php'));
         $menu = file_get_contents(resource_path('views/components/catalog/category-action-menu.blade.php'));

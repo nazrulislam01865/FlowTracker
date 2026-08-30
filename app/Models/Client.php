@@ -9,7 +9,48 @@ use Illuminate\Database\Eloquent\Relations\HasManyThrough;
 
 class Client extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'name',
+        'code',
+        'country',
+        'contact_name',
+        'email',
+        'phone',
+        'account_manager_id',
+        'preferred_language',
+        'outstanding_balance',
+        'notes',
+        'is_active',
+        'office_address',
+        'legal_business_name',
+        'website',
+        'preferred_currency',
+        'contact_job_title',
+        'office_address_line1',
+        'office_suite',
+        'office_city',
+        'office_state',
+        'office_zip',
+        'billing_same_as_office',
+        'billing_address_line1',
+        'billing_suite',
+        'billing_city',
+        'billing_state',
+        'billing_zip',
+        'billing_country',
+        'ein_tax_id',
+        'sales_tax_status',
+        'payment_terms',
+        'po_required',
+        'is_draft',
+        'logo_path',
+        'created_by',
+        'archived_at',
+        'archived_by',
+        'purged_at',
+        'purged_by',
+        'billing_recipient',
+    ];
 
     protected function casts(): array
     {

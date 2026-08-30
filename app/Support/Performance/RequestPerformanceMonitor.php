@@ -2,6 +2,7 @@
 
 namespace App\Support\Performance;
 
+use App\Services\Observability\OperationsMetrics;
 use Illuminate\Database\Events\QueryExecuted;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
@@ -10,6 +11,7 @@ use Throwable;
 
 class RequestPerformanceMonitor
 {
+    public function __construct(private readonly OperationsMetrics $operationsMetrics) {}
     private float $startedAt = 0.0;
     private int $queryCount = 0;
     private float $queryTimeMs = 0.0;
@@ -171,6 +173,7 @@ class RequestPerformanceMonitor
         }
 
         $this->writeRequestLog($durationMs, $payload);
+        $this->operationsMetrics->recordRequest($payload);
         $this->activeRequest = false;
     }
 
@@ -184,6 +187,7 @@ class RequestPerformanceMonitor
         $payload['exception_message'] = $exception->getMessage();
 
         Log::warning('FlowTrack failed request performance', $payload);
+        $this->operationsMetrics->recordRequest($payload, true);
         $this->activeRequest = false;
     }
 

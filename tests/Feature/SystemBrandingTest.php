@@ -33,9 +33,10 @@ class SystemBrandingTest extends TestCase
         $this->assertNotNull($path);
         Storage::disk('public')->assertExists($path);
 
-        $this->get('/branding-assets/logo/'.basename($path))
-            ->assertOk()
-            ->assertHeader('Cache-Control', 'public, max-age=31536000, immutable');
+        $response = $this->get('/branding-assets/logo/'.basename($path))
+            ->assertOk();
+
+        $this->assertCacheControlDirectives($response, ['public', 'max-age=31536000', 'immutable']);
     }
 
     public function test_admin_can_upload_favicon_and_login_uses_it(): void

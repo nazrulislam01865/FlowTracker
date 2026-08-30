@@ -1,7 +1,7 @@
 @foreach($inquiryGroups as $group)
-    <article class="order-group" wire:key="my-work-inquiry-{{ $group['id'] }}" x-data="{ open: false }">
+    <article class="order-group" wire:key="my-work-inquiry-{{ $group['id'] }}" x-data="{ open: true }">
         <header class="order-head">
-            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" x-bind:aria-label="open ? 'Collapse Order' : 'Expand Order'"><span x-text="open ? '⌄' : '›'">›</span></button>
+            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
             <span class="order-identity">
                 @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
                 <span class="order-title">{{ $group['title'] }}</span>
@@ -13,7 +13,7 @@
             <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
         </header>
 
-        <div class="task-rows" x-cloak x-show="open">
+        <div class="task-rows" x-show="open">
             @foreach($group['tasks'] as $task)
                 <div
                     class="task-row"
@@ -31,11 +31,11 @@
                             select.disabled=true;
                             try{
                                 const result=await $wire.updateInquiryTaskStatus({{ $task['id'] }},next,this.version);
-                                if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
+                                if(!result?.ok){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);return;}
                                 this.currentStatus=result.status||next;
                                 this.version=result.version||this.version;
                                 if(result.refresh)await $wire.$refresh();
-                            }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
+                            }catch(error){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);}
                             finally{this.saving=false;select.disabled=false;}
                         }
                     }"
@@ -52,7 +52,7 @@
                     </span>
                     <span
                         class="due-editor ft-inline-edit-shell {{ $task['dueTone'] }}"
-                        x-data="window.FlowTrackInlineEdit({ key: @js('my-work-inquiry-task-'.$task['id'].'-due-date'), label: 'inquiry task due date', value: @js($task['dueValue']), display: @js($task['dueDisplay']) })"
+                        x-data="window.FlowTrack.ui.inlineEdit({ key: @js('my-work-inquiry-task-'.$task['id'].'-due-date'), label: 'inquiry task due date', value: @js($task['dueValue']), display: @js($task['dueDisplay']) })"
                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     >
                         <span x-show="!editing" x-text="display" class="ft-task-inline-display">{{ $task['dueDisplay'] }}</span>
@@ -65,7 +65,7 @@
                             <x-ui.inline-save-state compact />
                         @endif
                     </span>
-                    <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
+                    <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrack.ui.masterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
                         @php $inquiryTaskStatusOptions = app(\App\Services\InquiryService::class)->openTaskStatusOptions((string) $task['status']); @endphp
                         @foreach($inquiryTaskStatusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('inquiry_task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                     </select>

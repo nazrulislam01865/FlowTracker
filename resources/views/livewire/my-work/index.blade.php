@@ -1,6 +1,6 @@
 <div
     id="my-work-app"
-    x-data="{ metrics: @js($metrics), groupsExpanded: false }"
+    x-data="{ metrics: @js($metrics), groupsExpanded: true }"
     x-on:my-work-metrics.window="metrics = $event.detail"
 >
 
@@ -12,7 +12,7 @@
                 @if($sourceFilter === 'inquiries' && $statusFilter !== '')
                     Inquiry tasks matching the selected dashboard status filter.
                 @else
-                    {{ $administratorView ? 'All Order tasks, grouped by Order and ranked by what needs action first.' : 'Tasks assigned to you or from Orders you created, grouped by Order and ranked by what needs action first.' }}
+                    Only the current active task is shown under each Order. It is visible to the task assignee, the Order creator, users with applicable access, and Admin/Super Admin.
                 @endif
             </p>
         </div>
@@ -69,16 +69,19 @@
     </section>
     @else
 
-    <section class="work-view" aria-busy="false">
-        <div class="metrics ft-summary-card-grid" aria-label="My Task summary filters">
-            <x-ui.summary-card label="Created Today" :value="$metrics['createdToday'] ?? 0" value-expression="metrics.createdToday ?? '—'" icon="created" tone="blue" caption="Tasks created today" :active="$quick === 'createdToday'" wire:click="setMetricFilter('createdToday')" aria-pressed="{{ $quick === 'createdToday' ? 'true' : 'false' }}" />
-            <x-ui.summary-card label="Not Started" :value="$metrics['notStarted'] ?? 0" value-expression="metrics.notStarted ?? '—'" icon="not-started" tone="slate" caption="Waiting for first action" :active="$quick === 'notStarted'" wire:click="setMetricFilter('notStarted')" aria-pressed="{{ $quick === 'notStarted' ? 'true' : 'false' }}" />
-            <x-ui.summary-card label="In Progress" :value="$metrics['inProgress'] ?? 0" value-expression="metrics.inProgress ?? '—'" icon="in-progress" tone="blue" caption="Work currently underway" :active="$quick === 'inProgress'" wire:click="setMetricFilter('inProgress')" aria-pressed="{{ $quick === 'inProgress' ? 'true' : 'false' }}" />
-            <x-ui.summary-card label="Due This Week" :value="$metrics['dueThisWeek'] ?? 0" value-expression="metrics.dueThisWeek ?? '—'" icon="due-week" tone="amber" caption="Tasks due this week" :active="$quick === 'dueThisWeek'" wire:click="setMetricFilter('dueThisWeek')" aria-pressed="{{ $quick === 'dueThisWeek' ? 'true' : 'false' }}" />
-            <x-ui.summary-card label="Completed This Week" :value="$metrics['completedThisWeek'] ?? 0" value-expression="metrics.completedThisWeek ?? '—'" icon="completed" tone="green" caption="Finished this week" :active="$quick === 'completedThisWeek'" wire:click="setMetricFilter('completedThisWeek')" aria-pressed="{{ $quick === 'completedThisWeek' ? 'true' : 'false' }}" />
-            <x-ui.summary-card label="Needs Attention" :value="$metrics['attention'] ?? 0" value-expression="metrics.attention ?? '—'" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$quick === 'attention'" wire:click="setMetricFilter('attention')" aria-pressed="{{ $quick === 'attention' ? 'true' : 'false' }}" />
-        </div>
+    {{-- Keep the current workflow-stage overview exactly as the current My Tasks design.
+         Only the table/filter area below is restored to the previous design. --}}
+    <x-orders.workflow-stage-overview
+        :stages="$taskStages"
+        :selected-stage-value="$phaseFilter"
+        mode="wire-filter"
+        filter-method="setPhaseFilter"
+        title="My tasks by workflow stage"
+        description="Click a stage to filter the tasks below on this page."
+        count-label="Open tasks"
+    />
 
+    <section class="work-view" aria-busy="false">
         <div class="toolbar ft-list-filter-bar">
             <div class="toolbar-primary">
                 <label class="search-wrap">
@@ -86,47 +89,109 @@
                     <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search tasks, Orders, clients or flags" aria-label="Search my work">
                     @if($search !== '')<button class="clear" type="button" wire:click="clearSearch">Clear</button>@endif
                 </label>
-                <div class="phase-filters" aria-label="Filter by Order workflow phase">
-                    @foreach($phaseOptions as $phaseOption)
-                        <button
-                            type="button"
-                            class="phase-toggle {{ $phaseFilter === $phaseOption ? 'active' : '' }}"
-                            wire:click="setPhaseFilter({{ \Illuminate\Support\Js::from($phaseOption) }})"
-                            aria-pressed="{{ $phaseFilter === $phaseOption ? 'true' : 'false' }}"
-                            title="{{ $phaseOption }}"
-                        >
-                            <span class="phase-check" aria-hidden="true">✓</span>
-                            <span>{{ $phaseOption }}</span>
-                        </button>
-                    @endforeach
-                </div>
-            </div>
-            <div class="toolbar-secondary">
-                <div class="quick-filters">
-                    <button type="button" class="chip {{ $quick === 'mentions' ? 'active' : '' }}" wire:click="setQuick('{{ $quick === 'mentions' ? 'my_tasks' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $metrics['mentions'] ?? '—' }}</span>)</button>
-                    @if($statusFilter !== '')
-                        <button type="button" class="chip active" wire:click="clearStatusFilter" title="Clear dashboard status filter">Status: {{ $statusFilter }} ×</button>
-                    @endif
-                </div>
-                <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
-                    <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed tasks">
-                    <span class="completed-check" aria-hidden="true">✓</span>
-                    <span>Hide completed</span>
-                </label>
-                <select class="sort" wire:model.live="sort" aria-label="Sort work">
-                    <option value="action">Sort: Action priority</option>
-                    <option value="due">Sort: Due soon</option>
-                    <option value="job">Sort: Order number</option>
-                </select>
-                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $phaseFilter === '' && $statusFilter === '' && $quick === 'my_tasks' && !$hideCompleted)>Clear filters</button>
             </div>
         </div>
+
+        @if($phaseFilter !== '')
+            @php
+                $hiddenTaskStatusFilters = [
+                    '', 'not start', 'not started', 'not ready', 'locked', 'skipped',
+                    'not applicable', 'n/a', 'completed', 'cancelled', 'canceled',
+                    'waiting for sample approval', 'waiting for qc issue resolution',
+                ];
+                $stageTaskStatusOptions = collect($statusOptions)
+                    ->filter(fn ($statusOption) => ! in_array(mb_strtolower(trim((string) $statusOption)), $hiddenTaskStatusFilters, true))
+                    ->values();
+                $selectedMyTaskStage = collect($taskStages ?? [])->first(
+                    fn ($stage) => mb_strtolower(trim((string) data_get($stage, 'name'))) === mb_strtolower(trim($phaseFilter))
+                );
+                $selectedMyTaskStageSequence = (int) data_get($selectedMyTaskStage, 'sequence', 0);
+            @endphp
+            <div class="ft-order-list-v5 my-task-stage-filter-parity">
+                <div class="stage-inline-controls" aria-label="{{ $phaseFilter }} task filters">
+                    <span class="stage-inline-label">{{ $phaseFilter }}</span>
+                    <div class="stage-inline-quick" role="group" aria-label="Task status">
+                        <button
+                            type="button"
+                            class="stage-inline-chip {{ $statusFilter === '' ? 'active' : '' }}"
+                            style="--quick-color:#0F8F7C"
+                            wire:click="setTaskStatusFilter('')"
+                            aria-pressed="{{ $statusFilter === '' ? 'true' : 'false' }}"
+                        >
+                            <span class="stage-inline-check" aria-hidden="true">✓</span>
+                            <span>All</span>
+                        </button>
+                        @foreach($stageTaskStatusOptions as $statusOption)
+                            @php
+                                $taskStatusColor = \App\Support\MasterColor::normalize(
+                                    app(\App\Services\MasterDataService::class)->colorFor('order_task_status', (string) $statusOption)
+                                ) ?: '#0F8F7C';
+                            @endphp
+                            <button
+                                type="button"
+                                class="stage-inline-chip {{ $statusFilter === $statusOption ? 'active' : '' }}"
+                                style="--quick-color:{{ $taskStatusColor }}"
+                                wire:click='setTaskStatusFilter(@js($statusOption))'
+                                aria-pressed="{{ $statusFilter === $statusOption ? 'true' : 'false' }}"
+                            >
+                                <span class="stage-inline-check" aria-hidden="true">✓</span>
+                                <span>{{ $statusOption }}</span>
+                            </button>
+                        @endforeach
+                    </div>
+                    <span class="stage-view-note">Row colors match task status</span>
+
+                    <div class="stage-inline-selects">
+                        <div class="stage-filter-field">
+                            <span class="stage-filter-caption">Supplier</span>
+                            <x-ui.search-select
+                                class="ft-order-v5-stage-search-select ft-order-v5-supplier-filter"
+                                label="Supplier"
+                                property="stageSupplier"
+                                type="suppliers"
+                                context="order-list"
+                                :value="$stageSupplier"
+                                placeholder="All suppliers"
+                                :initial-options="$stageSupplierOptions"
+                                search-placeholder="Search supplier..."
+                                footer-message="Type 2 characters to search suppliers."
+                                :hide-label="true"
+                                :fixed-menu="true"
+                                :menu-width="320"
+                                wire:key="my-task-stage-supplier-{{ $selectedMyTaskStageSequence }}-{{ filled($stageSupplier) ? $stageSupplier : 'all' }}"
+                            />
+                        </div>
+
+                        <div class="stage-filter-field stage-filter-field-user">
+                            <span class="stage-filter-caption">{{ $phaseFilter }} assignee</span>
+                            <x-ui.search-select
+                                class="ft-order-v5-stage-search-select ft-order-v5-stage-assignee-filter"
+                                :label="$phaseFilter.' assignee'"
+                                property="stageAssignee"
+                                type="users"
+                                context="order-list-user-filter"
+                                :value="$stageAssignee"
+                                :placeholder="'All '.strtolower($phaseFilter).' assignees'"
+                                :initial-options="$stageAssigneeOptions"
+                                :show-avatar="true"
+                                search-placeholder="Search user..."
+                                footer-message="All active FlowTrack users are available."
+                                :hide-label="true"
+                                :fixed-menu="true"
+                                :menu-width="340"
+                                wire:key="my-task-stage-assignee-{{ $selectedMyTaskStageSequence }}-{{ filled($stageAssignee) ? $stageAssignee : 'all' }}"
+                            />
+                        </div>
+                    </div>
+                </div>
+            </div>
+        @endif
 
         <div class="load-state">
             <span></span>
             <span class="load-actions">
                 <span class="loading-copy">
-                    <span wire:loading.delay.long wire:target="search,phaseFilter,quick,sort,hideCompleted,setMetricFilter,setPhaseFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Updating tasks…</span>
+                    <span wire:loading.delay.long wire:target="search,phaseFilter,statusFilter,stageSupplier,stageAssignee,quick,sort,hideCompleted,setMetricFilter,setPhaseFilter,setTaskStatusFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Updating tasks…</span>
                 </span>
                 <span class="group-controls" aria-label="Order group controls">
                     <button type="button" class="group-control" x-on:click="groupsExpanded = true" title="Expand all Orders" aria-label="Expand all Orders">
@@ -139,32 +204,32 @@
             </span>
         </div>
 
-        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
+        <div class="work-progress" wire:loading.delay.long.flex wire:target="search,phaseFilter,statusFilter,stageSupplier,stageAssignee,sort,hideCompleted,setMetricFilter,setTaskStatusFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage" aria-live="polite"><span></span> Updating tasks…</div>
 
-        <section class="list-shell" aria-label="My Tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,phaseFilter,sort,hideCompleted,setMetricFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage">
+        <section class="list-shell" aria-label="My Tasks grouped by Order" wire:loading.class="is-refreshing" wire:target="search,phaseFilter,statusFilter,stageSupplier,stageAssignee,sort,hideCompleted,setMetricFilter,setTaskStatusFilter,setQuick,clearFilters,clearSearch,gotoPage,previousPage,nextPage">
             <div class="task-table-scroll">
                 <div class="task-head"><span>Task</span><span>Phase</span><span>Assignee</span><span>Due</span><span>Status</span><span>Flag</span><span>Updated</span><span>View</span></div>
 
                 <div>
                 @foreach($workGroups as $group)
-                    <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: false }" x-effect="open = groupsExpanded">
+                    <article class="order-group" wire:key="my-work-order-{{ $group['id'] }}" x-data="{ open: true }" x-effect="open = groupsExpanded">
                         <header class="order-head">
-                            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" x-bind:aria-label="open ? 'Collapse Order' : 'Expand Order'"><span x-text="open ? '⌄' : '›'">›</span></button>
+                            <button type="button" class="collapse" x-on:click="open = !open" x-bind:aria-expanded="open.toString()" aria-label="Collapse {{ $group['number'] }}"><span x-text="open ? '⌄' : '›'">⌄</span></button>
                             <span class="order-identity">
                                 @if($group['route'])<a class="order-id" href="{{ $group['route'] }}" wire:navigate>{{ $group['number'] }}</a>@else<span class="order-id">{{ $group['number'] }}</span>@endif
                                 <span class="order-title">{{ $group['title'] }}</span>
                             </span>
                             <span class="order-client">{{ $group['client'] }}</span>
                             <span class="order-stage">{{ $group['stage'] }}</span>
-                            <span class="health {{ $group['healthTone'] }}">{{ $group['health'] }}</span>
                             <span class="order-progress"><i class="progress-track"><i style="width:{{ $group['progress'] }}%"></i></i>{{ $group['progress'] }}%</span>
                             <span class="task-count">{{ $group['taskCount'] }} {{ $group['taskCount'] === 1 ? 'task' : 'tasks' }}</span>
                         </header>
 
-                        <div class="task-rows" x-cloak x-show="open">
+                        <div class="task-rows" x-show="open">
                             @foreach($group['tasks'] as $task)
                                 <div
                                     class="task-row"
+                                    style="{{ \App\Support\MasterColor::style($task['taskColor'] ?? null) }}border-left:4px solid var(--ft-master-color,#2563EB)"
                                     wire:key="my-work-task-{{ $task['id'] }}"
                                     x-data="{
                                         saving:false,
@@ -179,14 +244,14 @@
                                             select.disabled=true;
                                             try{
                                                 const result=await $wire.updateTaskStatus({{ $task['id'] }},next,this.version);
-                                                if(!result?.ok){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);return;}
+                                                if(!result?.ok){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);return;}
                                                 this.currentStatus=result.status||next;
                                                 this.version=result.version||this.version;
                                                 // Keep the renderless status update, but re-query once when
                                                 // completion changes list membership. This removes the task now,
                                                 // and removes its Order group too if it was the final visible task.
-                                                if(result.completed && @js($hideCompleted))await $wire.$refresh();
-                                            }catch(error){select.value=previous;window.FlowTrackMasterColor?.applySelect(select);}
+                                                if(result.refresh || (result.completed && @js($hideCompleted)))await $wire.$refresh();
+                                            }catch(error){select.value=previous;window.FlowTrack.ui.masterColor?.applySelect(select);}
                                             finally{this.saving=false;select.disabled=false;}
                                         }
                                     }"
@@ -203,7 +268,7 @@
                                         wire:key="my-work-task-{{ $task['id'] }}-assignee-{{ $task['assigneeId'] ?: 0 }}"
                                         data-label="Assignee"
                                         title="{{ $task['assignee'] }}"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('my-work-task-'.$task['id'].'-assignee'), label: 'task assignee', value: @js($task['assigneeId'] ?? ''), display: @js($task['assignee']), avatarUrl: @js($task['assigneeAvatar'] ?? '') })"
+                                        x-data="window.FlowTrack.ui.inlineEdit({ key: @js('my-work-task-'.$task['id'].'-assignee'), label: 'task assignee', value: @js($task['assigneeId'] ?? ''), display: @js($task['assignee']), avatarUrl: @js($task['assigneeAvatar'] ?? '') })"
                                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                         x-on:click.outside="if (editing) cancelEdit()"
                                         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
@@ -233,7 +298,7 @@
                                     </div>
                                     <span
                                         class="due-editor ft-inline-edit-shell {{ $task['dueTone'] }}" data-label="Due"
-                                        x-data="window.FlowTrackInlineEdit({ key: @js('my-work-task-'.$task['id'].'-due-date'), label: 'task due date', value: @js($task['dueValue']), display: @js($task['dueDisplay']) })"
+                                        x-data="window.FlowTrack.ui.inlineEdit({ key: @js('my-work-task-'.$task['id'].'-due-date'), label: 'task due date', value: @js($task['dueValue']), display: @js($task['dueDisplay']) })"
                                         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                                     >
                                         <span x-show="!editing" x-text="display" class="ft-task-inline-display">{{ $task['dueDisplay'] }}</span>
@@ -247,7 +312,7 @@
                                         @endif
                                     </span>
                                     <span class="status-wrap" data-label="Status">
-                                        <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrackMasterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
+                                        <select data-master-color-select class="status-select {{ $task['statusColor'] ? 'ft-master-color' : '' }}" style="{{ \App\Support\MasterColor::style($task['statusColor']) }}" @if($task['canEdit']) x-on:change="saveStatus($event); window.FlowTrack.ui.masterColor?.applySelect($event.currentTarget)" @else disabled @endif aria-label="Status for {{ $task['title'] }}">
                                             @if(!in_array($task['status'], $statusOptions, true))<option value="{{ $task['status'] }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $task['status']) }}" selected>{{ $task['status'] }}</option>@endif
                                             @foreach($statusOptions as $statusOption)<option value="{{ $statusOption }}" data-color="{{ app(\App\Services\MasterDataService::class)->colorFor('order_task_status', $statusOption) }}" @selected($statusOption === $task['status'])>{{ $statusOption }}</option>@endforeach
                                         </select>

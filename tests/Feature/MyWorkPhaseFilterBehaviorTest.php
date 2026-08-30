@@ -6,17 +6,18 @@ use Tests\TestCase;
 
 class MyWorkPhaseFilterBehaviorTest extends TestCase
 {
-    public function test_my_work_phase_filter_is_order_workflow_based_and_deduplicated_by_name(): void
+    public function test_my_work_phase_filter_uses_the_canonical_seven_stage_order_runtime(): void
     {
         $service = file_get_contents(app_path('Services/MyWorkService.php'));
+        $resolver = file_get_contents(app_path('Support/OrderStageResolver.php'));
 
-        $this->assertStringContainsString("->where('my_work_filter_workflows.applies_to', 'orders')", $service);
-        $this->assertStringContainsString("->where('my_work_filter_workflows.is_active', true)", $service);
-        $this->assertStringContainsString("->unique(fn (\$name) => mb_strtolower(\$name))", $service);
-        $this->assertStringContainsString("LOWER(TRIM(workflow_phases.name)) = ?", $service);
+        $this->assertStringContainsString('OrderWorkflowSetupService::fixedStages()', $service);
+        $this->assertStringContainsString('OrderStageResolver::resolve(', $service);
         $this->assertStringContainsString('orderPhaseSourceIdsForName', $service);
         $this->assertStringContainsString("orWhereIn('workflow_phases.source_workflow_phase_id'", $service);
-        $this->assertStringContainsString("'phase' => (string) ($task->getAttribute('my_work_phase_name') ?: $task->getAttribute('my_work_phase_short_name') ?: 'No phase')", $service);
+        $this->assertStringContainsString("'phase' => (string) \$taskStage['short_name']", $service);
+        $this->assertStringContainsString("order intake", $resolver);
+        $this->assertStringContainsString("'name' => (string) \$stage['name']", $resolver);
     }
 
     public function test_metric_cards_and_toolbar_filters_are_mutually_exclusive(): void

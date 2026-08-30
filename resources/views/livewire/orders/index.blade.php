@@ -1,22 +1,68 @@
-<x-jobs.table
-    :jobs="$jobs"
-    :search-filter="$search"
-    :client-filter="$client"
-    :phase-filter="$phase"
-    :owner-filter="$owner"
-    :metrics="$metrics"
-    :metric-filter="$metricFilter"
-    :date-from="$dateFrom"
-    :date-to="$dateTo"
-    :import-filter-id="$importBatchId"
-    :import-filter-label="$importBatchLabel"
-    :date-range-enabled="true"
-    :client-filter-options="$clientFilterOptions"
-    :phase-filter-options="$phaseFilterOptions"
-    :owner-filter-options="$ownerFilterOptions"
-    :selected-order-ids="$selectedOrderIds"
-    :show-bulk-delete-confirm="$showBulkDeleteConfirm"
-    clear-action="clearSearch"
-    clear-filters-action="clearFilters"
-    wire:key="orders-list"
-/>
+<div class="ft-orders-index-livewire-root">
+    <x-orders.prototype-list
+        :jobs="$jobs"
+        :rows="$orderRows"
+        :stages="$orderStages"
+        :selected-stage="$selectedStage"
+        :stage-quick-filters="$stageQuickFilters"
+        :search-filter="$search"
+        :client-filter="$client"
+        :owner-filter="$owner"
+        :phase-filter="$phase"
+        :date-from="$dateFrom"
+        :date-to="$dateTo"
+        :metric-filter="$metricFilter"
+        :stage-quick="$stageQuick"
+        :stage-supplier="$stageSupplier"
+        :stage-assignee="$stageAssignee"
+        :stage-urgency="$stageUrgency"
+        :stage-carrier="$stageCarrier"
+        :stage-client="$stageClient"
+        :client-filter-options="$clientFilterOptions"
+        :owner-filter-options="$ownerFilterOptions"
+        :stage-assignee-options="$stageAssigneeOptions"
+        :stage-client-filter-options="$stageClientFilterOptions"
+        :supplier-filter-options="$supplierFilterOptions"
+        :shipment-urgency-options="$shipmentUrgencyOptions"
+        :import-filter-id="$importBatchId"
+        :import-filter-label="$importBatchLabel"
+        wire:key="orders-prototype-v5"
+    />
+
+    {{-- CHANGE 2026-08-24:
+         IMPORTANT: keep the list and its inline action modals inside one stable
+         Livewire root. Previously the modal host was a second top-level sibling,
+         so the action request completed but Livewire could not reliably morph
+         the newly-rendered modal into the managed DOM. --}}
+    @if($listActionOrder && $listActionTask)
+        <div
+            class="ft-order-prototype-detail ft-order-list-action-modal-host"
+            wire:key="order-list-action-modal-host-{{ $listActionOrder->id }}-{{ $listActionTask->id }}"
+        >
+            @if($showOrderWorkflowActionModal)
+                <x-jobs.order-detail.workflow-action-modal
+                    :job="$listActionOrder"
+                    :task="$listActionTask"
+                    :config="$listActionWorkflowModal"
+                    :step="$orderWorkflowActionStep"
+                    :payload="$orderWorkflowActionPayload"
+                    :email-fallback="$orderWorkflowEmailFallback"
+                    :email-fallback-message="$orderWorkflowEmailFallbackMessage"
+                    :email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"
+                />
+            @endif
+
+            @if($showOverviewTaskDocumentModal)
+                <x-jobs.order-detail.document-modal
+                    :job="$listActionOrder"
+                    :task="$listActionTask"
+                    :available-documents="$listActionAvailableDocuments"
+                    :source="$overviewTaskDocumentSource"
+                    :upload="$overviewTaskDocumentUpload"
+                    :existing-document-id="$overviewTaskExistingDocumentId"
+                    :context="$listActionContext"
+                />
+            @endif
+        </div>
+    @endif
+</div>

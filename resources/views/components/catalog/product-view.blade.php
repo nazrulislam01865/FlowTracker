@@ -1,19 +1,21 @@
-@props(['product', 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC'])
+@props(['product', 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC', 'detailSectionsReady' => []])
 @php
-    $documents = collect($product->productDocuments());
-    $certificate = $documents->firstWhere('kind', 'certificate');
-    $template = $documents->firstWhere('kind', 'template');
+    $pricingReady = (bool) ($detailSectionsReady['pricing'] ?? false);
+    $optionsReady = (bool) ($detailSectionsReady['options'] ?? false);
+    $documentsReady = (bool) ($detailSectionsReady['documents'] ?? false);
     $created = $product->created_at?->copy()->timezone($displayTimezone);
     $updated = $product->updated_at?->copy()->timezone($displayTimezone);
     $classification = collect([$product->productMainCategory(), $product->parent?->name, trim((string) data_get($product->metadata, 'sub_category'))])->filter()->values();
-    // Product pricing is loaded from the normalized metadata first, with the
-    // model falling back to the original pasted Excel table for older/suspect
-    // records. This keeps Product Details reliable after save and for records
-    // created by earlier builds.
-    $priceBreakpoints = collect($product->productPriceBreakpoints());
-    $remoteSurchargeBreakpoints = collect($product->productRemoteSurchargeBreakpoints())->keyBy('quantity');
-    $productOptions = collect($product->productOptions());
-    $shipmentUrgencyOptions = collect($product->productShipmentUrgencyOptions());
+
+    // These helpers can parse legacy metadata and build large arrays. Keep that
+    // CPU/HTML work behind viewport boundaries instead of doing it above fold.
+    $priceBreakpoints = $pricingReady ? collect($product->productPriceBreakpoints()) : collect();
+    $remoteSurchargeBreakpoints = $pricingReady ? collect($product->productRemoteSurchargeBreakpoints())->keyBy('quantity') : collect();
+    $productOptions = $optionsReady ? collect($product->productOptions()) : collect();
+    $shipmentUrgencyOptions = $optionsReady ? collect($product->productShipmentUrgencyOptions()) : collect();
+    $documents = $documentsReady ? collect($product->productDocuments()) : collect();
+    $certificate = $documentsReady ? $documents->firstWhere('kind', 'certificate') : null;
+    $template = $documentsReady ? $documents->firstWhere('kind', 'template') : null;
 @endphp
 <div class="ft-product-page ft-product-view-page">
     <div class="ft-product-page-breadcrumb"><button type="button" wire:click="closeProductView">Products</button><span>/</span><strong>{{ $product->productDisplayCode() }}</strong></div>
@@ -67,6 +69,7 @@
         </div>
     </x-catalog.product-section>
 
+    @if($pricingReady)
     @if($priceBreakpoints->isNotEmpty())
         <x-catalog.product-section title="Product pricing">
             <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap">
@@ -102,7 +105,11 @@
             </div>
         </x-catalog.product-section>
     @endif
+    @else
+        <x-ui.progressive-section-loader section="pricing" method="loadProductDetailSection" key-prefix="product-detail" :rows="3" message="Loading product pricing when needed…" root-margin="360px 0px" />
+    @endif
 
+    @if($optionsReady)
     @if($productOptions->isNotEmpty() || $shipmentUrgencyOptions->isNotEmpty())
         <div class="ft-product-options-shipping-grid">
             @if($productOptions->isNotEmpty())
@@ -150,7 +157,11 @@
             @endif
         </div>
     @endif
+    @else
+        <x-ui.progressive-section-loader section="options" method="loadProductDetailSection" key-prefix="product-detail" :rows="3" message="Loading product options and shipping data when needed…" root-margin="320px 0px" />
+    @endif
 
+    @if($documentsReady)
     <x-catalog.product-section title="Certificates & documents" class="ft-product-documents-section">
         <div class="ft-product-documents-grid">
             <div class="ft-product-certificate-number"><small>Test certificate number</small><strong>{{ data_get($product->metadata, 'test_certificate_number') ?: '—' }}</strong></div>
@@ -163,4 +174,7 @@
             <div class="ft-product-activity-popover" x-cloak x-show="activity" x-on:click.outside="activity=false"><strong>Product activity</strong><span>Created {{ $created?->format('M j, Y g:i A') ?? '—' }} by {{ $product->creator?->name ?? '—' }}</span><span>Last updated {{ $updated?->format('M j, Y g:i A') ?? '—' }}</span></div>
         </footer>
     </x-catalog.product-section>
+    @else
+        <x-ui.progressive-section-loader section="documents" method="loadProductDetailSection" key-prefix="product-detail" :rows="3" message="Loading certificates and documents when needed…" root-margin="300px 0px" />
+    @endif
 </div>

@@ -27,17 +27,19 @@
             <span>/</span>
             <a href="{{ route('administration', ['tab' => 'users']) }}" wire:navigate>Users &amp; Assignments</a>
             <span>/</span>
-            <span>Edit user</span>
+            <span>{{ $createMode ? 'Create user' : 'Edit user' }}</span>
         @else
-            <span>Edit user</span>
+            <span>{{ $createMode ? 'Create user' : 'Edit user' }}</span>
         @endif
     </div>
 
     <div class="ft-user-editor-head">
         <div>
-            <h1>{{ $profileMode ? 'My profile' : 'Edit user' }}</h1>
+            <h1>{{ $profileMode ? 'My profile' : ($createMode ? 'Create user' : 'Edit user') }}</h1>
             <p>
-                @if($profileMode && !$isEditing)
+                @if($createMode)
+                    Add identity, contact information, access, status, and sign-in security for the new user.
+                @elseif($profileMode && !$isEditing)
                     Review your identity, contact information, access details, and account information.
                 @else
                     Update identity, contact information, access, status, and sign-in security.
@@ -45,7 +47,7 @@
             </p>
         </div>
         <div class="ft-user-editor-head-actions">
-            <span class="ft-user-editor-ref">User ID · {{ $userReference }}</span>
+            <span class="ft-user-editor-ref">{{ $createMode ? 'New user' : 'User ID · '.$userReference }}</span>
             @if($profileMode && !$isEditing)
                 <button class="ft-user-editor-button is-save ft-user-editor-edit-profile" type="button" wire:click="enableEditing" wire:loading.attr="disabled" wire:target="enableEditing">
                     <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m15 5 4 4M4 20l3.5-.7L19 7.8a2.1 2.1 0 0 0-3-3L4.6 16.2 4 20Z"/></svg>
@@ -56,7 +58,7 @@
         </div>
     </div>
 
-    <form wire:submit="saveChanges" novalidate>
+    <form wire:submit="saveChanges" novalidate data-ft-feedback-scope="form">
         <div class="ft-user-editor-layout">
             <aside class="card ft-user-editor-profile-card">
                 <div class="ft-user-editor-avatar-wrap">
@@ -190,7 +192,7 @@
                         </span>
                     </header>
                     <div class="ft-user-editor-section-body">
-                        <div class="ft-user-editor-fields">
+                        <div class="ft-user-editor-fields ft-user-editor-access-fields">
                             <div class="field">
                                 <label>Roles *</label>
                                 <x-ui.multi-role-select model="roleIds" :options="$roleOptions" :disabled="!$isEditing || !$canManageAccess || $targetIsSuperAdmin" placeholder="Select one or more roles" />
@@ -198,107 +200,24 @@
                                 @error('roleIds')<div class="validation-error">{{ $message }}</div>@enderror
                                 @error('roleIds.*')<div class="validation-error">{{ $message }}</div>@enderror
                             </div>
-
-                            <div class="field">
-                                <label>Department *</label>
-                                @php
-                                    $selectedDepartment = collect($departmentOptions)->first(
-                                        fn ($department) => (string) ($department['id'] ?? '') === (string) ($departmentId ?? '')
-                                    );
-                                    $selectedDepartmentLabel = $selectedDepartment['name'] ?? 'No department';
-                                    $departmentPickerDisabled = !$isEditing || !$canManageAccess;
-                                @endphp
-                                <div
-                                    class="ft-user-editor-department-picker {{ $departmentPickerDisabled ? 'is-disabled' : '' }}"
-                                    wire:key="user-editor-department-{{ $departmentId ?? 'none' }}-{{ $departmentPickerDisabled ? 'disabled' : 'enabled' }}"
-                                    x-data="{
-                                        open: false,
-                                        query: '',
-                                        selectedValue: @js((string) ($departmentId ?? '')),
-                                        selectedLabel: @js($selectedDepartmentLabel),
-                                        options: @js(array_values($departmentOptions)),
-                                        get filteredOptions() {
-                                            const q = this.query.trim().toLowerCase();
-                                            if (!q) return this.options;
-                                            return this.options.filter((item) => String(item.name || '').toLowerCase().includes(q));
-                                        },
-                                        openMenu() {
-                                            if (@js($departmentPickerDisabled)) return;
-                                            this.open = true;
-                                            this.$nextTick(() => this.$refs.search?.focus());
-                                        },
-                                        closeMenu() {
-                                            this.open = false;
-                                            this.query = '';
-                                        },
-                                        choose(item) {
-                                            this.selectedValue = String(item.id);
-                                            this.selectedLabel = String(item.name);
-                                            this.closeMenu();
-                                            dirty = true;
-                                            $wire.$set('departmentId', Number(item.id));
-                                        },
-                                        clearSelection() {
-                                            this.selectedValue = '';
-                                            this.selectedLabel = 'No department';
-                                            this.closeMenu();
-                                            dirty = true;
-                                            $wire.$set('departmentId', null);
-                                        }
-                                    }"
-                                    x-on:keydown.escape.window="if (open) closeMenu()"
-                                >
-                                    <button
-                                        type="button"
-                                        class="ft-user-editor-department-trigger ft-inline-remote-user-trigger"
-                                        x-on:click.stop="open ? closeMenu() : openMenu()"
-                                        :aria-expanded="open.toString()"
-                                        aria-haspopup="listbox"
-                                        @disabled($departmentPickerDisabled)
-                                    >
-                                        <span x-text="selectedLabel">{{ $selectedDepartmentLabel }}</span>
-                                        <span class="ft-filter-chevron" aria-hidden="true">⌄</span>
-                                    </button>
-
-                                    <div
-                                        class="ft-remote-filter-menu ft-user-editor-department-menu"
-                                        x-cloak
-                                        x-show="open"
-                                        x-on:click.outside="closeMenu()"
-                                    >
-                                        <input
-                                            x-ref="search"
-                                            class="ft-remote-filter-search"
-                                            type="search"
-                                            x-model="query"
-                                            placeholder="Search department…"
-                                            autocomplete="off"
-                                        >
-                                        <button
-                                            type="button"
-                                            class="ft-remote-filter-option ft-remote-filter-clear"
-                                            x-show="selectedValue !== ''"
-                                            x-on:click="clearSelection()"
-                                        >
-                                            <span>No department</span><small>Clear</small>
-                                        </button>
-                                        <div class="ft-remote-filter-list" role="listbox">
-                                            <template x-for="department in filteredOptions" :key="department.id">
-                                                <button
-                                                    type="button"
-                                                    class="ft-remote-filter-option"
-                                                    :aria-selected="String(department.id) === selectedValue"
-                                                    x-on:click="choose(department)"
-                                                >
-                                                    <span x-text="department.name"></span>
-                                                    <small x-text="String(department.id) === selectedValue ? 'Selected' : ''"></small>
-                                                </button>
-                                            </template>
-                                            <div class="ft-remote-filter-message" x-show="filteredOptions.length === 0">No matching departments</div>
-                                        </div>
-                                    </div>
-                                </div>
-                                @error('departmentId')<div class="validation-error">{{ $message }}</div>@enderror
+                            <div class="field" x-on:flowtrack-selection-changed="if ($event.detail?.property === 'departmentId') dirty = true">
+                                <x-ui.search-select
+                                    class="ft-user-editor-department-picker"
+                                    label="Department"
+                                    property="departmentId"
+                                    required
+                                    type="departments"
+                                    context="user-editor"
+                                    action="setDepartmentSelection"
+                                    :value="$departmentId"
+                                    placeholder="No department"
+                                    :initial-options="$departmentOptions"
+                                    :disabled="!$isEditing || !$canManageAccess"
+                                    :menu-width="320"
+                                    :fixed-menu="true"
+                                    wire:key="user-editor-department-{{ $departmentId ?? 'none' }}-{{ (!$isEditing || !$canManageAccess) ? 'disabled' : 'enabled' }}"
+                                />
+                                @error('departmentId')<x-ui.validation-message :message="$message" />@enderror
                             </div>
 
                             <div class="field">
@@ -377,7 +296,7 @@
                                 return level;
                             },
                             strengthLabel() {
-                                if (!this.passwordTouched || !this.password) return 'Leave blank or use at least 12 characters.';
+                                if (!this.passwordTouched || !this.password) return @js($createMode ? 'Use at least 12 characters.' : 'Leave blank or use at least 12 characters.');
                                 return ['Use at least 12 characters.', 'Weak', 'Fair', 'Good', 'Strong'][this.strength()];
                             }
                         }"
@@ -386,7 +305,7 @@
                         <header class="ft-user-editor-section-head">
                             <div>
                                 <h2>Set password</h2>
-                                <p>Leave both fields blank to keep the user’s current password.</p>
+                                <p>{{ $createMode ? 'Create a secure password for the new user.' : 'Leave both fields blank to keep the user’s current password.' }}</p>
                             </div>
                             <span class="ft-user-editor-section-icon">
                                 <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 11V8a5 5 0 0 1 10 0v3M6 11h12a2 2 0 0 1 2 2v6H4v-6a2 2 0 0 1 2-2Z"/></svg>
@@ -395,7 +314,7 @@
                         <div class="ft-user-editor-section-body">
                             <div class="ft-user-editor-fields">
                                 <div class="field">
-                                    <label for="ft-edit-password">New password <span>Optional</span></label>
+                                    <label for="ft-edit-password">{{ $createMode ? 'Password *' : 'New password' }} @unless($createMode)<span>Optional</span>@endunless</label>
                                     <div class="ft-user-editor-password-wrap">
                                         <input id="ft-edit-password" data-user-password-field x-model="password" x-on:focus="passwordFocused = true" x-on:blur="passwordFocused = false" x-on:keydown="passwordTouched = true" x-on:paste="passwordTouched = true" x-on:input.stop="syncPassword($event.target.value)" :type="showPassword ? 'text' : 'password'" autocomplete="new-password" data-1p-ignore data-lpignore="true">
                                         <div class="ft-user-editor-password-tools">
@@ -409,7 +328,7 @@
                                 </div>
 
                                 <div class="field">
-                                    <label for="ft-edit-password-confirmation">Confirm new password <span>Optional</span></label>
+                                    <label for="ft-edit-password-confirmation">{{ $createMode ? 'Confirm password *' : 'Confirm new password' }} @unless($createMode)<span>Optional</span>@endunless</label>
                                     <div class="ft-user-editor-password-wrap">
                                         <input id="ft-edit-password-confirmation" data-user-password-field x-model="confirmation" x-on:focus="confirmationFocused = true" x-on:blur="confirmationFocused = false" x-on:keydown="confirmationTouched = true" x-on:paste="confirmationTouched = true" x-on:input.stop="syncConfirmation($event.target.value)" :type="showConfirmation ? 'text' : 'password'" autocomplete="new-password" data-1p-ignore data-lpignore="true">
                                         <div class="ft-user-editor-password-tools">
@@ -422,10 +341,12 @@
                                 </div>
                             </div>
 
-                            <label class="ft-user-editor-check">
-                                <input type="checkbox" wire:model="signOutSessions">
-                                <span>Sign the user out of other existing sessions when the password changes.</span>
-                            </label>
+                            @unless($createMode)
+                                <label class="ft-user-editor-check">
+                                    <input type="checkbox" wire:model="signOutSessions">
+                                    <span>Sign the user out of other existing sessions when the password changes.</span>
+                                </label>
+                            @endunless
                         </div>
                     </section>
 
@@ -441,8 +362,8 @@
                                 <a class="ft-user-editor-button is-cancel" href="{{ $cancelUrl }}" wire:navigate>Cancel</a>
                             @endif
                             <button class="ft-user-editor-button is-save" type="submit" disabled :disabled="!dirty" wire:loading.attr="disabled" wire:target="saveChanges,profileImage">
-                                <span wire:loading.remove wire:target="saveChanges">Save changes</span>
-                                <span wire:loading wire:target="saveChanges">Saving…</span>
+                                <span wire:loading.remove wire:target="saveChanges">{{ $createMode ? 'Create user' : 'Save changes' }}</span>
+                                <span wire:loading wire:target="saveChanges">{{ $createMode ? 'Creating…' : 'Saving…' }}</span>
                             </button>
                         </div>
                     </div>

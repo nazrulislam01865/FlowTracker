@@ -8,8 +8,14 @@
     'activities' => null,
     'orderStatusOptions' => null,
     'orderOwnerOptions' => null,
+    'clientOrderSearch' => '',
+    'clientOrderStatus' => '',
+    'clientOrderOwner' => '',
+    'clientOrderRange' => '3m',
     'documentCount' => 0,
     'orderMetrics' => [],
+    'orderCount' => 0,
+    'detailSectionsReady' => [],
     'clientCode' => '',
     'clientCountries' => [],
     'clientCountryFlags' => [],
@@ -38,7 +44,8 @@
 ])
 @php
     $client = $detail['client'];
-    $jobs = $detail['jobs'];
+    $jobs = $detail['jobs'] ?? collect();
+    $addressesReady = (bool) ($detailSectionsReady['addresses'] ?? false);
     $initials = collect(preg_split('/\s+/', trim((string) $client->name)))
         ->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('') ?: 'CL';
     $access = app(\App\Services\AccessControlService::class);
@@ -56,7 +63,7 @@
     $currencyText = $currencyCode.(isset($currencyNames[$currencyCode]) ? ' · '.$currencyNames[$currencyCode] : '');
     $primaryInitials = collect(preg_split('/\s+/', trim((string) ($client->contact_name ?: 'Primary Contact'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'PC';
     $managerInitials = collect(preg_split('/\s+/', trim((string) ($client->accountManager?->name ?: 'Unassigned'))))->filter()->take(2)->map(fn ($p) => mb_strtoupper(mb_substr($p,0,1)))->implode('') ?: 'AM';
-    $contactCount = $client->contacts->count();
+    $contactCount = (int) ($client->contacts_count ?? ($client->relationLoaded('contacts') ? $client->contacts->count() : 0));
     if ($contactCount === 0 && (filled($client->contact_name) || filled($client->email) || filled($client->phone))) $contactCount = 1;
 
     $formatAddress = function (?string $line1, ?string $suite, ?string $city, ?string $state, ?string $zip, ?string $country): array {
@@ -67,7 +74,7 @@
 
     $officeLines = $formatAddress($client->office_address_line1 ?: $client->office_address, $client->office_suite, $client->office_city, $client->office_state, $client->office_zip, $client->country);
     $billingLines = $formatAddress($client->billing_address_line1, $client->billing_suite, $client->billing_city, $client->billing_state, $client->billing_zip, $client->billing_country ?: $client->country);
-    $shippingAddresses = $client->shippingAddresses ?? collect();
+    $shippingAddresses = $addressesReady && $client->relationLoaded('shippingAddresses') ? $client->shippingAddresses : collect();
     $addressCount = 1 + ($client->billing_same_as_office ? 0 : ($billingLines ? 1 : 0)) + $shippingAddresses->count();
 
     $statusLabel = function ($job) {
@@ -138,7 +145,7 @@
     <nav class="ft-client-proto-tabs" aria-label="Client detail sections">
         <button type="button" wire:click="setClientDetailTab('overview')" class="{{ $tab === 'overview' ? 'active' : '' }}">Overview</button>
         <button type="button" wire:click="setClientDetailTab('contacts')" class="{{ $tab === 'contacts' ? 'active' : '' }}">Contacts <span>{{ $contactCount }}</span></button>
-        <button type="button" wire:click="setClientDetailTab('orders')" class="{{ $tab === 'orders' ? 'active' : '' }}">Orders <span>{{ $jobs->count() }}</span></button>
+        <button type="button" wire:click="setClientDetailTab('orders')" class="{{ $tab === 'orders' ? 'active' : '' }}">Orders <span>{{ $orderCount }}</span></button>
         <button type="button" wire:click="setClientDetailTab('documents')" class="{{ $tab === 'documents' ? 'active' : '' }}">Documents <span>{{ $documentCount }}</span></button>
         <button type="button" wire:click="setClientDetailTab('activity')" class="{{ $tab === 'activity' ? 'active' : '' }}">Activity</button>
     </nav>
@@ -211,6 +218,7 @@
 
         </div>
 
+        @if($addressesReady)
         <section class="ft-client-proto-card ft-client-addresses-card">
             <div class="ft-client-card-head ft-client-address-card-head">
                 <div><h2>Addresses</h2><p>Office, billing and delivery locations.</p></div>
@@ -239,6 +247,9 @@
                 @endforeach
             </div>
         </section>
+        @else
+            <x-ui.progressive-section-loader section="addresses" method="loadClientDetailSection" key-prefix="client-detail" :rows="4" message="Loading client addresses when needed…" root-margin="340px 0px" />
+        @endif
 
         <div class="ft-client-overview-bottom-grid">
             <section class="ft-client-proto-card ft-client-commercial-card">
@@ -321,13 +332,44 @@
                 <div><h2>Client orders</h2><p>All orders for {{ $client->name }}.</p></div>
                 <div><a href="{{ route('jobs.index', ['client'=>$client->id]) }}" wire:navigate><span>↗</span> Open in Orders</a><small>Opens the Orders workspace with<br>{{ $client->name }} filter applied.</small></div>
             </div>
-            <div class="ft-client-order-filters">
-                <label class="ft-client-order-search"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input type="search" placeholder="Search order number or description..." wire:model.live.debounce.300ms="clientOrderSearch"></label>
-                <select wire:model.live="clientOrderStatus"><option value="">All statuses</option>@foreach($orderStatusOptions ?? [] as $status)<option value="{{ $status }}">{{ $status }}</option>@endforeach</select>
-                <select wire:model.live="clientOrderOwner"><option value="">All owners</option>@foreach($orderOwnerOptions ?? [] as $owner)<option value="{{ $owner->id }}">{{ $owner->name }}</option>@endforeach</select>
-                <select wire:model.live="clientOrderRange"><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m">Last 12 months</option><option value="all">All time</option></select>
-                <button type="button" wire:click="clearClientOrderFilters">Clear filters</button>
-            </div>
+            <x-ui.filter-bar class="ft-client-order-filters" label="Client order filters">
+                <x-ui.search-input
+                    class="ft-client-order-search ft-client-order-search-shared"
+                    property="clientOrderSearch"
+                    :value="$clientOrderSearch"
+                    label="Search client orders"
+                    placeholder="Search order number or description..."
+                    :debounce="300"
+                    :hide-label="true"
+                />
+                <x-ui.search-select
+                    class="ft-client-order-selector"
+                    label="Status"
+                    property="clientOrderStatus"
+                    :value="$clientOrderStatus"
+                    placeholder="All statuses"
+                    :options="collect($orderStatusOptions ?? [])->map(fn ($status) => ['id' => $status, 'label' => $status])"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="220"
+                />
+                <x-ui.search-select
+                    class="ft-client-order-selector"
+                    label="Owner"
+                    property="clientOrderOwner"
+                    type="users"
+                    context="client-orders"
+                    :value="$clientOrderOwner"
+                    placeholder="All owners"
+                    :initial-options="$orderOwnerOptions ?? collect()"
+                    :params="['client_id' => $client->id]"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="260"
+                />
+                <select class="ft-client-order-range" wire:model.live="clientOrderRange" aria-label="Client order date range"><option value="3m">Last 3 months</option><option value="6m">Last 6 months</option><option value="12m">Last 12 months</option><option value="all">All time</option></select>
+                <x-ui.filter-reset action="clearClientOrderFilters" label="Clear filters" />
+            </x-ui.filter-bar>
             <div class="ft-client-order-filter-meta"><span>Client: {{ $client->name }} <b>×</b></span><em>{{ number_format($orders?->total() ?? 0) }} matching orders</em></div>
             <div class="ft-client-orders-table-wrap">
                 <table class="ft-client-orders-table">

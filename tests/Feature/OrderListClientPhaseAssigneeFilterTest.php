@@ -113,7 +113,8 @@ class OrderListClientPhaseAssigneeFilterTest extends TestCase
         $this->assertStringContainsString(':property="$peopleProperty"', $view);
         $this->assertStringContainsString('type="users"', $view);
         $this->assertStringContainsString("'order-list-owner'", $view);
-        $this->assertStringContainsString('Clear filters', $view);
+        $this->assertStringContainsString('<x-ui.filter-reset', $view);
+        $this->assertStringContainsString('label="Clear filters"', $view);
         $this->assertStringNotContainsString('Type to search all', $view);
         $this->assertStringContainsString("public string \$owner = '';", $component);
         $this->assertStringContainsString('public function clearFilters(): void', $component);

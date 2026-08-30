@@ -6,6 +6,6 @@
 <td class="ft-order-product-updated" data-label="Updated">
     <strong>{{ $primary }}</strong>
     @if(filled($secondary))
-        <span>· {{ $secondary }}</span>
+        <span>{{ $secondary }}</span>
     @endif
 </td>

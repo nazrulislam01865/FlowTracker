@@ -8,7 +8,17 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 class FlowJobPhaseHistory extends Model
 {
     protected $table = 'flow_job_phase_histories';
-    protected $guarded = [];
+    protected $fillable = [
+        'flow_job_id',
+        'workflow_phase_id',
+        'changed_by',
+        'phase_owner_id',
+        'target_date',
+        'health_override',
+        'status',
+        'entered_at',
+        'completed_at',
+    ];
     protected function casts(): array
     {
         return [

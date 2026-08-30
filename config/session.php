@@ -18,7 +18,7 @@ return [
     |
     */
 
-    'driver' => env('SESSION_DRIVER', 'database'),
+    'driver' => env('SESSION_DRIVER', env('FLOWTRACK_HORIZONTAL_SCALING', false) ? 'redis' : 'database'),
 
     /*
     |--------------------------------------------------------------------------
@@ -73,7 +73,7 @@ return [
     |
     */
 
-    'connection' => env('SESSION_CONNECTION'),
+    'connection' => env('SESSION_CONNECTION', env('FLOWTRACK_HORIZONTAL_SCALING', false) ? 'session' : null),
 
     /*
     |--------------------------------------------------------------------------

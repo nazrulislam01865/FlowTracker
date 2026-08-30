@@ -14,7 +14,6 @@ use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class OrderFinanceService
 {
@@ -49,6 +48,7 @@ class OrderFinanceService
         // JobDetailPresenter also provides compatibility for older orders that
         // still store their product in the legacy flow_jobs.product columns.
         $items = JobDetailPresenter::products($job)
+            ->filter(fn ($item) => !($item->is_removed ?? false))
             ->filter(fn ($item) => filled($item->product_name ?? null))
             ->values();
 
@@ -137,8 +137,8 @@ class OrderFinanceService
             }
 
             if ($supportingDocument) {
-                $path = $supportingDocument->store('invoices/'.$lockedJob->id, 'local');
-                throw_if(!$path, \RuntimeException::class, 'The supporting document could not be stored. Please try again.');
+                $stored = app(SecureDocumentStorage::class)->store($supportingDocument, 'invoices/'.$lockedJob->id);
+                $path = $stored['path'];
                 $invoice->update([
                     'supporting_document_path' => $path,
                     'supporting_document_name' => $supportingDocument->getClientOriginalName(),
@@ -176,8 +176,8 @@ class OrderFinanceService
             $receiptPath = null;
             $receiptName = null;
             if ($receipt) {
-                $receiptPath = $receipt->store('payments/'.$lockedJob->id, 'local');
-                throw_if(!$receiptPath, \RuntimeException::class, 'The payment receipt could not be stored. Please try again.');
+                $stored = app(SecureDocumentStorage::class)->store($receipt, 'payments/'.$lockedJob->id);
+                $receiptPath = $stored['path'];
                 $receiptName = $receipt->getClientOriginalName();
             }
 
@@ -272,7 +272,7 @@ class OrderFinanceService
 
     public function deleteSupportingDocument(Invoice $invoice): void
     {
-        if ($invoice->supporting_document_path) Storage::disk('local')->delete($invoice->supporting_document_path);
+        if ($invoice->supporting_document_path) app(SecureDocumentStorage::class)->delete($invoice->supporting_document_path);
     }
 
     private function normalizeInvoiceItems(array $items): array

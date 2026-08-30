@@ -11,7 +11,6 @@ use App\Models\TaskPackItem;
 use App\Models\TaskPackTask;
 use App\Models\Workflow;
 use Illuminate\Support\Facades\DB;
-use Illuminate\Support\Facades\Storage;
 
 class PermanentJobDeleteService
 {
@@ -136,11 +135,9 @@ class PermanentJobDeleteService
      */
     public function cleanupDocumentFiles(array $paths): void
     {
-        $disk = (string) config('flowtrack.document_disk', 'public');
-
         foreach (collect($paths)->filter()->unique() as $path) {
             if (!Document::query()->where('path', $path)->exists()) {
-                Storage::disk($disk)->delete($path);
+                app(SecureDocumentStorage::class)->delete((string) $path);
             }
         }
     }

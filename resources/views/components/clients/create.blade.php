@@ -27,15 +27,12 @@
     'clientLogoUpload' => null,
     'existingClientLogoUrl' => '',
     'removeClientLogo' => false,
+    'addressOptionsReady' => true,
 ])
 @php
     $isEdit = $mode === 'edit';
-    $selectedManager = $users->firstWhere('id', (int) $accountManagerId);
-    $accountManagerOptions = collect($users)->map(fn ($user) => [
-        'id' => (string) $user->id,
-        'label' => (string) $user->name,
-        'meta' => (string) ($user->department?->name ?: ''),
-    ])->values();
+    $accountManagerOptions = collect($users)->values();
+    $selectedManager = $accountManagerOptions->first(fn ($option) => (string) data_get($option, 'id') === (string) $accountManagerId);
     $countryOptions = collect($clientCountries)->map(fn ($country) => [
         'id' => (string) $country,
         'label' => (string) $country,
@@ -53,7 +50,7 @@
         ? sha1((string) json_encode($errors->getMessages(), JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES))
         : '';
 @endphp
-<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype ft-reusable-form-theme' : 'ft-create-client-page ft-client-create-prototype ft-reusable-form-theme' }}" data-client-validation-signature="{{ $clientValidationSignature }}">
+<div class="{{ $isEdit ? 'ft-client-inline-edit ft-client-create-prototype ft-reusable-form-theme' : 'ft-create-client-page ft-client-create-prototype ft-reusable-form-theme ft-form-standard ft-form-standard--client' }}" data-ft-feedback-scope="form" data-client-validation-signature="{{ $clientValidationSignature }}">
     <div class="ft-client-create-shell">
         @unless($isEdit)
             <div class="ft-client-create-top">
@@ -87,7 +84,7 @@
                             @endif
                         </div>
                         <div class="ft-client-logo-upload-copy">
-                            <b>Client logo <span style="font-weight:500;color:#71829a">(Optional)</span></b>
+                            <b>Client logo <span class="ft-client-logo-optional">(Optional)</span></b>
                             <p>Upload the company logo once and FlowTrack will reuse it anywhere this client is shown. JPG, PNG or WebP · max 5 MB.</p>
                             <div class="ft-client-logo-actions">
                                 <label class="ft-client-logo-file">
@@ -125,13 +122,15 @@
                     </label>
                     <div class="ft-proto-field">
                         <b>Account manager <em>*</em></b>
-                        <x-ui.select-filter
+                        <x-ui.search-select
                             label="Account manager"
                             property="accountManagerId"
                             :value="$accountManagerId ?? ''"
                             placeholder="Unassigned"
-                            :options="$accountManagerOptions"
-                            :selected-label="$selectedManager?->name ?? 'Unassigned'"
+                            type="users"
+                            context="client-account-manager"
+                            :initial-options="$accountManagerOptions"
+                            :selected-label="data_get($selectedManager, 'label', 'Unassigned')"
                             search-placeholder="Search account manager…"
                             :menu-width="360"
                             :fixed-menu="true"
@@ -189,6 +188,7 @@
                 @error('contacts')<small class="validation-error ft-client-contacts-error">{{ $message }}</small>@enderror
             </section>
 
+            @if($isEdit || $addressOptionsReady)
             <section class="ft-client-prototype-section ft-client-shipping-aligned-section">
                 <div class="ft-client-section-title ft-client-section-title-spread">
                     <div class="ft-section-title-left">
@@ -257,7 +257,7 @@
 
                         <div class="ft-proto-field ft-shipping-country-field">
                             <b>Country / region <em>*</em></b>
-                            <x-ui.select-filter
+                            <x-ui.search-select
                                 label="Country / region"
                                 property="billingCountry"
                                 :value="$billingCountry"
@@ -292,7 +292,7 @@
 
                         <div class="ft-proto-field ft-shipping-state-field">
                             <b>State @if(count($billingStates))<em>*</em>@endif</b>
-                            <x-ui.select-filter
+                            <x-ui.search-select
                                 label="State"
                                 property="billingState"
                                 :value="$billingState"
@@ -322,6 +322,21 @@
                     </div>
                 </article>
             </section>
+
+            @else
+                <section class="ft-client-prototype-section ft-client-shipping-aligned-section" wire:key="create-client-addresses-placeholder">
+                    <div class="ft-client-section-title ft-client-section-title-spread">
+                        <div class="ft-section-title-left">
+                            <span>3</span>
+                            <div>
+                                <h3>Shipping &amp; billing addresses</h3>
+                                <p>Country and state options load only when you approach the address section.</p>
+                            </div>
+                        </div>
+                    </div>
+                    <x-ui.progressive-section-loader section="addresses" :rows="5" />
+                </section>
+            @endif
 
             <section class="ft-client-prototype-section">
                 <div class="ft-client-section-title"><span>5</span><div><h3>Business &amp; billing preferences</h3></div></div>

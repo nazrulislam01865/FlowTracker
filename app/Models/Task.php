@@ -14,7 +14,32 @@ class Task extends Model
 {
     use SoftDeletes, TracksTaskAssigneePerformance;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'task_number',
+        'flow_job_id',
+        'workflow_phase_id',
+        'task_pack_task_id',
+        'assignee_id',
+        'title',
+        'status',
+        'priority',
+        'progress',
+        'due_date',
+        'needs_attention',
+        'attention_reason',
+        'completed_at',
+        'setup_assignee_id',
+        'document_category_id',
+        'document_requirement_source',
+        'description',
+        'start_date',
+        'task_flag_id',
+        'order_task_status_id',
+        'order_task_flag_id',
+        'assignee_assigned_at',
+        'assignee_at_completion',
+        'assignee_assigned_at_completion',
+    ];
 
     protected function casts(): array
     {

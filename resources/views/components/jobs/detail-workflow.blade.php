@@ -1,4 +1,4 @@
-@props(['job','users'=>collect(),'healthOptions'=>collect()])
+@props(['job','users'=>collect()])
 @php
     $blockers = \App\Support\JobDetailPresenter::blockers($job);
     $currentTasks = \App\Support\JobDetailPresenter::phaseTasks($job);

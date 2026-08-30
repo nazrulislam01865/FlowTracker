@@ -96,13 +96,13 @@ class BulkOrderImportController extends Controller
     public function template(): BinaryFileResponse
     {
         abort_unless(auth()->user()->canAccess('jobs.create'), 403);
-        $trackedTemplate = resource_path('templates/FlowTrack_Bulk_Order_Import_Template_v3.xlsx');
-        $storageTemplate = storage_path('app/templates/FlowTrack_Bulk_Order_Import_Template_v3.xlsx');
+        $trackedTemplate = resource_path('templates/FlowTrack_Bulk_Order_Import_Template_v4.xlsx');
+        $storageTemplate = storage_path('app/templates/FlowTrack_Bulk_Order_Import_Template_v4.xlsx');
         $path = is_file($trackedTemplate) ? $trackedTemplate : $storageTemplate;
 
         abort_unless(is_file($path), 404);
 
-        return response()->download($path, 'FlowTrack_Bulk_Order_Import_Template_v3.xlsx', [
+        return response()->download($path, 'FlowTrack_Bulk_Order_Import_Template_v4.xlsx', [
             'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         ]);
     }

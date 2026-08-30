@@ -31,7 +31,7 @@ class BoardService
                 'flow_jobs.id', 'flow_jobs.job_number', 'flow_jobs.client_id', 'flow_jobs.workflow_id',
                 'flow_jobs.source_workflow_id', 'flow_jobs.workflow_phase_id', 'flow_jobs.source_workflow_phase_id', 'flow_jobs.owner_id', 'flow_jobs.coordinator_id',
                 'flow_jobs.title', 'flow_jobs.quantity', 'flow_jobs.commercial_value', 'flow_jobs.currency',
-                'flow_jobs.status', 'flow_jobs.health', 'flow_jobs.priority', 'flow_jobs.progress',
+                'flow_jobs.status', 'flow_jobs.priority', 'flow_jobs.progress',
                 'flow_jobs.delivery_date', 'flow_jobs.next_action', 'flow_jobs.needs_attention', 'flow_jobs.attention_requested',
                 'flow_jobs.completed_at', 'flow_jobs.created_at', 'flow_jobs.updated_at',
             ])
@@ -114,7 +114,7 @@ class BoardService
             ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.owner_id = ? or flow_jobs.coordinator_id = ? or exists (select 1 from flow_job_members where flow_job_members.flow_job_id = flow_jobs.id and flow_job_members.user_id = ?) or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.assignee_id = ? and tasks.deleted_at is null)) then 1 else 0 end) as mine_count", [$user->id, $user->id, $user->id, $user->id])
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.delivery_date < ? then 1 else 0 end) as overdue_count", [$today])
             ->selectRaw("sum(case when flow_jobs.completed_at is null and flow_jobs.delivery_date between ? and ? then 1 else 0 end) as week_count", [$today, $weekEnd])
-            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.health = 'Blocked' or flow_jobs.status = 'Blocked' or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status = 'Blocked' and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as blocked_count")
+            ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.status = 'Blocked' or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status = 'Blocked' and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as blocked_count")
             ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.status in ('Waiting for Client','Waiting for Supplier','Waiting for Internal Approval') and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as waiting_count")
             ->selectRaw("sum(case when flow_jobs.completed_at is null and (flow_jobs.owner_id is null or flow_jobs.coordinator_id is null or exists (select 1 from tasks where tasks.flow_job_id = flow_jobs.id and tasks.assignee_id is null and tasks.completed_at is null and tasks.deleted_at is null)) then 1 else 0 end) as unassigned_count")
             ->first();
@@ -474,7 +474,7 @@ class BoardService
                 };
             })
             ->when($filters['owner'] ?? null, fn ($q, $value) => $q->where(fn ($inner) => $inner->where('owner_id', $value)->orWhere('coordinator_id', $value)))
-            ->when($filters['health'] ?? null, fn ($q, $value) => $q->where('health', $value));
+;
 
         match ($filters['quick'] ?? '') {
             'mine' => $query->where(fn ($q) => $q
@@ -485,7 +485,7 @@ class BoardService
             ),
             'overdue' => $query->where('delivery_date', '<', app(WorkspaceSettingsService::class)->localToday()->toDateString()),
             'week' => $query->whereBetween('delivery_date', [app(WorkspaceSettingsService::class)->localToday(), app(WorkspaceSettingsService::class)->localToday()->copy()->addDays(7)]),
-            'blocked' => $query->where(fn ($q) => $q->where('health', 'Blocked')->orWhere('status', 'Blocked')->orWhereHas('tasks', fn ($t) => $t->where('status', 'Blocked')->whereNull('completed_at'))),
+            'blocked' => $query->where(fn ($q) => $q->where('status', 'Blocked')->orWhereHas('tasks', fn ($t) => $t->where('status', 'Blocked')->whereNull('completed_at'))),
             'waiting' => $query->where(fn ($q) => $q->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->orWhereHas('tasks', fn ($t) => $t->whereIn('status', ['Waiting for Client', 'Waiting for Supplier', 'Waiting for Internal Approval'])->whereNull('completed_at'))),
             'unassigned' => $query->where(fn ($q) => $q->whereNull('owner_id')->orWhereNull('coordinator_id')->orWhereHas('tasks', fn ($t) => $t->whereNull('assignee_id')->whereNull('completed_at'))),
             default => null,

@@ -16,7 +16,9 @@ function gzipBytes(file) {
 }
 
 const sourceFiles = [
-  'resources/css/flowtrack.css',
+  'resources/css/application/core.css',
+  'resources/css/application/after-core.css',
+  'resources/css/application/after-dashboard.css',
   'resources/css/app.css',
   'resources/css/login.css',
   'resources/css/components/management-theme.css',

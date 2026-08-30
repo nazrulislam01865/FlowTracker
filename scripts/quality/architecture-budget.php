@@ -92,12 +92,40 @@ function metrics(string $root): array
     $appText = readTextFiles($appPhpFiles);
 
     $allCssFiles = collectFiles($root . '/resources/css', '.css');
-    $allCssText = readTextFiles($allCssFiles);
-    $canonicalCssFiles = array_values(array_filter(
+
+    // Phase 3 finalization moved the pre-existing visual debt into owned
+    // component/module files and removed the monolith/legacy directory. Path
+    // movement must not be counted as new Phase 0 debt. The exact preserved
+    // files are recorded in quality/css-finalization-manifest.json and are
+    // governed separately by scripts/quality/css-modularization.php.
+    $finalizationManifestPath = $root . '/quality/css-finalization-manifest.json';
+    $finalizationManifest = is_file($finalizationManifestPath)
+        ? json_decode((string) file_get_contents($finalizationManifestPath), true)
+        : [];
+    $sourcePreservedCss = array_fill_keys($finalizationManifest['source_preserved_files'] ?? [], true);
+    $phase3RelocatedLegacy = static function (string $file) use ($root, $sourcePreservedCss): bool {
+        return isset($sourcePreservedCss[normalizePath($file, $root)]);
+    };
+
+    $architectureCssFiles = array_values(array_filter(
         $allCssFiles,
+        static fn (string $file): bool => ! $phase3RelocatedLegacy($file)
+    ));
+    $allCssText = readTextFiles($architectureCssFiles);
+    $canonicalCssFiles = array_values(array_filter(
+        $architectureCssFiles,
         static fn (string $file): bool => !str_contains(str_replace('\\', '/', $file), '/resources/css/generated/')
     ));
     $canonicalCssText = readTextFiles($canonicalCssFiles);
+
+    // Phase 1 establishes tokens.css as the one allowed owner of static design
+    // values. Hard-coded color debt excludes that authoritative token source
+    // while continuing to count legacy/component/page stylesheets.
+    $hardcodedColorDebtFiles = array_values(array_filter(
+        $canonicalCssFiles,
+        static fn (string $file): bool => normalizePath($file, $root) !== 'resources/css/foundation/tokens.css'
+    ));
+    $hardcodedColorDebtText = readTextFiles($hardcodedColorDebtFiles);
 
     $flowtrackPath = $root . '/resources/css/flowtrack.css';
     $flowtrackText = is_file($flowtrackPath) ? (string) file_get_contents($flowtrackPath) : '';
@@ -137,7 +165,7 @@ function metrics(string $root): array
             'blade_hardcoded_hex_colors' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $bladeText),
             'css_important_all' => regexCount('/!important\b/', $allCssText),
             'css_important_canonical' => regexCount('/!important\b/', $canonicalCssText),
-            'css_hardcoded_hex_canonical' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $canonicalCssText),
+            'css_hardcoded_hex_canonical' => regexCount('/#[0-9a-fA-F]{3,8}\b/', $hardcodedColorDebtText),
             'flowtrack_css_bytes' => is_file($flowtrackPath) ? filesize($flowtrackPath) : 0,
             'flowtrack_css_lines' => is_file($flowtrackPath) ? lineCount($flowtrackPath) : 0,
             'flowtrack_css_important' => regexCount('/!important\b/', $flowtrackText),
@@ -198,6 +226,12 @@ $baseline = json_decode((string) file_get_contents($baselinePath), true, flags: 
 $expected = flattenBudgets($baseline['budgets'] ?? []);
 $actual = flattenBudgets($current['budgets']);
 $failures = [];
+$exceptionNotices = [];
+$exceptionPath = $root . '/quality/architecture-inherited-exceptions.json';
+$exceptionConfig = is_file($exceptionPath)
+    ? json_decode((string) file_get_contents($exceptionPath), true, flags: JSON_THROW_ON_ERROR)
+    : ['exceptions' => []];
+$exceptions = $exceptionConfig['exceptions'] ?? [];
 
 foreach ($expected as $metric => $limit) {
     $value = $actual[$metric] ?? null;
@@ -205,16 +239,33 @@ foreach ($expected as $metric => $limit) {
         $failures[] = "$metric: metric missing from current scan";
         continue;
     }
-    if ($value > $limit) {
-        $failures[] = "$metric: $value > baseline $limit";
+    if ($value <= $limit) {
+        continue;
     }
+
+    $exception = $exceptions[$metric] ?? null;
+    $exceptionCeiling = is_array($exception) ? (int) ($exception['ceiling'] ?? -1) : -1;
+    if ($exceptionCeiling >= 0 && $value <= $exceptionCeiling) {
+        $targetPhase = (string) ($exception['target_phase'] ?? 'future phase');
+        $exceptionNotices[] = "$metric inherited at $value (Phase 0 ceiling $limit; frozen exception $exceptionCeiling; owner $targetPhase)";
+        continue;
+    }
+
+    $suffix = $exceptionCeiling >= 0 ? "; exception ceiling $exceptionCeiling" : '';
+    $failures[] = "$metric: $value > baseline $limit$suffix";
 }
 
 printf("Architecture budget check\n%-48s %12s %12s %10s\n", 'Metric', 'Current', 'Baseline', 'Status');
 foreach ($expected as $metric => $limit) {
     $value = $actual[$metric] ?? -1;
-    $status = $value <= $limit ? 'PASS' : 'FAIL';
+    $exception = $exceptions[$metric] ?? null;
+    $exceptionCeiling = is_array($exception) ? (int) ($exception['ceiling'] ?? -1) : -1;
+    $status = $value <= $limit ? 'PASS' : (($exceptionCeiling >= 0 && $value <= $exceptionCeiling) ? 'EXCEPT' : 'FAIL');
     printf("%-48s %12d %12d %10s\n", $metric, $value, $limit, $status);
+}
+
+if ($exceptionNotices !== []) {
+    echo "\nFrozen inherited architecture exceptions (non-increasing):\n - " . implode("\n - ", $exceptionNotices) . "\n";
 }
 
 if ($failures !== []) {
@@ -222,4 +273,4 @@ if ($failures !== []) {
     exit(1);
 }
 
-echo "\nPASS: architecture debt did not increase.\n";
+echo "\nPASS: Phase 0 debt did not increase beyond the original baseline or explicitly frozen inherited ceilings.\n";

@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use App\Support\AttachmentUpload;
 use Illuminate\Http\UploadedFile;
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class AttachmentUploadFormatSupportTest extends TestCase
 {
@@ -32,16 +33,16 @@ class AttachmentUploadFormatSupportTest extends TestCase
     public function test_key_order_inquiry_task_and_archive_uploaders_expose_eps_and_esp(): void
     {
         $views = [
-            resource_path('views/components/jobs/create.blade.php'),
-            resource_path('views/components/jobs/detail-overview.blade.php'),
-            resource_path('views/components/jobs/task-detail.blade.php'),
-            resource_path('views/livewire/inquiries/_attachments.blade.php'),
-            resource_path('views/livewire/inquiries/index.blade.php'),
-            resource_path('views/livewire/documents/index.blade.php'),
+            resource_path('views/components/jobs/create.blade.php') => file_get_contents(resource_path('views/components/jobs/create.blade.php')),
+            resource_path('views/components/jobs/order-detail/attachments.blade.php') => file_get_contents(resource_path('views/components/jobs/order-detail/attachments.blade.php')),
+            resource_path('views/components/jobs/order-detail/document-modal.blade.php') => file_get_contents(resource_path('views/components/jobs/order-detail/document-modal.blade.php')),
+            resource_path('views/components/jobs/task-detail.blade.php') => OrderPhase5Source::taskDetailView(),
+            resource_path('views/livewire/inquiries/_attachments.blade.php') => file_get_contents(resource_path('views/livewire/inquiries/_attachments.blade.php')),
+            resource_path('views/livewire/inquiries/index.blade.php') => $this->inquiryViewSource(),
+            resource_path('views/livewire/documents/index.blade.php') => file_get_contents(resource_path('views/livewire/documents/index.blade.php')),
         ];
 
-        foreach ($views as $view) {
-            $contents = file_get_contents($view);
+        foreach ($views as $view => $contents) {
             $this->assertStringContainsString('.eps', $contents, $view);
             $this->assertStringContainsString('.esp', $contents, $view);
         }

@@ -3,7 +3,8 @@
 namespace App\Livewire\Dashboard;
 
 use App\Livewire\Concerns\RefreshesFromWorkspace;
-use App\Services\DashboardService;
+use App\Actions\Dashboard\MarkDashboardMentionsRead;
+use App\Queries\Dashboard\DashboardMentionsQuery;
 use Livewire\Attributes\On;
 use Livewire\Attributes\Reactive;
 use Livewire\Component;
@@ -45,7 +46,7 @@ class TaggedComments extends Component
 
     public function markAllRead(): void
     {
-        app(DashboardService::class)->markAllMentionsRead(
+        app(MarkDashboardMentionsRead::class)->handle(
             auth()->user(),
             max(0, (int) $this->clientFilter),
             max(0, (int) $this->teamFilter),
@@ -63,14 +64,14 @@ class TaggedComments extends Component
 
     public function render()
     {
-        $service = app(DashboardService::class);
+        $service = app(DashboardMentionsQuery::class);
         $clientId = max(0, (int) $this->clientFilter);
         $departmentId = max(0, (int) $this->teamFilter);
 
         // Apply both the local mention tab and the parent dashboard controls in SQL
         // before LIMIT. This keeps the feed synchronized with Today/7 days/30 days,
         // Client, Team and Search instead of behaving like an isolated widget.
-        $mentions = $service->mentions(
+        $mentions = $service->rows(
             auth()->user(),
             $this->filter,
             4,
@@ -82,7 +83,7 @@ class TaggedComments extends Component
 
         return view('livewire.dashboard.tagged-comments', [
             'mentions' => $mentions,
-            'unreadMentionCount' => $service->unreadMentionCount(
+            'unreadMentionCount' => $service->unreadCount(
                 auth()->user(),
                 $clientId,
                 $departmentId,

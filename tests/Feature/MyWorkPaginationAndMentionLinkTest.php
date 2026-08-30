@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
+use Tests\Support\OrderPhase5Source;
 
 class MyWorkPaginationAndMentionLinkTest extends TestCase
 {
@@ -12,11 +13,11 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
-        $this->assertStringContainsString('public const JOBS_PER_PAGE = 5;', $service);
+        $this->assertStringContainsString('public const JOBS_PER_PAGE = 3;', $service);
         $this->assertStringContainsString('min(self::JOBS_PER_PAGE, $perPage)', $service);
         $this->assertStringContainsString('public int $perPage = MyWorkService::JOBS_PER_PAGE;', $component);
         $this->assertStringContainsString("previousPage('workPage')", $view);
-        $this->assertStringContainsString("gotoPage({{ $pageNumber }}, 'workPage')", $view);
+        $this->assertStringContainsString("gotoPage({{ \$pageNumber }}, 'workPage')", $view);
         $this->assertStringContainsString("nextPage('workPage')", $view);
     }
 
@@ -26,8 +27,8 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $controller = file_get_contents(app_path('Http/Controllers/NotificationOpenController.php'));
         $routes = file_get_contents(base_path('routes/web.php'));
         $tagged = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
-        $jobs = file_get_contents(app_path('Livewire/Jobs/Index.php'));
-        $taskDetail = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
+        $jobs = OrderPhase5Source::livewire();
+        $taskDetail = OrderPhase5Source::taskDetailView();
         $jobActivity = file_get_contents(resource_path('views/components/jobs/detail-activity.blade.php'));
 
         $this->assertStringContainsString("route('notifications.open'", $notificationService);
@@ -65,9 +66,9 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
     }
     public function test_dashboard_mentions_include_descriptions_and_inquiries_with_realtime_delivery(): void
     {
-        $dashboardService = file_get_contents(app_path('Services/DashboardService.php'));
+        $dashboardService = file_get_contents(app_path('Services/LegacyDashboardService.php'));
         $notificationService = file_get_contents(app_path('Services/NotificationService.php'));
-        $inquiryService = file_get_contents(app_path('Services/InquiryService.php'));
+        $inquiryService = $this->inquiryServiceSource();
         $tagged = file_get_contents(app_path('Livewire/Dashboard/TaggedComments.php'));
         $taggedView = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
 
@@ -76,11 +77,11 @@ class MyWorkPaginationAndMentionLinkTest extends TestCase
         $this->assertStringContainsString("flow_notifications.inquiry_task_id", $dashboardService);
         $this->assertStringNotContainsString("flow_task_comments.body', 'flow_notifications.message'", $dashboardService);
         $this->assertStringContainsString('notifyInquiryMentionedUsers', $notificationService);
-        $this->assertStringContainsString("'inquiry_id' => $inquiry?->id", $notificationService);
+        $this->assertStringContainsString("'inquiry_id' => \$inquiry?->id", $notificationService);
         $this->assertStringContainsString('$this->notifyMentions($inquiry->refresh(), null, $newDisplay, $actor);', $inquiryService);
         $this->assertStringNotContainsString('if ((int) $recipient->id === (int) $actor->id) return;', $inquiryService);
-        $this->assertStringContainsString("'inquiry'", $tagged);
-        $this->assertStringContainsString("'inquiry' => 'Inquiries'", $taggedView);
+        $this->assertStringContainsString("'inquiries'", $tagged);
+        $this->assertStringContainsString(">Inquiries</button>", $taggedView);
     }
 
 }

@@ -9,7 +9,18 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class WorkflowTemplate extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'id',
+        'workspace_id',
+        'code',
+        'name',
+        'description',
+        'is_active',
+        'is_default',
+        'version',
+        'applies_to',
+        'client_availability',
+    ];
 
     protected function casts(): array
     {

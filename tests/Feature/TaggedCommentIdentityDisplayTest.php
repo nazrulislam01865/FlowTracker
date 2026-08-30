@@ -50,11 +50,11 @@ class TaggedCommentIdentityDisplayTest extends TestCase
     public function test_tagged_comments_use_actor_avatar_and_humanized_mention_text(): void
     {
         $view = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
-        $dashboard = file_get_contents(app_path('Services/DashboardService.php'));
+        $dashboard = file_get_contents(app_path('Services/LegacyDashboardService.php'));
         $notification = file_get_contents(app_path('Models/FlowNotification.php'));
         $migration = file_get_contents(database_path('migrations/2026_08_12_063000_add_actor_to_flow_notifications.php'));
 
-        $this->assertStringContainsString('<x-ui.avatar class="ft-avatar"', $view);
+        $this->assertStringContainsString('<x-ui.avatar class="ft-mgmt-mention-avatar"', $view);
         $this->assertStringContainsString('MentionService::class)->displayText($mention->message)', $view);
         $this->assertStringContainsString("'actor:id,name,profile_image_path'", $dashboard);
         $this->assertStringContainsString('FlowNotification::supportsActorIdentity()', $dashboard);

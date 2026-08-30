@@ -17,7 +17,7 @@ class OrderRequiredDocumentsAndMyWorkSearchPerformanceTest extends TestCase
 
     public function test_order_detail_tabs_eager_load_tasks_and_documents_before_presenting_requirements(): void
     {
-        $service = file_get_contents(app_path('Services/JobService.php'));
+        $service = $this->jobServiceSource();
 
         $this->assertStringContainsString("if (\$tab === 'overview')", $service);
         $this->assertStringContainsString("if (\$tab === 'workflow')", $service);
@@ -32,7 +32,7 @@ class OrderRequiredDocumentsAndMyWorkSearchPerformanceTest extends TestCase
         $view = file_get_contents(resource_path('views/livewire/my-work/index.blade.php'));
 
         $this->assertStringContainsString('if ($length >= 3) return true;', $service);
-        $this->assertStringContainsString("preg_match('/^(JO|TS|TA|OR)$/i'", $service);
+        $this->assertStringContainsString("preg_match('/^(JO|TS|TA|OR)\$/i'", $service);
         $this->assertStringContainsString('$referencePrefixOnly = mb_strlen($search) < 3', $service);
         $this->assertStringContainsString("wire:model.live.debounce.650ms=\"search\"", $view);
         $this->assertStringContainsString('! app(MyWorkService::class)->searchIsUsable($this->search)', $component);

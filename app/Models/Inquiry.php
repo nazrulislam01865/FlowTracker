@@ -13,7 +13,37 @@ class Inquiry extends Model
 {
     use SoftDeletes;
 
-    protected $guarded = [];
+    protected $fillable = [
+        'workspace_id',
+        'inquiry_number',
+        'client_id',
+        'owner_id',
+        'created_by',
+        'source_task_pack_id',
+        'reference_number',
+        'client_contact',
+        'received_date',
+        'request_source',
+        'subject',
+        'requirement_notes',
+        'target_price',
+        'currency',
+        'required_delivery_date',
+        'priority',
+        'initial_follow_up_date',
+        'status',
+        'result',
+        'dead_reason',
+        'dead_note',
+        'converted_job_id',
+        'completed_at',
+        'source_workflow_template_id',
+        'started_at',
+        'needs_attention',
+        'attention_reason',
+        'attention_by',
+        'attention_at',
+    ];
 
     protected function casts(): array
     {
@@ -32,6 +62,7 @@ class Inquiry extends Model
     public function client(): BelongsTo { return $this->belongsTo(Client::class); }
     public function owner(): BelongsTo { return $this->belongsTo(User::class, 'owner_id'); }
     public function creator(): BelongsTo { return $this->belongsTo(User::class, 'created_by'); }
+    public function attentionRequester(): BelongsTo { return $this->belongsTo(User::class, 'attention_by'); }
     public function sourceTaskPack(): BelongsTo { return $this->belongsTo(TaskPack::class, 'source_task_pack_id'); }
     public function sourceWorkflow(): BelongsTo { return $this->belongsTo(WorkflowTemplate::class, 'source_workflow_template_id'); }
     public function convertedJob(): BelongsTo { return $this->belongsTo(FlowJob::class, 'converted_job_id'); }
@@ -47,5 +78,6 @@ class Inquiry extends Model
             ->orderBy('inquiry_tasks.sequence');
     }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
+    public function rfqInvitations(): HasMany { return $this->hasMany(InquiryRfqInvitation::class)->latest('id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
 }

@@ -7,7 +7,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class WorkspaceMembership extends Model
 {
-    protected $guarded = [];
+    protected $fillable = [
+        'workspace_id',
+        'user_id',
+        'role_id',
+        'department_id',
+        'job_title',
+        'status',
+        'joined_at',
+        'business_unit',
+    ];
 
     protected function casts(): array
     {

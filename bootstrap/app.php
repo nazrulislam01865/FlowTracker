@@ -11,12 +11,27 @@ use App\Http\Middleware\EnsureSingleLoginSession;
 use App\Http\Middleware\MonitorPerformance;
 use App\Http\Middleware\NormalizeSessionCookie;
 use App\Http\Middleware\PreventDynamicPageCaching;
+use App\Http\Middleware\SecurityHeaders;
+use App\Http\Controllers\Health\InfrastructureReadyController;
+use App\Http\Controllers\Telemetry\RealtimeTelemetryController;
+use Illuminate\Support\Facades\Route;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
         web: __DIR__.'/../routes/web.php',
         commands: __DIR__.'/../routes/console.php',
         health: '/up',
+        then: function (): void {
+            // Stateless readiness check for Nginx/load balancers. `/up` remains
+            // the cheap process-liveness endpoint; this route verifies shared
+            // dependencies without creating a session on the selected node.
+            Route::get('/health/ready', InfrastructureReadyController::class)
+                ->name('health.ready');
+
+            Route::post('/telemetry/realtime', RealtimeTelemetryController::class)
+                ->middleware(['web', 'auth', 'throttle:60,1'])
+                ->name('telemetry.realtime');
+        },
     )
     ->withMiddleware(function (Middleware $middleware): void {
         $middleware->alias([
@@ -29,7 +44,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // a fresh browser or alternate host to lose its session and hit 419.
         $middleware->web(
             prepend: [NormalizeSessionCookie::class],
-            append: [MonitorPerformance::class, EnsureSingleLoginSession::class, PreventDynamicPageCaching::class],
+            append: [MonitorPerformance::class, EnsureSingleLoginSession::class, PreventDynamicPageCaching::class, SecurityHeaders::class],
         );
     })
     ->withExceptions(function (Exceptions $exceptions): void {

@@ -17,11 +17,20 @@
     'startPhaseId' => null,
     'startPhaseProperty' => null,
     'startPhaseErrorField' => null,
+    'selectable' => true,
+    'stagePreview' => collect(),
+    'kindLabel' => 'Default workflow',
+    'sourceLabel' => null,
+    'stageNoun' => 'phase',
+    'optionEmptyMessage' => 'No workflow is available.',
+    'setupUrl' => null,
+    'setupLabel' => 'Open workflow setup',
 ])
 
 @php
     $workflowOptions = collect($workflowOptions);
     $startPhases = collect($startPhases);
+    $stagePreview = collect($stagePreview);
     $workflowOptionCount = $workflowOptions->count();
     $phaseCount = (int) $phaseCount;
     $taskCount = (int) $taskCount;
@@ -29,7 +38,7 @@
     $showStartPhasePicker = filled($startPhaseProperty) && $startPhases->count() > 1;
 @endphp
 
-<section {{ $attributes->class('ft-create-workflow-next') }} x-data="{ workflowOpen: false }">
+<section {{ $attributes->class('ft-create-workflow-next') }} x-data="{ workflowOpen: false, previewOpen: false }">
     <div class="ft-create-workflow-heading">
         <span>{{ $step }}</span>
         <h2>{{ $title }}</h2>
@@ -42,22 +51,46 @@
         <button
             class="ft-create-workflow-selected"
             type="button"
-            x-on:click="workflowOpen = !workflowOpen"
-            :aria-expanded="workflowOpen.toString()"
-            aria-haspopup="listbox"
+            @if($selectable) x-on:click="workflowOpen = !workflowOpen" :aria-expanded="workflowOpen.toString()" aria-haspopup="listbox" @else aria-expanded="false" disabled @endif
         >
             <span class="ft-create-workflow-icon" aria-hidden="true">✓</span>
             <span class="ft-create-workflow-copy">
-                <small>Default workflow</small>
+                <small>{{ $kindLabel }}@if(filled($sourceLabel)) · {{ $sourceLabel }}@endif</small>
                 <strong>{{ $selectedWorkflowName ?: 'Select workflow' }}</strong>
-                <span>{{ $phaseCount }} {{ \Illuminate\Support\Str::plural('phase', $phaseCount) }} · {{ $taskCount }} {{ \Illuminate\Support\Str::plural('task', $taskCount) }} will be created</span>
+                <span>{{ $phaseCount }} {{ \Illuminate\Support\Str::plural($stageNoun, $phaseCount) }} · {{ $taskCount }} {{ \Illuminate\Support\Str::plural('task', $taskCount) }} will be created</span>
             </span>
-            @if($previewAllowed)
-                <span class="ft-workflow-preview-muted" title="Workflow Setup is temporarily disabled">Preview workflow unavailable</span>
+            @if($stagePreview->isNotEmpty())
+                <span
+                    class="ft-create-workflow-preview-toggle"
+                    role="button"
+                    tabindex="0"
+                    x-on:click.stop="previewOpen = !previewOpen"
+                    x-on:keydown.enter.stop.prevent="previewOpen = !previewOpen"
+                    x-on:keydown.space.stop.prevent="previewOpen = !previewOpen"
+                    x-text="previewOpen ? 'Hide workflow' : 'Preview workflow'"
+                >Preview workflow</span>
             @endif
-            <span class="ft-create-workflow-chevron" aria-hidden="true">⌄</span>
+            @if($selectable)<span class="ft-create-workflow-chevron" aria-hidden="true">⌄</span>@endif
         </button>
 
+        @if($stagePreview->isNotEmpty())
+            <div class="ft-create-workflow-preview" x-cloak x-show="previewOpen" x-transition.opacity.duration.120ms>
+                @foreach($stagePreview as $stage)
+                    @php
+                        $stageColor = $stage['color'] ?? '#2d72d9';
+                        $stageSequence = (int) ($stage['sequence'] ?? $loop->iteration);
+                        $stageTaskCount = (int) ($stage['task_count'] ?? 0);
+                    @endphp
+                    <div class="ft-create-workflow-stage" style="--ft-workflow-stage: {{ $stageColor }}">
+                        <small>Stage {{ $stageSequence }}</small>
+                        <strong>{{ $stage['name'] ?? 'Stage' }}</strong>
+                        <span>{{ $stageTaskCount }} {{ \Illuminate\Support\Str::plural('task', $stageTaskCount) }}</span>
+                    </div>
+                @endforeach
+            </div>
+        @endif
+
+        @if($selectable)
         <div class="ft-create-workflow-options" x-cloak x-show="workflowOpen" role="listbox" aria-label="Available workflows">
             @forelse($workflowOptions as $workflowOption)
                 @php
@@ -79,7 +112,12 @@
                     </span>
                 </button>
             @empty
-                <div class="ft-create-workflow-empty">No workflow is available for the selected client.</div>
+                <div class="ft-create-workflow-empty">
+                    <span>{{ $optionEmptyMessage }}</span>
+                    @if(filled($setupUrl))
+                        <a href="{{ $setupUrl }}" wire:navigate>{{ $setupLabel }} →</a>
+                    @endif
+                </div>
             @endforelse
 
             @if($showStartPhasePicker)
@@ -94,6 +132,7 @@
                 </label>
             @endif
         </div>
+        @endif
     </div>
 
     @if($emptyMessage)

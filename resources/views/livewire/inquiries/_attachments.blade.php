@@ -1,41 +1,24 @@
 <section class="ft-detail-card ft-attachment-card">
     <h2>Attachments <span>{{ $inquiry->documents_count }}</span></h2>
     <div class="ft-upload-zone compact ft-task-upload-zone">
-        @if($canEditInquiry && $canCreateDocuments && !$showInquiryDocumentPicker)
+        @if($canEditInquiry && $canCreateDocuments)
             <label class="ft-task-upload-drop ft-livewire-upload-zone" data-file-dropzone data-auto-upload-method="uploadInquiryFiles" for="inquiryOverviewUpload-{{ $inquiry->id }}">
                 <input id="inquiryOverviewUpload-{{ $inquiry->id }}" type="file" wire:model="inquiryUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp">
                 <span class="ft-paperclip">⌕</span>
                 <div>Drop files here or <strong>browse</strong><small data-drop-status>PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB</small></div>
             </label>
-        @elseif(!$canEditInquiry || (!$canCreateDocuments && !$canLinkDocuments))
+        @elseif(!$canEditInquiry || !$canCreateDocuments)
             <div class="ft-task-upload-drop ft-task-upload-readonly"><span class="ft-paperclip">⌕</span><div>Attachments<small>You have read-only access to Inquiry attachments.</small></div></div>
-        @endif
-        @if($canEditInquiry && $canLinkDocuments)
-            <button class="ft-outline-btn ft-task-choose-document" type="button" wire:click="toggleInquiryDocumentPicker">{{ $showInquiryDocumentPicker && $canCreateDocuments ? 'Upload new' : 'Choose from Documents' }}</button>
         @endif
     </div>
 
-    @if(!$showInquiryDocumentPicker && count($inquiryUploads ?? []))
+    @if(count($inquiryUploads ?? []))
         <div class="ft-upload-ready-row ft-auto-upload-state" aria-live="polite">
             <span>Uploading and linking {{ count($inquiryUploads ?? []) }} file{{ count($inquiryUploads ?? []) === 1 ? '' : 's' }} automatically…</span>
         </div>
     @endif
     @error('inquiryUploads')<div class="validation-error">{{ $message }}</div>@enderror
     @error('inquiryUploads.*')<div class="validation-error">{{ $message }}</div>@enderror
-
-    @if($showInquiryDocumentPicker)
-        <div class="ft-existing-document-picker ft-task-document-picker">
-            <select wire:model="inquiryExistingDocumentId">
-                <option value="">Select a stored client document</option>
-                @foreach($availableInquiryDocuments as $stored)
-                    <option value="{{ $stored->id }}">{{ $stored->name }}</option>
-                @endforeach
-            </select>
-            <button class="ft-new-job-btn" type="button" wire:click="attachExistingInquiryDocument">Link document</button>
-            <button class="ft-outline-btn" type="button" wire:click="toggleInquiryDocumentPicker">Cancel</button>
-        </div>
-        @error('inquiryExistingDocumentId')<div class="validation-error">{{ $message }}</div>@enderror
-    @endif
 
     @if($inquiryDocuments)
         @foreach($inquiryDocuments as $document)

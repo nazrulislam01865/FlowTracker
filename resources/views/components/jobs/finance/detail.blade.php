@@ -1,5 +1,5 @@
 @props([
-    'job','summary'=>[],'contacts'=>collect(),'users'=>collect(),
+    'job','summary'=>[],'redoContext'=>[],'contacts'=>collect(),'users'=>collect(),
     'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'paymentMethods'=>collect(),'receivedAccounts'=>collect(),
     'canCreate'=>false,'canEdit'=>false,
     'showCreateInvoiceModal'=>false,'invoiceType'=>'Final invoice','invoiceCurrency'=>'USD','invoiceIssueDate'=>'','invoicePaymentTerms'=>'Net 15 days','invoiceDueDate'=>'','invoiceBillingContactId'=>null,'invoiceLineItems'=>[],'invoicePurchaseOrderReference'=>'','invoiceNotes'=>'','invoiceTaxRate'=>'0','invoiceSupportingDocument'=>null,'invoiceEmailAfterCreation'=>false,
@@ -24,6 +24,8 @@
         <x-jobs.finance.metric-card label="Outstanding" :value="$money($summary['outstanding'] ?? 0)" icon="outstanding" tone="blue" />
         <x-jobs.finance.metric-card label="Overdue" :value="$money($summary['overdue'] ?? 0)" icon="warning" tone="red" :danger="(float)($summary['overdue'] ?? 0) > 0" />
     </div>
+
+    <x-jobs.order-detail.redo-finance :job="$job" :context="$redoContext" />
 
     @if((float)($summary['overdue'] ?? 0) > 0)
         <div class="ft-finance-overdue">

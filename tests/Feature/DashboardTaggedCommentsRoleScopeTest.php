@@ -9,7 +9,7 @@ class DashboardTaggedCommentsRoleScopeTest extends TestCase
     public function test_tagged_comments_are_workspace_wide_for_administrators_and_personal_for_users(): void
     {
         $notifications = file_get_contents(app_path('Services/NotificationService.php'));
-        $dashboard = file_get_contents(app_path('Services/DashboardService.php'));
+        $dashboard = file_get_contents(app_path('Services/LegacyDashboardService.php'));
         $tagged = file_get_contents(resource_path('views/livewire/dashboard/tagged-comments.blade.php'));
         $index = file_get_contents(resource_path('views/livewire/dashboard/index.blade.php'));
         $resolver = file_get_contents(app_path('Http/Controllers/NotificationOpenController.php'));
@@ -23,7 +23,8 @@ class DashboardTaggedCommentsRoleScopeTest extends TestCase
         $this->assertStringContainsString('All mentions across Orders, Tasks and Inquiries', $tagged);
         $this->assertStringContainsString("\$mention->type === 'mention_admin' ? 'mentioned a user in' : 'mentioned you in'", $tagged);
         $this->assertStringNotContainsString("collect(\$data['attentionItems'])->take(4)", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
-        $this->assertStringContainsString("collect(\$data['attentionItems'])->take(6)->values()", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
+        $this->assertStringContainsString("'orders' => \$attentionOrders", file_get_contents(app_path('Livewire/Dashboard/Index.php')));
+        $this->assertStringContainsString('->take(6)', file_get_contents(app_path('Livewire/Dashboard/Index.php')));
         $this->assertStringContainsString("['mention', 'mention_admin', 'comment']", $resolver);
         $this->assertStringContainsString("type === 'mention_admin'", $resolver);
         $this->assertStringContainsString("'type' => 'mention_admin'", $migration);

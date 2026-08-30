@@ -10,10 +10,12 @@ use App\Models\TaskPack;
 use App\Models\TaskPackItem;
 use App\Models\TaskPackTask;
 use App\Models\WorkflowPhase;
+use App\Support\MasterColor;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Illuminate\Validation\ValidationException;
 
@@ -62,8 +64,9 @@ class TaskPackService
             ->select(['id', 'workspace_id', 'code', 'name', 'description', 'is_active'])
             ->with([
                 'items' => fn ($query) => $query->select([
-                    'id', 'task_pack_id', 'title', 'default_assignee_id',
+                    'id', 'task_pack_id', 'title', 'color', 'default_assignee_id',
                     'default_department_id', 'priority_id', 'document_category_id',
+                    'document_required_before_completion', 'allow_multiple_documents', 'document_instructions',
                     'is_required', 'sort_order',
                 ]),
                 'items.defaultAssignee:id,name',
@@ -135,7 +138,18 @@ class TaskPackService
     public function savePackWithItems(array $packData, array $items, ?int $id = null): TaskPack
     {
         $this->assertAction($id ? 'edit' : 'create');
-        return DB::transaction(function () use ($packData, $items, $id) {
+
+        if ($id) {
+            $orderedExistingIds = collect($items)
+                ->pluck('id')
+                ->filter()
+                ->map(fn ($itemId) => (int) $itemId)
+                ->values()
+                ->all();
+            $this->assertOrderPackCoreSequence($id, $orderedExistingIds);
+        }
+
+        $pack = DB::transaction(function () use ($packData, $items, $id) {
             $pack = $this->savePack($packData, $id, false);
             $keepIds = [];
 
@@ -148,6 +162,7 @@ class TaskPackService
                 $saved = $this->saveItem($pack, [
                     'title' => $row['title'] ?? '',
                     'description' => $row['description'] ?? null,
+                    'color' => $row['color'] ?? '#2563EB',
                     'default_assignee_id' => $row['default_assignee_id'] ?? null,
                     'default_department_id' => $row['default_department_id'] ?? null,
                     'priority_id' => $row['priority_id'] ?? null,
@@ -162,7 +177,7 @@ class TaskPackService
                     'allow_efficiency_override' => (bool) ($row['allow_efficiency_override'] ?? false),
                     'is_required' => (bool) ($row['is_required'] ?? true),
                     'sort_order' => $index,
-                ], $itemId, false);
+                ], $itemId, false, false);
                 $keepIds[] = $saved->id;
             }
 
@@ -178,6 +193,9 @@ class TaskPackService
             $this->normalize($pack->id);
             return $pack->fresh(['items.defaultAssignee','items.defaultDepartment','items.priority','items.documentCategory']);
         });
+
+        $this->publishMappedOrderWorkflows((int) $pack->id);
+        return $pack;
     }
 
     public function savePack(array $data, ?int $id = null, bool $authorize = true): TaskPack
@@ -202,6 +220,9 @@ class TaskPackService
                 ->where('workspace_id', $workspaceId)
                 ->where('is_snapshot', false)
                 ->findOrFail($id);
+            if (! $payload['is_active'] && $this->mappedOrderWorkflowIds((int) $pack->id)->isNotEmpty()) {
+                throw ValidationException::withMessages(['packActive' => 'A Task Pack mapped to an Order workflow cannot be deactivated. Remap that workflow first.']);
+            }
             $pack->update($payload);
             return $pack->refresh();
         }
@@ -213,6 +234,9 @@ class TaskPackService
     {
         $this->assertAction('edit');
         $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
+        if ($pack->is_active && $this->mappedOrderWorkflowIds((int) $pack->id)->isNotEmpty()) {
+            throw ValidationException::withMessages(['pack' => 'A Task Pack mapped to an Order workflow cannot be deactivated. Remap that workflow first.']);
+        }
         $pack->update(['is_active' => !$pack->is_active]);
     }
 
@@ -270,8 +294,14 @@ class TaskPackService
                 ->limit(8)
                 ->get(['id', 'job_number', 'title', 'workflow_id', 'source_workflow_id', 'deleted_at']);
 
+        $mappedOrderWorkflowIds = $this->mappedOrderWorkflowIds((int) $pack->id);
+
         return [
             'id' => (int) $pack->id,
+            'can_delete' => $mappedOrderWorkflowIds->isEmpty(),
+            'blocked_reason' => $mappedOrderWorkflowIds->isNotEmpty()
+                ? 'This Task Pack is mapped to an Order workflow. Remap that stage in Workflow Setup before deleting the Task Pack.'
+                : null,
             'name' => (string) $pack->name,
             'mapped_phase_count' => $mappedPhaseCount,
             'mapped_phases' => $mappedPhases->map(fn (WorkflowPhase $phase) => [
@@ -300,6 +330,11 @@ class TaskPackService
     {
         $this->assertAction('delete');
         $pack = TaskPack::where('workspace_id', $this->workspaceId())->where('is_snapshot', false)->findOrFail($id);
+        if ($this->mappedOrderWorkflowIds((int) $pack->id)->isNotEmpty()) {
+            throw ValidationException::withMessages([
+                'pack' => 'This Task Pack is mapped to an Order workflow. Remap that stage in Workflow Setup before deleting it.',
+            ]);
+        }
 
         $mappedPhases = WorkflowPhase::query()
             ->where('task_pack_id', $id)
@@ -353,18 +388,19 @@ class TaskPackService
         ];
     }
 
-    public function saveItem(TaskPack $pack, array $data, ?int $id = null, bool $authorize = true): TaskPackItem
+    public function saveItem(TaskPack $pack, array $data, ?int $id = null, bool $authorize = true, bool $publishOrderWorkflows = true): TaskPackItem
     {
         if ($authorize) $this->assertAction('edit');
         abort_if((bool) $pack->is_snapshot, 404);
-        return DB::transaction(function () use ($pack, $data, $id) {
+        $item = DB::transaction(function () use ($pack, $data, $id) {
             $existingItem = $id ? TaskPackItem::query()->findOrFail($id) : null;
             $previousDefaultAssigneeId = $existingItem?->default_assignee_id ? (int) $existingItem->default_assignee_id : null;
+            $previousDefaultDepartmentId = $existingItem?->default_department_id ? (int) $existingItem->default_department_id : null;
 
             $sort = array_key_exists('sort_order', $data)
                 ? max(0, (int) $data['sort_order'])
                 : ($id ? (int) $existingItem->sort_order : ((int) $pack->items()->max('sort_order') + 1));
-            $item = TaskPackItem::query()->updateOrCreate(['id' => $id], [
+            $payload = [
                 'task_pack_id' => $pack->id,
                 'title' => trim($data['title']),
                 'description' => blank($data['description'] ?? null) ? null : trim($data['description']),
@@ -386,25 +422,79 @@ class TaskPackService
                     : ($existingItem ? (bool) $existingItem->allow_efficiency_override : false),
                 'is_required' => (bool) ($data['is_required'] ?? true),
                 'sort_order' => $sort,
-            ]);
+            ];
+
+            if ($this->taskPackItemColumnExists('color')) {
+                $payload['color'] = MasterColor::normalize((string) ($data['color'] ?? $existingItem?->color ?? '#2563EB')) ?: '#2563EB';
+            }
+
+            // These fields support the protected Order workflow runtime. Keep the
+            // generic Task Pack service backward-compatible during deployments
+            // where PHP code is updated before the migration has finished. The
+            // idempotent migration adds the columns; until then saves no longer
+            // crash with SQLSTATE[42S22].
+            if ($this->taskPackItemColumnExists('automation_key')) {
+                $payload['automation_key'] = array_key_exists('automation_key', $data)
+                    ? (blank($data['automation_key']) ? null : trim((string) $data['automation_key']))
+                    : ($existingItem?->automation_key ?: null);
+            }
+
+            if ($this->taskPackItemColumnExists('document_required_before_completion')) {
+                $payload['document_required_before_completion'] = array_key_exists('document_required_before_completion', $data)
+                    ? (bool) $data['document_required_before_completion']
+                    : ($existingItem ? (bool) ($existingItem->document_required_before_completion ?? true) : true);
+            }
+            if ($this->taskPackItemColumnExists('allow_multiple_documents')) {
+                $payload['allow_multiple_documents'] = array_key_exists('allow_multiple_documents', $data)
+                    ? (bool) $data['allow_multiple_documents']
+                    : ($existingItem ? (bool) ($existingItem->allow_multiple_documents ?? false) : false);
+            }
+            if ($this->taskPackItemColumnExists('document_instructions')) {
+                $payload['document_instructions'] = array_key_exists('document_instructions', $data)
+                    ? (blank($data['document_instructions']) ? null : trim((string) $data['document_instructions']))
+                    : ($existingItem?->document_instructions ?: null);
+            }
+
+            $item = TaskPackItem::query()->updateOrCreate(['id' => $id], $payload);
             $this->mirrorLegacyItem($item);
 
             // Task Pack is the single source of truth for required documents.
             // Keep already generated tasks synchronized when this requirement is
             // added, changed or removed from the Task Pack.
             Task::query()->where('task_pack_task_id', $item->id)->update([
+                'title' => $item->title,
+                'description' => $item->description,
                 'document_category_id' => $item->document_category_id ?: null,
                 'document_requirement_source' => $item->document_category_id ? 'task_pack' : null,
             ]);
 
-            // The Task Pack is also the source of truth for the initial task
-            // assignee. Keep generated tasks in sync when the configured
-            // assignee changes, while preserving a deliberate manual
-            // reassignment made on an individual Job task.
-            $this->syncGeneratedTaskAssignees($item->fresh(), $previousDefaultAssigneeId);
+            // Updating a title, color, timing or document option must not scan
+            // every generated task in the system. Re-resolve generated task
+            // assignees only when the Task Pack's assignment source changed.
+            $nextDefaultAssigneeId = $item->default_assignee_id ? (int) $item->default_assignee_id : null;
+            $nextDefaultDepartmentId = $item->default_department_id ? (int) $item->default_department_id : null;
+            $assignmentChanged = $previousDefaultAssigneeId !== $nextDefaultAssigneeId
+                || $previousDefaultDepartmentId !== $nextDefaultDepartmentId;
+
+            if ($assignmentChanged) {
+                $this->syncGeneratedTaskAssignees($item->fresh(), $previousDefaultAssigneeId);
+            }
 
             return $item;
         });
+
+        if ($publishOrderWorkflows) $this->publishMappedOrderWorkflows((int) $pack->id);
+        return $item;
+    }
+
+
+    /** @var array<string, bool> */
+    private static array $taskPackItemColumnCache = [];
+
+    private function taskPackItemColumnExists(string $column): bool
+    {
+        return self::$taskPackItemColumnCache[$column]
+            ??= Schema::hasTable('task_pack_items') && Schema::hasColumn('task_pack_items', $column);
     }
 
     private function syncGeneratedTaskAssignees(TaskPackItem $item, ?int $previousDefaultAssigneeId = null): void
@@ -415,8 +505,7 @@ class TaskPackService
         $desiredAssigneeId = $item->default_assignee_id ? (int) $item->default_assignee_id : null;
 
         // A Task Pack may use a default department instead of a named user.
-        // Resolve that exactly as Job generation does so existing and newly
-        // generated tasks behave consistently.
+        // Resolve that once, then synchronize matching generated rows in bulk.
         if (!$desiredAssigneeId && $item->defaultDepartment && Schema::hasTable('departments')) {
             $legacyDepartmentId = DB::table('departments')
                 ->where('code', $item->defaultDepartment->code)
@@ -431,60 +520,86 @@ class TaskPackService
             }
         }
 
-        Task::query()
-            ->where('task_pack_task_id', $item->id)
-            ->orderBy('id')
-            ->get()
-            ->each(function (Task $task) use ($desiredAssigneeId, $previousDefaultAssigneeId): void {
-                $storedSetupId = Schema::hasColumn('tasks', 'setup_assignee_id') && $task->setup_assignee_id
-                    ? (int) $task->setup_assignee_id
-                    : null;
+        $taskBase = Task::query()->where('task_pack_task_id', $item->id);
+        $hasSetupAssignee = Schema::hasColumn('tasks', 'setup_assignee_id');
 
-                $followsTaskPack = !$task->assignee_id
-                    || ($storedSetupId && (int) $task->assignee_id === $storedSetupId)
-                    || ($previousDefaultAssigneeId && (int) $task->assignee_id === $previousDefaultAssigneeId);
-
-                if (!$followsTaskPack) return;
-
-                $changes = ['assignee_id' => $desiredAssigneeId];
-                if (Schema::hasColumn('tasks', 'setup_assignee_id')) {
-                    $changes['setup_assignee_id'] = $desiredAssigneeId;
+        $followingTaskIds = (clone $taskBase)
+            ->where(function ($query) use ($previousDefaultAssigneeId, $hasSetupAssignee): void {
+                $query->whereNull('assignee_id');
+                if ($hasSetupAssignee) {
+                    $query->orWhere(function ($sameSetup) {
+                        $sameSetup->whereNotNull('setup_assignee_id')
+                            ->whereColumn('assignee_id', 'setup_assignee_id');
+                    });
                 }
-                $task->update($changes);
-
-                if ($desiredAssigneeId && Schema::hasTable('flow_job_members')) {
-                    DB::table('flow_job_members')->updateOrInsert(
-                        ['flow_job_id' => $task->flow_job_id, 'user_id' => $desiredAssigneeId],
-                        [
-                            'access_level' => 'member',
-                            'can_manage_tasks' => false,
-                            'can_upload_documents' => true,
-                            'can_view_financials' => false,
-                            'updated_at' => now(),
-                            'created_at' => now(),
-                        ]
-                    );
+                if ($previousDefaultAssigneeId) {
+                    $query->orWhere('assignee_id', $previousDefaultAssigneeId);
                 }
-            });
+            })
+            ->pluck('id');
 
-        // Inquiry taskflows keep the Task Pack assignee as their initial setup
-        // value too. Only rows still following that setup are synchronized; a
-        // manual reassignment by an Admin or the Inquiry creator is preserved.
+        if ($followingTaskIds->isNotEmpty()) {
+            $jobIds = Task::query()
+                ->whereIn('id', $followingTaskIds)
+                ->whereNotNull('flow_job_id')
+                ->distinct()
+                ->pluck('flow_job_id')
+                ->map(fn ($id) => (int) $id)
+                ->values();
+
+            $changes = ['assignee_id' => $desiredAssigneeId];
+            if ($hasSetupAssignee) $changes['setup_assignee_id'] = $desiredAssigneeId;
+            Task::query()->whereIn('id', $followingTaskIds)->update($changes);
+
+            if ($desiredAssigneeId && $jobIds->isNotEmpty() && Schema::hasTable('flow_job_members')) {
+                $now = now();
+                $rows = $jobIds->map(fn (int $jobId) => [
+                    'flow_job_id' => $jobId,
+                    'user_id' => $desiredAssigneeId,
+                    'access_level' => 'member',
+                    'can_manage_tasks' => false,
+                    'can_upload_documents' => true,
+                    'can_view_financials' => false,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ])->all();
+
+                DB::table('flow_job_members')->upsert(
+                    $rows,
+                    ['flow_job_id', 'user_id'],
+                    ['access_level', 'can_manage_tasks', 'can_upload_documents', 'can_view_financials', 'updated_at']
+                );
+            }
+        }
+
+        // Inquiry taskflows use setup_assignee_id to distinguish Task Pack
+        // assignment from a deliberate manual reassignment. Preserve manual
+        // assignments while updating the setup value in bounded statements.
         if (Schema::hasTable('inquiry_tasks') && Schema::hasColumn('inquiry_tasks', 'setup_assignee_id')) {
-            InquiryTask::query()
-                ->where('source_task_pack_item_id', $item->id)
-                ->orderBy('id')
-                ->get()
-                ->each(function (InquiryTask $task) use ($desiredAssigneeId, $previousDefaultAssigneeId): void {
-                    $storedSetupId = $task->setup_assignee_id ? (int) $task->setup_assignee_id : null;
-                    $followsTaskPack = !$task->assignee_id
-                        || ($storedSetupId && (int) $task->assignee_id === $storedSetupId)
-                        || ($previousDefaultAssigneeId && (int) $task->assignee_id === $previousDefaultAssigneeId);
+            $inquiryBase = InquiryTask::query()->where('source_task_pack_item_id', $item->id);
+            $followingInquiryIds = (clone $inquiryBase)
+                ->where(function ($query) use ($previousDefaultAssigneeId): void {
+                    $query->whereNull('assignee_id')
+                        ->orWhere(function ($sameSetup) {
+                            $sameSetup->whereNotNull('setup_assignee_id')
+                                ->whereColumn('assignee_id', 'setup_assignee_id');
+                        });
+                    if ($previousDefaultAssigneeId) {
+                        $query->orWhere('assignee_id', $previousDefaultAssigneeId);
+                    }
+                })
+                ->pluck('id');
 
-                    $changes = ['setup_assignee_id' => $desiredAssigneeId];
-                    if ($followsTaskPack) $changes['assignee_id'] = $desiredAssigneeId;
-                    $task->update($changes);
-                });
+            if ($followingInquiryIds->isNotEmpty()) {
+                InquiryTask::query()->whereIn('id', $followingInquiryIds)->update([
+                    'assignee_id' => $desiredAssigneeId,
+                    'setup_assignee_id' => $desiredAssigneeId,
+                ]);
+            }
+
+            (clone $inquiryBase)->whereNotIn('id', $followingInquiryIds)->update([
+                'setup_assignee_id' => $desiredAssigneeId,
+            ]);
         }
     }
 
@@ -492,32 +607,125 @@ class TaskPackService
     {
         if ($authorize) $this->assertAction('delete');
         $item = TaskPackItem::findOrFail($id);
+        $packId = (int) $item->task_pack_id;
+        if (filled($item->automation_key) && $this->mappedOrderWorkflowIds($packId)->isNotEmpty()) {
+            throw ValidationException::withMessages(['item' => 'Core Order automation tasks cannot be deleted. You can edit their title, assignee, timing and document settings.']);
+        }
         if (Task::where('task_pack_task_id', $item->id)->exists()) {
             throw ValidationException::withMessages(['item' => 'This Task Pack item has generated Tasks and cannot be deleted.']);
         }
-        DB::transaction(function () use ($item) {
+        DB::transaction(function () use ($item, $packId) {
             if (Schema::hasTable('task_pack_tasks')) TaskPackTask::whereKey($item->id)->delete();
-            $packId = $item->task_pack_id;
             $item->delete();
             $this->normalize($packId);
         });
+        $this->publishMappedOrderWorkflows($packId);
     }
 
     public function moveItem(int $id, int $direction): void
     {
         $this->assertAction('edit');
-        DB::transaction(function () use ($id, $direction) {
+        $packId = 0;
+        DB::transaction(function () use ($id, $direction, &$packId) {
             $item = TaskPackItem::findOrFail($id);
-            $items = TaskPackItem::where('task_pack_id', $item->task_pack_id)->orderBy('sort_order')->orderBy('id')->get()->values();
+            $packId = (int) $item->task_pack_id;
+            $items = TaskPackItem::where('task_pack_id', $packId)->orderBy('sort_order')->orderBy('id')->get()->values();
             $index = $items->search(fn ($row) => $row->id === $item->id);
             $target = $index + $direction;
             if ($index === false || $target < 0 || $target >= $items->count()) return;
+
+            $projected = $items->pluck('id')->map(fn ($rowId) => (int) $rowId)->all();
+            [$projected[$index], $projected[$target]] = [$projected[$target], $projected[$index]];
+            $this->assertOrderPackCoreSequence($packId, $projected);
+
             $a = $items[$index]; $b = $items[$target]; $tmp = $a->sort_order;
             $a->update(['sort_order' => 999999]);
             $b->update(['sort_order' => $tmp]);
-            $a->update(['sort_order' => $b->sort_order === 999999 ? $target : $target]);
-            $this->normalize($item->task_pack_id);
+            $a->update(['sort_order' => $target]);
+            $this->normalize($packId);
         });
+        if ($packId) $this->publishMappedOrderWorkflows($packId);
+    }
+
+    /** @return Collection<int,int> */
+    private function mappedOrderWorkflowIds(int $packId): Collection
+    {
+        return WorkflowPhase::query()
+            ->where('task_pack_id', $packId)
+            ->whereNotNull('workflow_template_id')
+            ->whereHas('workflowTemplate', fn ($query) => $query
+                ->where('workspace_id', app(WorkflowService::class)->workspaceId())
+                ->where('applies_to', 'orders'))
+            ->pluck('workflow_template_id')
+            ->filter()
+            ->map(fn ($workflowId) => (int) $workflowId)
+            ->unique()
+            ->values();
+    }
+
+    private function publishMappedOrderWorkflows(int $packId): void
+    {
+        $refreshed = false;
+
+        foreach ($this->mappedOrderWorkflowIds($packId) as $workflowId) {
+            try {
+                $orderService = app(OrderWorkflowSetupService::class);
+                if (! $orderService->isReadyForOrderCreation((int) $workflowId)) continue;
+
+                // Do not synchronously call publishWorkflow() here. Publishing
+                // an Order workflow runs syncActiveOrders(), which can rebuild
+                // hundreds of imported live Orders inside one Livewire request
+                // and exceed PHP's execution limit. Normal Task Pack edits
+                // already synchronize generated task fields directly. Structural
+                // changes are repaired lazily when an Order is opened and can be
+                // bulk-applied explicitly with flowtrack:sync-order-workflow.
+                $orderService->ensureRuntimeMirror((int) $workflowId);
+                $refreshed = true;
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+
+        if ($refreshed) {
+            app(WorkspaceRefreshService::class)->touch('TaskPackSetup:order-definition-updated');
+        }
+    }
+
+    /**
+     * Extra custom tasks may be inserted anywhere, but the protected Order
+     * automation tasks must remain present and in their original relative order.
+     */
+    private function assertOrderPackCoreSequence(int $packId, array $orderedItemIds): void
+    {
+        $phases = WorkflowPhase::query()
+            ->where('task_pack_id', $packId)
+            ->whereNotNull('workflow_template_id')
+            ->whereHas('workflowTemplate', fn ($query) => $query
+                ->where('workspace_id', app(WorkflowService::class)->workspaceId())
+                ->where('applies_to', 'orders'))
+            ->get(['id', 'sequence']);
+        if ($phases->isEmpty()) return;
+
+        $keysById = TaskPackItem::query()
+            ->where('task_pack_id', $packId)
+            ->whereIn('id', $orderedItemIds)
+            ->pluck('automation_key', 'id');
+        $actualCoreKeys = collect($orderedItemIds)
+            ->map(fn ($itemId) => $keysById[(int) $itemId] ?? null)
+            ->filter()
+            ->values()
+            ->all();
+
+        foreach ($phases as $phase) {
+            $expected = OrderWorkflowSetupService::automationKeysForStage((int) $phase->sequence);
+            if (! $expected) continue;
+            $filtered = array_values(array_filter($actualCoreKeys, fn ($key) => in_array($key, $expected, true)));
+            if ($filtered !== $expected) {
+                throw ValidationException::withMessages([
+                    'tasks' => 'Core Order automation tasks cannot be removed or reordered relative to each other. Extra tasks may be added anywhere.',
+                ]);
+            }
+        }
     }
 
     public function syncLegacy(): void
@@ -535,6 +743,9 @@ class TaskPackService
             TaskPackItem::firstOrCreate(['id' => $legacy->id], [
                 'task_pack_id' => $legacy->task_pack_id,
                 'title' => $legacy->title,
+                'color' => Schema::hasColumn('task_pack_tasks', 'color')
+                    ? (MasterColor::normalize((string) ($legacy->color ?? '')) ?: '#2563EB')
+                    : '#2563EB',
                 'priority_id' => $medium,
                 'due_offset_days' => max(1, (int) $legacy->sequence),
                 'is_required' => $legacy->is_required,
@@ -594,6 +805,45 @@ class TaskPackService
         });
     }
 
+    /**
+     * Ensure every modern task_pack_items row has the legacy task_pack_tasks
+     * mirror with the same primary key. Runtime Order tasks still carry a
+     * foreign key to task_pack_tasks.id, so a direct SQL insert into
+     * task_pack_items without the mirror would make task generation fail.
+     *
+     * Returns true only when a repair/normalization was required.
+     */
+    public function ensureLegacyMirrorsForPack(TaskPack $pack): bool
+    {
+        if (! Schema::hasTable('task_pack_items') || ! Schema::hasTable('task_pack_tasks')) {
+            return false;
+        }
+
+        $itemIds = TaskPackItem::query()
+            ->where('task_pack_id', $pack->id)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->values();
+
+        if ($itemIds->isEmpty()) {
+            return false;
+        }
+
+        $legacyIds = TaskPackTask::query()
+            ->where('task_pack_id', $pack->id)
+            ->whereIn('id', $itemIds)
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id);
+
+        if ($itemIds->diff($legacyIds)->isEmpty()) {
+            return false;
+        }
+
+        DB::transaction(fn () => $this->normalize((int) $pack->id));
+
+        return true;
+    }
+
     private function normalize(int $packId): void
     {
         if (Schema::hasTable('task_pack_tasks')) {
@@ -631,13 +881,18 @@ class TaskPackService
             $conflict->update(['sequence' => 50000 + (int) $conflict->id]);
         }
 
-        TaskPackTask::query()->updateOrCreate(['id' => $item->id], [
+        $legacyPayload = [
             'task_pack_id' => $item->task_pack_id,
             'title' => $item->title,
             'sequence' => $sequence,
             'is_required' => $item->is_required,
             'default_department_id' => $legacyDepartmentId,
-        ]);
+        ];
+        if (Schema::hasColumn('task_pack_tasks', 'color')) {
+            $legacyPayload['color'] = MasterColor::normalize((string) ($item->color ?? '')) ?: '#2563EB';
+        }
+
+        TaskPackTask::query()->updateOrCreate(['id' => $item->id], $legacyPayload);
     }
     private function taskPackTemplateIds(int $packId): array
     {
