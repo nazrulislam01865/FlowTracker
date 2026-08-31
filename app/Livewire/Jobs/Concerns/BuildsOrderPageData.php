@@ -5,6 +5,7 @@ namespace App\Livewire\Jobs\Concerns;
 use App\Queries\Inquiries\InquiryDetailQuery;
 use App\Queries\Orders\OrderListQuery;
 use App\Queries\Orders\VisibleOrderQuery;
+use App\Models\ClientDeliveryContact;
 use App\Models\ClientShippingAddress;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
@@ -46,7 +47,12 @@ trait BuildsOrderPageData
                 ->referenceQuery($user, 'create-job')
                 ->where('is_active', true)
                 ->whereKey($this->clientId)
-                ->get(['id', 'name', 'contact_name'])
+                ->with(['contacts' => fn ($query) => $query
+                    ->select(['id', 'client_id', 'name', 'job_title', 'phone', 'is_primary', 'sort_order'])
+                    ->orderByDesc('is_primary')
+                    ->orderBy('sort_order')
+                    ->orderBy('id')])
+                ->get(['id', 'name', 'contact_name', 'contact_job_title', 'phone'])
             : collect();
 
         $savedShippingAddresses = $clients->isNotEmpty()
@@ -56,6 +62,15 @@ trait BuildsOrderPageData
                 ->orderBy('sort_order')
                 ->orderBy('id')
                 ->get(['id', 'client_id', 'label', 'recipient', 'address_line1', 'suite', 'city', 'state', 'zip', 'country', 'is_default', 'sort_order'])
+            : collect();
+
+        $savedDeliveryContacts = $clients->isNotEmpty()
+            ? ClientDeliveryContact::query()
+                ->where('client_id', $this->clientId)
+                ->whereIn('contact_type', ['end_customer', 'other_contact'])
+                ->orderByDesc('last_used_at')
+                ->orderByDesc('id')
+                ->get(['id', 'client_id', 'contact_type', 'name', 'phone_country_code', 'phone', 'last_used_at'])
             : collect();
 
         $phoneCountryCodeOptions = $options->options(
@@ -246,6 +261,7 @@ trait BuildsOrderPageData
             'selectedTask' => null,
             'clients' => $clients,
             'savedShippingAddresses' => $savedShippingAddresses,
+            'savedDeliveryContacts' => $savedDeliveryContacts,
             'phoneCountryCodeOptions' => $phoneCountryCodeOptions,
             'workflows' => $workflows,
             'categories' => collect(),
@@ -690,7 +706,7 @@ trait BuildsOrderPageData
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->overviewTaskLinkFormTaskId = null;

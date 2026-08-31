@@ -8,6 +8,8 @@
     'accept' => '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp',
     'progressLabel' => 'Uploading files...',
     'progressAriaLabel' => 'Attachment upload progress',
+    'variant' => 'default',
+    'browseButton' => null,
 ])
 
 <div
@@ -44,13 +46,31 @@
     x-on:livewire-upload-error="resetUpload()"
     x-on:livewire-upload-cancel="resetUpload()"
 >
-    <label class="ft-create-attachment-dropzone ft-livewire-upload-zone" data-file-dropzone for="{{ $inputId }}">
-        <span class="ft-create-attachment-dropzone-icon" aria-hidden="true">⇧</span>
-        <span class="ft-create-attachment-dropzone-copy">
-            <strong>{{ $headline }}</strong>
-            <span class="ft-create-attachment-drop-or">or <b>{{ $browseText }}</b></span>
-            <small data-drop-status>{{ $helper }}</small>
+    <label
+        class="ft-create-attachment-dropzone ft-livewire-upload-zone {{ $variant === 'order-document' ? 'ft-create-attachment-dropzone--order-document' : '' }}"
+        data-file-dropzone
+        for="{{ $inputId }}"
+    >
+        <span class="ft-create-attachment-dropzone-icon" aria-hidden="true">
+            @if($variant === 'order-document')
+                <svg viewBox="0 0 24 24" fill="none"><path d="M7.7 18.5H6.5a4 4 0 0 1-.65-7.95A6.5 6.5 0 0 1 18.4 8.9a4.75 4.75 0 0 1-.9 9.6h-1.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 18V10.5m0 0-3 3m3-3 3 3" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            @else
+                ⇧
+            @endif
         </span>
+        <span class="ft-create-attachment-dropzone-copy">
+            @if($variant === 'order-document')
+                <strong>{{ $headline }} <span>or <b>{{ $browseText }}</b></span></strong>
+                <small data-drop-status>{{ $helper }}</small>
+            @else
+                <strong>{{ $headline }}</strong>
+                <span class="ft-create-attachment-drop-or">or <b>{{ $browseText }}</b></span>
+                <small data-drop-status>{{ $helper }}</small>
+            @endif
+        </span>
+        @if($variant === 'order-document' && filled($browseButton))
+            <span class="ft-create-attachment-browse-button" aria-hidden="true">{{ $browseButton }}</span>
+        @endif
         <input
             id="{{ $inputId }}"
             type="file"

@@ -73,6 +73,7 @@ class Client extends Model
     public function tasks(): HasManyThrough { return $this->hasManyThrough(Task::class, FlowJob::class, 'client_id', 'flow_job_id'); }
     public function shippingAddresses(): HasMany { return $this->hasMany(ClientShippingAddress::class)->orderBy('sort_order'); }
     public function contacts(): HasMany { return $this->hasMany(ClientContact::class)->orderByDesc('is_primary')->orderBy('sort_order')->orderBy('id'); }
+    public function deliveryContacts(): HasMany { return $this->hasMany(ClientDeliveryContact::class)->orderByDesc('last_used_at')->orderByDesc('id'); }
 
     public function logoUrl(): ?string
     {

@@ -121,7 +121,7 @@ trait ManagesInquiryDetail
         abort_unless(in_array($tab, ['overview', 'rfq', 'comparison'], true), 422);
         $this->detailTab = $tab;
         $this->selectedTaskId = null;
-        $this->showRfqEmailPreview = false;
+        $this->showRfqSettings = false;
         $this->resetPage('inquiryDocumentsPage');
         $this->resetPage('inquiryActivityPage');
     }

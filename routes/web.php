@@ -58,6 +58,26 @@ Route::post('/rfq/{token}', [PublicInquiryRfqController::class, 'respond'])
     ->middleware('throttle:30,1')
     ->where('token', '[A-Za-z0-9]{32,100}')
     ->name('rfq.public.respond');
+Route::post('/rfq/{token}/documents', [PublicInquiryRfqController::class, 'uploadDocuments'])
+    ->middleware('throttle:20,1')
+    ->where('token', '[A-Za-z0-9]{32,100}')
+    ->name('rfq.public.documents.upload');
+Route::post('/rfq/{token}/documents/{document}/remove', [PublicInquiryRfqController::class, 'removeDocument'])
+    ->middleware('throttle:30,1')
+    ->where(['token' => '[A-Za-z0-9]{32,100}', 'document' => '[0-9]+'])
+    ->name('rfq.public.documents.remove');
+Route::get('/rfq/{token}/documents/{document}/preview', [PublicInquiryRfqController::class, 'previewDocument'])
+    ->middleware('throttle:60,1')
+    ->where(['token' => '[A-Za-z0-9]{32,100}', 'document' => '[0-9]+'])
+    ->name('rfq.public.documents.preview');
+Route::get('/rfq/{token}/documents/{document}/download', [PublicInquiryRfqController::class, 'downloadDocument'])
+    ->middleware('throttle:60,1')
+    ->where(['token' => '[A-Za-z0-9]{32,100}', 'document' => '[0-9]+'])
+    ->name('rfq.public.documents.download');
+Route::get('/rfq/{token}/products/{item}/image', [PublicInquiryRfqController::class, 'productImage'])
+    ->middleware('throttle:120,1')
+    ->where(['token' => '[A-Za-z0-9]{32,100}', 'item' => '[0-9]+'])
+    ->name('rfq.public.product-image');
 
 Route::get('/session/recover', function (\Illuminate\Http\Request $request) {
     // Recovery is intentionally a GET: it is the safe landing point after a

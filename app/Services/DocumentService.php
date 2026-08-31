@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Collection;
 
 class DocumentService
 {
@@ -81,13 +82,18 @@ class DocumentService
             ?: $task?->setupTemplate?->documentCategory?->name
             ?: ($data['category'] ?? ($task ? 'Task attachment' : 'Other'));
 
-        $version = $this->nextDocumentVersion(
-            $task,
-            $task?->flow_job_id ?: ($data['flow_job_id'] ?? null),
-            $task?->id ?: ($data['task_id'] ?? null),
-            $category,
-            $file->getClientOriginalName(),
-        );
+        $isArtworkTask = $task
+            && app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+        $batchVersion = max(0, (int) ($data['artwork_batch_version'] ?? 0));
+        $version = $isArtworkTask && $batchVersion > 0
+            ? $batchVersion
+            : $this->nextDocumentVersion(
+                $task,
+                $task?->flow_job_id ?: ($data['flow_job_id'] ?? null),
+                $task?->id ?: ($data['task_id'] ?? null),
+                $category,
+                $file->getClientOriginalName(),
+            );
 
         $document = Document::create([
             'document_number' => $this->nextNumber(),
@@ -108,6 +114,40 @@ class DocumentService
         $this->recordDocumentActivity($document, $user, 'uploaded');
         $this->notifyDocumentChange($document, $user, 'uploaded');
         return $document;
+    }
+
+    /**
+     * Store a user-selected file set. Artwork files selected together are one
+     * revision and therefore share a version number; later artwork batches
+     * increment that version once. Other document types retain their existing
+     * per-file version behaviour.
+     *
+     * @param array<int,UploadedFile> $files
+     * @return Collection<int,Document>
+     */
+    public function storeMany(array $files, array $data, User $user, string $permissionModule = 'documents'): Collection
+    {
+        $documents = collect();
+        $artworkBatchVersion = null;
+
+        foreach (array_values($files) as $file) {
+            $fileData = $data;
+            if ($artworkBatchVersion !== null) {
+                $fileData['artwork_batch_version'] = $artworkBatchVersion;
+            }
+
+            $document = $this->store($file, $fileData, $user, $permissionModule);
+            $documents->push($document);
+
+            $document->loadMissing('task.setupTemplate');
+            if ($artworkBatchVersion === null
+                && $document->task
+                && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD') {
+                $artworkBatchVersion = max(1, (int) $document->version);
+            }
+        }
+
+        return $documents;
     }
 
     public function linkExisting(Document $source, Task $task, User $user, bool $allowGenericAttachment = false, ?string $note = null): Document

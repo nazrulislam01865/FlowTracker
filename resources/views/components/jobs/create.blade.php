@@ -9,8 +9,9 @@
     'showMissingProductSupplierModal'=>false,'missingProductSupplierName'=>'',
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'','newProductSupplierId'=>null,
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'workflowPhaseId'=>null,'mentionUsers'=>collect(),
-    'savedShippingAddresses'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,
-    'phoneCountryCodeOptions'=>collect(),'shippingPhoneCountryCode'=>'',
+    'savedShippingAddresses'=>collect(),'savedDeliveryContacts'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,
+    'phoneCountryCodeOptions'=>collect(),'shippingPhoneCountryCode'=>'+1','shippingPhone'=>'',
+    'shippingContactType'=>'end_customer','shippingContactId'=>null,'shippingContactSelection'=>'','shippingContactName'=>'','shippingSaveContact'=>true,
 ])
 @php
     $selectedClient = $clients->firstWhere('id', (int)$clientId);
@@ -105,37 +106,18 @@
                 @error('shippingAddress')<small class="validation-error">{{ $message }}</small>@enderror
             </label>
 
-            <div class="ft-order-shipping-contact-grid">
-                <div class="ft-create-field">
-                    <b>Phone Number</b>
-                    <div class="ft-order-phone-control">
-                        <x-ui.search-select
-                            class="ft-order-phone-code-filter"
-                            label="Phone country code"
-                            property="shippingPhoneCountryCode"
-                            type="phone-country-codes"
-                            context="create-job"
-                            :value="$shippingPhoneCountryCode"
-                            placeholder="Code"
-                            :selected-label="$shippingPhoneCountryCode ?: null"
-                            :initial-options="$phoneCountryCodeOptions"
-                            :clearable="true"
-                            :fixed-menu="true"
-                            :menu-width="300"
-                            wire:key="create-order-phone-country-code-{{ $shippingPhoneCountryCode ?: 'none' }}"
-                        />
-                        <input wire:model="shippingPhone" inputmode="tel" autocomplete="tel" placeholder="Enter phone number">
-                    </div>
-                    @error('shippingPhoneCountryCode')<small class="validation-error">{{ $message }}</small>@enderror
-                    @error('shippingPhone')<small class="validation-error">{{ $message }}</small>@enderror
-                </div>
-
-                <label class="ft-create-field">
-                    <b>Postal Code *</b>
-                    <input wire:model="shippingPostalCode" autocomplete="postal-code" required aria-required="true" placeholder="Enter postal code">
-                    @error('shippingPostalCode')<small class="validation-error">{{ $message }}</small>@enderror
-                </label>
-            </div>
+            <x-jobs.create.shipping-contact
+                :selected-client="$selectedClient"
+                :saved-delivery-contacts="$savedDeliveryContacts"
+                :phone-country-code-options="$phoneCountryCodeOptions"
+                :shipping-phone-country-code="$shippingPhoneCountryCode"
+                :shipping-phone="$shippingPhone"
+                :shipping-contact-type="$shippingContactType"
+                :shipping-contact-id="$shippingContactId"
+                :shipping-contact-selection="$shippingContactSelection"
+                :shipping-contact-name="$shippingContactName"
+                :shipping-save-contact="$shippingSaveContact"
+            />
         </section>
 
         @if($showSavedShippingAddressPicker)
@@ -253,26 +235,11 @@
             <x-jobs.create-section-placeholder number="4" title="Schedule & owner" section="assignment" :rows="5" />
         @endif
 
-        <section class="ft-create-section">
-            <div class="ft-create-section-title"><span>5</span><h2>Purchase Order</h2></div>
-            @if(auth()->user()->canModule('documents','create'))
-                <x-ui.create-attachment-dropzone
-                    input-id="job-create-purchase-order"
-                    model="purchaseOrderUpload"
-                    headline="Drop Purchase Order here"
-                    browse-text="browse files"
-                    helper="PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB per file"
-                    progress-label="Uploading Purchase Order..."
-                    progress-aria-label="Purchase Order upload progress"
-                />
-            @else
-                <div class="ft-create-note">Your role does not allow Purchase Order uploads during Order creation.</div>
-            @endif
-            @if($purchaseOrderUpload)
-                <div class="ft-create-upload-list"><span>{{ $purchaseOrderUpload->getClientOriginalName() }}</span></div>
-            @endif
-            @error('purchaseOrderUpload')<small class="validation-error">{{ $message }}</small>@enderror
-        </section>
+        <x-jobs.create.documents
+            :purchase-order-upload="$purchaseOrderUpload"
+            :job-attachments="$jobAttachments"
+            :can-upload="auth()->user()->canModule('documents','create')"
+        />
 
         @if($workflowReady)
             <x-ui.create-workflow-picker
@@ -288,6 +255,9 @@
                 option-fallback="Order workflow"
                 footnote="Tasks are created when you select Create order. Workflow and starting phase are fixed after creation."
                 :preview-allowed="true"
+                :preview-default-open="true"
+                availability-label="workflow available"
+                icon="workflow"
                 :stage-preview="$workflowStagePreview"
                 kind-label="Order workflow"
                 source-label="Workflow Setup"
@@ -306,26 +276,6 @@
         @else
             <x-jobs.create-section-placeholder number="6" title="What happens next" section="workflow" :rows="2" />
         @endif
-
-        <section class="ft-create-section">
-            <div class="ft-create-section-title"><span>7</span><h2>Other document</h2></div>
-            @if(auth()->user()->canModule('documents','create'))
-                <x-ui.create-attachment-dropzone
-                    input-id="job-create-files"
-                    model="jobAttachments"
-                    :multiple="true"
-                    headline="Drop files here"
-                    browse-text="browse files"
-                    helper="PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB per file"
-                    progress-label="Uploading selected files..."
-                    progress-aria-label="Order document upload progress"
-                />
-            @else
-                <div class="ft-create-note">Your role does not allow document uploads during Order creation.</div>
-            @endif
-            @if(count($jobAttachments))<div class="ft-create-upload-list">@foreach($jobAttachments as $file)<span>{{ $file->getClientOriginalName() }}</span>@endforeach</div>@endif
-            @error('jobAttachments.*')<small class="validation-error">{{ $message }}</small>@enderror
-        </section>
 
         <div class="ft-create-actions">
             <button type="button" class="ft-create-cancel" wire:click="closeCreate">Cancel</button>

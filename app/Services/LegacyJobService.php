@@ -1267,6 +1267,8 @@ class LegacyJobService
                 'shipment_urgency_ids' => array_values(array_map('intval', (array) ($data['shipment_urgency_ids'] ?? []))),
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'shipping_address' => blank($data['shipping_address'] ?? null) ? null : trim((string) $data['shipping_address']),
+                'shipping_contact_type' => blank($data['shipping_contact_type'] ?? null) ? null : trim((string) $data['shipping_contact_type']),
+                'shipping_contact_name' => blank($data['shipping_contact_name'] ?? null) ? null : trim((string) $data['shipping_contact_name']),
                 'shipping_phone_country_code' => blank($data['shipping_phone_country_code'] ?? null) ? null : trim((string) $data['shipping_phone_country_code']),
                 'shipping_phone' => blank($data['shipping_phone'] ?? null) ? null : trim((string) $data['shipping_phone']),
                 'shipping_postal_code' => blank($data['shipping_postal_code'] ?? null) ? null : trim((string) $data['shipping_postal_code']),

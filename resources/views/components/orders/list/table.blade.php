@@ -1,6 +1,6 @@
         <div class="table-scroll" wire:loading.class="is-loading" wire:target="search,client,owner,phase,metricFilter,setMetricFilter,dateFrom,dateTo,stageQuick,stageSupplier,stageAssignee,stageUrgency,stageCarrier,stageClient,clearFilters,gotoPage,previousPage,nextPage">
-            <table class="orders-modern-table">
-                <thead><tr>@foreach($headers as $header)<th>{{ $header }}</th>@endforeach</tr></thead>
+            <table @class(['orders-modern-table', 'orders-modern-table--overview' => $sequence === 0])>
+                <thead><tr>@foreach($headers as $header)<th @class(['client-product-column' => $sequence === 0 && $loop->index === 1])>{{ $header }}</th>@endforeach</tr></thead>
                 <tbody>
                     @forelse($jobs as $job)
                         @php
@@ -10,6 +10,11 @@
                             $activeTaskColor = data_get($row, 'active_task_color');
                             $phaseSequence = (int) data_get($row, 'phase_sequence', 0);
                             $hasCompletedTask = (bool) data_get($row, 'has_completed_task', false);
+                            $clientLabel = trim((string) data_get($row, 'client'));
+                            $productSummary = collect([
+                                data_get($row, 'product'),
+                                data_get($row, 'product_detail'),
+                            ])->filter(fn ($value) => filled($value))->implode(' · ');
                             $clientCode = strtoupper(trim((string) data_get($row, 'client_code', '')));
                             $clientName = strtoupper(trim((string) data_get($row, 'client', '')));
                             $clientRowTone = ($clientCode === 'IID' || preg_match('/\bIID\b/i', $clientName))
@@ -34,7 +39,7 @@
                         @if($sequence === 0)
                             <tr class="{{ $rowClass }}" style="{{ $rowStyle }}" x-data x-on:click="window.location.href='{{ $detailUrl }}'">
                                 <td data-label="Order"><a class="order-cell-id" href="{{ $detailUrl }}" wire:navigate x-on:click.stop>{{ data_get($row,'order') }}</a><span class="order-cell-ref">{{ data_get($row,'reference') }} · {{ data_get($row,'created') }}</span></td>
-                                <td data-label="Client & Product"><div class="client-product-cell"><x-ui.client-logo :client="$job->client" :name="data_get($row,'client','Client')" :size="34" /><div class="client-product-copy"><b>{{ data_get($row,'client') }}</b><small>{{ data_get($row,'product') }} · {{ data_get($row,'product_detail') }}</small></div></div></td>
+                                <td class="client-product-column" data-label="Client & Product"><div class="client-product-cell"><x-ui.client-logo :client="$job->client" :name="$clientLabel ?: 'Client'" :size="34" /><div class="client-product-copy"><b title="{{ $clientLabel }}">{{ $clientLabel }}</b><small title="{{ $productSummary }}">{{ $productSummary }}</small></div></div></td>
                                 <td data-label="Current stage"><span class="stage-chip" style="--stage:{{ data_get($row,'phase_color') }}">{{ data_get($row,'phase_name') }}</span></td>
                                 <td data-label="Current status"><span class="row-status {{ filled(data_get($row,'flag')) ? 'attn' : 'good' }}">{{ data_get($row,'status') }}</span>@if(filled(data_get($row,'flag')))<span class="order-cell-ref">⚑ {{ data_get($row,'flag') }}</span>@endif</td>
                                 <td data-label="Owner & delivery"><div class="owner-delivery"><x-ui.avatar :name="data_get($row,'owner','Unassigned')" :src="data_get($row,'owner_avatar')" :size="28" /><div><b>{{ data_get($row,'owner') }}</b><small>{{ data_get($row,'delivery') ? 'CRDD '.$formatDate(data_get($row,'delivery')) : 'No delivery date' }}</small></div></div></td>
@@ -115,4 +120,3 @@
                 </tbody>
             </table>
         </div>
-

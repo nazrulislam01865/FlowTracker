@@ -25,9 +25,8 @@
         ->filter()
         ->unique()
         ->values();
-    // Artwork task: only the latest revision belongs in the live Order Details view.
-    // Older artwork versions remain stored and available from document/version history,
-    // but are intentionally hidden from the Artwork stage task row.
+    // Artwork files selected together share a version. Show the complete latest
+    // revision set while older revisions remain available from version history.
     $artworkVersionDocuments = $isArtworkUploadTask
         ? $taskDocuments
             ->sortBy(function ($document) {
@@ -41,10 +40,13 @@
             })
             ->values()
         : collect();
-    $latestArtworkDocument = $artworkVersionDocuments->last();
-    $latestArtworkDocumentId = (int) ($latestArtworkDocument?->id ?? 0);
+    $latestArtworkVersion = max(0, (int) ($artworkVersionDocuments->max('version') ?? 0));
+    $latestArtworkDocuments = $latestArtworkVersion > 0
+        ? $artworkVersionDocuments->where('version', $latestArtworkVersion)->sortBy('id')->values()
+        : collect();
+    $latestArtworkDocument = $latestArtworkDocuments->last();
     $resourceDocuments = $isArtworkUploadTask
-        ? collect([$latestArtworkDocument])->filter()->values()
+        ? $latestArtworkDocuments
         : $taskDocuments
             ->reject(fn ($document) => $revisionReferenceDocumentIds->contains((int) $document->id))
             ->values();
@@ -147,6 +149,9 @@
                 📎 {{ $latestTaskDocument->name }}
                 @if($isArtworkUploadTask)
                     · Version {{ max(1, (int) $latestTaskDocument->version) }} · Latest
+                    @if($latestArtworkDocuments->count() > 1)
+                        · +{{ $latestArtworkDocuments->count() - 1 }} file{{ $latestArtworkDocuments->count() === 2 ? '' : 's' }}
+                    @endif
                 @elseif($taskDocuments->count() > 1)
                     +{{ $taskDocuments->count() - 1 }}
                 @endif
@@ -207,9 +212,7 @@
                     </b>
                     <small>
                         {{ $document->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') }}
-                        @if($isArtworkUploadTask)
-                            · Latest
-                        @endif
+                        @if($isArtworkUploadTask) · Latest revision @endif
                     </small>
                 </span>
                 <span class="ft-order-task-resource-actions">

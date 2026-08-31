@@ -17,12 +17,14 @@ class MyWorkActiveTaskOnlyVisibilityTest extends TestCase
         $this->assertStringContainsString('applyStructuralActiveTaskConstraint($query)', $service);
         $this->assertStringContainsString('private function applyStructuralActiveTaskConstraint(Builder $query): void', $service);
 
-        // Visibility remains personal for non-admins, but the active task is
-        // resolved before that visibility can expose a future sibling.
-        $this->assertStringContainsString('if (!$access->isAdministrator($user))', $service);
-        $this->assertStringContainsString("->where('tasks.assignee_id', $user->id)", $service);
-        $this->assertStringContainsString("->orWhereHas('job', fn (Builder $job) => $job->where('created_by', $user->id))", $service);
-        $this->assertStringContainsString("->orWhereIn('tasks.id', $visibleByConfiguredAccess)", $service);
+        // Assignment is the visibility boundary for every role. Admin and
+        // Super Admin do not bypass it on My Tasks.
+        $activeScope = strstr($service, 'public function activeVisibleTaskQuery(User $user): Builder');
+        $activeScope = strstr($activeScope, 'private function applyStructuralActiveTaskConstraint', true);
+        $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $activeScope);
+        $this->assertStringNotContainsString('isAdministrator($user)', $activeScope);
+        $this->assertStringNotContainsString("->orWhereHas('job', fn (Builder \$job) => \$job->where('created_by', \$user->id))", $activeScope);
+        $this->assertStringNotContainsString("->orWhereIn('tasks.id', $visibleByConfiguredAccess)", $activeScope);
 
         // Current phase and current saved Task Pack are both required. This is
         // what prevents stale cloud rows from obsolete packs appearing active.
@@ -37,7 +39,7 @@ class MyWorkActiveTaskOnlyVisibilityTest extends TestCase
         $this->assertStringContainsString('ART_SAMPLE_APPROVAL', $service);
         $this->assertStringContainsString('QC_ISSUE', $service);
 
-        // Admin/Super Admin also need the table to advance to the next active row.
+        // Every role also needs the table to advance to the next active assigned row.
         $this->assertStringContainsString("\$result['refresh'] = true;", $component);
     }
 

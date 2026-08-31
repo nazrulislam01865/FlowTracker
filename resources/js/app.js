@@ -2,6 +2,7 @@ import { installBrowserApi } from './core/browser-api.js';
 import { bootAttachmentAutoUpload } from './components/attachment-auto-upload.js';
 import { bootAsyncFeedback, resetAsyncFeedback } from './components/async-feedback.js';
 import { bootFileDropzones } from './components/file-dropzones.js';
+import { bootLocalFileActions } from './components/local-file-actions.js';
 import { resetInlineEditState } from './components/inline-edit.js';
 import { bootMasterColors } from './components/master-colors.js';
 import { bootLivewireMentionHooks, bootMentionInputs, observeMentionInputs } from './components/mentions.js';
@@ -45,6 +46,7 @@ const bootShared = () => {
     observeMentionInputs();
     bootLivewireMentionHooks();
     bootFileDropzones();
+    bootLocalFileActions();
     bootAttachmentAutoUpload();
     bootMasterColors();
     bootRouteFeatures();
@@ -94,6 +96,7 @@ bindNavigationLifecycle({
         bootMentionInputs();
         observeMentionInputs();
         bootFileDropzones();
+        bootLocalFileActions();
         bootAttachmentAutoUpload();
         bootMasterColors();
         bootRouteFeatures();

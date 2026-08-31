@@ -79,5 +79,6 @@ class Inquiry extends Model
     }
     public function documents(): HasMany { return $this->hasMany(InquiryDocument::class)->latest('id'); }
     public function rfqInvitations(): HasMany { return $this->hasMany(InquiryRfqInvitation::class)->latest('id'); }
+    public function rfqSetting(): HasOne { return $this->hasOne(InquiryRfqSetting::class); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
 }

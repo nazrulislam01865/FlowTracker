@@ -102,6 +102,13 @@ final class OrderArtworkEvidenceService
             ->values();
 
         $movedDocuments = 0;
+        $artworkBatchKeys = Document::query()
+            ->where('task_id', $artworkTask->id)
+            ->get(['id', 'version'])
+            ->mapWithKeys(fn (Document $document): array => [
+                (int) $document->id => 'active:'.max(1, (int) $document->version),
+            ])
+            ->all();
 
         foreach ($candidateDocuments as $document) {
             $sourceTaskId = (int) ($document->task_id ?? 0);
@@ -125,6 +132,9 @@ final class OrderArtworkEvidenceService
                 continue;
             }
 
+            $artworkBatchKeys[(int) $document->id] = $sourceTaskId > 0
+                ? 'historical:'.$sourceTaskId.':'.max(1, (int) $document->version)
+                : 'orphan:'.max(1, (int) $document->version).':'.(string) $document->created_at;
             $document->update(['task_id' => (int) $artworkTask->id]);
             $movedDocuments++;
         }
@@ -155,7 +165,7 @@ final class OrderArtworkEvidenceService
 
         $changed = $movedDocuments + (int) $movedLinks;
         if ($changed > 0) {
-            $this->normalizeArtworkVersions((int) $artworkTask->id);
+            $this->normalizeArtworkVersions((int) $artworkTask->id, $artworkBatchKeys);
             app(WorkspaceRefreshService::class)->touch('OrderArtworkEvidence:repaired');
         }
 
@@ -199,16 +209,22 @@ final class OrderArtworkEvidenceService
             ->squish();
     }
 
-    private function normalizeArtworkVersions(int $taskId): void
+    /** @param array<int,string> $batchKeys */
+    private function normalizeArtworkVersions(int $taskId, array $batchKeys = []): void
     {
+        $versionsByBatch = [];
+        $nextVersion = 0;
+
         Document::query()
             ->where('task_id', $taskId)
             ->orderBy('created_at')
             ->orderBy('id')
             ->get(['id', 'version'])
             ->values()
-            ->each(function (Document $document, int $index): void {
-                $version = $index + 1;
+            ->each(function (Document $document) use (&$versionsByBatch, &$nextVersion, $batchKeys): void {
+                $batchKey = $batchKeys[(int) $document->id]
+                    ?? 'active:'.max(1, (int) $document->version);
+                $version = $versionsByBatch[$batchKey] ??= ++$nextVersion;
                 if ((int) $document->version !== $version) {
                     $document->update(['version' => $version]);
                 }

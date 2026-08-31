@@ -6,6 +6,7 @@ use App\Models\Activity;
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
 use App\Models\InquiryRfqInvitation;
+use App\Models\InquiryRfqSetting;
 use App\Models\InquiryRfqQuote;
 use App\Models\MasterRecord;
 use App\Models\User;
@@ -69,6 +70,101 @@ final class InquiryRfqService
         }
 
         return $candidate;
+    }
+
+    public function settings(Inquiry $inquiry): InquiryRfqSetting
+    {
+        $defaults = [
+            'workspace_id' => (int) $inquiry->workspace_id,
+            'inquiry_id' => (int) $inquiry->id,
+            'special_note' => null,
+            'supplier_details' => null,
+            'default_due_at' => $this->defaultDueAt($inquiry),
+            'link_validity_hours' => 720,
+            'auto_reply_enabled' => true,
+            'reminder_enabled' => true,
+            'reminder_hours_before_due' => 24,
+            'allow_revision' => true,
+            'award_email_enabled' => true,
+            'not_selected_email_enabled' => true,
+        ];
+
+        if (! Schema::hasTable('inquiry_rfq_settings')) {
+            return new InquiryRfqSetting($defaults);
+        }
+
+        $settings = InquiryRfqSetting::query()->where('inquiry_id', $inquiry->id)->first();
+        if (! $settings) {
+            return new InquiryRfqSetting($defaults);
+        }
+
+        if (! $settings->default_due_at) {
+            $settings->default_due_at = $this->defaultDueAt($inquiry);
+        }
+
+        return $settings;
+    }
+
+    /** @param array<string,mixed> $data */
+    public function saveSettings(Inquiry $inquiry, array $data, User $actor): InquiryRfqSetting
+    {
+        abort_unless(Schema::hasTable('inquiry_rfq_settings'), 503, 'Run the latest database migrations before saving RFQ settings.');
+
+        $settings = InquiryRfqSetting::query()->updateOrCreate(
+            ['inquiry_id' => $inquiry->id],
+            [
+                'workspace_id' => (int) $inquiry->workspace_id,
+                'special_note' => trim((string) ($data['special_note'] ?? '')) ?: null,
+                'supplier_details' => trim((string) ($data['supplier_details'] ?? '')) ?: null,
+                'default_due_at' => Carbon::parse((string) $data['default_due_at']),
+                'link_validity_hours' => max(1, min(2160, (int) ($data['link_validity_hours'] ?? 720))),
+                'auto_reply_enabled' => (bool) ($data['auto_reply_enabled'] ?? false),
+                'reminder_enabled' => (bool) ($data['reminder_enabled'] ?? false),
+                'reminder_hours_before_due' => max(1, min(336, (int) ($data['reminder_hours_before_due'] ?? 24))),
+                'allow_revision' => (bool) ($data['allow_revision'] ?? false),
+                'award_email_enabled' => (bool) ($data['award_email_enabled'] ?? true),
+                'not_selected_email_enabled' => (bool) ($data['not_selected_email_enabled'] ?? true),
+                'updated_by' => $actor->id,
+            ],
+        );
+
+        InquiryRfqInvitation::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->whereNull('awarded_at')
+            ->whereNull('rejected_at')
+            ->update([
+                'auto_reply_enabled' => $settings->auto_reply_enabled,
+                'reminder_enabled' => $settings->reminder_enabled,
+                'reminder_hours_before_due' => $settings->reminder_hours_before_due,
+                'allow_revision' => $settings->allow_revision,
+                'updated_at' => now(),
+            ]);
+
+        InquiryRfqInvitation::query()
+            ->where('inquiry_id', $inquiry->id)
+            ->where(function ($query): void {
+                $query->whereNull('invited_at')->orWhere('email_status', '!=', 'Delivered');
+            })
+            ->whereNull('awarded_at')
+            ->whereNull('rejected_at')
+            ->update([
+                'due_at' => $settings->default_due_at,
+                'request_message' => $settings->special_note,
+                'supplier_details' => $settings->supplier_details,
+                'updated_at' => now(),
+            ]);
+
+        $this->activity($inquiry, $actor, 'rfq.settings_updated', 'Supplier RFQ invitation settings were updated.', [
+            'link_validity_hours' => (int) $settings->link_validity_hours,
+            'auto_reply_enabled' => (bool) $settings->auto_reply_enabled,
+            'reminder_enabled' => (bool) $settings->reminder_enabled,
+            'allow_revision' => (bool) $settings->allow_revision,
+            'award_email_enabled' => (bool) $settings->award_email_enabled,
+            'not_selected_email_enabled' => (bool) $settings->not_selected_email_enabled,
+        ]);
+        app(\App\Services\WorkspaceRefreshService::class)->touch('InquiryRFQ:settings');
+
+        return $settings->fresh();
     }
 
     /**
@@ -518,17 +614,8 @@ final class InquiryRfqService
         abort_if($existing, 422, 'This supplier has already been invited.');
 
         $token = Str::random(64);
-        $sharedDueAt = InquiryRfqInvitation::query()
-            ->where('inquiry_id', $inquiry->id)
-            ->whereNotNull('due_at')
-            ->orderBy('id')
-            ->value('due_at');
-        $sharedRequestMessage = InquiryRfqInvitation::query()
-            ->where('inquiry_id', $inquiry->id)
-            ->whereNotNull('request_message')
-            ->where('request_message', '!=', '')
-            ->orderBy('id')
-            ->value('request_message');
+        $settings = $this->settings($inquiry);
+        $linkValidityHours = max(1, (int) ($settings->link_validity_hours ?: 720));
         $invitation = InquiryRfqInvitation::create([
             'workspace_id' => $workspaceId,
             'inquiry_id' => $inquiry->id,
@@ -537,8 +624,14 @@ final class InquiryRfqService
             'token_hash' => hash('sha256', $token),
             'token_cipher' => Crypt::encryptString($token),
             'invited_at' => $sendEmail ? now() : null,
-            'due_at' => $dueAt ?: ($sharedDueAt ? Carbon::parse($sharedDueAt) : $this->defaultDueAt($inquiry)),
-            'request_message' => filled($requestMessage) ? trim((string) $requestMessage) : ($sharedRequestMessage ?: null),
+            'due_at' => $dueAt ?: ($settings->default_due_at ?: $this->defaultDueAt($inquiry)),
+            'link_expires_at' => ($sendEmail && $emailReady && $emailEnabled) ? now()->addHours($linkValidityHours) : null,
+            'request_message' => filled($requestMessage) ? trim((string) $requestMessage) : ($settings->special_note ?: null),
+            'supplier_details' => trim((string) ($settings->supplier_details ?? '')) ?: null,
+            'auto_reply_enabled' => (bool) $settings->auto_reply_enabled,
+            'reminder_enabled' => (bool) $settings->reminder_enabled,
+            'reminder_hours_before_due' => max(1, (int) ($settings->reminder_hours_before_due ?: 24)),
+            'allow_revision' => (bool) $settings->allow_revision,
             'email_status' => ! $sendEmail ? 'Draft' : ($emailReady ? 'Sending' : 'No email'),
         ]);
         $invitation->setRelation('supplier', $supplier);
@@ -675,10 +768,23 @@ final class InquiryRfqService
 
         $wasDelivered = $invitation->email_status === 'Delivered';
         $token = Crypt::decryptString((string) $invitation->token_cipher);
-        $invitation->update(['email_status' => 'Sending']);
+        $settings = $this->settings($inquiry);
+        $linkValidityHours = max(1, (int) ($settings->link_validity_hours ?: 720));
+        $invitation->update([
+            'due_at' => $settings->default_due_at ?: $invitation->due_at ?: $this->defaultDueAt($inquiry),
+            'link_expires_at' => now()->addHours($linkValidityHours),
+            'request_message' => trim((string) ($settings->special_note ?? '')) ?: null,
+            'supplier_details' => trim((string) ($settings->supplier_details ?? '')) ?: null,
+            'auto_reply_enabled' => (bool) $settings->auto_reply_enabled,
+            'reminder_enabled' => (bool) $settings->reminder_enabled,
+            'reminder_hours_before_due' => max(1, (int) ($settings->reminder_hours_before_due ?: 24)),
+            'allow_revision' => (bool) $settings->allow_revision,
+            'reminder_sent_at' => null,
+            'email_status' => 'Sending',
+        ]);
 
         try {
-            $trackingId = $this->mailer->sendInvitation($invitation, $token);
+            $trackingId = $this->mailer->sendInvitation($invitation->fresh(['supplier','inquiry.items','quote']), $token);
         } catch (Throwable $exception) {
             $invitation->update(['email_status' => 'Failed']);
             throw $exception;
@@ -706,15 +812,19 @@ final class InquiryRfqService
         $invitation = InquiryRfqInvitation::query()
             ->where('token_hash', hash('sha256', $token))
             ->with([
-                'supplier:id,name,metadata,status',
-                'inquiry:id,workspace_id,inquiry_number,subject,currency,required_delivery_date,result',
+                'supplier:id,name,code,metadata,status',
+                'inviter:id,name,email',
+                'inquiry:id,workspace_id,inquiry_number,client_id,subject,requirement_notes,currency,required_delivery_date,result',
+                'inquiry.client:id,name',
                 'inquiry.items:id,inquiry_id,item_name,category,quantity,unit,unit_price,notes,sort_order',
-                'quote:id,invitation_id,currency,freight,lead_time_days,validity_days,notes,submitted_total',
-                'quote.items:id,quote_id,inquiry_item_id,product_name,quantity,unit_price,sort_order',
+                'quote:id,invitation_id,supplier_contact_name,supplier_contact_email,supplier_contact_phone,currency,freight,tooling_cost,sample_cost,discount,tax_status,lead_time_days,sample_lead_time_days,incoterm,shipping_port,estimated_delivery_date,validity_days,specification_compliance,notes,supporting_information,document_notes,submitted_by_name,submitted_by_email,submitted_total,created_at,updated_at',
+                'quote.items:id,quote_id,inquiry_item_id,product_name,quantity,unit_price,moq,sort_order',
+                'quote.documents:id,quote_id,document_type,name,path,mime_type,size,sort_order,created_at,updated_at',
             ])
             ->firstOrFail();
 
         abort_if($invitation->inquiry?->result === 'dead', 410, 'This request is no longer active.');
+        abort_if($this->linkExpired($invitation), 410, 'This quotation link has expired. Contact the buyer if you need a new invitation.');
         return $invitation;
     }
 
@@ -734,11 +844,44 @@ final class InquiryRfqService
         app(\App\Services\WorkspaceRefreshService::class)->touch('InquiryRFQ:declined');
     }
 
-    /** @param array<int,array{inquiry_item_id:int,unit_price:float|int|string}> $items */
+    public function beginQuoteRevision(InquiryRfqInvitation $invitation): InquiryRfqQuote
+    {
+        $invitation->loadMissing(['quote', 'supplier', 'inquiry']);
+        abort_if($invitation->awarded_at || $invitation->rejected_at, 422, 'This RFQ is already closed.');
+        abort_if($invitation->interest_status === 'declined', 422, 'This quotation request has been declined.');
+        abort_unless($invitation->quote_status === 'submitted' && $invitation->quote, 422, 'Only a submitted quotation can be revised.');
+        abort_unless((bool) ($invitation->allow_revision ?? true), 422, 'The buyer has disabled quotation revisions for this request.');
+        abort_if($this->linkExpired($invitation), 422, 'This quotation link has expired.');
+
+        $previousSubmittedAt = $invitation->quote_submitted_at;
+        $quote = DB::transaction(function () use ($invitation, $previousSubmittedAt): InquiryRfqQuote {
+            $invitation->update([
+                'quote_status' => 'draft',
+                'interest_status' => 'interested',
+                'interest_at' => $invitation->interest_at ?: now(),
+            ]);
+
+            $this->activity($invitation->inquiry, null, 'rfq.quote_revision_started', $invitation->supplier?->name.' reopened its quotation for revision.', [
+                'supplier_id' => (int) $invitation->supplier_id,
+                'invitation_id' => (int) $invitation->id,
+                'quote_id' => (int) $invitation->quote->id,
+                'previous_submitted_at' => $previousSubmittedAt?->toIso8601String(),
+            ]);
+
+            return $invitation->quote->fresh(['items', 'documents']);
+        });
+
+        app(\App\Services\WorkspaceRefreshService::class)->touch('InquiryRFQ:quote-revision-started');
+
+        return $quote;
+    }
+
+    /** @param array<int,array{inquiry_item_id:int,unit_price:float|int|string,moq?:float|int|string|null}> $items */
     public function submitQuote(InquiryRfqInvitation $invitation, array $items, array $data): InquiryRfqQuote
     {
         abort_if($invitation->awarded_at || $invitation->rejected_at, 422, 'This RFQ is already closed.');
-        abort_if($invitation->due_at && now()->greaterThan($invitation->due_at->copy()->addDays(30)), 422, 'This quotation link has expired.');
+        abort_if($invitation->quote_status === 'submitted', 422, 'This quotation has already been submitted and can no longer be edited.');
+        abort_if($this->linkExpired($invitation), 422, 'This quotation link has expired.');
 
         $inquiry = $invitation->inquiry()->with('items:id,inquiry_id,item_name,quantity,sort_order')->firstOrFail();
         $sourceItems = $inquiry->items->keyBy('id');
@@ -756,6 +899,7 @@ final class InquiryRfqService
                 'product_name' => (string) $source->item_name,
                 'quantity' => (float) $source->quantity,
                 'unit_price' => $unitPrice,
+                'moq' => filled($row['moq'] ?? null) ? max(0, (float) $row['moq']) : null,
                 'sort_order' => (int) $source->sort_order,
             ];
         })->keyBy('inquiry_item_id');
@@ -765,18 +909,37 @@ final class InquiryRfqService
         }
 
         $freight = max(0, round((float) ($data['freight'] ?? 0), 2));
+        $toolingCost = max(0, round((float) ($data['tooling_cost'] ?? 0), 2));
+        $sampleCost = max(0, round((float) ($data['sample_cost'] ?? 0), 2));
+        $discount = max(0, round((float) ($data['discount'] ?? 0), 2));
         $subtotal = $normalized->sum(fn (array $row) => ((float) $row['quantity']) * ((float) $row['unit_price']));
-        $submittedTotal = round($subtotal + $freight, 2);
+        $submittedTotal = round($subtotal + $freight + $toolingCost + $sampleCost - $discount, 2);
 
-        $quote = DB::transaction(function () use ($invitation, $normalized, $data, $freight, $submittedTotal): InquiryRfqQuote {
+        $quote = DB::transaction(function () use ($invitation, $normalized, $data, $freight, $toolingCost, $sampleCost, $discount, $submittedTotal): InquiryRfqQuote {
             $quote = InquiryRfqQuote::query()->updateOrCreate(
                 ['invitation_id' => $invitation->id],
                 [
+                    'supplier_contact_name' => trim((string) ($data['supplier_contact_name'] ?? '')) ?: null,
+                    'supplier_contact_email' => trim((string) ($data['supplier_contact_email'] ?? '')) ?: null,
+                    'supplier_contact_phone' => trim((string) ($data['supplier_contact_phone'] ?? '')) ?: null,
                     'currency' => strtoupper(trim((string) ($data['currency'] ?? 'USD'))) ?: 'USD',
                     'freight' => $freight,
+                    'tooling_cost' => $toolingCost,
+                    'sample_cost' => $sampleCost,
+                    'discount' => $discount,
+                    'tax_status' => trim((string) ($data['tax_status'] ?? 'excluded')) ?: 'excluded',
                     'lead_time_days' => filled($data['lead_time_days'] ?? null) ? max(0, (int) $data['lead_time_days']) : null,
+                    'sample_lead_time_days' => filled($data['sample_lead_time_days'] ?? null) ? max(0, (int) $data['sample_lead_time_days']) : null,
+                    'incoterm' => trim((string) ($data['incoterm'] ?? '')) ?: null,
+                    'shipping_port' => trim((string) ($data['shipping_port'] ?? '')) ?: null,
+                    'estimated_delivery_date' => filled($data['estimated_delivery_date'] ?? null) ? $data['estimated_delivery_date'] : null,
                     'validity_days' => filled($data['validity_days'] ?? null) ? max(0, (int) $data['validity_days']) : null,
+                    'specification_compliance' => trim((string) ($data['specification_compliance'] ?? '')) ?: null,
                     'notes' => trim((string) ($data['notes'] ?? '')) ?: null,
+                    'supporting_information' => $data['supporting_information'] ?? null,
+                    'document_notes' => trim((string) ($data['document_notes'] ?? '')) ?: null,
+                    'submitted_by_name' => trim((string) ($data['submitted_by_name'] ?? $data['supplier_contact_name'] ?? '')) ?: null,
+                    'submitted_by_email' => trim((string) ($data['submitted_by_email'] ?? $data['supplier_contact_email'] ?? '')) ?: null,
                     'submitted_total' => $submittedTotal,
                 ],
             );
@@ -807,7 +970,7 @@ final class InquiryRfqService
         ]);
         app(\App\Services\WorkspaceRefreshService::class)->touch('InquiryRFQ:quote-submitted');
 
-        if ($this->emailControl->inquiryEnabled()) {
+        if ($this->emailControl->inquiryEnabled() && (bool) ($invitation->auto_reply_enabled ?? true)) {
             try {
                 $this->mailer->sendQuoteReceived($invitation, $quote->fresh('items'));
             } catch (Throwable $exception) {
@@ -821,7 +984,51 @@ final class InquiryRfqService
         return $quote->fresh('items');
     }
 
-    /** @return array{winner:InquiryRfqInvitation,email_failures:int,email_service_disabled:bool} */
+    public function submitSavedDraft(InquiryRfqInvitation $invitation): InquiryRfqQuote
+    {
+        $invitation->loadMissing(['quote.items', 'quote.documents', 'supplier', 'inquiry.items']);
+        $quote = $invitation->quote;
+        abort_unless($quote, 422, 'Complete the quotation before submitting.');
+
+        $requiredDocumentTypes = ['formal_quotation', 'price_breakdown'];
+        $documentTypes = collect($quote->documents ?? [])->pluck('document_type');
+        abort_unless(collect($requiredDocumentTypes)->every(fn (string $type): bool => $documentTypes->contains($type)), 422, 'Upload the required quotation documents before submitting.');
+        abort_unless(filled($quote->supplier_contact_name) && filled($quote->supplier_contact_email), 422, 'Complete the supplier contact details before submitting.');
+
+        $items = collect($quote->items)->map(fn ($item): array => [
+            'inquiry_item_id' => (int) $item->inquiry_item_id,
+            'unit_price' => $item->unit_price,
+            'moq' => $item->moq,
+        ])->all();
+
+        $data = [
+            'supplier_contact_name' => $quote->supplier_contact_name,
+            'supplier_contact_email' => $quote->supplier_contact_email,
+            'supplier_contact_phone' => $quote->supplier_contact_phone,
+            'currency' => $quote->currency,
+            'freight' => $quote->freight,
+            'tooling_cost' => $quote->tooling_cost,
+            'sample_cost' => $quote->sample_cost,
+            'discount' => $quote->discount,
+            'tax_status' => $quote->tax_status,
+            'lead_time_days' => $quote->lead_time_days,
+            'sample_lead_time_days' => $quote->sample_lead_time_days,
+            'incoterm' => $quote->incoterm,
+            'shipping_port' => $quote->shipping_port,
+            'estimated_delivery_date' => $quote->estimated_delivery_date?->format('Y-m-d'),
+            'validity_days' => $quote->validity_days,
+            'specification_compliance' => $quote->specification_compliance,
+            'notes' => $quote->notes,
+            'supporting_information' => $quote->supporting_information,
+            'document_notes' => $quote->document_notes,
+            'submitted_by_name' => $quote->supplier_contact_name,
+            'submitted_by_email' => $quote->supplier_contact_email,
+        ];
+
+        return $this->submitQuote($invitation, $items, $data);
+    }
+
+    /** @return array{winner:InquiryRfqInvitation,email_failures:int,email_service_disabled:bool,award_email_enabled:bool,not_selected_email_enabled:bool} */
     public function award(Inquiry $inquiry, int $invitationId, User $actor): array
     {
         $winner = InquiryRfqInvitation::query()
@@ -857,35 +1064,45 @@ final class InquiryRfqService
         ]);
         app(\App\Services\WorkspaceRefreshService::class)->touch('InquiryRFQ:awarded');
 
+        $settings = $this->settings($inquiry);
+        $awardEmailEnabled = (bool) ($settings->award_email_enabled ?? true);
+        $notSelectedEmailEnabled = (bool) ($settings->not_selected_email_enabled ?? true);
+
         if (! $this->emailControl->inquiryEnabled()) {
             return [
                 'winner' => $winner->fresh(['supplier','quote.items']),
                 'email_failures' => 0,
                 'email_service_disabled' => true,
+                'award_email_enabled' => $awardEmailEnabled,
+                'not_selected_email_enabled' => $notSelectedEmailEnabled,
             ];
         }
 
         $failures = 0;
-        try {
-            $this->mailer->sendAward($winner->fresh(['supplier','inquiry.items','quote.items']), $actor);
-        } catch (Throwable $exception) {
-            $failures++;
-            Log::warning('flowtrack.rfq.award_email_failed', ['invitation_id' => $winner->id, 'error' => $exception->getMessage()]);
-        }
-
-        $losers = InquiryRfqInvitation::query()
-            ->where('inquiry_id', $inquiry->id)
-            ->where('id', '!=', $winner->id)
-            ->with(['supplier','inquiry.items'])
-            ->get();
-        foreach ($losers as $loser) {
-            if (! filter_var($loser->supplierEmail(), FILTER_VALIDATE_EMAIL)) continue;
+        if ($awardEmailEnabled && filter_var($winner->supplierEmail(), FILTER_VALIDATE_EMAIL)) {
             try {
-                $this->mailer->sendNotSelected($loser);
-                $loser->update(['rejection_notified_at' => now()]);
+                $this->mailer->sendAward($winner->fresh(['supplier','inquiry.items','quote.items']), $actor);
             } catch (Throwable $exception) {
                 $failures++;
-                Log::warning('flowtrack.rfq.not_selected_email_failed', ['invitation_id' => $loser->id, 'error' => $exception->getMessage()]);
+                Log::warning('flowtrack.rfq.award_email_failed', ['invitation_id' => $winner->id, 'error' => $exception->getMessage()]);
+            }
+        }
+
+        if ($notSelectedEmailEnabled) {
+            $losers = InquiryRfqInvitation::query()
+                ->where('inquiry_id', $inquiry->id)
+                ->where('id', '!=', $winner->id)
+                ->with(['supplier','inquiry.items'])
+                ->get();
+            foreach ($losers as $loser) {
+                if (! filter_var($loser->supplierEmail(), FILTER_VALIDATE_EMAIL)) continue;
+                try {
+                    $this->mailer->sendNotSelected($loser);
+                    $loser->update(['rejection_notified_at' => now()]);
+                } catch (Throwable $exception) {
+                    $failures++;
+                    Log::warning('flowtrack.rfq.not_selected_email_failed', ['invitation_id' => $loser->id, 'error' => $exception->getMessage()]);
+                }
             }
         }
 
@@ -893,6 +1110,8 @@ final class InquiryRfqService
             'winner' => $winner->fresh(['supplier','quote.items']),
             'email_failures' => $failures,
             'email_service_disabled' => false,
+            'award_email_enabled' => $awardEmailEnabled,
+            'not_selected_email_enabled' => $notSelectedEmailEnabled,
         ];
     }
 
@@ -902,22 +1121,31 @@ final class InquiryRfqService
         if (! Schema::hasTable('inquiry_rfq_invitations')) return ['sent' => 0, 'failed' => 0];
         if (! $this->emailControl->inquiryEnabled()) return ['sent' => 0, 'failed' => 0];
 
-        $start = now()->addDay()->startOfDay();
-        $end = now()->addDay()->endOfDay();
         $sent = 0;
         $failed = 0;
+        $now = now();
+        $latestRelevantDue = $now->copy()->addDays(14);
 
         InquiryRfqInvitation::query()
-            ->whereBetween('due_at', [$start, $end])
             ->where('email_status', 'Delivered')
+            ->where('reminder_enabled', true)
             ->whereNull('reminder_sent_at')
+            ->whereNotNull('due_at')
+            ->where('due_at', '>', $now)
+            ->where('due_at', '<=', $latestRelevantDue)
             ->where('quote_status', '!=', 'submitted')
             ->where('interest_status', '!=', 'declined')
             ->whereNull('awarded_at')
             ->whereNull('rejected_at')
             ->with(['supplier','inquiry.items'])
-            ->chunkById(100, function ($rows) use (&$sent, &$failed): void {
+            ->chunkById(100, function ($rows) use (&$sent, &$failed, $now): void {
                 foreach ($rows as $invitation) {
+                    $hoursBefore = max(1, (int) ($invitation->reminder_hours_before_due ?: 24));
+                    $reminderAt = $invitation->due_at->copy()->subHours($hoursBefore);
+                    if ($now->lessThan($reminderAt) || $this->linkExpired($invitation)) {
+                        continue;
+                    }
+
                     try {
                         $token = Crypt::decryptString((string) $invitation->token_cipher);
                         $this->mailer->sendReminder($invitation, $token);
@@ -1093,6 +1321,15 @@ final class InquiryRfqService
         }
 
         return $supplierIds->unique()->values()->all();
+    }
+
+    private function linkExpired(InquiryRfqInvitation $invitation): bool
+    {
+        if ($invitation->link_expires_at) {
+            return now()->greaterThan($invitation->link_expires_at);
+        }
+
+        return (bool) ($invitation->due_at && now()->greaterThan($invitation->due_at->copy()->addDays(30)));
     }
 
     private function activity(Inquiry $inquiry, ?User $actor, string $event, string $description, array $meta = []): void

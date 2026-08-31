@@ -6,28 +6,40 @@ use Tests\TestCase;
 
 class CreateOrderPurchaseOrderUploadTest extends TestCase
 {
-    public function test_create_order_exposes_purchase_order_and_other_document_sections(): void
+    public function test_create_order_uses_the_combined_documents_prototype_before_workflow(): void
     {
-        $view = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
+        $createView = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
+        $documentsView = file_get_contents(resource_path('views/components/jobs/create/documents.blade.php'));
         $indexView = file_get_contents(resource_path('views/livewire/jobs/index.blade.php'));
         $index = file_get_contents(app_path('Livewire/Jobs/Index.php'));
         $creation = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderCreation.php'));
 
-        $this->assertStringContainsString('<div class="ft-create-section-title"><span>5</span><h2>Purchase Order</h2></div>', $view);
-        $this->assertStringContainsString('step="6"', $view);
-        $this->assertStringContainsString('number="6" title="What happens next"', $view);
+        $this->assertStringContainsString('<x-jobs.create.documents', $createView);
+        $this->assertStringContainsString('step="6"', $createView);
+        $this->assertStringContainsString('number="6" title="What happens next"', $createView);
         $this->assertLessThan(
-            strpos($view, 'title="What happens next"'),
-            strpos($view, '<h2>Purchase Order</h2>'),
-            'Purchase Order must appear before What happens next on Create Order.'
+            strpos($createView, 'title="What happens next"'),
+            strpos($createView, '<x-jobs.create.documents'),
+            'Documents must appear before What happens next on Create Order.'
         );
-        $this->assertStringContainsString('wire:model="purchaseOrderUpload"', $view);
-        $this->assertStringContainsString('<h2>Other document</h2>', $view);
-        $this->assertStringContainsString('wire:model="jobAttachments" multiple', $view);
+
+        $this->assertStringContainsString('<h2>Documents</h2>', $documentsView);
+        $this->assertStringContainsString('<strong>Purchase order</strong>', $documentsView);
+        $this->assertStringContainsString('<span class="ft-order-document-optional">Optional</span>', $documentsView);
+        $this->assertStringNotContainsString('<span class="ft-order-document-required">Required</span>', $documentsView);
+        $this->assertStringContainsString('<strong>Other documents</strong>', $documentsView);
+        $this->assertStringContainsString('model="purchaseOrderUpload"', $documentsView);
+        $this->assertStringContainsString('model="jobAttachments"', $documentsView);
+        $this->assertStringContainsString(':multiple="true"', $documentsView);
+        $this->assertStringContainsString('Purchase order attached and ready.', $documentsView);
+        $this->assertStringContainsString("saved to the order's Document Archive", $documentsView);
+
         $this->assertStringContainsString(':purchase-order-upload="$purchaseOrderUpload"', $indexView);
         $this->assertStringContainsString('public $purchaseOrderUpload = null;', $index);
         $this->assertStringContainsString("'purchaseOrderUpload' => AttachmentUpload::nullableRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480)", $creation);
-        $this->assertStringContainsString("'purchaseOrderUpload',", $creation);
+        $this->assertStringContainsString("'jobAttachments.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480)", $creation);
+        $this->assertStringContainsString('public function removeCreatePurchaseOrder(): void', $creation);
+        $this->assertStringContainsString('public function removeCreateAttachment(int $index): void', $creation);
     }
 
     public function test_create_order_purchase_order_is_linked_to_po_task_and_completes_normal_workflow_action(): void

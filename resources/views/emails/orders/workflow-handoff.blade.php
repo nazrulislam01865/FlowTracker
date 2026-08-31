@@ -22,9 +22,11 @@
     </table>
 
     <div style="padding:14px 16px;border:1px solid #dce5ee;border-radius:9px;background:#fff">
-        <div style="font-size:10px;color:#718097;text-transform:uppercase;letter-spacing:.05em">Attached file</div>
-        <div style="margin-top:4px;font-size:13px;font-weight:700;color:#152238">{{ $document->name }}</div>
-        @if((int) ($document->version ?? 0) > 0)<div style="margin-top:2px;font-size:11px;color:#718097">Version {{ $document->version }}</div>@endif
+        <div style="font-size:10px;color:#718097;text-transform:uppercase;letter-spacing:.05em">Attached file{{ $documents->count() === 1 ? '' : 's' }}</div>
+        @foreach($documents as $attachedDocument)
+            <div style="margin-top:4px;font-size:13px;font-weight:700;color:#152238">{{ $attachedDocument->name }}</div>
+        @endforeach
+        @if((int) ($document->version ?? 0) > 0)<div style="margin-top:2px;font-size:11px;color:#718097">Artwork version {{ $document->version }}</div>@endif
     </div>
 
     <p style="margin:20px 0 0;color:#718097;font-size:11px;line-height:1.55">Reply to this email if you need clarification from {{ $sentBy->name }}.</p>

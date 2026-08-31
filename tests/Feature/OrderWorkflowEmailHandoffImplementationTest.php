@@ -48,7 +48,10 @@ class OrderWorkflowEmailHandoffImplementationTest extends TestCase
         // Preview and send share the exact same email Blade/view data.
         $this->assertStringContainsString("view('emails.orders.workflow-handoff', \$viewData)->render()", $service);
         $this->assertStringContainsString("'html' => \$previewHtml", $service);
-        $this->assertStringContainsString("'delivery' => \$this->deliveryLabel()", $service);
+        $this->assertStringContainsString("'delivery' => \$emailServiceEnabled ? \$this->deliveryLabel()", $service);
+        $this->assertStringContainsString('private function sourceDocuments(', $service);
+        $this->assertStringContainsString("where('version', \$latestVersion)", $service);
+        $this->assertStringContainsString('attachments: $attachments', $service);
         $this->assertStringContainsString("'from_address' => \$this->senderAddress()", $service);
 
         $this->assertStringContainsString("'variant' => 'purchase_order_email'", $actions);

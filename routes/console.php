@@ -41,10 +41,10 @@ Artisan::command('flowtrack:send-rfq-reminders', function (): int {
     $result = app(\App\Services\Inquiries\InquiryRfqService::class)->sendDueReminders();
     $this->info('RFQ due-date reminders sent: '.(int) $result['sent'].'. Failed: '.(int) $result['failed'].'.');
     return (int) $result['failed'] > 0 ? 1 : 0;
-})->purpose('Send supplier RFQ reminders for quotations due tomorrow');
+})->purpose('Send supplier RFQ reminders at each inquiry configured reminder window');
 
 Schedule::command('flowtrack:send-rfq-reminders')
-    ->dailyAt('09:00')
+    ->hourly()
     ->withoutOverlapping()
     ->onOneServer();
 

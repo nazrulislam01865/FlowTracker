@@ -39,7 +39,7 @@ trait ManagesOrderTaskResources
         $this->overviewTaskLinkUrl = '';
         $this->overviewTaskDocumentModalTaskId = $task->id;
         $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->resetValidation([
@@ -55,7 +55,7 @@ trait ManagesOrderTaskResources
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->resetValidation([
@@ -75,7 +75,7 @@ trait ManagesOrderTaskResources
         }
 
         $this->overviewTaskDocumentSource = $source;
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskExistingDocumentId']);
     }
@@ -99,10 +99,16 @@ trait ManagesOrderTaskResources
 
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+            $allowsMultiple = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD'
+                || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
             $this->validate([
-                'overviewTaskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+                'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)],
+                'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
             ], [
-                'overviewTaskDocumentUpload.max' => 'The file is too large. Maximum file size is 20 MB.',
+                'overviewTaskDocumentUpload.max' => $allowsMultiple
+                    ? 'You can upload a maximum of 10 files at a time.'
+                    : 'Choose one file for this task.',
+                'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
             ]);
 
             $storeData = [
@@ -116,7 +122,7 @@ trait ManagesOrderTaskResources
             } else {
                 $storeData['category'] = 'Task attachment';
             }
-            $documentService->store($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+            $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
             $this->validate(['overviewTaskExistingDocumentId' => ['required', 'integer', 'exists:documents,id']]);
@@ -144,12 +150,21 @@ trait ManagesOrderTaskResources
         session()->flash('success', 'Document added to '.$title.'.');
     }
 
+    public function removeOverviewTaskDocumentUpload(int $index): void
+    {
+        if (! array_key_exists($index, $this->overviewTaskDocumentUpload)) return;
+
+        unset($this->overviewTaskDocumentUpload[$index]);
+        $this->overviewTaskDocumentUpload = array_values($this->overviewTaskDocumentUpload);
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskDocumentUpload.*']);
+    }
+
     public function openOverviewTaskLinkForm(int $taskId): void
     {
         $task = $this->editableOverviewTask($taskId);
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->overviewTaskLinkFormTaskId = $task->id;
@@ -326,23 +341,21 @@ trait ManagesOrderTaskResources
 
         try {
             $documentService = app(DocumentService::class);
-            foreach ($this->taskDocumentUploads as $upload) {
-                $storeData = [
-                    'flow_job_id' => $task->flow_job_id,
-                    'client_id' => $task->job?->client_id,
-                    'task_id' => $task->id,
-                ];
+            $storeData = [
+                'flow_job_id' => $task->flow_job_id,
+                'client_id' => $task->job?->client_id,
+                'task_id' => $task->id,
+            ];
 
-                // Uploading from Task Details must satisfy the same Task Pack
-                // document requirement as uploading from the Order taskflow.
-                if ($documentService->taskHasRequirement($task)) {
-                    $storeData['require_task_pack_requirement'] = true;
-                } else {
-                    $storeData['category'] = 'Task attachment';
-                }
-
-                $documentService->store($upload, $storeData, auth()->user());
+            // Uploading from Task Details must satisfy the same Task Pack
+            // document requirement as uploading from the Order taskflow.
+            if ($documentService->taskHasRequirement($task)) {
+                $storeData['require_task_pack_requirement'] = true;
+            } else {
+                $storeData['category'] = 'Task attachment';
             }
+
+            $documentService->storeMany($this->taskDocumentUploads, $storeData, auth()->user());
         } catch (\Throwable $e) {
             report($e);
             $message = 'FlowTrack could not store this attachment. Please try again.';

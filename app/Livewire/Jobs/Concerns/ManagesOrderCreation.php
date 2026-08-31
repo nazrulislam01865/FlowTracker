@@ -2,7 +2,12 @@
 
 namespace App\Livewire\Jobs\Concerns;
 
+use App\Actions\Clients\SaveClientDeliveryContact;
+use App\Actions\Clients\SaveClientOrderContact;
 use App\Actions\Orders\CreateOrder;
+use App\Models\Client;
+use App\Models\ClientContact;
+use App\Models\ClientDeliveryContact;
 use App\Models\ClientShippingAddress;
 use App\Models\MasterRecord;
 use App\Models\Task;
@@ -37,6 +42,452 @@ trait ManagesOrderCreation
 
         $this->repeatedOrderNumber = '';
         $this->resetValidation('repeatedOrderNumber');
+    }
+
+    public function selectShippingContactType(string $type): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless(in_array($type, ['end_customer', 'middle_client', 'other_contact'], true), 422, 'Choose a valid delivery contact type.');
+
+        $client = $this->createShippingContactClient();
+        abort_unless($client, 422, 'Select a client first.');
+
+        if ($type === $this->shippingContactType) {
+            return;
+        }
+
+        // Preserve the current tab as an in-progress draft before changing the
+        // source. This prevents user-entered End customer / Other contact data
+        // from disappearing when the user compares or switches contact tabs.
+        $this->rememberShippingContactDraft($this->shippingContactType);
+        $this->shippingContactType = $type;
+
+        if (!$this->restoreShippingContactDraft($type)) {
+            $this->shippingSaveContact = true;
+
+            if ($type === 'middle_client') {
+                $contact = $client->contacts
+                    ->firstWhere('is_primary', true)
+                    ?: $client->contacts->first();
+
+                if ($contact) {
+                    $this->useMiddleClientContact($contact);
+                } else {
+                    $this->clearShippingContactDraftFields();
+                }
+            } else {
+                // End customer and Other contact are intentionally user-entered.
+                // Their separate drafts remain available when the user switches
+                // away and returns to either tab.
+                $this->clearShippingContactDraftFields();
+            }
+        }
+
+        $this->resetValidation([
+            'shippingContactType',
+            'shippingContactId',
+            'shippingContactSelection',
+            'shippingContactName',
+            'shippingPhoneCountryCode',
+            'shippingPhone',
+            'shippingSaveContact',
+        ]);
+    }
+
+    private function rememberShippingContactDraft(?string $type = null): void
+    {
+        $type = $type ?: $this->shippingContactType;
+        if (!in_array($type, ['end_customer', 'middle_client', 'other_contact'], true)) {
+            return;
+        }
+
+        $this->shippingContactDrafts[$type] = [
+            'contact_id' => $this->shippingContactId,
+            'selection' => trim((string) $this->shippingContactSelection),
+            'name' => trim((string) $this->shippingContactName),
+            'country_code' => trim((string) $this->shippingPhoneCountryCode) ?: self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE,
+            'phone' => trim((string) $this->shippingPhone),
+            'save_contact' => (bool) $this->shippingSaveContact,
+        ];
+    }
+
+    private function restoreShippingContactDraft(string $type): bool
+    {
+        $draft = $this->shippingContactDrafts[$type] ?? null;
+        if (!is_array($draft)) {
+            return false;
+        }
+
+        $this->shippingContactId = isset($draft['contact_id']) && $draft['contact_id'] !== null
+            ? (int) $draft['contact_id']
+            : null;
+        $this->shippingContactSelection = trim((string) ($draft['selection'] ?? ''));
+        $this->shippingContactName = trim((string) ($draft['name'] ?? ''));
+        $this->shippingPhoneCountryCode = trim((string) ($draft['country_code'] ?? '')) ?: self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+        $this->shippingPhone = trim((string) ($draft['phone'] ?? ''));
+        $this->shippingSaveContact = (bool) ($draft['save_contact'] ?? true);
+
+        return true;
+    }
+
+    private function clearShippingContactDraftFields(): void
+    {
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = '';
+        $this->shippingContactName = '';
+        $this->shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+        $this->shippingPhone = '';
+    }
+
+    public function selectShippingContact(mixed $contactId): void
+    {
+        $this->selectShippingContactOption('middle_client', $contactId);
+    }
+
+    public function selectShippingContactOption(string $type, mixed $contactId): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless(in_array($type, ['end_customer', 'middle_client', 'other_contact'], true), 422, 'Choose a valid delivery contact type.');
+        abort_unless($type === $this->shippingContactType, 409, 'The delivery contact source changed. Choose the contact again.');
+        abort_unless($this->clientId, 422, 'Select a client first.');
+
+        $raw = trim((string) $contactId);
+        abort_unless($raw !== '' && ctype_digit($raw), 422, 'Choose a valid saved contact.');
+
+        $client = $this->createShippingContactClient();
+        abort_unless($client, 422, 'That client is no longer available.');
+
+        if ($type === 'middle_client') {
+            $contact = $client->contacts->firstWhere('id', (int) $raw);
+            abort_unless($contact, 422, 'That contact is no longer available for this client.');
+            $this->useMiddleClientContact($contact);
+        } else {
+            $contact = ClientDeliveryContact::query()
+                ->where('client_id', $client->id)
+                ->where('contact_type', $type)
+                ->find((int) $raw);
+            abort_unless($contact, 422, 'That saved delivery contact is no longer available.');
+
+            $this->shippingContactId = null;
+            $this->shippingContactSelection = (string) $contact->id;
+            $this->shippingContactName = trim((string) $contact->name);
+            $this->shippingPhoneCountryCode = trim((string) ($contact->phone_country_code ?? '')) ?: self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+            $this->shippingPhone = trim((string) $contact->phone);
+            $this->shippingSaveContact = true;
+        }
+
+        $this->resetValidation([
+            'shippingContactId',
+            'shippingContactName',
+            'shippingPhoneCountryCode',
+            'shippingPhone',
+        ]);
+    }
+
+    public function useNewShippingContactPerson(string $type, mixed $name): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless(in_array($type, ['end_customer', 'middle_client', 'other_contact'], true), 422, 'Choose a valid delivery contact type.');
+        abort_unless($type === $this->shippingContactType, 409, 'The delivery contact source changed. Enter the contact again.');
+
+        $name = trim((string) $name);
+        abort_unless($name !== '' && mb_strlen($name) <= 255, 422, 'Enter a valid contact person.');
+
+        $wasSavedSelection = $this->shippingContactSelection !== ''
+            && !str_starts_with($this->shippingContactSelection, 'custom:');
+
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = 'custom:'.$name;
+        $this->shippingContactName = $name;
+        $this->shippingSaveContact = true;
+
+        if ($wasSavedSelection) {
+            $this->shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+            $this->shippingPhone = '';
+        }
+
+        $this->resetValidation(['shippingContactId', 'shippingContactName']);
+    }
+
+    public function updatedShippingContactName(mixed $value): void
+    {
+        if (!$this->showCreate) return;
+
+        $name = trim((string) $value);
+        if ($name === '') {
+            $this->shippingContactId = null;
+            $this->shippingContactSelection = '';
+            return;
+        }
+
+        if ($this->shippingContactSelection !== '' && !str_starts_with($this->shippingContactSelection, 'custom:')) {
+            $selectedName = $this->selectedShippingContactName();
+            if ($selectedName !== null && mb_strtolower($selectedName) === mb_strtolower($name)) return;
+
+            // Moving away from a saved option must never carry that person's
+            // phone number into a newly typed contact by accident.
+            $this->shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+            $this->shippingPhone = '';
+        }
+
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = 'custom:'.$name;
+        $this->shippingSaveContact = true;
+        $this->resetValidation('shippingContactId');
+    }
+
+    private function selectedShippingContactName(): ?string
+    {
+        $selection = trim((string) $this->shippingContactSelection);
+        if ($selection === '' || !ctype_digit($selection) || !$this->clientId) return null;
+
+        if ($this->shippingContactType === 'middle_client') {
+            return ClientContact::query()
+                ->where('client_id', $this->clientId)
+                ->whereKey((int) $selection)
+                ->value('name');
+        }
+
+        if (in_array($this->shippingContactType, ['end_customer', 'other_contact'], true)) {
+            return ClientDeliveryContact::query()
+                ->where('client_id', $this->clientId)
+                ->where('contact_type', $this->shippingContactType)
+                ->whereKey((int) $selection)
+                ->value('name');
+        }
+
+        return null;
+    }
+
+    public function useSavedDeliveryContactByName(mixed $name): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+        abort_unless($this->clientId, 422, 'Select a client first.');
+
+        if (!in_array($this->shippingContactType, ['end_customer', 'other_contact'], true)) {
+            return;
+        }
+
+        $name = trim((string) $name);
+        if ($name === '') return;
+
+        $clientId = app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->whereKey($this->clientId)
+            ->value('id');
+        abort_unless($clientId, 403);
+
+        $contact = ClientDeliveryContact::query()
+            ->where('client_id', $clientId)
+            ->where('contact_type', $this->shippingContactType)
+            ->whereRaw('LOWER(name) = ?', [mb_strtolower($name)])
+            ->orderByDesc('last_used_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if (!$contact) return;
+
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = (string) $contact->id;
+        $this->shippingContactName = trim((string) $contact->name);
+        $this->shippingPhoneCountryCode = trim((string) ($contact->phone_country_code ?? '')) ?: self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+        $this->shippingPhone = trim((string) $contact->phone);
+        $this->shippingSaveContact = true;
+        $this->resetValidation([
+            'shippingContactName',
+            'shippingPhoneCountryCode',
+            'shippingPhone',
+        ]);
+    }
+
+    private function createShippingContactClient(): ?Client
+    {
+        if (!$this->clientId) return null;
+
+        return app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->with(['contacts' => fn ($query) => $query
+                ->select(['id', 'client_id', 'name', 'job_title', 'phone', 'is_primary', 'sort_order'])
+                ->orderByDesc('is_primary')
+                ->orderBy('sort_order')
+                ->orderBy('id')])
+            ->find($this->clientId, ['id', 'name', 'contact_name', 'contact_job_title', 'phone']);
+    }
+
+    private function initializeCreateShippingContact(?int $clientId): void
+    {
+        $this->shippingContactType = 'end_customer';
+        $this->shippingContactDrafts = [];
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = '';
+        $this->shippingContactName = '';
+        $this->shippingSaveContact = true;
+        $this->shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+        $this->shippingPhone = '';
+
+        if (!$clientId) return;
+
+        $client = $this->createShippingContactClient();
+        if (!$client) return;
+
+        // The selected Order client is the Middle client. Prefer its primary
+        // structured contact when available, while End customer remains a
+        // separate user-entered source.
+        $middleContact = $client->contacts->firstWhere('is_primary', true)
+            ?: $client->contacts->first(fn (ClientContact $contact): bool => filled($contact->phone))
+            ?: $client->contacts->first();
+
+        if ($middleContact) {
+            $this->shippingContactType = 'middle_client';
+            $this->useMiddleClientContact($middleContact);
+        }
+    }
+
+    private function useMiddleClientContact(ClientContact $contact): void
+    {
+        $this->shippingContactId = (int) $contact->id;
+        $this->shippingContactSelection = (string) $contact->id;
+        $this->shippingContactName = trim((string) $contact->name);
+        $this->shippingSaveContact = true;
+        $this->applyStoredShippingPhone((string) ($contact->phone ?? ''));
+    }
+
+    private function applyStoredShippingPhone(string $storedPhone): void
+    {
+        [$countryCode, $phone] = $this->splitStoredShippingPhone($storedPhone);
+        $this->shippingPhoneCountryCode = $countryCode;
+        $this->shippingPhone = $phone;
+    }
+
+    /** @return array{0:string,1:string} */
+    private function splitStoredShippingPhone(string $storedPhone): array
+    {
+        $value = trim($storedPhone);
+        if ($value === '') return [self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE, ''];
+
+        $codes = MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('phone_country_code')
+            ->active()
+            ->pluck('name')
+            ->map(fn ($code) => trim((string) $code))
+            ->filter(fn (string $code): bool => $code !== '')
+            ->sortByDesc(fn (string $code): int => strlen($code))
+            ->values();
+
+        foreach ($codes as $code) {
+            if (!str_starts_with($value, $code)) continue;
+
+            $phone = ltrim(trim(substr($value, strlen($code))), " \t-");
+            return [$code, $phone];
+        }
+
+        return [self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE, $value];
+    }
+
+    private function normalizeShippingContactSelectionBeforeSave(): void
+    {
+        $name = trim((string) $this->shippingContactName);
+        if ($name === '') return;
+
+        $selection = trim((string) $this->shippingContactSelection);
+        if ($selection !== '' && ctype_digit($selection)) {
+            $selectedName = $this->selectedShippingContactName();
+            if ($selectedName !== null && mb_strtolower($selectedName) === mb_strtolower($name)) return;
+        } elseif (str_starts_with($selection, 'custom:')) {
+            return;
+        }
+
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = 'custom:'.$name;
+        $this->shippingSaveContact = true;
+    }
+
+    private function persistShippingContactSelection(): void
+    {
+        if (!$this->clientId) return;
+
+        // The active tab has not necessarily been switched away from, so its
+        // latest values may not yet exist in shippingContactDrafts. Capture it
+        // first, then persist every complete contact draft the user supplied.
+        // Empty or partially entered tabs are ignored.
+        $this->rememberShippingContactDraft($this->shippingContactType);
+
+        $client = app(ClientService::class)
+            ->referenceQuery(auth()->user(), 'create-job')
+            ->where('is_active', true)
+            ->find($this->clientId, ['id']);
+        if (!$client) return;
+
+        foreach (['end_customer', 'middle_client', 'other_contact'] as $type) {
+            $draft = $this->shippingContactDrafts[$type] ?? null;
+            if (!is_array($draft)) continue;
+
+            $name = trim((string) ($draft['name'] ?? ''));
+            $phone = trim((string) ($draft['phone'] ?? ''));
+
+            // A user may briefly visit a tab without completing it. Do not
+            // create incomplete reusable contacts just because that tab has a
+            // remembered draft.
+            if ($name === '' || $phone === '') continue;
+
+            $countryCode = trim((string) ($draft['country_code'] ?? ''))
+                ?: self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
+            $selection = trim((string) ($draft['selection'] ?? ''));
+            $contactId = isset($draft['contact_id']) && $draft['contact_id'] !== null
+                ? (int) $draft['contact_id']
+                : null;
+            $isNewContact = $selection === '' || str_starts_with($selection, 'custom:');
+            $shouldSave = (bool) ($draft['save_contact'] ?? true) || $isNewContact;
+
+            // Existing contacts are already reusable. Respect the save/update
+            // checkbox for them, while newly typed contacts are always saved as
+            // requested by the Create Order contact workflow.
+            if (!$shouldSave) continue;
+
+            if ($type === 'middle_client') {
+                $existingId = $contactId;
+                if (!$existingId && $selection !== '' && ctype_digit($selection)) {
+                    $existingId = (int) $selection;
+                }
+
+                if ($existingId) {
+                    $contact = ClientContact::query()
+                        ->where('client_id', $client->id)
+                        ->find($existingId);
+                    if (!$contact) continue;
+
+                    $fullPhone = trim(collect([$countryCode, $phone])
+                        ->filter(fn ($part) => filled($part))
+                        ->implode(' '));
+
+                    if ($fullPhone !== '' && trim((string) $contact->phone) !== $fullPhone) {
+                        $contact->update(['phone' => $fullPhone]);
+                    }
+
+                    continue;
+                }
+
+                app(SaveClientOrderContact::class)->execute(
+                    $client,
+                    $name,
+                    $countryCode,
+                    $phone,
+                );
+                continue;
+            }
+
+            app(SaveClientDeliveryContact::class)->execute(
+                auth()->user(),
+                $client,
+                $type,
+                $name,
+                $countryCode,
+                $phone,
+            );
+        }
     }
 
     public function setCreateSelector(string $property, mixed $value): void
@@ -82,6 +533,7 @@ trait ManagesOrderCreation
                 // a Client change so Create Order never retains a stale id.
                 $this->applyClientWorkflowDefault($id);
                 $this->resetCreateShippingAddress();
+                $this->initializeCreateShippingContact($id);
             }
 
             return;
@@ -148,6 +600,35 @@ trait ManagesOrderCreation
     {
         $this->resetCreateForm();
         $this->redirectRoute('jobs.index', navigate: true);
+    }
+
+    public function removeCreatePurchaseOrder(): void
+    {
+        abort_unless(
+            $this->showCreate
+                && auth()->user()->canModule('jobs', 'create')
+                && auth()->user()->canModule('documents', 'create'),
+            403,
+        );
+
+        $this->purchaseOrderUpload = null;
+        $this->resetValidation('purchaseOrderUpload');
+    }
+
+    public function removeCreateAttachment(int $index): void
+    {
+        abort_unless(
+            $this->showCreate
+                && auth()->user()->canModule('jobs', 'create')
+                && auth()->user()->canModule('documents', 'create'),
+            403,
+        );
+        abort_unless(array_key_exists($index, $this->jobAttachments), 422, 'That attachment is no longer selected.');
+
+        unset($this->jobAttachments[$index]);
+        $this->jobAttachments = array_values($this->jobAttachments);
+        $this->resetValidation('jobAttachments');
+        $this->resetValidation('jobAttachments.*');
     }
 
     public function loadCreateSection(string $section): void
@@ -246,6 +727,12 @@ trait ManagesOrderCreation
 
         $this->shippingAddress = $lines->implode("\n");
         $this->shippingPostalCode = trim((string) $address->zip);
+        if ($this->shippingContactType === 'end_customer' && filled($address->recipient)) {
+            $this->shippingContactName = trim((string) $address->recipient);
+            $this->shippingContactId = null;
+            $this->shippingContactSelection = 'custom:'.$this->shippingContactName;
+            $this->shippingSaveContact = true;
+        }
         $this->shippingSourceAddressId = $address->id;
         $this->showSavedShippingAddressPicker = false;
         $this->resetValidation([
@@ -258,9 +745,15 @@ trait ManagesOrderCreation
     private function resetCreateShippingAddress(): void
     {
         $this->shippingAddress = '';
-        $this->shippingPhoneCountryCode = '';
+        $this->shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
         $this->shippingPhone = '';
         $this->shippingPostalCode = '';
+        $this->shippingContactType = 'end_customer';
+        $this->shippingContactDrafts = [];
+        $this->shippingContactId = null;
+        $this->shippingContactSelection = '';
+        $this->shippingContactName = '';
+        $this->shippingSaveContact = true;
         $this->shippingSourceAddressId = null;
         $this->showSavedShippingAddressPicker = false;
         $this->resetValidation([
@@ -268,6 +761,11 @@ trait ManagesOrderCreation
             'shippingPhoneCountryCode',
             'shippingPhone',
             'shippingPostalCode',
+            'shippingContactType',
+            'shippingContactId',
+            'shippingContactSelection',
+            'shippingContactName',
+            'shippingSaveContact',
             'shippingSourceAddressId',
         ]);
     }
@@ -395,6 +893,8 @@ trait ManagesOrderCreation
             return;
         }
 
+        $this->normalizeShippingContactSelectionBeforeSave();
+
         // Re-resolve defaults and validate any explicit Order-only supplier override
         // immediately before validation. This prevents stale or tampered supplier IDs.
         if (!$this->synchronizeCreateOrderProductSuppliersFromCatalog()) {
@@ -425,8 +925,16 @@ trait ManagesOrderCreation
             'estimatedDeliveryDate' => ['nullable','date'],
             'description' => ['nullable','string'],
             'shippingAddress' => ['required','string','max:2000'],
-            'shippingPhoneCountryCode' => [
+            'shippingContactType' => ['required', Rule::in(['end_customer', 'middle_client', 'other_contact'])],
+            'shippingContactId' => [
                 'nullable',
+                'integer',
+                Rule::exists('client_contacts', 'id')->where(fn ($query) => $query->where('client_id', $this->clientId)),
+            ],
+            'shippingContactName' => ['required', 'string', 'max:255'],
+            'shippingSaveContact' => ['boolean'],
+            'shippingPhoneCountryCode' => [
+                'required',
                 'string',
                 'max:12',
                 'regex:/^\+[0-9]{1,4}$/',
@@ -436,7 +944,7 @@ trait ManagesOrderCreation
                     ->where('status', 'active')
                     ->whereNull('deleted_at')),
             ],
-            'shippingPhone' => ['nullable','string','max:60','regex:/^[0-9()\s.\-]{5,40}$/'],
+            'shippingPhone' => ['required','string','max:60','regex:/^[0-9()\s.\-]{5,40}$/'],
             'shippingPostalCode' => ['required','string','max:30'],
             'shippingSourceAddressId' => [
                 'nullable',
@@ -462,7 +970,7 @@ trait ManagesOrderCreation
             // Optional PO uploaded during Create Order. It is attached to the
             // NEW_UPLOAD_PO workflow task after the Order and its tasks exist.
             'purchaseOrderUpload' => AttachmentUpload::nullableRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
-            'jobAttachments.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS, 20480),
+            'jobAttachments.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
         ], [
             'referenceNumber.required' => 'Client Reference Number is required.',
             'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
@@ -471,6 +979,9 @@ trait ManagesOrderCreation
             'shippingAddress.required' => 'Shipping address is required.',
             'deliveryDate.date' => 'Order hand date must be a valid date.',
             'shippingPostalCode.required' => 'Postal code is required.',
+            'shippingContactName.required' => 'Contact person is required.',
+            'shippingPhoneCountryCode.required' => 'Country code is required.',
+            'shippingPhone.required' => 'Phone number is required.',
             'shippingPhoneCountryCode.regex' => 'Choose a valid international phone code.',
             'shippingPhoneCountryCode.exists' => 'Choose an active phone country code from Master Data.',
             'shippingPhone.regex' => 'Enter a valid shipping contact phone number.',
@@ -554,6 +1065,8 @@ trait ManagesOrderCreation
             $draft,
             auth()->user(),
         );
+
+        $this->persistShippingContactSelection();
 
         $this->showCreate = false;
         $this->resetCreateForm();
@@ -640,7 +1153,7 @@ trait ManagesOrderCreation
             ? $requestedClientId
             : $clientQuery->value('id');
         $this->applyClientWorkflowDefault($this->clientId);
-        $this->shippingPhoneCountryCode = '';
+        $this->initializeCreateShippingContact($this->clientId);
         $this->jobItems = [];
     }
 
@@ -666,6 +1179,12 @@ trait ManagesOrderCreation
             'shippingPhoneCountryCode',
             'shippingPhone',
             'shippingPostalCode',
+            'shippingContactType',
+            'shippingContactId',
+            'shippingContactSelection',
+            'shippingContactName',
+            'shippingSaveContact',
+            'shippingContactDrafts',
             'shippingSourceAddressId',
             'showSavedShippingAddressPicker',
             'jobItems',

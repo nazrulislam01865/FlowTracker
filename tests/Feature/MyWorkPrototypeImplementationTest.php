@@ -47,9 +47,11 @@ class MyWorkPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("->fromSub(\$grouped, 'my_work_groups')", $service);
         $this->assertStringContainsString('->paginate(max(1, min(self::JOBS_PER_PAGE, $perPage))', $service);
         $this->assertStringContainsString("->whereIn('tasks.flow_job_id', \$jobIds)", $service);
-        $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $service);
-        $this->assertStringContainsString('if (!$access->isAdministrator($user))', $service);
-        $this->assertStringContainsString('includeOpenConstraint: !$showCompleted', $service);
+        $activeScope = strstr($service, 'public function activeVisibleTaskQuery(User $user): Builder');
+        $activeScope = strstr($activeScope, 'private function applyStructuralActiveTaskConstraint', true);
+        $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $activeScope);
+        $this->assertStringNotContainsString('isAdministrator($user)', $activeScope);
+        $this->assertStringContainsString('applyStructuralActiveTaskConstraint($query)', $activeScope);
         $this->assertStringContainsString("->whereNull('completed_at')", $service);
         $this->assertStringContainsString("->whereNotIn('status', JobService::INACTIVE_STATUSES)", $service);
         $this->assertStringContainsString("->where('my_work_mention_activity.event', 'task.comment')", $service);

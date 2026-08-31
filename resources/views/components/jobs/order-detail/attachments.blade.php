@@ -13,9 +13,9 @@
 <section class="section-card attachments-card ft-order-section-card ft-order-attachments-card" data-order-disclosure>
     <div class="section-head ft-order-section-head">
         <h2>Other document <span class="status-pill">{{ $otherDocuments->count() }}</span></h2>
-        <button type="button" class="section-toggle ft-order-disclosure-button ft-order-compact-toggle" data-order-disclosure-trigger aria-expanded="false">Show files</button>
+        <button type="button" class="section-toggle ft-order-disclosure-button ft-order-compact-toggle" data-order-disclosure-trigger aria-expanded="true">Hide files</button>
     </div>
-    <div class="collapse-body collapsed ft-order-disclosure-body" data-order-disclosure-body hidden>
+    <div class="collapse-body ft-order-disclosure-body" data-order-disclosure-body>
         @if($canUpload)
             <div class="attachment-drop ft-order-attachment-drop {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-error' : '' }}">
                 <label data-file-dropzone data-auto-upload-method="uploadGeneralOrderDocuments" for="orderGeneralAttachment-{{ $job->id }}"><b>⌕ &nbsp; Drop files here or <span>browse</span></b><div class="card-sub">PDF, Office files, JPG, PNG, ZIP, AI, EPS, ESP · Max 20 MB</div><input id="orderGeneralAttachment-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp"></label>

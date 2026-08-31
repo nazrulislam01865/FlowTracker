@@ -645,15 +645,15 @@
     gap:12px;
     margin-bottom:5px;
     color:#52677f;
-    font-size:.625rem;
-    font-weight:700;
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-label-weight);
     line-height:1.3;
 }
 .ft-create-job-page .ft-create-upload-progress-meta b{
     flex:0 0 auto;
     color:var(--ft-order-create-accent);
-    font-size:.625rem;
-    font-weight:800;
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-label-weight);
 }
 .ft-create-job-page .ft-create-upload-progress-track{
     width:100%;
@@ -672,6 +672,403 @@
 }
 @media(max-width:700px){
     .ft-create-job-page .ft-create-upload-progress-meta{
-        font-size:.6875rem;
+        font-size:var(--ft-form-helper-size);
+    }
+}
+
+/* Create Order > Shipping address > delivery contact phone.
+   The visual structure follows the approved prototype while typography and
+   control sizing remain owned by the central FlowTrack form tokens. */
+.ft-form-standard--order .ft-order-delivery-contact{
+    margin-top:2px;
+    color:var(--ft-form-control-color);
+}
+.ft-form-standard--order .ft-order-delivery-contact-heading{
+    display:flex;
+    flex-direction:column;
+    gap:2px;
+    margin-bottom:10px;
+}
+.ft-form-standard--order .ft-order-delivery-contact-heading>b{
+    color:var(--ft-form-label-color);
+    font-size:var(--ft-form-label-size);
+    font-weight:var(--ft-form-label-weight);
+    line-height:1.25;
+}
+.ft-form-standard--order .ft-order-delivery-contact-heading>small,
+.ft-form-standard--order .ft-order-contact-person-field>small{
+    color:var(--ft-form-helper-color);
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-helper-weight);
+    line-height:1.35;
+}
+.ft-form-standard--order .ft-order-contact-source-tabs{
+    display:grid;
+    grid-template-columns:repeat(3,minmax(0,1fr));
+    overflow:hidden;
+    border:1px solid var(--ft-form-control-border);
+    border-radius:var(--ft-form-control-radius);
+    background:#fff;
+}
+.ft-form-standard--order .ft-order-contact-source{
+    appearance:none;
+    min-width:0;
+    min-height:46px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    gap:8px;
+    padding:7px 12px;
+    border:0;
+    border-right:1px solid var(--ft-form-control-border);
+    background:#fff;
+    color:var(--ft-form-control-color);
+    cursor:pointer;
+    transition:background .15s ease,color .15s ease,box-shadow .15s ease;
+}
+.ft-form-standard--order .ft-order-contact-source:last-child{border-right:0}
+.ft-form-standard--order .ft-order-contact-source>svg{
+    width:16px;
+    height:16px;
+    flex:0 0 16px;
+}
+.ft-form-standard--order .ft-order-contact-source>span{
+    min-width:0;
+    display:flex;
+    flex-direction:column;
+    align-items:flex-start;
+    gap:1px;
+}
+.ft-form-standard--order .ft-order-contact-source strong{
+    color:inherit;
+    font-size:var(--ft-form-button-size);
+    font-weight:var(--ft-form-button-weight);
+    line-height:1.2;
+    white-space:nowrap;
+}
+.ft-form-standard--order .ft-order-contact-source small{
+    color:var(--ft-form-helper-color);
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-helper-weight);
+    max-width:100%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    line-height:1.15;
+    white-space:nowrap;
+}
+.ft-form-standard--order .ft-order-contact-source small.is-warning{color:#c98618}
+.ft-form-standard--order .ft-order-contact-source.is-active{
+    background:var(--ft-theme-primary);
+    color:#fff;
+    box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--ft-theme-primary) 86%,#000);
+}
+.ft-form-standard--order .ft-order-contact-source.is-active small{color:rgba(255,255,255,.86)}
+.ft-form-standard--order .ft-order-contact-source:focus-visible{
+    position:relative;
+    z-index:1;
+    outline:3px solid color-mix(in srgb,var(--ft-theme-primary) 18%,transparent);
+    outline-offset:-3px;
+}
+.ft-form-standard--order .ft-order-contact-warning,
+.ft-form-standard--order .ft-order-contact-success{
+    min-height:34px;
+    display:flex;
+    align-items:center;
+    gap:8px;
+    margin-top:10px;
+    padding:7px 11px;
+    border-radius:7px;
+}
+.ft-form-standard--order .ft-order-contact-warning{
+    border:1px solid #efc36c;
+    background:#fff8e9;
+    color:#8e6117;
+}
+.ft-form-standard--order .ft-order-contact-warning>span{
+    width:17px;
+    height:17px;
+    flex:0 0 17px;
+    display:grid;
+    place-items:center;
+    border:1px solid #d99a2f;
+    border-radius:50%;
+    color:#b77916;
+    font-size:10px;
+    font-weight:900;
+}
+.ft-form-standard--order .ft-order-contact-warning p,
+.ft-form-standard--order .ft-order-contact-success p{
+    margin:0;
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-helper-weight);
+    line-height:1.35;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid{
+    display:grid;
+    grid-template-columns:minmax(0,1.12fr) minmax(150px,.55fr) minmax(0,1.45fr);
+    gap:12px;
+    align-items:start;
+    margin-top:10px;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid>.ft-create-field{
+    min-width:0;
+    margin:0;
+}
+.ft-form-standard--order .ft-order-country-code-field,
+.ft-form-standard--order .ft-order-delivery-phone-code-filter{
+    min-width:0;
+    width:100%;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid .ft-create-field>b,
+.ft-form-standard--order .ft-order-delivery-phone-code-filter>label{
+    display:block;
+    margin:0 0 6px;
+    color:var(--ft-form-label-color);
+    font-size:var(--ft-form-label-size);
+    font-weight:var(--ft-form-label-weight);
+    line-height:1.2;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid input,
+.ft-form-standard--order .ft-order-delivery-contact-grid select,
+.ft-form-standard--order .ft-order-delivery-phone-code-filter .ft-remote-filter-button{
+    width:100%;
+    min-height:var(--ft-form-control-height)!important;
+    height:var(--ft-form-control-height)!important;
+    border:1px solid var(--ft-form-control-border)!important;
+    border-radius:var(--ft-form-control-radius)!important;
+    background:#fff!important;
+    color:var(--ft-form-control-color)!important;
+    font-size:var(--ft-form-control-size)!important;
+    font-weight:var(--ft-form-control-weight)!important;
+    box-shadow:none!important;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid input,
+.ft-form-standard--order .ft-order-delivery-contact-grid select{
+    padding:0 11px;
+    outline:0;
+}
+.ft-form-standard--order .ft-order-contact-select-wrap{
+    position:relative;
+}
+.ft-form-standard--order .ft-order-contact-select-wrap select{
+    appearance:none;
+    padding-right:32px;
+}
+.ft-form-standard--order .ft-order-contact-select-wrap>svg{
+    position:absolute;
+    top:50%;
+    right:10px;
+    width:15px;
+    height:15px;
+    transform:translateY(-50%);
+    color:var(--ft-form-helper-color);
+    pointer-events:none;
+}
+.ft-form-standard--order .ft-order-contact-person-field>small{
+    display:block;
+    margin-top:4px;
+}
+.ft-form-standard--order .ft-order-delivery-phone-code-filter .ft-remote-filter-button{
+    padding:0 29px 0 11px!important;
+    text-align:left!important;
+}
+.ft-form-standard--order .ft-order-delivery-phone-code-filter .ft-filter-chevron{right:10px!important}
+.ft-form-standard--order .ft-order-delivery-phone-code-filter .ft-remote-filter-menu{
+    width:min(300px,calc(100vw - 24px))!important;
+    min-width:min(250px,calc(100vw - 24px))!important;
+    max-width:calc(100vw - 24px)!important;
+    z-index:1450!important;
+}
+.ft-form-standard--order .ft-order-delivery-contact-grid input:focus,
+.ft-form-standard--order .ft-order-delivery-contact-grid select:focus,
+.ft-form-standard--order .ft-order-delivery-phone-code-filter .ft-remote-filter-button:focus{
+    border-color:var(--ft-theme-primary)!important;
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ft-theme-primary) 10%,transparent)!important;
+}
+.ft-form-standard--order .ft-order-contact-save-row{
+    min-height:28px;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:14px;
+    margin-top:4px;
+}
+.ft-form-standard--order .ft-order-contact-save-check{
+    min-width:0;
+    display:inline-flex;
+    align-items:center;
+    gap:7px;
+    color:var(--ft-form-control-color);
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-helper-weight);
+    cursor:pointer;
+}
+.ft-form-standard--order .ft-order-contact-save-check input{
+    width:15px!important;
+    height:15px!important;
+    min-height:0!important;
+    margin:0!important;
+    padding:0!important;
+    flex:0 0 15px;
+    accent-color:var(--ft-theme-primary);
+}
+.ft-form-standard--order .ft-order-saved-contact-badge{
+    flex:0 0 auto;
+    display:inline-flex;
+    align-items:center;
+    gap:5px;
+    color:var(--ft-theme-primary);
+    font-size:var(--ft-form-helper-size);
+    font-weight:var(--ft-form-label-weight);
+    white-space:nowrap;
+}
+.ft-form-standard--order .ft-order-saved-contact-badge svg{
+    width:16px;
+    height:16px;
+    padding:2px;
+    border-radius:50%;
+    background:color-mix(in srgb,var(--ft-theme-primary) 12%,#fff);
+}
+.ft-form-standard--order .ft-order-contact-success{
+    border:1px solid color-mix(in srgb,var(--ft-theme-primary) 24%,#d5e7e4);
+    background:color-mix(in srgb,var(--ft-theme-primary) 6%,#fff);
+    color:var(--ft-theme-primary);
+}
+.ft-form-standard--order .ft-order-contact-success>span{
+    width:17px;
+    height:17px;
+    flex:0 0 17px;
+    display:grid;
+    place-items:center;
+    border:1px solid color-mix(in srgb,var(--ft-theme-primary) 35%,#fff);
+    border-radius:50%;
+}
+.ft-form-standard--order .ft-order-contact-success svg{width:12px;height:12px}
+.ft-form-standard--order .ft-order-contact-success strong{font-weight:var(--ft-form-label-weight)}
+.ft-form-standard--order .ft-order-postal-row{
+    display:block;
+    width:100%;
+    margin-top:12px;
+}
+.ft-form-standard--order .ft-order-postal-row>b{
+    display:block;
+    margin:0 0 6px;
+    color:var(--ft-form-label-color);
+    font-size:var(--ft-form-label-size);
+    font-weight:var(--ft-form-label-weight);
+    line-height:1.2;
+}
+.ft-form-standard--order .ft-order-postal-row>input{
+    width:100%;
+    min-width:0;
+    min-height:var(--ft-form-control-height);
+    padding:0 11px;
+    border:1px solid var(--ft-form-control-border);
+    border-radius:var(--ft-form-control-radius);
+    background:#fff;
+    color:var(--ft-form-control-color);
+    font-size:var(--ft-form-control-size);
+    font-weight:var(--ft-form-control-weight);
+    outline:0;
+}
+.ft-form-standard--order .ft-order-postal-row>input:focus{
+    border-color:var(--ft-theme-primary);
+    box-shadow:0 0 0 3px color-mix(in srgb,var(--ft-theme-primary) 10%,transparent);
+}
+.ft-form-standard--order .ft-order-postal-row>.validation-error{
+    display:block;
+    margin-top:4px;
+}
+@media (max-width:760px){
+    .ft-form-standard--order .ft-order-contact-source-tabs{grid-template-columns:1fr}
+    .ft-form-standard--order .ft-order-contact-source{justify-content:flex-start;border-right:0;border-bottom:1px solid var(--ft-form-control-border)}
+    .ft-form-standard--order .ft-order-contact-source:last-child{border-bottom:0}
+    .ft-form-standard--order .ft-order-delivery-contact-grid{grid-template-columns:1fr}
+    .ft-form-standard--order .ft-order-contact-save-row{align-items:flex-start;flex-direction:column;gap:6px;margin-top:7px}
+    .ft-form-standard--order .ft-order-postal-row>.validation-error{margin-top:4px}
+}
+
+
+/* Create Order delivery-contact searchable person selector. The field itself
+   is the search surface: focus/click shows all saved contacts for the active
+   source, while typing filters the same list and may create a new contact. */
+.ft-form-standard--order .ft-order-contact-combobox{
+    position:relative;
+    min-width:0;
+    width:100%;
+}
+.ft-form-standard--order .ft-order-contact-combobox__input-wrap{
+    position:relative;
+    min-width:0;
+}
+.ft-form-standard--order .ft-order-contact-combobox__input{
+    padding-right:36px!important;
+}
+.ft-form-standard--order .ft-order-contact-combobox__toggle{
+    position:absolute;
+    top:0;
+    right:0;
+    width:36px;
+    height:var(--ft-form-control-height);
+    display:grid;
+    place-items:center;
+    padding:0;
+    border:0;
+    background:transparent;
+    color:var(--ft-form-helper-color);
+    cursor:pointer;
+}
+.ft-form-standard--order .ft-order-contact-combobox__toggle>svg{
+    width:16px;
+    height:16px;
+}
+.ft-form-standard--order .ft-order-contact-combobox__menu{
+    position:absolute;
+    top:calc(100% + 5px);
+    left:0;
+    z-index:1450;
+    width:100%;
+    min-width:min(300px,calc(100vw - 24px));
+    max-width:min(520px,calc(100vw - 24px));
+    display:flex;
+    flex-direction:column;
+    gap:4px;
+}
+.ft-form-standard--order .ft-order-contact-combobox__list{
+    max-height:240px;
+}
+.ft-form-standard--order .ft-order-contact-combobox__option{
+    min-height:40px;
+    font-size:var(--ft-form-control-size);
+}
+.ft-form-standard--order .ft-order-contact-combobox__option>span{
+    min-width:0;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ft-form-standard--order .ft-order-contact-combobox__option>small{
+    max-width:45%;
+    overflow:hidden;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+    font-size:var(--ft-form-helper-size);
+}
+.ft-form-standard--order .ft-order-contact-combobox__new{
+    border-top:1px solid var(--ft-form-control-border);
+    border-radius:0 0 var(--ft-form-control-radius) var(--ft-form-control-radius);
+    color:var(--ft-theme-primary);
+}
+.ft-form-standard--order .ft-order-contact-combobox__empty{
+    padding:10px 12px;
+    color:var(--ft-form-helper-color);
+    font-size:var(--ft-form-helper-size);
+    line-height:1.35;
+}
+@media(max-width:700px){
+    .ft-form-standard--order .ft-order-contact-combobox__menu{
+        width:min(100%,calc(100vw - 24px));
+        min-width:min(260px,calc(100vw - 24px));
+        max-width:calc(100vw - 24px);
     }
 }

@@ -11,6 +11,9 @@
     'optionFallback' => 'Workflow',
     'footnote' => 'Tasks are created when you create this record.',
     'previewAllowed' => false,
+    'previewDefaultOpen' => false,
+    'availabilityLabel' => null,
+    'icon' => 'check',
     'emptyMessage' => null,
     'errorField' => null,
     'startPhases' => collect(),
@@ -38,12 +41,12 @@
     $showStartPhasePicker = filled($startPhaseProperty) && $startPhases->count() > 1;
 @endphp
 
-<section {{ $attributes->class('ft-create-workflow-next') }} x-data="{ workflowOpen: false, previewOpen: false }">
+<section {{ $attributes->class('ft-create-workflow-next') }} x-data="{ workflowOpen: false, previewOpen: {{ $previewDefaultOpen ? 'true' : 'false' }} }">
     <div class="ft-create-workflow-heading">
         <span>{{ $step }}</span>
         <h2>{{ $title }}</h2>
         @if($workflowOptionCount > 0)
-            <em>{{ $workflowOptionCount }} {{ \Illuminate\Support\Str::plural('workflow', $workflowOptionCount) }} available</em>
+            <em>{{ filled($availabilityLabel) ? $availabilityLabel : $workflowOptionCount.' '.\Illuminate\Support\Str::plural('workflow', $workflowOptionCount).' available' }}</em>
         @endif
     </div>
 
@@ -53,7 +56,13 @@
             type="button"
             @if($selectable) x-on:click="workflowOpen = !workflowOpen" :aria-expanded="workflowOpen.toString()" aria-haspopup="listbox" @else aria-expanded="false" disabled @endif
         >
-            <span class="ft-create-workflow-icon" aria-hidden="true">✓</span>
+            <span class="ft-create-workflow-icon" aria-hidden="true">
+                @if($icon === 'workflow')
+                    <svg viewBox="0 0 24 24" fill="none"><path d="M7.7 18.5H6.5a4 4 0 0 1-.65-7.95A6.5 6.5 0 0 1 18.4 8.9a4.75 4.75 0 0 1-.9 9.6h-1.2" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8.5 15.6h7M12 12.2v6.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg>
+                @else
+                    ✓
+                @endif
+            </span>
             <span class="ft-create-workflow-copy">
                 <small>{{ $kindLabel }}@if(filled($sourceLabel)) · {{ $sourceLabel }}@endif</small>
                 <strong>{{ $selectedWorkflowName ?: 'Select workflow' }}</strong>

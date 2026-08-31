@@ -149,10 +149,19 @@ class Index extends Component
     public string $deliveryDate = '';
     public string $estimatedDeliveryDate = '';
     public string $description = '';
+    public const DEFAULT_SHIPPING_PHONE_COUNTRY_CODE = '+1';
+
     public string $shippingAddress = '';
-    public string $shippingPhoneCountryCode = '';
+    public string $shippingPhoneCountryCode = self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE;
     public string $shippingPhone = '';
     public string $shippingPostalCode = '';
+    public string $shippingContactType = 'end_customer';
+    public ?int $shippingContactId = null;
+    public string $shippingContactSelection = '';
+    public string $shippingContactName = '';
+    public bool $shippingSaveContact = true;
+    /** @var array<string,array{contact_id:?int,selection:string,name:string,country_code:string,phone:string,save_contact:bool}> */
+    public array $shippingContactDrafts = [];
     public ?int $shippingSourceAddressId = null;
     public bool $showSavedShippingAddressPicker = false;
     public array $jobItems = [];
@@ -238,7 +247,8 @@ class Index extends Component
     public bool $showOverviewTaskDocumentModal = false;
     public ?int $overviewTaskDocumentModalTaskId = null;
     public string $overviewTaskDocumentSource = 'upload';
-    public $overviewTaskDocumentUpload = null;
+    /** Files selected in the Order Details workflow upload modal. */
+    public array $overviewTaskDocumentUpload = [];
     public ?int $overviewTaskExistingDocumentId = null;
     public string $overviewTaskDocumentNote = '';
     public ?int $overviewTaskLinkFormTaskId = null;

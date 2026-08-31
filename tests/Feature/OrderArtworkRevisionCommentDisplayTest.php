@@ -25,6 +25,7 @@ class OrderArtworkRevisionCommentDisplayTest extends TestCase
         $this->assertStringContainsString('$revisionComment', $card);
         $this->assertStringContainsString('Reference attachment', $card);
     }
+
     public function test_artwork_uploads_use_continuous_versions_and_resolved_revision_panel_is_hidden(): void
     {
         $documents = file_get_contents(app_path('Services/DocumentService.php'));
@@ -38,16 +39,17 @@ class OrderArtworkRevisionCommentDisplayTest extends TestCase
         $this->assertStringContainsString('$hasReplacementArtwork', $jobs);
         $this->assertStringContainsString('if ($hasReplacementArtwork)', $jobs);
         $this->assertStringContainsString('· Version {{ max(1, (int) $latestTaskDocument->version) }}', $row);
-        $this->assertStringContainsString('collect([$latestArtworkDocument])->filter()->values()', $row);
+        $this->assertStringContainsString('? $latestArtworkDocuments', $row);
         $this->assertStringContainsString("class=\"ft-order-task-resource-row {{ \$isArtworkUploadTask ? 'is-latest-artwork' : '' }}\"", $row);
         $this->assertStringContainsString('· Version {{ max(1, (int) $latestTaskDocument->version) }} · Latest', $row);
         $this->assertStringContainsString('ft-order-artwork-version-state', $row);
-        $this->assertStringNotContainsString("{{ \$taskDocuments->count() - 1 }} archived", $row);
+        $this->assertStringNotContainsString('{{ $taskDocuments->count() - 1 }} archived', $row);
         $this->assertStringContainsString('if (! $isArtworkTask) {', $documents);
         $this->assertStringContainsString("\$query->where('name', \$document->name);", $documents);
         $this->assertStringContainsString('· Version {{ max(1, (int) $referenceDocument->version) }}', $card);
         $this->assertStringContainsString('{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}', $modal);
-        $this->assertStringContainsString("{{ \$index === 0 ? 'Latest' : 'Archived' }}", $modal);
+        $this->assertStringContainsString("{{ (int) \$doc->version === \$artworkVersion ? 'Latest' : 'Archived' }}", $modal);
+        $this->assertStringContainsString("'artwork_batch_version'", $documents);
+        $this->assertStringContainsString('public function storeMany(', $documents);
     }
-
 }

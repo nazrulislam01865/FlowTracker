@@ -285,7 +285,7 @@ trait BuildsInquiryPageData
         if ($this->inquiryActivityTab !== 'all') {
             $detailSectionsReady['activity'] = true;
         }
-        $rfqContext = in_array($this->detailTab, ['rfq', 'comparison'], true) || $this->showRfqEmailPreview;
+        $rfqContext = in_array($this->detailTab, ['rfq', 'comparison'], true) || $this->showRfqSettings;
         $with = [
             'client:id,name,logo_path',
             'creator:id,name,profile_image_path',
@@ -494,7 +494,6 @@ trait BuildsInquiryPageData
         $rfqSupplierCandidates = collect();
         $rfqAssignableProducts = collect();
         $rfqWorkspace = null;
-        $rfqEmailPreviews = [];
         if ($rfqContext) {
             $rfqInvitations = $this->detailTab === 'rfq'
                 ? $rfq->overviewInvitations($inquiry)
@@ -542,9 +541,6 @@ trait BuildsInquiryPageData
                     );
                 }
             }
-            if ($this->showRfqEmailPreview) {
-                $rfqEmailPreviews = $rfq->previewHtml($inquiry);
-            }
         }
         $canManageInquiryRfq = $canManageInquiryRecord;
 
@@ -559,7 +555,6 @@ trait BuildsInquiryPageData
             'rfqSupplierCandidates' => $rfqSupplierCandidates,
             'rfqAssignableProducts' => $rfqAssignableProducts,
             'rfqWorkspace' => $rfqWorkspace,
-            'rfqEmailPreviews' => $rfqEmailPreviews,
             'canManageInquiryRfq' => $canManageInquiryRfq,
             'canEditSuppliers' => $user->canModule('suppliers', 'edit'),
             'inquiryDocuments' => $documents,

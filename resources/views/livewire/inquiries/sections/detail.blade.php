@@ -398,8 +398,8 @@
                 @include('livewire.inquiries.sections.comparison')
             @endif
 
-            @if($showRfqEmailPreview)
-                <x-inquiries-rfq-email-preview :previews="$rfqEmailPreviews" :active="$rfqEmailPreviewType" />
+            @if($showRfqSettings)
+                <x-inquiries-rfq-settings :rfq-reminder-enabled="$rfqReminderEnabled" />
             @endif
 
             @if($showTaskDocumentModal && $taskDocumentModalTask)

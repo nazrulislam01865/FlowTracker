@@ -4,252 +4,297 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <meta name="robots" content="noindex,nofollow">
+    <meta name="color-scheme" content="light">
     <title>{{ $invitation->inquiry->inquiry_number }} · Supplier quotation</title>
+    @if($brand['favicon_url'] ?? null)<link rel="icon" href="{{ $brand['favicon_url'] }}">@endif
     <script
         src="{{ asset('js/flowtrack-image-fallback.js') }}?v={{ \App\Support\FrontendBuildVersion::current() }}"
         data-fallback-src="{{ asset('images/flowtrack-image-fallback.svg') }}"
     ></script>
     @vite(['resources/theme/flowtrack/core.css', 'resources/css/app.css'])
 </head>
-<body class="ft-public-rfq-page">
-@php
-    $inquiry = $invitation->inquiry;
-    $supplier = $invitation->supplier;
-    $quote = $invitation->quote;
-    $locked = (bool) ($invitation->awarded_at || $invitation->rejected_at || $invitation->interest_status === 'declined');
-    $submitted = $invitation->quote_status === 'submitted' && $quote;
-    $statusLabel = $invitation->awarded_at
-        ? 'Awarded'
-        : ($invitation->rejected_at
-            ? 'Closed'
-            : ($submitted ? 'Submitted' : ($invitation->interest_status === 'declined' ? 'Declined' : 'Awaiting quotation')));
-    $totalQuantity = (float) $inquiry->items->sum('quantity');
-    $currency = old('currency', $quote?->currency ?? $inquiry->currency ?? 'USD');
-@endphp
+<body class="ft-rfq-portal-page ft-rfq-step-{{ $step }}">
+    <x-rfq.public.header :brand="$brand" :supplier="$invitation->supplier" :buyer-email="$buyerEmail" />
 
-<main class="ft-public-rfq-shell">
-    <header class="ft-public-rfq-brand" aria-label="{{ $brand['name'] ?? 'FlowTrack' }} supplier quotation portal">
-        <div class="ft-public-rfq-brand-lockup">
-            <div class="ft-public-rfq-brand-name">{{ strtoupper($brand['name'] ?? 'FlowTrack') }}</div>
-            <div class="ft-public-rfq-brand-subtitle">Supplier quotation portal</div>
-        </div>
-        <div class="ft-public-rfq-secure-badge" title="This quotation link is unique to your company">
-            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M12 3l7 3v5c0 4.4-2.7 8.3-7 10-4.3-1.7-7-5.6-7-10V6l7-3zm0 2.2L7 7.3V11c0 3.3 1.9 6.4 5 7.8 3.1-1.4 5-4.5 5-7.8V7.3l-5-2.1z"/></svg>
-            Secure RFQ
-        </div>
-    </header>
-
-    @if(session('success'))
-        <div class="ft-rfq-public-success" role="status">
-            <span class="ft-rfq-public-feedback-icon">✓</span>
-            <div><strong>Response saved</strong><span>{{ session('success') }}</span></div>
-        </div>
-    @endif
-
-    <section class="ft-public-rfq-card ft-public-rfq-intro-card">
-        <div class="ft-public-rfq-intro-top">
-            <div>
-                <div class="ft-public-rfq-eyebrow">Request for quotation · {{ $inquiry->inquiry_number }}</div>
-                <h1>{{ $inquiry->subject }}</h1>
-                <p>Hello {{ $invitation->supplierContactName() }}. Review the request below and submit your commercial quotation.</p>
-            </div>
-            <span class="ft-public-rfq-status {{ $submitted ? 'is-submitted' : ($locked ? 'is-closed' : 'is-pending') }}">{{ $statusLabel }}</span>
-        </div>
-
-        <div class="ft-public-rfq-meta">
-            <div class="ft-public-rfq-meta-item">
-                <span class="ft-public-rfq-meta-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M4 20V8l8-4 8 4v12h-6v-6h-4v6H4zm2-2h2v-6h8v6h2V9.2l-6-3-6 3V18z"/></svg>
-                </span>
-                <div><small>Supplier</small><strong>{{ $supplier->name }}</strong></div>
-            </div>
-            <div class="ft-public-rfq-meta-item">
-                <span class="ft-public-rfq-meta-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M7 2v2h10V2h2v2h1a2 2 0 012 2v14a2 2 0 01-2 2H4a2 2 0 01-2-2V6a2 2 0 012-2h1V2h2zm13 8H4v10h16V10zM4 8h16V6H4v2z"/></svg>
-                </span>
-                <div><small>Quotation due</small><strong>{{ $invitation->due_at?->format('M j, Y') ?? 'No due date' }}</strong></div>
-            </div>
-            <div class="ft-public-rfq-meta-item">
-                <span class="ft-public-rfq-meta-icon" aria-hidden="true">
-                    <svg viewBox="0 0 24 24"><path d="M5 3h14a2 2 0 012 2v14a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2zm0 2v14h14V5H5zm2 3h10v2H7V8zm0 4h10v2H7v-2zm0 4h6v2H7v-2z"/></svg>
-                </span>
-                <div><small>Requested quantity</small><strong>{{ number_format($totalQuantity, 0) }} {{ $totalQuantity === 1.0 ? 'unit' : 'units' }}</strong></div>
-            </div>
-        </div>
-    </section>
-
-    <form method="post" action="{{ route('rfq.public.respond', ['token' => $token]) }}" class="ft-public-rfq-card ft-public-rfq-form" id="rfq-quotation-form">
-        @csrf
-        <div class="ft-public-rfq-card-head">
-            <div>
-                <span class="ft-public-rfq-section-kicker">Quotation</span>
-                <h2>{{ $quote ? 'Review your quotation' : 'Enter your quotation' }}</h2>
-                <p>Enter a unit price for every requested product, then complete the commercial terms.</p>
-            </div>
-            @if($submitted)<span class="ft-rfq-status-pill is-green">Submitted</span>@endif
-        </div>
-
-        @if($errors->any())
-            <div class="ft-rfq-public-error" role="alert">
-                <span class="ft-rfq-public-feedback-icon">!</span>
-                <div><strong>Please check your quotation</strong><span>{{ $errors->first() }}</span></div>
-            </div>
-        @endif
-
-        <section class="ft-public-rfq-form-section" aria-labelledby="rfq-products-title">
-            <div class="ft-public-rfq-subhead">
+    <main class="ft-rfq-portal-shell">
+        <section class="ft-rfq-portal-main">
+            <div class="ft-rfq-portal-title-row">
                 <div>
-                    <h3 id="rfq-products-title">Requested products</h3>
-                    <p>{{ $inquiry->items->count() }} {{ $inquiry->items->count() === 1 ? 'product' : 'products' }} · {{ number_format($totalQuantity, 0) }} total units</p>
+                    <a class="ft-rfq-portal-backlink" href="{{ route('rfq.public.show', ['token' => $token, 'step' => 'details']) }}">
+                        <x-rfq.public.icon name="arrow-left" /> Quotation request
+                    </a>
+                    <h1>Submit your quotation</h1>
+                    <p>Provide your best commercial offer for the product below.</p>
                 </div>
-                <span>Unit price <b>*</b></span>
+                <div class="ft-rfq-portal-save-state" aria-live="polite">
+                    <span class="ft-rfq-portal-draft-pill">{{ $submitted ? 'Submitted' : 'Draft' }}</span>
+                    @if($savedAt)
+                        <small><x-rfq.public.icon name="clock" /> Saved {{ $savedAt->diffForHumans() }}</small>
+                    @else
+                        <small><x-rfq.public.icon name="clock" /> Not saved yet</small>
+                    @endif
+                </div>
             </div>
 
-            <div class="ft-public-rfq-items">
-                @foreach($inquiry->items as $item)
-                    @php($existingPrice = $quote?->items?->firstWhere('inquiry_item_id', $item->id)?->unit_price)
-                    <div class="ft-public-rfq-item" data-rfq-item data-quantity="{{ (float) $item->quantity }}">
-                        <div class="ft-public-rfq-item-main">
-                            <div class="ft-public-rfq-item-index">{{ $loop->iteration }}</div>
-                            <div class="ft-public-rfq-item-copy">
-                                <strong>{{ $item->item_name }}</strong>
-                                <span>{{ $item->category ?: 'Product' }} <i>·</i> {{ number_format((float) $item->quantity, 0) }} {{ $item->unit ?: 'units' }}</span>
-                            </div>
-                        </div>
-                        <label class="ft-public-rfq-price-field">
-                            <span class="sr-only">Unit price for {{ $item->item_name }}</span>
-                            <span class="ft-public-rfq-currency-prefix" data-currency-prefix>{{ $currency }}</span>
-                            <input
-                                type="number"
-                                name="prices[{{ $item->id }}]"
-                                min="0"
-                                step="0.0001"
-                                inputmode="decimal"
-                                value="{{ old('prices.'.$item->id, $existingPrice) }}"
-                                placeholder="0.00"
-                                required
-                                data-rfq-price
-                                @disabled($locked)
-                            >
-                        </label>
-                    </div>
-                @endforeach
+            <div class="ft-rfq-portal-private-note">
+                <span class="ft-rfq-portal-lock-icon"><x-rfq.public.icon name="lock" /></span>
+                <span>This quotation is private and can only be accessed through your invitation link.</span>
             </div>
+
+            @php($portalSuccess = session('success'))
+            @if($portalSuccess && $step !== 'pricing' && $portalSuccess !== 'Draft saved.')
+                <div class="ft-rfq-portal-feedback is-success" role="status">
+                    <x-rfq.public.icon name="check" />{{ $portalSuccess }}
+                </div>
+            @endif
+            @if($errors->any())
+                <div class="ft-rfq-portal-feedback is-error" role="alert">
+                    <x-rfq.public.icon name="alert" />{{ $errors->first() }}
+                </div>
+            @endif
+
+            <x-rfq.public.stepper :steps="$steps" :token="$token" :locked="$locked" />
+
+            @switch($step)
+                @case('pricing')
+                    <x-rfq.public.pricing
+                        :invitation="$invitation"
+                        :token="$token"
+                        :quote="$quote"
+                        :products="$products"
+                        :currency="$currency"
+                        :contact="$contact"
+                        :rfq-reference="$rfqReference"
+                        :client-name="$clientName"
+                        :documents="$documents"
+                        :locked="$locked"
+                    />
+                    @break
+                @case('documents')
+                    <x-rfq.public.documents
+                        :invitation="$invitation"
+                        :token="$token"
+                        :quote="$quote"
+                        :products="$products"
+                        :documents="$documents"
+                        :document-types="$documentTypes"
+                        :required-document-types="$requiredDocumentTypes"
+                        :required-document-count="$requiredDocumentCount"
+                        :required-document-total="$requiredDocumentTotal"
+                        :supporting-information-options="$supportingInformationOptions"
+                        :supporting-information="$supportingInformation"
+                        :locked="$locked"
+                    />
+                    @break
+                @case('review')
+                    <x-rfq.public.review
+                        :invitation="$invitation"
+                        :token="$token"
+                        :quote="$quote"
+                        :products="$products"
+                        :documents="$documents"
+                        :document-types="$documentTypes"
+                        :contact="$contact"
+                        :rfq-reference="$rfqReference"
+                        :currency="$currency"
+                        :product-subtotal="$productSubtotal"
+                        :sample-cost="$sampleCost"
+                        :other-costs="$otherCosts"
+                        :total-quoted-value="$totalQuotedValue"
+                        :client-name="$clientName"
+                        :ready-to-submit="$readyToSubmit"
+                        :locked="$locked"
+                        :submitted="$submitted"
+                        :can-revise="$canRevise"
+                    />
+                    @break
+                @default
+                    <x-rfq.public.details
+                        :invitation="$invitation"
+                        :token="$token"
+                        :quote="$quote"
+                        :products="$products"
+                        :contact="$contact"
+                        :rfq-reference="$rfqReference"
+                        :locked="$locked"
+                    />
+            @endswitch
         </section>
 
-        <section class="ft-public-rfq-form-section ft-public-rfq-commercial" aria-labelledby="rfq-terms-title">
-            <div class="ft-public-rfq-subhead">
-                <div>
-                    <h3 id="rfq-terms-title">Commercial terms</h3>
-                    <p>Add freight, lead time and quotation validity.</p>
-                </div>
-            </div>
+        <aside class="ft-rfq-portal-aside">
+            <x-rfq.public.summary
+                :invitation="$invitation"
+                :token="$token"
+                :step="$step"
+                :quote="$quote"
+                :first-product="$firstProduct"
+                :currency="$currency"
+                :total-quantity="$totalQuantity"
+                :product-subtotal="$productSubtotal"
+                :sample-cost="$sampleCost"
+                :other-costs="$otherCosts"
+                :total-quoted-value="$totalQuotedValue"
+                :details-complete="$detailsComplete"
+                :pricing-complete="$pricingComplete"
+                :documents="$documents"
+                :documents-complete="$documentsComplete"
+                :ready-to-submit="$readyToSubmit"
+                :locked="$locked"
+                :submitted="$submitted"
+                :can-revise="$canRevise"
+            />
+        </aside>
+    </main>
 
-            <div class="ft-public-rfq-grid">
-                <label>
-                    <span>Currency <b>*</b></span>
-                    <select name="currency" required data-rfq-currency @disabled($locked)>
-                        <option value="USD" @selected($currency === 'USD')>USD — US Dollar</option>
-                        <option value="EUR" @selected($currency === 'EUR')>EUR — Euro</option>
-                        <option value="GBP" @selected($currency === 'GBP')>GBP — British Pound</option>
-                        <option value="CNY" @selected($currency === 'CNY')>CNY — Chinese Yuan</option>
-                    </select>
-                </label>
-                <label>
-                    <span>Freight</span>
-                    <div class="ft-public-rfq-input-prefix"><span data-currency-prefix>{{ $currency }}</span><input type="number" name="freight" min="0" step="0.01" inputmode="decimal" value="{{ old('freight', $quote?->freight ?? 0) }}" placeholder="0.00" data-rfq-freight @disabled($locked)></div>
-                </label>
-                <label>
-                    <span>Lead time <small>days</small></span>
-                    <input type="number" name="lead_time_days" min="0" inputmode="numeric" value="{{ old('lead_time_days', $quote?->lead_time_days) }}" placeholder="e.g. 14" @disabled($locked)>
-                </label>
-                <label>
-                    <span>Quote validity <small>days</small></span>
-                    <input type="number" name="validity_days" min="0" inputmode="numeric" value="{{ old('validity_days', $quote?->validity_days) }}" placeholder="e.g. 30" @disabled($locked)>
-                </label>
-                <label class="ft-public-rfq-wide">
-                    <span>Notes <small>optional</small></span>
-                    <textarea name="notes" rows="4" placeholder="Add production notes, MOQ information, exclusions or other terms…" @disabled($locked)>{{ old('notes', $quote?->notes) }}</textarea>
-                </label>
-            </div>
-        </section>
+    <x-rfq.public.footer :brand="$brand" :buyer-email="$buyerEmail" />
 
-        @unless($locked)
-            <div class="ft-public-rfq-review-bar" aria-live="polite">
-                <div class="ft-public-rfq-total">
-                    <small>Estimated quotation total</small>
-                    <strong><span data-rfq-total-currency>{{ $currency }}</span> <span data-rfq-total>—</span></strong>
-                    <span>Product subtotal + freight</span>
-                </div>
-                <div class="ft-public-rfq-actions">
-                    @unless($quote)
-                        <button type="submit" name="action" value="decline" class="ft-rfq-public-secondary" formnovalidate data-rfq-decline>Decline</button>
-                    @endunless
-                    <button type="submit" name="action" value="submit" class="ft-rfq-public-primary">
-                        <span>{{ $quote ? 'Update quotation' : 'Submit quotation' }}</span>
-                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9.3 16.6L4.7 12l-1.4 1.4 6 6L21 7.7l-1.4-1.4-10.3 10.3z"/></svg>
-                    </button>
-                </div>
-            </div>
-            <p class="ft-public-rfq-security-note">By submitting, you confirm that the pricing and commercial terms above are accurate for this request.</p>
-        @else
-            <div class="ft-rfq-public-note">
-                <strong>{{ $submitted ? 'Quotation submitted' : 'This RFQ is closed' }}</strong>
-                <span>{{ $submitted ? 'Your latest quotation is shown above. Contact the buyer if a change is required after the request has been closed.' : 'This request can no longer be edited.' }}</span>
-            </div>
-        @endunless
-    </form>
+    <script>
+    (() => {
+        const upload = document.querySelector('[data-rfq-document-input]');
+        if (upload) {
+            upload.addEventListener('change', () => {
+                if (upload.files && upload.files.length && upload.form) {
+                    upload.form.action = upload.dataset.uploadUrl || upload.form.action;
+                    upload.form.submit();
+                }
+            });
+        }
 
-    <footer class="ft-public-rfq-footer">
-        <span>Secure supplier response for {{ $inquiry->inquiry_number }}</span>
-        <span>Powered by {{ $brand['name'] ?? 'FlowTrack' }}</span>
-    </footer>
-</main>
+        // Every quotation upload surface supports native browse plus drag-and-drop.
+        // The Documents step auto-uploads after a drop; the Pricing step keeps the
+        // dropped files in its form so unsaved commercial fields are not discarded.
+        document.querySelectorAll('[data-rfq-dropzone]').forEach(dropZone => {
+            const fileInput = dropZone.querySelector('input[type="file"]');
+            if (!fileInput || fileInput.disabled) return;
 
-@if(!$locked)
-<script>
-(() => {
-    const form = document.getElementById('rfq-quotation-form');
-    if (!form) return;
+            const stopDragDefaults = event => {
+                event.preventDefault();
+                event.stopPropagation();
+            };
 
-    const currency = form.querySelector('[data-rfq-currency]');
-    const priceInputs = Array.from(form.querySelectorAll('[data-rfq-price]'));
-    const freight = form.querySelector('[data-rfq-freight]');
-    const total = form.querySelector('[data-rfq-total]');
-    const totalCurrency = form.querySelector('[data-rfq-total-currency]');
-    const prefixes = Array.from(form.querySelectorAll('[data-currency-prefix]'));
+            ['dragenter', 'dragover'].forEach(name => dropZone.addEventListener(name, event => {
+                stopDragDefaults(event);
+                dropZone.classList.add('is-dragging');
+            }));
 
-    const recalculate = () => {
-        const code = currency?.value || 'USD';
-        prefixes.forEach(node => { node.textContent = code; });
-        if (totalCurrency) totalCurrency.textContent = code;
+            ['dragleave', 'dragend'].forEach(name => dropZone.addEventListener(name, event => {
+                stopDragDefaults(event);
+                dropZone.classList.remove('is-dragging');
+            }));
 
-        let subtotal = 0;
-        let hasPrice = false;
-        priceInputs.forEach(input => {
-            const row = input.closest('[data-rfq-item]');
-            const quantity = Number(row?.dataset.quantity || 0);
-            const price = Number(input.value);
-            if (input.value !== '' && Number.isFinite(price)) {
-                subtotal += quantity * price;
-                hasPrice = true;
-            }
+            dropZone.addEventListener('drop', event => {
+                stopDragDefaults(event);
+                dropZone.classList.remove('is-dragging');
+
+                const droppedFiles = Array.from(event.dataTransfer?.files || []);
+                if (!droppedFiles.length) return;
+
+                const transfer = new DataTransfer();
+                droppedFiles.forEach(file => transfer.items.add(file));
+                fileInput.files = transfer.files;
+                fileInput.dispatchEvent(new Event('change', { bubbles: true }));
+            });
         });
-        const freightValue = Number(freight?.value || 0);
-        if (total) total.textContent = hasPrice
-            ? (subtotal + (Number.isFinite(freightValue) ? freightValue : 0)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-            : '—';
-    };
 
-    currency?.addEventListener('change', recalculate);
-    freight?.addEventListener('input', recalculate);
-    priceInputs.forEach(input => input.addEventListener('input', recalculate));
-    form.querySelector('[data-rfq-decline]')?.addEventListener('click', event => {
-        if (!window.confirm('Decline this request for quotation?')) event.preventDefault();
-    });
-    recalculate();
-})();
-</script>
-@endif
+        const pricing = document.getElementById('rfq-pricing-form');
+        if (pricing) {
+            const currency = pricing.querySelector('[data-rfq-currency]');
+            const totalNodes = document.querySelectorAll('[data-rfq-live-total]');
+            const recalculate = () => {
+                let subtotal = 0;
+                pricing.querySelectorAll('[data-rfq-price]').forEach(input => {
+                    const row = input.closest('[data-rfq-price-row]');
+                    const lineSubtotal = Number(row?.dataset.quantity || 0) * Number(input.value || 0);
+                    subtotal += lineSubtotal;
+                    const lineNode = row?.querySelector('[data-rfq-line-subtotal]');
+                    if (lineNode) {
+                        const code = currency?.value || 'USD';
+                        lineNode.textContent = `${code} ${lineSubtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                    }
+                });
+                const money = name => Number(pricing.querySelector(`[name="${name}"]`)?.value || 0);
+                const sampleCost = money('sample_cost');
+                const otherCosts = money('tooling_cost') + money('freight') - money('discount');
+                const total = subtotal + sampleCost + otherCosts;
+                const code = currency?.value || 'USD';
+                totalNodes.forEach(node => node.textContent = `${code} ${total.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`);
+                const productSubtotalNode = document.querySelector('[data-rfq-summary-product-subtotal]');
+                const sampleCostNode = document.querySelector('[data-rfq-summary-sample-cost]');
+                const otherCostsNode = document.querySelector('[data-rfq-summary-other-costs]');
+                if (productSubtotalNode) productSubtotalNode.textContent = `${code} ${subtotal.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (sampleCostNode) sampleCostNode.textContent = `${code} ${sampleCost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                if (otherCostsNode) otherCostsNode.textContent = `${code} ${otherCosts.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+                pricing.querySelectorAll('[data-rfq-currency-label]').forEach(node => { node.textContent = code; });
+            };
+            pricing.addEventListener('input', recalculate);
+            pricing.addEventListener('change', recalculate);
+            recalculate();
+
+            const editContact = pricing.querySelector('[data-rfq-edit-contact]');
+            editContact?.addEventListener('click', () => pricing.querySelector('[name="supplier_contact_name"]')?.focus());
+
+            const addPriceBreak = pricing.querySelector('[data-rfq-add-price-break]');
+            addPriceBreak?.addEventListener('click', () => {
+                pricing.querySelector('[name^="moqs["]')?.focus();
+            });
+
+            const pricingFiles = pricing.querySelector('[data-rfq-pricing-file-input]');
+            pricingFiles?.addEventListener('change', () => {
+                const list = pricing.querySelector('.ft-rfq-prototype-uploaded-files');
+                if (!list) return;
+                list.querySelectorAll('[data-rfq-pending-file]').forEach(node => node.remove());
+                const selectedFiles = Array.from(pricingFiles.files || []);
+                const emptyState = list.querySelector('.ft-rfq-prototype-empty-file');
+                if (emptyState) emptyState.hidden = selectedFiles.length > 0;
+                const summaryDocument = document.querySelector('[data-rfq-summary-document]');
+                if (summaryDocument) {
+                    const hasDocument = Number(summaryDocument.dataset.existingDocuments || 0) > 0 || selectedFiles.length > 0;
+                    summaryDocument.classList.toggle('is-complete', hasDocument);
+                    const marker = summaryDocument.querySelector('span');
+                    if (marker) marker.textContent = hasDocument ? '✓' : '○';
+                }
+                selectedFiles.forEach(file => {
+                    const row = document.createElement('div');
+                    row.className = 'ft-rfq-prototype-file-row is-pending-upload';
+                    row.dataset.rfqPendingFile = '1';
+                    const size = file.size >= 1048576
+                        ? `${(file.size / 1048576).toFixed(1)} MB`
+                        : `${Math.max(1, Math.ceil(file.size / 1024))} KB`;
+                    row.innerHTML = `<span class="ft-rfq-file-icon">FILE</span><span class="ft-rfq-prototype-file-name"></span><span class="ft-rfq-prototype-file-size">·&nbsp; ${size}</span><span class="ft-rfq-prototype-file-ready">✓</span><span class="ft-rfq-prototype-pending-label">Ready to save</span>`;
+                    row.querySelector('.ft-rfq-prototype-file-name').textContent = file.name;
+                    list.appendChild(row);
+                });
+            });
+
+            const confirmation = pricing.querySelector('[data-rfq-pricing-confirmation]');
+            const confirmationSummary = document.querySelector('[data-rfq-summary-confirmation]');
+            const syncConfirmation = () => {
+                if (!confirmation || !confirmationSummary) return;
+                confirmationSummary.classList.toggle('is-complete', confirmation.checked);
+                confirmationSummary.classList.toggle('is-pending', !confirmation.checked);
+                const marker = confirmationSummary.querySelector('span');
+                if (marker) marker.textContent = confirmation.checked ? '✓' : '○';
+                confirmationSummary.lastChild.textContent = confirmation.checked ? ' Confirmation completed' : ' Confirmation required';
+            };
+            confirmation?.addEventListener('change', syncConfirmation);
+            syncConfirmation();
+        }
+
+        document.querySelectorAll('[data-rfq-toggle-requirements]').forEach(link => {
+            link.addEventListener('click', event => {
+                const panel = link.closest('.ft-rfq-buyer-requirements');
+                if (!panel) return;
+
+                event.preventDefault();
+                const expanded = panel.classList.toggle('is-expanded');
+                link.setAttribute('aria-expanded', expanded ? 'true' : 'false');
+            });
+        });
+
+        document.querySelectorAll('[data-rfq-decline]').forEach(button => button.addEventListener('click', event => {
+            if (!window.confirm('Decline this request for quotation?')) event.preventDefault();
+        }));
+    })();
+    </script>
 </body>
 </html>

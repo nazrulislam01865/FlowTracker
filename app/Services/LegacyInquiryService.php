@@ -2303,6 +2303,21 @@ class LegacyInquiryService
     }
 
 
+    /**
+     * Personal Inquiry-task scope used only by My Tasks.
+     *
+     * Keep the normal Inquiry/task permission scope, then always narrow it to
+     * the authenticated assignee. This prevents Admin/Super Admin, Inquiry
+     * creators, department access, or all-record scopes from turning My Tasks
+     * into a global Inquiry task list.
+     */
+    private function assignedInquiryTaskQueryForMyWork(User $user): Builder
+    {
+        return app(AccessControlService::class)
+            ->applyInquiryTaskScope(InquiryTask::query(), $user)
+            ->where('inquiry_tasks.assignee_id', $user->id);
+    }
+
     public function myTaskGroups(User $user, array $filters, int $limit = 3): Collection
     {
         $access = app(AccessControlService::class);
@@ -2321,7 +2336,7 @@ class LegacyInquiryService
             $visibleInquiries->whereNull('result');
         }
 
-        $query = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
+        $query = $this->assignedInquiryTaskQueryForMyWork($user)
             ->whereIn('inquiry_tasks.inquiry_id', $visibleInquiries->select('inquiries.id'));
 
         if ($statusFilter !== '') {
@@ -2467,7 +2482,7 @@ class LegacyInquiryService
         $todayDate = $today->toDateString();
         $tomorrow = $today->copy()->addDay()->toDateString();
         $weekEnd = $today->copy()->addDays(7)->toDateString();
-        $base = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
+        $base = $this->assignedInquiryTaskQueryForMyWork($user)
             ->whereNull('inquiry_tasks.completed_at')
             ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
             ->whereNotExists(function ($earlier): void {
@@ -2497,7 +2512,7 @@ class LegacyInquiryService
     {
         $access = app(AccessControlService::class);
         if (!$access->can($user, 'inquiries', 'view') || !$access->can($user, 'tasks', 'view')) return 0;
-        $query = $access->applyInquiryTaskScope(InquiryTask::query(), $user)
+        $query = $this->assignedInquiryTaskQueryForMyWork($user)
             ->whereNull('inquiry_tasks.completed_at')
             ->whereIn('inquiry_tasks.inquiry_id', $this->visibleQuery($user)->whereNull('result')->where('inquiries.status', '!=', 'Draft')->select('inquiries.id'))
             ->whereNotExists(function ($earlier): void {

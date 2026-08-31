@@ -12,7 +12,10 @@
         : ($fromAddress !== '' ? $fromAddress : $fromName);
     $replyTo = trim((string) ($preview['reply_to'] ?? ''));
     $subject = trim((string) ($preview['subject'] ?? '')) ?: $defaultSubject;
-    $attachment = trim((string) ($preview['document_name'] ?? ''));
+    $attachments = collect($preview['documents'] ?? [])->pluck('name')->filter()->values();
+    if ($attachments->isEmpty() && filled($preview['document_name'] ?? null)) {
+        $attachments = collect([(string) $preview['document_name']]);
+    }
     $delivery = trim((string) ($preview['delivery'] ?? '')) ?: 'Configured email service';
     $emailServiceEnabled = (bool) ($preview['email_service_enabled'] ?? true);
     $recipientSource = trim((string) ($preview['recipient_source'] ?? ''));
@@ -59,7 +62,7 @@
             <div class="ft-order-email-preview-meta-row"><span>Reply to</span><strong>{{ $replyTo }}</strong></div>
         @endif
         <div class="ft-order-email-preview-meta-row"><span>Subject</span><strong>{{ $subject }}</strong></div>
-        <div class="ft-order-email-preview-meta-row"><span>Attachment</span><strong>{{ $attachment !== '' ? $attachment : 'No attachment available' }}</strong></div>
+        <div class="ft-order-email-preview-meta-row"><span>Attachment{{ $attachments->count() === 1 ? '' : 's' }}</span><strong>{{ $attachments->isNotEmpty() ? $attachments->implode(', ') : 'No attachment available' }}</strong></div>
     </div>
 
     @if($html !== '')

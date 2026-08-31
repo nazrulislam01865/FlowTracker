@@ -10,8 +10,9 @@ class InquiryRfqInvitation extends Model
 {
     protected $fillable = [
         'workspace_id','inquiry_id','supplier_id','invited_by','token_hash','token_cipher',
-        'request_message',
-        'invited_at','due_at','email_status','email_tracking_id','reminder_sent_at',
+        'request_message','supplier_details',
+        'invited_at','due_at','link_expires_at','email_status','email_tracking_id','reminder_sent_at',
+        'auto_reply_enabled','reminder_enabled','reminder_hours_before_due','allow_revision',
         'interest_status','interest_at','quote_status','quote_submitted_at','awarded_at',
         'rejected_at','rejection_notified_at',
     ];
@@ -21,7 +22,12 @@ class InquiryRfqInvitation extends Model
         return [
             'invited_at' => 'datetime',
             'due_at' => 'datetime',
+            'link_expires_at' => 'datetime',
             'reminder_sent_at' => 'datetime',
+            'auto_reply_enabled' => 'boolean',
+            'reminder_enabled' => 'boolean',
+            'reminder_hours_before_due' => 'integer',
+            'allow_revision' => 'boolean',
             'interest_at' => 'datetime',
             'quote_submitted_at' => 'datetime',
             'awarded_at' => 'datetime',

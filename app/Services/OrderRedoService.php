@@ -333,6 +333,8 @@ class OrderRedoService
                 'shipment_urgency_ids' => $root->shipment_urgency_ids ?: [],
                 'notes' => trim((string) ($data['internal_instructions'] ?? '')) ?: null,
                 'shipping_address' => $root->shipping_address,
+                'shipping_contact_type' => $root->shipping_contact_type,
+                'shipping_contact_name' => $root->shipping_contact_name,
                 'shipping_phone_country_code' => $root->shipping_phone_country_code,
                 'shipping_phone' => $root->shipping_phone,
                 'shipping_postal_code' => $root->shipping_postal_code,

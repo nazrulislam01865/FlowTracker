@@ -10,9 +10,9 @@
             <h1>My Tasks</h1>
             <p>
                 @if($sourceFilter === 'inquiries' && $statusFilter !== '')
-                    Inquiry tasks matching the selected dashboard status filter.
+                    Only your assigned Inquiry tasks matching the selected dashboard status filter.
                 @else
-                    Only the current active task is shown under each Order. It is visible to the task assignee, the Order creator, users with applicable access, and Admin/Super Admin.
+                    Only your currently active assigned tasks are shown here. The same personal assignment rule applies to every role, including Admin and Super Admin.
                 @endif
             </p>
         </div>

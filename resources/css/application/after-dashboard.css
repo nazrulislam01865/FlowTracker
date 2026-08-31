@@ -7,6 +7,7 @@
 @import '../modules/catalog/product-categories.css';
 @import '../modules/orders/create-products.css';
 @import '../modules/orders/create.css';
+@import '../modules/orders/create-documents.css';
 @import '../modules/orders/detail-header.css';
 @import '../modules/tasks/detail-attachments.css';
 @import '../modules/orders/products-detail.css';

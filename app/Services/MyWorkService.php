@@ -189,10 +189,9 @@ class MyWorkService
             ->whereJsonLength('meta->mention_user_ids', '>', 0)
             ->groupBy('subject_id');
 
-        // Drive every My Tasks counter from exactly the same active-only and
-        // permission-aware scope as the table. This keeps assignees, creators,
-        // authorized viewers and administrators aligned with what they can
-        // actually see below the stage cards.
+        // Drive every My Tasks counter from exactly the same active-only,
+        // assignee-only scope as the table. Admin and Super Admin intentionally
+        // follow the same personal queue rule as every other user.
         $activeVisibleTaskIds = $this->activeVisibleTaskQuery($user)
             ->reorder()
             ->select('tasks.id');
@@ -409,10 +408,10 @@ class MyWorkService
     }
 
     /**
-     * Count the same open task scope used by My Tasks. Administrators keep
-     * broad visibility; other users count only the currently active Order task
-     * assigned to them. Keeping this in one service prevents the sidebar badge
-     * and page results from drifting apart.
+     * Count the same open task scope used by My Tasks. Every role, including
+     * Admin and Super Admin, counts only the currently active Order task that is
+     * assigned to that user. Keeping this in one service prevents the sidebar
+     * badge and page results from drifting apart.
      */
     public function openTaskCount(User $user): int
     {
@@ -426,10 +425,10 @@ class MyWorkService
     /**
      * Return the Orders that belong in My Tasks.
      *
-     * Administrators keep the broad operational view. For every other user an
-     * Order appears only while the CURRENT workflow task is assigned to that
-     * user. Future assigned tasks stay hidden until sequencing activates them.
-     * Order creation/ownership by itself never puts an Order into My Tasks.
+     * For every role, an Order appears only while its CURRENT workflow task is
+     * assigned to that user. Future assigned tasks stay hidden until sequencing
+     * activates them. Order ownership, creator status, record-scope access, or
+     * administrator privileges never add unrelated Orders to My Tasks.
      */
     public function personalOpenOrderIdsQuery(User $user): Builder
     {
@@ -444,22 +443,17 @@ class MyWorkService
     /**
      * Active Order-task scope used by My Tasks for EVERY role.
      *
-     * The page is an execution queue, not a task-history screen, so it never
-     * renders sibling/future/completed tasks from the Order. Only tasks in the
-     * Order's current workflow phase that are actually actionable remain.
+     * My Tasks is a personal execution queue, not an operational overview.
+     * Therefore the task must be assigned to the authenticated user regardless
+     * of whether that user is a normal user, Admin, or Super Admin. Order
+     * creator/owner access and broader record-scope permissions do not add tasks
+     * to this page.
      *
-     * Visibility for non-admin users is the union of three allowed paths:
-     * - the active task assignee;
-     * - the Order creator;
-     * - users included by the configured task record-access scope;
-     * - Admin/Super Admin bypass record-scope restrictions, but STILL see only
-     *   the active task rows. They are exempt from the visibility gate, not from
-     *   the active-task-only rule.
+     * The page also remains active-task-only: sibling, future, completed, and
+     * stale workflow rows are excluded by the structural active-task resolver.
      */
     public function activeVisibleTaskQuery(User $user): Builder
     {
-        $access = app(AccessControlService::class);
-
         // IMPORTANT: Do not infer "active" from the stored status alone.
         // Older/cloud Orders can contain stale sibling statuses (for example
         // more than one READY row) after workflow/task-pack changes. Order
@@ -472,24 +466,10 @@ class MyWorkService
             ->leftJoin('task_pack_items as my_work_active_template', function ($join): void {
                 $join->on('my_work_active_template.id', '=', 'tasks.task_pack_task_id')
                     ->on('my_work_active_template.task_pack_id', '=', 'my_work_active_phase.task_pack_id');
-            });
-
-        // Admin/Super Admin are intentionally exempt from the visibility
-        // participant check. Everyone else can see the one active task when
-        // they are the assignee, the Order creator, or the task is included by
-        // their configured record-access scope.
-        if (!$access->isAdministrator($user)) {
-            $visibleByConfiguredAccess = app(TaskService::class)
-                ->visibleQuery($user)
-                ->select('tasks.id');
-
-            $query->where(function (Builder $visibility) use ($user, $visibleByConfiguredAccess): void {
-                $visibility
-                    ->where('tasks.assignee_id', $user->id)
-                    ->orWhereHas('job', fn (Builder $job) => $job->where('created_by', $user->id))
-                    ->orWhereIn('tasks.id', $visibleByConfiguredAccess);
-            });
-        }
+            })
+            // This assignment constraint is deliberately unconditional. Admin
+            // and Super Admin must not receive a broad My Tasks queue.
+            ->where('tasks.assignee_id', $user->id);
 
         $query
             ->whereNull('tasks.completed_at')
@@ -796,15 +776,13 @@ class MyWorkService
     }
 
     /**
-     * Backwards-compatible helper for callers that specifically need the
-     * current active task assigned to the supplied user. My Tasks itself uses
-     * activeVisibleTaskQuery() so creators/authorized viewers also see the
-     * active task while Admin/Super Admin remain unrestricted by assignment.
+     * Backwards-compatible alias for callers that explicitly request the
+     * current active task assigned to the supplied user. activeVisibleTaskQuery()
+     * now has that exact personal-assignment contract for every role.
      */
     public function activeAssignedTaskQuery(User $user): Builder
     {
-        return $this->activeVisibleTaskQuery($user)
-            ->where('tasks.assignee_id', $user->id);
+        return $this->activeVisibleTaskQuery($user);
     }
 
     private function personalTaskQuery(
@@ -812,10 +790,9 @@ class MyWorkService
         array $filters,
     ): Builder
     {
-        // My Tasks always contains only the currently active task rows.
-        // TaskService::visibleQuery() inside activeVisibleTaskQuery() applies the
-        // assignee / Order-creator / configured-access visibility rules, while
-        // Admin and Super Admin bypass those record-scope checks automatically.
+        // My Tasks always contains only the currently active task rows that
+        // are assigned to the authenticated user. The same rule applies to
+        // normal users, Admin, and Super Admin.
         $query = $this->activeVisibleTaskQuery($user);
 
         $search = trim((string) ($filters['search'] ?? ''));

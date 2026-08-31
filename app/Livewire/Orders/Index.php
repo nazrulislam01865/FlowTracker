@@ -72,7 +72,8 @@ class Index extends Component
     public bool $showOverviewTaskDocumentModal = false;
     public ?int $overviewTaskDocumentModalTaskId = null;
     public string $overviewTaskDocumentSource = 'upload';
-    public $overviewTaskDocumentUpload = null;
+    /** Files selected in the Order workflow upload modal. */
+    public array $overviewTaskDocumentUpload = [];
     public ?int $overviewTaskExistingDocumentId = null;
     public string $overviewTaskDocumentNote = '';
 
@@ -623,7 +624,7 @@ class Index extends Component
         $this->orderWorkflowActionTaskId = null;
         $this->overviewTaskDocumentModalTaskId = (int) $task->id;
         $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->resetValidation([
@@ -639,7 +640,7 @@ class Index extends Component
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->listActionOrderId = null;
@@ -661,7 +662,7 @@ class Index extends Component
         }
 
         $this->overviewTaskDocumentSource = $source;
-        $this->overviewTaskDocumentUpload = null;
+        $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskExistingDocumentId']);
     }
@@ -687,10 +688,16 @@ class Index extends Component
 
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+            $allowsMultiple = app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD'
+                || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
             $this->validate([
-                'overviewTaskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+                'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)],
+                'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
             ], [
-                'overviewTaskDocumentUpload.max' => 'The file is too large. Maximum file size is 20 MB.',
+                'overviewTaskDocumentUpload.max' => $allowsMultiple
+                    ? 'You can upload a maximum of 10 files at a time.'
+                    : 'Choose one file for this task.',
+                'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
             ]);
 
             $storeData = [
@@ -706,7 +713,7 @@ class Index extends Component
                 $storeData['category'] = 'Task attachment';
             }
 
-            $documentService->store($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+            $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
             $this->validate([
@@ -736,6 +743,15 @@ class Index extends Component
         $title = (string) $task->title;
         $this->closeOverviewTaskDocumentModal();
         session()->flash('success', 'Document added to '.$title.'.');
+    }
+
+    public function removeOverviewTaskDocumentUpload(int $index): void
+    {
+        if (! array_key_exists($index, $this->overviewTaskDocumentUpload)) return;
+
+        unset($this->overviewTaskDocumentUpload[$index]);
+        $this->overviewTaskDocumentUpload = array_values($this->overviewTaskDocumentUpload);
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskDocumentUpload.*']);
     }
 
     private function editableListWorkflowTask(int $orderId, int $taskId, array $with = []): Task

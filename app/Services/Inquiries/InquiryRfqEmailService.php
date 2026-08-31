@@ -48,6 +48,8 @@ final class InquiryRfqEmailService
                 'items' => $inquiry->items,
                 'due' => $invitation->due_at,
                 'requestMessage' => trim((string) ($invitation->request_message ?? '')),
+                'supplierDetails' => trim((string) ($invitation->supplier_details ?? '')),
+                'linkExpiresAt' => $invitation->link_expires_at,
                 'publicUrl' => route('rfq.public.show', ['token' => $token]),
             ],
             ['type' => 'rfq_invitation', 'reference' => $inquiry->inquiry_number, 'inquiry_id' => $inquiry->id, 'supplier_id' => $invitation->supplier_id],
@@ -58,7 +60,7 @@ final class InquiryRfqEmailService
     {
         return $this->email->send(EmailMessage::view(
             $invitation->supplierEmail(),
-            'Reminder — quotation due tomorrow',
+            'Reminder — quotation due '.$invitation->due_at?->format('M j, Y'),
             'emails.rfq.reminder',
             [
                 'brand' => $this->rfqBrand(),
@@ -67,6 +69,7 @@ final class InquiryRfqEmailService
                 'contact' => $invitation->supplierContactName(),
                 'items' => $invitation->inquiry->items,
                 'due' => $invitation->due_at,
+                'linkExpiresAt' => $invitation->link_expires_at,
                 'publicUrl' => route('rfq.public.show', ['token' => $token]),
             ],
             ['type' => 'rfq_due_reminder', 'reference' => $invitation->inquiry->inquiry_number, 'inquiry_id' => $invitation->inquiry_id, 'supplier_id' => $invitation->supplier_id],
@@ -148,7 +151,9 @@ final class InquiryRfqEmailService
         $due = $primary?->due_at ?: now()->addDays(7)->endOfDay();
         $items = $inquiry->relationLoaded('items') ? $inquiry->items : $inquiry->items()->get();
         $requestMessage = trim((string) ($primary?->request_message ?? ''));
-        $base = compact('brand','supplier','contact','due','items','inquiry','requestMessage');
+        $supplierDetails = trim((string) ($primary?->supplier_details ?? ''));
+        $linkExpiresAt = $primary?->link_expires_at;
+        $base = compact('brand','supplier','contact','due','items','inquiry','requestMessage','supplierDetails','linkExpiresAt');
 
         $quote = $submitted?->quote;
         $winnerQuote = $winner?->quote;

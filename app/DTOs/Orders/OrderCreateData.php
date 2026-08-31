@@ -33,6 +33,8 @@ final readonly class OrderCreateData
             'estimated_delivery_date' => $data['estimatedDeliveryDate'] ?: null,
             'description' => $data['description'],
             'shipping_address' => blank($data['shippingAddress'] ?? null) ? null : trim((string) $data['shippingAddress']),
+            'shipping_contact_type' => blank($data['shippingContactType'] ?? null) ? null : trim((string) $data['shippingContactType']),
+            'shipping_contact_name' => blank($data['shippingContactName'] ?? null) ? null : trim((string) $data['shippingContactName']),
             'shipping_phone_country_code' => blank($data['shippingPhoneCountryCode'] ?? null) ? null : trim((string) $data['shippingPhoneCountryCode']),
             'shipping_phone' => blank($data['shippingPhone'] ?? null) ? null : trim((string) $data['shippingPhone']),
             'shipping_postal_code' => blank($data['shippingPostalCode'] ?? null) ? null : trim((string) $data['shippingPostalCode']),

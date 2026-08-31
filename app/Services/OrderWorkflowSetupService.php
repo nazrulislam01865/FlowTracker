@@ -66,7 +66,7 @@ class OrderWorkflowSetupService
             [
                 'key' => 'art', 'name' => 'Artwork', 'short' => 'Artwork', 'color' => '#7b61c9',
                 'tasks' => [
-                    self::task('ART_PREPARE_UPLOAD', 'Prepare & Upload Artwork', 'Artwork', 0, true, 'Artwork', true, true, 'Upload the latest artwork file. Older versions remain in history.'),
+                    self::task('ART_PREPARE_UPLOAD', 'Prepare & Upload Artwork', 'Artwork', 0, true, 'Artwork', true, true, 'Upload up to 10 artwork files as one revision. Older revisions remain in history.'),
                     self::task('ART_INTERNAL_REVIEW', 'Internal Artwork Review', 'Artwork', 0),
                     self::task('ART_SEND_ORDER_TEAM', 'Send Artwork to Order Team', 'Artwork', 0),
                     self::task('ART_CLIENT_ERP_DECISION', 'Client ERP / Approval', 'Order Team', 1, true, 'Artwork Approval', false, true, 'Attach client approval evidence when available.'),

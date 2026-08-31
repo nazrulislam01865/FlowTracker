@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class MyWorkPersonalScopeAndMobileCardTest extends TestCase
 {
-    public function test_my_tasks_shows_only_active_rows_with_participant_visibility_and_admin_exemption(): void
+    public function test_my_tasks_shows_only_current_active_rows_assigned_to_the_authenticated_user_for_every_role(): void
     {
         $service = file_get_contents(app_path('Services/MyWorkService.php'));
         $component = file_get_contents(app_path('Livewire/MyWork/Index.php'));
@@ -14,12 +14,18 @@ class MyWorkPersonalScopeAndMobileCardTest extends TestCase
 
         $this->assertStringContainsString("public string \$quick = 'my_tasks';", $component);
         $this->assertStringContainsString("'my_tasks' => null", $component);
-        $this->assertStringContainsString('if (!$access->isAdministrator($user))', $service);
-        $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $service);
+
+        $activeScope = strstr($service, 'public function activeVisibleTaskQuery(User $user): Builder');
+        $activeScope = strstr($activeScope, 'private function applyStructuralActiveTaskConstraint', true);
+        $this->assertStringContainsString("->where('tasks.assignee_id', \$user->id)", $activeScope);
+        $this->assertStringNotContainsString('isAdministrator($user)', $activeScope);
+        $this->assertStringNotContainsString("->orWhereHas('job', fn (Builder \$job) => \$job->where('created_by', \$user->id))", $activeScope);
+        $this->assertStringNotContainsString('visibleByConfiguredAccess', $activeScope);
+
         $this->assertStringContainsString("->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id')", $service);
         $this->assertStringContainsString('activeAssignedTaskQuery', $service);
-        $this->assertStringContainsString('if (!$access->isAdministrator($user))', $service);
-        $this->assertStringContainsString('Only Orders whose current active task is assigned to you appear here.', $view);
+        $this->assertStringContainsString('Only your currently active assigned tasks are shown here.', $view);
+        $this->assertStringContainsString('including Admin and Super Admin', $view);
         $this->assertStringContainsString('My Tasks', $view);
         $this->assertStringNotContainsString('Needs my action', $view);
     }

@@ -8,15 +8,16 @@ class OrderCreateUploadProgressAndOwnerPickerStabilityTest extends TestCase
 {
     public function test_create_order_purchase_order_and_other_documents_show_real_upload_progress(): void
     {
-        $view = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
-        $css = file_get_contents(resource_path('css/modules/orders/create.css'));
+        $documents = file_get_contents(resource_path('views/components/jobs/create/documents.blade.php'));
+        $dropzone = file_get_contents(resource_path('views/components/ui/create-attachment-dropzone.blade.php'));
+        $css = file_get_contents(resource_path('css/modules/orders/create-documents.css'));
 
-        $this->assertSame(2, substr_count($view, 'x-on:livewire-upload-progress="updateUpload($event)"'));
-        $this->assertStringContainsString('Uploading Purchase Order...', $view);
-        $this->assertStringContainsString('aria-label="Purchase Order upload progress"', $view);
-        $this->assertStringContainsString('aria-label="Order document upload progress"', $view);
-        $this->assertStringContainsString('ft-create-upload-progress-track', $view);
-        $this->assertStringContainsString('.ft-create-job-page .ft-create-upload-progress-track', $css);
+        $this->assertStringContainsString('x-on:livewire-upload-progress="updateUpload($event)"', $dropzone);
+        $this->assertStringContainsString('Uploading purchase order...', $documents);
+        $this->assertStringContainsString('progress-aria-label="Purchase order upload progress"', $documents);
+        $this->assertStringContainsString('progress-aria-label="Order document upload progress"', $documents);
+        $this->assertStringContainsString('ft-create-attachment-progress-track', $dropzone);
+        $this->assertStringContainsString('.ft-create-job-page .ft-create-attachment-progress', $css);
     }
 
     public function test_repeated_owner_picker_use_keeps_compact_recent_page_and_remeasures_unconstrained_options(): void

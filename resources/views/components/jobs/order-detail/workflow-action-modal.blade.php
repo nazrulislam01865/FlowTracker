@@ -10,8 +10,9 @@
     $artworkDocs = $latestArtworkTask
         ? $job->documents->where('task_id', $latestArtworkTask->id)->sortBy('created_at')->values()
         : collect();
-    $latestArtwork = $artworkDocs->last();
     $artworkVersion = max(1, (int) ($artworkDocs->max('version') ?? 0));
+    $latestArtworkDocuments = $artworkDocs->where('version', $artworkVersion)->sortBy('id')->values();
+    $latestArtwork = $latestArtworkDocuments->last();
     $activeItems = \App\Support\OrderDetailPresenter::activeItems($job);
     $firstItem = $activeItems->first();
     $productName = (string) ($firstItem?->product_name ?: $job->product ?: 'Order product');
@@ -127,11 +128,11 @@
                         @endif
                     </div>
                     <div class="ft-prototype-artwork-meta">
-                        <small>LATEST ARTWORK</small>
+                        <small>LATEST ARTWORK · {{ $latestArtworkDocuments->count() }} FILE{{ $latestArtworkDocuments->count() === 1 ? '' : 'S' }}</small>
                         <h3>{{ $productName }}</h3>
                         <dl>
                             <div><dt>Version</dt><dd>V{{ $artworkVersion }}</dd></div>
-                            <div><dt>File</dt><dd>{{ $latestArtwork ? $latestArtwork->name.' · Version '.max(1, (int) $latestArtwork->version) : 'Artwork file' }}</dd></div>
+                            <div><dt>Files</dt><dd>{{ $latestArtworkDocuments->isNotEmpty() ? $latestArtworkDocuments->pluck('name')->implode(', ') : 'Artwork file' }}</dd></div>
                             <div><dt>Uploaded by</dt><dd>{{ $latestArtwork?->uploader?->name ?: $task->assignee?->name ?: 'FlowTrack' }}</dd></div>
                             <div><dt>Client</dt><dd>{{ $clientName }}</dd></div>
                         </dl>
@@ -147,8 +148,9 @@
                                             <small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
                                         </span>
                                         <span class="ft-prototype-version-status">
-                                            <b>{{ $index === 0 ? 'Latest' : 'Archived' }}</b>
+                                            <b>{{ (int) $doc->version === $artworkVersion ? 'Latest' : 'Archived' }}</b>
                                             <a href="{{ route('documents.open', $doc) }}" target="_blank" rel="noopener">Open</a>
+                                            <a href="{{ route('documents.download', $doc) }}">Download</a>
                                         </span>
                                     </div>
                                 @endforeach

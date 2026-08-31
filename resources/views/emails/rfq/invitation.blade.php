@@ -7,7 +7,17 @@
     <p style="margin:0 0 20px;color:#44566f;font-size:13px">{{ $brand['name'] ?? 'Company' }} is requesting a quotation from <strong style="color:#152238">{{ $supplier->name }}</strong> for {{ $items->count() === 1 ? 'the product below' : 'the products below' }}.</p>
 
     @if(filled($requestMessage ?? null))
-        <div style="margin:0 0 18px;padding:12px 14px;border-left:3px solid #0b8f80;background:#f1faf8;border-radius:7px;color:#385d58;font-size:12px;line-height:1.55">{!! nl2br(e($requestMessage)) !!}</div>
+        <div style="margin:0 0 14px;padding:12px 14px;border-left:3px solid #0b8f80;background:#f1faf8;border-radius:7px;color:#385d58;font-size:12px;line-height:1.55">
+            <div style="margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#08776c">Special note from buyer</div>
+            {!! nl2br(e($requestMessage)) !!}
+        </div>
+    @endif
+
+    @if(filled($supplierDetails ?? null))
+        <div style="margin:0 0 18px;padding:12px 14px;background:#f7f9fc;border:1px solid #e1e7ef;border-radius:7px;color:#44566f;font-size:12px;line-height:1.55">
+            <div style="margin-bottom:4px;font-size:10px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:#718097">Inquiry &amp; product details</div>
+            {!! nl2br(e($supplierDetails)) !!}
+        </div>
     @endif
 
     <table role="presentation" width="100%" cellspacing="0" cellpadding="0" border="0" style="width:100%;margin:0 0 16px;background:#f8fafc;border:1px solid #e1e7ef;border-radius:9px"><tr>
@@ -23,5 +33,8 @@
     @endforeach
 
     <x-email.rfq-button :href="$publicUrl">View request &amp; submit quotation</x-email.rfq-button>
-    <p style="margin:0;color:#718097;font-size:11px;line-height:1.55">This secure link is unique to your company. No account is required.</p>
+    <p style="margin:0;color:#718097;font-size:11px;line-height:1.55">
+        This secure link is unique to your company. No account is required.
+        @if(!empty($linkExpiresAt)) It remains valid until <strong style="color:#52647c">{{ $linkExpiresAt->format('M j, Y 	 g:i A') }}</strong>. @endif
+    </p>
 </x-email.rfq-frame>

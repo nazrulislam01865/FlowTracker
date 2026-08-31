@@ -330,26 +330,18 @@ class AccessControlService
         $query = $this->eloquentBuilder($query);
         if (!$this->can($user, 'inquiries', 'view')) return $query->whereRaw('1 = 0');
 
-        $scopes = $this->normalizeScopes($this->scopes($user, 'inquiries'));
-        if (in_array('all_records', $scopes, true)) return $query;
+        // Inquiry visibility is deliberately participant-based, not role-scope based.
+        // Admin and super-admin users can see every Inquiry in the workspace. Every
+        // other user can see an Inquiry only when they created it or when at least
+        // one Inquiry task is assigned directly to them. In particular, a regular
+        // role with an `all_records`, `department`, or owner-based Inquiry scope
+        // must not make unrelated Inquiries appear in the Inquiry list or detail.
+        if ($this->isAdministrator($user)) return $query;
 
-        return $query->where(function (Builder $scopeQuery) use ($user, $scopes): void {
-            // Creators retain visibility under every non-admin record scope.
-            $scopeQuery->where('created_by', $user->id);
-
-            if (array_intersect($scopes, ['own_records', 'assigned_jobs'])) {
-                $scopeQuery->orWhere('owner_id', $user->id);
-            }
-
-            if (in_array('assigned_jobs', $scopes, true)) {
-                $scopeQuery->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id));
-            }
-
-            if (in_array('department', $scopes, true) && $user->department_id) {
-                $scopeQuery
-                    ->orWhereHas('owner', fn (Builder $owner) => $owner->where('department_id', $user->department_id))
-                    ->orWhereHas('tasks.assignee', fn (Builder $assignee) => $assignee->where('department_id', $user->department_id));
-            }
+        return $query->where(function (Builder $scopeQuery) use ($user): void {
+            $scopeQuery
+                ->where('created_by', $user->id)
+                ->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id));
         });
     }
 

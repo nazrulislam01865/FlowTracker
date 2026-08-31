@@ -76,11 +76,12 @@ final class OrderWorkflowEmailService
         $emailServiceEnabled = $this->emailControl->orderEnabled();
 
         $recipients = $this->recipients($job, $key);
-        $document = $this->sourceDocument($job, $key);
+        $documents = $this->sourceDocuments($job, $key);
+        $document = $documents->last();
         $subject = $this->subject($job, $key);
         $brand = $this->companyBrand();
         $viewData = ($document && $actor)
-            ? $this->viewData($job, $key, $document, $actor, $brand)
+            ? $this->viewData($job, $key, $document, $documents, $actor, $brand)
             : [];
         $previewHtml = $viewData !== []
             ? view('emails.orders.workflow-handoff', $viewData)->render()
@@ -107,6 +108,13 @@ final class OrderWorkflowEmailService
             'document_name' => $document?->name,
             'document_version' => $document?->version,
             'document_size' => $document?->size,
+            'documents' => $documents->map(fn (Document $item) => [
+                'id' => (int) $item->id,
+                'name' => (string) $item->name,
+                'version' => max(1, (int) $item->version),
+                'size' => (int) $item->size,
+            ])->values()->all(),
+            'document_count' => $documents->count(),
             'from_name' => $this->senderName($brand),
             'from_address' => $this->senderAddress(),
             'reply_to' => $actor && filter_var((string) $actor->email, FILTER_VALIDATE_EMAIL) ? (string) $actor->email : '',
@@ -166,33 +174,37 @@ final class OrderWorkflowEmailService
             ]);
         }
 
-        $document = $this->sourceDocument($job, $key);
-        if (! $document) {
+        $documents = $this->sourceDocuments($job, $key);
+        $document = $documents->last();
+        if ($documents->isEmpty() || ! $document) {
             $label = $key === self::PURCHASE_ORDER_HANDOFF ? 'Purchase Order' : 'Artwork';
             throw ValidationException::withMessages([
                 'orderWorkflowActionEmail' => 'No uploaded '.$label.' file was found. Upload the file in the previous workflow task before sending this email.',
             ]);
         }
 
-        $located = $this->storage->locate((string) $document->path);
-        if (! $located) {
-            throw ValidationException::withMessages([
-                'orderWorkflowActionEmail' => 'The attachment record exists, but the stored file cannot be found. Re-upload the file before sending.',
-            ]);
-        }
+        $attachments = $documents->map(function (Document $item) {
+            $located = $this->storage->locate((string) $item->path);
+            if (! $located) {
+                throw ValidationException::withMessages([
+                    'orderWorkflowActionEmail' => 'An attachment record exists, but '.$item->name.' cannot be found. Re-upload the artwork set before sending.',
+                ]);
+            }
+
+            return EmailMessage::storageAttachment(
+                (string) $located['disk'],
+                (string) $located['path'],
+                (string) $item->name,
+                filled($item->mime_type) ? (string) $item->mime_type : null,
+            );
+        })->values()->all();
 
         $brand = $this->companyBrand();
         $orderNumber = $job->displayOrderNumber();
         $team = $this->teamLabel($key);
         $subject = $this->subject($job, $key);
         $replyTo = filter_var((string) $actor->email, FILTER_VALIDATE_EMAIL) ? [(string) $actor->email] : [];
-        $viewData = $this->viewData($job, $key, $document, $actor, $brand);
-        $attachment = EmailMessage::storageAttachment(
-            (string) $located['disk'],
-            (string) $located['path'],
-            (string) $document->name,
-            filled($document->mime_type) ? (string) $document->mime_type : null,
-        );
+        $viewData = $this->viewData($job, $key, $document, $documents, $actor, $brand);
 
         $message = new EmailMessage(
             to: $recipients->pluck('email')->all(),
@@ -200,13 +212,14 @@ final class OrderWorkflowEmailService
             view: 'emails.orders.workflow-handoff',
             viewData: $viewData,
             replyTo: $replyTo,
-            attachments: [$attachment],
+            attachments: $attachments,
             context: [
                 'type' => $key === self::PURCHASE_ORDER_HANDOFF ? 'order_purchase_order_handoff' : 'order_artwork_handoff',
                 'reference' => $orderNumber,
                 'flow_job_id' => (int) $job->id,
                 'task_id' => (int) $handoffTask->id,
                 'document_id' => (int) $document->id,
+                'document_ids' => $documents->pluck('id')->map(fn ($id) => (int) $id)->all(),
             ],
         );
 
@@ -257,10 +270,12 @@ final class OrderWorkflowEmailService
                 ? 'job.purchase_order_emailed_to_artwork_team'
                 : 'job.artwork_emailed_to_order_team',
             'description' => ($key === self::PURCHASE_ORDER_HANDOFF ? 'Purchase Order' : 'Artwork')
-                .' emailed to '.$team.' with '.$document->name.'.',
+                .' emailed to '.$team.' with '.$documents->pluck('name')->implode(', ').'.',
             'meta' => [
                 'task_id' => (int) $handoffTask->id,
                 'document_id' => (int) $document->id,
+                'document_ids' => $documents->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'document_count' => $documents->count(),
                 'document_version' => (int) ($document->version ?: 1),
                 'recipient_count' => $recipients->count(),
                 'business_unit' => $key === self::ARTWORK_HANDOFF ? $this->orderBusinessUnit($job) : null,
@@ -461,19 +476,27 @@ final class OrderWorkflowEmailService
             .'Assign the Order Team role and set Business unit to '.$unitLabel.' or Both IID & NEP for at least one active user with a valid email address.';
     }
 
-    private function sourceDocument(FlowJob $job, string $handoffKey): ?Document
+    /** @return Collection<int,Document> */
+    private function sourceDocuments(FlowJob $job, string $handoffKey): Collection
     {
         $sourceKey = self::SOURCE_TASK_KEYS[$handoffKey] ?? null;
-        if (! $sourceKey) return null;
+        if (! $sourceKey) return collect();
 
         $sourceTaskIds = $this->tasksForAutomationKey($job, $sourceKey)->pluck('id');
-        if ($sourceTaskIds->isEmpty()) return null;
+        if ($sourceTaskIds->isEmpty()) return collect();
 
-        return Document::query()
+        $documents = Document::query()
             ->where('flow_job_id', $job->id)
             ->whereIn('task_id', $sourceTaskIds)
-            ->orderByDesc('id')
-            ->first();
+            ->orderBy('id')
+            ->get();
+
+        if ($documents->isEmpty()) return collect();
+        if ($sourceKey !== 'ART_PREPARE_UPLOAD') return collect([$documents->last()]);
+
+        $latestVersion = max(1, (int) $documents->max('version'));
+
+        return $documents->where('version', $latestVersion)->values();
     }
 
     /** @return Collection<int,Task> */
@@ -528,7 +551,8 @@ final class OrderWorkflowEmailService
     }
 
     /** @return array<string,mixed> */
-    private function viewData(FlowJob $job, string $key, Document $document, User $actor, array $brand): array
+    /** @param Collection<int,Document> $documents */
+    private function viewData(FlowJob $job, string $key, Document $document, Collection $documents, User $actor, array $brand): array
     {
         return [
             'brand' => $brand,
@@ -536,6 +560,7 @@ final class OrderWorkflowEmailService
             'team' => $this->teamLabel($key),
             'handoffType' => $key === self::PURCHASE_ORDER_HANDOFF ? 'purchase_order' : 'artwork',
             'document' => $document,
+            'documents' => $documents,
             'sentBy' => $actor,
             'orderNumber' => $job->displayOrderNumber(),
             'productSummary' => $this->productSummary($job),

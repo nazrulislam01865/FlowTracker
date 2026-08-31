@@ -3,9 +3,8 @@
                 $isArtworkUploadTask = $taskAutomationKey === 'ART_PREPARE_UPLOAD';
                 $taskAttachmentDocuments = $task->documents->sortByDesc('created_at')->values();
 
-                // Keep Task Details in parity with the Artwork task row on Order Details:
-                // the live view shows only the newest artwork revision. Older revisions stay
-                // stored for audit/version history and are never deleted by this presentation filter.
+                // Keep Task Details in parity with Order Details: show every file
+                // in the newest artwork revision and keep older revisions in history.
                 $artworkVersionDocuments = $isArtworkUploadTask
                     ? $taskAttachmentDocuments
                         ->sortBy(function ($document) {
@@ -19,9 +18,12 @@
                         })
                         ->values()
                     : collect();
-                $latestArtworkDocument = $artworkVersionDocuments->last();
+                $latestArtworkVersion = max(0, (int) ($artworkVersionDocuments->max('version') ?? 0));
+                $latestArtworkDocuments = $latestArtworkVersion > 0
+                    ? $artworkVersionDocuments->where('version', $latestArtworkVersion)->sortBy('id')->values()
+                    : collect();
                 $visibleTaskDocuments = $isArtworkUploadTask
-                    ? collect([$latestArtworkDocument])->filter()->values()
+                    ? $latestArtworkDocuments
                     : $taskAttachmentDocuments;
                 $visibleAttachmentCount = $visibleTaskDocuments->count()
                     + ($task->relationLoaded('links') ? $task->links->count() : 0);
@@ -109,7 +111,7 @@
                     </div>
                 @endif
                 @if($isArtworkUploadTask)
-                    <p class="ft-upload-note">Only the latest artwork version is shown here. Older artwork versions remain available in document/version history.</p>
+                    <p class="ft-upload-note">Every file in the latest artwork revision is shown here. Older artwork revisions remain available in document/version history.</p>
                 @else
                     <p class="ft-upload-note">Files and external links attached to this task remain available here and in the Order taskflow. Either can satisfy a Task Pack document requirement.</p>
                 @endif

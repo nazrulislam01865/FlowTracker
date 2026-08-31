@@ -65,6 +65,8 @@ class FlowJob extends Model
         'cancelled_at',
         'cancelled_by',
         'shipping_address',
+        'shipping_contact_type',
+        'shipping_contact_name',
         'shipping_phone_country_code',
         'shipping_phone',
         'shipping_postal_code',

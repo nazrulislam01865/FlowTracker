@@ -22,8 +22,18 @@ trait ManagesInquiryRfq
     public bool $showRfqSupplierPicker = false;
     public ?int $rfqSupplierProductId = null;
 
-    public bool $showRfqEmailPreview = false;
-    public string $rfqEmailPreviewType = 'invitation';
+    public bool $showRfqSettings = false;
+    public string $rfqSpecialNote = '';
+    public string $rfqSupplierDetails = '';
+    public string $rfqDefaultDueAt = '';
+    public int $rfqLinkValidityValue = 30;
+    public string $rfqLinkValidityUnit = 'days';
+    public bool $rfqAutoReplyEnabled = true;
+    public bool $rfqReminderEnabled = true;
+    public int $rfqReminderHoursBeforeDue = 24;
+    public bool $rfqAllowRevision = true;
+    public bool $rfqAwardEmailEnabled = true;
+    public bool $rfqNotSelectedEmailEnabled = true;
 
     public function resetInquiryRfqState(): void
     {
@@ -35,8 +45,18 @@ trait ManagesInquiryRfq
         $this->rfqTablePage = 1;
         $this->showRfqSupplierPicker = false;
         $this->rfqSupplierProductId = null;
-        $this->showRfqEmailPreview = false;
-        $this->rfqEmailPreviewType = 'invitation';
+        $this->showRfqSettings = false;
+        $this->rfqSpecialNote = '';
+        $this->rfqSupplierDetails = '';
+        $this->rfqDefaultDueAt = '';
+        $this->rfqLinkValidityValue = 30;
+        $this->rfqLinkValidityUnit = 'days';
+        $this->rfqAutoReplyEnabled = true;
+        $this->rfqReminderEnabled = true;
+        $this->rfqReminderHoursBeforeDue = 24;
+        $this->rfqAllowRevision = true;
+        $this->rfqAwardEmailEnabled = true;
+        $this->rfqNotSelectedEmailEnabled = true;
         $this->resetValidation();
     }
 
@@ -315,9 +335,15 @@ trait ManagesInquiryRfq
             $name = $result['winner']->supplier?->name ?: 'Supplier';
             $failures = (int) ($result['email_failures'] ?? 0);
             $emailDisabled = (bool) ($result['email_service_disabled'] ?? false);
+            $awardEmailEnabled = (bool) ($result['award_email_enabled'] ?? true);
+            $notSelectedEmailEnabled = (bool) ($result['not_selected_email_enabled'] ?? true);
             $deliveryMessage = $emailDisabled
                 ? ' Inquiry email service is disabled, so supplier notification emails were skipped.'
-                : ($failures ? ' '.$failures.' notification email(s) could not be delivered.' : ' Supplier emails were sent.');
+                : ($failures
+                    ? ' '.$failures.' notification email(s) could not be delivered.'
+                    : (($awardEmailEnabled && $notSelectedEmailEnabled)
+                        ? ' Supplier emails were sent.'
+                        : ' Supplier notification preferences were applied.'));
             session()->flash('success', $name.' was awarded the quotation.'.$deliveryMessage);
             $this->resetPage('inquiryActivityPage');
         } catch (Throwable $exception) {
@@ -326,21 +352,72 @@ trait ManagesInquiryRfq
         }
     }
 
-    public function openRfqEmailPreview(string $type = 'invitation'): void
+    public function openRfqSettings(): void
     {
-        $this->rfqEmailPreviewType = in_array($type, ['invitation','reminder','received','award','not_selected'], true) ? $type : 'invitation';
-        $this->showRfqEmailPreview = true;
+        $inquiry = $this->authoriseRfqManagement();
+        $settings = $this->rfqService()->settings($inquiry);
+        $hours = max(1, (int) ($settings->link_validity_hours ?: 720));
+
+        $this->rfqSpecialNote = (string) ($settings->special_note ?? '');
+        $this->rfqSupplierDetails = (string) ($settings->supplier_details ?? '');
+        $this->rfqDefaultDueAt = ($settings->default_due_at ?: $this->rfqService()->defaultDueAt($inquiry))->format('Y-m-d\TH:i');
+        $this->rfqLinkValidityUnit = $hours % 24 === 0 ? 'days' : 'hours';
+        $this->rfqLinkValidityValue = $this->rfqLinkValidityUnit === 'days' ? max(1, intdiv($hours, 24)) : $hours;
+        $this->rfqAutoReplyEnabled = (bool) ($settings->auto_reply_enabled ?? true);
+        $this->rfqReminderEnabled = (bool) ($settings->reminder_enabled ?? true);
+        $this->rfqReminderHoursBeforeDue = max(1, (int) ($settings->reminder_hours_before_due ?: 24));
+        $this->rfqAllowRevision = (bool) ($settings->allow_revision ?? true);
+        $this->rfqAwardEmailEnabled = (bool) ($settings->award_email_enabled ?? true);
+        $this->rfqNotSelectedEmailEnabled = (bool) ($settings->not_selected_email_enabled ?? true);
+        $this->showRfqSettings = true;
+        $this->resetValidation();
     }
 
-    public function closeRfqEmailPreview(): void
+    public function closeRfqSettings(): void
     {
-        $this->showRfqEmailPreview = false;
+        $this->showRfqSettings = false;
+        $this->resetValidation();
     }
 
-    public function setRfqEmailPreviewType(string $type): void
+    public function saveRfqSettings(): void
     {
-        abort_unless(in_array($type, ['invitation','reminder','received','award','not_selected'], true), 422);
-        $this->rfqEmailPreviewType = $type;
+        $inquiry = $this->authoriseRfqManagement();
+        $validated = $this->validate([
+            'rfqSpecialNote' => ['nullable', 'string', 'max:4000'],
+            'rfqSupplierDetails' => ['nullable', 'string', 'max:8000'],
+            'rfqDefaultDueAt' => ['required', 'date', 'after:now'],
+            'rfqLinkValidityValue' => ['required', 'integer', 'min:1'],
+            'rfqLinkValidityUnit' => ['required', 'in:hours,days'],
+            'rfqAutoReplyEnabled' => ['boolean'],
+            'rfqReminderEnabled' => ['boolean'],
+            'rfqReminderHoursBeforeDue' => ['required', 'integer', 'min:1', 'max:336'],
+            'rfqAllowRevision' => ['boolean'],
+            'rfqAwardEmailEnabled' => ['boolean'],
+            'rfqNotSelectedEmailEnabled' => ['boolean'],
+        ]);
+
+        $validityHours = (int) $validated['rfqLinkValidityValue'] * ($validated['rfqLinkValidityUnit'] === 'days' ? 24 : 1);
+        if ($validityHours > 2160) {
+            $this->addError('rfqLinkValidityValue', 'The secure link can be valid for up to 90 days.');
+            return;
+        }
+
+        $this->rfqService()->saveSettings($inquiry, [
+            'special_note' => $validated['rfqSpecialNote'] ?? '',
+            'supplier_details' => $validated['rfqSupplierDetails'] ?? '',
+            'default_due_at' => $validated['rfqDefaultDueAt'],
+            'link_validity_hours' => $validityHours,
+            'auto_reply_enabled' => (bool) $validated['rfqAutoReplyEnabled'],
+            'reminder_enabled' => (bool) $validated['rfqReminderEnabled'],
+            'reminder_hours_before_due' => (int) $validated['rfqReminderHoursBeforeDue'],
+            'allow_revision' => (bool) $validated['rfqAllowRevision'],
+            'award_email_enabled' => (bool) $validated['rfqAwardEmailEnabled'],
+            'not_selected_email_enabled' => (bool) $validated['rfqNotSelectedEmailEnabled'],
+        ], auth()->user());
+
+        $this->showRfqSettings = false;
+        $this->resetPage('inquiryActivityPage');
+        session()->flash('success', 'RFQ supplier settings saved.');
     }
 
     private function authoriseRfqManagement(): \App\Models\Inquiry

@@ -3144,13 +3144,18 @@
 
 .ft-order-list-v5 .client-product-cell {
     display: flex;
+    width: 100%;
     gap: 9px;
     align-items: center;
-    min-width: 0
+    min-width: 0;
+    overflow: hidden
 }
 
 .ft-order-list-v5 .client-product-copy {
-    min-width: 0
+    flex: 1 1 auto;
+    min-width: 0;
+    max-width: calc(100% - 43px);
+    overflow: hidden
 }
 
 .ft-order-list-v5 .client-product-copy b {
@@ -4547,7 +4552,7 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
 @media (max-width: 680px) {
     .ft-orders-prototype .ft-job-row,
     .ft-orders-prototype .ft-job-row.ft-client-row-iid,
-    .ft-orders-prototype .ft-job-row.ft-client-row-nep {
+.ft-orders-prototype .ft-job-row.ft-client-row-nep {
         grid-template-columns: repeat(6,minmax(0,1fr));
         grid-template-areas:
             "identity identity identity identity identity identity"
@@ -4556,5 +4561,33 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
             "stage stage flag flag flag flag"
             "owner owner owner owner owner owner"
             "progress progress progress progress progress progress";
+    }
+}
+
+/* CHANGE 2026-08-31: Keep Client & Product compact on the overview table.
+   The workflow-stage tables retain their own column sizing, while narrow
+   containers continue to use the existing card layout above. */
+@container ft-orders-filter-card (min-width: 821px) {
+    .ft-order-list-v5 .orders-modern-table--overview {
+        min-width: 1050px;
+        table-layout: fixed;
+    }
+
+    .ft-order-list-v5 .orders-modern-table--overview th:first-child,
+    .ft-order-list-v5 .orders-modern-table--overview td:first-child {
+        width: 175px;
+    }
+
+    .ft-order-list-v5 .orders-modern-table--overview .client-product-column {
+        width: 400px;
+        max-width: 400px;
+        overflow: hidden;
+    }
+}
+
+@container ft-orders-filter-card (min-width: 821px) and (max-width: 1180px) {
+    .ft-order-list-v5 .orders-modern-table--overview .client-product-column {
+        width: 350px;
+        max-width: 350px;
     }
 }

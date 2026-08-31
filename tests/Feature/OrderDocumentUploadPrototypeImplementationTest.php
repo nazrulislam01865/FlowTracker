@@ -2,8 +2,8 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use Tests\Support\OrderPhase5Source;
+use Tests\TestCase;
 
 class OrderDocumentUploadPrototypeImplementationTest extends TestCase
 {
@@ -38,7 +38,8 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $this->assertNotFalse($deletePosition);
         $this->assertLessThan($deletePosition, $storePosition);
     }
-    public function test_order_workflow_upload_modal_keeps_the_same_size_after_file_selection(): void
+
+    public function test_order_workflow_upload_modal_supports_multi_file_artwork_without_resizing(): void
     {
         $view = file_get_contents(resource_path('views/components/jobs/order-detail/document-modal.blade.php'));
         $css = $this->orderDetailCss();
@@ -46,16 +47,17 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("ft-order-task-document-modal ft-order-attachment-upload-modal {{ \$prototypeUpload ? 'ft-order-prototype-upload-modal' : '' }}", $view);
         $this->assertStringContainsString('ft-prototype-selected-file-name', $view);
         $this->assertStringContainsString('ft-order-attachment-selected-file', $view);
-        $this->assertStringContainsString('1 file selected', $view);
-        $this->assertStringContainsString("wire:click=\"\$set('overviewTaskDocumentUpload', null)\"", $view);
-        $this->assertStringContainsString('Add another file', $view);
+        $this->assertStringContainsString("\$allowMultipleUploads = \$automationKey === 'ART_PREPARE_UPLOAD'", $view);
+        $this->assertStringContainsString('@if($allowMultipleUploads) multiple @endif', $view);
+        $this->assertStringContainsString('$selectedUploadCount', $view);
+        $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $index }})', $view);
+        $this->assertStringContainsString('One artwork version', $view);
         $this->assertStringContainsString('Ready to upload', $view);
-        $this->assertStringContainsString('title="Choose file"', $view);
-        $this->assertStringContainsString('height:500px;', $css);
-        $this->assertStringContainsString('grid-template-rows:auto minmax(0,1fr) auto;', $css);
-        $this->assertStringContainsString('overflow-y:auto;', $css);
-        $this->assertStringContainsString('text-overflow:ellipsis;', $css);
-        $this->assertStringContainsString('white-space:nowrap;', $css);
+        $this->assertStringContainsString("'Choose files' : 'Choose file'", $view);
+        $this->assertMatchesRegularExpression('/height:\s*500px;/', $css);
+        $this->assertMatchesRegularExpression('/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;/', $css);
+        $this->assertMatchesRegularExpression('/overflow-y:\s*auto;/', $css);
+        $this->assertMatchesRegularExpression('/text-overflow:\s*ellipsis;/', $css);
+        $this->assertMatchesRegularExpression('/white-space:\s*nowrap;/', $css);
     }
-
 }

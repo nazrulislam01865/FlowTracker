@@ -69,7 +69,6 @@ class Index extends Component
     public array $statusOptions = [];
     public array $phaseOptions = [];
     public int $perPage = MyWorkService::JOBS_PER_PAGE;
-    public bool $administratorView = false;
     public bool $hideCompleted = false;
 
     private const METRIC_FILTERS = ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'];
@@ -86,7 +85,6 @@ class Index extends Component
 
         $user = auth()->user();
         $service = app(MyWorkService::class);
-        $this->administratorView = app(\App\Services\AccessControlService::class)->isAdministrator($user);
         // Load the summary from the optimized My Work aggregate during the same
         // request. This avoids starting a second Livewire request with wire:init,
         // which could occupy a PHP worker long after the page was already visible.
@@ -332,11 +330,11 @@ class Index extends Component
             $result['version'] = (string) $updatedTask->getRawOriginal('updated_at');
             $result['avatarUrl'] = $assignee?->profileImageUrl();
 
-            // Keep the successful assignee selection visible immediately. A full
-            // Livewire refresh is only necessary when reassignment can change
-            // whether this row belongs in the current My Tasks result set.
+            // My Tasks is assignee-only for every role. Reassigning the row
+            // away from the current user must therefore remove it immediately,
+            // including when the actor is Admin or Super Admin.
             $needsListRefresh = trim($this->search) !== '' || $this->quick === 'attention';
-            if (!$this->administratorView && !$needsListRefresh) {
+            if (!$needsListRefresh) {
                 try {
                     app(MyWorkService::class)->findPersonalVisibleTask(auth()->user(), (int) $updatedTask->id);
                 } catch (ModelNotFoundException) {
