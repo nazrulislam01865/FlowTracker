@@ -41,6 +41,7 @@
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
     'overviewTaskExistingDocumentId' => null,
+    'overviewTaskArtworkRevision' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -210,6 +211,7 @@
             :source="$overviewTaskDocumentSource"
             :upload="$overviewTaskDocumentUpload"
             :existing-document-id="$overviewTaskExistingDocumentId"
+            :artwork-revision="$overviewTaskArtworkRevision"
             :context="$orderDetailContext"
         />
     @endif

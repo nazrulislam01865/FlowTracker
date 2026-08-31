@@ -60,6 +60,7 @@
                     :source="$overviewTaskDocumentSource"
                     :upload="$overviewTaskDocumentUpload"
                     :existing-document-id="$overviewTaskExistingDocumentId"
+                    :artwork-revision="$listActionArtworkRevision"
                     :context="$listActionContext"
                 />
             @endif

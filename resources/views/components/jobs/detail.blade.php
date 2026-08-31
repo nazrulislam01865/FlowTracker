@@ -43,6 +43,7 @@
     'overviewTaskDocumentSource'=>'upload',
     'overviewTaskDocumentUpload'=>null,
     'overviewTaskExistingDocumentId'=>null,
+    'overviewTaskArtworkRevision'=>[],
     'overviewTaskLinkFormTaskId'=>null,
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
@@ -190,6 +191,7 @@
             :overview-task-document-source="$overviewTaskDocumentSource"
             :overview-task-document-upload="$overviewTaskDocumentUpload"
             :overview-task-existing-document-id="$overviewTaskExistingDocumentId"
+            :overview-task-artwork-revision="$overviewTaskArtworkRevision"
             :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
             :show-add-order-task-form="$showAddOrderTaskForm"
             :new-order-task-assignee-id="$newOrderTaskAssigneeId"

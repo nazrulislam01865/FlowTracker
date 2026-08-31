@@ -44,6 +44,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
     'overviewTaskExistingDocumentId' => null,
+    'overviewTaskArtworkRevision' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -112,6 +113,7 @@ foreach (array_filter(([
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
     'overviewTaskExistingDocumentId' => null,
+    'overviewTaskArtworkRevision' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -461,14 +463,14 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask): ?>
         <?php if (isset($component)) { $__componentOriginal75144a7262080e4edb332b7df7a76a92 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal75144a7262080e4edb332b7df7a76a92 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.document-modal','data' => ['job' => $job,'task' => $overviewTaskDocumentModalTask,'availableDocuments' => $overviewTaskAvailableDocuments,'source' => $overviewTaskDocumentSource,'upload' => $overviewTaskDocumentUpload,'existingDocumentId' => $overviewTaskExistingDocumentId,'context' => $orderDetailContext]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.document-modal','data' => ['job' => $job,'task' => $overviewTaskDocumentModalTask,'availableDocuments' => $overviewTaskAvailableDocuments,'source' => $overviewTaskDocumentSource,'upload' => $overviewTaskDocumentUpload,'existingDocumentId' => $overviewTaskExistingDocumentId,'artworkRevision' => $overviewTaskArtworkRevision,'context' => $orderDetailContext]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.document-modal'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'artwork-revision' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskArtworkRevision),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

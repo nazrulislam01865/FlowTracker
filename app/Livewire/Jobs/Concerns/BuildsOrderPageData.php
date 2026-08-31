@@ -467,8 +467,13 @@ trait BuildsOrderPageData
 
         $overviewTaskDocumentModalTask = null;
         $overviewTaskAvailableDocuments = collect();
+        $overviewTaskArtworkRevision = ['active' => false, 'documents' => collect(), 'retained_documents' => collect()];
         if ($this->detailTab === 'overview' && $this->showOverviewTaskDocumentModal && $this->overviewTaskDocumentModalTaskId) {
             $overviewTaskDocumentModalTask = $selected->tasks->firstWhere('id', (int) $this->overviewTaskDocumentModalTaskId);
+            if ($overviewTaskDocumentModalTask
+                && app(\App\Services\OrderWorkflowActionService::class)->automationKey($overviewTaskDocumentModalTask) === 'ART_PREPARE_UPLOAD') {
+                $overviewTaskArtworkRevision = app(DocumentService::class)->pendingArtworkRevision($overviewTaskDocumentModalTask);
+            }
             if ($overviewTaskDocumentModalTask && $this->overviewTaskDocumentSource === 'existing') {
                 $overviewTaskAvailableDocuments = app(DocumentService::class)
                     ->query($user, ['client' => $selected->client_id])
@@ -605,6 +610,7 @@ trait BuildsOrderPageData
             'availableDocuments' => $availableDocuments,
             'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,
             'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,
+            'overviewTaskArtworkRevision' => $overviewTaskArtworkRevision,
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),
             'inquiryResults' => $inquiryResults,
             'selectedLinkInquiry' => $selectedLinkInquiry,

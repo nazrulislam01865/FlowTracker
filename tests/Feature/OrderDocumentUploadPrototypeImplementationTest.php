@@ -48,7 +48,7 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('ft-prototype-selected-file-name', $view);
         $this->assertStringContainsString('ft-order-attachment-selected-file', $view);
         $this->assertStringContainsString("\$allowMultipleUploads = \$automationKey === 'ART_PREPARE_UPLOAD'", $view);
-        $this->assertStringContainsString('@if($allowMultipleUploads) multiple @endif', $view);
+        $this->assertStringContainsString('@if($inputAllowsMultiple) multiple @endif', $view);
         $this->assertStringContainsString('$selectedUploadCount', $view);
         $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $index }})', $view);
         $this->assertStringContainsString('One artwork version', $view);

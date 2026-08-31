@@ -688,32 +688,52 @@ class Index extends Component
 
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
-            $allowsMultiple = app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD'
-                || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
+            $isArtworkUpload = app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+            $artworkRevision = $isArtworkUpload ? $documentService->pendingArtworkRevision($task) : ['active' => false, 'documents' => collect()];
+            $revisionFileCount = (bool) ($artworkRevision['active'] ?? false)
+                ? collect($artworkRevision['documents'] ?? [])->count()
+                : 0;
+            $allowsMultiple = $isArtworkUpload || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
+            $uploadRules = ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)];
+            if ($revisionFileCount > 0) {
+                $uploadRules[] = 'size:'.$revisionFileCount;
+            }
             $this->validate([
-                'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)],
+                'overviewTaskDocumentUpload' => $uploadRules,
                 'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
             ], [
                 'overviewTaskDocumentUpload.max' => $allowsMultiple
                     ? 'You can upload a maximum of 10 files at a time.'
                     : 'Choose one file for this task.',
+                'overviewTaskDocumentUpload.size' => $revisionFileCount > 0
+                    ? 'Upload exactly '.$revisionFileCount.' revised file'.($revisionFileCount === 1 ? '' : 's').' — one for each artwork selected for revision.'
+                    : 'Choose the required file set.',
                 'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
             ]);
 
-            $storeData = [
-                'flow_job_id' => $task->flow_job_id,
-                'client_id' => $task->job?->client_id,
-                'task_id' => $task->id,
-                'note' => $note,
-            ];
-
-            if ($documentService->taskHasRequirement($task)) {
-                $storeData['require_task_pack_requirement'] = true;
+            if ($revisionFileCount > 0) {
+                $documentService->storeArtworkRevision(
+                    $this->overviewTaskDocumentUpload,
+                    $task,
+                    auth()->user(),
+                    $note,
+                );
             } else {
-                $storeData['category'] = 'Task attachment';
-            }
+                $storeData = [
+                    'flow_job_id' => $task->flow_job_id,
+                    'client_id' => $task->job?->client_id,
+                    'task_id' => $task->id,
+                    'note' => $note,
+                ];
 
-            $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+                if ($documentService->taskHasRequirement($task)) {
+                    $storeData['require_task_pack_requirement'] = true;
+                } else {
+                    $storeData['category'] = 'Task attachment';
+                }
+
+                $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+            }
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
             $this->validate([
@@ -807,6 +827,7 @@ class Index extends Component
         $listActionContext = [];
         $listActionWorkflowModal = [];
         $listActionAvailableDocuments = collect();
+        $listActionArtworkRevision = ['active' => false, 'documents' => collect(), 'retained_documents' => collect()];
 
         if ($this->listActionOrderId && ($this->showOrderWorkflowActionModal || $this->showOverviewTaskDocumentModal)) {
             $orderQuery = app(VisibleOrderQuery::class);
@@ -823,6 +844,10 @@ class Index extends Component
 
             if ($listActionTask) {
                 $listActionContext = app(OrderDetailViewService::class)->build($listActionOrder, $user, $urgencies);
+                if ($this->showOverviewTaskDocumentModal
+                    && app(OrderWorkflowActionService::class)->automationKey($listActionTask) === 'ART_PREPARE_UPLOAD') {
+                    $listActionArtworkRevision = app(DocumentService::class)->pendingArtworkRevision($listActionTask);
+                }
                 $listActionWorkflowModal = data_get(
                     $listActionContext,
                     'taskActionModals.'.(int) $listActionTask->id,
@@ -857,6 +882,7 @@ class Index extends Component
             'listActionContext' => $listActionContext,
             'listActionWorkflowModal' => $listActionWorkflowModal,
             'listActionAvailableDocuments' => $listActionAvailableDocuments,
+            'listActionArtworkRevision' => $listActionArtworkRevision,
         ]);
     }
 

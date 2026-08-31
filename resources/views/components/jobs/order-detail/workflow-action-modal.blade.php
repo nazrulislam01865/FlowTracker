@@ -84,6 +84,37 @@
                     </button>
                 </div>
             @elseif($step === 'revision')
+                <div class="ft-artwork-revision-selector">
+                    <div class="ft-artwork-revision-selector-head">
+                        <div>
+                            <strong>Which artwork needs revision?</strong>
+                            <span>Select only the file or files that must be replaced. Every unselected artwork file will remain unchanged in the next version.</span>
+                        </div>
+                        <em>{{ $latestArtworkDocuments->count() }} current file{{ $latestArtworkDocuments->count() === 1 ? '' : 's' }}</em>
+                    </div>
+                    <div class="ft-artwork-revision-selector-list">
+                        @forelse($latestArtworkDocuments as $revisionDocument)
+                            @php $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
+                            <label class="ft-artwork-revision-selector-item">
+                                <input
+                                    type="checkbox"
+                                    wire:model="orderWorkflowActionPayload.revision_document_ids"
+                                    value="{{ $revisionDocument->id }}"
+                                >
+                                <span class="ft-artwork-revision-selector-check" aria-hidden="true">✓</span>
+                                <span class="ft-artwork-revision-selector-type">{{ $revisionExtension }}</span>
+                                <span class="ft-artwork-revision-selector-copy">
+                                    <b title="{{ $revisionDocument->name }}">{{ $revisionDocument->name }}</b>
+                                    <small>Artwork V{{ max(1, (int) $revisionDocument->version) }} · Select to replace this file only</small>
+                                </span>
+                                <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View</a>
+                            </label>
+                        @empty
+                            <div class="ft-artwork-revision-selector-empty">No current artwork files are available to revise.</div>
+                        @endforelse
+                    </div>
+                    @error('orderWorkflowActionPayload.revision_document_ids')<p class="validation-error">{{ $message }}</p>@enderror
+                </div>
                 <label class="ft-prototype-field">
                     <span>{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Revision instructions' : 'Client feedback' }}</span>
                     <textarea wire:model="orderWorkflowActionComment" rows="5" placeholder="Describe the required artwork changes..."></textarea>
@@ -114,15 +145,26 @@
                 />
                 @error('orderWorkflowActionEmail')<p class="validation-error">{{ $message }}</p>@enderror
             @elseif($variant === 'artwork_review' || $variant === 'artwork_email' || $variant === 'client_erp')
-                <div class="ft-prototype-artwork-preview">
+                <div
+                    class="ft-prototype-artwork-preview"
+                    x-data="{ selectedArtworkId: {{ (int) ($latestArtwork?->id ?? 0) }} }"
+                >
                     <div class="ft-prototype-artwork-canvas">
-                        @if($latestArtwork)
-                            @php $extension = strtolower(pathinfo((string) $latestArtwork->name, PATHINFO_EXTENSION)); @endphp
-                            @if(in_array($extension, ['jpg','jpeg','png','webp','gif'], true))
-                                <img src="{{ route('documents.open', $latestArtwork) }}" alt="Latest artwork preview">
-                            @else
-                                <div class="ft-prototype-artwork-file"><span>{{ strtoupper($extension ?: 'FILE') }}</span><strong>{{ $latestArtwork->name }} · Version {{ max(1, (int) $latestArtwork->version) }}</strong><a href="{{ route('documents.open', $latestArtwork) }}" target="_blank" rel="noopener">Open artwork</a></div>
-                            @endif
+                        @if($latestArtworkDocuments->isNotEmpty())
+                            @foreach($latestArtworkDocuments as $previewDocument)
+                                @php $previewExtension = strtolower(pathinfo((string) $previewDocument->name, PATHINFO_EXTENSION)); @endphp
+                                <div
+                                    class="ft-prototype-artwork-canvas-item"
+                                    x-cloak
+                                    x-show="selectedArtworkId === {{ (int) $previewDocument->id }}"
+                                >
+                                    @if(in_array($previewExtension, ['jpg','jpeg','png','webp','gif'], true))
+                                        <img src="{{ route('documents.open', $previewDocument) }}" alt="Artwork preview: {{ $previewDocument->name }}">
+                                    @else
+                                        <div class="ft-prototype-artwork-file"><span>{{ strtoupper($previewExtension ?: 'FILE') }}</span><strong>{{ $previewDocument->name }} · Version {{ max(1, (int) $previewDocument->version) }}</strong><a href="{{ route('documents.open', $previewDocument) }}" target="_blank" rel="noopener">Open artwork</a></div>
+                                    @endif
+                                </div>
+                            @endforeach
                         @else
                             <div class="ft-prototype-artwork-file"><span>ART</span><strong>Artwork file</strong><small>No previewable image available</small></div>
                         @endif
@@ -136,25 +178,56 @@
                             <div><dt>Uploaded by</dt><dd>{{ $latestArtwork?->uploader?->name ?: $task->assignee?->name ?: 'FlowTrack' }}</dd></div>
                             <div><dt>Client</dt><dd>{{ $clientName }}</dd></div>
                         </dl>
-                        @if($latestArtwork)
-                            <div class="ft-prototype-artwork-actions"><a href="{{ route('documents.open', $latestArtwork) }}" target="_blank" rel="noopener">Open</a><a href="{{ route('documents.download', $latestArtwork) }}">Download</a></div>
-                        @endif
-                        @if($artworkDocs->isNotEmpty())
-                            <div class="ft-prototype-version-list">
-                                @foreach($artworkDocs->reverse()->values() as $index => $doc)
-                                    <div>
-                                        <span class="ft-prototype-version-file">
-                                            <strong>{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}</strong>
-                                            <small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
-                                        </span>
-                                        <span class="ft-prototype-version-status">
-                                            <b>{{ (int) $doc->version === $artworkVersion ? 'Latest' : 'Archived' }}</b>
-                                            <a href="{{ route('documents.open', $doc) }}" target="_blank" rel="noopener">Open</a>
-                                            <a href="{{ route('documents.download', $doc) }}">Download</a>
-                                        </span>
-                                    </div>
+                        @if($latestArtworkDocuments->isNotEmpty())
+                            <div class="ft-prototype-artwork-actions">
+                                @foreach($latestArtworkDocuments as $previewDocument)
+                                    <span x-cloak x-show="selectedArtworkId === {{ (int) $previewDocument->id }}">
+                                        <a href="{{ route('documents.open', $previewDocument) }}" target="_blank" rel="noopener">Open</a>
+                                        <a href="{{ route('documents.download', $previewDocument) }}">Download</a>
+                                    </span>
                                 @endforeach
                             </div>
+                            <div class="ft-artwork-current-file-picker" aria-label="Current artwork files">
+                                <div class="ft-artwork-current-file-picker-head">
+                                    <strong>Current artwork files</strong>
+                                    <span>Select a file below to preview it on the left.</span>
+                                </div>
+                                @foreach($latestArtworkDocuments as $doc)
+                                    <button
+                                        type="button"
+                                        class="ft-artwork-current-file-choice"
+                                        x-on:click="selectedArtworkId = {{ (int) $doc->id }}"
+                                        x-bind:class="{ 'is-active': selectedArtworkId === {{ (int) $doc->id }} }"
+                                    >
+                                        <span class="ft-artwork-current-file-choice-type">{{ strtoupper(pathinfo((string) $doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                                        <span class="ft-artwork-current-file-choice-copy">
+                                            <b title="{{ $doc->name }}">{{ $doc->name }}</b>
+                                            <small>Artwork V{{ max(1, (int) $doc->version) }}</small>
+                                        </span>
+                                        <em x-text="selectedArtworkId === {{ (int) $doc->id }} ? 'Viewing' : 'Preview'">Preview</em>
+                                    </button>
+                                @endforeach
+                            </div>
+                        @endif
+                        @if($artworkDocs->where('version', '!=', $artworkVersion)->isNotEmpty())
+                            <details class="ft-prototype-version-history">
+                                <summary>Previous artwork versions</summary>
+                                <div class="ft-prototype-version-list">
+                                    @foreach($artworkDocs->where('version', '!=', $artworkVersion)->sortByDesc('id')->values() as $index => $doc)
+                                        <div>
+                                            <span class="ft-prototype-version-file">
+                                                <strong>{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}</strong>
+                                                <small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
+                                            </span>
+                                            <span class="ft-prototype-version-status">
+                                                <b>Archived</b>
+                                                <a href="{{ route('documents.open', $doc) }}" target="_blank" rel="noopener">Open</a>
+                                                <a href="{{ route('documents.download', $doc) }}">Download</a>
+                                            </span>
+                                        </div>
+                                    @endforeach
+                                </div>
+                            </details>
                         @endif
                     </div>
                 </div>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Task;
 use App\Models\User;
@@ -228,6 +229,7 @@ class OrderWorkflowActionService
         $inspected = $units > 0 ? max(1, min($units, (int) ceil($units * 0.10))) : 1;
 
         return [
+            'revision_document_ids' => [],
             'qty_received' => $units ?: 1,
             'qty_inspected' => $inspected,
             'qty_accepted' => $inspected,
@@ -279,7 +281,7 @@ class OrderWorkflowActionService
 
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'revise') {
                 $this->requireComment($comment, 'Add revision instructions before requesting a revision.');
-                $this->restartArtwork($locked, $actor, $comment, 'Internal artwork revision requested');
+                $this->restartArtwork($locked, $actor, $comment, 'Internal artwork revision requested', $payload);
                 return $locked->refresh();
             }
 
@@ -298,7 +300,7 @@ class OrderWorkflowActionService
 
             if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'revise') {
                 $this->requireComment($comment, 'Add the client revision request before continuing.');
-                $this->restartArtwork($locked, $actor, $comment, 'Client artwork revision requested');
+                $this->restartArtwork($locked, $actor, $comment, 'Client artwork revision requested', $payload);
                 return $locked->refresh();
             }
 
@@ -646,7 +648,15 @@ class OrderWorkflowActionService
         return app(TaskService::class)->moveStatus($task, app(OrderTaskFlagService::class)->completedStatus(), $actor);
     }
 
-    private function restartArtwork(Task $current, User $actor, string $comment, string $description): void
+    /**
+     * Reopen the Artwork upload task for only the artwork files explicitly
+     * selected by the reviewer. The selection is stored on the revision event
+     * so the later upload can replace only those files while carrying the other
+     * files forward unchanged into the next artwork version.
+     *
+     * @param array<string,mixed> $payload
+     */
+    private function restartArtwork(Task $current, User $actor, string $comment, string $description, array $payload = []): void
     {
         $job = $current->job;
         $tasks = Task::query()
@@ -657,6 +667,44 @@ class OrderWorkflowActionService
             ->get();
         $upload = $tasks->first(fn (Task $candidate) => $this->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
         abort_unless($upload, 422, 'Artwork upload task is not configured.');
+
+        $latestVersion = max(0, (int) $upload->documents()->max('version'));
+        $latestDocuments = $latestVersion > 0
+            ? $upload->documents()->where('version', $latestVersion)->orderBy('id')->get()
+            : collect();
+
+        $requestedDocumentIds = collect($payload['revision_document_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        if ($latestDocuments->isEmpty()) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.revision_document_ids' => 'No current artwork files are available to revise.',
+            ]);
+        }
+
+        if ($requestedDocumentIds->isEmpty()) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.revision_document_ids' => 'Select at least one artwork file that needs revision.',
+            ]);
+        }
+
+        $latestIds = $latestDocuments->pluck('id')->map(fn ($id) => (int) $id);
+        if ($requestedDocumentIds->contains(fn ($id) => ! $latestIds->contains((int) $id))) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.revision_document_ids' => 'One of the selected artwork files is no longer part of the latest artwork set. Reopen the review and try again.',
+            ]);
+        }
+
+        // Preserve the visual order from the latest artwork set instead of the
+        // checkbox submission order. This gives the upload step a deterministic
+        // one-to-one replacement order when several files require revision.
+        $revisionDocuments = $latestDocuments
+            ->filter(fn (Document $document) => $requestedDocumentIds->contains((int) $document->id))
+            ->values();
+        $revisionDocumentIds = $revisionDocuments->pluck('id')->map(fn ($id) => (int) $id)->all();
 
         $ready = app(OrderTaskFlagService::class)->readyStatus();
         $notStarted = app(OrderTaskFlagService::class)->notStartedStatus();
@@ -676,12 +724,8 @@ class OrderWorkflowActionService
                 'progress' => 0,
             ]);
         }
-        // Freeze the exact artwork file that the revision request refers to.
-        // This keeps the revision panel historically correct after a revised
-        // artwork is uploaded later and becomes the task's newest document.
-        $referenceDocumentId = (int) ($upload->documents()
-            ->latest('id')
-            ->value('id') ?? 0);
+
+        $referenceDocumentId = (int) ($revisionDocuments->last()?->id ?? 0);
 
         $job?->activities()->create([
             'user_id' => $actor->id,
@@ -693,6 +737,9 @@ class OrderWorkflowActionService
                 'target_task_id' => (int) $upload->id,
                 'workflow_phase_id' => (int) $current->workflow_phase_id,
                 'reference_document_id' => $referenceDocumentId > 0 ? $referenceDocumentId : null,
+                'revision_document_ids' => $revisionDocumentIds,
+                'revision_document_names' => $revisionDocuments->pluck('name')->values()->all(),
+                'source_artwork_version' => $latestVersion,
             ],
         ]);
     }

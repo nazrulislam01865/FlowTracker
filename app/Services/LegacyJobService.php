@@ -1096,15 +1096,32 @@ class LegacyJobService
             // artwork file is uploaded after this request, the revision has
             // been answered and the panel must disappear from the task row.
             // The activity itself stays in Order history for audit purposes.
-            $hasReplacementArtwork = $referenceDocument
-                ? $taskDocuments->contains(fn ($document) => (int) $document->id > (int) $referenceDocument->id)
-                : $taskDocuments->contains(fn ($document) => $document->created_at && $note->created_at && $document->created_at->gt($note->created_at));
+            $sourceArtworkVersion = max(0, (int) data_get($note->meta, 'source_artwork_version', 0));
+            $hasReplacementArtwork = $sourceArtworkVersion > 0
+                ? (int) ($taskDocuments->max('version') ?? 0) > $sourceArtworkVersion
+                : ($referenceDocument
+                    ? $taskDocuments->contains(fn ($document) => (int) $document->id > (int) $referenceDocument->id)
+                    : $taskDocuments->contains(fn ($document) => $document->created_at && $note->created_at && $document->created_at->gt($note->created_at)));
 
             if ($hasReplacementArtwork) {
                 continue;
             }
 
+            $revisionDocumentIds = collect(data_get($note->meta, 'revision_document_ids', []))
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn ($id) => $id > 0)
+                ->unique()
+                ->values();
+            $revisionDocuments = $revisionDocumentIds
+                ->map(fn ($id) => $documentsById->get($id))
+                ->filter()
+                ->values();
+            if ($revisionDocuments->isEmpty() && $referenceDocument) {
+                $revisionDocuments = collect([$referenceDocument]);
+            }
+
             $note->setRelation('referenceDocument', $referenceDocument);
+            $note->setRelation('revisionDocuments', $revisionDocuments);
 
             $notesByTask[$targetTaskId] ??= collect();
             $notesByTask[$targetTaskId]->push($note);

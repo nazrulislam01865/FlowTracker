@@ -1,4 +1,4 @@
-@props(['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'existingDocumentId' => null, 'context' => []])
+@props(['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'context' => []])
 @php
     $canUpload = (bool) ($context['canUploadDocument'] ?? false);
     $canLink = (bool) ($context['canLinkDocument'] ?? false);
@@ -8,6 +8,14 @@
     $allowMultipleUploads = $automationKey === 'ART_PREPARE_UPLOAD'
         || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
     $hasExistingEvidence = $task->relationLoaded('documents') ? $task->documents->isNotEmpty() : false;
+    $artworkRevisionActive = $automationKey === 'ART_PREPARE_UPLOAD' && (bool) ($artworkRevision['active'] ?? false);
+    $revisionDocuments = $artworkRevisionActive ? collect($artworkRevision['documents'] ?? [])->values() : collect();
+    $retainedArtworkDocuments = $artworkRevisionActive ? collect($artworkRevision['retained_documents'] ?? [])->values() : collect();
+    $revisionCount = $revisionDocuments->count();
+    // Keep Artwork bound to a multiple-file input because Livewire stores this
+    // field in an array property even when a selective revision needs one file.
+    $inputAllowsMultiple = $allowMultipleUploads;
+    $uploadCopyPlural = $artworkRevisionActive ? $revisionCount > 1 : $allowMultipleUploads;
 
     $prototypeConfig = match ($automationKey) {
         'NEW_UPLOAD_PO' => [
@@ -19,12 +27,16 @@
         ],
         'ART_PREPARE_UPLOAD' => [
             'title' => $hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork',
-            'label' => $hasExistingEvidence ? 'Revised artwork files' : 'Artwork files',
-            'copy' => $hasExistingEvidence
-                ? 'Upload up to 10 corrected artwork files as one revision. The previous version remains in Order history.'
-                : 'Upload up to 10 artwork files together for internal review.',
-            'hint' => 'PDF, AI, EPS, ESP, JPG or PNG · Max 20 MB per file · Up to 10 files',
-            'button' => $hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork',
+            'label' => $artworkRevisionActive ? 'Replacement artwork files' : ($hasExistingEvidence ? 'Revised artwork files' : 'Artwork files'),
+            'copy' => $artworkRevisionActive
+                ? 'Upload only the '.($revisionCount === 1 ? 'artwork file selected' : $revisionCount.' artwork files selected').' for revision. '.($retainedArtworkDocuments->count() ?: 'No').' other file'.($retainedArtworkDocuments->count() === 1 ? '' : 's').' will remain unchanged automatically.'
+                : ($hasExistingEvidence
+                    ? 'Upload up to 10 corrected artwork files as one revision. The previous version remains in Order history.'
+                    : 'Upload up to 10 artwork files together for internal review.'),
+            'hint' => $artworkRevisionActive
+                ? 'PDF, AI, EPS, ESP, JPG or PNG · Max 20 MB per file · Exactly '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
+                : 'PDF, AI, EPS, ESP, JPG or PNG · Max 20 MB per file · Up to 10 files',
+            'button' => $artworkRevisionActive ? 'Upload Selected Revision' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
         ],
         'ART_SAMPLE_APPROVAL' => [
             'title' => 'Upload Sample Approval',
@@ -87,8 +99,47 @@
                     x-on:livewire-upload-error="uploading = false; progress = 0"
                     x-on:livewire-upload-cancel="uploading = false; progress = 0"
                 >
+                    @if($artworkRevisionActive)
+                        <div class="ft-artwork-revision-upload-plan">
+                            <div class="ft-artwork-revision-upload-plan-head">
+                                <div>
+                                    <strong>Selective artwork revision</strong>
+                                    <span>Replace only the selected artwork. Unchanged files are carried into the new version automatically. If several files are selected, choose the replacement files in the numbered order shown below.</span>
+                                </div>
+                                <em>{{ $revisionCount }} replacement{{ $revisionCount === 1 ? '' : 's' }}</em>
+                            </div>
+                            <div class="ft-artwork-revision-upload-columns">
+                                <div>
+                                    <small>REPLACE</small>
+                                    @foreach($revisionDocuments as $index => $revisionDocument)
+                                        <div class="ft-artwork-revision-upload-item is-replace">
+                                            <span>{{ $index + 1 }}</span>
+                                            <b title="{{ $revisionDocument->name }}">{{ $revisionDocument->name }}</b>
+                                            <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener">View</a>
+                                        </div>
+                                    @endforeach
+                                </div>
+                                <div>
+                                    <small>KEEP UNCHANGED</small>
+                                    @forelse($retainedArtworkDocuments as $retainedDocument)
+                                        <div class="ft-artwork-revision-upload-item is-retained">
+                                            <span>✓</span>
+                                            <b title="{{ $retainedDocument->name }}">{{ $retainedDocument->name }}</b>
+                                            <em>Retained</em>
+                                        </div>
+                                    @empty
+                                        <div class="ft-artwork-revision-upload-empty">All current artwork files were selected for revision.</div>
+                                    @endforelse
+                                </div>
+                            </div>
+                            @if(filled($artworkRevision['comment'] ?? null))
+                                <p><b>Revision instruction:</b> {{ $artworkRevision['comment'] }}</p>
+                            @endif
+                        </div>
+                    @endif
+
                     @if($selectedUploads->isNotEmpty())
-                        <div class="ft-order-attachment-selected-count">{{ $selectedUploadCount }} file{{ $selectedUploadCount === 1 ? '' : 's' }} selected{{ $automationKey === 'ART_PREPARE_UPLOAD' ? ' · One artwork version' : '' }}</div>
+                        <div class="ft-order-attachment-selected-count">{{ $selectedUploadCount }} file{{ $selectedUploadCount === 1 ? '' : 's' }} selected{{ $artworkRevisionActive ? ' · '.$selectedUploadCount.' of '.$revisionCount.' replacements' : ($automationKey === 'ART_PREPARE_UPLOAD' ? ' · One artwork version' : '') }}</div>
                         @foreach($selectedUploadDetails as $index => $selectedUpload)
                             <div class="ft-order-attachment-selected-file" wire:key="overview-task-upload-{{ $task->id }}-{{ $index }}-{{ md5($selectedUpload['name']) }}">
                                 <span class="ft-order-attachment-selected-check" aria-hidden="true">✓</span>
@@ -104,15 +155,15 @@
                     @endif
 
                     <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone {{ $selectedUploads->isNotEmpty() ? 'is-compact' : '' }}">
-                        <input type="file" wire:model="overviewTaskDocumentUpload" @if($allowMultipleUploads) multiple @endif accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp" aria-label="{{ $allowMultipleUploads ? 'Choose files to upload' : 'Choose a file to upload' }}" title="{{ $allowMultipleUploads ? 'Choose files' : 'Choose file' }}">
+                        <input type="file" wire:model="overviewTaskDocumentUpload" @if($inputAllowsMultiple) multiple @endif accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp" aria-label="{{ $uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload' }}" title="{{ $uploadCopyPlural ? 'Choose files' : 'Choose file' }}">
                         <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
                         @if($selectedUploads->isNotEmpty())
-                            <strong>{{ $allowMultipleUploads ? 'Choose a different file set' : 'Choose a different file' }}</strong>
+                            <strong>{{ $uploadCopyPlural ? 'Choose a different file set' : 'Choose a different file' }}</strong>
                             <b>Drag &amp; drop or <span>browse</span></b>
                         @else
-                            <strong>Drag &amp; drop {{ $allowMultipleUploads ? 'files' : 'a file' }} here</strong>
-                            <b>or choose from your computer{{ $allowMultipleUploads ? ' (use Shift/Ctrl/Cmd to select several)' : '' }}</b>
-                            <span class="ft-order-attachment-browse">Browse file{{ $allowMultipleUploads ? 's' : '' }}</span>
+                            <strong>Drag &amp; drop {{ $uploadCopyPlural ? 'files' : 'a file' }} here</strong>
+                            <b>or choose from your computer{{ $uploadCopyPlural ? ' (use Shift/Ctrl/Cmd to select several)' : '' }}</b>
+                            <span class="ft-order-attachment-browse">Browse file{{ $uploadCopyPlural ? 's' : '' }}</span>
                         @endif
                         <small>{{ $prototypeConfig['hint'] }}</small>
                     </label>
@@ -125,7 +176,7 @@
                         x-transition.opacity.duration.120ms
                     >
                         <div class="ft-prototype-upload-progress-meta">
-                            <span>Uploading {{ $allowMultipleUploads ? 'files' : 'file' }}...</span>
+                            <span>Uploading {{ $uploadCopyPlural ? 'files' : 'file' }}...</span>
 
                             <b x-text="`${progress}%`">
                                 0%

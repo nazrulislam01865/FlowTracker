@@ -14,6 +14,9 @@
     $referenceDocument = $revisionNote->relationLoaded('referenceDocument')
         ? $revisionNote->getRelation('referenceDocument')
         : null;
+    $revisionDocuments = $revisionNote->relationLoaded('revisionDocuments')
+        ? collect($revisionNote->getRelation('revisionDocuments'))->values()
+        : ($referenceDocument ? collect([$referenceDocument]) : collect());
     $extension = $referenceDocument
         ? strtoupper(pathinfo((string) $referenceDocument->name, PATHINFO_EXTENSION) ?: 'FILE')
         : 'FILE';
@@ -43,22 +46,27 @@
         </div>
 
         <div class="ft-order-artwork-revision-field">
-            <div class="ft-order-artwork-revision-label">Reference attachment</div>
+            <div class="ft-order-artwork-revision-label">Artwork selected for revision</div>
 
-            @if($referenceDocument)
-                <div class="ft-order-artwork-revision-attachment">
-                    <span class="file-icon ft-order-file-icon ft-order-artwork-revision-file-icon">{{ $extension }}</span>
-                    <span class="ft-order-artwork-revision-file-copy">
-                        <b>{{ $referenceDocument->name }} · Version {{ max(1, (int) $referenceDocument->version) }}</b>
-                        <small>{{ $extension }} · Uploaded {{ \App\Support\UserLocalTime::format($referenceDocument->created_at, 'M j, Y, g:i A') }}</small>
-                    </span>
-                    <span class="ft-order-artwork-revision-file-actions">
-                        <a href="{{ route('documents.open', $referenceDocument) }}" target="_blank" rel="noopener">Open</a>
-                        @if($canExportDocument)
-                            <span class="ft-order-artwork-revision-action-divider" aria-hidden="true"></span>
-                            <a href="{{ route('documents.download', $referenceDocument) }}">Download</a>
-                        @endif
-                    </span>
+            @if($revisionDocuments->isNotEmpty())
+                <div class="ft-order-artwork-revision-attachment-list">
+                    @foreach($revisionDocuments as $revisionDocument)
+                        @php $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
+                        <div class="ft-order-artwork-revision-attachment">
+                            <span class="file-icon ft-order-file-icon ft-order-artwork-revision-file-icon">{{ $revisionExtension }}</span>
+                            <span class="ft-order-artwork-revision-file-copy">
+                                <b>{{ $revisionDocument->name }} · Version {{ max(1, (int) $revisionDocument->version) }}</b>
+                                <small>{{ $revisionExtension }} · Only this selected artwork needs replacement</small>
+                            </span>
+                            <span class="ft-order-artwork-revision-file-actions">
+                                <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener">Open</a>
+                                @if($canExportDocument)
+                                    <span class="ft-order-artwork-revision-action-divider" aria-hidden="true"></span>
+                                    <a href="{{ route('documents.download', $revisionDocument) }}">Download</a>
+                                @endif
+                            </span>
+                        </div>
+                    @endforeach
                 </div>
             @else
                 <div class="ft-order-artwork-revision-attachment ft-order-artwork-revision-attachment--empty">

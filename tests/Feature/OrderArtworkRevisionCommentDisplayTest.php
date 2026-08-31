@@ -23,7 +23,7 @@ class OrderArtworkRevisionCommentDisplayTest extends TestCase
         $this->assertStringContainsString('x-jobs.order-detail.artwork-revision-card', $row);
         $this->assertStringContainsString('Artwork revision issue', $card);
         $this->assertStringContainsString('$revisionComment', $card);
-        $this->assertStringContainsString('Reference attachment', $card);
+        $this->assertStringContainsString('Artwork selected for revision', $card);
     }
 
     public function test_artwork_uploads_use_continuous_versions_and_resolved_revision_panel_is_hidden(): void
@@ -46,9 +46,9 @@ class OrderArtworkRevisionCommentDisplayTest extends TestCase
         $this->assertStringNotContainsString('{{ $taskDocuments->count() - 1 }} archived', $row);
         $this->assertStringContainsString('if (! $isArtworkTask) {', $documents);
         $this->assertStringContainsString("\$query->where('name', \$document->name);", $documents);
-        $this->assertStringContainsString('· Version {{ max(1, (int) $referenceDocument->version) }}', $card);
+        $this->assertStringContainsString('· Version {{ max(1, (int) $revisionDocument->version) }}', $card);
         $this->assertStringContainsString('{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}', $modal);
-        $this->assertStringContainsString("{{ (int) \$doc->version === \$artworkVersion ? 'Latest' : 'Archived' }}", $modal);
+        $this->assertStringContainsString('Previous artwork versions', $modal);
         $this->assertStringContainsString("'artwork_batch_version'", $documents);
         $this->assertStringContainsString('public function storeMany(', $documents);
     }
