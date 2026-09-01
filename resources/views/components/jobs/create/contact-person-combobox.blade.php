@@ -36,13 +36,17 @@
     x-data="{
         open: false,
         query: '',
+        dynamicType: @js((string) $type),
+        dynamicPlaceholder: @js((string) $placeholder),
         currentValue: @js((string) $value),
         selectedId: @js((string) $selectedId),
         items: @js($items->all()),
-        sync(value, selectedId, items) {
+        sync(type, value, selectedId, items, placeholder = null) {
+            this.dynamicType = String(type || this.dynamicType || '');
             this.currentValue = String(value || '');
             this.selectedId = String(selectedId || '');
             this.items = Array.isArray(items) ? items : [];
+            if (placeholder !== null) this.dynamicPlaceholder = String(placeholder || '');
             if (!this.open && this.$refs.input) this.$refs.input.value = this.currentValue;
         },
         openMenu() {
@@ -68,22 +72,25 @@
             const typed = this.normalise(this.query || this.$refs.input?.value || '');
             return typed !== '' && this.items.some((item) => this.normalise(item.label) === typed);
         },
-        choose(item) {
+        async choose(item) {
             if (!item) return;
             this.open = false;
             this.query = '';
             if (this.$refs.input) this.$refs.input.value = item.label || '';
-            $wire.call('selectShippingContactOption', @js((string) $type), String(item.id));
+            const payload = await $wire.call('selectShippingContactOption', this.dynamicType, String(item.id));
+            window.dispatchEvent(new CustomEvent('flowtrack-shipping-contact-payload', { detail: payload }));
         },
-        useTypedContact() {
+        async useTypedContact() {
             const name = String(this.$refs.input?.value || '').trim();
             if (!name) return;
             this.open = false;
             this.query = '';
-            $wire.call('useNewShippingContactPerson', @js((string) $type), name);
+            const payload = await $wire.call('useNewShippingContactPerson', this.dynamicType, name);
+            window.dispatchEvent(new CustomEvent('flowtrack-shipping-contact-payload', { detail: payload }));
         },
     }"
-    x-effect="sync(@js((string) $value), @js((string) $selectedId), @js($items->all()))"
+    x-init="sync(@js((string) $type), @js((string) $value), @js((string) $selectedId), @js($items->all()), @js((string) $placeholder))"
+    x-on:flowtrack-shipping-contact-switched.window="sync($event.detail?.type, $event.detail?.name, $event.detail?.selection, $event.detail?.items, $event.detail?.placeholder)"
     x-on:click.outside="closeMenu()"
 >
     <div class="ft-order-contact-combobox__input-wrap">
@@ -99,10 +106,10 @@
             aria-haspopup="listbox"
             aria-controls="{{ $componentId }}-listbox"
             x-bind:aria-expanded="open.toString()"
-            placeholder="{{ $placeholder }}"
+            x-bind:placeholder="dynamicPlaceholder"
             x-on:focus="openMenu()"
             x-on:click="openMenu()"
-            x-on:input="query = $event.target.value; open = true"
+            x-on:input="query = $event.target.value; open = true; $dispatch('flowtrack-shipping-contact-name-input', { name: $event.target.value })"
             x-on:keydown.escape.stop="closeMenu()"
             x-on:keydown.enter.prevent="filteredItems.length === 1 ? choose(filteredItems[0]) : useTypedContact()"
         >

@@ -128,6 +128,7 @@ unset($__defined_vars, $__key, $__value); ?>
             fixedMenu: <?php echo \Illuminate\Support\Js::from((bool) $fixedMenu)->toHtml() ?>,
         })"
         x-effect="syncSelection(<?php echo \Illuminate\Support\Js::from(['value' => (string) $value, 'label' => $resolvedLabel])->toHtml() ?>, <?php echo \Illuminate\Support\Js::from($params)->toHtml() ?>, <?php echo \Illuminate\Support\Js::from($items->all())->toHtml() ?>); syncDisabled(<?php echo \Illuminate\Support\Js::from((bool) $disabled)->toHtml() ?>)"
+        x-on:flowtrack-search-select-sync.window="if ($event.detail?.property === <?php echo \Illuminate\Support\Js::from($property)->toHtml() ?>) syncSelection({ value: String($event.detail?.value || ''), label: String($event.detail?.label || $event.detail?.value || <?php echo \Illuminate\Support\Js::from($placeholder)->toHtml() ?>) }, <?php echo \Illuminate\Support\Js::from($params)->toHtml() ?>, Array.isArray($event.detail?.items) ? $event.detail.items : items)"
     <?php else: ?>
         x-data="window.FlowTrack.ui.localFilter({
             property: <?php echo \Illuminate\Support\Js::from($property)->toHtml() ?>,

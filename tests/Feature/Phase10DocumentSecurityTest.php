@@ -31,6 +31,48 @@ class Phase10DocumentSecurityTest extends TestCase
         $this->assertNotSame('spec.pdf', basename($stored['path']));
     }
 
+
+    public function test_pdf_with_utf8_bom_and_leading_whitespace_is_accepted(): void
+    {
+        Storage::fake('flowtrack_private');
+        Storage::fake('flowtrack_quarantine');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.quarantine_disk', 'flowtrack_quarantine');
+        config()->set('flowtrack.upload_security.scanner', 'basic');
+
+        // Common Illustrator/design-export edge case: Fileinfo correctly
+        // identifies this as PDF even though %PDF- is not byte zero.
+        $file = UploadedFile::fake()->createWithContent(
+            'artwork.pdf',
+            "\xEF\xBB\xBF\r\n%PDF-1.7\nFlowTrack artwork\n",
+        );
+
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/1');
+
+        Storage::disk('flowtrack_private')->assertExists($stored['path']);
+        $this->assertSame([], Storage::disk('flowtrack_quarantine')->allFiles('pending'));
+    }
+
+    public function test_mislabeled_pdf_is_still_rejected_by_signature_validation(): void
+    {
+        Storage::fake('flowtrack_private');
+        Storage::fake('flowtrack_quarantine');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.quarantine_disk', 'flowtrack_quarantine');
+        config()->set('flowtrack.upload_security.scanner', 'basic');
+
+        $file = UploadedFile::fake()->createWithContent('not-really.pdf', 'plain text pretending to be a PDF');
+
+        try {
+            app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/1');
+            $this->fail('A mislabeled PDF must not be promoted.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+            $this->assertStringContainsString('not-really.pdf', $exception->getMessage());
+            $this->assertSame([], Storage::disk('flowtrack_private')->allFiles());
+        }
+    }
+
     public function test_script_upload_is_rejected_before_promotion(): void
     {
         Storage::fake('flowtrack_private');

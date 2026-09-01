@@ -3,6 +3,7 @@
 @import './detail/detail-02.css';
 @import './detail/redo.css';
 @import './detail/cancellation.css';
+@import './detail/shipment-phase.css';
 
 @import './detail/responsive-task-cards.css';
 

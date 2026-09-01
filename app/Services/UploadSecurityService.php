@@ -13,6 +13,9 @@ use Symfony\Component\Process\Process;
  */
 class UploadSecurityService
 {
+    /** PDF tools sometimes prepend a UTF-8 BOM or harmless whitespace. */
+    private const PDF_HEADER_SCAN_BYTES = 1024;
+
     private const ALLOWED_EXTENSIONS = [
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp', 'gif',
         'ico', 'zip', 'txt', 'csv', 'ai', 'eps', 'esp',
@@ -41,7 +44,7 @@ class UploadSecurityService
 
         $detectedMime = $this->detectMime($absolutePath, $reportedMime);
         $this->rejectExecutableSignature($absolutePath);
-        $this->validateKnownSignature($absolutePath, $extension, $detectedMime);
+        $this->validateKnownSignature($absolutePath, $extension, $detectedMime, $originalName);
 
         if ($extension === 'zip' || in_array($extension, ['docx', 'xlsx'], true)) {
             $this->inspectZipContainer($absolutePath);
@@ -93,15 +96,22 @@ class UploadSecurityService
         }
     }
 
-    private function validateKnownSignature(string $path, string $extension, string $mime): void
+    private function validateKnownSignature(string $path, string $extension, string $mime, string $originalName): void
     {
         if ($extension === '' || in_array($extension, ['eps', 'esp', 'ai', 'txt', 'csv'], true)) {
             return;
         }
 
-        $prefix = (string) file_get_contents($path, false, null, 0, 16);
+        // Read enough data for formats whose identifying header may legally be
+        // preceded by a small amount of harmless transport/exporter metadata.
+        // In particular, real PDF files from some design tools include a UTF-8
+        // BOM or whitespace before %PDF-. Laravel/Fileinfo still identifies
+        // those files as PDFs, while the old byte-zero check rejected them.
+        $prefix = file_get_contents($path, false, null, 0, max(self::PDF_HEADER_SCAN_BYTES, 16));
+        abort_if($prefix === false, 422, 'The uploaded file could not be inspected.');
+
         $ok = match ($extension) {
-            'pdf' => str_starts_with($prefix, '%PDF-'),
+            'pdf' => $this->hasPdfHeader($prefix),
             'jpg', 'jpeg' => str_starts_with($prefix, "\xFF\xD8\xFF"),
             'png' => str_starts_with($prefix, "\x89PNG\r\n\x1A\n"),
             'gif' => str_starts_with($prefix, 'GIF87a') || str_starts_with($prefix, 'GIF89a'),
@@ -110,11 +120,34 @@ class UploadSecurityService
             default => true,
         };
 
-        abort_unless($ok, 422, 'The file contents do not match the selected file type.');
+        if (! $ok) {
+            $safeName = basename($originalName);
+            $type = strtoupper($extension);
+            abort(422, 'The contents of "'.$safeName.'" do not match its '.$type.' file type. Re-export the file or choose the correct file format.');
+        }
 
         if ($mime !== '' && str_starts_with($mime, 'text/html')) {
             abort(422, 'HTML content is not allowed in uploaded business documents.');
         }
+    }
+
+    private function hasPdfHeader(string $prefix): bool
+    {
+        $head = substr($prefix, 0, self::PDF_HEADER_SCAN_BYTES);
+        $position = strpos($head, '%PDF-');
+        if ($position === false) {
+            return false;
+        }
+
+        // Only tolerate a UTF-8 BOM plus whitespace/control padding before the
+        // PDF marker. Arbitrary leading content remains rejected, preserving
+        // the upload-security boundary against disguised/polyglot documents.
+        $leading = substr($head, 0, $position);
+        if (str_starts_with($leading, "\xEF\xBB\xBF")) {
+            $leading = substr($leading, 3);
+        }
+
+        return trim($leading, "\x00\x09\x0A\x0C\x0D\x20") === '';
     }
 
     /** Inspect archive metadata only; FlowTrack never extracts user archives. */

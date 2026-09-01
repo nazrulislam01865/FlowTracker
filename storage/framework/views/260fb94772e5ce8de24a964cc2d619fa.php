@@ -60,6 +60,10 @@ unset($__defined_vars, $__key, $__value); ?>
     $completedTasks = \App\Support\OrderDetailPresenter::completedCount($selectedTasks);
     $applicableTaskCount = $selectedTasks->count();
     $stageCount = $phases->count();
+    $isShipmentPhase = \App\Support\OrderShipmentPresenter::isShipmentPhase($selectedPhase, $selectedTasks);
+    $shipmentPresentation = $isShipmentPhase
+        ? \App\Support\OrderShipmentPresenter::present($job, $selectedPhase, $selectedTasks, $context)
+        : [];
 
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
@@ -116,8 +120,32 @@ unset($__defined_vars, $__key, $__value); ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
         </section>
 
-        <section class="grid ft-order-workflow-layout ft-order-workflow-layout--full">
-            <div class="card ft-order-task-panel">
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isShipmentPhase): ?>
+            <?php if (isset($component)) { $__componentOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.phase','data' => ['job' => $job,'phase' => $selectedPhase,'presentation' => $shipmentPresentation]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.shipment.phase'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedPhase),'presentation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentPresentation)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37)): ?>
+<?php $attributes = $__attributesOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37; ?>
+<?php unset($__attributesOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37)): ?>
+<?php $component = $__componentOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37; ?>
+<?php unset($__componentOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37); ?>
+<?php endif; ?>
+        <?php else: ?>
+            <section class="grid ft-order-workflow-layout ft-order-workflow-layout--full">
+              <div class="card ft-order-task-panel">
                 <div class="card-head">
                     <div>
                         <div class="card-title"><?php echo e($selectedPhase?->name ?? 'Workflow'); ?> tasks</div>
@@ -163,8 +191,9 @@ unset($__defined_vars, $__key, $__value); ?>
                         <div class="empty-stage">No tasks are configured for this stage.</div>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
-            </div>
-        </section>
+              </div>
+            </section>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </section>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/jobs/order-detail/workflow.blade.php ENDPATH**/ ?>

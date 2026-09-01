@@ -26,6 +26,10 @@
     $completedTasks = \App\Support\OrderDetailPresenter::completedCount($selectedTasks);
     $applicableTaskCount = $selectedTasks->count();
     $stageCount = $phases->count();
+    $isShipmentPhase = \App\Support\OrderShipmentPresenter::isShipmentPhase($selectedPhase, $selectedTasks);
+    $shipmentPresentation = $isShipmentPhase
+        ? \App\Support\OrderShipmentPresenter::present($job, $selectedPhase, $selectedTasks, $context)
+        : [];
 
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
@@ -66,8 +70,15 @@
             @endforeach
         </section>
 
-        <section class="grid ft-order-workflow-layout ft-order-workflow-layout--full">
-            <div class="card ft-order-task-panel">
+        @if($isShipmentPhase)
+            <x-jobs.order-detail.shipment.phase
+                :job="$job"
+                :phase="$selectedPhase"
+                :presentation="$shipmentPresentation"
+            />
+        @else
+            <section class="grid ft-order-workflow-layout ft-order-workflow-layout--full">
+              <div class="card ft-order-task-panel">
                 <div class="card-head">
                     <div>
                         <div class="card-title">{{ $selectedPhase?->name ?? 'Workflow' }} tasks</div>
@@ -100,7 +111,8 @@
                         <div class="empty-stage">No tasks are configured for this stage.</div>
                     @endforelse
                 </div>
-            </div>
-        </section>
+              </div>
+            </section>
+        @endif
     @endif
 </section>

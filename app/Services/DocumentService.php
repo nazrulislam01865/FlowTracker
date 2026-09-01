@@ -129,27 +129,45 @@ class DocumentService
      */
     public function storeMany(array $files, array $data, User $user, string $permissionModule = 'documents'): Collection
     {
-        $documents = collect();
-        $artworkBatchVersion = null;
+        $storedPaths = [];
 
-        foreach (array_values($files) as $file) {
-            $fileData = $data;
-            if ($artworkBatchVersion !== null) {
-                $fileData['artwork_batch_version'] = $artworkBatchVersion;
+        try {
+            return DB::transaction(function () use ($files, $data, $user, $permissionModule, &$storedPaths): Collection {
+                $documents = collect();
+                $artworkBatchVersion = null;
+
+                foreach (array_values($files) as $file) {
+                    $fileData = $data;
+                    if ($artworkBatchVersion !== null) {
+                        $fileData['artwork_batch_version'] = $artworkBatchVersion;
+                    }
+
+                    $document = $this->store($file, $fileData, $user, $permissionModule);
+                    $documents->push($document);
+                    if (filled($document->path)) {
+                        $storedPaths[] = (string) $document->path;
+                    }
+
+                    $document->loadMissing('task.setupTemplate');
+                    if ($artworkBatchVersion === null
+                        && $document->task
+                        && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD') {
+                        $artworkBatchVersion = max(1, (int) $document->version);
+                    }
+                }
+
+                return $documents;
+            });
+        } catch (\Throwable $exception) {
+            // Treat the file set as one upload. If a later file fails security
+            // inspection, roll back the database rows and remove any files that
+            // were already promoted for this batch.
+            foreach (array_unique($storedPaths) as $path) {
+                app(SecureDocumentStorage::class)->delete($path);
             }
 
-            $document = $this->store($file, $fileData, $user, $permissionModule);
-            $documents->push($document);
-
-            $document->loadMissing('task.setupTemplate');
-            if ($artworkBatchVersion === null
-                && $document->task
-                && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD') {
-                $artworkBatchVersion = max(1, (int) $document->version);
-            }
+            throw $exception;
         }
-
-        return $documents;
     }
 
 

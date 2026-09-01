@@ -1,0 +1,158 @@
+@props([
+    'job',
+    'phase',
+    'presentation' => [],
+])
+
+<section class="ft-shipment-phase" aria-label="Shipment tasks" wire:key="shipment-phase-{{ $job->id }}-{{ $phase->id }}">
+    <div class="ft-shipment-phase__status">
+        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M2.5 5.5h9v8h-9zM11.5 8h3l3 3v2.5h-6z"/><circle cx="6" cy="15" r="1.5"/><circle cx="14.5" cy="15" r="1.5"/></svg>
+        Order status: Ready for shipment
+    </div>
+
+    <header class="ft-shipment-phase__head">
+        <div>
+            <h3>Shipment tasks</h3>
+            <p>Complete these steps in order to dispatch the package.</p>
+        </div>
+        <div class="ft-shipment-progress" aria-label="{{ $presentation['completed_count'] ?? 0 }} of {{ $presentation['total_count'] ?? 0 }} complete">
+            <strong>{{ $presentation['completed_count'] ?? 0 }} of {{ $presentation['total_count'] ?? 0 }} complete</strong>
+            <div class="ft-shipment-progress__track" aria-hidden="true">
+                @foreach(($presentation['tasks'] ?? []) as $progressIndex => $row)
+                    @if($progressIndex > 0)<span class="ft-shipment-progress__line {{ $row['progress_line_done'] ? 'is-done' : '' }}"></span>@endif
+                    <span class="ft-shipment-progress__dot {{ $row['is_done'] ? 'is-done' : ($row['mode'] === 'active' ? 'is-current' : '') }}"></span>
+                @endforeach
+            </div>
+        </div>
+    </header>
+
+    <div class="ft-shipment-phase__tasks">
+        @foreach(($presentation['tasks'] ?? []) as $index => $row)
+            <article
+                class="ft-shipment-task ft-shipment-task--{{ $row['mode'] }}"
+                wire:key="shipment-task-{{ $row['task']->id }}"
+                x-data="{ open: @js($row['mode'] === 'active') }"
+            >
+                <div class="ft-shipment-task__rail">
+                    <span class="ft-shipment-task__number">
+                        @if($row['is_done'])
+                            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m5.2 10.2 3 3L14.9 6.7"/></svg>
+                        @else
+                            {{ $index + 1 }}
+                        @endif
+                    </span>
+                    @if(!$loop->last)<span class="ft-shipment-task__rail-line"></span>@endif
+                </div>
+
+                <div class="ft-shipment-task__content">
+                    <div class="ft-shipment-task__top">
+                        <div class="ft-shipment-task__copy">
+                            <div class="ft-shipment-task__eyebrow">
+                                <span>TASK {{ $row['display_code'] }}</span>
+                                @if($row['mode'] === 'active')<em>Current task</em>@endif
+                            </div>
+                            <h4>{{ $row['title'] }}</h4>
+                            <p>{{ $row['description'] }}</p>
+                        </div>
+
+                        <x-jobs.order-detail.shipment.task-meta :job="$job" :row="$row" />
+
+                        <div class="ft-shipment-task__state">
+                            @if($row['mode'] === 'active')
+                                <span class="ft-shipment-state ft-shipment-state--action"><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 6.5v4M10 13.5h.01"/></svg>Action required</span>
+                            @elseif($row['is_done'])
+                                <span class="ft-shipment-state ft-shipment-state--done">Completed</span>
+                            @else
+                                <span class="ft-shipment-state ft-shipment-state--locked"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="9" width="10" height="8" rx="1.5"/><path d="M7.5 9V6.5a2.5 2.5 0 0 1 5 0V9"/></svg>Locked</span>
+                            @endif
+                            <button type="button" class="ft-shipment-task__chevron" x-on:click="open = !open" :aria-expanded="open.toString()" aria-label="Toggle task details">
+                                <svg viewBox="0 0 20 20" aria-hidden="true" :class="{ 'is-open': open }"><path d="m5.5 7.5 4.5 4.5 4.5-4.5"/></svg>
+                            </button>
+                        </div>
+                    </div>
+
+                    @if($row['key'] === 'SHIP_CONFIRM_INFO')
+                        <div class="ft-shipment-task__expanded" x-cloak x-show="open">
+                            <section class="ft-shipment-current-details">
+                                <header>
+                                    <strong>Current shipment details</strong>
+                                    @if($row['can_edit'] && !$row['is_done'])
+                                        <button type="button" wire:click="openOrderWorkflowAction({{ $row['task']->id }})">
+                                            <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>
+                                            Edit
+                                        </button>
+                                    @endif
+                                </header>
+                                <dl>
+                                    <div><dt>Recipient:</dt><dd>{{ $presentation['recipient'] ?: '—' }}</dd></div>
+                                    <div><dt>Address:</dt><dd>{{ $presentation['address'] ?: '—' }}</dd></div>
+                                    <div><dt>Client:</dt><dd>{{ $presentation['client_name'] ?: '—' }}</dd></div>
+                                    <div><dt>Postal code:</dt><dd>{{ $presentation['postal_code'] ?: '—' }}</dd></div>
+                                    <div><dt>Phone:</dt><dd>{{ $presentation['phone'] ?: '—' }}</dd></div>
+                                </dl>
+                            </section>
+
+                            <section class="ft-shipment-review-panel">
+                                <h5>Do you want to update the shipment details?</h5>
+                                <p>Choose Update details to edit the existing information, or continue without changes.</p>
+                                <div class="ft-shipment-review-panel__actions">
+                                    <button type="button" class="ft-shipment-btn ft-shipment-btn--outline" @disabled(!$row['can_edit'] || $row['is_done']) wire:click="confirmShipmentDetailsWithoutChanges({{ $row['task']->id }})" wire:loading.attr="disabled" wire:target="confirmShipmentDetailsWithoutChanges">
+                                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4.5 10.5 3.2 3.2 7.8-8"/></svg>No changes — continue
+                                    </button>
+                                    <button type="button" class="ft-shipment-btn ft-shipment-btn--primary" @disabled(!$row['can_edit'] || $row['is_done']) wire:click="openOrderWorkflowAction({{ $row['task']->id }})">
+                                        <svg viewBox="0 0 20 20" aria-hidden="true"><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>Update details
+                                    </button>
+                                </div>
+                                <small><svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="M10 9v4M10 6.5h.01"/></svg>Either action completes this task and unlocks tracking setup.</small>
+                            </section>
+                        </div>
+                    @elseif($row['key'] === 'SHIP_LABEL')
+                        <div class="ft-shipment-inline-work" x-data="{ carrier: @js(($presentation['carrier'] ?? '') ?: 'UPS'), tracking: @js($presentation['tracking'] ?? '') }">
+                            <label>
+                                <span>COURIER</span>
+                                <select x-model="carrier" @disabled($row['mode'] !== 'active' || !$row['can_edit'] || $row['label_generated'])>
+                                    <option value="">Select courier</option>
+                                    <option value="UPS">UPS</option>
+                                    <option value="FedEx">FedEx</option>
+                                    <option value="DHL">DHL</option>
+                                    <option value="Other">Other</option>
+                                </select>
+                            </label>
+                            <label>
+                                <span>TRACKING NUMBER</span>
+                                <input type="text" x-model.trim="tracking" placeholder="Enter tracking number" @disabled($row['mode'] !== 'active' || !$row['can_edit'] || $row['label_generated'])>
+                            </label>
+                            <div class="ft-shipment-inline-work__buttons">
+                                <button
+                                    type="button"
+                                    class="ft-shipment-btn ft-shipment-btn--primary ft-shipment-btn--continue"
+                                    @disabled($row['mode'] !== 'active' || !$row['can_edit'])
+                                    x-bind:disabled="@js($row['mode'] !== 'active' || !$row['can_edit']) || !carrier || !tracking"
+                                    x-on:click="$wire.completeShipmentTrackingTask({{ $row['task']->id }}, carrier, tracking)"
+                                    wire:loading.attr="disabled"
+                                    wire:target="completeShipmentTrackingTask"
+                                >
+                                    <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M4 10h11M11 6l4 4-4 4"/></svg>Continue to next task
+                                </button>
+                            </div>
+                            @if($row['mode'] !== 'active' && !$row['is_done'])
+                                <small class="ft-shipment-unlock-note"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="9" width="10" height="8" rx="1.5"/><path d="M7.5 9V6.5a2.5 2.5 0 0 1 5 0V9"/></svg>Available after Review or update shipment details</small>
+                            @endif
+                            @error('shipmentLabel')<p class="validation-error">{{ $message }}</p>@enderror
+                        </div>
+                    @elseif($row['key'] === 'SHIP_PACKAGE')
+                        <div class="ft-shipment-dispatch-work">
+                            <button type="button" class="ft-shipment-btn ft-shipment-btn--primary" @disabled($row['mode'] !== 'active' || !$row['can_edit']) wire:click="dispatchShipment({{ $row['task']->id }})" wire:loading.attr="disabled" wire:target="dispatchShipment">
+                                <svg viewBox="0 0 20 20" aria-hidden="true"><circle cx="10" cy="10" r="7"/><path d="m6.5 10 2.2 2.2 4.8-4.8"/></svg>Mark as dispatched
+                            </button>
+                            @if($row['mode'] !== 'active' && !$row['is_done'])
+                                <small class="ft-shipment-unlock-note"><svg viewBox="0 0 20 20" aria-hidden="true"><rect x="5" y="9" width="10" height="8" rx="1.5"/><path d="M7.5 9V6.5a2.5 2.5 0 0 1 5 0V9"/></svg>Available after Add tracking number &amp; print courier label</small>
+                            @endif
+                            @error('shipmentDispatch')<p class="validation-error">{{ $message }}</p>@enderror
+                        </div>
+                    @endif
+                </div>
+            </article>
+        @endforeach
+    </div>
+</section>

@@ -18,9 +18,10 @@ class CreateOrderShippingContactPrototypeTest extends TestCase
         $this->assertStringContainsString('End customer', $contactView);
         $this->assertStringContainsString('Middle client', $contactView);
         $this->assertStringContainsString('Other contact', $contactView);
-        $this->assertStringContainsString("wire:click=\"selectShippingContactType('end_customer')\"", $contactView);
-        $this->assertStringContainsString("wire:click=\"selectShippingContactType('middle_client')\"", $contactView);
-        $this->assertStringContainsString("wire:click=\"selectShippingContactType('other_contact')\"", $contactView);
+        $this->assertStringContainsString("x-on:click=\"switchContactType('end_customer')\"", $contactView);
+        $this->assertStringContainsString("x-on:click=\"switchContactType('middle_client')\"", $contactView);
+        $this->assertStringContainsString("x-on:click=\"switchContactType('other_contact')\"", $contactView);
+        $this->assertStringContainsString("\$wire.call('selectShippingContactType', type)", $contactView);
         $this->assertStringContainsString('<x-jobs.create.contact-person-combobox', $contactView);
         $this->assertStringContainsString(':shipping-contact-selection="$shippingContactSelection"', $createView);
         $this->assertStringContainsString('New contact will be saved', $contactView);
@@ -46,9 +47,12 @@ class CreateOrderShippingContactPrototypeTest extends TestCase
         $action = file_get_contents(app_path('Actions/Clients/SaveClientDeliveryContact.php'));
         $dto = file_get_contents(app_path('DTOs/Orders/OrderCreateData.php'));
 
-        $this->assertStringContainsString('public function selectShippingContactType(string $type): void', $creation);
-        $this->assertStringContainsString('public function selectShippingContactOption(string $type, mixed $contactId): void', $creation);
-        $this->assertStringContainsString('public function useNewShippingContactPerson(string $type, mixed $name): void', $creation);
+        $this->assertStringContainsString('#[Renderless]', $creation);
+        $this->assertStringContainsString('public function selectShippingContactType(string $type): array', $creation);
+        $this->assertStringContainsString('public function selectShippingContactOption(string $type, mixed $contactId): array', $creation);
+        $this->assertStringContainsString('public function useNewShippingContactPerson(string $type, mixed $name): array', $creation);
+        $this->assertStringContainsString('shippingContactUiPayload', $creation);
+        $this->assertStringContainsString('setCreateShippingPhoneCountryCode', $creation);
         $this->assertStringContainsString('public function updatedShippingContactName(mixed $value): void', $creation);
         $this->assertStringContainsString('End customer and Other contact are intentionally user-entered.', $creation);
         $this->assertStringContainsString("\$this->shippingContactType = 'middle_client';", $creation);

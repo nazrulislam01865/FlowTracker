@@ -41,7 +41,7 @@ Purpose-built popup variants now match the prototype interaction structure while
 - QC form and QC issue/report/resolve
 - Shipment Information
 - Courier Label Preview
-- Ship Package
+- Dispatch shipment
 - Prepare Bulk Invoice
 - Send Invoice preview
 - Record Payment

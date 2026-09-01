@@ -36,8 +36,16 @@ class OrderWorkflowActionService
         'resolve qc issue (when needed)' => 'QC_ISSUE',
         'approve for shipment' => 'QC_APPROVE_SHIPMENT',
         'confirm shipment information' => 'SHIP_CONFIRM_INFO',
+        'confirm shipping information' => 'SHIP_CONFIRM_INFO',
+        'review shipment info' => 'SHIP_CONFIRM_INFO',
+        'review or update shipment details' => 'SHIP_CONFIRM_INFO',
         'generate & print courier label' => 'SHIP_LABEL',
+        'generate courier label' => 'SHIP_LABEL',
+        'preview & print courier label' => 'SHIP_LABEL',
+        'add tracking number & print courier label' => 'SHIP_LABEL',
         'ship package' => 'SHIP_PACKAGE',
+        'ship the package' => 'SHIP_PACKAGE',
+        'dispatch shipment' => 'SHIP_PACKAGE',
         'prepare invoice' => 'BILL_PREPARE',
         'send invoice' => 'BILL_SEND',
         'receive & process payment' => 'PAY_PROCESS',
@@ -84,7 +92,7 @@ class OrderWorkflowActionService
             'QC_APPROVE_SHIPMENT' => 'Proceed to Shipment',
             'SHIP_CONFIRM_INFO' => 'Review Information',
             'SHIP_LABEL' => str_contains($status, 'label generated') ? 'Preview / Print' : 'Generate Label',
-            'SHIP_PACKAGE' => 'Ship Package',
+            'SHIP_PACKAGE' => 'Mark as dispatched',
             'BILL_PREPARE' => 'Prepare Invoice',
             'BILL_SEND' => 'Preview & Send',
             'PAY_PROCESS' => 'Record Payment',
@@ -173,9 +181,9 @@ class OrderWorkflowActionService
             ],
             'SHIP_CONFIRM_INFO' => [
                 'variant' => 'shipment_info',
-                'title' => 'Shipment Information',
-                'copy' => 'Confirm recipient, package and declared-value information before generating the courier label.',
-                'choices' => ['confirm' => 'Confirm Information'],
+                'title' => 'Update shipment details',
+                'copy' => 'Review and edit the delivery information for this shipment.',
+                'choices' => ['confirm' => 'Save & complete task'],
             ],
             'SHIP_LABEL' => [
                 'variant' => 'courier_label',
@@ -185,7 +193,7 @@ class OrderWorkflowActionService
             ],
             'SHIP_PACKAGE' => [
                 'variant' => 'ship_package',
-                'title' => 'Ship the Package',
+                'title' => 'Dispatch shipment',
                 'copy' => 'Record the carrier, tracking number and shipment date.',
                 'choices' => ['confirm' => 'Confirm Shipment'],
             ],
@@ -228,7 +236,7 @@ class OrderWorkflowActionService
         $units = (int) $job->items->filter(fn ($item) => ! ($item->is_removed ?? false))->sum(fn ($item) => (int) ($item->quantity ?? 0));
         $inspected = $units > 0 ? max(1, min($units, (int) ceil($units * 0.10))) : 1;
 
-        return [
+        $payload = [
             'revision_document_ids' => [],
             'qty_received' => $units ?: 1,
             'qty_inspected' => $inspected,
@@ -259,6 +267,33 @@ class OrderWorkflowActionService
             'payment_reference' => '',
             'payment_notes' => '',
         ];
+
+        $key = $this->automationKey($task);
+        if (in_array($key, ['SHIP_LABEL', 'SHIP_PACKAGE'], true)) {
+            $shipmentInfoActivity = $job->activities()
+                ->where('event', 'job.shipment_information_confirmed')
+                ->latest('id')
+                ->first();
+            if ($shipmentInfoActivity) {
+                $shipmentMeta = (array) ($shipmentInfoActivity->meta ?? []);
+                $payload['recipient'] = trim((string) ($shipmentMeta['contact_name'] ?? $shipmentMeta['recipient'] ?? $payload['recipient']));
+                $payload['contact'] = trim((string) (($shipmentMeta['phone_country_code'] ?? '').' '.($shipmentMeta['phone_number'] ?? '')));
+                $payload['address'] = trim((string) ($shipmentMeta['address'] ?? $payload['address']));
+            }
+
+            $labelActivity = $job->activities()
+                ->where('event', 'job.courier_label_generated')
+                ->latest('id')
+                ->first();
+            $payload['carrier'] = trim((string) data_get($labelActivity?->meta, 'carrier', $payload['carrier']));
+            $payload['tracking_number'] = trim((string) data_get($labelActivity?->meta, 'tracking_number', ''));
+        }
+
+        if ($key === 'SHIP_CONFIRM_INFO') {
+            $payload = array_merge($payload, $this->shipmentContactPayload($job));
+        }
+
+        return $payload;
     }
 
     /**
@@ -472,12 +507,38 @@ class OrderWorkflowActionService
 
             if ($key === 'SHIP_CONFIRM_INFO') {
                 $this->validateShipmentInfo($payload);
+                if ((bool) ($payload['update_saved_contact'] ?? false)) {
+                    $this->updateSavedShipmentContact($job, $actor, $payload);
+                }
                 $job->activities()->create([
                     'user_id' => $actor->id,
                     'event' => 'job.shipment_information_confirmed',
                     'description' => 'Shipment information confirmed.',
-                    'meta' => $this->onlyPayload($payload, ['recipient','contact','address','packages','weight','dimensions','declared_value']),
+                    'meta' => $this->onlyPayload($payload, [
+                        'client_name','contact_name','contact_type','phone_country_code','phone_number',
+                        'address','city','state','country','postal_code','recipient','contact',
+                    ]),
                 ]);
+                return $this->complete($locked, $actor);
+            }
+
+            if ($key === 'SHIP_LABEL' && $decision === 'complete') {
+                $carrier = trim((string) ($payload['carrier'] ?? ''));
+                $trackingNumber = trim((string) ($payload['tracking_number'] ?? ''));
+
+                if ($carrier === '' || $trackingNumber === '') {
+                    throw ValidationException::withMessages([
+                        'shipmentLabel' => 'Select a courier and enter the tracking number first.',
+                    ]);
+                }
+
+                $job->activities()->create([
+                    'user_id' => $actor->id,
+                    'event' => 'job.courier_label_generated',
+                    'description' => 'Courier and tracking details recorded.',
+                    'meta' => $this->onlyPayload($payload, ['carrier','tracking_number']),
+                ]);
+
                 return $this->complete($locked, $actor);
             }
 
@@ -487,6 +548,7 @@ class OrderWorkflowActionService
                     'user_id' => $actor->id,
                     'event' => 'job.courier_label_generated',
                     'description' => 'Courier label generated and ready for preview/print.',
+                    'meta' => $this->onlyPayload($payload, ['carrier','tracking_number']),
                 ]);
                 app(JobService::class)->syncAutomaticStatus($job->refresh(), $actor);
                 return $locked->refresh();
@@ -792,12 +854,197 @@ class OrderWorkflowActionService
     private function validateShipmentInfo(array $payload): void
     {
         $errors = $this->requiredPayloadErrors($payload, [
-            'recipient' => 'Recipient',
-            'address' => 'Delivery address',
-            'packages' => 'Package count',
-            'weight' => 'Weight',
+            'client_name' => 'Client name',
+            'contact_name' => 'Contact person',
+            'phone_country_code' => 'Country code',
+            'phone_number' => 'Phone number',
+            'address' => 'Shipping address',
+            'country' => 'Country',
+            'postal_code' => 'Postal code',
         ]);
+
+        $masterData = app(MasterDataService::class);
+        $countryCode = trim((string) ($payload['phone_country_code'] ?? ''));
+        $country = trim((string) ($payload['country'] ?? ''));
+
+        if ($countryCode !== '' && ! $masterData->active('phone_country_code')->contains(
+            fn ($record) => strcasecmp(trim((string) $record->name), $countryCode) === 0
+        )) {
+            $errors['orderWorkflowActionPayload.phone_country_code'] = 'Choose an active phone country code from Master Data.';
+        }
+
+        if ($country !== '' && ! $masterData->active('country')->contains(
+            fn ($record) => strcasecmp(trim((string) $record->name), $country) === 0
+        )) {
+            $errors['orderWorkflowActionPayload.country'] = 'Choose an active country from Master Data.';
+        }
+
         $this->throwPayloadErrors($errors);
+    }
+
+    /** @return array<string,mixed> */
+    private function shipmentContactPayload(FlowJob $job): array
+    {
+        $job->loadMissing([
+            'client.contacts:id,client_id,name,job_title,phone,is_primary,sort_order',
+            'client.deliveryContacts:id,client_id,contact_type,name,phone_country_code,phone,last_used_at',
+            'client.shippingAddresses:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+            'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+        ]);
+
+        $client = $job->client;
+        $contactType = trim((string) ($job->shipping_contact_type ?: 'middle_client'));
+        if (! in_array($contactType, ['middle_client', 'end_customer', 'other_contact'], true)) {
+            $contactType = 'middle_client';
+        }
+
+        $contactOptions = collect();
+        if ($client) {
+            foreach ($client->contacts as $contact) {
+                [$countryCode, $phone] = $this->splitShipmentPhone((string) ($contact->phone ?? ''));
+                $contactOptions->push([
+                    'value' => 'middle_client:'.$contact->id,
+                    'label' => trim($contact->name.($contact->job_title ? ' · '.$contact->job_title : '')),
+                    'contact_type' => 'middle_client',
+                    'name' => (string) $contact->name,
+                    'country_code' => $countryCode,
+                    'phone' => $phone,
+                ]);
+            }
+            foreach ($client->deliveryContacts as $contact) {
+                $contactOptions->push([
+                    'value' => $contact->contact_type.':'.$contact->id,
+                    'label' => (string) $contact->name,
+                    'contact_type' => (string) $contact->contact_type,
+                    'name' => (string) $contact->name,
+                    'country_code' => (string) ($contact->phone_country_code ?? ''),
+                    'phone' => (string) ($contact->phone ?? ''),
+                ]);
+            }
+        }
+
+        $contactName = trim((string) ($job->shipping_contact_name ?: $client?->contact_name ?: $client?->name ?: ''));
+        $selectedContact = $contactOptions->first(function (array $option) use ($contactName, $contactType): bool {
+            return $option['contact_type'] === $contactType
+                && mb_strtolower(trim((string) $option['name'])) === mb_strtolower($contactName);
+        });
+
+        if (! $selectedContact && $contactName !== '') {
+            $contactOptions->prepend([
+                'value' => 'current',
+                'label' => $contactName,
+                'contact_type' => $contactType,
+                'name' => $contactName,
+                'country_code' => (string) ($job->shipping_phone_country_code ?? ''),
+                'phone' => (string) ($job->shipping_phone ?? ''),
+            ]);
+            $selectedContact = $contactOptions->first();
+        }
+
+        $sourceAddress = $job->shippingSourceAddress;
+        $addressOptions = collect();
+        if ($client) {
+            foreach ($client->shippingAddresses as $address) {
+                $addressOptions->push([
+                    'value' => (string) $address->id,
+                    'label' => trim((string) ($address->label ?: $address->recipient ?: 'Saved address')),
+                    'address' => $this->shipmentAddressText($address),
+                    'city' => (string) ($address->city ?? ''),
+                    'state' => (string) ($address->state ?? ''),
+                    'country' => (string) ($address->country ?? ''),
+                    'postal_code' => (string) ($address->zip ?? ''),
+                    'is_default' => (bool) $address->is_default,
+                ]);
+            }
+        }
+
+        $selectedAddress = $sourceAddress?->id ? (string) $sourceAddress->id : '';
+        if ($selectedAddress === '' && $addressOptions->isNotEmpty()) {
+            $selectedAddress = (string) (($addressOptions->firstWhere('is_default', true) ?? $addressOptions->first())['value'] ?? '');
+        }
+
+        $countryCode = trim((string) ($job->shipping_phone_country_code ?: data_get($selectedContact, 'country_code', '')));
+        $phoneNumber = trim((string) ($job->shipping_phone ?: data_get($selectedContact, 'phone', '')));
+        $address = trim((string) ($job->shipping_address ?: ($sourceAddress ? $this->shipmentAddressText($sourceAddress) : '')));
+        $masterData = app(MasterDataService::class);
+        $phoneCountryCodeOptions = $masterData->active('phone_country_code')
+            ->map(fn ($record) => [
+                'id' => (string) $record->name,
+                'label' => (string) $record->name,
+                'meta' => trim((string) ($record->description ?? '')),
+            ])
+            ->values()
+            ->all();
+        $countryOptions = $masterData->active('country')
+            ->map(fn ($record) => [
+                'id' => (string) $record->name,
+                'label' => (string) $record->name,
+                'meta' => trim((string) ($record->code ?? '')),
+            ])
+            ->values()
+            ->all();
+
+        return [
+            'client_name' => trim((string) ($client?->name ?: 'Client')),
+            'contact_name' => $contactName,
+            'contact_type' => $contactType,
+            'contact_selection' => (string) data_get($selectedContact, 'value', 'current'),
+            'contact_options' => $contactOptions->values()->all(),
+            'phone_country_code' => $countryCode,
+            'phone_country_code_options' => $phoneCountryCodeOptions,
+            'phone_number' => $phoneNumber,
+            'address' => $address,
+            'city' => (string) ($sourceAddress?->city ?? ''),
+            'state' => (string) ($sourceAddress?->state ?? ''),
+            'country' => (string) ($sourceAddress?->country ?? $client?->country ?? ''),
+            'country_options' => $countryOptions,
+            'postal_code' => trim((string) ($job->shipping_postal_code ?: $sourceAddress?->zip ?: '')),
+            'address_selection' => $selectedAddress,
+            'address_options' => $addressOptions->values()->all(),
+            'update_saved_contact' => false,
+            // Compatibility keys retained for the label preview and audit data.
+            'recipient' => $contactName,
+            'contact' => trim($countryCode.' '.$phoneNumber),
+        ];
+    }
+
+    /** @return array{0:string,1:string} */
+    private function splitShipmentPhone(string $value): array
+    {
+        $value = trim($value);
+        if (preg_match('/^(\+\d{1,4})[\s-]*(.*)$/', $value, $matches) === 1) {
+            return [trim((string) $matches[1]), trim((string) $matches[2])];
+        }
+
+        return ['', $value];
+    }
+
+    private function shipmentAddressText(object $address): string
+    {
+        $street = trim(collect([$address->address_line1 ?? null, $address->suite ?? null])->filter()->implode(', '));
+        $locality = trim(collect([$address->city ?? null, $address->state ?? null, $address->country ?? null])->filter()->implode(', '));
+
+        return collect([$street, $locality])->filter()->implode("\n");
+    }
+
+    /** @param array<string,mixed> $payload */
+    private function updateSavedShipmentContact(FlowJob $job, User $actor, array $payload): void
+    {
+        if (! $job->client) return;
+
+        $type = (string) ($payload['contact_type'] ?? 'middle_client');
+        $name = (string) ($payload['contact_name'] ?? '');
+        $countryCode = (string) ($payload['phone_country_code'] ?? '');
+        $phone = (string) ($payload['phone_number'] ?? '');
+
+        if ($type === 'middle_client') {
+            (new \App\Actions\Clients\SaveClientOrderContact())->execute($job->client, $name, $countryCode, $phone);
+            return;
+        }
+
+        if (in_array($type, ['end_customer', 'other_contact'], true)) {
+            (new \App\Actions\Clients\SaveClientDeliveryContact())->execute($actor, $job->client, $type, $name, $countryCode, $phone);
+        }
     }
 
     /** @param array<string,mixed> $payload */

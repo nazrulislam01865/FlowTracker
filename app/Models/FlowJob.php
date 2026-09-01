@@ -124,6 +124,18 @@ class FlowJob extends Model
             ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.package_shipped'));
     }
 
+    public function latestShipmentInformationActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.shipment_information_confirmed'));
+    }
+
+    public function latestCourierLabelActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.courier_label_generated'));
+    }
+
     public function latestWorkflowInvoiceActivity(): MorphOne
     {
         return $this->morphOne(Activity::class, 'subject')

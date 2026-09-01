@@ -47,7 +47,7 @@
     // or horizontally shift the popup after submit.
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
-    $modalWide = $variant === 'courier_label';
+    $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
 
     if ($step === 'sample') {
         $title = 'Is a Sample or Swatch Required?';
@@ -287,17 +287,7 @@
                     <button type="button" wire:click="submitOrderWorkflowAction('pass')"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
                 </div>
             @elseif($variant === 'shipment_info')
-                <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Recipient</span><input wire:model="orderWorkflowActionPayload.recipient">@error('orderWorkflowActionPayload.recipient')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                    <label class="ft-prototype-field"><span>Contact</span><input wire:model="orderWorkflowActionPayload.contact">@error('orderWorkflowActionPayload.contact')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                </div>
-                <label class="ft-prototype-field"><span>Delivery address</span><textarea wire:model="orderWorkflowActionPayload.address" rows="4"></textarea>@error('orderWorkflowActionPayload.address')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Packages</span><input wire:model="orderWorkflowActionPayload.packages" placeholder="e.g. 24 cartons">@error('orderWorkflowActionPayload.packages')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                    <label class="ft-prototype-field"><span>Total weight</span><input wire:model="orderWorkflowActionPayload.weight" placeholder="e.g. 312 kg">@error('orderWorkflowActionPayload.weight')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                    <label class="ft-prototype-field"><span>Dimensions / carton</span><input wire:model="orderWorkflowActionPayload.dimensions" placeholder="e.g. 60 × 45 × 40 cm">@error('orderWorkflowActionPayload.dimensions')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                    <label class="ft-prototype-field"><span>Declared value</span><input wire:model="orderWorkflowActionPayload.declared_value" placeholder="{{ number_format($orderTotal,2) }}">@error('orderWorkflowActionPayload.declared_value')<p class="validation-error">{{ $message }}</p>@enderror</label>
-                </div>
+                <x-jobs.order-detail.shipment.update-details-form :job="$job" :payload="$payload" />
             @elseif($variant === 'courier_label')
                 <div class="ft-prototype-label-preview">
                     <div><small>SHIP TO</small><h3>{{ mb_strtoupper($clientName) }}</h3><p>{!! nl2br(e((string) ($payload['address'] ?? $job->shipping_address ?? ''))) !!}</p><div class="ft-prototype-barcode"></div><b>FLOWTRACK · {{ $orderNumber }}</b></div>
@@ -353,8 +343,21 @@
             // normal footer must return so the user can actually submit it.
             $usesInlineWorkflowActions = $step === 'main'
                 && in_array($variant, ['client_decision','production_check','qc_check'], true);
+            $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
         @endphp
-        @unless($usesInlineWorkflowActions || $step === 'sample')
+        @if($usesShipmentFooter)
+            <footer class="ft-order-task-document-modal-actions ft-shipment-modal-footer">
+                <button type="button" class="ft-shipment-modal-reset" wire:click="resetShipmentActionDetails">Reset changes</button>
+                <div class="ft-shipment-modal-footer__actions">
+                    <div>
+                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Save &amp; complete task</button>
+                    </div>
+                    <small>Saving unlocks Add tracking number &amp; print courier label.</small>
+                </div>
+            </footer>
+        @endif
+        @unless($usesInlineWorkflowActions || $usesShipmentFooter || $step === 'sample')
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
                 <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
                 @if($step === 'revision')

@@ -9,6 +9,7 @@ use App\Models\Task;
 use App\Services\AccessControlService;
 use App\Services\Orders\OrderWorkflowEmailService;
 use App\Services\TaskService;
+use Illuminate\Validation\ValidationException;
 
 /**
  * Phase 5 Order UI workflow extracted from the legacy Jobs coordinator.
@@ -103,6 +104,142 @@ trait ManagesOrderWorkflow
         $this->orderWorkflowActionPayload = [];
         $this->resetOrderWorkflowEmailFallbackState();
         $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+    }
+
+    public function confirmShipmentDetailsWithoutChanges(int $taskId): void
+    {
+        $task = $this->shipmentActionTask($taskId, 'SHIP_CONFIRM_INFO');
+        $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
+        $payload = $workflowActions->initialPayload($task, $task->job);
+
+        try {
+            $workflowActions->perform($task, auth()->user(), 'confirm', null, $payload);
+        } catch (ValidationException $exception) {
+            $this->orderWorkflowActionTaskId = $taskId;
+            $this->orderWorkflowActionStep = 'main';
+            $this->orderWorkflowActionPayload = $payload;
+            $this->showOrderWorkflowActionModal = true;
+            foreach ($exception->errors() as $field => $messages) {
+                foreach ((array) $messages as $message) $this->addError($field, $message);
+            }
+            return;
+        }
+
+        $this->refreshShipmentWorkflowSelection();
+        session()->flash('success', 'Shipment details confirmed. Tracking setup is now available.');
+    }
+
+    public function generateShipmentCourierLabel(int $taskId, string $carrier, string $trackingNumber): void
+    {
+        $task = $this->shipmentActionTask($taskId, 'SHIP_LABEL');
+        $carrier = trim($carrier);
+        $trackingNumber = trim($trackingNumber);
+        $this->resetValidation('shipmentLabel');
+
+        if ($carrier === '' || $trackingNumber === '') {
+            $this->addError('shipmentLabel', 'Select a courier and enter the tracking number first.');
+            return;
+        }
+
+        $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
+        $payload = $workflowActions->initialPayload($task, $task->job);
+        $payload['carrier'] = $carrier;
+        $payload['tracking_number'] = $trackingNumber;
+        $workflowActions->perform($task, auth()->user(), 'generate', null, $payload);
+
+        $this->refreshShipmentWorkflowSelection();
+        session()->flash('success', 'Courier label generated. Review and print it to continue.');
+    }
+
+    public function completeShipmentTrackingTask(int $taskId, string $carrier, string $trackingNumber): void
+    {
+        $task = $this->shipmentActionTask($taskId, 'SHIP_LABEL');
+        $carrier = trim($carrier);
+        $trackingNumber = trim($trackingNumber);
+        $this->resetValidation('shipmentLabel');
+
+        if ($carrier === '' || $trackingNumber === '') {
+            $this->addError('shipmentLabel', 'Select a courier and enter the tracking number first.');
+            return;
+        }
+
+        $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
+        $payload = $workflowActions->initialPayload($task, $task->job);
+        $payload['carrier'] = $carrier;
+        $payload['tracking_number'] = $trackingNumber;
+        $workflowActions->perform($task, auth()->user(), 'complete', null, $payload);
+
+        $this->refreshShipmentWorkflowSelection();
+        session()->flash('success', 'Tracking details saved. Dispatch shipment is now available.');
+    }
+
+    public function dispatchShipment(int $taskId): void
+    {
+        $task = $this->shipmentActionTask($taskId, 'SHIP_PACKAGE');
+        $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
+        $payload = $workflowActions->initialPayload($task, $task->job);
+        $this->resetValidation('shipmentDispatch');
+
+        if (trim((string) ($payload['carrier'] ?? '')) === '' || trim((string) ($payload['tracking_number'] ?? '')) === '') {
+            $this->addError('shipmentDispatch', 'Generate the courier label with a tracking number before dispatching the shipment.');
+            return;
+        }
+
+        $workflowActions->perform($task, auth()->user(), 'confirm', null, $payload);
+        $this->refreshShipmentWorkflowSelection();
+        session()->flash('success', 'Shipment marked as dispatched.');
+    }
+
+    public function selectShipmentContact(string $selection): void
+    {
+        abort_unless($this->selectedJobId && $this->orderWorkflowActionTaskId, 422);
+        $options = collect($this->orderWorkflowActionPayload['contact_options'] ?? []);
+        $option = $options->firstWhere('value', $selection);
+        if (! $option) return;
+
+        $this->orderWorkflowActionPayload['contact_selection'] = $selection;
+        $this->orderWorkflowActionPayload['contact_name'] = (string) ($option['name'] ?? '');
+        $this->orderWorkflowActionPayload['contact_type'] = (string) ($option['contact_type'] ?? 'middle_client');
+        $this->orderWorkflowActionPayload['phone_country_code'] = (string) ($option['country_code'] ?? '');
+        $this->orderWorkflowActionPayload['phone_number'] = (string) ($option['phone'] ?? '');
+        $this->orderWorkflowActionPayload['recipient'] = (string) ($option['name'] ?? '');
+        $this->orderWorkflowActionPayload['contact'] = trim((string) (($option['country_code'] ?? '').' '.($option['phone'] ?? '')));
+        $this->resetValidation([
+            'orderWorkflowActionPayload.contact_name',
+            'orderWorkflowActionPayload.phone_country_code',
+            'orderWorkflowActionPayload.phone_number',
+        ]);
+    }
+
+    public function useShipmentSavedAddress(string $selection = ''): void
+    {
+        abort_unless($this->selectedJobId && $this->orderWorkflowActionTaskId, 422);
+        $options = collect($this->orderWorkflowActionPayload['address_options'] ?? []);
+        if ($options->isEmpty()) return;
+
+        $option = $selection !== '' ? $options->firstWhere('value', $selection) : null;
+        $option ??= $options->firstWhere('is_default', true) ?: $options->first();
+        if (! $option) return;
+
+        $this->orderWorkflowActionPayload['address_selection'] = (string) ($option['value'] ?? '');
+        $this->orderWorkflowActionPayload['address'] = (string) ($option['address'] ?? '');
+        $this->orderWorkflowActionPayload['city'] = (string) ($option['city'] ?? '');
+        $this->orderWorkflowActionPayload['state'] = (string) ($option['state'] ?? '');
+        $this->orderWorkflowActionPayload['country'] = (string) ($option['country'] ?? '');
+        $this->orderWorkflowActionPayload['postal_code'] = (string) ($option['postal_code'] ?? '');
+        $this->resetValidation([
+            'orderWorkflowActionPayload.address',
+            'orderWorkflowActionPayload.country',
+            'orderWorkflowActionPayload.postal_code',
+        ]);
+    }
+
+    public function resetShipmentActionDetails(): void
+    {
+        abort_unless($this->selectedJobId && $this->orderWorkflowActionTaskId, 422);
+        $task = $this->shipmentActionTask((int) $this->orderWorkflowActionTaskId, 'SHIP_CONFIRM_INFO');
+        $this->orderWorkflowActionPayload = app(\App\Services\OrderWorkflowActionService::class)->initialPayload($task, $task->job);
+        $this->resetValidation('orderWorkflowActionPayload');
     }
 
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void
@@ -203,6 +340,26 @@ trait ManagesOrderWorkflow
         $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
         if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
         session()->flash('success', $successMessage);
+    }
+
+    private function shipmentActionTask(int $taskId, string $expectedKey): Task
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job.client', 'job.items', 'job.phase', 'setupTemplate', 'documents', 'links'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        abort_unless(app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === $expectedKey, 422);
+        app(\App\Services\OrderTaskSequenceService::class)->assertStatusActionable($task);
+
+        return $task;
+    }
+
+    private function refreshShipmentWorkflowSelection(): void
+    {
+        $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
+        if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
     }
 
     public function completeOrderWorkflowEmailTaskAfterFailure(): void

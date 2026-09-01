@@ -122,26 +122,39 @@ trait ManagesOrderTaskResources
                 'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
             ]);
 
-            if ($revisionFileCount > 0) {
-                $documentService->storeArtworkRevision(
-                    $this->overviewTaskDocumentUpload,
-                    $task,
-                    auth()->user(),
-                    $note,
-                );
-            } else {
-                $storeData = [
-                    'flow_job_id' => $task->flow_job_id,
-                    'client_id' => $task->job?->client_id,
-                    'task_id' => $task->id,
-                    'note' => $note,
-                ];
-                if ($documentService->taskHasRequirement($task)) {
-                    $storeData['require_task_pack_requirement'] = true;
+            try {
+                if ($revisionFileCount > 0) {
+                    $documentService->storeArtworkRevision(
+                        $this->overviewTaskDocumentUpload,
+                        $task,
+                        auth()->user(),
+                        $note,
+                    );
                 } else {
-                    $storeData['category'] = 'Task attachment';
+                    $storeData = [
+                        'flow_job_id' => $task->flow_job_id,
+                        'client_id' => $task->job?->client_id,
+                        'task_id' => $task->id,
+                        'note' => $note,
+                    ];
+                    if ($documentService->taskHasRequirement($task)) {
+                        $storeData['require_task_pack_requirement'] = true;
+                    } else {
+                        $storeData['category'] = 'Task attachment';
+                    }
+                    $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
                 }
-                $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+            } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
+                if ($exception->getStatusCode() !== 422) {
+                    throw $exception;
+                }
+
+                $message = trim((string) $exception->getMessage());
+                $this->addError(
+                    'overviewTaskDocumentUpload',
+                    $message !== '' ? $message : 'One of the selected files could not be verified. Re-export it and try again.',
+                );
+                return;
             }
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);

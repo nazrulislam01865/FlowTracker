@@ -75,7 +75,7 @@ unset($__defined_vars, $__key, $__value); ?>
     // or horizontally shift the popup after submit.
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
-    $modalWide = $variant === 'courier_label';
+    $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
 
     if ($step === 'sample') {
         $title = 'Is a Sample or Swatch Required?';
@@ -447,66 +447,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     <button type="button" wire:click="submitOrderWorkflowAction('pass')"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
                 </div>
             <?php elseif($variant === 'shipment_info'): ?>
-                <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Recipient</span><input wire:model="orderWorkflowActionPayload.recipient"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.recipient'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                    <label class="ft-prototype-field"><span>Contact</span><input wire:model="orderWorkflowActionPayload.contact"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.contact'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                </div>
-                <label class="ft-prototype-field"><span>Delivery address</span><textarea wire:model="orderWorkflowActionPayload.address" rows="4"></textarea><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.address'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Packages</span><input wire:model="orderWorkflowActionPayload.packages" placeholder="e.g. 24 cartons"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.packages'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                    <label class="ft-prototype-field"><span>Total weight</span><input wire:model="orderWorkflowActionPayload.weight" placeholder="e.g. 312 kg"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.weight'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                    <label class="ft-prototype-field"><span>Dimensions / carton</span><input wire:model="orderWorkflowActionPayload.dimensions" placeholder="e.g. 60 × 45 × 40 cm"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.dimensions'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                    <label class="ft-prototype-field"><span>Declared value</span><input wire:model="orderWorkflowActionPayload.declared_value" placeholder="<?php echo e(number_format($orderTotal,2)); ?>"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.declared_value'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
-                </div>
+                <?php if (isset($component)) { $__componentOriginala71941c0208bdab3d16b9d1f53b9e592 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginala71941c0208bdab3d16b9d1f53b9e592 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.update-details-form','data' => ['job' => $job,'payload' => $payload]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.shipment.update-details-form'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($payload)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginala71941c0208bdab3d16b9d1f53b9e592)): ?>
+<?php $attributes = $__attributesOriginala71941c0208bdab3d16b9d1f53b9e592; ?>
+<?php unset($__attributesOriginala71941c0208bdab3d16b9d1f53b9e592); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginala71941c0208bdab3d16b9d1f53b9e592)): ?>
+<?php $component = $__componentOriginala71941c0208bdab3d16b9d1f53b9e592; ?>
+<?php unset($__componentOriginala71941c0208bdab3d16b9d1f53b9e592); ?>
+<?php endif; ?>
             <?php elseif($variant === 'courier_label'): ?>
                 <div class="ft-prototype-label-preview">
                     <div><small>SHIP TO</small><h3><?php echo e(mb_strtoupper($clientName)); ?></h3><p><?php echo nl2br(e((string) ($payload['address'] ?? $job->shipping_address ?? ''))); ?></p><div class="ft-prototype-barcode"></div><b>FLOWTRACK · <?php echo e($orderNumber); ?></b></div>
@@ -660,8 +622,21 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             // normal footer must return so the user can actually submit it.
             $usesInlineWorkflowActions = $step === 'main'
                 && in_array($variant, ['client_decision','production_check','qc_check'], true);
+            $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
         ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($usesInlineWorkflowActions || $step === 'sample')): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($usesShipmentFooter): ?>
+            <footer class="ft-order-task-document-modal-actions ft-shipment-modal-footer">
+                <button type="button" class="ft-shipment-modal-reset" wire:click="resetShipmentActionDetails">Reset changes</button>
+                <div class="ft-shipment-modal-footer__actions">
+                    <div>
+                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Save &amp; complete task</button>
+                    </div>
+                    <small>Saving unlocks Add tracking number &amp; print courier label.</small>
+                </div>
+            </footer>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($usesInlineWorkflowActions || $usesShipmentFooter || $step === 'sample')): ?>
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
                 <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($step === 'revision'): ?>

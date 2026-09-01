@@ -25,10 +25,13 @@ class OrderArtworkMultiFileUploadTest extends TestCase
             $this->assertStringContainsString("'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules", $component);
             $this->assertStringContainsString('storeMany($this->overviewTaskDocumentUpload', $component);
             $this->assertStringContainsString('storeArtworkRevision(', $component);
+            $this->assertStringContainsString('catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception)', $component);
+            $this->assertStringContainsString("\$this->addError(\n                    'overviewTaskDocumentUpload'", $component);
             $this->assertStringContainsString('function removeOverviewTaskDocumentUpload(', $component);
         }
 
         $this->assertStringContainsString('public function storeMany(', $documents);
+        $this->assertStringContainsString('return DB::transaction(function () use ($files, $data, $user, $permissionModule, &$storedPaths)', $documents);
         $this->assertStringContainsString("\$fileData['artwork_batch_version'] = \$artworkBatchVersion", $documents);
         $this->assertStringContainsString('$version = $isArtworkTask && $batchVersion > 0', $documents);
     }

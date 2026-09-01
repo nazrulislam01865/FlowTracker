@@ -672,6 +672,9 @@ class LegacyJobService
         if ($tab === 'overview') {
             $relations = [
                 'workflow.phases.taskPack.items.documentCategory',
+                'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+                'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
+                'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
                 'tasks' => fn ($query) => app(AccessControlService::class)
                     ->applyTaskScope($query, $user)
                     ->with([
@@ -914,6 +917,9 @@ class LegacyJobService
     {
         $job->load([
             'workflow.phases.taskPack.items.documentCategory',
+            'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+            'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
+            'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->with([

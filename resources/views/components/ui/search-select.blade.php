@@ -77,6 +77,7 @@
             fixedMenu: @js((bool) $fixedMenu),
         })"
         x-effect="syncSelection(@js(['value' => (string) $value, 'label' => $resolvedLabel]), @js($params), @js($items->all())); syncDisabled(@js((bool) $disabled))"
+        x-on:flowtrack-search-select-sync.window="if ($event.detail?.property === @js($property)) syncSelection({ value: String($event.detail?.value || ''), label: String($event.detail?.label || $event.detail?.value || @js($placeholder)) }, @js($params), Array.isArray($event.detail?.items) ? $event.detail.items : items)"
     @else
         x-data="window.FlowTrack.ui.localFilter({
             property: @js($property),

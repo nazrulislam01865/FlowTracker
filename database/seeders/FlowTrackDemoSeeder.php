@@ -105,7 +105,7 @@ class FlowTrackDemoSeeder extends Seeder
             'Artwork'=>['Collect artwork requirements','Prepare artwork','Internal artwork review','Submit artwork to client','Record approval / revision'],
             'Swatch'=>['Prepare swatch or sample','Internal swatch review','Arrange courier submission','Record client feedback','Close sample approval'],
             'Production'=>['Confirm materials ready','Start production','Update production milestone','Perform quality inspection','Complete packing'],
-            'Shipment'=>['Confirm shipping information','Prepare packing list','Book shipment','Upload shipment documents','Record tracking number'],
+            'Shipment'=>['Review or update shipment details','Add tracking number & print courier label','Dispatch shipment'],
             'Invoice'=>['Prepare invoice','Internal invoice review','Submit invoice','Record payment follow-up','Close outstanding balance'],
         ];
         $packs = collect();
