@@ -9,6 +9,7 @@
     'showHeader' => true,
     'filterMethod' => 'selectStage',
     'countLabel' => 'Current orders',
+    'navigationQuery' => [],
 ])
 
 @php
@@ -64,7 +65,7 @@
                 <a
                     class="ft-order-workflow-stage-show-all"
                     href="{{ route('jobs.index') }}"
-                    wire:navigate
+                    wire:navigate.hover
                 >
                     {{ $showAllLabel }}
                 </a>
@@ -128,8 +129,8 @@
                 <a
                     class="ft-order-workflow-stage-card"
                     style="{{ $style }}"
-                    href="{{ route('jobs.index', ['phase' => $stageId]) }}"
-                    wire:navigate
+                    href="{{ route('jobs.index', array_merge($navigationQuery, ['phase' => $stageId])) }}"
+                    wire:navigate.hover
                 >
                     <span class="ft-order-workflow-stage-kicker">Stage {{ (int) data_get($stage, 'sequence') }}</span>
                     <b title="{{ data_get($stage, 'name') }}">{{ $stageName }}</b>

@@ -43,8 +43,10 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'showOverviewTaskDocumentModal' => false,
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
+    'overviewTaskRevisionUpload' => [],
     'overviewTaskExistingDocumentId' => null,
     'overviewTaskArtworkRevision' => [],
+    'overviewTaskRevisionDocumentIds' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -52,6 +54,9 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionAttachment' => null,
+    'orderWorkflowActionRevisionComments' => [],
+    'orderWorkflowActionRevisionAttachments' => [],
     'orderWorkflowEmailFallback' => false,
     'orderWorkflowEmailFallbackMessage' => '',
     'orderWorkflowEmailFallbackAttempts' => 0,
@@ -112,8 +117,10 @@ foreach (array_filter(([
     'showOverviewTaskDocumentModal' => false,
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
+    'overviewTaskRevisionUpload' => [],
     'overviewTaskExistingDocumentId' => null,
     'overviewTaskArtworkRevision' => [],
+    'overviewTaskRevisionDocumentIds' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -121,6 +128,9 @@ foreach (array_filter(([
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionAttachment' => null,
+    'orderWorkflowActionRevisionComments' => [],
+    'orderWorkflowActionRevisionAttachments' => [],
     'orderWorkflowEmailFallback' => false,
     'orderWorkflowEmailFallbackMessage' => '',
     'orderWorkflowEmailFallbackAttempts' => 0,
@@ -437,14 +447,14 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowActionTask): ?>
             <?php if (isset($component)) { $__componentOriginal8e43f3521a8e6328e588de4039a01fc1 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8e43f3521a8e6328e588de4039a01fc1 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow-action-modal','data' => ['job' => $job,'task' => $workflowActionTask,'config' => $workflowActionModal,'step' => $orderWorkflowActionStep,'payload' => $orderWorkflowActionPayload,'emailFallback' => $orderWorkflowEmailFallback,'emailFallbackMessage' => $orderWorkflowEmailFallbackMessage,'emailFallbackAttempts' => $orderWorkflowEmailFallbackAttempts]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow-action-modal','data' => ['job' => $job,'task' => $workflowActionTask,'config' => $workflowActionModal,'step' => $orderWorkflowActionStep,'payload' => $orderWorkflowActionPayload,'attachment' => $orderWorkflowActionAttachment,'revisionComments' => $orderWorkflowActionRevisionComments,'revisionAttachments' => $orderWorkflowActionRevisionAttachments,'mentionUsers' => $mentionUsers,'emailFallback' => $orderWorkflowEmailFallback,'emailFallbackMessage' => $orderWorkflowEmailFallbackMessage,'emailFallbackAttempts' => $orderWorkflowEmailFallbackAttempts]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.workflow-action-modal'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionTask),'config' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionModal),'step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionStep),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionPayload),'email-fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallback),'email-fallback-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackMessage),'email-fallback-attempts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackAttempts)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionTask),'config' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionModal),'step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionStep),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionPayload),'attachment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionAttachment),'revision-comments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionComments),'revision-attachments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionAttachments),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'email-fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallback),'email-fallback-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackMessage),'email-fallback-attempts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackAttempts)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -463,14 +473,14 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask): ?>
         <?php if (isset($component)) { $__componentOriginal75144a7262080e4edb332b7df7a76a92 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal75144a7262080e4edb332b7df7a76a92 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.document-modal','data' => ['job' => $job,'task' => $overviewTaskDocumentModalTask,'availableDocuments' => $overviewTaskAvailableDocuments,'source' => $overviewTaskDocumentSource,'upload' => $overviewTaskDocumentUpload,'existingDocumentId' => $overviewTaskExistingDocumentId,'artworkRevision' => $overviewTaskArtworkRevision,'context' => $orderDetailContext]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.document-modal','data' => ['job' => $job,'task' => $overviewTaskDocumentModalTask,'availableDocuments' => $overviewTaskAvailableDocuments,'source' => $overviewTaskDocumentSource,'upload' => $overviewTaskDocumentUpload,'revisionUpload' => $overviewTaskRevisionUpload,'existingDocumentId' => $overviewTaskExistingDocumentId,'artworkRevision' => $overviewTaskArtworkRevision,'revisionDocumentIds' => $overviewTaskRevisionDocumentIds,'context' => $orderDetailContext]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.document-modal'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'artwork-revision' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskArtworkRevision),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'revision-upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskRevisionUpload),'existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'artwork-revision' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskArtworkRevision),'revision-document-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskRevisionDocumentIds),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

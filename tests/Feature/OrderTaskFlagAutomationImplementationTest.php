@@ -45,7 +45,30 @@ class OrderTaskFlagAutomationImplementationTest extends TestCase
         $this->assertStringContainsString("'order_task_flag_id' => \$flag?->id", $service);
         $this->assertStringContainsString("'order_flag_id' => \$orderFlagId", $service);
         $this->assertStringContainsString('flowtrack:sync-order-flags', $console);
-        $this->assertStringContainsString('->hourly()->withoutOverlapping()', $console);
+        $this->assertStringContainsString('->everyFiveMinutes()', $console);
+        $this->assertStringContainsString('->withoutOverlapping()', $console);
+        $this->assertStringContainsString('->onOneServer()', $console);
+    }
+
+
+    public function test_due_transition_sync_is_not_invoked_from_normal_read_paths(): void
+    {
+        $readPaths = [
+            app_path('Services/LegacyJobService.php'),
+            app_path('Services/LegacyDashboardService.php'),
+            app_path('Livewire/Jobs/Concerns/BuildsOrderPageData.php'),
+        ];
+
+        foreach ($readPaths as $path) {
+            $this->assertStringNotContainsString(
+                'syncDueTransitions(',
+                file_get_contents($path),
+                'Global due-transition synchronization must remain outside HTTP/read rendering paths: '.$path,
+            );
+        }
+
+        $console = file_get_contents(base_path('routes/console.php'));
+        $this->assertStringContainsString('syncDueTransitions(true)', $console);
     }
 
     public function test_order_task_ui_no_longer_offers_manual_flag_selection(): void

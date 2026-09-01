@@ -15,6 +15,7 @@ use App\Support\UserLocalTime;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 
 /**
  * Query and presentation support for the prototype-faithful Orders list.
@@ -25,6 +26,10 @@ use Illuminate\Support\Collection;
  */
 class OrderListPrototypeService
 {
+    private const STAGE_DEFINITION_CACHE_TTL_MINUTES = 10;
+    private const STAGE_COUNT_CACHE_TTL_SECONDS = 15;
+    private const STAGE_PHASE_MAP_CACHE_TTL_MINUTES = 10;
+
     public const QUICK_FILTERS = [
         1 => ['all' => 'All', 'po_pending' => 'PO pending', 'po_uploaded' => 'PO uploaded'],
         2 => ['all' => 'All', 'review' => 'Internal review', 'revision' => 'Revision required', 'client' => 'Client approval'],
@@ -70,20 +75,89 @@ class OrderListPrototypeService
     /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
     public function stages(User $user, bool $myTasksOnly = false): Collection
     {
-        $workflowIds = OrderWorkflowSetupService::orderWorkflowQuery()
-            ->where('is_active', true)
-            ->pluck('id')
-            ->map(fn ($id) => (int) $id)
-            ->values();
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $key = implode(':', [
+            'flowtrack', 'orders', 'stage-counts', 'v2',
+            'workspace', max(1, $workspaceId),
+            'user', (int) $user->id,
+            $myTasksOnly ? 'my-tasks' : 'all',
+        ]);
 
-        $phaseRows = $workflowIds->isEmpty() ? collect() : WorkflowPhase::query()
-            ->whereIn('workflow_template_id', $workflowIds)
-            ->where('is_active', true)
-            ->whereBetween('sequence', [1, count(OrderWorkflowSetupService::fixedStages())])
-            ->orderBy('workflow_template_id')
-            ->orderBy('sequence')
-            ->get(['id','workflow_template_id','name','short_name','sequence','color']);
+        return collect(Cache::remember(
+            $key,
+            now()->addSeconds(self::STAGE_COUNT_CACHE_TTL_SECONDS),
+            fn (): array => $this->buildStages($user, $myTasksOnly)->values()->all(),
+        ));
+    }
 
+    /**
+     * Dashboard workflow cards use the same canonical seven-stage contract as
+     * the Orders page, but their counts must respect the dashboard's global
+     * Today / 7 days / 30 days, Client and Team filters.
+     *
+     * @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}>
+     */
+    public function dashboardStages(
+        User $user,
+        int $clientId = 0,
+        int $departmentId = 0,
+        int $rangeDays = 7,
+    ): Collection {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+        [$rangeFrom, $rangeTo] = $settings->localDateRangeUtcBounds(
+            $today->copy()->subDays($rangeDays - 1)->toDateString(),
+            $today->toDateString(),
+        );
+
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $key = implode(':', [
+            'flowtrack', 'dashboard', 'stage-counts', 'v2',
+            'workspace', max(1, $workspaceId),
+            'user', (int) $user->id,
+            'range', $rangeDays,
+            'client', $clientId,
+            'team', $departmentId,
+        ]);
+
+        return collect(Cache::remember(
+            $key,
+            now()->addSeconds(self::STAGE_COUNT_CACHE_TTL_SECONDS),
+            function () use ($user, $clientId, $departmentId, $rangeFrom, $rangeTo): array {
+                return $this->buildStages(
+                    $user,
+                    false,
+                    function (Builder $query) use ($clientId, $departmentId, $rangeFrom, $rangeTo): void {
+                        // Match the global dashboard semantics used by Summary and Flow:
+                        // only operational Orders touched during the selected local date
+                        // window, optionally narrowed to one Client and the Order owner's Team.
+                        $query
+                            ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true))
+                            ->whereBetween('flow_jobs.updated_at', [$rangeFrom, $rangeTo])
+                            ->when($clientId > 0, fn (Builder $orders) => $orders->where('flow_jobs.client_id', $clientId))
+                            ->when(
+                                $departmentId > 0,
+                                fn (Builder $orders) => $orders->whereHas(
+                                    'owner',
+                                    fn (Builder $owner) => $owner->where('users.department_id', $departmentId),
+                                ),
+                            );
+                    },
+                )->values()->all();
+            },
+        ));
+    }
+
+    /**
+     * @param null|callable(Builder):void $countScope
+     * @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}>
+     */
+    private function buildStages(User $user, bool $myTasksOnly = false, ?callable $countScope = null): Collection
+    {
         // Count by the canonical seven-stage runtime contract instead of by
         // raw workflow phase IDs. Historical Orders can still reference retired
         // rows such as "Order Intake"; those rows must count under New Order
@@ -98,6 +172,10 @@ class OrderListPrototypeService
                 'flow_jobs.id',
                 app(MyWorkService::class)->personalOpenOrderIdsQuery($user),
             );
+        }
+
+        if ($countScope !== null) {
+            $countScope($countQuery);
         }
 
         $rawCounts = $countQuery
@@ -129,14 +207,7 @@ class OrderListPrototypeService
             )['sequence'])
             ->map(fn (Collection $rows): int => (int) $rows->sum(fn ($row) => (int) $row->aggregate));
 
-        $preferredWorkflowId = OrderWorkflowSetupService::orderWorkflowQuery()
-            ->where('is_active', true)
-            ->orderByDesc('is_default')
-            ->orderBy('id')
-            ->value('id');
-        $preferredBySequence = $phaseRows
-            ->where('workflow_template_id', $preferredWorkflowId)
-            ->keyBy('sequence');
+        $preferredBySequence = $this->cachedStageDefinitions()->keyBy('sequence');
 
         return collect(OrderWorkflowSetupService::fixedStages())->values()->map(function (array $fixed, int $index) use ($preferredBySequence, $countBySequence): array {
             $sequence = $index + 1;
@@ -146,12 +217,92 @@ class OrderListPrototypeService
                 // workflow templates can share the same seven operational cards.
                 'id' => $sequence,
                 'name' => (string) $fixed['name'],
-                'short_name' => (string) ($phase?->short_name ?: $fixed['short']),
+                'short_name' => (string) (($phase['short_name'] ?? '') ?: $fixed['short']),
                 'sequence' => $sequence,
-                'color' => (string) ($phase?->color ?: $fixed['color']),
+                'color' => (string) (($phase['color'] ?? '') ?: $fixed['color']),
                 'count' => (int) ($countBySequence[$sequence] ?? 0),
             ];
         });
+    }
+
+    public static function stageDefinitionCacheKey(int $workspaceId): string
+    {
+        return 'flowtrack:orders:stage-definitions:v1:workspace:'.max(1, $workspaceId);
+    }
+
+    /**
+     * Cache only stable workflow presentation metadata. Live Order/task counts
+     * remain outside this cache and are recalculated for every authorized read.
+     *
+     * @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string}>
+     */
+    private function cachedStageDefinitions(): Collection
+    {
+        $workspaceId = app(WorkflowService::class)->workspaceId();
+        $key = self::stageDefinitionCacheKey($workspaceId);
+        $expiresAt = now()->addMinutes(self::STAGE_DEFINITION_CACHE_TTL_MINUTES);
+
+        $resolver = function (): array {
+            $preferredWorkflowId = OrderWorkflowSetupService::orderWorkflowQuery()
+                ->where('is_active', true)
+                ->orderByDesc('is_default')
+                ->orderBy('id')
+                ->value('id');
+
+            if (! $preferredWorkflowId) {
+                return [];
+            }
+
+            return WorkflowPhase::query()
+                ->where('workflow_template_id', (int) $preferredWorkflowId)
+                ->where('is_active', true)
+                ->whereBetween('sequence', [1, count(OrderWorkflowSetupService::fixedStages())])
+                ->orderBy('sequence')
+                ->get(['id', 'name', 'short_name', 'sequence', 'color'])
+                ->map(fn (WorkflowPhase $phase): array => [
+                    'id' => (int) $phase->id,
+                    'name' => (string) $phase->name,
+                    'short_name' => (string) ($phase->short_name ?: $phase->name),
+                    'sequence' => (int) $phase->sequence,
+                    'color' => (string) ($phase->color ?: ''),
+                ])
+                ->values()
+                ->all();
+        };
+
+        $rows = Cache::remember($key, $expiresAt, $resolver);
+
+        // Defend against stale/legacy cache payloads after deployment. Laravel
+        // may keep an old cache store across releases, so validate scalars before
+        // letting cached data influence the Orders stage UI.
+        if (! $this->validStageDefinitionRows($rows)) {
+            Cache::forget($key);
+            $rows = $resolver();
+            Cache::put($key, $rows, $expiresAt);
+        }
+
+        return collect($rows);
+    }
+
+    private function validStageDefinitionRows(mixed $rows): bool
+    {
+        if (! is_array($rows)) {
+            return false;
+        }
+
+        foreach ($rows as $row) {
+            if (! is_array($row)) {
+                return false;
+            }
+
+            foreach (['id', 'name', 'short_name', 'sequence', 'color'] as $field) {
+                if (! array_key_exists($field, $row)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     public function paginate(User $user, array $filters, Collection $stages, int $perPage = 10, bool $myTasksOnly = false): LengthAwarePaginator
@@ -159,6 +310,10 @@ class OrderListPrototypeService
         $stageId = (int) ($filters['phase_id'] ?? 0);
         $sequence = (int) ($stages->firstWhere('id', $stageId)['sequence'] ?? 0);
         $phaseIds = $sequence > 0 ? $this->orderPhaseIdsForSequence($sequence) : [];
+
+        $dashboardScope = (bool) ($filters['dashboard_scope'] ?? false);
+        $dateFrom = (string) ($filters['date_from'] ?? '');
+        $dateTo = (string) ($filters['date_to'] ?? '');
 
         $query = app(JobService::class)->ordersListQuery(
             $user,
@@ -168,10 +323,32 @@ class OrderListPrototypeService
             null,
             $this->positiveInt($filters['owner_id'] ?? null),
             (string) ($filters['metric'] ?? ''),
-            (string) ($filters['date_from'] ?? ''),
-            (string) ($filters['date_to'] ?? ''),
+            $dashboardScope ? '' : $dateFrom,
+            $dashboardScope ? '' : $dateTo,
             $this->positiveInt($filters['import_id'] ?? null),
         );
+
+        if ($dashboardScope) {
+            [$rangeFrom, $rangeTo] = app(WorkspaceSettingsService::class)
+                ->localDateRangeUtcBounds($dateFrom, $dateTo);
+            $dashboardTeamId = $this->positiveInt($filters['dashboard_team_id'] ?? null);
+
+            // Match Dashboard::dashboardStages() exactly so a card showing N
+            // orders opens a table containing the same N-order population before
+            // pagination: active-client operational orders touched in the selected
+            // local period, optionally limited to the selected owner's Team.
+            $query
+                ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true))
+                ->when($rangeFrom, fn (Builder $orders) => $orders->where('flow_jobs.updated_at', '>=', $rangeFrom))
+                ->when($rangeTo, fn (Builder $orders) => $orders->where('flow_jobs.updated_at', '<=', $rangeTo))
+                ->when(
+                    $dashboardTeamId,
+                    fn (Builder $orders) => $orders->whereHas(
+                        'owner',
+                        fn (Builder $owner) => $owner->where('users.department_id', $dashboardTeamId),
+                    ),
+                );
+        }
 
         if ($myTasksOnly) {
             $query->whereIn(
@@ -812,26 +989,51 @@ class OrderListPrototypeService
     {
         if ($sequence < 1 || $sequence > count(OrderWorkflowSetupService::fixedStages())) return [];
 
-        // Include historical/snapshot phase IDs as aliases of the current
-        // seven-stage runtime. This keeps the New Order filter correct for old
-        // rows still named "Order Intake" and does the same for the retired
-        // combined QC/Dispatch and Invoice/Payment stages.
-        return WorkflowPhase::query()
-            ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
-            ->filter(fn (WorkflowPhase $phase): bool => OrderStageResolver::matchesSequence(
-                $sequence,
-                $phase->name,
-                $phase->short_name,
-                $phase->sequence,
-            ))
-            ->flatMap(fn (WorkflowPhase $phase): array => [
-                (int) $phase->id,
-                (int) ($phase->source_workflow_phase_id ?: 0),
-            ])
-            ->filter(fn (int $id): bool => $id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $key = 'flowtrack:orders:stage-phase-map:v2:workspace:'.max(1, $workspaceId);
+
+        $map = Cache::remember(
+            $key,
+            now()->addMinutes(self::STAGE_PHASE_MAP_CACHE_TTL_MINUTES),
+            function (): array {
+                $map = [];
+                foreach (range(1, count(OrderWorkflowSetupService::fixedStages())) as $stageSequence) {
+                    $map[$stageSequence] = [];
+                }
+
+                WorkflowPhase::query()
+                    ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                    ->each(function (WorkflowPhase $phase) use (&$map): void {
+                        foreach (array_keys($map) as $stageSequence) {
+                            if (! OrderStageResolver::matchesSequence(
+                                (int) $stageSequence,
+                                $phase->name,
+                                $phase->short_name,
+                                $phase->sequence,
+                            )) {
+                                continue;
+                            }
+
+                            $map[$stageSequence][] = (int) $phase->id;
+                            if ((int) ($phase->source_workflow_phase_id ?: 0) > 0) {
+                                $map[$stageSequence][] = (int) $phase->source_workflow_phase_id;
+                            }
+                            break;
+                        }
+                    });
+
+                foreach ($map as $stageSequence => $ids) {
+                    $map[$stageSequence] = array_values(array_unique(array_filter(
+                        array_map('intval', $ids),
+                        fn (int $id): bool => $id > 0,
+                    )));
+                }
+
+                return $map;
+            },
+        );
+
+        return array_values($map[$sequence] ?? []);
     }
 
     private function positiveInt(mixed $value): ?int

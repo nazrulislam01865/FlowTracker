@@ -40,8 +40,10 @@
     'showOverviewTaskDocumentModal' => false,
     'overviewTaskDocumentSource' => 'upload',
     'overviewTaskDocumentUpload' => null,
+    'overviewTaskRevisionUpload' => [],
     'overviewTaskExistingDocumentId' => null,
     'overviewTaskArtworkRevision' => [],
+    'overviewTaskRevisionDocumentIds' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showAddOrderTaskForm' => false,
     'newOrderTaskAssigneeId' => null,
@@ -49,6 +51,9 @@
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionAttachment' => null,
+    'orderWorkflowActionRevisionComments' => [],
+    'orderWorkflowActionRevisionAttachments' => [],
     'orderWorkflowEmailFallback' => false,
     'orderWorkflowEmailFallbackMessage' => '',
     'orderWorkflowEmailFallbackAttempts' => 0,
@@ -196,6 +201,10 @@
                 :config="$workflowActionModal"
                 :step="$orderWorkflowActionStep"
                 :payload="$orderWorkflowActionPayload"
+                :attachment="$orderWorkflowActionAttachment"
+                :revision-comments="$orderWorkflowActionRevisionComments"
+                :revision-attachments="$orderWorkflowActionRevisionAttachments"
+                :mention-users="$mentionUsers"
                 :email-fallback="$orderWorkflowEmailFallback"
                 :email-fallback-message="$orderWorkflowEmailFallbackMessage"
                 :email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"
@@ -210,8 +219,10 @@
             :available-documents="$overviewTaskAvailableDocuments"
             :source="$overviewTaskDocumentSource"
             :upload="$overviewTaskDocumentUpload"
+            :revision-upload="$overviewTaskRevisionUpload"
             :existing-document-id="$overviewTaskExistingDocumentId"
             :artwork-revision="$overviewTaskArtworkRevision"
+            :revision-document-ids="$overviewTaskRevisionDocumentIds"
             :context="$orderDetailContext"
         />
     @endif

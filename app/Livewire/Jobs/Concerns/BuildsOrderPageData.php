@@ -319,7 +319,6 @@ trait BuildsOrderPageData
 
     private function taskPageData(User $user): array
     {
-        app(\App\Services\OrderTaskFlagService::class)->syncDueTransitions();
         $master = app(MasterDataService::class);
 
         // If an interaction forces a lazy section to hydrate, promote that
@@ -587,6 +586,7 @@ trait BuildsOrderPageData
 
         $shipmentUrgencyOptions = $master->active('shipment_urgency');
         $orderDetailContext = app(OrderDetailViewService::class)->build($selected, $user, $shipmentUrgencyOptions);
+        $orderDetailContext['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
         $orderRedoContext = $preloadedRedoContext
             ?? app(OrderRedoService::class)->context($selected, $user);
         $orderRedoForm = $this->redoFormState($selected);
@@ -713,6 +713,7 @@ trait BuildsOrderPageData
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
         $this->overviewTaskDocumentUpload = [];
+        $this->overviewTaskRevisionUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->overviewTaskLinkFormTaskId = null;

@@ -55,9 +55,9 @@
             <section class="ft-rfq-portal-card ft-rfq-upload-section">
                 <h2>Upload documents</h2>
                 <label class="ft-rfq-dropzone" data-rfq-dropzone>
-                    <input type="file" name="documents[]" multiple accept=".pdf,.xlsx,.docx,.jpg,.jpeg,.png" data-rfq-document-input data-upload-url="{{ route('rfq.public.documents.upload', ['token' => $token]) }}">
+                    <input type="file" name="documents[]" multiple accept="{{ \App\Support\AttachmentUpload::accept() }}" data-rfq-document-input data-upload-url="{{ route('rfq.public.documents.upload', ['token' => $token]) }}">
                     <span class="ft-rfq-upload-icon"><x-rfq.public.icon name="upload-cloud" /></span>
-                    <span class="ft-rfq-dropzone__copy"><strong>Drop files here or <b>browse</b></strong><small>PDF, XLSX, DOCX, JPG or PNG&nbsp; · &nbsp;Max 20 MB each</small></span>
+                    <span class="ft-rfq-dropzone__copy"><strong>Drop files here or <b>browse</b></strong><small>{{ \App\Support\AttachmentUpload::helperText(20) }}</small></span>
                     <span class="ft-rfq-browse-btn">Browse files</span>
                 </label>
 

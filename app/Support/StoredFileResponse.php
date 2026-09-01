@@ -10,7 +10,7 @@ use Symfony\Component\HttpFoundation\StreamedResponse;
 
 final class StoredFileResponse
 {
-    private const FORCE_DOWNLOAD_EXTENSIONS = ['ai', 'eps', 'esp', 'ps'];
+    private const FORCE_DOWNLOAD_EXTENSIONS = ['ai', 'eps', 'esp', 'ps', 'cdr'];
 
     public static function inline(string $path, string $originalName, ?string $mimeType = null): StreamedResponse
     {
@@ -98,6 +98,7 @@ final class StoredFileResponse
             'eps' => 'application/postscript',
             'esp' => 'application/octet-stream',
             'ps' => 'application/postscript',
+            'cdr' => 'application/octet-stream',
         ];
 
         if ($extension !== '' && isset($known[$extension])) return $known[$extension];

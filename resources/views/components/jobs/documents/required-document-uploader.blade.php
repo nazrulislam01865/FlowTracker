@@ -57,9 +57,9 @@
                                 },
                                 validateFile(file) {
                                     const extension = String(file?.name || '').split('.').pop().toLowerCase();
-                                    const allowed = ['pdf', 'docx', 'xlsx', 'jpg', 'jpeg', 'png', 'zip', 'eps', 'esp'];
+                                    const allowed = @js(\App\Support\AttachmentUpload::extensions());
                                     if (!allowed.includes(extension)) {
-                                        this.errorText = 'Use a PDF, DOCX, XLSX, JPG, PNG, ZIP, EPS or ESP file.';
+                                        this.errorText = @js(\App\Support\AttachmentUpload::validationMessage());
                                         return false;
                                     }
                                     if (Number(file?.size || 0) > 20 * 1024 * 1024) {
@@ -155,7 +155,7 @@
                                 class="ft-proto-file-input"
                                 id="jobDocumentUpload-{{ $job->id }}"
                                 type="file"
-                                accept=".pdf,.docx,.xlsx,.jpg,.jpeg,.png,.zip,.eps,.esp"
+                                accept="{{ \App\Support\AttachmentUpload::accept() }}"
                                 x-on:change="captureFile($event)"
                             >
 
@@ -231,7 +231,7 @@
                             <?php endif; ?>
                         </div>
 
-                        <div class="ft-proto-upload-formats">PDF, DOCX, XLSX, JPG, PNG, ZIP, EPS or ESP <span>·</span> Max 20 MB</div>
+                        <div class="ft-proto-upload-formats">{{ \App\Support\AttachmentUpload::helperText(20) }}</div>
                     <?php elseif ($canLinkDocument && ($showDocumentPicker || ! $canUploadDocument)): ?>
                         <div class="ft-proto-existing-panel">
                             <div class="ft-proto-existing-copy">

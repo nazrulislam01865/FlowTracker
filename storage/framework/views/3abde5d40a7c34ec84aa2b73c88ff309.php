@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'context' => []]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'context' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -34,54 +34,76 @@ unset($__defined_vars, $__key, $__value); ?>
     $automationKey = $workflowActions->automationKey($task);
     $prototypeUpload = in_array($automationKey, ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
     $allowMultipleUploads = $automationKey === 'ART_PREPARE_UPLOAD'
+        || $automationKey === 'NEW_UPLOAD_PO'
         || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
     $hasExistingEvidence = $task->relationLoaded('documents') ? $task->documents->isNotEmpty() : false;
     $artworkRevisionActive = $automationKey === 'ART_PREPARE_UPLOAD' && (bool) ($artworkRevision['active'] ?? false);
-    $revisionDocuments = $artworkRevisionActive ? collect($artworkRevision['documents'] ?? [])->values() : collect();
-    $retainedArtworkDocuments = $artworkRevisionActive ? collect($artworkRevision['retained_documents'] ?? [])->values() : collect();
+    $allRevisionCandidates = $artworkRevisionActive
+        ? collect($artworkRevision['documents'] ?? [])->merge(collect($artworkRevision['retained_documents'] ?? []))->unique('id')->sortBy('id')->values()
+        : collect();
+    $selectedRevisionIds = collect($revisionDocumentIds ?: ($artworkRevision['document_ids'] ?? []))
+        ->map(fn($id) => (int) $id)
+        ->filter(fn($id) => $id > 0)
+        ->unique()
+        ->values();
+    $revisionDocuments = $artworkRevisionActive
+        ? $allRevisionCandidates->filter(fn($document) => $selectedRevisionIds->contains((int) $document->id))->values()
+        : collect();
+    $retainedArtworkDocuments = $artworkRevisionActive
+        ? $allRevisionCandidates->reject(fn($document) => $selectedRevisionIds->contains((int) $document->id))->values()
+        : collect();
     $revisionCount = $revisionDocuments->count();
-    // Keep Artwork bound to a multiple-file input because Livewire stores this
-    // field in an array property even when a selective revision needs one file.
+    // Normal Artwork uploads can still be multi-file. Selective revision replacements
+    // are intentionally chosen one-at-a-time under the exact source artwork.
     $inputAllowsMultiple = $allowMultipleUploads;
-    $uploadCopyPlural = $artworkRevisionActive ? $revisionCount > 1 : $allowMultipleUploads;
+    $uploadCopyPlural = $allowMultipleUploads;
+    $revisionItemsByDocumentId = collect($artworkRevision['items'] ?? [])->mapWithKeys(function ($item) {
+        $id = (int) data_get($item, 'document_id', 0);
+        return $id > 0 ? [$id => (array) $item] : [];
+    });
 
     $prototypeConfig = match ($automationKey) {
         'NEW_UPLOAD_PO' => [
-            'title' => 'Upload Purchase Order',
-            'label' => 'Purchase order file',
-            'copy' => 'Upload the client purchase order to begin processing this Order.',
-            'hint' => 'PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB',
-            'button' => 'Upload Purchase Order',
+            'title' => $hasExistingEvidence ? 'Add other documents' : 'Upload Purchase Order',
+            'label' => $hasExistingEvidence ? 'Other purchase order documents' : 'Purchase order documents',
+            'copy' => $hasExistingEvidence
+                ? 'Add more documents to the completed Purchase Order task.'
+                : 'Upload the client purchase order and any supporting documents to begin processing this Order.',
+            'hint' => \App\Support\AttachmentUpload::helperText(20).' · Up to 10 files',
+            'button' => $hasExistingEvidence ? 'Add other documents' : 'Upload Purchase Order',
         ],
         'ART_PREPARE_UPLOAD' => [
-            'title' => $hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork',
+            'title' => $artworkRevisionActive ? 'Upload Revised Artwork' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
             'label' => $artworkRevisionActive ? 'Replacement artwork files' : ($hasExistingEvidence ? 'Revised artwork files' : 'Artwork files'),
             'copy' => $artworkRevisionActive
-                ? 'Upload only the '.($revisionCount === 1 ? 'artwork file selected' : $revisionCount.' artwork files selected').' for revision. '.($retainedArtworkDocuments->count() ?: 'No').' other file'.($retainedArtworkDocuments->count() === 1 ? '' : 's').' will remain unchanged automatically.'
+                ? ($revisionCount > 0
+                    ? 'Upload each replacement directly under the artwork it replaces. '.$revisionCount.' artwork file'.($revisionCount === 1 ? ' is' : 's are').' waiting for replacement. Unselected artwork remains unchanged automatically.'
+                    : 'Upload one replacement directly under each artwork selected in the revision request.')
                 : ($hasExistingEvidence
                     ? 'Upload up to 10 corrected artwork files as one revision. The previous version remains in Order history.'
                     : 'Upload up to 10 artwork files together for internal review.'),
             'hint' => $artworkRevisionActive
-                ? 'PDF, AI, EPS, ESP, JPG or PNG · Max 20 MB per file · Exactly '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
-                : 'PDF, AI, EPS, ESP, JPG or PNG · Max 20 MB per file · Up to 10 files',
-            'button' => $artworkRevisionActive ? 'Upload Selected Revision' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
+                ? \App\Support\AttachmentUpload::helperText(20).' · '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
+                : \App\Support\AttachmentUpload::helperText(20).' · Up to 10 files',
+            'button' => $artworkRevisionActive ? 'Upload Revised Artwork' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
         ],
         'ART_SAMPLE_APPROVAL' => [
             'title' => 'Upload Sample Approval',
             'label' => 'Signed sample approval',
             'copy' => 'Attach the client sample/swatch approval to continue to Production.',
-            'hint' => 'PDF, Office files, JPG or PNG · Max 20 MB',
+            'hint' => \App\Support\AttachmentUpload::helperText(20),
             'button' => 'Upload Sample Approval',
         ],
         default => [
             'title' => 'Add document to task',
             'label' => 'Task document',
             'copy' => 'Upload a new file or link an existing client document.',
-            'hint' => 'PDF, Office, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB',
+            'hint' => \App\Support\AttachmentUpload::helperText(20),
             'button' => 'Add document',
         ],
     };
-    $selectedUploads = collect(is_array($upload) ? $upload : ($upload ? [$upload] : []))->filter()->values();
+    $effectiveUpload = $artworkRevisionActive ? $revisionUpload : $upload;
+    $selectedUploads = collect(is_array($effectiveUpload) ? $effectiveUpload : ($effectiveUpload ? [$effectiveUpload] : []))->filter()->values();
     $selectedUploadCount = $selectedUploads->count();
     $selectedUploadDetails = $selectedUploads->map(function ($file) {
         $name = $file->getClientOriginalName();
@@ -96,7 +118,7 @@ unset($__defined_vars, $__key, $__value); ?>
     });
 ?>
 <div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-document-modal-'.e($task->id).''; ?>wire:key="order-task-document-modal-<?php echo e($task->id); ?>" wire:click.self="closeOverviewTaskDocumentModal">
-    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal <?php echo e($prototypeUpload ? 'ft-order-prototype-upload-modal' : ''); ?>" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
+    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal <?php echo e($prototypeUpload ? 'ft-order-prototype-upload-modal' : ''); ?> <?php echo e($artworkRevisionActive ? 'ft-order-prototype-upload-modal--artwork-revision' : ''); ?>" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
         <header class="ft-order-task-document-modal-head">
             <div>
                 <h2 id="order-task-document-modal-title"><?php echo e($prototypeConfig['title']); ?></h2>
@@ -131,51 +153,208 @@ unset($__defined_vars, $__key, $__value); ?>
                         <div class="ft-artwork-revision-upload-plan">
                             <div class="ft-artwork-revision-upload-plan-head">
                                 <div>
-                                    <strong>Selective artwork revision</strong>
-                                    <span>Replace only the selected artwork. Unchanged files are carried into the new version automatically. If several files are selected, choose the replacement files in the numbered order shown below.</span>
+                                    <strong>Artwork selected for revision</strong>
+                                    <span>Upload one replacement under each artwork below. Files not listed here remain unchanged.</span>
                                 </div>
-                                <em><?php echo e($revisionCount); ?> replacement<?php echo e($revisionCount === 1 ? '' : 's'); ?></em>
+                                <em><?php echo e($selectedUploadCount); ?> / <?php echo e($revisionCount); ?> ready</em>
                             </div>
-                            <div class="ft-artwork-revision-upload-columns">
-                                <div>
-                                    <small>REPLACE</small>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $revisionDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $revisionDocument): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                        <div class="ft-artwork-revision-upload-item is-replace">
-                                            <span><?php echo e($index + 1); ?></span>
-                                            <b title="<?php echo e($revisionDocument->name); ?>"><?php echo e($revisionDocument->name); ?></b>
-                                            <a href="<?php echo e(route('documents.open', $revisionDocument)); ?>" target="_blank" rel="noopener">View</a>
+
+                            <div class="ft-artwork-revision-replacement-list">
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $revisionDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $revisionCandidate): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <?php
+                                        $revisionDocumentId = (int) $revisionCandidate->id;
+                                        $candidateExtension = strtoupper(pathinfo((string) $revisionCandidate->name, PATHINFO_EXTENSION) ?: 'FILE');
+                                        $revisionItem = (array) ($revisionItemsByDocumentId[$revisionDocumentId] ?? []);
+                                        $revisionInstruction = trim((string) data_get($revisionItem, 'comment', ''));
+                                        $replacementFile = $revisionUpload[$revisionDocumentId] ?? $revisionUpload[(string) $revisionDocumentId] ?? null;
+                                        $replacementDetail = null;
+                                        if ($replacementFile) {
+                                            $replacementName = $replacementFile->getClientOriginalName();
+                                            $replacementDetail = [
+                                                'name' => $replacementName,
+                                                'type' => strtoupper((string) pathinfo($replacementName, PATHINFO_EXTENSION)) ?: 'FILE',
+                                                'size' => $replacementFile->getSize() >= 1048576
+                                                    ? number_format($replacementFile->getSize() / 1048576, 1).' MB'
+                                                    : number_format(max(1, (int) ceil($replacementFile->getSize() / 1024))).' KB',
+                                            ];
+                                        }
+                                    ?>
+                                    <div
+                                        class="ft-artwork-revision-replacement-item <?php echo e($replacementDetail ? 'has-replacement' : ''); ?>"
+                                        <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'artwork-revision-replacement-'.e($task->id).'-'.e($revisionDocumentId).''; ?>wire:key="artwork-revision-replacement-<?php echo e($task->id); ?>-<?php echo e($revisionDocumentId); ?>"
+                                    >
+                                        <div class="ft-artwork-revision-replacement-summary">
+                                            <div class="ft-artwork-revision-replacement-source">
+                                                <span class="ft-artwork-revision-selector-check is-checked" aria-hidden="true">✓</span>
+                                                <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['extension' => $candidateExtension,'size' => 'sm']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['extension' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($candidateExtension),'size' => 'sm']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                                                <span class="ft-artwork-revision-upload-selector-copy">
+                                                    <b title="<?php echo e($revisionCandidate->name); ?>"><?php echo e($revisionCandidate->name); ?></b>
+                                                    <small><?php echo e($candidateExtension); ?> · Version <?php echo e(max(1, (int) $revisionCandidate->version)); ?></small>
+                                                </span>
+                                            </div>
+                                            <div class="ft-artwork-revision-replacement-actions">
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($replacementDetail): ?>
+                                                    <span>Ready</span>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                <a href="<?php echo e(route('documents.open', $revisionCandidate)); ?>" target="_blank" rel="noopener">Open</a>
+                                            </div>
                                         </div>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                                </div>
-                                <div>
-                                    <small>KEEP UNCHANGED</small>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $retainedArtworkDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $retainedDocument): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                                        <div class="ft-artwork-revision-upload-item is-retained">
-                                            <span>✓</span>
-                                            <b title="<?php echo e($retainedDocument->name); ?>"><?php echo e($retainedDocument->name); ?></b>
-                                            <em>Retained</em>
+
+                                        <div class="ft-artwork-revision-replacement-details">
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($revisionInstruction !== ''): ?>
+                                                <div class="ft-artwork-revision-replacement-change">
+                                                    <strong>Required change</strong>
+                                                    <p><?php echo e($revisionInstruction); ?></p>
+                                                </div>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                                            <div class="ft-artwork-revision-replacement-upload">
+                                                <div class="ft-artwork-revision-replacement-upload-head">
+                                                    <div>
+                                                        <strong>Replacement artwork <b>*</b></strong>
+                                                        <small>Upload the corrected file for this artwork only.</small>
+                                                    </div>
+                                                </div>
+
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($replacementDetail): ?>
+                                                    <div class="ft-order-attachment-selected-file ft-artwork-revision-replacement-selected-file">
+                                                        <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['extension' => $replacementDetail['type'],'size' => 'sm']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['extension' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($replacementDetail['type']),'size' => 'sm']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                                                        <span class="ft-order-attachment-selected-copy">
+                                                            <strong title="<?php echo e($replacementDetail['name']); ?>"><?php echo e($replacementDetail['name']); ?></strong>
+                                                            <small><?php echo e($replacementDetail['type']); ?> · <?php echo e($replacementDetail['size']); ?> · Ready to replace this artwork</small>
+                                                        </span>
+                                                        <button
+                                                            type="button"
+                                                            wire:click="removeOverviewTaskDocumentUpload(<?php echo e($revisionDocumentId); ?>)"
+                                                            wire:loading.attr="disabled"
+                                                            wire:target="overviewTaskRevisionUpload.<?php echo e($revisionDocumentId); ?>,removeOverviewTaskDocumentUpload(<?php echo e($revisionDocumentId); ?>)"
+                                                        >Remove</button>
+                                                    </div>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                                                <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone ft-artwork-revision-replacement-dropzone <?php echo e($replacementDetail ? 'is-compact' : ''); ?>" data-file-dropzone>
+                                                    <input
+                                                        type="file"
+                                                        wire:model="overviewTaskRevisionUpload.<?php echo e($revisionDocumentId); ?>"
+                                                        accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>"
+                                                        aria-label="Choose replacement artwork for <?php echo e($revisionCandidate->name); ?>"
+                                                        title="Choose replacement file"
+                                                    >
+                                                    <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($replacementDetail): ?>
+                                                        <strong>Choose a different replacement</strong>
+                                                        <b>Drag &amp; drop or <span>browse</span></b>
+                                                    <?php else: ?>
+                                                        <strong>Drag &amp; drop a file here</strong>
+                                                        <b>or choose from your computer</b>
+                                                        <span class="ft-order-attachment-browse">Browse file</span>
+                                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                    <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?></small>
+                                                </label>
+
+                                                <div class="ft-artwork-revision-replacement-uploading" wire:loading wire:target="overviewTaskRevisionUpload.<?php echo e($revisionDocumentId); ?>">Uploading replacement…</div>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskRevisionUpload.'.$revisionDocumentId];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </div>
                                         </div>
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
-                                        <div class="ft-artwork-revision-upload-empty">All current artwork files were selected for revision.</div>
-                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                </div>
+                                    </div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </div>
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(filled($artworkRevision['comment'] ?? null)): ?>
-                                <p><b>Revision instruction:</b> <?php echo e($artworkRevision['comment']); ?></p>
-                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskRevisionDocumentIds'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </div>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($artworkRevisionActive)): ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedUploads->isNotEmpty()): ?>
                         <div class="ft-order-attachment-selected-count"><?php echo e($selectedUploadCount); ?> file<?php echo e($selectedUploadCount === 1 ? '' : 's'); ?> selected<?php echo e($artworkRevisionActive ? ' · '.$selectedUploadCount.' of '.$revisionCount.' replacements' : ($automationKey === 'ART_PREPARE_UPLOAD' ? ' · One artwork version' : '')); ?></div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $selectedUploadDetails; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $selectedUpload): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                             <div class="ft-order-attachment-selected-file" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'overview-task-upload-'.e($task->id).'-'.e($index).'-'.e(md5($selectedUpload['name'])).''; ?>wire:key="overview-task-upload-<?php echo e($task->id); ?>-<?php echo e($index); ?>-<?php echo e(md5($selectedUpload['name'])); ?>">
-                                <span class="ft-order-attachment-selected-check" aria-hidden="true">✓</span>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($artworkRevisionActive): ?>
+                                    <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['extension' => $selectedUpload['type'],'size' => 'sm']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['extension' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedUpload['type']),'size' => 'sm']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                                <?php else: ?>
+                                    <span class="ft-order-attachment-selected-check" aria-hidden="true">✓</span>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <span class="ft-order-attachment-selected-copy">
                                     <strong class="<?php echo e($prototypeUpload ? 'ft-prototype-selected-file-name' : ''); ?>" title="<?php echo e($selectedUpload['name']); ?>"><?php echo e($selectedUpload['name']); ?></strong>
                                     <small><?php echo e($selectedUpload['type']); ?> · <?php echo e($selectedUpload['size']); ?> · Ready to upload</small>
                                 </span>
-                                <button type="button" wire:click="removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)" wire:loading.attr="disabled" wire:target="overviewTaskDocumentUpload,removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)">Remove</button>
+                                <button type="button" wire:click="removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)" wire:loading.attr="disabled" wire:target="overviewTaskDocumentUpload,overviewTaskRevisionUpload,removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)">Remove</button>
                             </div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                     <?php else: ?>
@@ -183,7 +362,7 @@ unset($__defined_vars, $__key, $__value); ?>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone <?php echo e($selectedUploads->isNotEmpty() ? 'is-compact' : ''); ?>">
-                        <input type="file" wire:model="overviewTaskDocumentUpload" <?php if($inputAllowsMultiple): ?> multiple <?php endif; ?> accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp" aria-label="<?php echo e($uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload'); ?>" title="<?php echo e($uploadCopyPlural ? 'Choose files' : 'Choose file'); ?>">
+                        <input type="file" wire:model="<?php echo e($artworkRevisionActive ? 'overviewTaskRevisionUpload' : 'overviewTaskDocumentUpload'); ?>" <?php if($inputAllowsMultiple): ?> multiple <?php endif; ?> accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>" aria-label="<?php echo e($uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload'); ?>" title="<?php echo e($uploadCopyPlural ? 'Choose files' : 'Choose file'); ?>">
                         <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedUploads->isNotEmpty()): ?>
                             <strong><?php echo e($uploadCopyPlural ? 'Choose a different file set' : 'Choose a different file'); ?></strong>
@@ -225,6 +404,7 @@ unset($__defined_vars, $__key, $__value); ?>
                         </div>
                     </div>
 
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskDocumentUpload'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -239,6 +419,19 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskDocumentUpload.*'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?>
+                        <p class="validation-error">
+                            <?php echo e($message); ?>
+
+                        </p>
+                    <?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskRevisionUpload'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -275,8 +468,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 class="primary"
                 wire:click="saveOverviewTaskDocument"
                 wire:loading.attr="disabled"
-                wire:target="saveOverviewTaskDocument,overviewTaskDocumentUpload"
-                <?php if($source === 'upload' ? $selectedUploads->isEmpty() : !$existingDocumentId): echo 'disabled'; endif; ?>
+                wire:target="saveOverviewTaskDocument,overviewTaskDocumentUpload,overviewTaskRevisionUpload"
+                <?php if($source === 'upload' ? ($artworkRevisionActive ? ($revisionCount < 1 || $selectedUploadCount !== $revisionCount) : $selectedUploads->isEmpty()) : !$existingDocumentId): echo 'disabled'; endif; ?>
             >
                 <span
                     wire:loading.remove

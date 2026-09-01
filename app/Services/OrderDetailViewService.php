@@ -47,6 +47,18 @@ class OrderDetailViewService
             ]])->all()
             : [];
 
+        $workflowEmailStatuses = [];
+        if ($job->relationLoaded('tasks') && $job->relationLoaded('workflowEmailActivities')) {
+            $emailService = app(\App\Services\Orders\OrderWorkflowEmailService::class);
+            $workflowEmailStatuses = $job->tasks
+                ->filter(fn ($task) => $workflowActions->automationKey($task) === 'ART_SEND_ORDER_TEAM')
+                ->mapWithKeys(function ($task) use ($job, $emailService): array {
+                    $task->setRelation('job', $job);
+                    return [(int) $task->id => $emailService->artworkHandoffDeliveryStatus($task)];
+                })
+                ->all();
+        }
+
         return [
             'team' => JobDetailPresenter::team($job),
             'canEditJob' => $canEdit,
@@ -65,6 +77,7 @@ class OrderDetailViewService
             'taskPermissions' => $taskPermissions,
             'taskActions' => $taskActionDescriptors,
             'taskActionModals' => $taskActionModals,
+            'workflowEmailStatuses' => $workflowEmailStatuses,
             'canCancel' => $canEdit && !$inactive && (int) ($job->phase?->sequence ?? 999) <= 4,
             'attentionLocked' => $inactive,
             'flagged' => (bool) ($job->attention_requested ?? false),

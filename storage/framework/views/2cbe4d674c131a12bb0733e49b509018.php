@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'attachment' => null, 'revisionComments' => [], 'revisionAttachments' => [], 'mentionUsers' => collect(), 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'attachment' => null, 'revisionComments' => [], 'revisionAttachments' => [], 'mentionUsers' => collect(), 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -38,13 +38,36 @@ unset($__defined_vars, $__key, $__value); ?>
     $artworkDocs = $latestArtworkTask
         ? $job->documents->where('task_id', $latestArtworkTask->id)->sortBy('created_at')->values()
         : collect();
-    $artworkVersion = max(1, (int) ($artworkDocs->max('version') ?? 0));
-    $latestArtworkDocuments = $artworkDocs->where('version', $artworkVersion)->sortBy('id')->values();
+    $latestArtworkDocuments = $latestArtworkTask
+        ? ($latestArtworkTask->relationLoaded('currentArtworkDocuments')
+            ? collect($latestArtworkTask->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
+            : app(\App\Services\DocumentService::class)->currentArtworkDocuments($latestArtworkTask, $artworkDocs))
+        : collect();
     $latestArtwork = $latestArtworkDocuments->last();
+    $currentArtworkVersions = $latestArtworkDocuments
+        ->pluck('version')
+        ->map(fn($version) => max(1, (int) $version))
+        ->unique()
+        ->sort()
+        ->values();
+    $artworkVersionLabel = $currentArtworkVersions->isEmpty()
+        ? 'V1'
+        : $currentArtworkVersions->map(fn($version) => 'V'.$version)->implode(' · ');
+    $currentArtworkDocumentIds = $latestArtworkDocuments->pluck('id')->map(fn($id) => (int) $id);
+    $archivedArtworkDocuments = $artworkDocs
+        ->reject(fn($document) => $currentArtworkDocumentIds->contains((int) $document->id))
+        ->sortByDesc('id')
+        ->values();
     $activeItems = \App\Support\OrderDetailPresenter::activeItems($job);
     $firstItem = $activeItems->first();
     $productName = (string) ($firstItem?->product_name ?: $job->product ?: 'Order product');
-    $supplierName = ($firstItem && $firstItem->relationLoaded('supplier'))
+    // activeItems() can return a lightweight stdClass for legacy orders that
+    // still use the order-level product fields. Only Eloquent-backed items
+    // expose relationLoaded(), so guard that call before checking supplier.
+    $firstItemHasLoadedSupplier = is_object($firstItem)
+        && method_exists($firstItem, 'relationLoaded')
+        && $firstItem->relationLoaded('supplier');
+    $supplierName = $firstItemHasLoadedSupplier
         ? (string) ($firstItem->supplier?->name ?: 'Supplier')
         : 'Supplier';
     $orderNumber = $job->displayOrderNumber();
@@ -52,18 +75,25 @@ unset($__defined_vars, $__key, $__value); ?>
     $ownerName = (string) ($job->owner?->name ?: $job->coordinator?->name ?: 'FlowTrack');
     $orderTotal = (float) $activeItems->sum(fn($item) => (float) ($item->unit_price ?? 0) * (int) ($item->quantity ?? 0));
     $emailHandoffPreview = in_array($variant, ['purchase_order_email', 'artwork_email'], true)
-        ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user())
+        ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user(), $payload)
         : [];
     $emailServiceEnabled = (bool) ($emailHandoffPreview['email_service_enabled'] ?? true);
     if (! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)) {
         $title = $variant === 'artwork_email' ? 'Complete Artwork Handoff' : 'Complete Purchase Order Handoff';
-        $copy = 'Order email service is disabled by an administrator. Review the handoff details, then continue without sending email.';
+        $copy = 'Email sending is currently disabled. Choose the intended recipients, then complete the handoff and send the file manually.';
     }
     $emailFallbackDocumentId = (int) ($emailHandoffPreview['document_id'] ?? 0);
     $emailFallbackDocument = $emailFallbackDocumentId > 0
         ? $job->documents->firstWhere('id', $emailFallbackDocumentId)
         : null;
     $emailFallbackAttachmentLabel = $variant === 'artwork_email' ? 'Artwork' : 'Purchase Order';
+    $revisionMentionUsers = collect($mentionUsers)->values();
+    $selectedRevisionDocumentIds = collect($payload['revision_document_ids'] ?? [])
+        ->map(fn($id) => (int) $id)
+        ->filter(fn($id) => $id > 0)
+        ->unique()
+        ->values();
+
 
     // Only the main Artwork preview/handoff screens need the large landscape
     // layout. Revision/issue follow-up steps must stay on the normal compact
@@ -76,6 +106,9 @@ unset($__defined_vars, $__key, $__value); ?>
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
     $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
+    // Every artwork revision dialog uses the same compact prototype shell.
+    // The copy/labels still vary by task, but layout and controls stay consistent.
+    $isArtworkRevisionRequest = $step === 'revision';
 
     if ($step === 'sample') {
         $title = 'Is a Sample or Swatch Required?';
@@ -83,15 +116,21 @@ unset($__defined_vars, $__key, $__value); ?>
     } elseif ($step === 'revision') {
         $title = $automationKey === 'ART_INTERNAL_REVIEW' ? 'Request Artwork Revision' : 'Client Revision Request';
         $copy = $automationKey === 'ART_INTERNAL_REVIEW'
-            ? 'Add the internal revision instructions before returning the Artwork task to upload.'
-            : 'Record the client feedback before restarting the artwork approval cycle.';
+            ? 'Select one or more artworks. Add the required change and any supporting files under each selected artwork.'
+            : 'Select one or more artworks and record the client feedback for each file before restarting the approval cycle.';
     } elseif ($step === 'issue') {
         $title = $automationKey === 'QC_CHECK' ? 'Report QC Issue' : 'Report Production Issue';
         $copy = 'Describe the issue before notifying the supplier and blocking progression.';
     }
 ?>
 <div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-action-modal-'.e($task->id).'-'.e($step).''; ?>wire:key="order-workflow-action-modal-<?php echo e($task->id); ?>-<?php echo e($step); ?>" wire:click.self="closeOrderWorkflowAction">
-    <section class="ft-order-task-document-modal ft-order-workflow-action-modal <?php echo e($isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '')); ?> <?php echo e($usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : ''); ?>" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-workflow-action-modal-title">
+    <section
+        class="ft-order-task-document-modal ft-order-workflow-action-modal <?php echo e($isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '')); ?> <?php echo e($usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : ''); ?> <?php echo e($isArtworkRevisionRequest ? 'ft-order-workflow-action-modal--artwork-revision-request' : ''); ?>"
+        data-ft-feedback-scope="form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-workflow-action-modal-title"
+    >
         <header class="ft-order-task-document-modal-head">
             <div><h2 id="order-workflow-action-modal-title"><?php echo e($title); ?></h2><p><?php echo e($copy); ?></p></div>
             <button type="button" wire:click="closeOrderWorkflowAction" aria-label="Close">×</button>
@@ -116,27 +155,186 @@ unset($__defined_vars, $__key, $__value); ?>
                     <div class="ft-artwork-revision-selector-head">
                         <div>
                             <strong>Which artwork needs revision?</strong>
-                            <span>Select only the file or files that must be replaced. Every unselected artwork file will remain unchanged in the next version.</span>
+                            <span>Select one or more files. Each selected artwork opens its own required change and supporting attachments.</span>
                         </div>
-                        <em><?php echo e($latestArtworkDocuments->count()); ?> current file<?php echo e($latestArtworkDocuments->count() === 1 ? '' : 's'); ?></em>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedRevisionDocumentIds->isNotEmpty()): ?>
+                            <em><?php echo e($selectedRevisionDocumentIds->count()); ?> selected</em>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </div>
+
                     <div class="ft-artwork-revision-selector-list">
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $latestArtworkDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $revisionDocument): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
-                            <?php $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE'); ?>
-                            <label class="ft-artwork-revision-selector-item">
-                                <input
-                                    type="checkbox"
-                                    wire:model="orderWorkflowActionPayload.revision_document_ids"
-                                    value="<?php echo e($revisionDocument->id); ?>"
-                                >
-                                <span class="ft-artwork-revision-selector-check" aria-hidden="true">✓</span>
-                                <span class="ft-artwork-revision-selector-type"><?php echo e($revisionExtension); ?></span>
-                                <span class="ft-artwork-revision-selector-copy">
-                                    <b title="<?php echo e($revisionDocument->name); ?>"><?php echo e($revisionDocument->name); ?></b>
-                                    <small>Artwork V<?php echo e(max(1, (int) $revisionDocument->version)); ?> · Select to replace this file only</small>
-                                </span>
-                                <a href="<?php echo e(route('documents.open', $revisionDocument)); ?>" target="_blank" rel="noopener" onclick="event.stopPropagation()">View</a>
-                            </label>
+                            <?php
+                                $revisionDocumentId = (int) $revisionDocument->id;
+                                $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE');
+                                $revisionSelected = $selectedRevisionDocumentIds->contains($revisionDocumentId);
+                                $documentAttachments = collect($revisionAttachments[$revisionDocumentId] ?? $revisionAttachments[(string) $revisionDocumentId] ?? [])->filter()->values();
+                                $documentAttachmentDetails = $documentAttachments->map(function ($file) {
+                                    $name = $file->getClientOriginalName();
+                                    return [
+                                        'name' => $name,
+                                        'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
+                                        'size' => $file->getSize() >= 1048576
+                                            ? number_format($file->getSize() / 1048576, 1).' MB'
+                                            : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
+                                    ];
+                                });
+                            ?>
+                            <div
+                                class="ft-artwork-revision-selector-item <?php echo e($revisionSelected ? 'is-selected' : ''); ?>"
+                                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'artwork-revision-request-item-'.e($task->id).'-'.e($revisionDocumentId).''; ?>wire:key="artwork-revision-request-item-<?php echo e($task->id); ?>-<?php echo e($revisionDocumentId); ?>"
+                            >
+                                <div class="ft-artwork-revision-selector-summary">
+                                    <label class="ft-artwork-revision-selector-choice">
+                                        <input
+                                            type="checkbox"
+                                            wire:model.live="orderWorkflowActionPayload.revision_document_ids"
+                                            value="<?php echo e($revisionDocumentId); ?>"
+                                        >
+                                        <span class="ft-artwork-revision-selector-check" aria-hidden="true">✓</span>
+                                        <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['extension' => $revisionExtension,'size' => 'sm']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['extension' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($revisionExtension),'size' => 'sm']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                                        <span class="ft-artwork-revision-selector-copy">
+                                            <b title="<?php echo e($revisionDocument->name); ?>"><?php echo e($revisionDocument->name); ?></b>
+                                            <small>Artwork V<?php echo e(max(1, (int) $revisionDocument->version)); ?></small>
+                                        </span>
+                                    </label>
+                                    <a href="<?php echo e(route('documents.open', $revisionDocument)); ?>" target="_blank" rel="noopener">View</a>
+                                </div>
+
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($revisionSelected): ?>
+                                    <div class="ft-artwork-revision-item-details">
+                                        <label class="ft-artwork-revision-item-change">
+                                            <span><?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Required change' : 'Client feedback'); ?> <b>*</b></span>
+                                            <textarea
+                                                wire:model="orderWorkflowActionRevisionComments.<?php echo e($revisionDocumentId); ?>"
+                                                rows="3"
+                                                autocomplete="off"
+                                                placeholder="<?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Describe the required artwork changes...' : 'Record the client feedback...'); ?>"
+                                            ></textarea>
+                                        </label>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionRevisionComments.'.$revisionDocumentId];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                                        <div class="ft-artwork-revision-item-support">
+                                            <div class="ft-artwork-revision-item-support-head">
+                                                <div>
+                                                    <strong>Supporting attachments <span>(optional)</span></strong>
+                                                    <small>Add marked-up artwork, screenshots, or reference documents for this file.</small>
+                                                </div>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($documentAttachments->isNotEmpty()): ?>
+                                                    <em><?php echo e($documentAttachments->count()); ?> file<?php echo e($documentAttachments->count() === 1 ? '' : 's'); ?></em>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </div>
+
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($documentAttachmentDetails->isNotEmpty()): ?>
+                                                <div class="ft-artwork-revision-support-files">
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $documentAttachmentDetails; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $supportFile): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                        <div class="ft-order-attachment-selected-file" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'artwork-revision-support-'.e($task->id).'-'.e($revisionDocumentId).'-'.e($index).'-'.e(md5($supportFile['name'])).''; ?>wire:key="artwork-revision-support-<?php echo e($task->id); ?>-<?php echo e($revisionDocumentId); ?>-<?php echo e($index); ?>-<?php echo e(md5($supportFile['name'])); ?>">
+                                                            <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['extension' => $supportFile['type'],'size' => 'sm']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['extension' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($supportFile['type']),'size' => 'sm']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                                                            <span class="ft-order-attachment-selected-copy">
+                                                                <strong title="<?php echo e($supportFile['name']); ?>"><?php echo e($supportFile['name']); ?></strong>
+                                                                <small><?php echo e($supportFile['type']); ?> · <?php echo e($supportFile['size']); ?> · Ready</small>
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                wire:click="removeOrderWorkflowActionRevisionAttachment(<?php echo e($revisionDocumentId); ?>, <?php echo e($index); ?>)"
+                                                                wire:loading.attr="disabled"
+                                                                wire:target="orderWorkflowActionRevisionAttachments.<?php echo e($revisionDocumentId); ?>,removeOrderWorkflowActionRevisionAttachment(<?php echo e($revisionDocumentId); ?>, <?php echo e($index); ?>)"
+                                                            >Remove</button>
+                                                        </div>
+                                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                                </div>
+                                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                                            <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone ft-artwork-revision-support-dropzone <?php echo e($documentAttachments->isNotEmpty() ? 'is-compact' : ''); ?>" data-file-dropzone>
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    wire:model="orderWorkflowActionRevisionAttachments.<?php echo e($revisionDocumentId); ?>"
+                                                    accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>"
+                                                    aria-label="Choose supporting files for <?php echo e($revisionDocument->name); ?>"
+                                                >
+                                                <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($documentAttachments->isNotEmpty()): ?>
+                                                    <strong>Choose supporting files</strong>
+                                                    <b>Drag &amp; drop or <span>browse</span></b>
+                                                <?php else: ?>
+                                                    <strong>Drag &amp; drop files here</strong>
+                                                    <b>or choose from your computer</b>
+                                                    <span class="ft-order-attachment-browse">Browse files</span>
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                                <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?> · Up to 10 files</small>
+                                            </label>
+
+                                            <div class="ft-artwork-revision-evidence-uploading" wire:loading wire:target="orderWorkflowActionRevisionAttachments.<?php echo e($revisionDocumentId); ?>">Uploading files…</div>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionRevisionAttachments.'.$revisionDocumentId];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionRevisionAttachments.'.$revisionDocumentId.'.*'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        </div>
+                                    </div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             <div class="ft-artwork-revision-selector-empty">No current artwork files are available to revise.</div>
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -149,19 +347,14 @@ $message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php e
 if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($automationKey === 'ART_INTERNAL_REVIEW' && $selectedRevisionDocumentIds->isNotEmpty()): ?>
+                        <div class="ft-artwork-revision-visibility-note">
+                            <span aria-hidden="true">▢</span>
+                            Supporting attachments will be visible to the artwork assignee and other relevant team members.
+                        </div>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </div>
-                <label class="ft-prototype-field">
-                    <span><?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Revision instructions' : 'Client feedback'); ?></span>
-                    <textarea wire:model="orderWorkflowActionComment" rows="5" placeholder="Describe the required artwork changes..."></textarea>
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionComment'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                </label>
             <?php elseif($step === 'issue'): ?>
                 <div class="ft-prototype-form-grid">
                     <label class="ft-prototype-field"><span>Issue category</span><select wire:model="orderWorkflowActionPayload.issue_category"><option>Fabric color variance</option><option>Print color mismatch</option><option>Incorrect dimensions</option><option>Damaged items</option><option>Other</option></select><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.issue_category'];
@@ -185,6 +378,64 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <div class="ft-prototype-file-placeholder"><strong>Screenshot / photo</strong><span>Supporting images/documents can be added to the task after the issue is recorded.</span></div>
                 <div class="ft-prototype-email-preview"><b>Email preview</b><span>The issue notification will be recorded for <?php echo e($supplierName); ?> with this Order and task.</span></div>
             <?php elseif($variant === 'purchase_order_email'): ?>
+                <?php
+                    $recipientOptions = collect($emailHandoffPreview['recipient_options'] ?? []);
+
+                    $toEmail = trim((string) ($payload['to_email'] ?? ''));
+                    if ($toEmail === '') {
+                        $legacyToUser = $recipientOptions->firstWhere('id', (int) ($payload['to_user_id'] ?? 0));
+                        $toEmail = trim((string) ($legacyToUser['email'] ?? ($payload['external_to_email'] ?? '')));
+                    }
+
+                    $matchedToUser = $recipientOptions->first(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === mb_strtolower($toEmail)
+                    );
+                    $toQuery = mb_strtolower($toEmail);
+                    $toSuggestions = $toQuery === '' || $matchedToUser
+                        ? collect()
+                        : $recipientOptions
+                            ->filter(function($option) use ($toQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $toQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $toQuery);
+                            })
+                            ->take(6)
+                            ->values();
+
+                    $ccEmails = trim((string) ($payload['cc_emails'] ?? ''));
+                    if ($ccEmails === '') {
+                        $legacyCcUserEmails = collect($payload['cc_user_ids'] ?? [])
+                            ->map(fn($id) => $recipientOptions->firstWhere('id', (int) $id)['email'] ?? null)
+                            ->filter();
+                        $legacyExternalCc = collect(preg_split('/[\s,;]+/', trim((string) ($payload['external_cc_emails'] ?? ''))) ?: [])->filter();
+                        $ccEmails = $legacyCcUserEmails->concat($legacyExternalCc)->unique()->implode(', ');
+                    }
+
+                    $ccParts = collect(preg_split('/[,;]+/', $ccEmails) ?: [])
+                        ->map(fn($value) => trim((string) $value));
+                    $ccQuery = mb_strtolower((string) ($ccParts->last() ?? ''));
+                    $ccPrefix = $ccParts->slice(0, max(0, $ccParts->count() - 1))->filter()->values();
+                    $ccExactMatch = $recipientOptions->contains(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $ccQuery
+                    );
+                    $ccSuggestions = $ccQuery === '' || $ccExactMatch
+                        ? collect()
+                        : $recipientOptions
+                            ->reject(fn($option) => $matchedToUser && (int) $option['id'] === (int) $matchedToUser['id'])
+                            ->filter(function($option) use ($ccQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $ccQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $ccQuery);
+                            })
+                            ->reject(function($option) use ($ccPrefix) {
+                                $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                return $ccPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                            })
+                            ->take(6)
+                            ->values();
+                    $hasCcRecipients = filled($ccEmails);
+                    $recipientCount = (int) ($emailHandoffPreview['recipient_count'] ?? 0);
+                    $toIsValidEmail = $toEmail !== '' && filter_var($toEmail, FILTER_VALIDATE_EMAIL);
+                ?>
+
                 <div class="ft-order-task-document-target">
                     <span class="ft-order-task-document-target-icon">PO</span>
                     <div>
@@ -192,18 +443,125 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         <strong><?php echo e($emailHandoffPreview['document_name'] ?? 'No Purchase Order uploaded'); ?></strong>
                         <span><?php echo e(filled($emailHandoffPreview['document_version'] ?? null) ? 'Version '.(int) $emailHandoffPreview['document_version'] : 'Upload the Purchase Order in the previous task first'); ?></span>
                     </div>
-                    <em><?php echo e($emailHandoffPreview['recipient_count'] ?? 0); ?> recipient<?php echo e((int) ($emailHandoffPreview['recipient_count'] ?? 0) === 1 ? '' : 's'); ?></em>
+                    <em><?php echo e($recipientCount > 0 ? $recipientCount.' recipient'.($recipientCount === 1 ? '' : 's') : 'Choose recipient'); ?></em>
                 </div>
+
+                <section
+                    class="ft-po-mail-recipients"
+                    aria-label="Purchase Order email recipients"
+                    x-data="{ ccOpen: <?php echo \Illuminate\Support\Js::from($hasCcRecipients)->toHtml() ?> }"
+                >
+                    <div class="ft-po-mail-row ft-po-mail-row--to">
+                        <label for="po-to-email-<?php echo e($task->id); ?>">To</label>
+                        <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                            <input
+                                id="po-to-email-<?php echo e($task->id); ?>"
+                                type="email"
+                                wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_email"
+                                placeholder="Enter email or search Artwork Team"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($toSuggestions->isNotEmpty()): ?>
+                                <div class="ft-po-mail-suggestions" role="listbox" aria-label="Artwork Team suggestions">
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $toSuggestions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                        <button
+                                            type="button"
+                                            <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'po-to-suggestion-'.e($task->id).'-'.e((int) $option['id']).''; ?>wire:key="po-to-suggestion-<?php echo e($task->id); ?>-<?php echo e((int) $option['id']); ?>"
+                                            wire:click="$set('orderWorkflowActionPayload.to_email', <?php echo \Illuminate\Support\Js::from((string) $option['email'])->toHtml() ?>)"
+                                            class="ft-po-mail-suggestion"
+                                        >
+                                            <span class="ft-po-mail-suggestion__avatar"><?php echo e(mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1))); ?></span>
+                                            <span><b><?php echo e($option['name']); ?></b><small><?php echo e($option['email']); ?></small></span>
+                                        </button>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                </div>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </div>
+                        <button
+                            type="button"
+                            class="ft-po-mail-cc-toggle"
+                            x-on:click="ccOpen = !ccOpen"
+                            x-bind:aria-expanded="ccOpen.toString()"
+                            aria-controls="po-cc-fields-<?php echo e($task->id); ?>"
+                        >Cc</button>
+                    </div>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.to_email'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-po-mail-validation"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($matchedToUser): ?>
+                        <div class="ft-po-assignment-note ft-po-assignment-note--mail">
+                            <span aria-hidden="true">✓</span>
+                            <p><b><?php echo e($matchedToUser['name']); ?></b> will receive the Purchase Order by email and will be automatically assigned to <strong>Prepare &amp; Upload Artwork</strong>.</p>
+                        </div>
+                    <?php elseif($toIsValidEmail): ?>
+                        <p class="ft-po-mail-help">This email will receive the Purchase Order. It does not match an Artwork Team user, so no internal artwork task will be auto-assigned.</p>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                    <div id="po-cc-fields-<?php echo e($task->id); ?>" class="ft-po-mail-cc" x-cloak x-show="ccOpen">
+                        <div class="ft-po-mail-row ft-po-mail-row--cc">
+                            <label for="po-cc-emails-<?php echo e($task->id); ?>">Cc</label>
+                            <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                <input
+                                    id="po-cc-emails-<?php echo e($task->id); ?>"
+                                    type="text"
+                                    wire:model.live.debounce.300ms="orderWorkflowActionPayload.cc_emails"
+                                    placeholder="Add email addresses, separated by commas"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($ccSuggestions->isNotEmpty()): ?>
+                                    <div class="ft-po-mail-suggestions" role="listbox" aria-label="Artwork Team CC suggestions">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $ccSuggestions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                            <?php
+                                                $nextCcEmails = $ccPrefix
+                                                    ->concat([(string) $option['email']])
+                                                    ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                    ->implode(', ');
+                                            ?>
+                                            <button
+                                                type="button"
+                                                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'po-cc-suggestion-'.e($task->id).'-'.e((int) $option['id']).''; ?>wire:key="po-cc-suggestion-<?php echo e($task->id); ?>-<?php echo e((int) $option['id']); ?>"
+                                                wire:click="$set('orderWorkflowActionPayload.cc_emails', <?php echo \Illuminate\Support\Js::from($nextCcEmails)->toHtml() ?>)"
+                                                class="ft-po-mail-suggestion"
+                                            >
+                                                <span class="ft-po-mail-suggestion__avatar"><?php echo e(mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1))); ?></span>
+                                                <span><b><?php echo e($option['name']); ?></b><small><?php echo e($option['email']); ?></small></span>
+                                            </button>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    </div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.cc_emails'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-po-mail-validation"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </div>
+                </section>
+
                 <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['preview' => $emailHandoffPreview,'defaultSubject' => 'Purchase Order ready — '.$orderNumber,'emptyRecipientText' => 'No active user with a valid email is assigned to this Order\'s Artwork phase.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['preview' => $emailHandoffPreview,'defaultSubject' => 'Purchase Order ready — '.$orderNumber,'emptyRecipientText' => 'Enter an email address in To to see the final email details.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('email.handoff-preview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Purchase Order ready — '.$orderNumber),'emptyRecipientText' => 'No active user with a valid email is assigned to this Order\'s Artwork phase.']); ?>
+<?php $component->withAttributes(['preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Purchase Order ready — '.$orderNumber),'emptyRecipientText' => 'Enter an email address in To to see the final email details.']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -253,7 +611,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                         <small>LATEST ARTWORK · <?php echo e($latestArtworkDocuments->count()); ?> FILE<?php echo e($latestArtworkDocuments->count() === 1 ? '' : 'S'); ?></small>
                         <h3><?php echo e($productName); ?></h3>
                         <dl>
-                            <div><dt>Version</dt><dd>V<?php echo e($artworkVersion); ?></dd></div>
+                            <div><dt>Versions</dt><dd><?php echo e($artworkVersionLabel); ?></dd></div>
                             <div><dt>Files</dt><dd><?php echo e($latestArtworkDocuments->isNotEmpty() ? $latestArtworkDocuments->pluck('name')->implode(', ') : 'Artwork file'); ?></dd></div>
                             <div><dt>Uploaded by</dt><dd><?php echo e($latestArtwork?->uploader?->name ?: $task->assignee?->name ?: 'FlowTrack'); ?></dd></div>
                             <div><dt>Client</dt><dd><?php echo e($clientName); ?></dd></div>
@@ -289,11 +647,11 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                             </div>
                         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($artworkDocs->where('version', '!=', $artworkVersion)->isNotEmpty()): ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($archivedArtworkDocuments->isNotEmpty()): ?>
                             <details class="ft-prototype-version-history">
                                 <summary>Previous artwork versions</summary>
                                 <div class="ft-prototype-version-list">
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $artworkDocs->where('version', '!=', $artworkVersion)->sortByDesc('id')->values(); $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $doc): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $archivedArtworkDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $doc): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                         <div>
                                             <span class="ft-prototype-version-file">
                                                 <strong><?php echo e($doc->name); ?> · Version <?php echo e(max(1, (int) $doc->version)); ?></strong>
@@ -313,16 +671,94 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
 
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($variant === 'artwork_email'): ?>
+                    <?php
+                        $artworkRecipientOptions = collect($emailHandoffPreview['recipient_options'] ?? []);
+                        $artworkToEmails = trim((string) ($payload['to_emails'] ?? ''));
+                        if ($artworkToEmails === '') {
+                            $artworkToEmails = trim((string) ($payload['to_email'] ?? ''));
+                        }
+
+                        $artworkToParts = collect(preg_split('/[,;]+/', $artworkToEmails) ?: [])
+                            ->map(fn($value) => trim((string) $value));
+                        $artworkToQuery = mb_strtolower((string) ($artworkToParts->last() ?? ''));
+                        $artworkToPrefix = $artworkToParts
+                            ->slice(0, max(0, $artworkToParts->count() - 1))
+                            ->filter()
+                            ->values();
+                        $artworkToExactMatch = $artworkRecipientOptions->contains(
+                            fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $artworkToQuery
+                        );
+                        $artworkToSuggestions = $artworkToQuery === '' || $artworkToExactMatch
+                            ? collect()
+                            : $artworkRecipientOptions
+                                ->filter(function($option) use ($artworkToQuery) {
+                                    return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $artworkToQuery)
+                                        || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $artworkToQuery);
+                                })
+                                ->reject(function($option) use ($artworkToPrefix) {
+                                    $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                    return $artworkToPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                                })
+                                ->take(6)
+                                ->values();
+                    ?>
+
+                    <section class="ft-po-mail-recipients ft-artwork-mail-recipients" aria-label="Artwork email recipients">
+                        <div class="ft-po-mail-row ft-po-mail-row--single">
+                            <label for="artwork-to-emails-<?php echo e($task->id); ?>">To</label>
+                            <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                <input
+                                    id="artwork-to-emails-<?php echo e($task->id); ?>"
+                                    type="text"
+                                    wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_emails"
+                                    placeholder="Enter email or search users"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($artworkToSuggestions->isNotEmpty()): ?>
+                                    <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user suggestions">
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $artworkToSuggestions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                            <?php
+                                                $nextArtworkToEmails = $artworkToPrefix
+                                                    ->concat([(string) $option['email']])
+                                                    ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                    ->implode(', ');
+                                            ?>
+                                            <button
+                                                type="button"
+                                                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'artwork-to-suggestion-'.e($task->id).'-'.e((int) $option['id']).''; ?>wire:key="artwork-to-suggestion-<?php echo e($task->id); ?>-<?php echo e((int) $option['id']); ?>"
+                                                wire:click="$set('orderWorkflowActionPayload.to_emails', <?php echo \Illuminate\Support\Js::from($nextArtworkToEmails)->toHtml() ?>)"
+                                                class="ft-po-mail-suggestion"
+                                            >
+                                                <span class="ft-po-mail-suggestion__avatar"><?php echo e(mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1))); ?></span>
+                                                <span><b><?php echo e($option['name']); ?></b><small><?php echo e($option['email']); ?></small></span>
+                                            </button>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                    </div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </div>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.to_emails'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-po-mail-validation"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </section>
+
                     <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['preview' => $emailHandoffPreview,'defaultSubject' => 'Artwork ready — '.$orderNumber,'emptyRecipientText' => 'No active user with a valid email has the Order Team role in Users & role assignments.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['preview' => $emailHandoffPreview,'defaultSubject' => 'Artwork ready — '.$orderNumber,'emptyRecipientText' => 'Enter one or more email addresses in To.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('email.handoff-preview'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Artwork ready — '.$orderNumber),'emptyRecipientText' => 'No active user with a valid email has the Order Team role in Users & role assignments.']); ?>
+<?php $component->withAttributes(['preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($emailHandoffPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Artwork ready — '.$orderNumber),'emptyRecipientText' => 'Enter one or more email addresses in To.']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -354,7 +790,7 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php elseif($variant === 'client_decision'): ?>
-                <p class="ft-prototype-modal-copy">Choose the decision received from <?php echo e($clientName); ?> for Artwork V<?php echo e($artworkVersion); ?>.</p>
+                <p class="ft-prototype-modal-copy">Choose the decision received from <?php echo e($clientName); ?> for the current artwork (<?php echo e($artworkVersionLabel); ?>).</p>
                 <div class="ft-prototype-choice-grid">
                     <button type="button" wire:click="submitOrderWorkflowAction('revise')"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
                     <button type="button" wire:click="submitOrderWorkflowAction('approved')"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
@@ -640,7 +1076,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
                 <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($step === 'revision'): ?>
-                    <button type="button" class="primary" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Request Revision' : 'Activate Revision Task'); ?></button>
+                    <button type="button" class="danger ft-artwork-revision-submit" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction,orderWorkflowActionRevisionAttachments"><?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Submit Revision' : 'Activate Revision Task'); ?></button>
                 <?php elseif($step === 'issue'): ?>
                     <button type="button" class="danger" wire:click="submitOrderWorkflowAction('issue')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Report Issue</button>
                 <?php elseif($emailFallback && $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)): ?>

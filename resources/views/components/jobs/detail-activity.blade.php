@@ -33,6 +33,7 @@
         @forelse($activities as $activity)
             @php
                 $isComment = $activity->event === 'job.comment';
+                $isArtworkRevision = $activity->event === 'job.artwork_revision_requested';
                 $actorName = $activity->user?->name ?? 'System';
                 $eventLabel = $isComment ? 'Comment' : \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event));
             @endphp
@@ -51,7 +52,11 @@
                         <div><b>{{ $actorName }}</b><span class="ft-activity-kind {{ $isComment ? 'comment' : 'history' }}">{{ $isComment ? 'Comment' : 'Change' }}</span></div>
                         <time title="{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                     </div>
-                    <div class="ft-rich-text-content"><x-ui.mention-text :text="$activity->description" /></div>
+                    @if($isArtworkRevision)
+                        <x-jobs.order-detail.revision-activity-content :activity="$activity" />
+                    @else
+                        <div class="ft-rich-text-content"><x-ui.mention-text :text="$activity->description" /></div>
+                    @endif
                     <div class="ft-activity-entry-meta"><span>{{ $eventLabel }}</span><span>•</span><span>{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y · g:i A') }}</span></div>
                 </div>
             </article>

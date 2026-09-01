@@ -25,24 +25,13 @@
         ->filter()
         ->unique()
         ->values();
-    // Artwork files selected together share a version. Show the complete latest
-    // revision set while older revisions remain available from version history.
-    $artworkVersionDocuments = $isArtworkUploadTask
-        ? $taskDocuments
-            ->sortBy(function ($document) {
-                $version = (int) ($document->version ?? 0);
-
-                return [
-                    $version > 0 ? $version : 999999,
-                    optional($document->created_at)->timestamp ?? 0,
-                    (int) $document->id,
-                ];
-            })
-            ->values()
-        : collect();
-    $latestArtworkVersion = max(0, (int) ($artworkVersionDocuments->max('version') ?? 0));
-    $latestArtworkDocuments = $latestArtworkVersion > 0
-        ? $artworkVersionDocuments->where('version', $latestArtworkVersion)->sortBy('id')->values()
+    // Selective Artwork revision is file-specific: accepted files keep their
+    // previous version while only replaced files increment. Use the hydrated
+    // current set instead of assuming every current file shares max(version).
+    $latestArtworkDocuments = $isArtworkUploadTask
+        ? ($task->relationLoaded('currentArtworkDocuments')
+            ? collect($task->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
+            : app(\App\Services\DocumentService::class)->currentArtworkDocuments($task, $taskDocuments))
         : collect();
     $latestArtworkDocument = $latestArtworkDocuments->last();
     $resourceDocuments = $isArtworkUploadTask
@@ -69,6 +58,24 @@
     $workflowAction = data_get($context, 'taskActions.'.(int) $task->id, []);
     $workflowActionLabel = (string) ($workflowAction['label'] ?? 'Take action');
     $workflowActionType = (string) ($workflowAction['type'] ?? 'workflow');
+    $workflowEmailStatus = (array) data_get($context, 'workflowEmailStatuses.'.(int) $task->id, []);
+    $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
+    $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
+    $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
+    $emailResendFeedbackStatus = strtolower(trim((string) ($emailResendFeedback['email_status'] ?? '')));
+    $isArtworkEmailTask = $automationKey === 'ART_SEND_ORDER_TEAM';
+    $emailDeliveryStatus = strtolower(trim((string) ($workflowEmailStatus['status'] ?? '')));
+    if (in_array($emailResendFeedbackStatus, ['sent', 'failed', 'not_sent'], true)) $emailDeliveryStatus = $emailResendFeedbackStatus;
+    // Completed legacy rows may predate delivery tracking. Show an explicit
+    // Not Sent state instead of silently hiding email status.
+    if ($isArtworkEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
+    $emailDeliveryFailed = $isArtworkEmailTask && $emailDeliveryStatus === 'failed';
+    $emailDeliverySent = $isArtworkEmailTask && $emailDeliveryStatus === 'sent';
+    $emailDeliveryNotSent = $isArtworkEmailTask && $emailDeliveryStatus === 'not_sent';
+    $emailCanResend = $isArtworkEmailTask
+        && $mode === 'done'
+        && $canEditTask
+        && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
@@ -91,6 +98,7 @@
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         x-on:click.outside="if(editing) cancelEdit()"
         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+        x-on:task-assignee-updated.window="if (Number($event.detail?.taskId) === Number({{ $task->id }})) syncConfirmed(String($event.detail?.assigneeId ?? ''), String($event.detail?.assigneeName ?? 'Unassigned'), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
         x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue), { avatarUrl:String($event.detail?.avatarUrl ?? '') })">
         <div class="ft-order-inline-display-row">
             @if($canAssignTask && !$isCancelled)
@@ -143,6 +151,18 @@
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status {{ $statusClass }}">{{ $displayStatus }}</span>
+        @if($isArtworkEmailTask && $mode === 'done')
+            @if($emailDeliverySent)
+                <span class="ft-order-task-email-status is-sent" title="The latest artwork email was sent successfully.">Email Sent</span>
+            @elseif($emailDeliveryFailed)
+                <span class="ft-order-task-email-status is-failed" title="The artwork email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
+            @elseif($emailDeliveryNotSent)
+                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful artwork email delivery.">Email Not Sent</span>
+            @endif
+            @if($emailResendFeedbackMessage !== '')
+                <div class="ft-order-task-email-feedback {{ $emailResendFeedbackType === 'success' ? 'is-success' : 'is-error' }}" role="status" aria-live="polite">{{ $emailResendFeedbackMessage }}</div>
+            @endif
+        @endif
         @if($taskDocuments->isNotEmpty())
             @php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); @endphp
             <div class="card-sub">
@@ -175,7 +195,19 @@
                 @endif
             @endif
         @elseif($mode === 'done')
-            <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
+            @if($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument))
+                <button type="button" class="btn small" wire:click="openOverviewTaskDocumentModal({{ $task->id }})">Add other documents</button>
+            @elseif($isArtworkEmailTask && $canEditTask)
+                @if($emailCanResend)
+                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="resendCompletedArtworkEmail({{ $task->id }})" wire:loading.attr="disabled" wire:target="resendCompletedArtworkEmail({{ $task->id }})">
+                        <span wire:loading.remove wire:target="resendCompletedArtworkEmail({{ $task->id }})">Resend</span>
+                        <span wire:loading wire:target="resendCompletedArtworkEmail({{ $task->id }})">Sending...</span>
+                    </button>
+                @endif
+                <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
+            @else
+                <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
+            @endif
         @endif
     </div>
 </article>
@@ -202,7 +234,7 @@
                 wire:key="order-task-document-{{ $document->id }}"
                 class="ft-order-task-resource-row {{ $isArtworkUploadTask ? 'is-latest-artwork' : '' }}"
             >
-                <span class="file-icon ft-order-file-icon">{{ strtoupper(pathinfo($document->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
+                <x-ui.file-type-badge :name="$document->name" class="ft-order-file-icon" />
                 <span>
                     <b>
                         {{ $document->name }}

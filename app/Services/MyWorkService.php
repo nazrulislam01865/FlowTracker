@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Support\OrderStageResolver;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class MyWorkService
@@ -14,6 +15,8 @@ class MyWorkService
     public const JOBS_PER_PAGE = 10;
 
     private const INITIAL_TASK_STATUSES = ['not started', 'not start', 'ready', 'to do', 'todo'];
+    private const STAGE_CARD_CACHE_TTL_SECONDS = 15;
+    private const STAGE_PHASE_MAP_CACHE_TTL_MINUTES = 10;
 
     /**
      * Paginate Jobs, never individual tasks. The first query selects only a
@@ -287,6 +290,23 @@ class MyWorkService
      */
     public function orderPhaseCards(User $user): array
     {
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $key = implode(':', [
+            'flowtrack', 'my-work', 'stage-cards', 'v2',
+            'workspace', max(1, $workspaceId),
+            'user', (int) $user->id,
+        ]);
+
+        return Cache::remember(
+            $key,
+            now()->addSeconds(self::STAGE_CARD_CACHE_TTL_SECONDS),
+            fn (): array => $this->buildOrderPhaseCards($user),
+        );
+    }
+
+    /** @return list<array{id:int,filter_value:string,name:string,short_name:string,sequence:int,color:string,count:int,count_label:string}> */
+    private function buildOrderPhaseCards(User $user): array
+    {
         $preferredWorkflowId = OrderWorkflowSetupService::orderWorkflowQuery()
             ->where('is_active', true)
             ->orderByDesc('is_default')
@@ -354,6 +374,7 @@ class MyWorkService
                 ];
             })
             ->all();
+    
     }
 
     /** @return list<int> */
@@ -362,29 +383,51 @@ class MyWorkService
         $expected = OrderStageResolver::sequenceFromName($phaseName);
         if (!$expected) return [];
 
-        // Include live, historical and snapshot phase identities. The query is
-        // used only after the user selects one of the seven canonical stages,
-        // so legacy aliases can be safely folded into that operational stage.
-        return DB::table('workflow_phases')
-            // Historical/snapshot phase rows may be inactive after Workflow
-            // Setup changes, but active Orders can still legitimately point to
-            // them. Include those identities so the canonical filter remains
-            // correct until the maintenance rebind runs.
-            ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
-            ->filter(fn ($phase): bool => OrderStageResolver::matchesSequence(
-                $expected,
-                $phase->name,
-                $phase->short_name,
-                $phase->sequence !== null ? (int) $phase->sequence : null,
-            ))
-            ->flatMap(fn ($phase): array => [
-                (int) $phase->id,
-                (int) ($phase->source_workflow_phase_id ?: 0),
-            ])
-            ->filter(fn (int $id): bool => $id > 0)
-            ->unique()
-            ->values()
-            ->all();
+        $workspaceId = app(SetupContext::class)->workspaceId();
+        $key = 'flowtrack:my-work:stage-phase-map:v2:workspace:'.max(1, $workspaceId);
+
+        $map = Cache::remember(
+            $key,
+            now()->addMinutes(self::STAGE_PHASE_MAP_CACHE_TTL_MINUTES),
+            function (): array {
+                $map = [];
+                foreach (range(1, count(OrderWorkflowSetupService::fixedStages())) as $stageSequence) {
+                    $map[$stageSequence] = [];
+                }
+
+                DB::table('workflow_phases')
+                    ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                    ->each(function ($phase) use (&$map): void {
+                        foreach (array_keys($map) as $stageSequence) {
+                            if (! OrderStageResolver::matchesSequence(
+                                (int) $stageSequence,
+                                $phase->name,
+                                $phase->short_name,
+                                $phase->sequence !== null ? (int) $phase->sequence : null,
+                            )) {
+                                continue;
+                            }
+
+                            $map[$stageSequence][] = (int) $phase->id;
+                            if ((int) ($phase->source_workflow_phase_id ?: 0) > 0) {
+                                $map[$stageSequence][] = (int) $phase->source_workflow_phase_id;
+                            }
+                            break;
+                        }
+                    });
+
+                foreach ($map as $stageSequence => $ids) {
+                    $map[$stageSequence] = array_values(array_unique(array_filter(
+                        array_map('intval', $ids),
+                        fn (int $id): bool => $id > 0,
+                    )));
+                }
+
+                return $map;
+            },
+        );
+
+        return array_values($map[(int) $expected] ?? []);
     }
 
     /** @return list<string> */
@@ -830,20 +873,17 @@ class MyWorkService
 
         $phase = trim((string) ($filters['phase'] ?? ''));
         if ($phase !== '') {
-            $normalizedPhase = mb_strtolower($phase);
             $sourcePhaseIds = $this->orderPhaseSourceIdsForName($phase);
 
-            $query->whereHas('phase', function (Builder $phaseQuery) use ($normalizedPhase, $sourcePhaseIds): void {
-                $phaseQuery->where(function (Builder $phaseMatch) use ($normalizedPhase, $sourcePhaseIds): void {
-                    $phaseMatch->whereRaw('LOWER(TRIM(workflow_phases.name)) = ?', [$normalizedPhase]);
-
-                    if ($sourcePhaseIds !== []) {
-                        $phaseMatch
-                            ->orWhereIn('workflow_phases.source_workflow_phase_id', $sourcePhaseIds)
-                            ->orWhereIn('workflow_phases.id', $sourcePhaseIds);
-                    }
-                });
-            });
+            // Stage cards are one of seven canonical workflow stages. Resolve
+            // historical/snapshot aliases once, then filter the indexed FK on
+            // tasks directly. This avoids a correlated workflow_phases EXISTS
+            // with LOWER(TRIM(...)) on every grouped-count and page query.
+            if ($sourcePhaseIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('tasks.workflow_phase_id', $sourcePhaseIds);
+            }
         }
 
         $statusFilter = trim((string) ($filters['status'] ?? ''));

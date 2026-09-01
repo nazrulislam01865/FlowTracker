@@ -66,6 +66,12 @@ final class OrderListQuery
     }
 
     /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
+    public function dashboardStages(User $actor, int $clientId, int $departmentId, int $rangeDays): Collection
+    {
+        return $this->prototype->dashboardStages($actor, $clientId, $departmentId, $rangeDays);
+    }
+
+    /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
     public function myTaskStages(User $actor): Collection
     {
         return $this->prototype->stages($actor, true);

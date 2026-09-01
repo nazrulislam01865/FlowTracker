@@ -42,8 +42,10 @@
     'newOrderTaskAssigneeId'=>null,
     'overviewTaskDocumentSource'=>'upload',
     'overviewTaskDocumentUpload'=>null,
+    'overviewTaskRevisionUpload'=>[],
     'overviewTaskExistingDocumentId'=>null,
     'overviewTaskArtworkRevision'=>[],
+    'overviewTaskRevisionDocumentIds'=>[],
     'overviewTaskLinkFormTaskId'=>null,
     'jobTaskSearch'=>'',
     'activityTab'=>'all',
@@ -107,6 +109,9 @@
     'orderWorkflowActionTaskId'=>null,
     'orderWorkflowActionStep'=>'main',
     'orderWorkflowActionPayload'=>[],
+    'orderWorkflowActionAttachment'=>null,
+    'orderWorkflowActionRevisionComments'=>[],
+    'orderWorkflowActionRevisionAttachments'=>[],
     'orderWorkflowEmailFallback'=>false,
     'orderWorkflowEmailFallbackMessage'=>'',
     'orderWorkflowEmailFallbackAttempts'=>0,
@@ -190,8 +195,10 @@
             :show-overview-task-document-modal="$showOverviewTaskDocumentModal"
             :overview-task-document-source="$overviewTaskDocumentSource"
             :overview-task-document-upload="$overviewTaskDocumentUpload"
+            :overview-task-revision-upload="$overviewTaskRevisionUpload"
             :overview-task-existing-document-id="$overviewTaskExistingDocumentId"
             :overview-task-artwork-revision="$overviewTaskArtworkRevision"
+            :overview-task-revision-document-ids="$overviewTaskRevisionDocumentIds"
             :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
             :show-add-order-task-form="$showAddOrderTaskForm"
             :new-order-task-assignee-id="$newOrderTaskAssigneeId"
@@ -199,6 +206,9 @@
             :order-workflow-action-task-id="$orderWorkflowActionTaskId"
             :order-workflow-action-step="$orderWorkflowActionStep"
             :order-workflow-action-payload="$orderWorkflowActionPayload"
+            :order-workflow-action-attachment="$orderWorkflowActionAttachment"
+            :order-workflow-action-revision-comments="$orderWorkflowActionRevisionComments"
+            :order-workflow-action-revision-attachments="$orderWorkflowActionRevisionAttachments"
             :order-workflow-email-fallback="$orderWorkflowEmailFallback"
             :order-workflow-email-fallback-message="$orderWorkflowEmailFallbackMessage"
             :order-workflow-email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"

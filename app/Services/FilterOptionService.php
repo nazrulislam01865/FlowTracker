@@ -82,18 +82,7 @@ class FilterOptionService
         $page = max(1, min(10000, $page));
         $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
         $search = trim($search);
-        $selectedIds = collect($selectedIds)
-            ->map(fn ($value) => is_scalar($value) ? trim((string) $value) : '')
-            ->filter(fn ($value) => $value !== '')
-            ->unique()
-            ->take(self::MAX_SELECTED)
-            ->values();
-
-        $selectedItems = $selectedIds
-            ->map(fn ($selectedId) => $this->resolveSelected($user, $type, $context, $selectedId, $constraints))
-            ->filter()
-            ->unique(fn ($item) => (string) ($item['id'] ?? ''))
-            ->values();
+        $selectedItems = $this->selectedOptions($user, $type, $context, $selectedIds, $constraints);
 
         // An incomplete search must never fall back to unrelated "recent"
         // rows. The client can keep its existing page-one choices visible,
@@ -124,6 +113,33 @@ class FilterOptionService
             nextPage: $hasMore ? $page + 1 : null,
             minSearchLength: self::MIN_SEARCH_LENGTH,
         );
+    }
+
+
+    /**
+     * Resolve only the currently selected remote-filter rows without loading a
+     * page of recent options. This keeps selected labels stable on Livewire
+     * renders while allowing list screens to defer the real option query until
+     * the user opens the dropdown.
+     */
+    public function selectedOptions(
+        User $user,
+        string $type,
+        string $context = '',
+        array $selectedIds = [],
+        array $constraints = [],
+    ): Collection {
+        abort_unless($this->supports($type), 404);
+
+        return collect($selectedIds)
+            ->map(fn ($value) => is_scalar($value) ? trim((string) $value) : '')
+            ->filter(fn ($value) => $value !== '')
+            ->unique()
+            ->take(self::MAX_SELECTED)
+            ->map(fn ($selectedId) => $this->resolveSelected($user, $type, $context, $selectedId, $constraints))
+            ->filter()
+            ->unique(fn ($item) => (string) ($item['id'] ?? ''))
+            ->values();
     }
 
     private function window(

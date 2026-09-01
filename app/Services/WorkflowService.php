@@ -558,6 +558,16 @@ class WorkflowService
     private function invalidateBoardWorkflowCache(int $workspaceId, ?int $workflowId = null): void
     {
         Cache::forget(BoardService::workflowOptionsCacheKey($workspaceId));
+
+        $ordersStageKey = OrderListPrototypeService::stageDefinitionCacheKey($workspaceId);
+        Cache::forget($ordersStageKey);
+        if (DB::transactionLevel() > 0) {
+            // A concurrent request could repopulate the cache before a workflow
+            // transaction commits. Clear it once more after commit so Orders
+            // never keep a pre-edit stage definition for the full TTL.
+            DB::afterCommit(fn (): bool => Cache::forget($ordersStageKey));
+        }
+
         if ($workflowId) {
             Cache::forget(BoardService::workflowPhaseCacheKey($workflowId));
         }

@@ -46,7 +46,7 @@ unset($__defined_vars, $__key, $__value); ?>
     <div class="collapse-body ft-order-disclosure-body" data-order-disclosure-body>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canUpload): ?>
             <div class="attachment-drop ft-order-attachment-drop <?php echo e($errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-error' : ''); ?>">
-                <label data-file-dropzone data-auto-upload-method="uploadGeneralOrderDocuments" for="orderGeneralAttachment-<?php echo e($job->id); ?>"><b>⌕ &nbsp; Drop files here or <span>browse</span></b><div class="card-sub">PDF, Office files, JPG, PNG, ZIP, AI, EPS, ESP · Max 20 MB</div><input id="orderGeneralAttachment-<?php echo e($job->id); ?>" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp"></label>
+                <label data-file-dropzone data-auto-upload-method="uploadGeneralOrderDocuments" for="orderGeneralAttachment-<?php echo e($job->id); ?>"><b>⌕ &nbsp; Drop files here or <span>browse</span></b><div class="card-sub"><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?></div><input id="orderGeneralAttachment-<?php echo e($job->id); ?>" type="file" wire:model="jobDocumentUploads" multiple accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>"></label>
             </div>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['jobDocumentUploads'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');

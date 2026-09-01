@@ -283,6 +283,19 @@ class BoardTaskPackService
             ->all();
     }
 
+    public function assigneeOptions(User $user)
+    {
+        $visibleAssigneeIds = app(AccessControlService::class)
+            ->applyTaskScope(Task::query()->whereNotNull('tasks.assignee_id'), $user)
+            ->select('tasks.assignee_id');
+
+        return User::query()
+            ->where('is_active', true)
+            ->whereIn('id', $visibleAssigneeIds)
+            ->orderBy('name')
+            ->get(['id', 'name', 'profile_image_path']);
+    }
+
     private function filteredTaskQuery(User $user, array $filters): Builder
     {
         $quick = (string) ($filters['quick'] ?? 'all');
@@ -329,10 +342,16 @@ class BoardTaskPackService
             }
         }
 
+        $assignee = trim((string) ($filters['assignee'] ?? ''));
+        if ($assignee === 'unassigned') {
+            $query->whereNull('tasks.assignee_id');
+        } elseif ($assignee !== '') {
+            $query->where('tasks.assignee_id', ctype_digit($assignee) ? (int) $assignee : -1);
+        }
+
         $query
             ->when($filters['job'] ?? null, fn (Builder $q, $value) => $q->where('tasks.flow_job_id', $value))
             ->when($filters['client'] ?? null, fn (Builder $q, $value) => $q->whereHas('job', fn (Builder $job) => $job->where('client_id', $value)))
-            ->when($filters['assignee'] ?? null, fn (Builder $q, $value) => $q->where('tasks.assignee_id', $value))
             ->when($filters['status'] ?? null, fn (Builder $q, $value) => $q->whereIn('tasks.status', BoardLaneResolver::databaseStatusValues((string) $value)))
             ->when($filters['due'] ?? null, function (Builder $q, $value): void {
                 $today = app(WorkspaceSettingsService::class)->localToday();

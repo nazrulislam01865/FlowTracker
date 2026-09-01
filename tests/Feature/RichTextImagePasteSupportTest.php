@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use Tests\TestCase;
 use Tests\Support\OrderPhase5Source;
+use App\Services\RichTextService;
 
 class RichTextImagePasteSupportTest extends TestCase
 {
@@ -120,6 +121,40 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString("StoredFileResponse::download(\$path, \$filename", $controller);
         $this->assertStringContainsString('.ft-rich-image-viewer', $css);
         $this->assertMatchesRegularExpression('/cursor\s*:\s*zoom-in/', $css);
+    }
+
+    public function test_saved_rich_text_images_can_be_presented_as_compact_file_rows(): void
+    {
+        $service = app(RichTextService::class);
+        $filename = '123e4567-e89b-12d3-a456-426614174000.png';
+        $stored = RichTextService::MARKER
+            .'<p>Move the logo to the left.</p><img src="'.route('rich-text-images.show', ['filename' => $filename], false).'">';
+
+        $images = $service->imageAttachments($stored);
+
+        $this->assertCount(1, $images);
+        $this->assertSame($filename, $images[0]['name']);
+        $this->assertSame('PNG', $images[0]['extension']);
+        $this->assertStringContainsString('/rich-text-images/'.$filename, $images[0]['url']);
+        $this->assertStringContainsString('/rich-text-images/'.$filename.'/download', $images[0]['download_url']);
+        $this->assertStringContainsString('Move the logo to the left.', (string) $service->withoutImages($stored));
+        $this->assertStringNotContainsString('<img', (string) $service->withoutImages($stored));
+    }
+
+    public function test_artwork_revision_activity_uses_compact_image_references(): void
+    {
+        $wideActivity = file_get_contents(resource_path('views/components/jobs/order-detail/activity.blade.php'));
+        $friendlyActivity = file_get_contents(resource_path('views/components/jobs/detail-activity.blade.php'));
+        $revisionContent = file_get_contents(resource_path('views/components/jobs/order-detail/revision-activity-content.blade.php'));
+
+        $this->assertStringContainsString("job.artwork_revision_requested", $wideActivity);
+        $this->assertStringContainsString('x-jobs.order-detail.revision-activity-content', $wideActivity);
+        $this->assertStringContainsString('x-jobs.order-detail.revision-activity-content', $friendlyActivity);
+        $this->assertStringContainsString('revision_comment', $revisionContent);
+        $this->assertStringContainsString('withoutImages', $revisionContent);
+        $this->assertStringContainsString('imageAttachments', $revisionContent);
+        $this->assertStringContainsString('ft-revision-activity-thumbnail', $revisionContent);
+        $this->assertStringContainsString('download_url', $revisionContent);
     }
 
     public function test_rich_text_survives_livewire_navigation_and_viewer_body_replacement(): void

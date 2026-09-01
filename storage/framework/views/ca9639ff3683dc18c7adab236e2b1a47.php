@@ -6,6 +6,7 @@
             || filled($dateFrom)
             || filled($dateTo)
             || filled($metricFilter)
+            || $dashboardScope
             || (int) $importFilterId > 0
             || $selectedStageFiltersActive;
         $orderToolbarAllActive = ! $orderToolbarAnyFilterActive;
@@ -90,14 +91,14 @@
 
                 <?php if (isset($component)) { $__componentOriginal6e32424d5df2e7bdda9ad721db0b2c8d = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal6e32424d5df2e7bdda9ad721db0b2c8d = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.date-range','data' => ['class' => 'ft-order-list-date-range','fromProperty' => 'dateFrom','toProperty' => 'dateTo','fromValue' => $dateFrom,'toValue' => $dateTo,'label' => 'Created date range','fromLabel' => 'From','toLabel' => 'To']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.date-range','data' => ['class' => 'ft-order-list-date-range','fromProperty' => 'dateFrom','toProperty' => 'dateTo','fromValue' => $dateFrom,'toValue' => $dateTo,'label' => ''.e($dashboardScope ? 'Activity date range' : 'Created date range').'','fromLabel' => 'From','toLabel' => 'To']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.date-range'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['class' => 'ft-order-list-date-range','from-property' => 'dateFrom','to-property' => 'dateTo','from-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateFrom),'to-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateTo),'label' => 'Created date range','from-label' => 'From','to-label' => 'To']); ?>
+<?php $component->withAttributes(['class' => 'ft-order-list-date-range','from-property' => 'dateFrom','to-property' => 'dateTo','from-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateFrom),'to-value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($dateTo),'label' => ''.e($dashboardScope ? 'Activity date range' : 'Created date range').'','from-label' => 'From','to-label' => 'To']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -119,6 +120,16 @@
                 ><span aria-hidden="true">×</span> Clear filter</button>
             </div>
         </div>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($dashboardScope): ?>
+            <div class="import-filter-line" role="status">
+                <b>Dashboard period:</b>
+                <?php echo e($dashboardRangeDays === 1 ? 'Today' : ($dashboardRangeDays > 0 ? $dashboardRangeDays.' days' : $dateFrom.' to '.$dateTo)); ?>
+
+                <span>· Orders active in this stage and updated during the selected period</span>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(filled($dashboardTeamLabel)): ?><span>· Team: <?php echo e($dashboardTeamLabel); ?></span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedStage): ?>
             <div class="stage-inline-controls">
@@ -280,6 +291,6 @@
 
         <div class="active-filter-line">
             <span><?php echo e(number_format($jobs->total())); ?> <?php echo e(\Illuminate\Support\Str::plural('order', $jobs->total())); ?></span>
-            <span><?php echo e($selectedStage ? $stageName.' filter · same Orders page' : 'Showing all workflow stages'); ?></span>
+            <span><?php echo e($selectedStage ? $stageName.' filter'.($dashboardScope ? ' · dashboard period applied' : ' · same Orders page') : 'Showing all workflow stages'); ?></span>
         </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/orders/list/filters.blade.php ENDPATH**/ ?>

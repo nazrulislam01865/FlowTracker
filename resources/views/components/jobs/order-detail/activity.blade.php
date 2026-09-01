@@ -32,6 +32,7 @@
                 @php
                     $isComment = $activity->event === 'job.comment';
                     $isCancellation = $activity->event === 'job.cancelled';
+                    $isArtworkRevision = $activity->event === 'job.artwork_revision_requested';
                     $actorName = $activity->user?->name ?? 'System';
                     $actorInitials = collect(preg_split('/\s+/', trim($actorName)))->filter()->map(fn($p)=>mb_strtoupper(mb_substr($p,0,1)))->take(2)->implode('');
                     $activityFocusKey = $isComment ? 'job-'.$activity->id : null;
@@ -40,7 +41,7 @@
                 @endphp
                 <div @if($activityAnchor) id="{{ $activityAnchor }}" @endif class="wide-activity {{ $isFocusedComment ? 'is-focused-comment' : '' }}" @if($isFocusedComment) x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" @endif>
                     <div class="avatar">{{ $actorInitials ?: 'SP' }}</div>
-                    <div><b>{{ $actorName }} <span class="card-sub activity-kind">{{ $isComment ? 'COMMENT' : 'CHANGE' }}</span></b><div class="wide-activity-copy {{ $isCancellation ? 'ft-rich-text-content ft-order-cancellation-activity-copy' : '' }}"><x-ui.mention-text :text="$activity->description" /></div><div class="card-sub">{{ \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event)) }}</div></div>
+                    <div><b>{{ $actorName }} <span class="card-sub activity-kind">{{ $isComment ? 'COMMENT' : 'CHANGE' }}</span></b><div class="wide-activity-copy {{ $isCancellation ? 'ft-rich-text-content ft-order-cancellation-activity-copy' : '' }}">@if($isArtworkRevision)<x-jobs.order-detail.revision-activity-content :activity="$activity" />@else<x-ui.mention-text :text="$activity->description" />@endif</div><div class="card-sub">{{ \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event)) }}</div></div>
                     <time title="{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                 </div>
             @empty

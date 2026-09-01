@@ -62,4 +62,28 @@ class CreateOrderPurchaseOrderUploadTest extends TestCase
         $this->assertStringContainsString('@forelse($otherDocuments as $document)', $view);
         $this->assertStringNotContainsString('@forelse($job->documents->sortByDesc', $view);
     }
+
+    public function test_purchase_order_task_accepts_multiple_files_and_keeps_add_document_action_after_completion(): void
+    {
+        $workflow = file_get_contents(app_path('Services/OrderWorkflowSetupService.php'));
+        $actions = file_get_contents(app_path('Services/OrderWorkflowActionService.php'));
+        $jobUploads = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderTaskResources.php'));
+        $orderUploads = file_get_contents(app_path('Livewire/Orders/Index.php'));
+        $modal = file_get_contents(resource_path('views/components/jobs/order-detail/document-modal.blade.php'));
+        $taskRow = file_get_contents(resource_path('views/components/jobs/order-detail/task-row.blade.php'));
+
+        $this->assertStringContainsString("self::task('NEW_UPLOAD_PO', 'Upload Purchase Order', 'Order Team', 0, true, 'Purchase Order', true, true", $workflow);
+        $this->assertStringContainsString("'NEW_UPLOAD_PO' => \$hasEvidence ? 'Add other documents' : 'Upload Purchase Order'", $actions);
+        $this->assertStringContainsString("\$automationKey === 'NEW_UPLOAD_PO'", $modal);
+        $this->assertStringContainsString("'hint' => \\App\\Support\\AttachmentUpload::helperText(20).' · Up to 10 files'", $modal);
+        $this->assertStringContainsString('@if($inputAllowsMultiple) multiple @endif', $modal);
+        $this->assertStringContainsString('Add other documents</button>', $taskRow);
+
+        foreach ([$jobUploads, $orderUploads] as $component) {
+            $this->assertStringContainsString("\$isPurchaseOrderUpload = \$automationKey === 'NEW_UPLOAD_PO';", $component);
+            $this->assertStringContainsString('$allowsMultiple = $isArtworkUpload || $isPurchaseOrderUpload', $component);
+        }
+
+        $this->assertStringContainsString("if (\$task->completed_at || strcasecmp(trim((string) \$task->status), 'Completed') === 0) return;", $actions);
+    }
 }

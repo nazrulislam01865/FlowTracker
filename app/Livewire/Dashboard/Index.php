@@ -144,9 +144,16 @@ class Index extends Component
             new DashboardFilterData($clientId, $departmentId, $this->rangeDays, $query),
         );
 
-        // Reuse the exact Orders-page workflow-stage source so Dashboard and
-        // Orders always show the same stage names, colors and current counts.
-        $data['orderStages'] = app(OrderListQuery::class)->stages($user);
+        // Reuse the exact Orders-page seven-stage source while applying the same
+        // global period / Client / Team scope as the rest of the dashboard.
+        // Previously this called stages($user), which intentionally returns the
+        // unfiltered Orders-page totals and made these cards ignore dashboard filters.
+        $data['orderStages'] = app(OrderListQuery::class)->dashboardStages(
+            $user,
+            $clientId,
+            $departmentId,
+            $this->rangeDays,
+        );
         $filterOptions = app(\App\Services\FilterOptionService::class);
         $data['dashboardClientFilterOptions'] = $filterOptions->options($user, 'clients', 'dashboard', '', $clientId ?: null, 6);
         $data['dashboardTeamFilterOptions'] = $filterOptions->options($user, 'departments', 'dashboard', '', $departmentId ?: null, 6);
@@ -155,6 +162,18 @@ class Index extends Component
         $cutoff = $today->copy()
             ->subDays(max(0, $this->rangeDays - 1))
             ->startOfDay();
+
+        // Stage cards must open the Orders table with the exact same dashboard
+        // scope that produced the card count. Keep the dashboard's operational
+        // 'touched during period' semantics (updated_at), plus Client and Team.
+        $data['orderStageNavigationQuery'] = array_filter([
+            'dashboard_scope' => 1,
+            'dashboard_range' => $this->rangeDays,
+            'date_from' => $cutoff->toDateString(),
+            'date_to' => $today->toDateString(),
+            'client' => $clientId > 0 ? $clientId : null,
+            'dashboard_team' => $departmentId > 0 ? $departmentId : null,
+        ], static fn ($value) => $value !== null && $value !== '');
 
         $filteredPriorityInquiries = $this->filterCollection(
             $data['priorityInquiries'],

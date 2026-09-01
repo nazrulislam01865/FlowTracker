@@ -12,6 +12,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'showHeader' => true,
     'filterMethod' => 'selectStage',
     'countLabel' => 'Current orders',
+    'navigationQuery' => [],
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -38,6 +39,7 @@ foreach (array_filter(([
     'showHeader' => true,
     'filterMethod' => 'selectStage',
     'countLabel' => 'Current orders',
+    'navigationQuery' => [],
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -105,7 +107,7 @@ unset($__defined_vars, $__key, $__value); ?>
                 <a
                     class="ft-order-workflow-stage-show-all"
                     href="<?php echo e(route('jobs.index')); ?>"
-                    wire:navigate
+                    wire:navigate.hover
                 >
                     <?php echo e($showAllLabel); ?>
 
@@ -170,8 +172,8 @@ unset($__defined_vars, $__key, $__value); ?>
                 <a
                     class="ft-order-workflow-stage-card"
                     style="<?php echo e($style); ?>"
-                    href="<?php echo e(route('jobs.index', ['phase' => $stageId])); ?>"
-                    wire:navigate
+                    href="<?php echo e(route('jobs.index', array_merge($navigationQuery, ['phase' => $stageId]))); ?>"
+                    wire:navigate.hover
                 >
                     <span class="ft-order-workflow-stage-kicker">Stage <?php echo e((int) data_get($stage, 'sequence')); ?></span>
                     <b title="<?php echo e(data_get($stage, 'name')); ?>"><?php echo e($stageName); ?></b>

@@ -18,7 +18,7 @@ class UploadSecurityService
 
     private const ALLOWED_EXTENSIONS = [
         'pdf', 'doc', 'docx', 'xls', 'xlsx', 'jpg', 'jpeg', 'png', 'webp', 'gif',
-        'ico', 'zip', 'txt', 'csv', 'ai', 'eps', 'esp',
+        'ico', 'zip', 'txt', 'csv', 'ai', 'eps', 'esp', 'cdr',
     ];
 
     private const BLOCKED_EXTENSIONS = [
@@ -98,34 +98,40 @@ class UploadSecurityService
 
     private function validateKnownSignature(string $path, string $extension, string $mime, string $originalName): void
     {
-        if ($extension === '' || in_array($extension, ['eps', 'esp', 'ai', 'txt', 'csv'], true)) {
+        if ($extension === '') {
             return;
         }
 
-        // Read enough data for formats whose identifying header may legally be
-        // preceded by a small amount of harmless transport/exporter metadata.
-        // In particular, real PDF files from some design tools include a UTF-8
-        // BOM or whitespace before %PDF-. Laravel/Fileinfo still identifies
-        // those files as PDFs, while the old byte-zero check rejected them.
-        $prefix = file_get_contents($path, false, null, 0, max(self::PDF_HEADER_SCAN_BYTES, 16));
-        abort_if($prefix === false, 422, 'The uploaded file could not be inspected.');
+        $signatureFlexible = in_array($extension, ['eps', 'esp', 'ai', 'cdr', 'txt', 'csv'], true);
 
-        $ok = match ($extension) {
-            'pdf' => $this->hasPdfHeader($prefix),
-            'jpg', 'jpeg' => str_starts_with($prefix, "\xFF\xD8\xFF"),
-            'png' => str_starts_with($prefix, "\x89PNG\r\n\x1A\n"),
-            'gif' => str_starts_with($prefix, 'GIF87a') || str_starts_with($prefix, 'GIF89a'),
-            'webp' => str_starts_with($prefix, 'RIFF') && substr($prefix, 8, 4) === 'WEBP',
-            'zip', 'docx', 'xlsx' => str_starts_with($prefix, "PK\x03\x04") || str_starts_with($prefix, "PK\x05\x06") || str_starts_with($prefix, "PK\x07\x08"),
-            default => true,
-        };
+        if (! $signatureFlexible) {
+            // Read enough data for formats whose identifying header may legally be
+            // preceded by a small amount of harmless transport/exporter metadata.
+            // In particular, real PDF files from some design tools include a UTF-8
+            // BOM or whitespace before %PDF-. Laravel/Fileinfo still identifies
+            // those files as PDFs, while the old byte-zero check rejected them.
+            $prefix = file_get_contents($path, false, null, 0, max(self::PDF_HEADER_SCAN_BYTES, 16));
+            abort_if($prefix === false, 422, 'The uploaded file could not be inspected.');
 
-        if (! $ok) {
-            $safeName = basename($originalName);
-            $type = strtoupper($extension);
-            abort(422, 'The contents of "'.$safeName.'" do not match its '.$type.' file type. Re-export the file or choose the correct file format.');
+            $ok = match ($extension) {
+                'pdf' => $this->hasPdfHeader($prefix),
+                'jpg', 'jpeg' => str_starts_with($prefix, "\xFF\xD8\xFF"),
+                'png' => str_starts_with($prefix, "\x89PNG\r\n\x1A\n"),
+                'gif' => str_starts_with($prefix, 'GIF87a') || str_starts_with($prefix, 'GIF89a'),
+                'webp' => str_starts_with($prefix, 'RIFF') && substr($prefix, 8, 4) === 'WEBP',
+                'zip', 'docx', 'xlsx' => str_starts_with($prefix, "PK\x03\x04") || str_starts_with($prefix, "PK\x05\x06") || str_starts_with($prefix, "PK\x07\x08"),
+                default => true,
+            };
+
+            if (! $ok) {
+                $safeName = basename($originalName);
+                $type = strtoupper($extension);
+                abort(422, 'The contents of "'.$safeName.'" do not match its '.$type.' file type. Re-export the file or choose the correct file format.');
+            }
         }
 
+        // MIME reporting is unreliable for AI/EPS/ESP/CDR, but a file that is
+        // positively identified as HTML is never a valid business attachment.
         if ($mime !== '' && str_starts_with($mime, 'text/html')) {
             abort(422, 'HTML content is not allowed in uploaded business documents.');
         }

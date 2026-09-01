@@ -92,8 +92,6 @@ class LegacyJobService
 
     public function filteredIds(User $user, array $filters): Collection
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
-
         return $this->filteredQuery($user, $filters)
             ->reorder('id')
             ->pluck('id')
@@ -103,7 +101,6 @@ class LegacyJobService
 
     public function paginate(User $user, array $filters, int $perPage = 20): LengthAwarePaginator
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
         $query = $this->filteredQuery($user, $filters)->reorder();
         match ($filters['sort'] ?? 'updated_desc') {
             'due_asc' => $query->orderByRaw('delivery_date is null, delivery_date asc')->orderByDesc('id'),
@@ -159,7 +156,6 @@ class LegacyJobService
         ?int $bulkImportId = null,
     ): Builder
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
         $search = trim($search);
         [$dateFromUtc, $dateToUtc] = app(WorkspaceSettingsService::class)->localDateRangeUtcBounds($dateFrom, $dateTo);
         $searchLength = mb_strlen($search);
@@ -329,7 +325,6 @@ class LegacyJobService
 
     public function summaryCounts(User $user): array
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
         $base = $this->visibleQuery($user);
 
         return [
@@ -498,8 +493,6 @@ class LegacyJobService
      */
     public function findVisibleBase(User $user, int $id): FlowJob
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
-
         return $this->visibleQuery($user)
             ->with([
                 'client:id,name,logo_path',
@@ -920,6 +913,7 @@ class LegacyJobService
             'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
             'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
+            'workflowEmailActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
             'tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->with([
@@ -1060,6 +1054,28 @@ class LegacyJobService
             ->filter(fn ($document) => (int) ($document->task_id ?? 0) > 0)
             ->groupBy(fn ($document) => (int) $document->task_id);
 
+        $appliedRevisionActivityIds = $job->activities()
+            ->where('event', 'job.artwork_revision_applied')
+            ->latest('id')
+            ->limit(100)
+            ->get()
+            ->map(fn ($activity) => (int) data_get($activity->meta, 'revision_activity_id', 0))
+            ->filter()
+            ->unique()
+            ->values();
+
+        // The current Artwork set may contain mixed file versions after a
+        // selective revision. Attach it directly to the upload task so every
+        // Order-detail surface renders accepted files at their existing version
+        // and only replaced files at their incremented version.
+        foreach ($artworkUploadTasks as $artworkUploadTask) {
+            $taskDocuments = collect($documentsByTask->get((int) $artworkUploadTask->id, collect()))->values();
+            $artworkUploadTask->setRelation(
+                'currentArtworkDocuments',
+                app(DocumentService::class)->currentArtworkDocuments($artworkUploadTask, $taskDocuments),
+            );
+        }
+
         $notesByTask = [];
         foreach ($notes as $note) {
             $targetTaskId = (int) data_get($note->meta, 'target_task_id', 0);
@@ -1103,11 +1119,12 @@ class LegacyJobService
             // been answered and the panel must disappear from the task row.
             // The activity itself stays in Order history for audit purposes.
             $sourceArtworkVersion = max(0, (int) data_get($note->meta, 'source_artwork_version', 0));
-            $hasReplacementArtwork = $sourceArtworkVersion > 0
-                ? (int) ($taskDocuments->max('version') ?? 0) > $sourceArtworkVersion
-                : ($referenceDocument
-                    ? $taskDocuments->contains(fn ($document) => (int) $document->id > (int) $referenceDocument->id)
-                    : $taskDocuments->contains(fn ($document) => $document->created_at && $note->created_at && $document->created_at->gt($note->created_at)));
+            $hasReplacementArtwork = $appliedRevisionActivityIds->contains((int) $note->id)
+                || ($sourceArtworkVersion > 0
+                    ? (int) ($taskDocuments->max('version') ?? 0) > $sourceArtworkVersion
+                    : ($referenceDocument
+                        ? $taskDocuments->contains(fn ($document) => (int) $document->id > (int) $referenceDocument->id)
+                        : $taskDocuments->contains(fn ($document) => $document->created_at && $note->created_at && $document->created_at->gt($note->created_at))));
 
             if ($hasReplacementArtwork) {
                 continue;
@@ -1122,12 +1139,19 @@ class LegacyJobService
                 ->map(fn ($id) => $documentsById->get($id))
                 ->filter()
                 ->values();
-            if ($revisionDocuments->isEmpty() && $referenceDocument) {
+            $selectionPending = (bool) data_get($note->meta, 'revision_selection_pending', false);
+            if ($revisionDocuments->isEmpty() && $referenceDocument && ! $selectionPending) {
                 $revisionDocuments = collect([$referenceDocument]);
             }
 
+            $revisionAttachments = collect(data_get($note->meta, 'revision_attachment_document_ids', []))
+                ->map(fn ($id) => $documentsById->get((int) $id))
+                ->filter()
+                ->values();
+
             $note->setRelation('referenceDocument', $referenceDocument);
             $note->setRelation('revisionDocuments', $revisionDocuments);
+            $note->setRelation('revisionAttachments', $revisionAttachments);
 
             $notesByTask[$targetTaskId] ??= collect();
             $notesByTask[$targetTaskId]->push($note);
@@ -1184,8 +1208,6 @@ class LegacyJobService
 
     public function findVisible(User $user, int $id): FlowJob
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
-
         $job = $this->visibleQuery($user)->with([
             'client','orderFlag',
             'workflow.phases.taskPack.items.defaultAssignee',

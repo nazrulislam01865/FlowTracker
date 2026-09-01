@@ -1978,6 +1978,11 @@ body:has(#my-work-app) .lang-btn {
     min-width: 190px
 }
 
+#my-work-app .toolbar-secondary .assignee-filter {
+    width: 230px;
+    min-width: 230px
+}
+
 @media(max-width:900px) {
     #my-work-app .toolbar {
         display: grid;
@@ -2000,7 +2005,8 @@ body:has(#my-work-app) .lang-btn {
         flex-wrap: wrap
     }
 
-    #my-work-app .toolbar-secondary .sort {
+    #my-work-app .toolbar-secondary .sort,
+    #my-work-app .toolbar-secondary .assignee-filter {
         min-width: 180px;
         flex: 1 1 180px
     }
@@ -2023,6 +2029,7 @@ body:has(#my-work-app) .lang-btn {
     }
 
     #my-work-app .toolbar-secondary .sort,
+    #my-work-app .toolbar-secondary .assignee-filter,
     #my-work-app .toolbar-secondary .clear-filters {
         width: 100%;
         min-width: 0
@@ -2210,6 +2217,12 @@ body:has(#my-work-app) .lang-btn {
         max-width: 230px;
     }
 
+    #my-work-app .toolbar-secondary .assignee-filter {
+        width: 230px;
+        min-width: 230px;
+        max-width: 230px;
+    }
+
     #my-work-app .toolbar-secondary .clear-filters {
         margin-left: auto;
     }
@@ -2312,7 +2325,7 @@ body:has(#my-work-app) .lang-btn {
 
     #my-work-app .toolbar-secondary {
         display: grid;
-        grid-template-columns: auto auto minmax(180px, 1fr) auto;
+        grid-template-columns: auto auto minmax(180px, 1fr) minmax(180px, 1fr) auto;
         gap: 8px;
         width: 100%;
         align-items: stretch
@@ -2320,6 +2333,7 @@ body:has(#my-work-app) .lang-btn {
 
     #my-work-app .toolbar-secondary .quick-filters,
     #my-work-app .toolbar-secondary .completed-toggle,
+    #my-work-app .toolbar-secondary .assignee-filter,
     #my-work-app .toolbar-secondary .sort,
     #my-work-app .toolbar-secondary .clear-filters {
         min-width: 0;
@@ -2329,13 +2343,16 @@ body:has(#my-work-app) .lang-btn {
 
     #my-work-app .toolbar-secondary .quick-filters .chip,
     #my-work-app .toolbar-secondary .completed-toggle,
+    #my-work-app .toolbar-secondary .assignee-filter .ft-search-select__trigger,
     #my-work-app .toolbar-secondary .sort,
     #my-work-app .toolbar-secondary .clear-filters {
         min-height: 40px
     }
 
-    #my-work-app .toolbar-secondary .sort {
+    #my-work-app .toolbar-secondary .sort,
+    #my-work-app .toolbar-secondary .assignee-filter {
         width: 100%;
+        min-width: 0;
         max-width: none
     }
 }
@@ -2380,6 +2397,7 @@ body:has(#my-work-app) .lang-btn {
     #my-work-app .toolbar-secondary .quick-filters,
     #my-work-app .toolbar-secondary .quick-filters .chip,
     #my-work-app .toolbar-secondary .completed-toggle,
+    #my-work-app .toolbar-secondary .assignee-filter,
     #my-work-app .toolbar-secondary .sort,
     #my-work-app .toolbar-secondary .clear-filters {
         width: 100%
@@ -2871,6 +2889,7 @@ body:has(#my-work-app) .lang-btn {
 #my-work-app .work-view .toolbar.ft-list-filter-bar .phase-toggle,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .chip,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .completed-toggle,
+#my-work-app .work-view .toolbar.ft-list-filter-bar .assignee-filter .ft-search-select__trigger,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .sort {
     width: 100%;
     min-width: 0;
@@ -2919,6 +2938,8 @@ body:has(#my-work-app) .lang-btn {
 #my-work-app .work-view .toolbar.ft-list-filter-bar .phase-toggle:hover,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .chip:hover,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .completed-toggle:hover,
+#my-work-app .work-view .toolbar.ft-list-filter-bar .assignee-filter .ft-search-select__trigger:hover,
+#my-work-app .work-view .toolbar.ft-list-filter-bar .assignee-filter .ft-search-select__trigger[aria-expanded="true"],
 #my-work-app .work-view .toolbar.ft-list-filter-bar .sort:hover,
 #my-work-app .work-view .toolbar.ft-list-filter-bar .sort:focus {
     border-color: var(--ft-theme-primary-300);
@@ -2983,6 +3004,7 @@ body:has(#my-work-app) .lang-btn {
     #my-work-app .work-view .toolbar.ft-list-filter-bar .phase-toggle,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .chip,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .completed-toggle,
+    #my-work-app .work-view .toolbar.ft-list-filter-bar .assignee-filter .ft-search-select__trigger,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .sort,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .clear-filters {
         min-height: 40px;
@@ -2999,6 +3021,7 @@ body:has(#my-work-app) .lang-btn {
     #my-work-app .work-view .toolbar.ft-list-filter-bar .phase-toggle,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .chip,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .completed-toggle,
+    #my-work-app .work-view .toolbar.ft-list-filter-bar .assignee-filter .ft-search-select__trigger,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .sort,
     #my-work-app .work-view .toolbar.ft-list-filter-bar .clear-filters {
         min-height: 42px;

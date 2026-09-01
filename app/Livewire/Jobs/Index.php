@@ -121,6 +121,12 @@ class Index extends Component
     public bool $showOrderWorkflowActionModal = false;
     public ?int $orderWorkflowActionTaskId = null;
     public string $orderWorkflowActionComment = '';
+    /** Legacy single revision attachment state kept for non-revision compatibility. */
+    public $orderWorkflowActionAttachment = null;
+    /** Per-artwork required-change text keyed by source document id. */
+    public array $orderWorkflowActionRevisionComments = [];
+    /** Per-artwork supporting uploads keyed by source document id. */
+    public array $orderWorkflowActionRevisionAttachments = [];
     public string $orderWorkflowActionStep = 'main';
     /** @var array<string,mixed> */
     public array $orderWorkflowActionPayload = [];
@@ -128,6 +134,8 @@ class Index extends Component
     public bool $orderWorkflowEmailFallback = false;
     public string $orderWorkflowEmailFallbackMessage = '';
     public int $orderWorkflowEmailFallbackAttempts = 0;
+    /** Immediate per-task resend result shown beside the completed Artwork email handoff. */
+    public array $orderWorkflowEmailResendFeedback = [];
     public string $jobTaskSearch = '';
     public bool $showCreate = false;
     public bool $createCatalogReady = false;
@@ -249,6 +257,10 @@ class Index extends Component
     public string $overviewTaskDocumentSource = 'upload';
     /** Files selected in the Order Details workflow upload modal. */
     public array $overviewTaskDocumentUpload = [];
+    /** Replacement files for the currently selected Artwork revision targets. */
+    public array $overviewTaskRevisionUpload = [];
+    /** Artwork files selected for replacement in an active revision upload. */
+    public array $overviewTaskRevisionDocumentIds = [];
     public ?int $overviewTaskExistingDocumentId = null;
     public string $overviewTaskDocumentNote = '';
     public ?int $overviewTaskLinkFormTaskId = null;

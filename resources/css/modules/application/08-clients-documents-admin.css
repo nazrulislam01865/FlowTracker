@@ -3656,3 +3656,25 @@
     }
 }
 
+
+/* Activity comment composers: editor full width, Comment action below. */
+.ft-comment-composer.ft-friendly-composer {
+    grid-template-columns: 32px minmax(0, 1fr) !important;
+    align-items: start !important;
+}
+
+.ft-comment-composer.ft-friendly-composer > .ft-rich-text,
+.ft-comment-composer.ft-friendly-composer > textarea,
+.ft-comment-composer.ft-friendly-composer > .ft-mention-input {
+    grid-column: 2;
+    width: 100%;
+    min-width: 0;
+}
+
+.ft-comment-composer.ft-friendly-composer > .ft-new-job-btn {
+    grid-column: 2 !important;
+    justify-self: end;
+    width: auto !important;
+    min-width: 88px;
+    margin-top: 0 !important;
+}

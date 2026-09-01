@@ -6,6 +6,7 @@
             || filled($dateFrom)
             || filled($dateTo)
             || filled($metricFilter)
+            || $dashboardScope
             || (int) $importFilterId > 0
             || $selectedStageFiltersActive;
         $orderToolbarAllActive = ! $orderToolbarAnyFilterActive;
@@ -82,7 +83,7 @@
                     to-property="dateTo"
                     :from-value="$dateFrom"
                     :to-value="$dateTo"
-                    label="Created date range"
+                    label="{{ $dashboardScope ? 'Activity date range' : 'Created date range' }}"
                     from-label="From"
                     to-label="To"
                 />
@@ -95,6 +96,15 @@
                 ><span aria-hidden="true">×</span> Clear filter</button>
             </div>
         </div>
+
+        @if($dashboardScope)
+            <div class="import-filter-line" role="status">
+                <b>Dashboard period:</b>
+                {{ $dashboardRangeDays === 1 ? 'Today' : ($dashboardRangeDays > 0 ? $dashboardRangeDays.' days' : $dateFrom.' to '.$dateTo) }}
+                <span>· Orders active in this stage and updated during the selected period</span>
+                @if(filled($dashboardTeamLabel))<span>· Team: {{ $dashboardTeamLabel }}</span>@endif
+            </div>
+        @endif
 
         @if($selectedStage)
             <div class="stage-inline-controls">
@@ -233,5 +243,5 @@
 
         <div class="active-filter-line">
             <span>{{ number_format($jobs->total()) }} {{ \Illuminate\Support\Str::plural('order', $jobs->total()) }}</span>
-            <span>{{ $selectedStage ? $stageName.' filter · same Orders page' : 'Showing all workflow stages' }}</span>
+            <span>{{ $selectedStage ? $stageName.' filter'.($dashboardScope ? ' · dashboard period applied' : ' · same Orders page') : 'Showing all workflow stages' }}</span>
         </div>

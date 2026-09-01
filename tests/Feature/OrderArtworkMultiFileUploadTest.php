@@ -18,19 +18,23 @@ class OrderArtworkMultiFileUploadTest extends TestCase
         $this->assertStringContainsString('@if($inputAllowsMultiple) multiple @endif', $modal);
         $this->assertStringContainsString('Up to 10 files', $modal);
         $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $index }})', $modal);
+        $this->assertStringContainsString('wire:model="overviewTaskRevisionUpload.{{ $revisionDocumentId }}"', $modal);
+        $this->assertStringContainsString('Upload the corrected file for this artwork only.', $modal);
 
         $this->assertStringContainsString('public array $overviewTaskDocumentUpload = [];', $jobComponent);
         foreach ([$jobUploads, $orderList] as $component) {
             $this->assertStringContainsString("'overviewTaskDocumentUpload' => ['required', 'array', 'min:1'", $component);
             $this->assertStringContainsString("'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules", $component);
-            $this->assertStringContainsString('storeMany($this->overviewTaskDocumentUpload', $component);
+            $this->assertStringContainsString('$uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;', $component);
+            $this->assertStringContainsString('storeMany($uploads', $component);
             $this->assertStringContainsString('storeArtworkRevision(', $component);
             $this->assertStringContainsString('catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception)', $component);
-            $this->assertStringContainsString("\$this->addError(\n                    'overviewTaskDocumentUpload'", $component);
+            $this->assertStringContainsString("\$isArtworkRevision ? 'overviewTaskRevisionUpload' : 'overviewTaskDocumentUpload'", $component);
             $this->assertStringContainsString('function removeOverviewTaskDocumentUpload(', $component);
         }
 
         $this->assertStringContainsString('public function storeMany(', $documents);
+        $this->assertStringContainsString('mapArtworkRevisionReplacementFiles(', $documents);
         $this->assertStringContainsString('return DB::transaction(function () use ($files, $data, $user, $permissionModule, &$storedPaths)', $documents);
         $this->assertStringContainsString("\$fileData['artwork_batch_version'] = \$artworkBatchVersion", $documents);
         $this->assertStringContainsString('$version = $isArtworkTask && $batchVersion > 0', $documents);
@@ -43,13 +47,13 @@ class OrderArtworkMultiFileUploadTest extends TestCase
         $workflowModal = file_get_contents(resource_path('views/components/jobs/order-detail/workflow-action-modal.blade.php'));
         $emailService = file_get_contents(app_path('Services/Orders/OrderWorkflowEmailService.php'));
 
-        $this->assertStringContainsString("where('version', \$latestArtworkVersion)", $row);
+        $this->assertStringContainsString('currentArtworkDocuments', $row);
         $this->assertStringContainsString('? $latestArtworkDocuments', $row);
-        $this->assertStringContainsString("where('version', \$latestArtworkVersion)", $taskAttachments);
-        $this->assertStringContainsString("where('version', \$artworkVersion)", $workflowModal);
+        $this->assertStringContainsString('currentArtworkDocuments', $taskAttachments);
+        $this->assertStringContainsString('currentArtworkDocuments', $workflowModal);
 
         $this->assertStringContainsString('private function sourceDocuments(', $emailService);
-        $this->assertStringContainsString("where('version', \$latestVersion)", $emailService);
+        $this->assertStringContainsString('currentArtworkDocuments(', $emailService);
         $this->assertStringContainsString('attachments: $attachments', $emailService);
         $this->assertStringContainsString("'document_ids' => \$documents->pluck('id')", $emailService);
     }

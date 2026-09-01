@@ -6,6 +6,7 @@ use App\Http\Controllers\Controller;
 use App\Services\BrandingService;
 use App\Services\Inquiries\InquiryRfqService;
 use App\Services\Inquiries\PublicRfqPortalService;
+use App\Support\AttachmentUpload;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
@@ -91,7 +92,7 @@ final class PublicInquiryRfqController extends Controller
                 'notes' => ['nullable', 'string', 'max:5000'],
                 'document_notes' => ['nullable', 'string', 'max:5000'],
                 'documents' => ['nullable', 'array', 'max:10'],
-                'documents.*' => ['file', 'mimes:pdf,xlsx,docx,jpg,jpeg,png', 'max:20480'],
+                'documents.*' => AttachmentUpload::itemRules(AttachmentUpload::BUSINESS_DOCUMENTS, 20480),
             ]);
 
             $prices = collect($data['prices'] ?? [])->mapWithKeys(fn ($price, $itemId) => [(int) $itemId => $price]);
@@ -158,7 +159,7 @@ final class PublicInquiryRfqController extends Controller
         $invitation = $rfq->findPublicInvitation($token);
         $data = $request->validate([
             'documents' => ['required', 'array', 'min:1', 'max:10'],
-            'documents.*' => ['required', 'file', 'mimes:pdf,xlsx,docx,jpg,jpeg,png', 'max:20480'],
+            'documents.*' => AttachmentUpload::requiredRules(AttachmentUpload::BUSINESS_DOCUMENTS, 20480),
             'document_types' => ['nullable', 'array'],
             'document_types.*' => ['nullable', 'in:'.implode(',', array_keys(PublicRfqPortalService::DOCUMENT_TYPES))],
             'supporting_information' => ['nullable', 'array'],

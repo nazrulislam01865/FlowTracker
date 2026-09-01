@@ -74,6 +74,55 @@ class RichTextService
         return $this->sanitizeHtml(substr(ltrim((string) $value), strlen(self::MARKER)));
     }
 
+    /**
+     * Return privately stored inline images as file-style presentation data.
+     * This lets compact activity cards reuse the same Open/Download treatment
+     * as normal Document attachments instead of forcing a large inline image.
+     *
+     * @return list<array{name:string,extension:string,url:string,download_url:string}>
+     */
+    public function imageAttachments(?string $value): array
+    {
+        $html = $this->safeHtml($value);
+        if (!$html) return [];
+
+        preg_match_all('/<img\b[^>]*\bsrc="([^"]+)"[^>]*>/i', $html, $matches);
+
+        return collect($matches[1] ?? [])
+            ->map(function (string $src): ?array {
+                $path = (string) (parse_url(html_entity_decode($src, ENT_QUOTES | ENT_HTML5, 'UTF-8'), PHP_URL_PATH) ?: '');
+                if (preg_match('#(?:^|/)rich-text-images/([A-Za-z0-9-]+\.(?:png|jpe?g|webp|gif))$#i', $path, $match) !== 1) {
+                    return null;
+                }
+
+                $filename = $match[1];
+
+                return [
+                    'name' => $filename,
+                    'extension' => strtoupper(pathinfo($filename, PATHINFO_EXTENSION) ?: 'IMG'),
+                    'url' => route('rich-text-images.show', ['filename' => $filename], false),
+                    'download_url' => route('rich-text-images.download', ['filename' => $filename], false),
+                ];
+            })
+            ->filter()
+            ->unique('name')
+            ->values()
+            ->all();
+    }
+
+    /** Return the rich content with inline images removed, preserving its text formatting. */
+    public function withoutImages(?string $value): ?string
+    {
+        $value = trim((string) $value);
+        if ($value === '') return null;
+        if (!$this->isRich($value)) return $value;
+
+        $html = $this->safeHtml($value) ?? '';
+        $html = trim(preg_replace('/<img\b[^>]*>/i', '', $html) ?? $html);
+
+        return $this->htmlHasContent($html) ? self::MARKER.$html : null;
+    }
+
     public function prependText(string $prefix, ?string $value): string
     {
         $prefix = trim($prefix);

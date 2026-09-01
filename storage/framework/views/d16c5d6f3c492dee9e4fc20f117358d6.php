@@ -79,6 +79,7 @@ unset($__defined_vars, $__key, $__value); ?>
             x-on:click.stop
             x-on:click.outside="if(editing) cancelEdit()"
             x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+            x-on:task-assignee-updated.window="if (Number($event.detail?.taskId) === Number(<?php echo e((int) $ownerTask->id); ?>)) syncConfirmed(String($event.detail?.assigneeId ?? ''), String($event.detail?.assigneeName ?? 'Unassigned'), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
             x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob(<?php echo e((int) $ownerTask->id); ?>, draftValue), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
         >
             <div class="ft-order-inline-display-row">

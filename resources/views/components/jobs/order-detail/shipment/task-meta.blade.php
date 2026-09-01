@@ -16,6 +16,7 @@
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         x-on:click.outside="if(editing) cancelEdit()"
         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+        x-on:task-assignee-updated.window="if (Number($event.detail?.taskId) === Number({{ $task->id }})) syncConfirmed(String($event.detail?.assigneeId ?? ''), String($event.detail?.assigneeName ?? 'Unassigned'), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
         x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob({{ $task->id }}, draftValue), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
     >
         <span>ASSIGNEE</span>

@@ -18,7 +18,7 @@
     <div class="collapse-body ft-order-disclosure-body" data-order-disclosure-body>
         @if($canUpload)
             <div class="attachment-drop ft-order-attachment-drop {{ $errors->has('jobDocumentUploads') || $errors->has('jobDocumentUploads.*') ? 'has-error' : '' }}">
-                <label data-file-dropzone data-auto-upload-method="uploadGeneralOrderDocuments" for="orderGeneralAttachment-{{ $job->id }}"><b>⌕ &nbsp; Drop files here or <span>browse</span></b><div class="card-sub">PDF, Office files, JPG, PNG, ZIP, AI, EPS, ESP · Max 20 MB</div><input id="orderGeneralAttachment-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp"></label>
+                <label data-file-dropzone data-auto-upload-method="uploadGeneralOrderDocuments" for="orderGeneralAttachment-{{ $job->id }}"><b>⌕ &nbsp; Drop files here or <span>browse</span></b><div class="card-sub">{{ \App\Support\AttachmentUpload::helperText(20) }}</div><input id="orderGeneralAttachment-{{ $job->id }}" type="file" wire:model="jobDocumentUploads" multiple accept="{{ \App\Support\AttachmentUpload::accept() }}"></label>
             </div>
             @error('jobDocumentUploads')<div class="validation-error ft-order-upload-error">{{ $message }} <button type="button" wire:click="clearJobDocumentUploads">Clear</button></div>@enderror
             @if(count($jobDocumentUploads ?? []))

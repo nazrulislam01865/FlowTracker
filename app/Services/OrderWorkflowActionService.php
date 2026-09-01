@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Activity;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Task;
@@ -74,7 +75,7 @@ class OrderWorkflowActionService
         $hasEvidence ??= $this->loadedEvidenceState($task);
 
         $label = match ($key) {
-            'NEW_UPLOAD_PO' => 'Upload Purchase Order',
+            'NEW_UPLOAD_PO' => $hasEvidence ? 'Add other documents' : 'Upload Purchase Order',
             'NEW_SEND_PO_ARTWORK' => 'Send to Artwork Team',
             'ART_PREPARE_UPLOAD' => $hasEvidence ? 'Upload Revised Artwork' : 'Upload Artwork',
             'ART_INTERNAL_REVIEW' => 'Review Artwork',
@@ -237,7 +238,19 @@ class OrderWorkflowActionService
         $inspected = $units > 0 ? max(1, min($units, (int) ceil($units * 0.10))) : 1;
 
         $payload = [
+            'revision_document_id' => null,
             'revision_document_ids' => [],
+            'revision_items' => [],
+            'recipient_type' => 'team',
+            'to_user_id' => null,
+            'to_email' => '',
+            'to_emails' => '',
+            'external_to_name' => '',
+            'external_to_email' => '',
+            'assignee_user_id' => null,
+            'cc_user_ids' => [],
+            'cc_emails' => '',
+            'external_cc_emails' => '',
             'qty_received' => $units ?: 1,
             'qty_inspected' => $inspected,
             'qty_accepted' => $inspected,
@@ -302,21 +315,26 @@ class OrderWorkflowActionService
      *
      * @param array<string,mixed> $payload
      */
-    public function perform(Task $task, User $actor, ?string $decision = null, ?string $comment = null, array $payload = []): Task
+    public function perform(Task $task, User $actor, ?string $decision = null, ?string $comment = null, array $payload = [], array $attachments = []): Task
     {
-        return DB::transaction(function () use ($task, $actor, $decision, $comment, $payload): Task {
+        return DB::transaction(function () use ($task, $actor, $decision, $comment, $payload, $attachments): Task {
             $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
             abort_unless((int) $locked->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
             app(OrderTaskSequenceService::class)->assertStatusActionable($locked);
+            $locked = app(TaskService::class)->claimForAction($locked, $actor, 'performed a workflow action');
 
             $key = $this->automationKey($locked);
             $decision = strtolower(trim((string) $decision));
-            $comment = trim((string) $comment);
+            $comment = app(RichTextService::class)->normalize(
+                $comment,
+                10000,
+                'orderWorkflowActionComment',
+            ) ?? '';
 
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'revise') {
-                $this->requireComment($comment, 'Add revision instructions before requesting a revision.');
-                $this->restartArtwork($locked, $actor, $comment, 'Internal artwork revision requested', $payload);
+                $activity = $this->restartArtwork($locked, $actor, 'Internal artwork revision requested', $payload, $comment);
+                $this->storeArtworkRevisionAttachments($activity, $locked, $actor, $attachments);
                 return $locked->refresh();
             }
 
@@ -334,8 +352,8 @@ class OrderWorkflowActionService
             }
 
             if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'revise') {
-                $this->requireComment($comment, 'Add the client revision request before continuing.');
-                $this->restartArtwork($locked, $actor, $comment, 'Client artwork revision requested', $payload);
+                $activity = $this->restartArtwork($locked, $actor, 'Client artwork revision requested', $payload, $comment);
+                $this->storeArtworkRevisionAttachments($activity, $locked, $actor, $attachments);
                 return $locked->refresh();
             }
 
@@ -599,7 +617,7 @@ class OrderWorkflowActionService
             if (in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
                 abort_unless($decision === 'confirm', 422, 'Confirm the email handoff before sending.');
 
-                app(\App\Services\Orders\OrderWorkflowEmailService::class)->send($locked, $actor);
+                app(\App\Services\Orders\OrderWorkflowEmailService::class)->send($locked, $actor, $payload);
 
                 return $this->complete($locked, $actor);
             }
@@ -656,12 +674,28 @@ class OrderWorkflowActionService
 
             abort_unless((int) $locked->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
             app(OrderTaskSequenceService::class)->assertStatusActionable($locked);
+            $locked = app(TaskService::class)->claimForAction($locked, $actor, 'completed an email handoff manually');
 
             $key = $this->automationKey($locked);
             abort_unless(in_array($key, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true), 422, 'This task does not support manual completion after email failure.');
             abort_unless((int) ($failure['task_id'] ?? 0) === (int) $locked->id, 422, 'The email-failure confirmation does not belong to this task.');
             abort_unless((string) ($failure['handoff_key'] ?? '') === (string) $key, 422, 'The email-failure confirmation is no longer valid for this task.');
             abort_unless((int) ($failure['attempts'] ?? 0) >= 3, 422, 'Manual completion is available only after three failed email delivery attempts.');
+
+            if ($key === 'NEW_SEND_PO_ARTWORK') {
+                $recipientId = (int) ($failure['assignment_user_id'] ?? $failure['primary_recipient_user_id'] ?? 0);
+                if ($recipientId > 0) {
+                    $recipient = User::query()->where('is_active', true)->find($recipientId);
+                    abort_unless($recipient, 422, 'The selected Artwork recipient is no longer active. Retry the handoff with another user.');
+                    $artworkTask = Task::query()
+                        ->where('flow_job_id', $job->id)
+                        ->with('setupTemplate')
+                        ->get()
+                        ->first(fn (Task $candidate) => $this->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
+                    abort_unless($artworkTask, 422, 'The Prepare & Upload Artwork task is not configured for this Order.');
+                    app(TaskService::class)->assignFromWorkflowHandoff($artworkTask, $recipient, $actor);
+                }
+            }
 
             $attachmentLabel = $key === 'ART_SEND_ORDER_TEAM' ? 'Artwork' : 'Purchase Order';
             $job->activities()->create([
@@ -688,6 +722,11 @@ class OrderWorkflowActionService
         $key = $this->automationKey($task);
         if (! in_array($key, self::DOCUMENT_ACTIONS, true)) return;
 
+        // Completed file-backed tasks can still accept supporting documents.
+        // Adding those files is evidence management only and must not run the
+        // completion/phase-advance side effects for a second time.
+        if ($task->completed_at || strcasecmp(trim((string) $task->status), 'Completed') === 0) return;
+
         if ($key === 'ART_SAMPLE_APPROVAL') {
             $this->complete($task, $actor);
             $waiting = Task::query()
@@ -711,15 +750,20 @@ class OrderWorkflowActionService
     }
 
     /**
-     * Reopen the Artwork upload task for only the artwork files explicitly
-     * selected by the reviewer. The selection is stored on the revision event
-     * so the later upload can replace only those files while carrying the other
-     * files forward unchanged into the next artwork version.
+     * Reopen Artwork preparation for one or more current artwork files.
+     * Every selected artwork carries its own required-change note and can carry
+     * its own set of supporting attachments. Unselected artwork is preserved in
+     * the next version by DocumentService.
      *
      * @param array<string,mixed> $payload
      */
-    private function restartArtwork(Task $current, User $actor, string $comment, string $description, array $payload = []): void
-    {
+    private function restartArtwork(
+        Task $current,
+        User $actor,
+        string $description,
+        array $payload = [],
+        string $legacyComment = '',
+    ): Activity {
         $job = $current->job;
         $tasks = Task::query()
             ->where('flow_job_id', $current->flow_job_id)
@@ -730,16 +774,8 @@ class OrderWorkflowActionService
         $upload = $tasks->first(fn (Task $candidate) => $this->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
         abort_unless($upload, 422, 'Artwork upload task is not configured.');
 
-        $latestVersion = max(0, (int) $upload->documents()->max('version'));
-        $latestDocuments = $latestVersion > 0
-            ? $upload->documents()->where('version', $latestVersion)->orderBy('id')->get()
-            : collect();
-
-        $requestedDocumentIds = collect($payload['revision_document_ids'] ?? [])
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn ($id) => $id > 0)
-            ->unique()
-            ->values();
+        $latestDocuments = app(DocumentService::class)->currentArtworkDocuments($upload);
+        $latestVersion = max(0, (int) ($latestDocuments->max('version') ?? 0));
 
         if ($latestDocuments->isEmpty()) {
             throw ValidationException::withMessages([
@@ -747,26 +783,76 @@ class OrderWorkflowActionService
             ]);
         }
 
-        if ($requestedDocumentIds->isEmpty()) {
+        $requestedIds = collect($payload['revision_document_ids'] ?? [])
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->values();
+
+        // Backward compatibility with an already-open dialog from the previous
+        // single-artwork implementation.
+        if ($requestedIds->isEmpty()) {
+            $legacyId = (int) ($payload['revision_document_id'] ?? 0);
+            if ($legacyId > 0) $requestedIds = collect([$legacyId]);
+        }
+
+        if ($requestedIds->isEmpty()) {
             throw ValidationException::withMessages([
                 'orderWorkflowActionPayload.revision_document_ids' => 'Select at least one artwork file that needs revision.',
             ]);
         }
 
         $latestIds = $latestDocuments->pluck('id')->map(fn ($id) => (int) $id);
-        if ($requestedDocumentIds->contains(fn ($id) => ! $latestIds->contains((int) $id))) {
+        if ($requestedIds->contains(fn ($id) => ! $latestIds->contains((int) $id))) {
             throw ValidationException::withMessages([
                 'orderWorkflowActionPayload.revision_document_ids' => 'One of the selected artwork files is no longer part of the latest artwork set. Reopen the review and try again.',
             ]);
         }
 
-        // Preserve the visual order from the latest artwork set instead of the
-        // checkbox submission order. This gives the upload step a deterministic
-        // one-to-one replacement order when several files require revision.
         $revisionDocuments = $latestDocuments
-            ->filter(fn (Document $document) => $requestedDocumentIds->contains((int) $document->id))
+            ->filter(fn (Document $document) => $requestedIds->contains((int) $document->id))
             ->values();
         $revisionDocumentIds = $revisionDocuments->pluck('id')->map(fn ($id) => (int) $id)->all();
+
+        $payloadItems = collect($payload['revision_items'] ?? [])
+            ->mapWithKeys(function ($item) {
+                $id = (int) data_get($item, 'document_id', 0);
+                return $id > 0 ? [$id => (array) $item] : [];
+            });
+
+        $richText = app(RichTextService::class);
+        $revisionItems = [];
+        $mentionIds = collect();
+        foreach ($revisionDocuments as $document) {
+            $documentId = (int) $document->id;
+            $rawComment = trim((string) data_get($payloadItems->get($documentId, []), 'comment', ''));
+            if ($rawComment === '' && count($revisionDocumentIds) === 1) {
+                $rawComment = trim($legacyComment);
+            }
+
+            $comment = $richText->normalize(
+                $rawComment,
+                10000,
+                'orderWorkflowActionRevisionComments.'.$documentId,
+            ) ?? '';
+            if (trim((string) $richText->withoutImages($comment)) === '' && $richText->imageAttachments($comment) === []) {
+                throw ValidationException::withMessages([
+                    'orderWorkflowActionRevisionComments.'.$documentId => 'Describe the required change for this artwork.',
+                ]);
+            }
+
+            $itemMentionIds = app(MentionService::class)->userIdsFromText($comment);
+            $mentionIds = $mentionIds->merge($itemMentionIds);
+            $revisionItems[] = [
+                'document_id' => $documentId,
+                'document_name' => (string) $document->name,
+                'comment' => $comment,
+                'mention_user_ids' => array_values(array_unique(array_map('intval', $itemMentionIds))),
+                'revision_attachment_document_ids' => [],
+                'revision_attachment_document_names' => [],
+            ];
+        }
+        $mentionIds = $mentionIds->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
 
         $ready = app(OrderTaskFlagService::class)->readyStatus();
         $notStarted = app(OrderTaskFlagService::class)->notStartedStatus();
@@ -788,22 +874,97 @@ class OrderWorkflowActionService
         }
 
         $referenceDocumentId = (int) ($revisionDocuments->last()?->id ?? 0);
+        $legacyRevisionComment = count($revisionItems) === 1
+            ? (string) ($revisionItems[0]['comment'] ?? '')
+            : collect($revisionItems)
+                ->map(fn ($item) => ($item['document_name'] ?? 'Artwork').': '.trim((string) ($item['comment'] ?? '')))
+                ->implode("\n");
+        $activityDescription = count($revisionItems) === 1
+            ? $richText->prependText($description.':', $legacyRevisionComment)
+            : $description.' for '.count($revisionItems).' artworks.';
 
-        $job?->activities()->create([
+        $activity = $job?->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.artwork_revision_requested',
-            'description' => $description.': '.$comment,
+            'description' => $activityDescription,
             'meta' => [
-                'revision_comment' => $comment,
+                'revision_comment' => $legacyRevisionComment,
+                'revision_items' => $revisionItems,
+                'mention_user_ids' => $mentionIds,
                 'source_task_id' => (int) $current->id,
                 'target_task_id' => (int) $upload->id,
                 'workflow_phase_id' => (int) $current->workflow_phase_id,
                 'reference_document_id' => $referenceDocumentId > 0 ? $referenceDocumentId : null,
                 'revision_document_ids' => $revisionDocumentIds,
+                'revision_document_id' => count($revisionDocumentIds) === 1 ? $revisionDocumentIds[0] : null,
                 'revision_document_names' => $revisionDocuments->pluck('name')->values()->all(),
+                'revision_selection_pending' => false,
                 'source_artwork_version' => $latestVersion,
+                'source_artwork_document_ids' => $latestDocuments->pluck('id')->map(fn ($id) => (int) $id)->values()->all(),
             ],
         ]);
+
+        abort_unless($activity, 500, 'The artwork revision activity could not be recorded.');
+
+        app(NotificationService::class)->notifyMentionedUsers(
+            $mentionIds,
+            $actor->name.' mentioned you in '.$job->displayOrderNumber(),
+            $legacyRevisionComment,
+            $job,
+            $upload,
+            $actor,
+        );
+
+        return $activity;
+    }
+
+    /**
+     * Store supporting files under the review task, grouped by the artwork they
+     * explain. A flat attachment id list is also kept for backward-compatible
+     * activity rendering and exports.
+     *
+     * @param array<int|string,mixed> $attachments
+     */
+    private function storeArtworkRevisionAttachments(Activity $activity, Task $reviewTask, User $actor, array $attachments): void
+    {
+        $meta = (array) $activity->meta;
+        $revisionItems = collect($meta['revision_items'] ?? [])->values();
+        if ($revisionItems->isEmpty()) return;
+
+        // Compatibility with callers that still pass one flat file array.
+        $isFlat = collect($attachments)->filter()->contains(
+            fn ($value) => is_object($value) && method_exists($value, 'getClientOriginalName')
+        );
+        if ($isFlat) {
+            $firstDocumentId = (int) data_get($revisionItems->first(), 'document_id', 0);
+            $attachments = $firstDocumentId > 0 ? [$firstDocumentId => $attachments] : [];
+        }
+
+        $allStored = collect();
+        $updatedItems = $revisionItems->map(function ($item) use ($attachments, $reviewTask, $actor, $allStored) {
+            $item = (array) $item;
+            $documentId = (int) ($item['document_id'] ?? 0);
+            $files = array_values(array_filter((array) ($attachments[$documentId] ?? $attachments[(string) $documentId] ?? [])));
+            if ($files === []) return $item;
+
+            $documents = app(DocumentService::class)->storeMany($files, [
+                'flow_job_id' => $reviewTask->flow_job_id,
+                'client_id' => $reviewTask->job?->client_id,
+                'task_id' => $reviewTask->id,
+                'category' => 'Artwork revision evidence',
+                'note' => 'Supporting attachment for artwork revision request: '.($item['document_name'] ?? 'Artwork').'.',
+            ], $actor);
+
+            foreach ($documents as $document) $allStored->push($document);
+            $item['revision_attachment_document_ids'] = $documents->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+            $item['revision_attachment_document_names'] = $documents->pluck('name')->values()->all();
+            return $item;
+        })->values()->all();
+
+        $meta['revision_items'] = $updatedItems;
+        $meta['revision_attachment_document_ids'] = $allStored->pluck('id')->map(fn ($id) => (int) $id)->values()->all();
+        $meta['revision_attachment_document_names'] = $allStored->pluck('name')->values()->all();
+        $activity->update(['meta' => $meta]);
     }
 
     private function loadedEvidenceState(Task $task): bool

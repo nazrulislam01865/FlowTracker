@@ -53,6 +53,24 @@
                     <span class="completed-check" aria-hidden="true">✓</span>
                     <span>Hide completed</span>
                 </label>
+                <x-ui.search-select
+                    class="assignee-filter"
+                    label="Assignee"
+                    property="assignee"
+                    :value="$assignee"
+                    placeholder="All"
+                    :options="collect([['id' => 'unassigned', 'label' => 'Unassigned']])->concat(
+                        $assigneeFilterOptions->map(fn ($option) => [
+                            'id' => (string) $option->id,
+                            'label' => $option->name,
+                        ])
+                    )"
+                    search-placeholder="Search people…"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="300"
+                    wire:key="all-tasks-assignee-filter-{{ $assignee ?: 'all' }}"
+                />
                 <select class="sort" wire:model.live="taskSort" aria-label="Sort All Tasks">
                     <option value="action">Sort: Action priority</option>
                     <option value="due">Sort: Due soon</option>
@@ -74,8 +92,8 @@
             </span>
             <span class="load-actions">
                 <span class="loading-copy">
-                    <span wire:loading.remove wire:target="search,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
-                    <span wire:loading.delay.long wire:target="search,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
+                    <span wire:loading.remove wire:target="search,assignee,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage">Results update after 650 ms</span>
+                    <span wire:loading.delay.long wire:target="search,assignee,taskPhaseFilter,taskQuick,taskSort,hideCompleted,setTaskMetricFilter,setTaskPhaseFilter,setTaskQuick,clearFilters,clearTaskSearch,gotoPage,previousPage,nextPage"><i class="spinner"></i> Searching all visible work…</span>
                 </span>
                 <span class="group-controls" aria-label="Order group controls">
                     <button type="button" class="group-control" x-on:click="groupsExpanded = true" title="Expand all Orders" aria-label="Expand all Orders">

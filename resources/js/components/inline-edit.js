@@ -306,6 +306,30 @@ export const createInlineEdit = (config = {}) => {
                     .toUpperCase() || '?';
             },
 
+            syncConfirmed(nextValue, nextDisplay, nextOptions = {}) {
+                const confirmedValue = normalize(nextValue);
+                const confirmedDisplay = normalize(nextDisplay ?? nextValue);
+                const hasAvatarOverride = nextOptions && Object.prototype.hasOwnProperty.call(nextOptions, 'avatarUrl');
+
+                this.serverValue = confirmedValue;
+                this.value = confirmedValue;
+                this.savedValue = confirmedValue;
+                this.draftValue = confirmedValue;
+                this.display = confirmedDisplay;
+                this.savedDisplay = confirmedDisplay;
+                if (hasAvatarOverride) {
+                    const confirmedAvatarUrl = normalize(nextOptions.avatarUrl);
+                    this.avatarUrl = confirmedAvatarUrl;
+                    this.savedAvatarUrl = confirmedAvatarUrl;
+                }
+                this.editing = false;
+
+                if (this.status !== 'saving') {
+                    this.status = '';
+                    this.error = '';
+                }
+            },
+
             async commit(nextValue, nextDisplay, requestFactory, nextOptions = {}) {
                 if (typeof requestFactory !== 'function' || this.status === 'saving') return false;
 

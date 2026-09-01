@@ -53,24 +53,13 @@ unset($__defined_vars, $__key, $__value); ?>
         ->filter()
         ->unique()
         ->values();
-    // Artwork files selected together share a version. Show the complete latest
-    // revision set while older revisions remain available from version history.
-    $artworkVersionDocuments = $isArtworkUploadTask
-        ? $taskDocuments
-            ->sortBy(function ($document) {
-                $version = (int) ($document->version ?? 0);
-
-                return [
-                    $version > 0 ? $version : 999999,
-                    optional($document->created_at)->timestamp ?? 0,
-                    (int) $document->id,
-                ];
-            })
-            ->values()
-        : collect();
-    $latestArtworkVersion = max(0, (int) ($artworkVersionDocuments->max('version') ?? 0));
-    $latestArtworkDocuments = $latestArtworkVersion > 0
-        ? $artworkVersionDocuments->where('version', $latestArtworkVersion)->sortBy('id')->values()
+    // Selective Artwork revision is file-specific: accepted files keep their
+    // previous version while only replaced files increment. Use the hydrated
+    // current set instead of assuming every current file shares max(version).
+    $latestArtworkDocuments = $isArtworkUploadTask
+        ? ($task->relationLoaded('currentArtworkDocuments')
+            ? collect($task->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
+            : app(\App\Services\DocumentService::class)->currentArtworkDocuments($task, $taskDocuments))
         : collect();
     $latestArtworkDocument = $latestArtworkDocuments->last();
     $resourceDocuments = $isArtworkUploadTask
@@ -97,6 +86,24 @@ unset($__defined_vars, $__key, $__value); ?>
     $workflowAction = data_get($context, 'taskActions.'.(int) $task->id, []);
     $workflowActionLabel = (string) ($workflowAction['label'] ?? 'Take action');
     $workflowActionType = (string) ($workflowAction['type'] ?? 'workflow');
+    $workflowEmailStatus = (array) data_get($context, 'workflowEmailStatuses.'.(int) $task->id, []);
+    $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
+    $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
+    $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
+    $emailResendFeedbackStatus = strtolower(trim((string) ($emailResendFeedback['email_status'] ?? '')));
+    $isArtworkEmailTask = $automationKey === 'ART_SEND_ORDER_TEAM';
+    $emailDeliveryStatus = strtolower(trim((string) ($workflowEmailStatus['status'] ?? '')));
+    if (in_array($emailResendFeedbackStatus, ['sent', 'failed', 'not_sent'], true)) $emailDeliveryStatus = $emailResendFeedbackStatus;
+    // Completed legacy rows may predate delivery tracking. Show an explicit
+    // Not Sent state instead of silently hiding email status.
+    if ($isArtworkEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
+    $emailDeliveryFailed = $isArtworkEmailTask && $emailDeliveryStatus === 'failed';
+    $emailDeliverySent = $isArtworkEmailTask && $emailDeliveryStatus === 'sent';
+    $emailDeliveryNotSent = $isArtworkEmailTask && $emailDeliveryStatus === 'not_sent';
+    $emailCanResend = $isArtworkEmailTask
+        && $mode === 'done'
+        && $canEditTask
+        && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
@@ -120,6 +127,7 @@ unset($__defined_vars, $__key, $__value); ?>
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
         x-on:click.outside="if(editing) cancelEdit()"
         x-on:ft-inline-remote-cancel.stop="cancelEdit()"
+        x-on:task-assignee-updated.window="if (Number($event.detail?.taskId) === Number(<?php echo e($task->id); ?>)) syncConfirmed(String($event.detail?.assigneeId ?? ''), String($event.detail?.assigneeName ?? 'Unassigned'), { avatarUrl:String($event.detail?.avatarUrl ?? '') })"
         x-on:ft-inline-remote-selected.stop="commit(String($event.detail?.value ?? ''), String($event.detail?.label ?? 'Unassigned'), () => $wire.updateTaskAssigneeFromJob(<?php echo e($task->id); ?>, draftValue), { avatarUrl:String($event.detail?.avatarUrl ?? '') })">
         <div class="ft-order-inline-display-row">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAssignTask && !$isCancelled): ?>
@@ -277,6 +285,18 @@ unset($__defined_vars, $__key, $__value); ?>
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status <?php echo e($statusClass); ?>"><?php echo e($displayStatus); ?></span>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkEmailTask && $mode === 'done'): ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailDeliverySent): ?>
+                <span class="ft-order-task-email-status is-sent" title="The latest artwork email was sent successfully.">Email Sent</span>
+            <?php elseif($emailDeliveryFailed): ?>
+                <span class="ft-order-task-email-status is-failed" title="The artwork email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
+            <?php elseif($emailDeliveryNotSent): ?>
+                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful artwork email delivery.">Email Not Sent</span>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailResendFeedbackMessage !== ''): ?>
+                <div class="ft-order-task-email-feedback <?php echo e($emailResendFeedbackType === 'success' ? 'is-success' : 'is-error'); ?>" role="status" aria-live="polite"><?php echo e($emailResendFeedbackMessage); ?></div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskDocuments->isNotEmpty()): ?>
             <?php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); ?>
             <div class="card-sub">
@@ -312,7 +332,19 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php elseif($mode === 'done'): ?>
-            <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument)): ?>
+                <button type="button" class="btn small" wire:click="openOverviewTaskDocumentModal(<?php echo e($task->id); ?>)">Add other documents</button>
+            <?php elseif($isArtworkEmailTask && $canEditTask): ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailCanResend): ?>
+                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">
+                        <span wire:loading.remove wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">Resend</span>
+                        <span wire:loading wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">Sending...</span>
+                    </button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
+            <?php else: ?>
+                <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
 </article>
@@ -364,7 +396,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-document-'.e($document->id).''; ?>wire:key="order-task-document-<?php echo e($document->id); ?>"
                 class="ft-order-task-resource-row <?php echo e($isArtworkUploadTask ? 'is-latest-artwork' : ''); ?>"
             >
-                <span class="file-icon ft-order-file-icon"><?php echo e(strtoupper(pathinfo($document->name, PATHINFO_EXTENSION) ?: 'FILE')); ?></span>
+                <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['name' => $document->name,'class' => 'ft-order-file-icon']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($document->name),'class' => 'ft-order-file-icon']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
                 <span>
                     <b>
                         <?php echo e($document->name); ?>

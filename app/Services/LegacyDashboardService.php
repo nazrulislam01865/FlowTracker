@@ -1028,7 +1028,6 @@ class LegacyDashboardService
 
     public function attentionTasks(User $user): Collection
     {
-        app(OrderTaskFlagService::class)->syncDueTransitions();
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
         return $this->activeTaskQuery($user)

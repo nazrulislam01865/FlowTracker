@@ -5,6 +5,7 @@
 ])
 @php
     $recipients = collect($preview['recipients'] ?? []);
+    $ccRecipients = collect($preview['cc_recipients'] ?? []);
     $fromName = trim((string) ($preview['from_name'] ?? ''));
     $fromAddress = trim((string) ($preview['from_address'] ?? ''));
     $fromText = $fromName !== '' && $fromAddress !== ''
@@ -31,7 +32,7 @@
         <div>
             <small>EMAIL PREVIEW</small>
             <strong>{{ $emailServiceEnabled ? 'Exact email that will be sent' : 'Email delivery is currently disabled' }}</strong>
-            <span>{{ $emailServiceEnabled ? 'Recipients, subject, attachment and message body are generated from this Order.' : 'The preview remains available, but confirming this task will continue the workflow without sending email.' }}</span>
+            <span>{{ $emailServiceEnabled ? 'Recipients, subject, attachment and message body are generated from this Order.' : 'Recipients are recorded for a manual handoff. Confirming will continue the workflow without sending email.' }}</span>
         </div>
         <em>{{ $delivery }}</em>
     </header>
@@ -46,6 +47,7 @@
                             <span class="ft-order-email-recipient-chip">
                                 <b>{{ $recipient['name'] ?? 'Team member' }}</b>
                                 <small>{{ $recipient['email'] ?? '' }}</small>
+                                @if($recipient['external'] ?? false)<em>External</em>@endif
                             </span>
                         @endforeach
                     </div>
@@ -54,6 +56,20 @@
                 @endif
             </div>
         </div>
+        @if($ccRecipients->isNotEmpty())
+            <div class="ft-order-email-preview-meta-row ft-order-email-preview-meta-row--recipients">
+                <span>CC</span>
+                <div class="ft-order-email-recipient-list">
+                    @foreach($ccRecipients as $recipient)
+                        <span class="ft-order-email-recipient-chip">
+                            <b>{{ $recipient['name'] ?? 'Team member' }}</b>
+                            <small>{{ $recipient['email'] ?? '' }}</small>
+                            @if($recipient['external'] ?? false)<em>External</em>@endif
+                        </span>
+                    @endforeach
+                </div>
+            </div>
+        @endif
         @if($recipientSource !== '')
             <div class="ft-order-email-preview-meta-row"><span>Recipient rule</span><strong>{{ $recipientSource }}</strong></div>
         @endif

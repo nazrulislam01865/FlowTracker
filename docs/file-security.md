@@ -34,7 +34,7 @@ FLOWTRACK_CLAMAV_BINARY=clamdscan
 A ClamAV scanner error fails closed: the upload remains quarantined and is not promoted.
 
 ## High-risk active formats
-EPS, ESP, AI and PostScript-like files are treated as untrusted active content. They may be stored when allowed by the business workflow, but `StoredFileResponse` always returns them as downloads with `application/octet-stream`; callers cannot force them inline.
+EPS, ESP, AI, CDR and PostScript-like files are treated as untrusted design/active content. They may be stored when allowed by the business workflow, but `StoredFileResponse` always returns them as downloads with `application/octet-stream`; callers cannot force them inline.
 
 ## ZIP policy
 FlowTrack never automatically extracts user ZIP archives. ZIP validation inspects metadata only and enforces entry-count, total-uncompressed-size, compression-ratio and path-safety limits. ZIP64 archives are rejected by the fallback parser when server ZIP support is unavailable rather than being interpreted unsafely.

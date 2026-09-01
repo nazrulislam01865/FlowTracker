@@ -162,7 +162,7 @@
                             :multiple="true"
                             headline="Drop client files here"
                             browse-text="browse files"
-                            helper="PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB per file"
+                            :helper="\App\Support\AttachmentUpload::helperText(20)"
                             progress-label="Uploading files..."
                             progress-aria-label="Inquiry attachment upload progress"
                         />

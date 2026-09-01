@@ -226,14 +226,14 @@
                         type="file"
                         name="documents[]"
                         multiple
-                        accept=".pdf,.xlsx,.docx,.jpg,.jpeg,.png"
+                        accept="{{ \App\Support\AttachmentUpload::accept() }}"
                         data-rfq-pricing-file-input
                         @disabled($locked)
                     >
                     <span class="ft-rfq-prototype-upload-icon"><x-rfq.public.icon name="upload-cloud" /></span>
                     <span>
                         <strong>Drop quotation files here or <b>browse</b></strong>
-                        <small>PDF, XLSX, DOCX, JPG or PNG · Max 20 MB each</small>
+                        <small>{{ \App\Support\AttachmentUpload::helperText(20) }}</small>
                     </span>
                 </label>
 

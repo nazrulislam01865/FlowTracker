@@ -470,7 +470,7 @@
                                     @endif
 
                                     <label class="ft-inquiry-task-document-dropzone ft-inquiry-attachment-dropzone {{ $taskDocumentUpload ? 'is-compact' : '' }}">
-                                        <input type="file" wire:model="taskDocumentUpload" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp" aria-label="{{ $taskDocumentUpload ? 'Add another file' : 'Choose a file to upload' }}">
+                                        <input type="file" wire:model="taskDocumentUpload" accept="{{ \App\Support\AttachmentUpload::accept() }}" aria-label="{{ $taskDocumentUpload ? 'Add another file' : 'Choose a file to upload' }}">
                                         <svg class="ft-inquiry-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
                                         @if($taskDocumentUpload)
                                             <strong>Add another file</strong>
@@ -480,7 +480,7 @@
                                             <b>or choose from your computer</b>
                                             <span class="ft-inquiry-attachment-browse">Browse files</span>
                                         @endif
-                                        <small>PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB</small>
+                                        <small>{{ \App\Support\AttachmentUpload::helperText(20) }}</small>
                                     </label>
 
                                     <div class="ft-inquiry-task-document-upload-progress" x-cloak x-show="uploading" x-transition.opacity.duration.120ms>

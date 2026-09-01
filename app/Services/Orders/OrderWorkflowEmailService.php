@@ -3,6 +3,7 @@
 namespace App\Services\Orders;
 
 use App\DTOs\Email\EmailMessage;
+use App\Models\Department;
 use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Role;
@@ -10,10 +11,12 @@ use App\Models\Task;
 use App\Models\User;
 use App\Services\BrandingService;
 use App\Services\CompanyProfileService;
+use App\Services\DocumentService;
 use App\Services\Email\EmailService;
 use App\Services\Email\ModuleEmailControlService;
 use App\Services\SecureDocumentStorage;
 use App\Services\SetupContext;
+use App\Services\TaskService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
@@ -61,7 +64,7 @@ final class OrderWorkflowEmailService
      *
      * @return array<string,mixed>
      */
-    public function preview(Task $handoffTask, ?User $actor = null): array
+    public function preview(Task $handoffTask, ?User $actor = null, array $selection = []): array
     {
         $key = $this->automationKey($handoffTask);
         if (! in_array($key, [self::PURCHASE_ORDER_HANDOFF, self::ARTWORK_HANDOFF], true)) {
@@ -75,7 +78,30 @@ final class OrderWorkflowEmailService
         $actor ??= auth()->user() instanceof User ? auth()->user() : ($job->owner ?: $job->coordinator);
         $emailServiceEnabled = $this->emailControl->orderEnabled();
 
-        $recipients = $this->recipients($job, $key);
+        $recipientOptions = $this->recipients($job, $key);
+        $purchaseOrderSelection = $key === self::PURCHASE_ORDER_HANDOFF
+            ? $this->purchaseOrderRecipientSelection($recipientOptions, $selection, false)
+            : null;
+        $artworkSelection = $key === self::ARTWORK_HANDOFF
+            ? $this->artworkRecipientSelection($recipientOptions, $selection, false)
+            : null;
+
+        if ($purchaseOrderSelection) {
+            $recipientRows = $this->userRecipientRows($purchaseOrderSelection['to_users'])
+                ->concat($purchaseOrderSelection['external_to'] ? [$purchaseOrderSelection['external_to']] : [])
+                ->values();
+            $ccRecipientRows = $this->userRecipientRows($purchaseOrderSelection['cc_users'])
+                ->concat($purchaseOrderSelection['external_cc'])
+                ->values();
+        } elseif ($artworkSelection) {
+            $recipientRows = $this->userRecipientRows($artworkSelection['to_users'])
+                ->concat($artworkSelection['external_to'])
+                ->values();
+            $ccRecipientRows = collect();
+        } else {
+            $recipientRows = collect();
+            $ccRecipientRows = collect();
+        }
         $documents = $this->sourceDocuments($job, $key);
         $document = $documents->last();
         $subject = $this->subject($job, $key);
@@ -83,24 +109,31 @@ final class OrderWorkflowEmailService
         $viewData = ($document && $actor)
             ? $this->viewData($job, $key, $document, $documents, $actor, $brand)
             : [];
+        if ($viewData !== [] && ($purchaseOrderSelection['external_to'] ?? null)) {
+            $viewData['team'] = $purchaseOrderSelection['external_to']['name'];
+        }
         $previewHtml = $viewData !== []
             ? view('emails.orders.workflow-handoff', $viewData)->render()
             : '';
 
         return [
             'key' => $key,
-            'team' => $this->teamLabel($key),
-            'recipients' => $recipients->map(fn (User $user) => [
+            'team' => $purchaseOrderSelection['external_to']['name'] ?? $this->teamLabel($key),
+            'recipients' => $recipientRows->all(),
+            'cc_recipients' => $ccRecipientRows->all(),
+            'recipient_options' => $recipientOptions->map(fn (User $user) => [
                 'id' => (int) $user->id,
                 'name' => (string) $user->name,
                 'email' => (string) $user->email,
             ])->values()->all(),
-            'recipient_count' => $recipients->count(),
-            'recipient_source' => $this->recipientSourceLabel($key, $job),
-            'empty_recipient_message' => $recipients->isEmpty()
-                ? ($key === self::ARTWORK_HANDOFF
-                    ? $this->missingOrderTeamRecipientMessage($job)
-                    : 'No active Artwork phase assignee with a valid email address was found for this Order.')
+            'recipient_count' => $recipientRows->count() + $ccRecipientRows->count(),
+            'recipient_source' => $key === self::PURCHASE_ORDER_HANDOFF
+                ? 'To / CC email fields — Artwork Team users are suggested when matched'
+                : 'To email field — matching active system users are suggested as you type',
+            'empty_recipient_message' => $recipientRows->isEmpty()
+                ? ($key === self::PURCHASE_ORDER_HANDOFF
+                    ? 'Enter a valid email address in To. Artwork Team users are suggested as you type.'
+                    : 'Enter one or more valid email addresses in To. Active system users are suggested as you type.')
                 : '',
             'business_unit' => $key === self::ARTWORK_HANDOFF ? $this->orderBusinessUnit($job) : null,
             'subject' => $subject,
@@ -119,6 +152,8 @@ final class OrderWorkflowEmailService
             'from_address' => $this->senderAddress(),
             'reply_to' => $actor && filter_var((string) $actor->email, FILTER_VALIDATE_EMAIL) ? (string) $actor->email : '',
             'email_service_enabled' => $emailServiceEnabled,
+            'assignment_user_id' => $purchaseOrderSelection ? $purchaseOrderSelection['assignee']?->id : null,
+            'assignment_user_name' => $purchaseOrderSelection ? $purchaseOrderSelection['assignee']?->name : null,
             'delivery' => $emailServiceEnabled ? $this->deliveryLabel() : 'Order email service disabled',
             'html' => $previewHtml,
         ];
@@ -128,7 +163,7 @@ final class OrderWorkflowEmailService
      * Send the file-backed handoff synchronously. The workflow task must only be
      * completed after the configured provider has durably accepted the email.
      */
-    public function send(Task $handoffTask, User $actor): string
+    public function send(Task $handoffTask, User $actor, array $selection = []): string
     {
         $key = $this->automationKey($handoffTask);
         abort_unless(in_array($key, [self::PURCHASE_ORDER_HANDOFF, self::ARTWORK_HANDOFF], true), 422);
@@ -136,6 +171,37 @@ final class OrderWorkflowEmailService
         $job = FlowJob::query()
             ->with(['client', 'owner', 'coordinator', 'items'])
             ->findOrFail($handoffTask->flow_job_id);
+
+        $recipientOptions = $this->recipients($job, $key);
+        $purchaseOrderSelection = $key === self::PURCHASE_ORDER_HANDOFF
+            ? $this->purchaseOrderRecipientSelection($recipientOptions, $selection, true)
+            : null;
+        $artworkSelection = $key === self::ARTWORK_HANDOFF
+            ? $this->artworkRecipientSelection($recipientOptions, $selection, true)
+            : null;
+
+        $recipients = $purchaseOrderSelection
+            ? $purchaseOrderSelection['to_users']
+            : collect($artworkSelection['to_users'] ?? []);
+        $ccRecipients = $purchaseOrderSelection ? $purchaseOrderSelection['cc_users'] : collect();
+        $externalTo = $purchaseOrderSelection['external_to'] ?? null;
+        $externalToRecipients = $purchaseOrderSelection
+            ? collect($externalTo ? [$externalTo] : [])
+            : collect($artworkSelection['external_to'] ?? []);
+        $externalCc = collect($purchaseOrderSelection['external_cc'] ?? []);
+        $assignmentRecipient = $purchaseOrderSelection['assignee'] ?? null;
+        $toEmails = $recipients->pluck('email')
+            ->concat($externalToRecipients->pluck('email'))
+            ->filter()->unique(fn ($email) => mb_strtolower((string) $email))->values();
+        $ccEmails = $ccRecipients->pluck('email')
+            ->concat($externalCc->pluck('email'))
+            ->filter()->unique(fn ($email) => mb_strtolower((string) $email))->values();
+        // Resolve the downstream task before attempting delivery. Otherwise a
+        // malformed workflow could accept the email and then fail assignment,
+        // leaving the sender to retry an email that was already delivered.
+        $artworkPreparationTask = $assignmentRecipient
+            ? $this->artworkPreparationTask($job)
+            : null;
 
         if (! $this->emailControl->orderEnabled()) {
             $trackingId = 'disabled-'.Str::uuid();
@@ -150,6 +216,13 @@ final class OrderWorkflowEmailService
                     'tracking_id' => $trackingId,
                     'email_service_disabled' => true,
                     'module' => ModuleEmailControlService::ORDER,
+                    'intended_to' => $toEmails->all(),
+                    'intended_cc' => $ccEmails->all(),
+                    // Keep the same recipient keys as real delivery attempts so
+                    // completed skipped handoffs can use the normal Resend path.
+                    'to_emails' => $toEmails->all(),
+                    'cc_emails' => $ccEmails->all(),
+                    'assignment_user_id' => $assignmentRecipient?->id,
                 ],
             ]);
 
@@ -160,14 +233,17 @@ final class OrderWorkflowEmailService
                 'reason' => 'order_email_service_disabled',
             ]);
 
+            if ($assignmentRecipient && $artworkPreparationTask) {
+                $this->assignArtworkPreparationTask($artworkPreparationTask, $assignmentRecipient, $actor);
+            }
+
             return $trackingId;
         }
 
-        $recipients = $this->recipients($job, $key);
-        if ($recipients->isEmpty()) {
+        if ($toEmails->isEmpty()) {
             $message = $key === self::ARTWORK_HANDOFF
                 ? $this->missingOrderTeamRecipientMessage($job)
-                : 'No active Artwork phase assignee with a valid email address could be resolved for this Order. Assign the Artwork phase tasks to the Artwork team members before sending.';
+                : $this->missingArtworkTeamRecipientMessage();
 
             throw ValidationException::withMessages([
                 'orderWorkflowActionEmail' => $message,
@@ -201,13 +277,15 @@ final class OrderWorkflowEmailService
 
         $brand = $this->companyBrand();
         $orderNumber = $job->displayOrderNumber();
-        $team = $this->teamLabel($key);
+        $team = $externalTo['name'] ?? $this->teamLabel($key);
         $subject = $this->subject($job, $key);
         $replyTo = filter_var((string) $actor->email, FILTER_VALIDATE_EMAIL) ? [(string) $actor->email] : [];
         $viewData = $this->viewData($job, $key, $document, $documents, $actor, $brand);
+        $viewData['team'] = $team;
 
         $message = new EmailMessage(
-            to: $recipients->pluck('email')->all(),
+            to: $toEmails->all(),
+            cc: $ccEmails->all(),
             subject: $subject,
             view: 'emails.orders.workflow-handoff',
             viewData: $viewData,
@@ -220,6 +298,12 @@ final class OrderWorkflowEmailService
                 'task_id' => (int) $handoffTask->id,
                 'document_id' => (int) $document->id,
                 'document_ids' => $documents->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'primary_recipient_user_id' => $recipients->first()?->id,
+                'external_primary_recipient' => $externalToRecipients->first(),
+                'external_to_emails' => $externalToRecipients->pluck('email')->values()->all(),
+                'assignment_user_id' => $assignmentRecipient?->id,
+                'cc_recipient_user_ids' => $ccRecipients->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'external_cc_emails' => $externalCc->pluck('email')->all(),
             ],
         );
 
@@ -259,8 +343,34 @@ final class OrderWorkflowEmailService
         }
 
         if ($lastException) {
+            $attachmentLabel = $key === self::PURCHASE_ORDER_HANDOFF ? 'Purchase Order' : 'Artwork';
+            $failureEvent = $key === self::ARTWORK_HANDOFF
+                ? 'job.artwork_email_failed_to_order_team'
+                : 'job.purchase_order_email_failed_to_artwork_team';
+
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => $failureEvent,
+                'description' => $attachmentLabel.' email delivery failed after '.$attemptsUsed.' attempts.',
+                'meta' => [
+                    'task_id' => (int) $handoffTask->id,
+                    'document_id' => (int) $document->id,
+                    'document_ids' => $documents->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                    'document_count' => $documents->count(),
+                    'to_emails' => $toEmails->values()->all(),
+                    'cc_emails' => $ccEmails->values()->all(),
+                    'tracking_id' => $trackingId,
+                    'delivery_attempts' => $attemptsUsed,
+                    'failed_at' => now()->toIso8601String(),
+                ],
+            ]);
+
             report($lastException);
             throw $lastException;
+        }
+
+        if ($assignmentRecipient && $artworkPreparationTask) {
+            $this->assignArtworkPreparationTask($artworkPreparationTask, $assignmentRecipient, $actor);
         }
 
 
@@ -277,7 +387,13 @@ final class OrderWorkflowEmailService
                 'document_ids' => $documents->pluck('id')->map(fn ($id) => (int) $id)->all(),
                 'document_count' => $documents->count(),
                 'document_version' => (int) ($document->version ?: 1),
-                'recipient_count' => $recipients->count(),
+                'recipient_count' => $toEmails->count() + $ccEmails->count(),
+                'primary_recipient_user_id' => $recipients->first()?->id,
+                'external_primary_recipient' => $externalToRecipients->first(),
+                'external_to_emails' => $externalToRecipients->pluck('email')->values()->all(),
+                'assignment_user_id' => $assignmentRecipient?->id,
+                'cc_recipient_user_ids' => $ccRecipients->pluck('id')->map(fn ($id) => (int) $id)->all(),
+                'external_cc_emails' => $externalCc->pluck('email')->all(),
                 'business_unit' => $key === self::ARTWORK_HANDOFF ? $this->orderBusinessUnit($job) : null,
                 'tracking_id' => $trackingId,
                 'delivery_attempts' => $attemptsUsed,
@@ -287,84 +403,355 @@ final class OrderWorkflowEmailService
         return $trackingId;
     }
 
+    /**
+     * Persistent delivery state for the completed Artwork -> Order Team handoff.
+     * The task lifecycle and email delivery lifecycle are intentionally separate:
+     * a task can be completed manually after an outage while its email remains
+     * failed and therefore retryable.
+     *
+     * @return array{status:?string,label:?string,to_emails:array<int,string>,attempts:int,tracking_id:string,resendable:bool}
+     */
+    public function artworkHandoffDeliveryStatus(Task $handoffTask): array
+    {
+        if ($this->automationKey($handoffTask) !== self::ARTWORK_HANDOFF) {
+            return ['status' => null, 'label' => null, 'to_emails' => [], 'attempts' => 0, 'tracking_id' => '', 'resendable' => false];
+        }
+
+        $job = $handoffTask->job ?: FlowJob::query()->find($handoffTask->flow_job_id);
+        if (! $job) {
+            return ['status' => null, 'label' => null, 'to_emails' => [], 'attempts' => 0, 'tracking_id' => '', 'resendable' => false];
+        }
+
+        $activities = $job->relationLoaded('workflowEmailActivities')
+            ? collect($job->getRelation('workflowEmailActivities'))
+            : $job->workflowEmailActivities()->get();
+
+        $latest = $activities
+            ->filter(fn ($activity) => (int) data_get($activity->meta, 'task_id', 0) === (int) $handoffTask->id)
+            ->sortByDesc('id')
+            ->first();
+
+        if (! $latest) {
+            return ['status' => null, 'label' => null, 'to_emails' => [], 'attempts' => 0, 'tracking_id' => '', 'resendable' => false];
+        }
+
+        $event = (string) $latest->event;
+        $status = match ($event) {
+            'job.artwork_email_failed_to_order_team' => 'failed',
+            'job.artwork_emailed_to_order_team' => 'sent',
+            'job.workflow_email_skipped' => 'not_sent',
+            default => null,
+        };
+        $label = match ($status) {
+            'failed' => 'Failed',
+            'sent' => 'Sent',
+            'not_sent' => 'Not Sent',
+            default => null,
+        };
+
+        // Older skipped-delivery rows used intended_to; newer rows also persist
+        // to_emails. Supporting both keeps already-completed tasks retryable.
+        $savedTo = data_get($latest->meta, 'to_emails', []);
+        if (empty($savedTo)) {
+            $savedTo = data_get($latest->meta, 'intended_to', []);
+        }
+        $toEmails = collect($savedTo)
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) !== false)
+            ->unique()
+            ->values()
+            ->all();
+
+        return [
+            'status' => $status,
+            'label' => $label,
+            'to_emails' => $toEmails,
+            'attempts' => (int) data_get($latest->meta, 'delivery_attempts', 0),
+            'tracking_id' => (string) data_get($latest->meta, 'tracking_id', ''),
+            'resendable' => $toEmails !== [],
+        ];
+    }
+
+    public function resendCompletedArtworkHandoff(Task $handoffTask, User $actor): string
+    {
+        abort_unless($this->automationKey($handoffTask) === self::ARTWORK_HANDOFF, 422, 'This task does not support artwork email resend.');
+        abort_unless($handoffTask->completed_at || strcasecmp(trim((string) $handoffTask->status), 'Completed') === 0, 422, 'Only a completed artwork handoff can be resent from this action.');
+        abort_unless($this->emailControl->orderEnabled(), 422, 'Order email sending is currently disabled. Enable it before resending the artwork.');
+
+        $delivery = $this->artworkHandoffDeliveryStatus($handoffTask);
+        abort_unless(
+            in_array((string) ($delivery['status'] ?? ''), ['failed', 'sent', 'not_sent'], true),
+            422,
+            'No previous artwork email delivery was found for this completed task.'
+        );
+
+        $toEmails = collect($delivery['to_emails'] ?? [])->filter()->values();
+        abort_if($toEmails->isEmpty(), 422, 'This completed artwork handoff has no saved recipients to resend to.');
+
+        return $this->send($handoffTask, $actor, [
+            'to_emails' => $toEmails->implode(', '),
+            'is_resend' => true,
+        ]);
+    }
+
 
     /** @return Collection<int,User> */
     private function recipients(FlowJob $job, string $handoffKey): Collection
     {
         return match ($handoffKey) {
-            self::PURCHASE_ORDER_HANDOFF => $this->artworkPhaseAssignees($job),
-            self::ARTWORK_HANDOFF => $this->orderTeamRoleMembers($job),
+            self::PURCHASE_ORDER_HANDOFF => $this->artworkTeamMembers(),
+            self::ARTWORK_HANDOFF => $this->orderTeamRecipientCandidates(),
             default => collect(),
         };
     }
 
     /**
-     * Purchase Order -> Artwork Team
+     * Resolve the Purchase Order To/CC email fields and the optional internal
+     * Artwork task assignee. Both fields accept normal email addresses. When
+     * an address matches an active Artwork Team user, that user is resolved as
+     * an internal recipient; the To match also owns Prepare & Upload Artwork.
+     * External addresses remain valid email recipients but are never assigned
+     * an internal FlowTrack task.
      *
-     * The Artwork Team for an Order is the set of people actually assigned to
-     * tasks in that Order's Artwork phase. This intentionally follows runtime
-     * task assignment rather than a department/role name, so the email always
-     * goes to the people who are responsible for Artwork on this specific
-     * Order. Every unique active assignee with a valid email is included.
+     * Legacy ID/external fields are still accepted so an already-open modal or
+     * saved failure marker from an older frontend does not break mid-handoff.
      *
-     * @return Collection<int,User>
+     * @return array{type:string,to_users:Collection<int,User>,cc_users:Collection<int,User>,external_to:?array{name:string,email:string,external:bool},external_cc:Collection<int,array{name:string,email:string,external:bool}>,assignee:?User}
      */
-    private function artworkPhaseAssignees(FlowJob $job): Collection
+    private function purchaseOrderRecipientSelection(Collection $candidates, array $selection, bool $required): array
     {
-        // Locate the Artwork phase from the known Artwork workflow tasks rather
-        // than relying on the displayed phase name. This remains safe if the
-        // phase is renamed in Order Workflow Setup.
-        $artworkPhaseIds = Task::query()
-            ->where('flow_job_id', $job->id)
-            ->with('setupTemplate:id,automation_key')
-            ->get(['id', 'flow_job_id', 'workflow_phase_id', 'task_pack_task_id', 'title'])
-            ->filter(function (Task $task): bool {
-                return in_array($this->automationKey($task), [
-                    'ART_PREPARE_UPLOAD',
-                    'ART_INTERNAL_REVIEW',
-                    self::ARTWORK_HANDOFF,
-                    'ART_CLIENT_ERP_DECISION',
-                    'ART_SAMPLE_APPROVAL',
-                ], true);
-            })
-            ->pluck('workflow_phase_id')
-            ->filter(fn ($id) => (int) $id > 0)
-            ->map(fn ($id) => (int) $id)
+        $candidateById = $candidates->keyBy(fn (User $user) => (int) $user->id);
+        $candidateByEmail = $candidates->keyBy(
+            fn (User $user) => mb_strtolower(trim((string) $user->email))
+        );
+
+        // New Gmail-style field: one freely-entered email address. Fall back to
+        // the previous selector payload so in-flight browser sessions remain safe.
+        $toEmail = mb_strtolower(trim((string) ($selection['to_email'] ?? '')));
+        $legacyType = ($selection['recipient_type'] ?? 'team') === 'external' ? 'external' : 'team';
+        $legacyAssignee = null;
+        if ($toEmail === '') {
+            if ($legacyType === 'external') {
+                $toEmail = mb_strtolower(trim((string) ($selection['external_to_email'] ?? '')));
+                $legacyAssignee = $candidateById->get((int) ($selection['assignee_user_id'] ?? 0));
+            } else {
+                $legacyPrimary = $candidateById->get((int) ($selection['to_user_id'] ?? 0));
+                if ($legacyPrimary) {
+                    $toEmail = mb_strtolower(trim((string) $legacyPrimary->email));
+                }
+            }
+        }
+
+        if ($required && ($toEmail === '' || filter_var($toEmail, FILTER_VALIDATE_EMAIL) === false)) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.to_email' => 'Enter a valid email address in To.',
+            ]);
+        }
+
+        $primary = $toEmail !== '' && filter_var($toEmail, FILTER_VALIDATE_EMAIL)
+            ? $candidateByEmail->get($toEmail)
+            : null;
+        $externalTo = $toEmail !== '' && filter_var($toEmail, FILTER_VALIDATE_EMAIL) && ! $primary
+            ? [
+                'name' => trim((string) ($selection['external_to_name'] ?? '')) ?: 'External recipient',
+                'email' => $toEmail,
+                'external' => true,
+            ]
+            : null;
+
+        // One CC field accepts any number of comma/semicolon/space-separated
+        // addresses. Known Artwork Team users are resolved internally; all other
+        // valid addresses are treated as external CC recipients.
+        $ccInput = trim((string) ($selection['cc_emails'] ?? ''));
+        if ($ccInput === '') {
+            $legacyCcEmails = collect($selection['cc_user_ids'] ?? [])
+                ->map(fn ($id) => $candidateById->get((int) $id)?->email)
+                ->filter()
+                ->concat(preg_split('/[\s,;]+/', trim((string) ($selection['external_cc_emails'] ?? ''))) ?: [])
+                ->filter()
+                ->implode(', ');
+            $ccInput = trim($legacyCcEmails);
+        }
+
+        $ccEmails = collect($ccInput === '' ? [] : preg_split('/[\s,;]+/', $ccInput))
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
             ->unique()
+            ->reject(fn ($email) => $toEmail !== '' && $email === $toEmail)
             ->values();
 
-        if ($artworkPhaseIds->isEmpty()) return collect();
+        $invalidCc = $ccEmails->first(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) === false);
+        if ($required && $invalidCc) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.cc_emails' => $invalidCc.' is not a valid CC email address.',
+            ]);
+        }
+        if ($required && $ccEmails->count() > 10) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.cc_emails' => 'Add no more than 10 CC email addresses.',
+            ]);
+        }
 
-        return Task::query()
-            ->where('flow_job_id', $job->id)
-            ->whereIn('workflow_phase_id', $artworkPhaseIds->all())
-            ->whereNotNull('assignee_id')
-            ->with('assignee')
-            ->orderBy('id')
-            ->get()
-            ->map(fn (Task $task) => $task->assignee)
-            ->filter(fn ($user) => $this->isDeliverableUser($user))
-            ->unique(fn (User $user) => mb_strtolower(trim((string) $user->email)))
-            ->sortBy(fn (User $user) => mb_strtolower((string) $user->name))
+        $ccUsers = $ccEmails
+            ->map(fn ($email) => $candidateByEmail->get($email))
+            ->filter()
+            ->unique(fn (User $user) => (int) $user->id)
             ->values();
+        $ccUserEmails = $ccUsers
+            ->pluck('email')
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
+            ->unique();
+        $externalCc = $ccEmails
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) && ! $ccUserEmails->contains($email))
+            ->map(fn ($email) => ['name' => 'External CC', 'email' => $email, 'external' => true])
+            ->values();
+
+        return [
+            'type' => $primary ? 'team' : 'external',
+            'to_users' => $primary ? collect([$primary]) : collect(),
+            'cc_users' => $ccUsers,
+            'external_to' => $externalTo,
+            'external_cc' => $externalCc,
+            'assignee' => $primary ?: $legacyAssignee,
+        ];
     }
 
     /**
-     * Artwork -> Order Team
+     * Resolve the Artwork -> Order Team To field. The field accepts multiple
+     * comma/semicolon/space-separated email addresses. Matching active Order
+     * Team users are resolved as internal recipients; any other valid address
+     * is still allowed as an external recipient. There is intentionally no CC
+     * field for this handoff.
      *
-     * Order Team membership is owned by Administration > Users & role
-     * assignments. Every active user assigned an active "Order Team" role in
-     * the current workspace is then filtered by the Order client's business unit:
-     * IID Orders -> IID or Both; NEP Orders -> NEP or Both. The role can be represented
-     * by its normal name, slug or code; normalization keeps the lookup stable
-     * across "Order Team", "order-team" and "ORDER_TEAM" forms.
+     * @return array{to_users:Collection<int,User>,external_to:Collection<int,array{name:string,email:string,external:bool}>}
+     */
+    private function artworkRecipientSelection(Collection $candidates, array $selection, bool $required): array
+    {
+        $candidateByEmail = $candidates->keyBy(
+            fn (User $user) => mb_strtolower(trim((string) $user->email))
+        );
+
+        $toInput = trim((string) ($selection['to_emails'] ?? ''));
+        if ($toInput === '') {
+            // Compatibility for an already-open browser that used the singular
+            // To field before this handoff was changed to support many people.
+            $toInput = trim((string) ($selection['to_email'] ?? ''));
+        }
+
+        $toEmails = collect($toInput === '' ? [] : preg_split('/[\s,;]+/', $toInput))
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
+            ->unique()
+            ->values();
+
+        if ($required && $toEmails->isEmpty()) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.to_emails' => 'Enter at least one email address in To.',
+            ]);
+        }
+
+        $invalidTo = $toEmails->first(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) === false);
+        if ($required && $invalidTo) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.to_emails' => $invalidTo.' is not a valid To email address.',
+            ]);
+        }
+
+        if ($required && $toEmails->count() > 10) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionPayload.to_emails' => 'Add no more than 10 To email addresses.',
+            ]);
+        }
+
+        $toUsers = $toEmails
+            ->map(fn ($email) => $candidateByEmail->get($email))
+            ->filter()
+            ->unique(fn (User $user) => (int) $user->id)
+            ->values();
+        $internalEmails = $toUsers
+            ->pluck('email')
+            ->map(fn ($email) => mb_strtolower(trim((string) $email)))
+            ->filter()
+            ->unique();
+        $externalTo = $toEmails
+            ->filter(fn ($email) => filter_var($email, FILTER_VALIDATE_EMAIL) && ! $internalEmails->contains($email))
+            ->map(fn ($email) => ['name' => 'External recipient', 'email' => $email, 'external' => true])
+            ->values();
+
+        return [
+            'to_users' => $toUsers,
+            'external_to' => $externalTo,
+        ];
+    }
+
+    /** @return Collection<int,array{id:int,name:string,email:string,external:bool}> */
+    private function userRecipientRows(Collection $users): Collection
+    {
+        return $users->map(fn (User $user) => [
+            'id' => (int) $user->id,
+            'name' => (string) $user->name,
+            'email' => (string) $user->email,
+            'external' => false,
+        ])->values();
+    }
+
+    private function artworkPreparationTask(FlowJob $job): Task
+    {
+        $task = $this->tasksForAutomationKey($job, 'ART_PREPARE_UPLOAD')->first();
+        if (! $task) {
+            throw ValidationException::withMessages([
+                'orderWorkflowActionEmail' => 'The Prepare & Upload Artwork task is not configured for this Order.',
+            ]);
+        }
+
+        return $task;
+    }
+
+    private function assignArtworkPreparationTask(Task $task, User $recipient, User $actor): void
+    {
+        app(TaskService::class)->assignFromWorkflowHandoff($task, $recipient, $actor);
+    }
+
+    /**
+     * Purchase Order -> Artwork Team
+     *
+     * Artwork Team membership is owned by Administration > Users & role
+     * assignments, not by runtime task assignment. Every active user in the
+     * current workspace who is configured as part of the Artwork Team receives
+     * the Purchase Order handoff.
+     *
+     * The user list can represent that team either through an "Artwork Team" /
+     * "Artwork" role or through the Artwork/Design department. Department
+     * aliases preserve older installations that still use the seeded "Design"
+     * / "DES" department. Duplicate email addresses are removed.
      *
      * @return Collection<int,User>
      */
-    private function orderTeamRoleMembers(FlowJob $job): Collection
+    private function artworkTeamMembers(): Collection
     {
         $workspaceId = app(SetupContext::class)->workspaceId();
-        $businessUnit = $this->orderBusinessUnit($job);
+
+        $departmentIds = Department::query()
+            ->where('is_active', true)
+            ->get(['id', 'name', 'code'])
+            ->filter(function (Department $department): bool {
+                return collect([$department->name, $department->code])
+                    ->filter(fn ($value) => filled($value))
+                    ->contains(function ($value): bool {
+                        return in_array($this->normalizeTeamIdentity((string) $value), [
+                            'artwork',
+                            'artworkteam',
+                            'design',
+                            'designteam',
+                            'des',
+                        ], true);
+                    });
+            })
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->values();
 
         $roleIds = Role::query()
             ->where('workspace_id', $workspaceId)
@@ -373,48 +760,77 @@ final class OrderWorkflowEmailService
             ->filter(function (Role $role): bool {
                 return collect([$role->name, $role->slug, $role->code])
                     ->filter(fn ($value) => filled($value))
-                    ->contains(fn ($value) => $this->normalizeTeamIdentity((string) $value) === 'orderteam');
+                    ->contains(fn ($value) => in_array($this->normalizeTeamIdentity((string) $value), ['artworkteam', 'artwork'], true));
             })
             ->pluck('id')
             ->map(fn ($id) => (int) $id)
             ->unique()
             ->values();
 
-        if ($roleIds->isEmpty()) return collect();
+        if ($departmentIds->isEmpty() && $roleIds->isEmpty()) return collect();
 
         return User::query()
             ->where('is_active', true)
             ->whereNotNull('email')
             ->where('email', '!=', '')
-            ->where(function ($query) use ($roleIds): void {
-                // user_roles is the canonical Users & role assignments source.
-                // role_id remains a compatibility fallback for older accounts
-                // that pre-date the multi-role pivot migration.
-                $query->whereHas('roles', fn ($roles) => $roles->whereIn('roles.id', $roleIds->all()))
-                    ->orWhereIn('role_id', $roleIds->all());
+            ->where(function ($query) use ($departmentIds, $roleIds, $workspaceId): void {
+                if ($departmentIds->isNotEmpty()) {
+                    // users.department_id is what Administration > Users & role
+                    // assignments displays. workspace_memberships.department_id
+                    // remains a compatibility path for migrated accounts.
+                    $query->whereIn('department_id', $departmentIds->all())
+                        ->orWhereHas('workspaceMemberships', function ($memberships) use ($departmentIds, $workspaceId): void {
+                            $memberships
+                                ->where('workspace_id', $workspaceId)
+                                ->whereIn('department_id', $departmentIds->all());
+                        });
+                }
+
+                if ($roleIds->isNotEmpty()) {
+                    $method = $departmentIds->isNotEmpty() ? 'orWhereHas' : 'whereHas';
+                    $query->{$method}('roles', fn ($roles) => $roles->whereIn('roles.id', $roleIds->all()));
+
+                    $query->orWhereIn('role_id', $roleIds->all());
+                }
             })
-            ->whereHas('workspaceMemberships', function ($query) use ($workspaceId, $businessUnit): void {
+            ->whereHas('workspaceMemberships', function ($query) use ($workspaceId): void {
                 $query
                     ->where('workspace_id', $workspaceId)
-                    ->where('status', 'active')
-                    ->where(function ($membership) use ($businessUnit): void {
-                        if ($businessUnit !== null) {
-                            $membership->where(function ($unitScope) use ($businessUnit): void {
-                                $unitScope->whereIn('business_unit', [$businessUnit, 'both'])
-                                    ->orWhereNull('business_unit');
-                            });
-                            return;
-                        }
-
-                        // Older/unknown client codes are intentionally restricted
-                        // to users explicitly available to both business units.
-                        $membership->where(function ($fallback): void {
-                            $fallback->where('business_unit', 'both')
-                                ->orWhereNull('business_unit');
-                        });
-                    });
+                    ->where('status', 'active');
             })
-            ->with('roles:id,name,slug,code')
+            ->with(['department:id,name,code', 'roles:id,name,slug,code'])
+            ->orderBy('name')
+            ->get()
+            ->filter(fn (User $user) => $this->isDeliverableUser($user))
+            ->unique(fn (User $user) => mb_strtolower(trim((string) $user->email)))
+            ->values();
+    }
+
+    /**
+     * Artwork -> Order Team recipient picker.
+     *
+     * The sender chooses the actual Order Team recipients in the To field, so
+     * the autocomplete must expose the same active system-user directory style
+     * used elsewhere in FlowTrack instead of becoming empty when a legacy role
+     * or department name does not exactly match "Order Team". External email
+     * addresses are still accepted by artworkRecipientSelection().
+     *
+     * @return Collection<int,User>
+     */
+    private function orderTeamRecipientCandidates(): Collection
+    {
+        $workspaceId = app(SetupContext::class)->workspaceId();
+
+        return User::query()
+            ->where('is_active', true)
+            ->whereNotNull('email')
+            ->where('email', '!=', '')
+            ->whereHas('workspaceMemberships', function ($query) use ($workspaceId): void {
+                $query
+                    ->where('workspace_id', $workspaceId)
+                    ->where('status', 'active');
+            })
+            ->with(['department:id,name,code', 'roles:id,name,slug,code'])
             ->orderBy('name')
             ->get()
             ->filter(fn (User $user) => $this->isDeliverableUser($user))
@@ -453,27 +869,21 @@ final class OrderWorkflowEmailService
     private function recipientSourceLabel(string $key, ?FlowJob $job = null): string
     {
         if ($key === self::PURCHASE_ORDER_HANDOFF) {
-            return "All assignees in this Order's Artwork phase";
+            return 'Users & role assignments — Artwork Team users';
         }
 
-        $businessUnit = $job ? $this->orderBusinessUnit($job) : null;
-        if ($businessUnit !== null) {
-            return 'Users & role assignments — Order Team role + '.strtoupper($businessUnit).' business unit ('.strtoupper($businessUnit).' or Both)';
-        }
+        return 'Active FlowTrack users in the current workspace — choose one or more Order Team recipients';
+    }
 
-        return 'Users & role assignments — Order Team role + Both business units';
+    private function missingArtworkTeamRecipientMessage(): string
+    {
+        return 'No active Artwork Team email address could be resolved from Users & role assignments. '
+            .'Assign an active user with a valid email address to the Artwork Team role or Artwork/Design department.';
     }
 
     private function missingOrderTeamRecipientMessage(FlowJob $job): string
     {
-        $businessUnit = $this->orderBusinessUnit($job);
-        if ($businessUnit === null) {
-            return 'No active Order Team recipient could be resolved for this client. Ensure the client code is IID or NEP, or assign an active Order Team user with Business unit set to Both IID & NEP and a valid email address.';
-        }
-
-        $unitLabel = strtoupper($businessUnit);
-        return 'No active '.$unitLabel.' Order Team email address could be resolved from Users & role assignments. '
-            .'Assign the Order Team role and set Business unit to '.$unitLabel.' or Both IID & NEP for at least one active user with a valid email address.';
+        return 'No active system user with a valid email address is available in this workspace. Add or reactivate a user in Users & role assignments, or enter an external email address manually.';
     }
 
     /** @return Collection<int,Document> */
@@ -492,11 +902,16 @@ final class OrderWorkflowEmailService
             ->get();
 
         if ($documents->isEmpty()) return collect();
-        if ($sourceKey !== 'ART_PREPARE_UPLOAD') return collect([$documents->last()]);
+        if ($sourceKey !== 'ART_PREPARE_UPLOAD') return $documents->values();
 
-        $latestVersion = max(1, (int) $documents->max('version'));
-
-        return $documents->where('version', $latestVersion)->values();
+        $sourceTasks = $this->tasksForAutomationKey($job, $sourceKey);
+        return $sourceTasks
+            ->flatMap(fn (Task $sourceTask) => app(DocumentService::class)->currentArtworkDocuments(
+                $sourceTask,
+                $documents->where('task_id', $sourceTask->id)->values(),
+            ))
+            ->sortBy('id')
+            ->values();
     }
 
     /** @return Collection<int,Task> */

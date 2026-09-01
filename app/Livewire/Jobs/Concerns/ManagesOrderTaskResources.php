@@ -40,10 +40,19 @@ trait ManagesOrderTaskResources
         $this->overviewTaskDocumentModalTaskId = $task->id;
         $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
         $this->overviewTaskDocumentUpload = [];
+        $this->overviewTaskRevisionUpload = [];
+        $pendingArtworkRevision = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD'
+            ? app(DocumentService::class)->pendingArtworkRevision($task)
+            : ['active' => false, 'document_ids' => []];
+        $this->overviewTaskRevisionDocumentIds = (bool) ($pendingArtworkRevision['active'] ?? false)
+            ? array_values(array_map('intval', $pendingArtworkRevision['document_ids'] ?? []))
+            : [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->resetValidation([
             'overviewTaskDocumentUpload',
+            'overviewTaskRevisionUpload',
+            'overviewTaskRevisionDocumentIds',
             'overviewTaskExistingDocumentId',
             'overviewTaskDocumentNote',
         ]);
@@ -56,10 +65,14 @@ trait ManagesOrderTaskResources
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
         $this->overviewTaskDocumentUpload = [];
+        $this->overviewTaskRevisionUpload = [];
+        $this->overviewTaskRevisionDocumentIds = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->resetValidation([
             'overviewTaskDocumentUpload',
+            'overviewTaskRevisionUpload',
+            'overviewTaskRevisionDocumentIds',
             'overviewTaskExistingDocumentId',
             'overviewTaskDocumentNote',
         ]);
@@ -76,8 +89,9 @@ trait ManagesOrderTaskResources
 
         $this->overviewTaskDocumentSource = $source;
         $this->overviewTaskDocumentUpload = [];
+        $this->overviewTaskRevisionUpload = [];
         $this->overviewTaskExistingDocumentId = null;
-        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskExistingDocumentId']);
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskRevisionUpload', 'overviewTaskExistingDocumentId']);
     }
 
     public function saveOverviewTaskDocument(): void
@@ -99,33 +113,60 @@ trait ManagesOrderTaskResources
 
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
-            $isArtworkUpload = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+            $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
+            $isArtworkUpload = $automationKey === 'ART_PREPARE_UPLOAD';
+            $isPurchaseOrderUpload = $automationKey === 'NEW_UPLOAD_PO';
             $artworkRevision = $isArtworkUpload ? $documentService->pendingArtworkRevision($task) : ['active' => false, 'documents' => collect()];
+            $isArtworkRevision = $isArtworkUpload && (bool) ($artworkRevision['active'] ?? false);
+            if ($isArtworkRevision) {
+                $revisionDocuments = collect($artworkRevision['documents'] ?? [])->values();
+                $expectedRevisionCount = $revisionDocuments->count();
+                $revisionRules = [
+                    'overviewTaskRevisionDocumentIds' => ['required', 'array', 'min:1'],
+                    'overviewTaskRevisionDocumentIds.*' => ['integer', 'distinct'],
+                    'overviewTaskRevisionUpload' => ['required', 'array', 'size:'.$expectedRevisionCount],
+                ];
+                $revisionMessages = [
+                    'overviewTaskRevisionDocumentIds.required' => 'No artwork is selected for this revision.',
+                    'overviewTaskRevisionDocumentIds.min' => 'No artwork is selected for this revision.',
+                    'overviewTaskRevisionUpload.required' => 'Choose one replacement file under each artwork selected for revision.',
+                    'overviewTaskRevisionUpload.size' => 'Choose one replacement file under each of the '.$expectedRevisionCount.' selected artwork file'.($expectedRevisionCount === 1 ? '' : 's').'.',
+                ];
+
+                foreach ($revisionDocuments as $revisionDocument) {
+                    $revisionDocumentId = (int) $revisionDocument->id;
+                    $revisionRules['overviewTaskRevisionUpload.'.$revisionDocumentId] = AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480);
+                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.required'] = 'Choose a replacement file for this artwork.';
+                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.max'] = 'This replacement file must be 20 MB or smaller.';
+                }
+
+                $this->validate($revisionRules, $revisionMessages);
+                $artworkRevision = $documentService->updatePendingArtworkRevisionSelection(
+                    $task,
+                    $this->overviewTaskRevisionDocumentIds,
+                );
+            }
             $revisionFileCount = (bool) ($artworkRevision['active'] ?? false)
                 ? collect($artworkRevision['documents'] ?? [])->count()
                 : 0;
-            $allowsMultiple = $isArtworkUpload || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
-            $uploadRules = ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)];
-            if ($revisionFileCount > 0) {
-                $uploadRules[] = 'size:'.$revisionFileCount;
+            $allowsMultiple = $isArtworkUpload || $isPurchaseOrderUpload || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
+            $uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;
+            if (! $isArtworkRevision) {
+                $this->validate([
+                    'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)],
+                    'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+                ], [
+                    'overviewTaskDocumentUpload.max' => $allowsMultiple
+                        ? 'You can upload a maximum of 10 files at a time.'
+                        : 'Choose one file for this task.',
+                    'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
+                ]);
             }
-            $this->validate([
-                'overviewTaskDocumentUpload' => $uploadRules,
-                'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
-            ], [
-                'overviewTaskDocumentUpload.max' => $allowsMultiple
-                    ? 'You can upload a maximum of 10 files at a time.'
-                    : 'Choose one file for this task.',
-                'overviewTaskDocumentUpload.size' => $revisionFileCount > 0
-                    ? 'Upload exactly '.$revisionFileCount.' revised file'.($revisionFileCount === 1 ? '' : 's').' — one for each artwork selected for revision.'
-                    : 'Choose the required file set.',
-                'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
-            ]);
 
             try {
                 if ($revisionFileCount > 0) {
                     $documentService->storeArtworkRevision(
-                        $this->overviewTaskDocumentUpload,
+                        $uploads,
                         $task,
                         auth()->user(),
                         $note,
@@ -142,7 +183,7 @@ trait ManagesOrderTaskResources
                     } else {
                         $storeData['category'] = 'Task attachment';
                     }
-                    $documentService->storeMany($this->overviewTaskDocumentUpload, $storeData, auth()->user());
+                    $documentService->storeMany($uploads, $storeData, auth()->user());
                 }
             } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
                 if ($exception->getStatusCode() !== 422) {
@@ -151,7 +192,7 @@ trait ManagesOrderTaskResources
 
                 $message = trim((string) $exception->getMessage());
                 $this->addError(
-                    'overviewTaskDocumentUpload',
+                    $isArtworkRevision ? 'overviewTaskRevisionUpload' : 'overviewTaskDocumentUpload',
                     $message !== '' ? $message : 'One of the selected files could not be verified. Re-export it and try again.',
                 );
                 return;
@@ -170,6 +211,7 @@ trait ManagesOrderTaskResources
         // task actions, not passive attachments. Let the backend complete the
         // configured task and unlock/advance the workflow after evidence saves.
         app(\App\Services\OrderWorkflowActionService::class)->afterDocumentAdded($task->refresh(), auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
 
         // A file-backed task can be the final applicable task in a stage (for
         // example Sample Approval). If it auto-advances the Order, move the
@@ -185,6 +227,12 @@ trait ManagesOrderTaskResources
 
     public function removeOverviewTaskDocumentUpload(int $index): void
     {
+        if (array_key_exists($index, $this->overviewTaskRevisionUpload)) {
+            unset($this->overviewTaskRevisionUpload[$index]);
+            $this->resetValidation(['overviewTaskRevisionUpload', 'overviewTaskRevisionUpload.'.$index]);
+            return;
+        }
+
         if (! array_key_exists($index, $this->overviewTaskDocumentUpload)) return;
 
         unset($this->overviewTaskDocumentUpload[$index]);
@@ -198,6 +246,7 @@ trait ManagesOrderTaskResources
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentUpload = [];
+        $this->overviewTaskRevisionUpload = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->overviewTaskLinkFormTaskId = $task->id;
@@ -230,6 +279,7 @@ trait ManagesOrderTaskResources
 
         $task = $this->editableOverviewTask($taskId);
         $link = app(TaskService::class)->addExternalLink($task, $this->overviewTaskLinkUrl, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
 
         // Close the inline form only after persistence is confirmed. The next
         // Livewire render then re-queries the task with its links relation and
@@ -245,6 +295,7 @@ trait ManagesOrderTaskResources
     {
         $task = $this->editableOverviewTask($taskId);
         app(TaskService::class)->removeExternalLink($task, $linkId, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
         session()->flash('success', 'Task link removed.');
     }
 
@@ -326,6 +377,8 @@ trait ManagesOrderTaskResources
             return ['ok' => false, 'message' => $message];
         }
 
+        $this->dispatchTaskAssigneeSync($task->id);
+
         unset($this->overviewTaskUploads[$taskId]);
         $this->resetValidation([$property]);
         session()->flash('success', 'Document uploaded and linked to '.$task->title.'.');
@@ -396,6 +449,8 @@ trait ManagesOrderTaskResources
             return ['ok' => false, 'message' => $message];
         }
 
+        $this->dispatchTaskAssigneeSync($task->id);
+
         $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->showTaskDocumentPicker = false;
@@ -413,6 +468,7 @@ trait ManagesOrderTaskResources
         $source = Document::findOrFail((int)$this->taskExistingDocumentId);
         abort_unless((int) $source->client_id === (int) $task->job?->client_id, 403, 'The selected document does not belong to this client.');
         app(\App\Services\DocumentService::class)->linkExisting($source, $task, auth()->user(), true);
+        $this->dispatchTaskAssigneeSync($task->id);
         $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->showTaskDocumentPicker = false;
@@ -428,6 +484,7 @@ trait ManagesOrderTaskResources
         abort_unless(auth()->user()->canModule('documents','delete'), 403);
         $document = Document::where('task_id',$task->id)->findOrFail($documentId);
         app(\App\Services\DocumentService::class)->delete($document, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
     }
 
     public function toggleTaskDocumentPicker(): void

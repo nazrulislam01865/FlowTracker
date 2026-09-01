@@ -1,0 +1,2 @@
+<?php echo $__env->make('livewire.shared.page-placeholder', ['title' => 'Dashboard'], array_diff_key(get_defined_vars(), ['__data' => 1, '__path' => 1]))->render(); ?>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/livewire/dashboard/placeholder.blade.php ENDPATH**/ ?>

@@ -4,13 +4,17 @@
     'multiple' => false,
     'headline' => 'Drop files here',
     'browseText' => 'browse files',
-    'helper' => 'PDF, Office files, JPG, PNG, ZIP, AI, EPS or ESP · Max 20 MB per file',
-    'accept' => '.pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.zip,.txt,.csv,.ai,.eps,.esp',
+    'helper' => null,
+    'accept' => null,
     'progressLabel' => 'Uploading files...',
     'progressAriaLabel' => 'Attachment upload progress',
     'variant' => 'default',
     'browseButton' => null,
 ])
+@php
+    $accept = $accept ?: \App\Support\AttachmentUpload::accept();
+    $helper = $helper ?: \App\Support\AttachmentUpload::helperText(20);
+@endphp
 
 <div
     {{ $attributes->class(['ft-create-attachment-uploader']) }}

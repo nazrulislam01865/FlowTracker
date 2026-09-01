@@ -448,6 +448,7 @@ class Index extends Component
             $this->taskPackMetrics = $service->metrics($user);
         }
 
+        $data['assigneeFilterOptions'] = $service->assigneeOptions($user);
         $data['taskPackGroups'] = $page['groups'];
         $data['taskPackPaginator'] = $page['paginator'];
         $data['taskPackTaskCount'] = $page['visibleTaskCount'];

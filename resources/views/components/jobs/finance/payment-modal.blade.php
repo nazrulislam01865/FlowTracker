@@ -120,7 +120,7 @@
             </section>
 
             <label class="ft-payment-upload">
-                <input type="file" wire:model="paymentReceipt" accept=".pdf,.doc,.docx,.xls,.xlsx,.jpg,.jpeg,.png,.csv,.txt,.eps,.esp">
+                <input type="file" wire:model="paymentReceipt" accept="{{ \App\Support\AttachmentUpload::accept() }}">
                 <span class="ft-payment-paperclip" aria-hidden="true">
                     <svg viewBox="0 0 24 24"><path d="M21.4 11.6 12 21a6 6 0 0 1-8.5-8.5l10-10a4 4 0 0 1 5.7 5.7L9.7 17.7a2 2 0 1 1-2.8-2.8l8.6-8.6"/></svg>
                 </span>

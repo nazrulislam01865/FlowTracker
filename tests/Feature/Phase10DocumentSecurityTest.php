@@ -92,6 +92,29 @@ class Phase10DocumentSecurityTest extends TestCase
         }
     }
 
+
+
+    public function test_cdr_is_accepted_as_a_private_business_document_and_forced_to_download(): void
+    {
+        Storage::fake('flowtrack_private');
+        Storage::fake('flowtrack_quarantine');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.quarantine_disk', 'flowtrack_quarantine');
+        config()->set('flowtrack.legacy_document_disks', []);
+        config()->set('flowtrack.upload_security.scanner', 'basic');
+
+        // CDR MIME detection varies by CorelDRAW version/exporter. The secure
+        // layer therefore treats it like AI/EPS: private storage + download
+        // only, while executable/script signatures are still rejected.
+        $file = UploadedFile::fake()->createWithContent('customer-artwork.cdr', "RIFF\x10\x00\x00\x00CDR6FlowTrack");
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/1');
+
+        Storage::disk('flowtrack_private')->assertExists($stored['path']);
+        $response = StoredFileResponse::inline($stored['path'], 'customer-artwork.cdr', 'application/octet-stream');
+        $this->assertStringContainsString('attachment', (string) $response->headers->get('Content-Disposition'));
+        $this->assertSame('application/octet-stream', $response->headers->get('Content-Type'));
+    }
+
     public function test_eps_and_postscript_like_files_are_never_rendered_inline(): void
     {
         Storage::fake('flowtrack_private');

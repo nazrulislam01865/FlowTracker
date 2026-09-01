@@ -12,15 +12,15 @@ class TaskDetailArtworkLatestOnlyTest extends TestCase
         $documents = file_get_contents(app_path('Services/DocumentService.php'));
 
         $this->assertStringContainsString("\$taskAutomationKey === 'ART_PREPARE_UPLOAD'", $attachments);
-        $this->assertStringContainsString("where('version', \$latestArtworkVersion)", $attachments);
+        $this->assertStringContainsString('currentArtworkDocuments(', $attachments);
         $this->assertStringContainsString('? $latestArtworkDocuments', $attachments);
         $this->assertStringContainsString('@foreach($visibleTaskDocuments as $doc)', $attachments);
         $this->assertStringContainsString('· Version {{ max(1, (int) $doc->version) }}', $attachments);
         $this->assertStringContainsString('· Latest', $attachments);
         $this->assertStringContainsString('Older artwork revisions remain available in document/version history.', $attachments);
 
-        // Artwork uploads remain one continuous version sequence, even when
-        // a revised upload uses a different original file name.
+        // Normal Artwork batches still share a version; selective replacements
+        // increment only the file that was actually revised.
         $this->assertStringContainsString("=== 'ART_PREPARE_UPLOAD'", $documents);
         $this->assertStringContainsString('if (! $isArtworkTask) {', $documents);
     }

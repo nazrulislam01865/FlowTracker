@@ -12,6 +12,7 @@ use App\Models\WorkflowTemplate;
 use Illuminate\Support\Arr;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
@@ -59,7 +60,7 @@ class OrderWorkflowSetupService
             [
                 'key' => 'new', 'name' => 'New Order', 'short' => 'New Order', 'color' => '#2d72d9',
                 'tasks' => [
-                    self::task('NEW_UPLOAD_PO', 'Upload Purchase Order', 'Order Team', 0, true, 'Purchase Order', true, false, "Upload the customer's purchase order."),
+                    self::task('NEW_UPLOAD_PO', 'Upload Purchase Order', 'Order Team', 0, true, 'Purchase Order', true, true, "Upload the customer's purchase order and any supporting documents."),
                     self::task('NEW_SEND_PO_ARTWORK', 'Send Purchase Order to Artwork Team', 'Order Team', 0),
                 ],
             ],
@@ -654,6 +655,8 @@ class OrderWorkflowSetupService
                 ->when($keptPhaseIds, fn ($query) => $query->whereNotIn('id', $keptPhaseIds))
                 ->delete();
         });
+
+        Cache::forget(OrderListPrototypeService::stageDefinitionCacheKey($workspaceId));
 
         // Publish the saved seven-stage definition to every active Order.
         // This is intentionally different from the original reusable Workflow

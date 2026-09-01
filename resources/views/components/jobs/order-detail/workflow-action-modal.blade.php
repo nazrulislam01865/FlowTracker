@@ -1,4 +1,4 @@
-@props(['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0])
+@props(['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'attachment' => null, 'revisionComments' => [], 'revisionAttachments' => [], 'mentionUsers' => collect(), 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0])
 @php
     $variant = (string) ($config['variant'] ?? 'confirm');
     $title = (string) ($config['title'] ?? 'Task action');
@@ -10,13 +10,36 @@
     $artworkDocs = $latestArtworkTask
         ? $job->documents->where('task_id', $latestArtworkTask->id)->sortBy('created_at')->values()
         : collect();
-    $artworkVersion = max(1, (int) ($artworkDocs->max('version') ?? 0));
-    $latestArtworkDocuments = $artworkDocs->where('version', $artworkVersion)->sortBy('id')->values();
+    $latestArtworkDocuments = $latestArtworkTask
+        ? ($latestArtworkTask->relationLoaded('currentArtworkDocuments')
+            ? collect($latestArtworkTask->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
+            : app(\App\Services\DocumentService::class)->currentArtworkDocuments($latestArtworkTask, $artworkDocs))
+        : collect();
     $latestArtwork = $latestArtworkDocuments->last();
+    $currentArtworkVersions = $latestArtworkDocuments
+        ->pluck('version')
+        ->map(fn($version) => max(1, (int) $version))
+        ->unique()
+        ->sort()
+        ->values();
+    $artworkVersionLabel = $currentArtworkVersions->isEmpty()
+        ? 'V1'
+        : $currentArtworkVersions->map(fn($version) => 'V'.$version)->implode(' · ');
+    $currentArtworkDocumentIds = $latestArtworkDocuments->pluck('id')->map(fn($id) => (int) $id);
+    $archivedArtworkDocuments = $artworkDocs
+        ->reject(fn($document) => $currentArtworkDocumentIds->contains((int) $document->id))
+        ->sortByDesc('id')
+        ->values();
     $activeItems = \App\Support\OrderDetailPresenter::activeItems($job);
     $firstItem = $activeItems->first();
     $productName = (string) ($firstItem?->product_name ?: $job->product ?: 'Order product');
-    $supplierName = ($firstItem && $firstItem->relationLoaded('supplier'))
+    // activeItems() can return a lightweight stdClass for legacy orders that
+    // still use the order-level product fields. Only Eloquent-backed items
+    // expose relationLoaded(), so guard that call before checking supplier.
+    $firstItemHasLoadedSupplier = is_object($firstItem)
+        && method_exists($firstItem, 'relationLoaded')
+        && $firstItem->relationLoaded('supplier');
+    $supplierName = $firstItemHasLoadedSupplier
         ? (string) ($firstItem->supplier?->name ?: 'Supplier')
         : 'Supplier';
     $orderNumber = $job->displayOrderNumber();
@@ -24,18 +47,25 @@
     $ownerName = (string) ($job->owner?->name ?: $job->coordinator?->name ?: 'FlowTrack');
     $orderTotal = (float) $activeItems->sum(fn($item) => (float) ($item->unit_price ?? 0) * (int) ($item->quantity ?? 0));
     $emailHandoffPreview = in_array($variant, ['purchase_order_email', 'artwork_email'], true)
-        ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user())
+        ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user(), $payload)
         : [];
     $emailServiceEnabled = (bool) ($emailHandoffPreview['email_service_enabled'] ?? true);
     if (! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)) {
         $title = $variant === 'artwork_email' ? 'Complete Artwork Handoff' : 'Complete Purchase Order Handoff';
-        $copy = 'Order email service is disabled by an administrator. Review the handoff details, then continue without sending email.';
+        $copy = 'Email sending is currently disabled. Choose the intended recipients, then complete the handoff and send the file manually.';
     }
     $emailFallbackDocumentId = (int) ($emailHandoffPreview['document_id'] ?? 0);
     $emailFallbackDocument = $emailFallbackDocumentId > 0
         ? $job->documents->firstWhere('id', $emailFallbackDocumentId)
         : null;
     $emailFallbackAttachmentLabel = $variant === 'artwork_email' ? 'Artwork' : 'Purchase Order';
+    $revisionMentionUsers = collect($mentionUsers)->values();
+    $selectedRevisionDocumentIds = collect($payload['revision_document_ids'] ?? [])
+        ->map(fn($id) => (int) $id)
+        ->filter(fn($id) => $id > 0)
+        ->unique()
+        ->values();
+
 
     // Only the main Artwork preview/handoff screens need the large landscape
     // layout. Revision/issue follow-up steps must stay on the normal compact
@@ -48,6 +78,9 @@
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
     $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
+    // Every artwork revision dialog uses the same compact prototype shell.
+    // The copy/labels still vary by task, but layout and controls stay consistent.
+    $isArtworkRevisionRequest = $step === 'revision';
 
     if ($step === 'sample') {
         $title = 'Is a Sample or Swatch Required?';
@@ -55,15 +88,21 @@
     } elseif ($step === 'revision') {
         $title = $automationKey === 'ART_INTERNAL_REVIEW' ? 'Request Artwork Revision' : 'Client Revision Request';
         $copy = $automationKey === 'ART_INTERNAL_REVIEW'
-            ? 'Add the internal revision instructions before returning the Artwork task to upload.'
-            : 'Record the client feedback before restarting the artwork approval cycle.';
+            ? 'Select one or more artworks. Add the required change and any supporting files under each selected artwork.'
+            : 'Select one or more artworks and record the client feedback for each file before restarting the approval cycle.';
     } elseif ($step === 'issue') {
         $title = $automationKey === 'QC_CHECK' ? 'Report QC Issue' : 'Report Production Issue';
         $copy = 'Describe the issue before notifying the supplier and blocking progression.';
     }
 @endphp
 <div class="ft-order-task-document-modal-backdrop" wire:key="order-workflow-action-modal-{{ $task->id }}-{{ $step }}" wire:click.self="closeOrderWorkflowAction">
-    <section class="ft-order-task-document-modal ft-order-workflow-action-modal {{ $isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '') }} {{ $usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : '' }}" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-workflow-action-modal-title">
+    <section
+        class="ft-order-task-document-modal ft-order-workflow-action-modal {{ $isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '') }} {{ $usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : '' }} {{ $isArtworkRevisionRequest ? 'ft-order-workflow-action-modal--artwork-revision-request' : '' }}"
+        data-ft-feedback-scope="form"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="order-workflow-action-modal-title"
+    >
         <header class="ft-order-task-document-modal-head">
             <div><h2 id="order-workflow-action-modal-title">{{ $title }}</h2><p>{{ $copy }}</p></div>
             <button type="button" wire:click="closeOrderWorkflowAction" aria-label="Close">×</button>
@@ -88,38 +127,136 @@
                     <div class="ft-artwork-revision-selector-head">
                         <div>
                             <strong>Which artwork needs revision?</strong>
-                            <span>Select only the file or files that must be replaced. Every unselected artwork file will remain unchanged in the next version.</span>
+                            <span>Select one or more files. Each selected artwork opens its own required change and supporting attachments.</span>
                         </div>
-                        <em>{{ $latestArtworkDocuments->count() }} current file{{ $latestArtworkDocuments->count() === 1 ? '' : 's' }}</em>
+                        @if($selectedRevisionDocumentIds->isNotEmpty())
+                            <em>{{ $selectedRevisionDocumentIds->count() }} selected</em>
+                        @endif
                     </div>
+
                     <div class="ft-artwork-revision-selector-list">
                         @forelse($latestArtworkDocuments as $revisionDocument)
-                            @php $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE'); @endphp
-                            <label class="ft-artwork-revision-selector-item">
-                                <input
-                                    type="checkbox"
-                                    wire:model="orderWorkflowActionPayload.revision_document_ids"
-                                    value="{{ $revisionDocument->id }}"
-                                >
-                                <span class="ft-artwork-revision-selector-check" aria-hidden="true">✓</span>
-                                <span class="ft-artwork-revision-selector-type">{{ $revisionExtension }}</span>
-                                <span class="ft-artwork-revision-selector-copy">
-                                    <b title="{{ $revisionDocument->name }}">{{ $revisionDocument->name }}</b>
-                                    <small>Artwork V{{ max(1, (int) $revisionDocument->version) }} · Select to replace this file only</small>
-                                </span>
-                                <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener" onclick="event.stopPropagation()">View</a>
-                            </label>
+                            @php
+                                $revisionDocumentId = (int) $revisionDocument->id;
+                                $revisionExtension = strtoupper(pathinfo((string) $revisionDocument->name, PATHINFO_EXTENSION) ?: 'FILE');
+                                $revisionSelected = $selectedRevisionDocumentIds->contains($revisionDocumentId);
+                                $documentAttachments = collect($revisionAttachments[$revisionDocumentId] ?? $revisionAttachments[(string) $revisionDocumentId] ?? [])->filter()->values();
+                                $documentAttachmentDetails = $documentAttachments->map(function ($file) {
+                                    $name = $file->getClientOriginalName();
+                                    return [
+                                        'name' => $name,
+                                        'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
+                                        'size' => $file->getSize() >= 1048576
+                                            ? number_format($file->getSize() / 1048576, 1).' MB'
+                                            : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
+                                    ];
+                                });
+                            @endphp
+                            <div
+                                class="ft-artwork-revision-selector-item {{ $revisionSelected ? 'is-selected' : '' }}"
+                                wire:key="artwork-revision-request-item-{{ $task->id }}-{{ $revisionDocumentId }}"
+                            >
+                                <div class="ft-artwork-revision-selector-summary">
+                                    <label class="ft-artwork-revision-selector-choice">
+                                        <input
+                                            type="checkbox"
+                                            wire:model.live="orderWorkflowActionPayload.revision_document_ids"
+                                            value="{{ $revisionDocumentId }}"
+                                        >
+                                        <span class="ft-artwork-revision-selector-check" aria-hidden="true">✓</span>
+                                        <x-ui.file-type-badge :extension="$revisionExtension" size="sm" />
+                                        <span class="ft-artwork-revision-selector-copy">
+                                            <b title="{{ $revisionDocument->name }}">{{ $revisionDocument->name }}</b>
+                                            <small>Artwork V{{ max(1, (int) $revisionDocument->version) }}</small>
+                                        </span>
+                                    </label>
+                                    <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener">View</a>
+                                </div>
+
+                                @if($revisionSelected)
+                                    <div class="ft-artwork-revision-item-details">
+                                        <label class="ft-artwork-revision-item-change">
+                                            <span>{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Required change' : 'Client feedback' }} <b>*</b></span>
+                                            <textarea
+                                                wire:model="orderWorkflowActionRevisionComments.{{ $revisionDocumentId }}"
+                                                rows="3"
+                                                autocomplete="off"
+                                                placeholder="{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Describe the required artwork changes...' : 'Record the client feedback...' }}"
+                                            ></textarea>
+                                        </label>
+                                        @error('orderWorkflowActionRevisionComments.'.$revisionDocumentId)<p class="validation-error">{{ $message }}</p>@enderror
+
+                                        <div class="ft-artwork-revision-item-support">
+                                            <div class="ft-artwork-revision-item-support-head">
+                                                <div>
+                                                    <strong>Supporting attachments <span>(optional)</span></strong>
+                                                    <small>Add marked-up artwork, screenshots, or reference documents for this file.</small>
+                                                </div>
+                                                @if($documentAttachments->isNotEmpty())
+                                                    <em>{{ $documentAttachments->count() }} file{{ $documentAttachments->count() === 1 ? '' : 's' }}</em>
+                                                @endif
+                                            </div>
+
+                                            @if($documentAttachmentDetails->isNotEmpty())
+                                                <div class="ft-artwork-revision-support-files">
+                                                    @foreach($documentAttachmentDetails as $index => $supportFile)
+                                                        <div class="ft-order-attachment-selected-file" wire:key="artwork-revision-support-{{ $task->id }}-{{ $revisionDocumentId }}-{{ $index }}-{{ md5($supportFile['name']) }}">
+                                                            <x-ui.file-type-badge :extension="$supportFile['type']" size="sm" />
+                                                            <span class="ft-order-attachment-selected-copy">
+                                                                <strong title="{{ $supportFile['name'] }}">{{ $supportFile['name'] }}</strong>
+                                                                <small>{{ $supportFile['type'] }} · {{ $supportFile['size'] }} · Ready</small>
+                                                            </span>
+                                                            <button
+                                                                type="button"
+                                                                wire:click="removeOrderWorkflowActionRevisionAttachment({{ $revisionDocumentId }}, {{ $index }})"
+                                                                wire:loading.attr="disabled"
+                                                                wire:target="orderWorkflowActionRevisionAttachments.{{ $revisionDocumentId }},removeOrderWorkflowActionRevisionAttachment({{ $revisionDocumentId }}, {{ $index }})"
+                                                            >Remove</button>
+                                                        </div>
+                                                    @endforeach
+                                                </div>
+                                            @endif
+
+                                            <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone ft-artwork-revision-support-dropzone {{ $documentAttachments->isNotEmpty() ? 'is-compact' : '' }}" data-file-dropzone>
+                                                <input
+                                                    type="file"
+                                                    multiple
+                                                    wire:model="orderWorkflowActionRevisionAttachments.{{ $revisionDocumentId }}"
+                                                    accept="{{ \App\Support\AttachmentUpload::accept() }}"
+                                                    aria-label="Choose supporting files for {{ $revisionDocument->name }}"
+                                                >
+                                                <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
+                                                @if($documentAttachments->isNotEmpty())
+                                                    <strong>Choose supporting files</strong>
+                                                    <b>Drag &amp; drop or <span>browse</span></b>
+                                                @else
+                                                    <strong>Drag &amp; drop files here</strong>
+                                                    <b>or choose from your computer</b>
+                                                    <span class="ft-order-attachment-browse">Browse files</span>
+                                                @endif
+                                                <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(20) }} · Up to 10 files</small>
+                                            </label>
+
+                                            <div class="ft-artwork-revision-evidence-uploading" wire:loading wire:target="orderWorkflowActionRevisionAttachments.{{ $revisionDocumentId }}">Uploading files…</div>
+                                            @error('orderWorkflowActionRevisionAttachments.'.$revisionDocumentId)<p class="validation-error">{{ $message }}</p>@enderror
+                                            @error('orderWorkflowActionRevisionAttachments.'.$revisionDocumentId.'.*')<p class="validation-error">{{ $message }}</p>@enderror
+                                        </div>
+                                    </div>
+                                @endif
+                            </div>
                         @empty
                             <div class="ft-artwork-revision-selector-empty">No current artwork files are available to revise.</div>
                         @endforelse
                     </div>
                     @error('orderWorkflowActionPayload.revision_document_ids')<p class="validation-error">{{ $message }}</p>@enderror
+
+                    @if($automationKey === 'ART_INTERNAL_REVIEW' && $selectedRevisionDocumentIds->isNotEmpty())
+                        <div class="ft-artwork-revision-visibility-note">
+                            <span aria-hidden="true">▢</span>
+                            Supporting attachments will be visible to the artwork assignee and other relevant team members.
+                        </div>
+                    @endif
                 </div>
-                <label class="ft-prototype-field">
-                    <span>{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Revision instructions' : 'Client feedback' }}</span>
-                    <textarea wire:model="orderWorkflowActionComment" rows="5" placeholder="Describe the required artwork changes..."></textarea>
-                    @error('orderWorkflowActionComment')<p class="validation-error">{{ $message }}</p>@enderror
-                </label>
             @elseif($step === 'issue')
                 <div class="ft-prototype-form-grid">
                     <label class="ft-prototype-field"><span>Issue category</span><select wire:model="orderWorkflowActionPayload.issue_category"><option>Fabric color variance</option><option>Print color mismatch</option><option>Incorrect dimensions</option><option>Damaged items</option><option>Other</option></select>@error('orderWorkflowActionPayload.issue_category')<p class="validation-error">{{ $message }}</p>@enderror</label>
@@ -129,6 +266,64 @@
                 <div class="ft-prototype-file-placeholder"><strong>Screenshot / photo</strong><span>Supporting images/documents can be added to the task after the issue is recorded.</span></div>
                 <div class="ft-prototype-email-preview"><b>Email preview</b><span>The issue notification will be recorded for {{ $supplierName }} with this Order and task.</span></div>
             @elseif($variant === 'purchase_order_email')
+                @php
+                    $recipientOptions = collect($emailHandoffPreview['recipient_options'] ?? []);
+
+                    $toEmail = trim((string) ($payload['to_email'] ?? ''));
+                    if ($toEmail === '') {
+                        $legacyToUser = $recipientOptions->firstWhere('id', (int) ($payload['to_user_id'] ?? 0));
+                        $toEmail = trim((string) ($legacyToUser['email'] ?? ($payload['external_to_email'] ?? '')));
+                    }
+
+                    $matchedToUser = $recipientOptions->first(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === mb_strtolower($toEmail)
+                    );
+                    $toQuery = mb_strtolower($toEmail);
+                    $toSuggestions = $toQuery === '' || $matchedToUser
+                        ? collect()
+                        : $recipientOptions
+                            ->filter(function($option) use ($toQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $toQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $toQuery);
+                            })
+                            ->take(6)
+                            ->values();
+
+                    $ccEmails = trim((string) ($payload['cc_emails'] ?? ''));
+                    if ($ccEmails === '') {
+                        $legacyCcUserEmails = collect($payload['cc_user_ids'] ?? [])
+                            ->map(fn($id) => $recipientOptions->firstWhere('id', (int) $id)['email'] ?? null)
+                            ->filter();
+                        $legacyExternalCc = collect(preg_split('/[\s,;]+/', trim((string) ($payload['external_cc_emails'] ?? ''))) ?: [])->filter();
+                        $ccEmails = $legacyCcUserEmails->concat($legacyExternalCc)->unique()->implode(', ');
+                    }
+
+                    $ccParts = collect(preg_split('/[,;]+/', $ccEmails) ?: [])
+                        ->map(fn($value) => trim((string) $value));
+                    $ccQuery = mb_strtolower((string) ($ccParts->last() ?? ''));
+                    $ccPrefix = $ccParts->slice(0, max(0, $ccParts->count() - 1))->filter()->values();
+                    $ccExactMatch = $recipientOptions->contains(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $ccQuery
+                    );
+                    $ccSuggestions = $ccQuery === '' || $ccExactMatch
+                        ? collect()
+                        : $recipientOptions
+                            ->reject(fn($option) => $matchedToUser && (int) $option['id'] === (int) $matchedToUser['id'])
+                            ->filter(function($option) use ($ccQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $ccQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $ccQuery);
+                            })
+                            ->reject(function($option) use ($ccPrefix) {
+                                $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                return $ccPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                            })
+                            ->take(6)
+                            ->values();
+                    $hasCcRecipients = filled($ccEmails);
+                    $recipientCount = (int) ($emailHandoffPreview['recipient_count'] ?? 0);
+                    $toIsValidEmail = $toEmail !== '' && filter_var($toEmail, FILTER_VALIDATE_EMAIL);
+                @endphp
+
                 <div class="ft-order-task-document-target">
                     <span class="ft-order-task-document-target-icon">PO</span>
                     <div>
@@ -136,12 +331,105 @@
                         <strong>{{ $emailHandoffPreview['document_name'] ?? 'No Purchase Order uploaded' }}</strong>
                         <span>{{ filled($emailHandoffPreview['document_version'] ?? null) ? 'Version '.(int) $emailHandoffPreview['document_version'] : 'Upload the Purchase Order in the previous task first' }}</span>
                     </div>
-                    <em>{{ $emailHandoffPreview['recipient_count'] ?? 0 }} recipient{{ (int) ($emailHandoffPreview['recipient_count'] ?? 0) === 1 ? '' : 's' }}</em>
+                    <em>{{ $recipientCount > 0 ? $recipientCount.' recipient'.($recipientCount === 1 ? '' : 's') : 'Choose recipient' }}</em>
                 </div>
+
+                <section
+                    class="ft-po-mail-recipients"
+                    aria-label="Purchase Order email recipients"
+                    x-data="{ ccOpen: @js($hasCcRecipients) }"
+                >
+                    <div class="ft-po-mail-row ft-po-mail-row--to">
+                        <label for="po-to-email-{{ $task->id }}">To</label>
+                        <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                            <input
+                                id="po-to-email-{{ $task->id }}"
+                                type="email"
+                                wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_email"
+                                placeholder="Enter email or search Artwork Team"
+                                autocomplete="off"
+                                spellcheck="false"
+                            >
+
+                            @if($toSuggestions->isNotEmpty())
+                                <div class="ft-po-mail-suggestions" role="listbox" aria-label="Artwork Team suggestions">
+                                    @foreach($toSuggestions as $option)
+                                        <button
+                                            type="button"
+                                            wire:key="po-to-suggestion-{{ $task->id }}-{{ (int) $option['id'] }}"
+                                            wire:click="$set('orderWorkflowActionPayload.to_email', @js((string) $option['email']))"
+                                            class="ft-po-mail-suggestion"
+                                        >
+                                            <span class="ft-po-mail-suggestion__avatar">{{ mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1)) }}</span>
+                                            <span><b>{{ $option['name'] }}</b><small>{{ $option['email'] }}</small></span>
+                                        </button>
+                                    @endforeach
+                                </div>
+                            @endif
+                        </div>
+                        <button
+                            type="button"
+                            class="ft-po-mail-cc-toggle"
+                            x-on:click="ccOpen = !ccOpen"
+                            x-bind:aria-expanded="ccOpen.toString()"
+                            aria-controls="po-cc-fields-{{ $task->id }}"
+                        >Cc</button>
+                    </div>
+                    @error('orderWorkflowActionPayload.to_email')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
+
+                    @if($matchedToUser)
+                        <div class="ft-po-assignment-note ft-po-assignment-note--mail">
+                            <span aria-hidden="true">✓</span>
+                            <p><b>{{ $matchedToUser['name'] }}</b> will receive the Purchase Order by email and will be automatically assigned to <strong>Prepare &amp; Upload Artwork</strong>.</p>
+                        </div>
+                    @elseif($toIsValidEmail)
+                        <p class="ft-po-mail-help">This email will receive the Purchase Order. It does not match an Artwork Team user, so no internal artwork task will be auto-assigned.</p>
+                    @endif
+
+                    <div id="po-cc-fields-{{ $task->id }}" class="ft-po-mail-cc" x-cloak x-show="ccOpen">
+                        <div class="ft-po-mail-row ft-po-mail-row--cc">
+                            <label for="po-cc-emails-{{ $task->id }}">Cc</label>
+                            <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                <input
+                                    id="po-cc-emails-{{ $task->id }}"
+                                    type="text"
+                                    wire:model.live.debounce.300ms="orderWorkflowActionPayload.cc_emails"
+                                    placeholder="Add email addresses, separated by commas"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+
+                                @if($ccSuggestions->isNotEmpty())
+                                    <div class="ft-po-mail-suggestions" role="listbox" aria-label="Artwork Team CC suggestions">
+                                        @foreach($ccSuggestions as $option)
+                                            @php
+                                                $nextCcEmails = $ccPrefix
+                                                    ->concat([(string) $option['email']])
+                                                    ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                    ->implode(', ');
+                                            @endphp
+                                            <button
+                                                type="button"
+                                                wire:key="po-cc-suggestion-{{ $task->id }}-{{ (int) $option['id'] }}"
+                                                wire:click="$set('orderWorkflowActionPayload.cc_emails', @js($nextCcEmails))"
+                                                class="ft-po-mail-suggestion"
+                                            >
+                                                <span class="ft-po-mail-suggestion__avatar">{{ mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1)) }}</span>
+                                                <span><b>{{ $option['name'] }}</b><small>{{ $option['email'] }}</small></span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                        @error('orderWorkflowActionPayload.cc_emails')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
+                    </div>
+                </section>
+
                 <x-email.handoff-preview
                     :preview="$emailHandoffPreview"
                     :defaultSubject="'Purchase Order ready — '.$orderNumber"
-                    emptyRecipientText="No active user with a valid email is assigned to this Order's Artwork phase."
+                    emptyRecipientText="Enter an email address in To to see the final email details."
                 />
                 @error('orderWorkflowActionEmail')<p class="validation-error">{{ $message }}</p>@enderror
             @elseif($variant === 'artwork_review' || $variant === 'artwork_email' || $variant === 'client_erp')
@@ -173,7 +461,7 @@
                         <small>LATEST ARTWORK · {{ $latestArtworkDocuments->count() }} FILE{{ $latestArtworkDocuments->count() === 1 ? '' : 'S' }}</small>
                         <h3>{{ $productName }}</h3>
                         <dl>
-                            <div><dt>Version</dt><dd>V{{ $artworkVersion }}</dd></div>
+                            <div><dt>Versions</dt><dd>{{ $artworkVersionLabel }}</dd></div>
                             <div><dt>Files</dt><dd>{{ $latestArtworkDocuments->isNotEmpty() ? $latestArtworkDocuments->pluck('name')->implode(', ') : 'Artwork file' }}</dd></div>
                             <div><dt>Uploaded by</dt><dd>{{ $latestArtwork?->uploader?->name ?: $task->assignee?->name ?: 'FlowTrack' }}</dd></div>
                             <div><dt>Client</dt><dd>{{ $clientName }}</dd></div>
@@ -209,11 +497,11 @@
                                 @endforeach
                             </div>
                         @endif
-                        @if($artworkDocs->where('version', '!=', $artworkVersion)->isNotEmpty())
+                        @if($archivedArtworkDocuments->isNotEmpty())
                             <details class="ft-prototype-version-history">
                                 <summary>Previous artwork versions</summary>
                                 <div class="ft-prototype-version-list">
-                                    @foreach($artworkDocs->where('version', '!=', $artworkVersion)->sortByDesc('id')->values() as $index => $doc)
+                                    @foreach($archivedArtworkDocuments as $index => $doc)
                                         <div>
                                             <span class="ft-prototype-version-file">
                                                 <strong>{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}</strong>
@@ -233,17 +521,88 @@
                 </div>
 
                 @if($variant === 'artwork_email')
+                    @php
+                        $artworkRecipientOptions = collect($emailHandoffPreview['recipient_options'] ?? []);
+                        $artworkToEmails = trim((string) ($payload['to_emails'] ?? ''));
+                        if ($artworkToEmails === '') {
+                            $artworkToEmails = trim((string) ($payload['to_email'] ?? ''));
+                        }
+
+                        $artworkToParts = collect(preg_split('/[,;]+/', $artworkToEmails) ?: [])
+                            ->map(fn($value) => trim((string) $value));
+                        $artworkToQuery = mb_strtolower((string) ($artworkToParts->last() ?? ''));
+                        $artworkToPrefix = $artworkToParts
+                            ->slice(0, max(0, $artworkToParts->count() - 1))
+                            ->filter()
+                            ->values();
+                        $artworkToExactMatch = $artworkRecipientOptions->contains(
+                            fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $artworkToQuery
+                        );
+                        $artworkToSuggestions = $artworkToQuery === '' || $artworkToExactMatch
+                            ? collect()
+                            : $artworkRecipientOptions
+                                ->filter(function($option) use ($artworkToQuery) {
+                                    return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $artworkToQuery)
+                                        || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $artworkToQuery);
+                                })
+                                ->reject(function($option) use ($artworkToPrefix) {
+                                    $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                    return $artworkToPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                                })
+                                ->take(6)
+                                ->values();
+                    @endphp
+
+                    <section class="ft-po-mail-recipients ft-artwork-mail-recipients" aria-label="Artwork email recipients">
+                        <div class="ft-po-mail-row ft-po-mail-row--single">
+                            <label for="artwork-to-emails-{{ $task->id }}">To</label>
+                            <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                <input
+                                    id="artwork-to-emails-{{ $task->id }}"
+                                    type="text"
+                                    wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_emails"
+                                    placeholder="Enter email or search users"
+                                    autocomplete="off"
+                                    spellcheck="false"
+                                >
+
+                                @if($artworkToSuggestions->isNotEmpty())
+                                    <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user suggestions">
+                                        @foreach($artworkToSuggestions as $option)
+                                            @php
+                                                $nextArtworkToEmails = $artworkToPrefix
+                                                    ->concat([(string) $option['email']])
+                                                    ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                    ->implode(', ');
+                                            @endphp
+                                            <button
+                                                type="button"
+                                                wire:key="artwork-to-suggestion-{{ $task->id }}-{{ (int) $option['id'] }}"
+                                                wire:click="$set('orderWorkflowActionPayload.to_emails', @js($nextArtworkToEmails))"
+                                                class="ft-po-mail-suggestion"
+                                            >
+                                                <span class="ft-po-mail-suggestion__avatar">{{ mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1)) }}</span>
+                                                <span><b>{{ $option['name'] }}</b><small>{{ $option['email'] }}</small></span>
+                                            </button>
+                                        @endforeach
+                                    </div>
+                                @endif
+                            </div>
+                        </div>
+                        @error('orderWorkflowActionPayload.to_emails')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
+                    </section>
+
                     <x-email.handoff-preview
                         :preview="$emailHandoffPreview"
                         :defaultSubject="'Artwork ready — '.$orderNumber"
-                        emptyRecipientText="No active user with a valid email has the Order Team role in Users & role assignments."
+                        emptyRecipientText="Enter one or more email addresses in To."
                     />
                     @error('orderWorkflowActionEmail')<p class="validation-error">{{ $message }}</p>@enderror
                 @elseif($variant === 'client_erp')
                     <label class="ft-prototype-field ft-prototype-field--top"><span>Client ERP reference</span><input wire:model="orderWorkflowActionPayload.erp_reference" placeholder="Client ERP reference">@error('orderWorkflowActionPayload.erp_reference')<p class="validation-error">{{ $message }}</p>@enderror</label>
                 @endif
             @elseif($variant === 'client_decision')
-                <p class="ft-prototype-modal-copy">Choose the decision received from {{ $clientName }} for Artwork V{{ $artworkVersion }}.</p>
+                <p class="ft-prototype-modal-copy">Choose the decision received from {{ $clientName }} for the current artwork ({{ $artworkVersionLabel }}).</p>
                 <div class="ft-prototype-choice-grid">
                     <button type="button" wire:click="submitOrderWorkflowAction('revise')"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
                     <button type="button" wire:click="submitOrderWorkflowAction('approved')"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
@@ -361,7 +720,7 @@
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
                 <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
                 @if($step === 'revision')
-                    <button type="button" class="primary" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Request Revision' : 'Activate Revision Task' }}</button>
+                    <button type="button" class="danger ft-artwork-revision-submit" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction,orderWorkflowActionRevisionAttachments">{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Submit Revision' : 'Activate Revision Task' }}</button>
                 @elseif($step === 'issue')
                     <button type="button" class="danger" wire:click="submitOrderWorkflowAction('issue')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Report Issue</button>
                 @elseif($emailFallback && $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true))

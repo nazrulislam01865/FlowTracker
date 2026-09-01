@@ -33,16 +33,17 @@ trait ManagesOrderTasks
     public function updateTaskAssigneeFromJob(int $taskId, mixed $assigneeId): array
     {
         $assignee = null;
-        $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, &$assignee) {
+        $updatedTask = null;
+        $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, &$assignee, &$updatedTask) {
             abort_unless($this->selectedJobId, 422);
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
             $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
             $assignee = $assigneeId ? User::where('is_active', true)->findOrFail($assigneeId) : null;
-            app(TaskService::class)->updateDetailField($task, 'assignee_id', $assigneeId, auth()->user());
+            $updatedTask = app(TaskService::class)->updateDetailField($task, 'assignee_id', $assigneeId, auth()->user());
         });
 
-        if ($result['ok'] ?? false) {
-            $result['avatarUrl'] = $assignee?->profileImageUrl();
+        if (($result['ok'] ?? false) && $updatedTask) {
+            $result = array_merge($result, $this->dispatchTaskAssigneeSync($updatedTask));
         }
 
         return $result;
@@ -51,13 +52,20 @@ trait ManagesOrderTasks
     #[Json]
     public function updateTaskDueDateFromJob(int $taskId, mixed $date): array
     {
-        return $this->persistInlineEdit('task due date', function () use ($taskId, $date) {
+        $updatedTask = null;
+        $result = $this->persistInlineEdit('task due date', function () use ($taskId, $date, &$updatedTask) {
             abort_unless($this->selectedJobId, 422);
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
             $date = trim((string) $date);
             if ($date !== '') validator(['date' => $date], ['date' => ['date']])->validate();
-            app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
+            $updatedTask = app(TaskService::class)->updateDueDate($task, $date ?: null, auth()->user());
         });
+
+        if (($result['ok'] ?? false) && $updatedTask) {
+            $result = array_merge($result, $this->dispatchTaskAssigneeSync($updatedTask));
+        }
+
+        return $result;
     }
 
     /**
@@ -161,14 +169,21 @@ trait ManagesOrderTasks
     #[Json]
     public function updateTaskStatusFromJob(int $taskId, mixed $status): array
     {
-        return $this->persistInlineEdit('task status', function () use ($taskId, $status) {
+        $updatedTask = null;
+        $result = $this->persistInlineEdit('task status', function () use ($taskId, $status, &$updatedTask) {
             abort_unless($this->selectedJobId, 422);
             $status = trim((string) $status);
             abort_if($status === '', 422, 'Task status is required.');
 
             $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
-            app(TaskService::class)->moveStatus($task, $status, auth()->user());
+            $updatedTask = app(TaskService::class)->moveStatus($task, $status, auth()->user());
         });
+
+        if (($result['ok'] ?? false) && $updatedTask) {
+            $result = array_merge($result, $this->dispatchTaskAssigneeSync($updatedTask));
+        }
+
+        return $result;
     }
 
     public function completePhase(): void
@@ -242,7 +257,8 @@ trait ManagesOrderTasks
             ->findOrFail($this->selectedTaskId);
         abort_unless(app(\App\Services\AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
 
-        app(TaskService::class)->moveStatus($task, 'Completed', auth()->user());
+        $task = app(TaskService::class)->moveStatus($task, 'Completed', auth()->user());
+        $this->dispatchTaskAssigneeSync($task);
         $this->loadTaskForm($task->id);
         session()->flash('success', 'Task marked complete.');
     }
@@ -252,6 +268,7 @@ trait ManagesOrderTasks
         if (!$this->selectedTaskId || !app(\App\Services\RichTextService::class)->hasContent($this->taskComment)) return;
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
         app(TaskService::class)->addComment($task, $this->taskComment, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
         $this->taskComment = '';
         $this->taskActivityPage = 1;
     }
@@ -326,6 +343,10 @@ trait ManagesOrderTasks
             $result['avatarUrl'] = $updatedTask->assignee?->profileImageUrl();
         }
 
+        if (($result['ok'] ?? false) && $updatedTask) {
+            $result = array_merge($result, $this->dispatchTaskAssigneeSync($updatedTask));
+        }
+
         if ($field === 'description' && ($result['ok'] ?? false) && $updatedTask) {
             $result['value'] = (string) ($updatedTask->description ?? '');
             $result['displayHtml'] = app(\App\Services\MentionService::class)
@@ -341,6 +362,7 @@ trait ManagesOrderTasks
         $this->validate(['newChecklistItem'=>['required','string','max:255']]);
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($this->selectedTaskId);
         app(TaskService::class)->addChecklistItem($task, $this->newChecklistItem, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
         $this->newChecklistItem = '';
     }
 
@@ -352,6 +374,7 @@ trait ManagesOrderTasks
         $item = $task->checklistItems->firstWhere('id', $itemId);
         abort_unless($item, 404);
         app(TaskService::class)->toggleChecklistItem($task, $item, $completed, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
     }
 
     public function deleteTaskChecklistItem(int $itemId): void
@@ -361,6 +384,7 @@ trait ManagesOrderTasks
         $item = $task->checklistItems->firstWhere('id', $itemId);
         abort_unless($item, 404);
         app(TaskService::class)->deleteChecklistItem($task, $item, auth()->user());
+        $this->dispatchTaskAssigneeSync($task->id);
     }
 
     public function setTaskFlag(string $flag): void
@@ -377,6 +401,7 @@ trait ManagesOrderTasks
         }
 
         $updated = app(TaskService::class)->setAttentionFlag($task, $flag !== '' ? $flag : null, auth()->user());
+        $this->dispatchTaskAssigneeSync($updated);
         $this->taskAttention = (bool) $updated->needs_attention;
         $this->taskAttentionReason = (string) $updated->attention_reason;
     }
@@ -389,6 +414,7 @@ trait ManagesOrderTasks
             ? null
             : (app(\App\Services\TaskFlagService::class)->defaultActive()?->name ?: 'Management attention');
         $updated = app(TaskService::class)->setAttentionFlag($task, $flag, auth()->user());
+        $this->dispatchTaskAssigneeSync($updated);
         $this->taskAttention = (bool) $updated->needs_attention;
         $this->taskAttentionReason = (string) $updated->attention_reason;
     }
@@ -413,6 +439,34 @@ trait ManagesOrderTasks
         session()->flash('success', 'Task update saved.');
         $this->selectedTaskId = null;
         $this->taskComment = '';
+    }
+
+    /** @return array{taskId:int, assigneeId:int|string, assigneeName:string, avatarUrl:string} */
+    private function dispatchTaskAssigneeSync(Task|int $task): array
+    {
+        $task = $task instanceof Task ? $task->refresh() : Task::query()->findOrFail($task);
+        $task->loadMissing('assignee:id,name,profile_image_path');
+
+        $payload = [
+            'taskId' => (int) $task->id,
+            'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : '',
+            'assigneeName' => (string) ($task->assignee?->name ?: 'Unassigned'),
+            'avatarUrl' => (string) ($task->assignee?->profileImageUrl() ?? ''),
+        ];
+
+        if ((int) $this->selectedTaskId === (int) $task->id) {
+            $this->taskAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        }
+
+        $this->dispatch(
+            'task-assignee-updated',
+            taskId: $payload['taskId'],
+            assigneeId: $payload['assigneeId'],
+            assigneeName: $payload['assigneeName'],
+            avatarUrl: $payload['avatarUrl'],
+        );
+
+        return $payload;
     }
 
     private function loadTaskForm(int $id): void

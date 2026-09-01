@@ -114,6 +114,19 @@ class FlowJob extends Model
     public function members(): HasMany { return $this->hasMany(FlowJobMember::class, 'flow_job_id'); }
     public function phaseHistories(): HasMany { return $this->hasMany(FlowJobPhaseHistory::class, 'flow_job_id'); }
     public function activities(): MorphMany { return $this->morphMany(Activity::class, 'subject'); }
+    public function workflowEmailActivities(): MorphMany
+    {
+        return $this->morphMany(Activity::class, 'subject')
+            ->whereIn('event', [
+                'job.artwork_emailed_to_order_team',
+                'job.artwork_email_failed_to_order_team',
+                // When Order email is disabled the handoff can still be completed
+                // manually. Keep that delivery state visible so the completed
+                // task can resend later after email is enabled again.
+                'job.workflow_email_skipped',
+            ])
+            ->latest('id');
+    }
     public function redoRecords(): HasMany { return $this->hasMany(OrderRedo::class, 'original_order_id')->orderBy('sequence'); }
     public function redoRecord(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderRedo::class, 'redo_order_id'); }
     public function createdActivity(): MorphOne { return $this->morphOne(Activity::class, 'subject')->oldestOfMany(); }

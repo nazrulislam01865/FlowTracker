@@ -180,6 +180,7 @@
         :stages="$orderStages"
         mode="navigate"
         :show-header="false"
+        :navigation-query="$orderStageNavigationQuery"
     />
 
 

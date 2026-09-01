@@ -17,6 +17,92 @@ use Illuminate\Validation\ValidationException;
 
 class TaskService
 {
+    /**
+     * Make the user who performs a task action the task's current assignee.
+     *
+     * This is intentionally separate from manual assignment: an explicit
+     * assignee edit keeps the selected user, while status changes, comments,
+     * checklist/resource actions and workflow actions claim the task for the
+     * person doing the work. The assignment is audited on both the Task and
+     * its parent Order through the normal activity/notification pipeline.
+     */
+    public function claimForAction(Task $task, User $actor, string $action = 'acted on the task'): Task
+    {
+        $task = Task::query()->findOrFail($task->id);
+        $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+
+        if ($previousAssigneeId === (int) $actor->id) {
+            return $task;
+        }
+
+        $previousAssigneeName = $previousAssigneeId
+            ? (User::query()->find($previousAssigneeId)?->name ?? 'Unassigned')
+            : 'Unassigned';
+
+        $task->update(['assignee_id' => $actor->id]);
+        FlowJobMember::firstOrCreate(
+            ['flow_job_id' => $task->flow_job_id, 'user_id' => $actor->id],
+            ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+        );
+
+        $this->record(
+            $task,
+            $actor,
+            'task.assignee_auto_assigned',
+            'Assignee automatically changed from '.$previousAssigneeName.' to '.$actor->name.' after '.$actor->name.' '.$action.'.',
+            [
+                'field' => 'assignee_id',
+                'old' => $previousAssigneeName,
+                'new' => $actor->name,
+                'old_assignee_id' => $previousAssigneeId,
+                'new_assignee_id' => (int) $actor->id,
+                'automatic' => true,
+                'trigger' => $action,
+            ],
+        );
+
+        return $task->refresh();
+    }
+
+    /**
+     * Assign a downstream task as a workflow side effect without applying the
+     * manual assignee permission gate to the person sending the handoff.
+     */
+    public function assignFromWorkflowHandoff(Task $task, User $assignee, User $actor): Task
+    {
+        $task = Task::query()->findOrFail($task->id);
+        $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        if ($previousAssigneeId === (int) $assignee->id) return $task;
+
+        $previousAssigneeName = $previousAssigneeId
+            ? (User::query()->find($previousAssigneeId)?->name ?? 'Unassigned')
+            : 'Unassigned';
+
+        $task->update(['assignee_id' => $assignee->id]);
+        FlowJobMember::firstOrCreate(
+            ['flow_job_id' => $task->flow_job_id, 'user_id' => $assignee->id],
+            ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+        );
+
+        $this->record(
+            $task,
+            $actor,
+            'task.assignee_auto_assigned',
+            $assignee->name.' was automatically assigned after the Purchase Order handoff.',
+            [
+                'field' => 'assignee_id',
+                'old' => $previousAssigneeName,
+                'new' => $assignee->name,
+                'old_assignee_id' => $previousAssigneeId,
+                'new_assignee_id' => (int) $assignee->id,
+                'automatic' => true,
+                'trigger' => 'purchase_order_handoff',
+            ],
+        );
+
+        return $task->refresh();
+    }
+
     public function visibleQuery(User $user): Builder
     {
         return app(AccessControlService::class)->applyTaskScope(Task::query(), $user);
@@ -65,7 +151,7 @@ class TaskService
                 'progress' => BoardLaneResolver::isCompleted($status) ? 100 : (BoardLaneResolver::isNotStarted($status) ? 0 : max($lockedTask->progress, 35)),
                 'needs_attention' => $lockedTask->needs_attention,
                 'attention_reason' => $lockedTask->attention_reason,
-            ], $actor);
+            ], $actor, 'changed the task status');
         }, 3);
     }
 
@@ -79,6 +165,8 @@ class TaskService
         if (! filter_var($url, FILTER_VALIDATE_URL) || ! in_array($scheme, ['http', 'https'], true) || $host === '') {
             throw ValidationException::withMessages(['overviewTaskLinkUrl' => 'Enter a valid http:// or https:// link.']);
         }
+
+        $task = $this->claimForAction($task, $actor, 'added an external link');
 
         // Create through the task relation so the foreign key always belongs
         // to the exact Order task that was authorized above. This also keeps the
@@ -107,6 +195,7 @@ class TaskService
     {
         $this->assertEditable($task, $actor);
         $link = $task->links()->whereKey($linkId)->firstOrFail();
+        $task = $this->claimForAction($task, $actor, 'removed an external link');
         $link->delete();
 
         $this->record($task, $actor, 'task.link_removed', 'External link removed.', [
@@ -119,6 +208,7 @@ class TaskService
         $this->assertEditable($task, $actor);
         $old = $task->due_date?->format('Y-m-d');
         $new = $dueDate ?: null;
+        $task = $this->claimForAction($task, $actor, 'changed the due date');
         $task->update(['due_date' => $new]);
         $this->record($task, $actor, 'task.due_date_updated', $this->changeDescription('Due date', $old, $new));
 
@@ -167,6 +257,16 @@ class TaskService
             $updates['progress'] = BoardLaneResolver::isCompleted($new) ? 100 : (BoardLaneResolver::isNotStarted($new) ? 0 : max(1, min(99, (int) $task->progress)));
             $updates['completed_at'] = BoardLaneResolver::isCompleted($new) ? ($task->completed_at ?: now()) : null;
         }
+
+        $labels = [
+            'title' => 'Task name', 'assignee_id' => 'Assignee', 'status' => 'Status', 'priority' => 'Priority',
+            'start_date' => 'Start date', 'description' => 'Description',
+        ];
+        if ($field !== 'assignee_id') {
+            $actionLabel = strtolower($labels[$field] ?? str_replace('_', ' ', $field));
+            $task = $this->claimForAction($task, $actor, 'updated the '.$actionLabel);
+        }
+
         $task->update($updates);
 
         if ($field === 'assignee_id' && $new) {
@@ -176,10 +276,6 @@ class TaskService
             );
         }
 
-        $labels = [
-            'title' => 'Task name', 'assignee_id' => 'Assignee', 'status' => 'Status', 'priority' => 'Priority',
-            'start_date' => 'Start date', 'description' => 'Description',
-        ];
         $oldDisplay = $field === 'assignee_id' ? (User::find($old)?->name ?? 'Unassigned') : $old;
         $newDisplay = $field === 'assignee_id' ? (User::find($new)?->name ?? 'Unassigned') : $new;
         if ($field === 'description') {
@@ -203,14 +299,9 @@ class TaskService
         return $task->refresh();
     }
 
-    public function update(Task $task, array $data, User $actor): Task
+    public function update(Task $task, array $data, User $actor, string $action = 'updated the task'): Task
     {
-        $assignmentChanged = array_key_exists('assignee_id', $data) && (int) ($data['assignee_id'] ?: 0) !== (int) ($task->assignee_id ?: 0);
-        if ($assignmentChanged) abort_unless(app(AccessControlService::class)->canAssignTask($actor, $task), 403);
         $this->assertEditable($task, $actor);
-
-        $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
-        $assigneeId = array_key_exists('assignee_id', $data) ? ($data['assignee_id'] ?: null) : $task->assignee_id;
         $status = trim((string) ($data['status'] ?? $task->status));
         abort_if($status === '', 422, 'Task status is required.');
 
@@ -219,6 +310,10 @@ class TaskService
 
         app(OrderTaskSequenceService::class)->assertStatusActionable($task);
         if (BoardLaneResolver::isCompleted($status)) $this->ensureCompletionRequirements($task);
+
+        $task = $this->claimForAction($task, $actor, $action);
+        $before = $task->only(['status','assignee_id','progress','needs_attention','attention_reason']);
+        $assigneeId = (int) $actor->id;
 
         $updates = [
             'status' => $status,
@@ -279,6 +374,7 @@ class TaskService
         $this->assertEditable($task, $actor);
         $label = trim($label);
         abort_if($label === '', 422, 'Checklist item is required.');
+        $task = $this->claimForAction($task, $actor, 'added a checklist item');
         $item = $task->checklistItems()->create([
             'label' => $label,
             'is_completed' => false,
@@ -293,6 +389,7 @@ class TaskService
     {
         $this->assertEditable($task, $actor);
         abort_unless((int) $item->flow_task_id === (int) $task->id, 422);
+        $task = $this->claimForAction($task, $actor, $completed ? 'completed a checklist item' : 'reopened a checklist item');
         $item->update(['is_completed' => $completed]);
         $this->record($task, $actor, 'task.checklist_updated', ($completed ? 'Completed checklist item: ' : 'Reopened checklist item: ').$item->label);
         $this->syncChecklistProgress($task);
@@ -304,6 +401,7 @@ class TaskService
         $this->assertEditable($task, $actor);
         abort_unless((int) $item->flow_task_id === (int) $task->id, 422);
         $label = $item->label;
+        $task = $this->claimForAction($task, $actor, 'deleted a checklist item');
         $item->delete();
         $this->record($task, $actor, 'task.checklist_deleted', 'Checklist item deleted: '.$label);
         $this->syncChecklistProgress($task);
@@ -314,6 +412,7 @@ class TaskService
         abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
         $body = app(RichTextService::class)->normalize($body, 5000, 'comment');
         abort_if(!$body, 422, 'Comment cannot be empty.');
+        $task = $this->claimForAction($task, $actor, 'added a comment');
         $mentionIds = app(MentionService::class)->userIdsFromText($body);
         $comment = $task->comments()->create(['user_id' => $actor->id, 'body' => $body]);
         $activityBody = app(RichTextService::class)->plainText($body);
@@ -329,6 +428,7 @@ class TaskService
     public function setAttentionFlag(Task $task, ?string $flag, User $actor): Task
     {
         $this->assertEditable($task, $actor);
+        $task = $this->claimForAction($task, $actor, 'updated the task flag');
 
         // Order Task Flags are automatic. Keep this compatibility method so
         // stale Livewire requests cannot corrupt the new status-driven mapping.

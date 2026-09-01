@@ -31,10 +31,13 @@ Artisan::command('flowtrack:sync-order-flags', function (): int {
     return 0;
 })->purpose('Persist automatic overdue Order Task Flags and parent Order Flags');
 
-// Due-date flags must change even when nobody edits the task. The normal web
-// paths also run a five-minute bounded sync, while the scheduler guarantees the
-// persisted values are refreshed independently of page traffic.
-Schedule::command('flowtrack:sync-order-flags')->hourly()->withoutOverlapping()->onOneServer();
+// Due-date flags must change even when nobody edits the task. Keep this work
+// completely outside normal web requests so page loads never become responsible
+// for scanning and updating open tasks. The scheduler is the single owner.
+Schedule::command('flowtrack:sync-order-flags')
+    ->everyFiveMinutes()
+    ->withoutOverlapping()
+    ->onOneServer();
 
 
 Artisan::command('flowtrack:send-rfq-reminders', function (): int {

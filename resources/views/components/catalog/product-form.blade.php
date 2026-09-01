@@ -302,8 +302,8 @@
                 <x-catalog.file-upload
                     model="productCertificateUpload"
                     label="Certificate & Test Report"
-                    hint="PDF, DOCX, EPS or ESP · Max 10 MB"
-                    accept=".pdf,.doc,.docx,.eps,.esp,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/postscript,application/octet-stream"
+                    :hint="\App\Support\AttachmentUpload::helperText(10)"
+                    :accept="\App\Support\AttachmentUpload::accept()"
                     :upload="$certificateUpload"
                     :current="$certificateDoc"
                     clear-action="clearProductCertificateUpload"
@@ -312,8 +312,8 @@
                 <x-catalog.file-upload
                     model="productTemplateUpload"
                     label="Product template"
-                    hint="PDF, AI, EPS or ESP · Max 10 MB"
-                    accept=".pdf,.ai,.eps,.esp,application/pdf,application/postscript,application/octet-stream"
+                    :hint="\App\Support\AttachmentUpload::helperText(10)"
+                    :accept="\App\Support\AttachmentUpload::accept()"
                     :upload="$templateUpload"
                     :current="$templateDoc"
                     clear-action="clearProductTemplateUpload"
