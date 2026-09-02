@@ -1988,6 +1988,54 @@
     margin-top: 3px
 }
 
+.ft-order-prototype-detail .activity-kind.is-customer-comment {
+    display: inline-flex;
+    align-items: center;
+    min-height: 20px;
+    padding: 3px 7px;
+    border: 1px solid var(--ft-border-success);
+    border-radius: 999px;
+    background: var(--ft-color-teal-50);
+    color: var(--teal);
+    font-size: .5rem;
+    font-weight: 900;
+    letter-spacing: .045em;
+    line-height: 1;
+}
+
+.ft-order-prototype-detail .ft-order-customer-comment-activity {
+    max-width: 760px;
+    margin-top: 7px;
+    padding: 10px 12px;
+    border: 1px solid var(--ft-border-success);
+    border-left: 3px solid var(--teal);
+    border-radius: 8px;
+    background: var(--ft-color-teal-50);
+}
+
+.ft-order-prototype-detail .ft-order-customer-comment-activity__label {
+    margin-bottom: 4px;
+    color: var(--teal);
+    font-size: .5625rem;
+    font-weight: 850;
+}
+
+.ft-order-prototype-detail .ft-order-customer-comment-activity__copy {
+    color: var(--text);
+    font-size: .6875rem;
+    font-weight: 650;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.ft-order-prototype-detail .ft-order-customer-comment-activity__context {
+    margin-top: 5px;
+    color: var(--muted);
+    font-size: .53125rem;
+    font-weight: 600;
+}
+
 /* Revision instructions can contain pasted screenshots. In the activity feed,
  * present those images as compact references instead of full-width artwork. */
 .ft-revision-activity-content {

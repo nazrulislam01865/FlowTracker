@@ -914,6 +914,8 @@ class LegacyJobService
             'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'workflowEmailActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
+            'workflowInvoiceActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
+            'invoices',
             'tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->with([
@@ -1048,17 +1050,29 @@ class LegacyJobService
             ->orderByDesc('id')
             ->get();
 
+        $job->setRelation('artworkRevisionRequestActivities', $notes);
+
         $documents = $job->relationLoaded('documents') ? $job->documents : collect();
         $documentsById = $documents->keyBy(fn ($document) => (int) $document->id);
         $documentsByTask = $documents
             ->filter(fn ($document) => (int) ($document->task_id ?? 0) > 0)
             ->groupBy(fn ($document) => (int) $document->task_id);
 
-        $appliedRevisionActivityIds = $job->activities()
+        // Load applied Artwork revisions once for the whole Order. The same
+        // collection drives both current-version reconstruction and resolution
+        // checks below, avoiding one activity query per Artwork upload task.
+        $appliedRevisionActivities = $job->activities()
             ->where('event', 'job.artwork_revision_applied')
             ->latest('id')
-            ->limit(100)
-            ->get()
+            ->get(['id', 'meta']);
+
+        // Reuse the same preloaded revision history in the Archived Artwork
+        // presenter. The archive is event-driven: only files that were actually
+        // replaced by a completed revision belong there. Keeping the activities
+        // on the hydrated Job avoids an extra query from Blade/presenter code.
+        $job->setRelation('artworkRevisionAppliedActivities', $appliedRevisionActivities);
+
+        $appliedRevisionActivityIds = $appliedRevisionActivities
             ->map(fn ($activity) => (int) data_get($activity->meta, 'revision_activity_id', 0))
             ->filter()
             ->unique()
@@ -1067,12 +1081,18 @@ class LegacyJobService
         // The current Artwork set may contain mixed file versions after a
         // selective revision. Attach it directly to the upload task so every
         // Order-detail surface renders accepted files at their existing version
-        // and only replaced files at their incremented version.
+        // and only replaced files at their incremented version. Reuse the
+        // already-loaded parent Job + applied activities so this loop is query-free.
         foreach ($artworkUploadTasks as $artworkUploadTask) {
             $taskDocuments = collect($documentsByTask->get((int) $artworkUploadTask->id, collect()))->values();
+            $artworkUploadTask->setRelation('job', $job);
             $artworkUploadTask->setRelation(
                 'currentArtworkDocuments',
-                app(DocumentService::class)->currentArtworkDocuments($artworkUploadTask, $taskDocuments),
+                app(DocumentService::class)->currentArtworkDocuments(
+                    $artworkUploadTask,
+                    $taskDocuments,
+                    $appliedRevisionActivities,
+                ),
             );
         }
 
@@ -1180,13 +1200,30 @@ class LegacyJobService
             : 'all';
         $perPage = max(1, min($perPage, 50));
 
+        $customerCommentEvents = [
+            'job.artwork_emailed_to_order_team',
+            'job.workflow_email_skipped',
+        ];
+
         $query = $job->activities()
             ->where(fn ($events) => $events->whereNull('event')->orWhere('event', '!=', 'job.health_updated'))
             ->with('user:id,name,profile_image_path')
-            ->when($activityTab === 'comments', fn ($activity) => $activity->where('event', 'job.comment'))
-            ->when($activityTab === 'history', fn ($activity) => $activity->where(fn ($events) => $events
-                ->whereNull('event')
-                ->orWhere('event', '!=', 'job.comment')));
+            ->when($activityTab === 'comments', fn ($activity) => $activity->where(function ($comments) use ($customerCommentEvents) {
+                $comments->where('event', 'job.comment')
+                    ->orWhere(function ($handoff) use ($customerCommentEvents) {
+                        $handoff->whereIn('event', $customerCommentEvents)
+                            ->whereNotNull('meta->customer_comment')
+                            ->where('meta->customer_comment', '!=', '');
+                    });
+            }))
+            ->when($activityTab === 'history', fn ($activity) => $activity
+                ->where(fn ($events) => $events->whereNull('event')->orWhere('event', '!=', 'job.comment'))
+                ->where(function ($events) use ($customerCommentEvents) {
+                    $events->whereNull('event')
+                        ->orWhereNotIn('event', $customerCommentEvents)
+                        ->orWhereNull('meta->customer_comment')
+                        ->orWhere('meta->customer_comment', '');
+                }));
 
         $total = (clone $query)->count();
         $pages = max(1, (int) ceil($total / $perPage));

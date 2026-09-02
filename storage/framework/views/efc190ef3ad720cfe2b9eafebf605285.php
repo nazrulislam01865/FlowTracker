@@ -87,23 +87,29 @@ unset($__defined_vars, $__key, $__value); ?>
     $workflowActionLabel = (string) ($workflowAction['label'] ?? 'Take action');
     $workflowActionType = (string) ($workflowAction['type'] ?? 'workflow');
     $workflowEmailStatus = (array) data_get($context, 'workflowEmailStatuses.'.(int) $task->id, []);
+    $workflowInvoice = (array) data_get($context, 'workflowInvoices.'.(int) $task->id, []);
+    $workflowInvoiceId = (int) ($workflowInvoice['id'] ?? 0);
+    $workflowInvoicePdfName = trim((string) ($workflowInvoice['pdf_name'] ?? ''));
     $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
     $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
     $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
     $emailResendFeedbackStatus = strtolower(trim((string) ($emailResendFeedback['email_status'] ?? '')));
     $isArtworkEmailTask = $automationKey === 'ART_SEND_ORDER_TEAM';
+    $isInvoiceEmailTask = $automationKey === 'BILL_SEND';
+    $isTrackedEmailTask = $isArtworkEmailTask || $isInvoiceEmailTask;
     $emailDeliveryStatus = strtolower(trim((string) ($workflowEmailStatus['status'] ?? '')));
     if (in_array($emailResendFeedbackStatus, ['sent', 'failed', 'not_sent'], true)) $emailDeliveryStatus = $emailResendFeedbackStatus;
     // Completed legacy rows may predate delivery tracking. Show an explicit
     // Not Sent state instead of silently hiding email status.
-    if ($isArtworkEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
-    $emailDeliveryFailed = $isArtworkEmailTask && $emailDeliveryStatus === 'failed';
-    $emailDeliverySent = $isArtworkEmailTask && $emailDeliveryStatus === 'sent';
-    $emailDeliveryNotSent = $isArtworkEmailTask && $emailDeliveryStatus === 'not_sent';
-    $emailCanResend = $isArtworkEmailTask
+    if ($isTrackedEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
+    $emailDeliveryFailed = $isTrackedEmailTask && $emailDeliveryStatus === 'failed';
+    $emailDeliverySent = $isTrackedEmailTask && $emailDeliveryStatus === 'sent';
+    $emailDeliveryNotSent = $isTrackedEmailTask && $emailDeliveryStatus === 'not_sent';
+    $emailCanResend = $isTrackedEmailTask
         && $mode === 'done'
         && $canEditTask
         && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
+    $emailResourceLabel = $isInvoiceEmailTask ? 'invoice' : 'artwork';
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
@@ -285,25 +291,31 @@ unset($__defined_vars, $__key, $__value); ?>
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status <?php echo e($statusClass); ?>"><?php echo e($displayStatus); ?></span>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkEmailTask && $mode === 'done'): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isTrackedEmailTask && $mode === 'done'): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailDeliverySent): ?>
-                <span class="ft-order-task-email-status is-sent" title="The latest artwork email was sent successfully.">Email Sent</span>
+                <span class="ft-order-task-email-status is-sent" title="The latest <?php echo e($emailResourceLabel); ?> email was sent successfully.">Email Sent</span>
             <?php elseif($emailDeliveryFailed): ?>
-                <span class="ft-order-task-email-status is-failed" title="The artwork email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
+                <span class="ft-order-task-email-status is-failed" title="The <?php echo e($emailResourceLabel); ?> email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
             <?php elseif($emailDeliveryNotSent): ?>
-                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful artwork email delivery.">Email Not Sent</span>
+                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful <?php echo e($emailResourceLabel); ?> email delivery.">Email Not Sent</span>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailResendFeedbackMessage !== ''): ?>
                 <div class="ft-order-task-email-feedback <?php echo e($emailResendFeedbackType === 'success' ? 'is-success' : 'is-error'); ?>" role="status" aria-live="polite"><?php echo e($emailResendFeedbackMessage); ?></div>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($taskDocuments->isNotEmpty()): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoiceId > 0): ?>
+            <div class="card-sub ft-order-task-invoice-file">
+                <span aria-hidden="true">📎</span>
+                <a href="<?php echo e(route('invoices.pdf.open', $workflowInvoiceId)); ?>" target="_blank" rel="noopener"><?php echo e($workflowInvoicePdfName !== '' ? $workflowInvoicePdfName : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf')); ?></a>
+                <a href="<?php echo e(route('invoices.pdf.download', $workflowInvoiceId)); ?>" class="ft-order-task-invoice-download">Download</a>
+            </div>
+        <?php elseif($taskDocuments->isNotEmpty()): ?>
             <?php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); ?>
             <div class="card-sub">
                 📎 <?php echo e($latestTaskDocument->name); ?>
 
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask): ?>
-                    · Version <?php echo e(max(1, (int) $latestTaskDocument->version)); ?> · Latest
+                    · Latest
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($latestArtworkDocuments->count() > 1): ?>
                         · +<?php echo e($latestArtworkDocuments->count() - 1); ?> file<?php echo e($latestArtworkDocuments->count() === 2 ? '' : 's'); ?>
 
@@ -334,11 +346,12 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php elseif($mode === 'done'): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument)): ?>
                 <button type="button" class="btn small" wire:click="openOverviewTaskDocumentModal(<?php echo e($task->id); ?>)">Add other documents</button>
-            <?php elseif($isArtworkEmailTask && $canEditTask): ?>
+            <?php elseif($isTrackedEmailTask && $canEditTask): ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailCanResend): ?>
-                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">
-                        <span wire:loading.remove wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">Resend</span>
-                        <span wire:loading wire:target="resendCompletedArtworkEmail(<?php echo e($task->id); ?>)">Sending...</span>
+                    <?php $resendMethod = $isInvoiceEmailTask ? 'resendCompletedInvoiceEmail' : 'resendCompletedArtworkEmail'; ?>
+                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="<?php echo e($resendMethod); ?>(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="<?php echo e($resendMethod); ?>(<?php echo e($task->id); ?>)">
+                        <span wire:loading.remove wire:target="<?php echo e($resendMethod); ?>(<?php echo e($task->id); ?>)">Resend</span>
+                        <span wire:loading wire:target="<?php echo e($resendMethod); ?>(<?php echo e($task->id); ?>)">Sending...</span>
                     </button>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
@@ -419,14 +432,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
 <?php endif; ?>
                 <span>
-                    <b>
-                        <?php echo e($document->name); ?>
-
-                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask): ?>
-                            · Version <?php echo e(max(1, (int) $document->version)); ?>
-
-                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                    </b>
+                    <b><?php echo e($document->name); ?></b>
                     <small>
                         <?php echo e($document->uploader?->name ?? 'FlowTrack'); ?> · <?php echo e(\App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A')); ?>
 

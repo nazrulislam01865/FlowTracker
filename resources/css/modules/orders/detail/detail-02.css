@@ -2972,6 +2972,146 @@
     margin-top: 12px;
 }
 
+/* Optional customer note for both the initial Artwork handoff and the same
+   handoff task after a revision cycle. Keep it visually aligned with the
+   existing recipient/preview stack without changing the modal structure. */
+.ft-order-prototype-detail .ft-artwork-handoff-comment {
+    display: grid;
+    gap: 6px;
+    margin-top: 12px;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment > span {
+    color: #10213b;
+    font-size: .625rem;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment > span em {
+    color: #8291a5;
+    font-style: normal;
+    font-weight: 650;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment textarea {
+    width: 100%;
+    min-height: 72px;
+    resize: vertical;
+    border: 1px solid #d8e2ec;
+    border-radius: 9px;
+    padding: 10px 12px;
+    background: #fff;
+    color: #10213b;
+    font: inherit;
+    line-height: 1.45;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment textarea::placeholder {
+    color: #96a3b4;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment textarea:focus {
+    outline: 0;
+    border-color: #71cdbf;
+    box-shadow: 0 0 0 2px rgba(0, 143, 127, .08);
+}
+
+
+/* Persisted Artwork handoff comments are stored with each workflow email
+   activity. This reusable disclosure makes that history visible both on the
+   handoff modal and on the Artwork handoff task without adding a new query. */
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history {
+    margin-top: 10px;
+    border: 1px solid #d8e2ec;
+    border-radius: 9px;
+    background: #f8fbfd;
+    overflow: hidden;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    min-height: 36px;
+    padding: 8px 11px;
+    color: #31445e;
+    font-size: .625rem;
+    font-weight: 800;
+    cursor: pointer;
+    list-style: none;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history > summary::-webkit-details-marker {
+    display: none;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__count {
+    min-width: 20px;
+    height: 20px;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 999px;
+    background: #e8f7f3;
+    color: #087f70;
+    font-size: .5625rem;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__list {
+    display: grid;
+    gap: 0;
+    border-top: 1px solid #e2e9f0;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__item {
+    display: grid;
+    gap: 5px;
+    padding: 9px 11px;
+    background: #fff;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__item + .ft-artwork-handoff-comment-history__item {
+    border-top: 1px solid #e8edf3;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__meta {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    color: #8291a5;
+    font-size: .5625rem;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__meta strong {
+    color: #5d6f85;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history__item p {
+    margin: 0;
+    color: #31445e;
+    font-size: .625rem;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history.is-compact {
+    width: min(100%, 250px);
+    margin-top: 6px;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history.is-compact > summary {
+    min-height: 28px;
+    padding: 5px 8px;
+}
+
+.ft-order-prototype-detail .ft-artwork-handoff-comment-history.is-compact .ft-artwork-handoff-comment-history__item {
+    padding: 7px 8px;
+}
+
 .ft-order-prototype-detail .ft-po-mail-row>label,
 .ft-order-prototype-detail .ft-po-mail-row__label {
     color: #6f7f93;

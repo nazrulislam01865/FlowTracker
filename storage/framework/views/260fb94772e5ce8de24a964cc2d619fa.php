@@ -65,6 +65,10 @@ unset($__defined_vars, $__key, $__value); ?>
         ? \App\Support\OrderShipmentPresenter::present($job, $selectedPhase, $selectedTasks, $context)
         : [];
 
+    $archivedArtworkDocuments = ! $isShipmentPhase
+        ? \App\Support\OrderDetailPresenter::archivedArtworkDocuments($job, $selectedTasks)
+        : collect();
+
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
         'active' => 'Complete the active task to continue the workflow',
@@ -193,6 +197,29 @@ unset($__defined_vars, $__key, $__value); ?>
                 </div>
               </div>
             </section>
+
+            <?php if (isset($component)) { $__componentOriginalc4d33f5cb28726121f9615c191b5cc39 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalc4d33f5cb28726121f9615c191b5cc39 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.archived-artwork','data' => ['documents' => $archivedArtworkDocuments,'canExportDocument' => (bool) ($context['canExportDocument'] ?? false)]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.archived-artwork'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($archivedArtworkDocuments),'can-export-document' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute((bool) ($context['canExportDocument'] ?? false))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalc4d33f5cb28726121f9615c191b5cc39)): ?>
+<?php $attributes = $__attributesOriginalc4d33f5cb28726121f9615c191b5cc39; ?>
+<?php unset($__attributesOriginalc4d33f5cb28726121f9615c191b5cc39); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalc4d33f5cb28726121f9615c191b5cc39)): ?>
+<?php $component = $__componentOriginalc4d33f5cb28726121f9615c191b5cc39; ?>
+<?php unset($__componentOriginalc4d33f5cb28726121f9615c191b5cc39); ?>
+<?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </section>

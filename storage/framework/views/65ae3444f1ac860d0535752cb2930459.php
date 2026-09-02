@@ -61,6 +61,11 @@ unset($__defined_vars, $__key, $__value); ?>
                     $isComment = $activity->event === 'job.comment';
                     $isCancellation = $activity->event === 'job.cancelled';
                     $isArtworkRevision = $activity->event === 'job.artwork_revision_requested';
+                    $customerComment = trim((string) data_get($activity->meta, 'customer_comment', ''));
+                    $isArtworkCustomerComment = $customerComment !== '' && in_array((string) $activity->event, [
+                        'job.artwork_emailed_to_order_team',
+                        'job.workflow_email_skipped',
+                    ], true);
                     $actorName = $activity->user?->name ?? 'System';
                     $actorInitials = collect(preg_split('/\s+/', trim($actorName)))->filter()->map(fn($p)=>mb_strtoupper(mb_substr($p,0,1)))->take(2)->implode('');
                     $activityFocusKey = $isComment ? 'job-'.$activity->id : null;
@@ -69,7 +74,44 @@ unset($__defined_vars, $__key, $__value); ?>
                 ?>
                 <div <?php if($activityAnchor): ?> id="<?php echo e($activityAnchor); ?>" <?php endif; ?> class="wide-activity <?php echo e($isFocusedComment ? 'is-focused-comment' : ''); ?>" <?php if($isFocusedComment): ?> x-data x-init="$nextTick(() => $el.scrollIntoView({ behavior: 'smooth', block: 'center' }))" <?php endif; ?>>
                     <div class="avatar"><?php echo e($actorInitials ?: 'SP'); ?></div>
-                    <div><b><?php echo e($actorName); ?> <span class="card-sub activity-kind"><?php echo e($isComment ? 'COMMENT' : 'CHANGE'); ?></span></b><div class="wide-activity-copy <?php echo e($isCancellation ? 'ft-rich-text-content ft-order-cancellation-activity-copy' : ''); ?>"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkRevision): ?><?php if (isset($component)) { $__componentOriginaleb74e077e078dc73a4ecc7ef913acc03 = $component; } ?>
+                    <div>
+                        <b>
+                            <?php echo e($actorName); ?>
+
+                            <span class="card-sub activity-kind <?php echo e($isArtworkCustomerComment ? 'is-customer-comment' : ''); ?>">
+                                <?php echo e($isArtworkCustomerComment ? 'CUSTOMER COMMENT' : ($isComment ? 'COMMENT' : 'CHANGE')); ?>
+
+                            </span>
+                        </b>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkCustomerComment): ?>
+                            <div class="ft-order-customer-comment-activity">
+                                <div class="ft-order-customer-comment-activity__label">Comment sent with artwork</div>
+                                <div class="ft-order-customer-comment-activity__copy"><?php if (isset($component)) { $__componentOriginal1d83f45bf838052fadc84bf85b829e43 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal1d83f45bf838052fadc84bf85b829e43 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.mention-text','data' => ['text' => $customerComment]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.mention-text'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['text' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($customerComment)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal1d83f45bf838052fadc84bf85b829e43)): ?>
+<?php $attributes = $__attributesOriginal1d83f45bf838052fadc84bf85b829e43; ?>
+<?php unset($__attributesOriginal1d83f45bf838052fadc84bf85b829e43); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal1d83f45bf838052fadc84bf85b829e43)): ?>
+<?php $component = $__componentOriginal1d83f45bf838052fadc84bf85b829e43; ?>
+<?php unset($__componentOriginal1d83f45bf838052fadc84bf85b829e43); ?>
+<?php endif; ?></div>
+                                <div class="ft-order-customer-comment-activity__context"><?php echo e($activity->event === 'job.workflow_email_skipped' ? 'Recorded for manual customer handoff' : 'Sent with customer artwork handoff'); ?></div>
+                            </div>
+                        <?php else: ?>
+                            <div class="wide-activity-copy <?php echo e($isCancellation ? 'ft-rich-text-content ft-order-cancellation-activity-copy' : ''); ?>"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkRevision): ?><?php if (isset($component)) { $__componentOriginaleb74e077e078dc73a4ecc7ef913acc03 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginaleb74e077e078dc73a4ecc7ef913acc03 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.revision-activity-content','data' => ['activity' => $activity]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.revision-activity-content'); ?>
@@ -111,7 +153,10 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php if (isset($__componentOriginal1d83f45bf838052fadc84bf85b829e43)): ?>
 <?php $component = $__componentOriginal1d83f45bf838052fadc84bf85b829e43; ?>
 <?php unset($__componentOriginal1d83f45bf838052fadc84bf85b829e43); ?>
-<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div><div class="card-sub"><?php echo e(\Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event))); ?></div></div>
+<?php endif; ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></div>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <div class="card-sub"><?php echo e(\Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event))); ?></div>
+                    </div>
                     <time title="<?php echo e(\App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A')); ?>"><?php echo e($activity->created_at?->diffForHumans()); ?></time>
                 </div>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); if ($__empty_1): ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>

@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Exceptions\EmailDeliveryException;
 use App\Models\Activity;
 use App\Models\Document;
 use App\Models\FlowJob;
@@ -91,9 +92,9 @@ class OrderWorkflowActionService
             'QC_CHECK' => 'Open QC Check',
             'QC_ISSUE' => str_contains($status, 'issue') ? 'Issue Resolved' : 'Continue',
             'QC_APPROVE_SHIPMENT' => 'Proceed to Shipment',
-            'SHIP_CONFIRM_INFO' => 'Review Information',
-            'SHIP_LABEL' => str_contains($status, 'label generated') ? 'Preview / Print' : 'Generate Label',
-            'SHIP_PACKAGE' => 'Mark as dispatched',
+            'SHIP_CONFIRM_INFO' => 'Review shipment details',
+            'SHIP_LABEL' => 'Add tracking number',
+            'SHIP_PACKAGE' => 'Dispatch shipment',
             'BILL_PREPARE' => 'Prepare Invoice',
             'BILL_SEND' => 'Preview & Send',
             'PAY_PROCESS' => 'Record Payment',
@@ -103,7 +104,9 @@ class OrderWorkflowActionService
         $interaction = match (true) {
             in_array($key, self::DOCUMENT_ACTIONS, true) => 'document',
             in_array($key, ['PROD_START', 'PROD_FINISH', 'QC_APPROVE_SHIPMENT'], true) => 'direct',
-            $key === 'SHIP_LABEL' && ! str_contains($status, 'label generated') => 'direct',
+            // Shipment tracking now requires courier + tracking input. Keep this
+            // as a modal action on the Orders list so it matches Task 5.2 on
+            // Order Details instead of trying the legacy one-click label flow.
             default => 'modal',
         };
 
@@ -187,10 +190,10 @@ class OrderWorkflowActionService
                 'choices' => ['confirm' => 'Save & complete task'],
             ],
             'SHIP_LABEL' => [
-                'variant' => 'courier_label',
-                'title' => 'Courier Label Preview',
-                'copy' => 'Review the generated shipping label and confirm it has been printed.',
-                'choices' => ['print' => 'Print Label'],
+                'variant' => 'shipment_tracking',
+                'title' => 'Add tracking number & print courier label',
+                'copy' => 'Select the courier and enter the tracking number. Completing this task unlocks Dispatch shipment.',
+                'choices' => ['complete' => 'Continue to next task'],
             ],
             'SHIP_PACKAGE' => [
                 'variant' => 'ship_package',
@@ -200,9 +203,9 @@ class OrderWorkflowActionService
             ],
             'BILL_PREPARE' => [
                 'variant' => 'invoice_prepare',
-                'title' => 'Prepare Bulk Invoice',
+                'title' => 'Prepare Invoice',
                 'copy' => 'Prepare the invoice details for this shipped Order.',
-                'choices' => ['confirm' => 'Prepare Bulk Invoice'],
+                'choices' => ['confirm' => 'Prepare Invoice'],
             ],
             'BILL_SEND' => [
                 'variant' => 'invoice_send',
@@ -226,12 +229,28 @@ class OrderWorkflowActionService
     }
 
     /** @return array<string, mixed> */
+    public function invoiceEmailPreview(Task $task, array $payload = []): array
+    {
+        return app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)
+            ->preview($task, null, $payload);
+    }
+
+    public function preparedWorkflowInvoice(FlowJob $job): ?\App\Models\Invoice
+    {
+        return app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)
+            ->preparedInvoice($job);
+    }
+
+    /** @return array<string, mixed> */
     public function initialPayload(Task $task, FlowJob $job): array
     {
-        $invoice = $job->activities()
-            ->where('event', 'job.workflow_invoice_prepared')
-            ->latest('id')
-            ->first();
+        $key = $this->automationKey($task);
+        $invoiceActivity = in_array($key, ['BILL_PREPARE', 'BILL_SEND'], true)
+            ? $job->activities()->where('event', 'job.workflow_invoice_prepared')->latest('id')->first()
+            : null;
+        $preparedInvoice = in_array($key, ['BILL_PREPARE', 'BILL_SEND'], true)
+            ? app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)->preparedInvoice($job)
+            : null;
         $total = $this->orderTotal($job);
         $paid = $this->recordedPaymentTotal($job);
         $units = (int) $job->items->filter(fn ($item) => ! ($item->is_removed ?? false))->sum(fn ($item) => (int) ($item->quantity ?? 0));
@@ -251,6 +270,7 @@ class OrderWorkflowActionService
             'cc_user_ids' => [],
             'cc_emails' => '',
             'external_cc_emails' => '',
+            'customer_comment' => '',
             'qty_received' => $units ?: 1,
             'qty_inspected' => $inspected,
             'qty_accepted' => $inspected,
@@ -269,7 +289,7 @@ class OrderWorkflowActionService
             'tracking_number' => '',
             'shipment_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
             'estimated_delivery_date' => $job->estimated_delivery_date?->format('Y-m-d') ?: '',
-            'invoice_number' => (string) data_get($invoice?->meta, 'invoice_number', ''),
+            'invoice_number' => (string) ($preparedInvoice?->invoice_number ?: data_get($invoiceActivity?->meta, 'invoice_number', '')),
             'invoice_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
             'invoice_amount' => $total > 0 ? number_format($total, 2, '.', '') : '0.00',
             'invoice_currency' => 'USD',
@@ -281,8 +301,29 @@ class OrderWorkflowActionService
             'payment_notes' => '',
         ];
 
-        $key = $this->automationKey($task);
+        if ($preparedInvoice && $key === 'BILL_SEND') {
+            $payload['invoice_id'] = (int) $preparedInvoice->id;
+            $payload['invoice_number'] = (string) $preparedInvoice->invoice_number;
+            $payload['invoice_date'] = $preparedInvoice->issue_date?->format('Y-m-d') ?: $payload['invoice_date'];
+            $payload['invoice_amount'] = number_format((float) $preparedInvoice->total, 2, '.', '');
+            $payload['invoice_currency'] = (string) $preparedInvoice->currency;
+            $payload['invoice_due_date'] = $preparedInvoice->due_date?->format('Y-m-d') ?: $payload['invoice_due_date'];
+            $payload['payment_terms'] = (string) data_get($invoiceActivity?->meta, 'payment_terms', $payload['payment_terms']);
+            $payload['to_email'] = trim((string) ($preparedInvoice->billing_contact_email ?: $job->client?->email ?: ''));
+            $payload['external_to_name'] = trim((string) ($job->client?->billing_recipient ?: $preparedInvoice->billing_contact_name ?: $job->client?->contact_name ?: $job->client?->name ?: 'Client accounts contact'));
+        }
+
         if (in_array($key, ['SHIP_LABEL', 'SHIP_PACKAGE'], true)) {
+            $courierOptions = app(MasterDataService::class)->active('courier')
+                ->map(fn ($record) => [
+                    'value' => trim((string) $record->name),
+                    'label' => trim((string) $record->name),
+                ])
+                ->filter(fn (array $option) => $option['value'] !== '')
+                ->unique(fn (array $option) => mb_strtolower($option['value']))
+                ->values();
+            $payload['courier_options'] = $courierOptions->all();
+
             $shipmentInfoActivity = $job->activities()
                 ->where('event', 'job.shipment_information_confirmed')
                 ->latest('id')
@@ -298,7 +339,18 @@ class OrderWorkflowActionService
                 ->where('event', 'job.courier_label_generated')
                 ->latest('id')
                 ->first();
-            $payload['carrier'] = trim((string) data_get($labelActivity?->meta, 'carrier', $payload['carrier']));
+            $savedCarrier = trim((string) data_get($labelActivity?->meta, 'carrier', ''));
+            if ($savedCarrier !== '') {
+                $payload['carrier'] = $savedCarrier;
+            } else {
+                $configuredCarrier = trim((string) ($payload['carrier'] ?? ''));
+                $carrierIsActive = $courierOptions->contains(
+                    fn (array $option) => strcasecmp($option['value'], $configuredCarrier) === 0,
+                );
+                $payload['carrier'] = $carrierIsActive
+                    ? $configuredCarrier
+                    : (string) data_get($courierOptions->first(), 'value', '');
+            }
             $payload['tracking_number'] = trim((string) data_get($labelActivity?->meta, 'tracking_number', ''));
         }
 
@@ -306,7 +358,103 @@ class OrderWorkflowActionService
             $payload = array_merge($payload, $this->shipmentContactPayload($job));
         }
 
+        if ($key === 'BILL_PREPARE') {
+            // Billing workflow invoice numbers are system-generated so users do
+            // not need to invent or coordinate invoice identifiers manually.
+            // Keep the format aligned with finance invoices while accounting for
+            // both finance records and earlier workflow-prepared invoices.
+            $payload['invoice_number'] = $this->nextWorkflowInvoiceNumber($job);
+        }
+
         return $payload;
+    }
+
+    /**
+     * Update shipment information after its workflow task has already been
+     * completed. This writes a new activity snapshot without reopening the task
+     * or moving the Order backwards in the workflow.
+     *
+     * @param array<string,mixed> $payload
+     */
+    public function updateCompletedShipmentInformation(Task $task, User $actor, array $payload): Task
+    {
+        return DB::transaction(function () use ($task, $actor, $payload): Task {
+            $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
+            abort_unless($this->automationKey($locked) === 'SHIP_CONFIRM_INFO', 422, 'This task does not manage shipment information.');
+            abort_unless((bool) $locked->completed_at || strcasecmp(trim((string) $locked->status), 'Completed') === 0, 422, 'Complete the shipment information task before editing historical shipment details.');
+
+            $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
+            abort_if(strcasecmp((string) $job->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+
+            $this->validateShipmentInfo($payload);
+            if ((bool) ($payload['update_saved_contact'] ?? false)) {
+                $this->updateSavedShipmentContact($job, $actor, $payload);
+            }
+
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.shipment_information_confirmed',
+                'description' => 'Shipment information updated after task completion.',
+                'meta' => $this->onlyPayload($payload, [
+                    'client_name','contact_name','contact_type','phone_country_code','phone_number',
+                    'address','city','state','country','postal_code','recipient','contact',
+                ]),
+            ]);
+
+            return $locked->refresh();
+        }, 3);
+    }
+
+    /**
+     * Update courier/tracking data after the tracking task has completed. The
+     * latest activity remains the source of truth used by Shipment presentation.
+     */
+    public function updateCompletedShipmentTracking(Task $task, User $actor, string $carrier, string $trackingNumber): Task
+    {
+        $carrier = trim($carrier);
+        $trackingNumber = trim($trackingNumber);
+
+        return DB::transaction(function () use ($task, $actor, $carrier, $trackingNumber): Task {
+            $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
+            abort_unless($this->automationKey($locked) === 'SHIP_LABEL', 422, 'This task does not manage shipment tracking.');
+            abort_unless((bool) $locked->completed_at || strcasecmp(trim((string) $locked->status), 'Completed') === 0, 422, 'Complete the tracking task before editing historical tracking details.');
+
+            $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->firstOrFail();
+            abort_if(strcasecmp((string) $job->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+
+            if ($carrier === '' || $trackingNumber === '') {
+                throw ValidationException::withMessages([
+                    'shipmentLabel' => 'Select a courier and enter the tracking number first.',
+                ]);
+            }
+            $this->validateShipmentCourier($carrier);
+
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.courier_label_generated',
+                'description' => 'Courier and tracking details updated after task completion.',
+                'meta' => ['carrier' => $carrier, 'tracking_number' => $trackingNumber],
+            ]);
+
+            // Once the package has been dispatched, Order lists read carrier and
+            // tracking from the dispatch snapshot. Keep that denormalized snapshot
+            // synchronized so a tracking correction is reflected everywhere.
+            $dispatchActivity = $job->activities()
+                ->where('event', 'job.package_shipped')
+                ->latest('id')
+                ->first();
+            if ($dispatchActivity) {
+                $dispatchActivity->update([
+                    'description' => $carrier.' tracking '.$trackingNumber.' recorded.',
+                    'meta' => array_merge((array) ($dispatchActivity->meta ?? []), [
+                        'carrier' => $carrier,
+                        'tracking_number' => $trackingNumber,
+                    ]),
+                ]);
+            }
+
+            return $locked->refresh();
+        }, 3);
     }
 
     /**
@@ -549,6 +697,7 @@ class OrderWorkflowActionService
                         'shipmentLabel' => 'Select a courier and enter the tracking number first.',
                     ]);
                 }
+                $this->validateShipmentCourier($carrier);
 
                 $job->activities()->create([
                     'user_id' => $actor->id,
@@ -561,6 +710,15 @@ class OrderWorkflowActionService
             }
 
             if ($key === 'SHIP_LABEL' && $decision === 'generate') {
+                $carrier = trim((string) ($payload['carrier'] ?? ''));
+                $trackingNumber = trim((string) ($payload['tracking_number'] ?? ''));
+                if ($carrier === '' || $trackingNumber === '') {
+                    throw ValidationException::withMessages([
+                        'shipmentLabel' => 'Select a courier and enter the tracking number first.',
+                    ]);
+                }
+                $this->validateShipmentCourier($carrier);
+
                 $locked->update(['status' => 'Courier Label Generated', 'completed_at' => null, 'progress' => 55]);
                 $job->activities()->create([
                     'user_id' => $actor->id,
@@ -596,21 +754,49 @@ class OrderWorkflowActionService
 
             if ($key === 'BILL_PREPARE') {
                 $this->validateInvoice($payload);
+                $invoice = app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)
+                    ->prepare($job, $actor, $payload);
+
+                $preparedMeta = $this->onlyPayload($payload, ['payment_terms']);
+                $preparedMeta = array_merge($preparedMeta, [
+                    'invoice_id' => (int) $invoice->id,
+                    'invoice_number' => (string) $invoice->invoice_number,
+                    'invoice_date' => $invoice->issue_date?->format('Y-m-d'),
+                    'invoice_amount' => (float) $invoice->total,
+                    'invoice_currency' => (string) $invoice->currency,
+                    'invoice_due_date' => $invoice->due_date?->format('Y-m-d'),
+                    'pdf_name' => (string) ($invoice->pdf_name ?: ''),
+                ]);
+
                 $job->activities()->create([
                     'user_id' => $actor->id,
                     'event' => 'job.workflow_invoice_prepared',
-                    'description' => 'Bulk invoice '.$payload['invoice_number'].' prepared.',
-                    'meta' => $this->onlyPayload($payload, ['invoice_number','invoice_date','invoice_amount','invoice_currency','payment_terms','invoice_due_date']),
+                    'description' => 'Invoice '.$invoice->invoice_number.' prepared.',
+                    'meta' => $preparedMeta,
                 ]);
                 return $this->complete($locked, $actor);
             }
 
             if ($key === 'BILL_SEND') {
-                $job->activities()->create([
-                    'user_id' => $actor->id,
-                    'event' => 'job.workflow_invoice_sent',
-                    'description' => 'Invoice preview confirmed and sent to the client.',
-                ]);
+                $invoiceEmail = app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class);
+
+                try {
+                    $trackingId = $invoiceEmail->send($locked, $actor, $payload);
+                } catch (EmailDeliveryException $exception) {
+                    // Billing must continue even when the provider is down. Keep
+                    // the failed delivery as a separate, resendable state just
+                    // like the completed Artwork email handoff.
+                    $invoiceEmail->recordFailedDelivery($locked, $actor, $payload, $exception);
+
+                    return $this->complete($locked, $actor);
+                }
+
+                // A disabled Order email service returns a durable skipped marker
+                // from the invoice service. Do not misreport that as a sent email.
+                if (! str_starts_with($trackingId, 'disabled-')) {
+                    $invoiceEmail->recordSuccessfulDelivery($locked, $actor, $payload, $trackingId);
+                }
+
                 return $this->complete($locked, $actor);
             }
 
@@ -1054,7 +1240,13 @@ class OrderWorkflowActionService
         ]);
 
         $client = $job->client;
-        $contactType = trim((string) ($job->shipping_contact_type ?: 'middle_client'));
+        $latestShipmentActivity = $job->activities()
+            ->where('event', 'job.shipment_information_confirmed')
+            ->latest('id')
+            ->first();
+        $latestShipmentMeta = (array) ($latestShipmentActivity?->meta ?? []);
+
+        $contactType = trim((string) ($latestShipmentMeta['contact_type'] ?? ($job->shipping_contact_type ?: 'middle_client')));
         if (! in_array($contactType, ['middle_client', 'end_customer', 'other_contact'], true)) {
             $contactType = 'middle_client';
         }
@@ -1084,7 +1276,7 @@ class OrderWorkflowActionService
             }
         }
 
-        $contactName = trim((string) ($job->shipping_contact_name ?: $client?->contact_name ?: $client?->name ?: ''));
+        $contactName = trim((string) ($latestShipmentMeta['contact_name'] ?? ($job->shipping_contact_name ?: $client?->contact_name ?: $client?->name ?: '')));
         $selectedContact = $contactOptions->first(function (array $option) use ($contactName, $contactType): bool {
             return $option['contact_type'] === $contactType
                 && mb_strtolower(trim((string) $option['name'])) === mb_strtolower($contactName);
@@ -1096,8 +1288,8 @@ class OrderWorkflowActionService
                 'label' => $contactName,
                 'contact_type' => $contactType,
                 'name' => $contactName,
-                'country_code' => (string) ($job->shipping_phone_country_code ?? ''),
-                'phone' => (string) ($job->shipping_phone ?? ''),
+                'country_code' => (string) ($latestShipmentMeta['phone_country_code'] ?? $job->shipping_phone_country_code ?? ''),
+                'phone' => (string) ($latestShipmentMeta['phone_number'] ?? $job->shipping_phone ?? ''),
             ]);
             $selectedContact = $contactOptions->first();
         }
@@ -1124,9 +1316,9 @@ class OrderWorkflowActionService
             $selectedAddress = (string) (($addressOptions->firstWhere('is_default', true) ?? $addressOptions->first())['value'] ?? '');
         }
 
-        $countryCode = trim((string) ($job->shipping_phone_country_code ?: data_get($selectedContact, 'country_code', '')));
-        $phoneNumber = trim((string) ($job->shipping_phone ?: data_get($selectedContact, 'phone', '')));
-        $address = trim((string) ($job->shipping_address ?: ($sourceAddress ? $this->shipmentAddressText($sourceAddress) : '')));
+        $countryCode = trim((string) ($latestShipmentMeta['phone_country_code'] ?? ($job->shipping_phone_country_code ?: data_get($selectedContact, 'country_code', ''))));
+        $phoneNumber = trim((string) ($latestShipmentMeta['phone_number'] ?? ($job->shipping_phone ?: data_get($selectedContact, 'phone', ''))));
+        $address = trim((string) ($latestShipmentMeta['address'] ?? ($job->shipping_address ?: ($sourceAddress ? $this->shipmentAddressText($sourceAddress) : ''))));
         $masterData = app(MasterDataService::class);
         $phoneCountryCodeOptions = $masterData->active('phone_country_code')
             ->map(fn ($record) => [
@@ -1146,7 +1338,7 @@ class OrderWorkflowActionService
             ->all();
 
         return [
-            'client_name' => trim((string) ($client?->name ?: 'Client')),
+            'client_name' => trim((string) ($latestShipmentMeta['client_name'] ?? ($client?->name ?: 'Client'))),
             'contact_name' => $contactName,
             'contact_type' => $contactType,
             'contact_selection' => (string) data_get($selectedContact, 'value', 'current'),
@@ -1155,11 +1347,11 @@ class OrderWorkflowActionService
             'phone_country_code_options' => $phoneCountryCodeOptions,
             'phone_number' => $phoneNumber,
             'address' => $address,
-            'city' => (string) ($sourceAddress?->city ?? ''),
-            'state' => (string) ($sourceAddress?->state ?? ''),
-            'country' => (string) ($sourceAddress?->country ?? $client?->country ?? ''),
+            'city' => (string) ($latestShipmentMeta['city'] ?? $sourceAddress?->city ?? ''),
+            'state' => (string) ($latestShipmentMeta['state'] ?? $sourceAddress?->state ?? ''),
+            'country' => (string) ($latestShipmentMeta['country'] ?? $sourceAddress?->country ?? $client?->country ?? ''),
             'country_options' => $countryOptions,
-            'postal_code' => trim((string) ($job->shipping_postal_code ?: $sourceAddress?->zip ?: '')),
+            'postal_code' => trim((string) ($latestShipmentMeta['postal_code'] ?? ($job->shipping_postal_code ?: $sourceAddress?->zip ?: ''))),
             'address_selection' => $selectedAddress,
             'address_options' => $addressOptions->values()->all(),
             'update_saved_contact' => false,
@@ -1206,6 +1398,32 @@ class OrderWorkflowActionService
         if (in_array($type, ['end_customer', 'other_contact'], true)) {
             (new \App\Actions\Clients\SaveClientDeliveryContact())->execute($actor, $job->client, $type, $name, $countryCode, $phone);
         }
+    }
+
+    private function validateShipmentCourier(string $carrier): void
+    {
+        $normalized = mb_strtolower(trim($carrier));
+        $allowed = app(MasterDataService::class)->active('courier')
+            ->contains(fn ($record) => mb_strtolower(trim((string) $record->name)) === $normalized);
+
+        if (! $allowed) {
+            throw ValidationException::withMessages([
+                'shipmentLabel' => 'Choose an active courier from Master Data.',
+            ]);
+        }
+    }
+
+    private function nextWorkflowInvoiceNumber(FlowJob $job): string
+    {
+        $workflowSequence = (int) $job->activities()
+            ->where('event', 'job.workflow_invoice_prepared')
+            ->count();
+        $financeSequence = (int) \App\Models\Invoice::query()
+            ->where('flow_job_id', $job->id)
+            ->max('sequence');
+        $sequence = max($workflowSequence, $financeSequence) + 1;
+
+        return sprintf('INV-%05d-%02d', (int) $job->id, $sequence);
     }
 
     /** @param array<string,mixed> $payload */

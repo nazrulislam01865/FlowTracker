@@ -154,6 +154,12 @@
                                     <div
                                         class="ft-artwork-revision-replacement-item {{ $replacementDetail ? 'has-replacement' : '' }}"
                                         wire:key="artwork-revision-replacement-{{ $task->id }}-{{ $revisionDocumentId }}"
+                                        x-data="{ uploadingReplacement: false, replacementProgress: 0 }"
+                                        x-on:livewire-upload-start="uploadingReplacement = true; replacementProgress = 0"
+                                        x-on:livewire-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                        x-on:livewire-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
+                                        x-on:livewire-upload-error="uploadingReplacement = false; replacementProgress = 0"
+                                        x-on:livewire-upload-cancel="uploadingReplacement = false; replacementProgress = 0"
                                     >
                                         <div class="ft-artwork-revision-replacement-summary">
                                             <div class="ft-artwork-revision-replacement-source">
@@ -161,7 +167,7 @@
                                                 <x-ui.file-type-badge :extension="$candidateExtension" size="sm" />
                                                 <span class="ft-artwork-revision-upload-selector-copy">
                                                     <b title="{{ $revisionCandidate->name }}">{{ $revisionCandidate->name }}</b>
-                                                    <small>{{ $candidateExtension }} · Version {{ max(1, (int) $revisionCandidate->version) }}</small>
+                                                    <small>{{ $candidateExtension }} · Current artwork</small>
                                                 </span>
                                             </div>
                                             <div class="ft-artwork-revision-replacement-actions">
@@ -224,7 +230,27 @@
                                                     <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(20) }}</small>
                                                 </label>
 
-                                                <div class="ft-artwork-revision-replacement-uploading" wire:loading wire:target="overviewTaskRevisionUpload.{{ $revisionDocumentId }}">Uploading replacement…</div>
+                                                <div
+                                                    class="ft-prototype-upload-progress ft-artwork-revision-replacement-uploading"
+                                                    x-cloak
+                                                    x-show="uploadingReplacement"
+                                                    x-transition.opacity.duration.120ms
+                                                >
+                                                    <div class="ft-prototype-upload-progress-meta">
+                                                        <span>Uploading replacement...</span>
+                                                        <b x-text="`${replacementProgress}%`">0%</b>
+                                                    </div>
+                                                    <div
+                                                        class="ft-prototype-upload-progress-track"
+                                                        role="progressbar"
+                                                        aria-label="Replacement artwork upload progress"
+                                                        aria-valuemin="0"
+                                                        aria-valuemax="100"
+                                                        x-bind:aria-valuenow="replacementProgress"
+                                                    >
+                                                        <span x-bind:style="`width: ${replacementProgress}%`"></span>
+                                                    </div>
+                                                </div>
                                                 @error('overviewTaskRevisionUpload.'.$revisionDocumentId)<p class="validation-error">{{ $message }}</p>@enderror
                                             </div>
                                         </div>

@@ -3043,3 +3043,276 @@ body:has(#my-work-app) .lang-btn {
         grid-template-areas:"toggle order count" "toggle client client";
     }
 }
+
+/* 2026-09-02: All Tasks filter hierarchy — stage filters stay together on one
+   colored row; task utilities live on the following row. This is scoped to
+   All Tasks so the existing My Tasks layout is unchanged. */
+#my-work-app .work-view .toolbar.ft-list-filter-bar.all-tasks-filter-bar {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 8px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar > .toolbar-primary {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    grid-column: 1 / -1;
+    gap: 8px;
+    min-width: 0;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .search-wrap {
+    grid-column: 1 / -1;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters {
+    display: flex;
+    grid-column: 1 / -1;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+    overflow-x: auto;
+    overflow-y: hidden;
+    padding-bottom: 1px;
+    scrollbar-width: thin;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-toggle {
+    --phase-color: var(--ft-theme-primary);
+    width: auto;
+    min-width: 0;
+    flex: 1 0 126px;
+    justify-content: flex-start;
+    border-color: color-mix(in srgb, var(--phase-color) 30%, #d9e3ec 70%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--phase-color) 7%, #fff 93%) 0%, color-mix(in srgb, var(--phase-color) 3%, #fff 97%) 100%);
+    color: color-mix(in srgb, var(--phase-color) 78%, #334155 22%);
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-toggle:hover {
+    border-color: color-mix(in srgb, var(--phase-color) 52%, #d9e3ec 48%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--phase-color) 10%, #fff 90%) 0%, color-mix(in srgb, var(--phase-color) 5%, #fff 95%) 100%);
+    color: color-mix(in srgb, var(--phase-color) 88%, #10213b 12%);
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-toggle.active {
+    border-color: color-mix(in srgb, var(--phase-color) 68%, #d9e3ec 32%);
+    background: linear-gradient(135deg, color-mix(in srgb, var(--phase-color) 14%, #fff 86%) 0%, color-mix(in srgb, var(--phase-color) 7%, #fff 93%) 100%);
+    color: color-mix(in srgb, var(--phase-color) 92%, #10213b 8%);
+    box-shadow: 0 0 0 2px color-mix(in srgb, var(--phase-color) 13%, transparent);
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-check {
+    flex: 0 0 15px;
+    border-color: color-mix(in srgb, var(--phase-color) 50%, #cbd5e1 50%);
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-toggle.active .phase-check {
+    border-color: var(--phase-color);
+    background: var(--phase-color);
+    color: #fff;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar > .all-tasks-secondary-filters {
+    display: flex;
+    grid-column: 1 / -1;
+    align-items: stretch;
+    gap: 7px;
+    width: 100%;
+    min-width: 0;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .quick-filters {
+    display: block;
+    flex: 0 0 150px;
+    min-width: 0;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .quick-filters .chip,
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .completed-toggle {
+    width: 100%;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .completed-toggle {
+    flex: 0 0 160px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .assignee-filter {
+    flex: 1 1 220px;
+    min-width: 170px;
+    max-width: 320px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .sort {
+    flex: 1 1 220px;
+    min-width: 190px;
+    max-width: 320px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters {
+    display: inline-flex;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    flex: 0 0 auto;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    height: 36px;
+    min-height: 36px;
+    padding: 0 10px;
+    border: 1px solid #fecaca;
+    border-radius: 8px;
+    background: #fff7f7;
+    color: #b42318;
+    font-size: .59375rem;
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters .clear-filter-icon {
+    display: inline-grid;
+    width: 14px;
+    height: 14px;
+    place-items: center;
+    border-radius: 50%;
+    background: #fee2e2;
+    color: #b42318;
+    font-size: .6875rem;
+    font-weight: 800;
+    line-height: 1;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters:not(:disabled):hover {
+    border-color: #fca5a5;
+    background: #fff1f2;
+    color: #991b1b;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters:disabled {
+    border-color: #f1d5d5;
+    background: #fffafa;
+    color: #c99a9a;
+    opacity: .6;
+    cursor: not-allowed;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters:disabled .clear-filter-icon {
+    background: #f8e8e8;
+    color: #c99a9a;
+}
+
+@media (max-width: 900px) {
+    #my-work-app .work-view .all-tasks-filter-bar > .all-tasks-secondary-filters {
+        flex-wrap: wrap;
+    }
+
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .quick-filters,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .completed-toggle,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .assignee-filter,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .sort {
+        flex: 1 1 calc(50% - 4px);
+        max-width: none;
+    }
+}
+
+@media (max-width: 520px) {
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .quick-filters,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .completed-toggle,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .assignee-filter,
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .sort {
+        flex-basis: 100%;
+        min-width: 0;
+    }
+
+    #my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters {
+        width: 100%;
+        min-height: 40px;
+        height: 40px;
+    }
+}
+
+/* 2026-09-02: All Tasks filter row lock.
+   Keep every workflow stage on exactly one row and every utility filter on
+   exactly one second row at every viewport. Smaller screens scroll the row
+   horizontally instead of stacking controls. */
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters {
+    display: grid !important;
+    grid-template-columns: repeat(7, minmax(118px, 1fr));
+    grid-auto-flow: column;
+    flex-wrap: nowrap !important;
+    width: 100%;
+    min-width: 0;
+    gap: 7px;
+    overflow-x: auto !important;
+    overflow-y: hidden !important;
+    padding: 0 0 1px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-stage-filters .phase-toggle {
+    width: 100% !important;
+    min-width: 118px;
+    max-width: none !important;
+    flex: none !important;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar > .all-tasks-secondary-filters {
+    display: grid !important;
+    grid-template-columns: 150px 160px minmax(190px, 1fr) minmax(190px, 1fr) auto;
+    grid-auto-flow: column;
+    align-items: stretch;
+    flex-wrap: nowrap !important;
+    width: 100%;
+    min-width: 0;
+    gap: 7px;
+    overflow-x: auto;
+    overflow-y: visible;
+    padding-bottom: 1px;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .quick-filters,
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .completed-toggle,
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .assignee-filter,
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-secondary-filters .sort,
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: none !important;
+    flex: none !important;
+}
+
+#my-work-app .work-view .all-tasks-filter-bar .all-tasks-clear-filters {
+    width: auto !important;
+    min-width: max-content !important;
+    height: 36px !important;
+    min-height: 36px !important;
+}
+
+/* 2026-09-02: All Tasks definitive filter DOM order.
+   Search is its own row. Workflow stages are always the first filter row,
+   utility filters are always the second filter row. Direct children and
+   explicit grid rows avoid older display:contents/order rules changing it. */
+#my-work-app .work-view .toolbar.ft-list-filter-bar.all-tasks-filter-bar {
+    display: grid !important;
+    grid-template-columns: minmax(0, 1fr) !important;
+    grid-template-rows: auto auto auto !important;
+    grid-auto-flow: row !important;
+    gap: 8px !important;
+}
+
+#my-work-app .work-view .toolbar.ft-list-filter-bar.all-tasks-filter-bar > .all-tasks-search-row {
+    grid-column: 1 / -1 !important;
+    grid-row: 1 !important;
+    order: 0 !important;
+}
+
+#my-work-app .work-view .toolbar.ft-list-filter-bar.all-tasks-filter-bar > .all-tasks-stage-filters {
+    grid-column: 1 / -1 !important;
+    grid-row: 2 !important;
+    order: 0 !important;
+}
+
+#my-work-app .work-view .toolbar.ft-list-filter-bar.all-tasks-filter-bar > .all-tasks-secondary-filters {
+    grid-column: 1 / -1 !important;
+    grid-row: 3 !important;
+    order: 0 !important;
+}

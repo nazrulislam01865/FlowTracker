@@ -1403,12 +1403,23 @@ class LegacyInquiryService
             : ((string) $task->status ?: $this->defaultTaskStatus());
         $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
         $nextAssigneeId = ($data['assignee_id'] ?? null) ? (int) $data['assignee_id'] : null;
-        if ((int) ($oldAssigneeId ?? 0) !== (int) ($nextAssigneeId ?? 0)) {
+        $oldDueDate = $task->due_date?->toDateString();
+        $nextDueDate = ($data['due_date'] ?? null) ?: null;
+        $hasTaskActivity = strcasecmp((string) $task->status, $nextStatus) !== 0
+            || (string) ($oldDueDate ?? '') !== (string) ($nextDueDate ?? '');
+
+        // Match Order tasks: changing task work/status claims the task for the
+        // person doing the work. A pure manual assignee edit remains explicit.
+        if ($hasTaskActivity) {
+            $task = $this->claimTaskForAction($task, $actor, 'updated the task');
+            $nextAssigneeId = (int) $actor->id;
+        } elseif ((int) ($oldAssigneeId ?? 0) !== (int) ($nextAssigneeId ?? 0)) {
             abort_unless(app(AccessControlService::class)->canAssignInquiryTask($actor, $task), 403);
         }
+
         $taskUpdate = [
-            'assignee_id' => ($data['assignee_id'] ?? null) ?: null,
-            'due_date' => ($data['due_date'] ?? null) ?: null,
+            'assignee_id' => $nextAssigneeId ?: null,
+            'due_date' => $nextDueDate,
         ] + $this->taskStatusPayload($nextStatus, $task);
         $taskStartAt = null;
         if ($this->isWorkingTaskStatus($nextStatus) && !$task->started_at) {
@@ -1481,6 +1492,12 @@ class LegacyInquiryService
                 throw ValidationException::withMessages(['task' => 'Add the required file or link before completion.']);
             }
 
+            $task = $this->claimTaskForAction(
+                $task,
+                $actor,
+                $willComplete ? 'completed the task' : ($wasCompleted ? 'reopened the task' : 'changed the task status'),
+            );
+
             $updates = $this->taskStatusPayload($status, $task) + [
                 'completed_at' => $willComplete ? ($task->completed_at ?: now()) : null,
             ];
@@ -1535,6 +1552,7 @@ class LegacyInquiryService
 
         // Due date remains editable after task completion. Updating it must not
         // reopen the task or alter completed_at/status.
+        $task = $this->claimTaskForAction($task, $actor, 'changed the due date');
         $task->update(['due_date' => $date ?: null]);
         $task->inquiry->touch();
         $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
@@ -1644,6 +1662,7 @@ class LegacyInquiryService
         }
 
         return DB::transaction(function () use ($task, $reason, $actor): InquiryTask {
+            $task = $this->claimTaskForAction($task, $actor, 'updated the task attention reason');
             $task->update([
                 'needs_attention' => true,
                 'attention_reason' => $reason,
@@ -1836,6 +1855,7 @@ class LegacyInquiryService
         if ($task) {
             abort_unless((int) $task->inquiry_id === (int) $inquiry->id, 422);
             abort_if($task->inquiry?->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
+            $task = $this->claimTaskForAction($task, $actor, 'uploaded a task document');
             // Documents added to an already-completed task remain evidence only.
             // An open task that explicitly requires a submission is completed
             // after its upload succeeds, below.
@@ -1909,6 +1929,8 @@ class LegacyInquiryService
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $actor)->firstOrFail();
         abort_unless((int) ($source->client_id ?? 0) === (int) $task->inquiry->client_id, 403, 'The selected document does not belong to this client.');
 
+        $task = $this->claimTaskForAction($task, $actor, 'linked a task document');
+
         $document = InquiryDocument::create([
             'inquiry_id' => $task->inquiry_id,
             'inquiry_task_id' => $task->id,
@@ -1948,6 +1970,8 @@ class LegacyInquiryService
             throw ValidationException::withMessages(['taskLinkUrl' => 'Enter a valid http:// or https:// link.']);
         }
 
+        $task = $this->claimTaskForAction($task, $actor, 'added an external link');
+
         $link = $task->links()->create([
             'created_by' => $actor->id,
             'url' => $url,
@@ -1980,6 +2004,7 @@ class LegacyInquiryService
             abort_unless($this->canEditTask($actor, $lockedTask), 403);
             abort_if($lockedTask->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change links.');
 
+            $lockedTask = $this->claimTaskForAction($lockedTask, $actor, 'removed an external link');
             $link = $lockedTask->links()->whereKey($linkId)->firstOrFail();
             $url = (string) $link->url;
             $wasCompleted = $lockedTask->completed_at !== null
@@ -2068,6 +2093,7 @@ class LegacyInquiryService
             abort_unless($this->canEditTask($actor, $lockedTask), 403);
             abort_if($lockedTask->inquiry->result, 422, 'Tasks on a closed Inquiry cannot change documents.');
 
+            $lockedTask = $this->claimTaskForAction($lockedTask, $actor, 'removed a task document');
             $document = $lockedTask->documents()->whereKey($documentId)->firstOrFail();
             $path = (string) $document->path;
             $name = (string) $document->name;
@@ -2149,6 +2175,8 @@ class LegacyInquiryService
         $task->loadMissing('inquiry');
         abort_unless($this->visibleQuery($actor)->whereKey($task->inquiry_id)->exists(), 403);
         abort_if(!$task->completed_at && !$this->isActiveTask($task), 422, 'Future task comments stay locked until the task starts.');
+
+        $task = $this->claimTaskForAction($task, $actor, 'added a comment');
 
         $comment = InquiryTaskComment::create([
             'inquiry_task_id' => $task->id,
@@ -2628,6 +2656,55 @@ class LegacyInquiryService
         }
 
         return $inquiry->refresh();
+    }
+
+    /**
+     * Make the user who performs an Inquiry task action the task's current
+     * assignee, matching the automatic ownership behavior used by Order tasks.
+     * Manual assignee edits intentionally bypass this helper so the selected
+     * user remains the assignee until somebody actually works on the task.
+     */
+    private function claimTaskForAction(InquiryTask $task, User $actor, string $action = 'acted on the task'): InquiryTask
+    {
+        $task->loadMissing('inquiry');
+        $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+
+        if ($previousAssigneeId === (int) $actor->id) {
+            return $task;
+        }
+
+        $previousAssigneeName = $previousAssigneeId
+            ? (User::query()->find($previousAssigneeId)?->name ?? 'Unassigned')
+            : 'Unassigned';
+
+        $task->update(['assignee_id' => $actor->id]);
+        $task->refresh();
+        $task->loadMissing('inquiry');
+        $task->inquiry->touch();
+
+        // Invalidate both users' My Tasks shells. notifyTaskAssigned() handles
+        // the new assignee shell and intentionally sends no self-notification.
+        $this->forgetMyTaskShell($previousAssigneeId);
+        $this->notifyTaskAssigned($task, $actor);
+
+        $this->activity(
+            $task->inquiry,
+            $actor,
+            'inquiry.task_assignee_auto_assigned',
+            'Assignee automatically changed from '.$previousAssigneeName.' to '.$actor->name.' after '.$actor->name.' '.$action.'.',
+            [
+                'inquiry_task_id' => $task->id,
+                'field' => 'assignee_id',
+                'old' => $previousAssigneeName,
+                'new' => $actor->name,
+                'old_assignee_id' => $previousAssigneeId,
+                'new_assignee_id' => (int) $actor->id,
+                'automatic' => true,
+                'trigger' => $action,
+            ],
+        );
+
+        return $task->refresh();
     }
 
     private function activity(Inquiry $inquiry, User $actor, string $event, string $description, array $meta = []): Activity

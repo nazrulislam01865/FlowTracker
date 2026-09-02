@@ -1225,3 +1225,86 @@
         grid-template-columns: 1fr 1fr;
     }
 }
+
+/* Shipment task parity refinements: use the same compact status marker language
+ * as the other Order workflow stages and keep every shipment task open. */
+.ft-order-prototype-detail .ft-shipment-progress {
+    min-width: 0;
+    display: block;
+}
+
+.ft-order-prototype-detail .ft-shipment-progress > strong {
+    display: block;
+    color: #15334b;
+    font-size: .75rem;
+    font-weight: 850;
+    white-space: nowrap;
+}
+
+.ft-order-prototype-detail .ft-shipment-progress > strong.is-complete {
+    color: #087f74;
+}
+
+.ft-order-prototype-detail .ft-shipment-task__marker-wrap {
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    padding-top: 18px;
+}
+
+.ft-order-prototype-detail .ft-shipment-task__marker {
+    width: 25px;
+    height: 25px;
+    border: 1px solid #cad5df;
+    border-radius: 50%;
+    display: grid;
+    place-items: center;
+    background: #fff;
+    color: #8391a4;
+    font-size: .72rem;
+    font-weight: 900;
+    line-height: 1;
+}
+
+.ft-order-prototype-detail .ft-shipment-task--done .ft-shipment-task__marker {
+    background: #e3f5ed;
+    border-color: #9ed8c2;
+    color: var(--green);
+}
+
+.ft-order-prototype-detail .ft-shipment-task--active .ft-shipment-task__marker {
+    background: var(--ft-theme-primary-soft);
+    border-color: var(--ft-theme-primary-300);
+    color: var(--teal);
+}
+
+.ft-order-prototype-detail .ft-shipment-inline-work__edit-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ft-order-prototype-detail .ft-shipment-unlock-note--editable {
+    color: #60758a;
+}
+
+@media (max-width: 720px) {
+    .ft-order-prototype-detail .ft-shipment-task__marker-wrap {
+        padding-top: 15px;
+    }
+
+    .ft-order-prototype-detail .ft-shipment-task__marker {
+        width: 25px;
+        height: 25px;
+    }
+
+    .ft-order-prototype-detail .ft-shipment-inline-work__edit-actions {
+        width: 100%;
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+    }
+
+    .ft-order-prototype-detail .ft-shipment-inline-work__edit-actions .ft-shipment-btn {
+        width: 100%;
+    }
+}

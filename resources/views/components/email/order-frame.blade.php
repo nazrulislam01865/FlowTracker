@@ -1,4 +1,4 @@
-@props(['brand' => [], 'label' => 'Order workflow'])
+@props(['brand' => [], 'label' => 'Order workflow', 'footerNote' => null])
 @php
     $brandName = trim((string) ($brand['name'] ?? 'Company')) ?: 'Company';
     $legalName = trim((string) ($brand['legal_name'] ?? ''));
@@ -39,7 +39,7 @@
                 <div style="color:#4f6279;font-weight:700">{{ $legalName !== '' ? $legalName : $brandName }}</div>
                 @if($addressLines->isNotEmpty())<div style="margin-top:2px">{{ $addressLines->implode(' · ') }}</div>@endif
                 @if($contactParts->isNotEmpty())<div style="margin-top:2px">{{ $contactParts->implode(' · ') }}</div>@endif
-                <div style="margin-top:7px;color:#8a98aa">Internal order workflow notification from {{ $brandName }}.</div>
+                <div style="margin-top:7px;color:#8a98aa">{{ filled($footerNote) ? $footerNote : 'Internal order workflow notification from '.$brandName.'.' }}</div>
             </td>
         </tr>
     </table>

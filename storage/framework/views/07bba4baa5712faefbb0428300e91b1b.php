@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['brand' => [], 'label' => 'Order workflow']));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['brand' => [], 'label' => 'Order workflow', 'footerNote' => null]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['brand' => [], 'label' => 'Order workflow']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['brand' => [], 'label' => 'Order workflow', 'footerNote' => null]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -67,7 +67,7 @@ unset($__defined_vars, $__key, $__value); ?>
                 <div style="color:#4f6279;font-weight:700"><?php echo e($legalName !== '' ? $legalName : $brandName); ?></div>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($addressLines->isNotEmpty()): ?><div style="margin-top:2px"><?php echo e($addressLines->implode(' · ')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($contactParts->isNotEmpty()): ?><div style="margin-top:2px"><?php echo e($contactParts->implode(' · ')); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                <div style="margin-top:7px;color:#8a98aa">Internal order workflow notification from <?php echo e($brandName); ?>.</div>
+                <div style="margin-top:7px;color:#8a98aa"><?php echo e(filled($footerNote) ? $footerNote : 'Internal order workflow notification from '.$brandName.'.'); ?></div>
             </td>
         </tr>
     </table>

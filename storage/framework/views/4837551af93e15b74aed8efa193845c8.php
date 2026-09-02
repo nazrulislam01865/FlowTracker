@@ -144,7 +144,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
 <?php endif; ?>
                         <span class="ft-order-artwork-revision-file-copy">
-                            <b><?php echo e($revisionDocumentName); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($revisionDocument): ?> · Version <?php echo e(max(1, (int) $revisionDocument->version)); ?><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></b>
+                            <b><?php echo e($revisionDocumentName); ?></b>
                             <small><?php echo e($revisionExtension); ?> · This artwork requires replacement</small>
                         </span>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($revisionDocument): ?>

@@ -22,29 +22,37 @@
             <x-ui.summary-card label="Needs Attention" :value="$taskPackMetrics['attention'] ?? 0" value-expression="metrics.attention ?? '—'" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$taskQuick === 'attention'" wire:click="setTaskMetricFilter('attention')" aria-pressed="{{ $taskQuick === 'attention' ? 'true' : 'false' }}" />
         </div>
 
-        <div class="toolbar ft-list-filter-bar">
-            <div class="toolbar-primary">
-                <label class="search-wrap">
-                    <span class="search-icon">⌕</span>
-                    <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search tasks, Orders, clients, assignees or flags" aria-label="Search All Tasks">
-                    @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
-                </label>
-                <div class="phase-filters" aria-label="Filter by Order workflow phase">
-                    @foreach($taskPackPhaseOptions as $phaseOption)
-                        <button
-                            type="button"
-                            class="phase-toggle {{ $taskPhaseFilter === $phaseOption ? 'active' : '' }}"
-                            wire:click="setTaskPhaseFilter({{ \Illuminate\Support\Js::from($phaseOption) }})"
-                            aria-pressed="{{ $taskPhaseFilter === $phaseOption ? 'true' : 'false' }}"
-                            title="{{ $phaseOption }}"
-                        >
-                            <span class="phase-check" aria-hidden="true">✓</span>
-                            <span>{{ $phaseOption }}</span>
-                        </button>
-                    @endforeach
-                </div>
+        @php
+            $allTaskStageColors = collect(\App\Services\OrderWorkflowSetupService::fixedStages())
+                ->mapWithKeys(fn (array $stage) => [
+                    mb_strtolower(trim((string) ($stage['name'] ?? ''))) => (string) ($stage['color'] ?? '#0F8F7C'),
+                ]);
+        @endphp
+        <div class="toolbar ft-list-filter-bar all-tasks-filter-bar">
+            <label class="search-wrap all-tasks-search-row">
+                <span class="search-icon">⌕</span>
+                <input class="search" type="search" wire:model.live.debounce.650ms="search" autocomplete="off" placeholder="Search tasks, Orders, clients, assignees or flags" aria-label="Search All Tasks">
+                @if($search !== '')<button class="clear" type="button" wire:click="clearTaskSearch">Clear</button>@endif
+            </label>
+            <div class="phase-filters all-tasks-stage-filters" aria-label="Filter by Order workflow phase">
+                @foreach($taskPackPhaseOptions as $phaseOption)
+                    @php
+                        $phaseColor = $allTaskStageColors->get(mb_strtolower(trim((string) $phaseOption)), '#0F8F7C');
+                    @endphp
+                    <button
+                        type="button"
+                        class="phase-toggle {{ $taskPhaseFilter === $phaseOption ? 'active' : '' }}"
+                        style="--phase-color: {{ $phaseColor }}"
+                        wire:click="setTaskPhaseFilter({{ \Illuminate\Support\Js::from($phaseOption) }})"
+                        aria-pressed="{{ $taskPhaseFilter === $phaseOption ? 'true' : 'false' }}"
+                        title="{{ $phaseOption }}"
+                    >
+                        <span class="phase-check" aria-hidden="true">✓</span>
+                        <span>{{ $phaseOption }}</span>
+                    </button>
+                @endforeach
             </div>
-            <div class="toolbar-secondary">
+            <div class="toolbar-secondary all-tasks-secondary-filters">
                 <div class="quick-filters">
                     <button type="button" class="chip {{ $taskQuick === 'mentions' ? 'active' : '' }}" wire:click="setTaskQuick('{{ $taskQuick === 'mentions' ? 'all' : 'mentions' }}')">Mentions (<span x-text="metrics.mentions ?? '—'">{{ $taskPackMetrics['mentions'] ?? '—' }}</span>)</button>
                 </div>
@@ -58,14 +66,14 @@
                     label="Assignee"
                     property="assignee"
                     :value="$assignee"
-                    placeholder="All"
+                    placeholder="Assignee"
                     :options="collect([['id' => 'unassigned', 'label' => 'Unassigned']])->concat(
                         $assigneeFilterOptions->map(fn ($option) => [
                             'id' => (string) $option->id,
                             'label' => $option->name,
                         ])
                     )"
-                    search-placeholder="Search people…"
+                    search-placeholder="Search assignee…"
                     :hide-label="true"
                     :fixed-menu="true"
                     :menu-width="300"
@@ -76,7 +84,17 @@
                     <option value="due">Sort: Due soon</option>
                     <option value="job">Sort: Order number</option>
                 </select>
-                <button type="button" class="chip clear-filters" wire:click="clearFilters" @disabled($search === '' && $taskPhaseFilter === '' && $taskQuick === 'all' && $hideCompleted && $assignee === '' && $job === '' && $client === '' && $status === '' && $due === '')>Clear filters</button>
+                <button
+                    type="button"
+                    class="clear-filters all-tasks-clear-filters"
+                    wire:click="clearFilters"
+                    title="Clear filters"
+                    aria-label="Clear filters"
+                    @disabled($search === '' && $taskPhaseFilter === '' && $taskQuick === 'all' && $hideCompleted && $assignee === '' && $job === '' && $client === '' && $status === '' && $due === '')
+                >
+                    <span class="clear-filter-icon" aria-hidden="true">×</span>
+                    <span>Clear filters</span>
+                </button>
             </div>
         </div>
 

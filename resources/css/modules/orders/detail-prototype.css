@@ -1,9 +1,11 @@
 /** Composition-only entry. */
 @import './detail/detail-01.css';
 @import './detail/detail-02.css';
+@import './detail/archived-artwork.css';
 @import './detail/redo.css';
 @import './detail/cancellation.css';
 @import './detail/shipment-phase.css';
+@import './detail/invoice-email.css';
 
 @import './detail/responsive-task-cards.css';
 

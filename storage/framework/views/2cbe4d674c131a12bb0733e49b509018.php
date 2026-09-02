@@ -77,16 +77,41 @@ unset($__defined_vars, $__key, $__value); ?>
     $emailHandoffPreview = in_array($variant, ['purchase_order_email', 'artwork_email'], true)
         ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user(), $payload)
         : [];
-    $emailServiceEnabled = (bool) ($emailHandoffPreview['email_service_enabled'] ?? true);
+    $invoiceEmailPreview = $variant === 'invoice_send'
+        ? $workflowActions->invoiceEmailPreview($task, $payload)
+        : [];
+    $workflowInvoice = $variant === 'invoice_send'
+        ? $workflowActions->preparedWorkflowInvoice($job)
+        : null;
+    $emailServiceEnabled = (bool) (($variant === 'invoice_send' ? $invoiceEmailPreview : $emailHandoffPreview)['email_service_enabled'] ?? true);
     if (! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)) {
         $title = $variant === 'artwork_email' ? 'Complete Artwork Handoff' : 'Complete Purchase Order Handoff';
         $copy = 'Email sending is currently disabled. Choose the intended recipients, then complete the handoff and send the file manually.';
+    } elseif (! $emailServiceEnabled && $variant === 'invoice_send') {
+        $title = 'Complete Send Invoice';
+        $copy = 'Email sending is currently disabled. Confirm the intended recipient and complete the task now; the invoice can be resent from the completed task later.';
     }
     $emailFallbackDocumentId = (int) ($emailHandoffPreview['document_id'] ?? 0);
     $emailFallbackDocument = $emailFallbackDocumentId > 0
         ? $job->documents->firstWhere('id', $emailFallbackDocumentId)
         : null;
     $emailFallbackAttachmentLabel = $variant === 'artwork_email' ? 'Artwork' : 'Purchase Order';
+    $artworkHandoffCommentHistory = ($variant === 'artwork_email' && $job->relationLoaded('workflowEmailActivities'))
+        ? collect($job->getRelation('workflowEmailActivities'))
+            ->filter(fn ($activity) => (int) data_get($activity->meta, 'task_id', 0) === (int) $task->id)
+            ->filter(fn ($activity) => in_array((string) $activity->event, [
+                'job.artwork_emailed_to_order_team',
+                'job.workflow_email_skipped',
+            ], true))
+            ->sortByDesc('id')
+            ->map(fn ($activity) => [
+                'id' => (int) $activity->id,
+                'comment' => trim((string) data_get($activity->meta, 'customer_comment', '')),
+                'created_at' => $activity->created_at,
+            ])
+            ->filter(fn (array $entry) => $entry['comment'] !== '')
+            ->values()
+        : collect();
     $revisionMentionUsers = collect($mentionUsers)->values();
     $selectedRevisionDocumentIds = collect($payload['revision_document_ids'] ?? [])
         ->map(fn($id) => (int) $id)
@@ -105,7 +130,7 @@ unset($__defined_vars, $__key, $__value); ?>
     // or horizontally shift the popup after submit.
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
-    $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
+    $modalWide = in_array($variant, ['courier_label', 'shipment_info', 'invoice_send'], true);
     // Every artwork revision dialog uses the same compact prototype shell.
     // The copy/labels still vary by task, but layout and controls stay consistent.
     $isArtworkRevisionRequest = $step === 'revision';
@@ -123,7 +148,8 @@ unset($__defined_vars, $__key, $__value); ?>
         $copy = 'Describe the issue before notifying the supplier and blocking progression.';
     }
 ?>
-<div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-action-modal-'.e($task->id).'-'.e($step).''; ?>wire:key="order-workflow-action-modal-<?php echo e($task->id); ?>-<?php echo e($step); ?>" wire:click.self="closeOrderWorkflowAction">
+
+<div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-workflow-action-modal-'.e($task->id).'-'.e($step).''; ?>wire:key="order-workflow-action-modal-<?php echo e($task->id); ?>-<?php echo e($step); ?>">
     <section
         class="ft-order-task-document-modal ft-order-workflow-action-modal <?php echo e($isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '')); ?> <?php echo e($usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : ''); ?> <?php echo e($isArtworkRevisionRequest ? 'ft-order-workflow-action-modal--artwork-revision-request' : ''); ?>"
         data-ft-feedback-scope="form"
@@ -216,7 +242,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php endif; ?>
                                         <span class="ft-artwork-revision-selector-copy">
                                             <b title="<?php echo e($revisionDocument->name); ?>"><?php echo e($revisionDocument->name); ?></b>
-                                            <small>Artwork V<?php echo e(max(1, (int) $revisionDocument->version)); ?></small>
+                                            <small>Artwork</small>
                                         </span>
                                     </label>
                                     <a href="<?php echo e(route('documents.open', $revisionDocument)); ?>" target="_blank" rel="noopener">View</a>
@@ -242,7 +268,15 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-                                        <div class="ft-artwork-revision-item-support">
+                                        <div
+                                            class="ft-artwork-revision-item-support"
+                                            x-data="{ uploading: false, progress: 0 }"
+                                            x-on:livewire-upload-start="uploading = true; progress = 0"
+                                            x-on:livewire-upload-progress="progress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                            x-on:livewire-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 350)"
+                                            x-on:livewire-upload-error="uploading = false; progress = 0"
+                                            x-on:livewire-upload-cancel="uploading = false; progress = 0"
+                                        >
                                             <div class="ft-artwork-revision-item-support-head">
                                                 <div>
                                                     <strong>Supporting attachments <span>(optional)</span></strong>
@@ -314,7 +348,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                                 <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?> · Up to 10 files</small>
                                             </label>
 
-                                            <div class="ft-artwork-revision-evidence-uploading" wire:loading wire:target="orderWorkflowActionRevisionAttachments.<?php echo e($revisionDocumentId); ?>">Uploading files…</div>
+                                            <div
+                                                class="ft-create-attachment-progress"
+                                                x-cloak
+                                                x-show="uploading"
+                                                x-transition.opacity.duration.120ms
+                                                aria-live="polite"
+                                            >
+                                                <div class="ft-create-attachment-progress-meta">
+                                                    <span>Uploading attachment<?php echo e($documentAttachments->count() === 1 ? '' : 's'); ?>...</span>
+                                                    <b x-text="`${Math.round(progress)}%`">0%</b>
+                                                </div>
+                                                <div
+                                                    class="ft-create-attachment-progress-track"
+                                                    role="progressbar"
+                                                    aria-label="Supporting attachment upload progress"
+                                                    aria-valuemin="0"
+                                                    aria-valuemax="100"
+                                                    x-bind:aria-valuenow="Math.round(progress)"
+                                                >
+                                                    <span x-bind:style="`width: ${progress}%`"></span>
+                                                </div>
+                                            </div>
                                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionRevisionAttachments.'.$revisionDocumentId];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -599,7 +654,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(in_array($previewExtension, ['jpg','jpeg','png','webp','gif'], true)): ?>
                                         <img src="<?php echo e(route('documents.open', $previewDocument)); ?>" alt="Artwork preview: <?php echo e($previewDocument->name); ?>">
                                     <?php else: ?>
-                                        <div class="ft-prototype-artwork-file"><span><?php echo e(strtoupper($previewExtension ?: 'FILE')); ?></span><strong><?php echo e($previewDocument->name); ?> · Version <?php echo e(max(1, (int) $previewDocument->version)); ?></strong><a href="<?php echo e(route('documents.open', $previewDocument)); ?>" target="_blank" rel="noopener">Open artwork</a></div>
+                                        <div class="ft-prototype-artwork-file"><span><?php echo e(strtoupper($previewExtension ?: 'FILE')); ?></span><strong><?php echo e($previewDocument->name); ?></strong><a href="<?php echo e(route('documents.open', $previewDocument)); ?>" target="_blank" rel="noopener">Open artwork</a></div>
                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 </div>
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
@@ -640,7 +695,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                         <span class="ft-artwork-current-file-choice-type"><?php echo e(strtoupper(pathinfo((string) $doc->name, PATHINFO_EXTENSION) ?: 'FILE')); ?></span>
                                         <span class="ft-artwork-current-file-choice-copy">
                                             <b title="<?php echo e($doc->name); ?>"><?php echo e($doc->name); ?></b>
-                                            <small>Artwork V<?php echo e(max(1, (int) $doc->version)); ?></small>
+                                            <small>Artwork</small>
                                         </span>
                                         <em x-text="selectedArtworkId === <?php echo e((int) $doc->id); ?> ? 'Viewing' : 'Preview'">Preview</em>
                                     </button>
@@ -654,7 +709,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $archivedArtworkDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $doc): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                                         <div>
                                             <span class="ft-prototype-version-file">
-                                                <strong><?php echo e($doc->name); ?> · Version <?php echo e(max(1, (int) $doc->version)); ?></strong>
+                                                <strong><?php echo e($doc->name); ?></strong>
                                                 <small><?php echo e(\App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A')); ?></small>
                                             </span>
                                             <span class="ft-prototype-version-status">
@@ -748,6 +803,42 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </section>
+
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($artworkHandoffCommentHistory->isNotEmpty()): ?>
+                        <?php if (isset($component)) { $__componentOriginal39a20eb4ceedbe5e138853d2dc8a5785 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal39a20eb4ceedbe5e138853d2dc8a5785 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.artwork-handoff-comment-history','data' => ['history' => $artworkHandoffCommentHistory,'label' => 'Previous customer comments']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.artwork-handoff-comment-history'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['history' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($artworkHandoffCommentHistory),'label' => 'Previous customer comments']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal39a20eb4ceedbe5e138853d2dc8a5785)): ?>
+<?php $attributes = $__attributesOriginal39a20eb4ceedbe5e138853d2dc8a5785; ?>
+<?php unset($__attributesOriginal39a20eb4ceedbe5e138853d2dc8a5785); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal39a20eb4ceedbe5e138853d2dc8a5785)): ?>
+<?php $component = $__componentOriginal39a20eb4ceedbe5e138853d2dc8a5785; ?>
+<?php unset($__componentOriginal39a20eb4ceedbe5e138853d2dc8a5785); ?>
+<?php endif; ?>
+                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                    <label class="ft-artwork-handoff-comment" for="artwork-customer-comment-<?php echo e($task->id); ?>">
+                        <span>Comment to customer <em>(optional)</em></span>
+                        <textarea
+                            id="artwork-customer-comment-<?php echo e($task->id); ?>"
+                            wire:model.live.debounce.300ms="orderWorkflowActionPayload.customer_comment"
+                            rows="3"
+                            maxlength="2000"
+                            placeholder="Write your message or any important note for the customer..."
+                        ></textarea>
+                    </label>
 
                     <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
@@ -905,6 +996,53 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php $component = $__componentOriginala71941c0208bdab3d16b9d1f53b9e592; ?>
 <?php unset($__componentOriginala71941c0208bdab3d16b9d1f53b9e592); ?>
 <?php endif; ?>
+            <?php elseif($variant === 'shipment_tracking'): ?>
+                <?php
+                    $shipmentCourierOptions = collect($payload['courier_options'] ?? []);
+                ?>
+                <div class="ft-prototype-form-grid">
+                    <label class="ft-prototype-field">
+                        <span>Courier</span>
+                        <select wire:model="orderWorkflowActionPayload.carrier">
+                            <option value="">Select courier</option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $shipmentCourierOptions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $courierOption): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                <option value="<?php echo e($courierOption['value']); ?>"><?php echo e($courierOption['label']); ?></option>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                        </select>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.carrier'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['shipmentLabel'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </label>
+                    <label class="ft-prototype-field">
+                        <span>Tracking number</span>
+                        <input wire:model="orderWorkflowActionPayload.tracking_number" placeholder="Enter tracking number">
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.tracking_number'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </label>
+                </div>
+                <div class="ft-prototype-email-preview">
+                    <b>Shipment task:</b> Add tracking number &amp; print courier label<br>
+                    <span>Saving the courier and tracking number completes Task 5.2 and unlocks Dispatch shipment.</span>
+                </div>
             <?php elseif($variant === 'courier_label'): ?>
                 <div class="ft-prototype-label-preview">
                     <div><small>SHIP TO</small><h3><?php echo e(mb_strtoupper($clientName)); ?></h3><p><?php echo nl2br(e((string) ($payload['address'] ?? $job->shipping_address ?? ''))); ?></p><div class="ft-prototype-barcode"></div><b>FLOWTRACK · <?php echo e($orderNumber); ?></b></div>
@@ -947,7 +1085,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
             <?php elseif($variant === 'invoice_prepare'): ?>
                 <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Invoice number</span><input wire:model="orderWorkflowActionPayload.invoice_number"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.invoice_number'];
+                    <label class="ft-prototype-field"><span>Invoice number</span><input value="<?php echo e($payload['invoice_number'] ?? ''); ?>" readonly aria-readonly="true" title="Generated automatically"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.invoice_number'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
@@ -998,7 +1136,240 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
                 <div class="ft-prototype-email-preview"><b>Included order:</b> <?php echo e($orderNumber); ?><br><b>Client:</b> <?php echo e($clientName); ?><br><b>Total:</b> <?php echo e($payload['invoice_currency'] ?? 'USD'); ?> <?php echo e(number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2)); ?></div>
             <?php elseif($variant === 'invoice_send'): ?>
-                <div class="ft-prototype-email-preview"><b>To:</b> Client accounts contact<br><b>Subject:</b> Invoice <?php echo e($payload['invoice_number'] ?: '—'); ?> — <?php echo e($orderNumber); ?><br><br>Hello <?php echo e($clientName); ?>,<br><br>Please find attached the invoice for Order <?php echo e($orderNumber); ?>.<br><br>Amount due: <?php echo e($payload['invoice_currency'] ?? 'USD'); ?> <?php echo e(number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2)); ?><br>Due date: <?php echo e($payload['invoice_due_date'] ?: 'As agreed'); ?><br><br>Regards,<br><?php echo e($ownerName); ?></div>
+                <?php
+                    $invoiceRecipientOptions = collect($invoiceEmailPreview['recipient_options'] ?? []);
+                    $invoiceToEmail = trim((string) ($payload['to_email'] ?? ''));
+                    $invoiceMatchedToUser = $invoiceRecipientOptions->first(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === mb_strtolower($invoiceToEmail)
+                    );
+                    $invoiceToQuery = mb_strtolower($invoiceToEmail);
+                    $invoiceToSuggestions = $invoiceToQuery === '' || $invoiceMatchedToUser
+                        ? collect()
+                        : $invoiceRecipientOptions
+                            ->filter(function($option) use ($invoiceToQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $invoiceToQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $invoiceToQuery);
+                            })
+                            ->take(6)
+                            ->values();
+                    $invoiceToIsValidEmail = $invoiceToEmail !== '' && filter_var($invoiceToEmail, FILTER_VALIDATE_EMAIL);
+                    $invoiceNoSystemMatch = $invoiceToQuery !== ''
+                        && ! $invoiceMatchedToUser
+                        && $invoiceToSuggestions->isEmpty()
+                        && ! $invoiceToIsValidEmail;
+
+                    $invoiceCcEmails = trim((string) ($payload['cc_emails'] ?? ''));
+                    $invoiceCcParts = collect(preg_split('/[,;]+/', $invoiceCcEmails) ?: [])
+                        ->map(fn($value) => trim((string) $value));
+                    $invoiceCcQuery = mb_strtolower((string) ($invoiceCcParts->last() ?? ''));
+                    $invoiceCcPrefix = $invoiceCcParts
+                        ->slice(0, max(0, $invoiceCcParts->count() - 1))
+                        ->filter()
+                        ->values();
+                    $invoiceCcExactMatch = $invoiceRecipientOptions->contains(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $invoiceCcQuery
+                    );
+                    $invoiceCcSuggestions = $invoiceCcQuery === '' || $invoiceCcExactMatch
+                        ? collect()
+                        : $invoiceRecipientOptions
+                            ->reject(fn($option) => $invoiceMatchedToUser && (int) $option['id'] === (int) $invoiceMatchedToUser['id'])
+                            ->filter(function($option) use ($invoiceCcQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $invoiceCcQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $invoiceCcQuery);
+                            })
+                            ->reject(function($option) use ($invoiceCcPrefix) {
+                                $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                return $invoiceCcPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                            })
+                            ->take(6)
+                            ->values();
+                ?>
+                <div class="ft-invoice-send-workspace">
+                    
+                        <section
+                            class="ft-invoice-send-document"
+                            aria-label="Generated invoice"
+                            <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'invoice-send-document-'.e($task->id).'-'.e($workflowInvoice?->id ?? 0).''; ?>wire:key="invoice-send-document-<?php echo e($task->id); ?>-<?php echo e($workflowInvoice?->id ?? 0); ?>"
+                            wire:ignore
+                        >
+                        <header class="ft-invoice-send-document__head">
+                            <div>
+                                <small>GENERATED INVOICE</small>
+                                <strong><?php echo e($workflowInvoice?->invoice_number ?: ($payload['invoice_number'] ?? 'Invoice')); ?></strong>
+                                <span>This exact PDF will be attached to the client email.</span>
+                            </div>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoice): ?>
+                                <div class="ft-invoice-send-document__actions">
+                                    <a href="<?php echo e(route('invoices.pdf.open', $workflowInvoice)); ?>" target="_blank" rel="noopener">Open invoice</a>
+                                    <a href="<?php echo e(route('invoices.pdf.download', $workflowInvoice)); ?>">Download PDF</a>
+                                </div>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        </header>
+
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoice): ?>
+                            <div class="ft-invoice-send-document__summary">
+                                <span><b><?php echo e($workflowInvoice->currency); ?> <?php echo e(number_format((float) $workflowInvoice->total, 2)); ?></b><small>Amount due</small></span>
+                                <span><b><?php echo e($workflowInvoice->issue_date?->format('M j, Y') ?: '—'); ?></b><small>Invoice date</small></span>
+                                <span><b><?php echo e($workflowInvoice->due_date?->format('M j, Y') ?: '—'); ?></b><small>Due date</small></span>
+                            </div>
+                            <div class="ft-invoice-send-pdf-preview">
+                                <div class="ft-invoice-send-pdf-preview__bar"><span>PDF</span><b><?php echo e($workflowInvoice->pdf_name ?: $workflowInvoice->invoice_number.'.pdf'); ?></b></div>
+                                <iframe title="Generated invoice PDF preview" src="<?php echo e(route('invoices.pdf.open', $workflowInvoice)); ?>"></iframe>
+                            </div>
+                        <?php else: ?>
+                            <div class="ft-order-email-preview-unavailable">The generated invoice PDF could not be found. Return to Prepare Invoice and generate it before sending.</div>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </section>
+
+                    <section class="ft-invoice-send-compose" aria-label="Invoice email compose and preview">
+                        <div class="ft-invoice-send-compose__title">
+                            <small>EMAIL DELIVERY</small>
+                            <strong>Review recipients and message</strong>
+                            <span>Change the billing email if needed, then verify the exact message before sending.</span>
+                        </div>
+
+                        <section
+                            class="ft-po-mail-recipients ft-invoice-mail-recipients"
+                            aria-label="Invoice email recipients"
+                            x-data="{ ccOpen: <?php echo \Illuminate\Support\Js::from(filled($payload['cc_emails'] ?? ''))->toHtml() ?> }"
+                        >
+                            <div class="ft-po-mail-row ft-po-mail-row--to">
+                                <label for="invoice-to-email-<?php echo e($task->id); ?>">To</label>
+                                <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                    <input
+                                        id="invoice-to-email-<?php echo e($task->id); ?>"
+                                        type="text"
+                                        wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_email"
+                                        placeholder="Enter email or search system users"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($invoiceToSuggestions->isNotEmpty()): ?>
+                                        <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user suggestions">
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $invoiceToSuggestions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                <button
+                                                    type="button"
+                                                    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'invoice-to-suggestion-'.e($task->id).'-'.e((int) $option['id']).''; ?>wire:key="invoice-to-suggestion-<?php echo e($task->id); ?>-<?php echo e((int) $option['id']); ?>"
+                                                    wire:click="$set('orderWorkflowActionPayload.to_email', <?php echo \Illuminate\Support\Js::from((string) $option['email'])->toHtml() ?>)"
+                                                    class="ft-po-mail-suggestion"
+                                                >
+                                                    <span class="ft-po-mail-suggestion__avatar"><?php echo e(mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1))); ?></span>
+                                                    <span><b><?php echo e($option['name']); ?></b><small><?php echo e($option['email']); ?></small></span>
+                                                </button>
+                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                        </div>
+                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
+                                <button
+                                    type="button"
+                                    class="ft-po-mail-cc-toggle"
+                                    x-on:click="ccOpen = !ccOpen"
+                                    x-bind:aria-expanded="ccOpen.toString()"
+                                    aria-controls="invoice-cc-fields-<?php echo e($task->id); ?>"
+                                >Cc</button>
+                            </div>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.to_email'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-po-mail-validation"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($invoiceMatchedToUser): ?>
+                                <div class="ft-po-assignment-note ft-po-assignment-note--mail ft-invoice-system-user-note">
+                                    <span aria-hidden="true">✓</span>
+                                    <p><b><?php echo e($invoiceMatchedToUser['name']); ?></b> is an active FlowTrack user. The invoice will be sent to <strong><?php echo e($invoiceMatchedToUser['email']); ?></strong>.</p>
+                                </div>
+                            <?php elseif($invoiceToIsValidEmail): ?>
+                                <p class="ft-po-mail-help">This address does not match an active FlowTrack user. It will be sent as an external email recipient.</p>
+                            <?php elseif($invoiceNoSystemMatch): ?>
+                                <p class="ft-po-mail-help ft-invoice-user-search-empty">No active system user matches “<?php echo e($invoiceToEmail); ?>”. Choose a suggested user or enter a complete external email address.</p>
+                            <?php else: ?>
+                                <p class="ft-po-mail-help">Billing contact: <?php echo e($workflowInvoice?->billing_contact_name ?: $clientName); ?> · You can search active system users by name or email.</p>
+                            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                            <div id="invoice-cc-fields-<?php echo e($task->id); ?>" class="ft-po-mail-cc" x-cloak x-show="ccOpen">
+                                <div class="ft-po-mail-row ft-po-mail-row--cc">
+                                    <label for="invoice-cc-emails-<?php echo e($task->id); ?>">Cc</label>
+                                    <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                        <input
+                                            id="invoice-cc-emails-<?php echo e($task->id); ?>"
+                                            type="text"
+                                            wire:model.live.debounce.300ms="orderWorkflowActionPayload.cc_emails"
+                                            placeholder="Add email or search system users"
+                                            autocomplete="off"
+                                            spellcheck="false"
+                                        >
+
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($invoiceCcSuggestions->isNotEmpty()): ?>
+                                            <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user CC suggestions">
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $invoiceCcSuggestions; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $option): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+                                                    <?php
+                                                        $nextInvoiceCcEmails = $invoiceCcPrefix
+                                                            ->concat([(string) $option['email']])
+                                                            ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                            ->implode(', ');
+                                                    ?>
+                                                    <button
+                                                        type="button"
+                                                        <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'invoice-cc-suggestion-'.e($task->id).'-'.e((int) $option['id']).''; ?>wire:key="invoice-cc-suggestion-<?php echo e($task->id); ?>-<?php echo e((int) $option['id']); ?>"
+                                                        wire:click="$set('orderWorkflowActionPayload.cc_emails', <?php echo \Illuminate\Support\Js::from($nextInvoiceCcEmails)->toHtml() ?>)"
+                                                        class="ft-po-mail-suggestion"
+                                                    >
+                                                        <span class="ft-po-mail-suggestion__avatar"><?php echo e(mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1))); ?></span>
+                                                        <span><b><?php echo e($option['name']); ?></b><small><?php echo e($option['email']); ?></small></span>
+                                                    </button>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
+                                            </div>
+                                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                    </div>
+                                </div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionPayload.cc_emails'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-po-mail-validation"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                            </div>
+                        </section>
+
+                        <?php if (isset($component)) { $__componentOriginal70137674ee97e22e87c5d4188f3bbd58 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.email.handoff-preview','data' => ['preview' => $invoiceEmailPreview,'defaultSubject' => 'Invoice '.($payload['invoice_number'] ?? '').' — '.$orderNumber,'emptyRecipientText' => 'Enter the client billing email in To before sending this invoice.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('email.handoff-preview'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['preview' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($invoiceEmailPreview),'defaultSubject' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute('Invoice '.($payload['invoice_number'] ?? '').' — '.$orderNumber),'emptyRecipientText' => 'Enter the client billing email in To before sending this invoice.']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal70137674ee97e22e87c5d4188f3bbd58)): ?>
+<?php $attributes = $__attributesOriginal70137674ee97e22e87c5d4188f3bbd58; ?>
+<?php unset($__attributesOriginal70137674ee97e22e87c5d4188f3bbd58); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal70137674ee97e22e87c5d4188f3bbd58)): ?>
+<?php $component = $__componentOriginal70137674ee97e22e87c5d4188f3bbd58; ?>
+<?php unset($__componentOriginal70137674ee97e22e87c5d4188f3bbd58); ?>
+<?php endif; ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['orderWorkflowActionEmail'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><p class="validation-error ft-invoice-send-email-error"><?php echo e($message); ?></p><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </section>
+                </div>
             <?php elseif($variant === 'payment'): ?>
                 <div class="ft-prototype-form-grid">
                     <label class="ft-prototype-field"><span>Outstanding balance</span><input value="<?php echo e(number_format((float) ($payload['payment_amount'] ?? $orderTotal), 2)); ?>" disabled></label>
@@ -1059,6 +1430,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             $usesInlineWorkflowActions = $step === 'main'
                 && in_array($variant, ['client_decision','production_check','qc_check'], true);
             $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
+            $editingCompletedShipmentInformation = $usesShipmentFooter
+                && \App\Support\OrderDetailPresenter::isCompletedTask($task);
         ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($usesShipmentFooter): ?>
             <footer class="ft-order-task-document-modal-actions ft-shipment-modal-footer">
@@ -1066,9 +1439,9 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <div class="ft-shipment-modal-footer__actions">
                     <div>
                         <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
-                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Save &amp; complete task</button>
+                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><?php echo e($editingCompletedShipmentInformation ? 'Save changes' : 'Save & complete task'); ?></button>
                     </div>
-                    <small>Saving unlocks Add tracking number &amp; print courier label.</small>
+                    <small><?php echo e($editingCompletedShipmentInformation ? 'The shipment task stays completed; only the latest shipment details are updated.' : 'Saving unlocks Add tracking number & print courier label.'); ?></small>
                 </div>
             </footer>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -1085,11 +1458,12 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <?php else: ?>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $choices; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $decision => $label): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                         <?php
-                            $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)
+                            $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email', 'invoice_send'], true)
                                 ? 'Complete without email'
                                 : $label;
+                            $actionDisabled = $variant === 'invoice_send' && ! $workflowInvoice;
                         ?>
-                        <button type="button" class="<?php echo e(in_array($decision, ['revise','issue'], true) ? 'danger' : 'primary'); ?>" wire:click="submitOrderWorkflowAction('<?php echo e($decision); ?>')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><?php echo e($actionLabel); ?></button>
+                        <button type="button" class="<?php echo e(in_array($decision, ['revise','issue'], true) ? 'danger' : 'primary'); ?>" wire:click="submitOrderWorkflowAction('<?php echo e($decision); ?>')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" <?php if($actionDisabled): echo 'disabled'; endif; ?>><?php echo e($actionLabel); ?></button>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </footer>

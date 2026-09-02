@@ -482,7 +482,7 @@
                 <div class="ft-da-version-list">
                     @forelse($versions as $version)
                         <div class="ft-da-version-row">
-                            <strong>{{ $version->name }} · Version {{ max(1, (int) $version->version) }}</strong>
+                            <strong>{{ $version->name }}@unless(\App\Support\ArtworkDocumentName::hasVersion((string) $version->name)) · Version {{ max(1, (int) $version->version) }}@endunless</strong>
                             <em class="ft-da-version-state {{ $loop->first ? 'is-latest' : 'is-archived' }}">{{ $loop->first ? 'Latest' : 'Archived' }}</em>
                             <span>{{ $version->uploader?->name ?? 'FlowTrack' }}</span>
                             <time>{{ \App\Support\UserLocalTime::format($version->created_at, 'M j, Y g:i A') }}</time>

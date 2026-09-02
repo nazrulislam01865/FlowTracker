@@ -182,6 +182,12 @@ unset($__defined_vars, $__key, $__value); ?>
                                     <div
                                         class="ft-artwork-revision-replacement-item <?php echo e($replacementDetail ? 'has-replacement' : ''); ?>"
                                         <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'artwork-revision-replacement-'.e($task->id).'-'.e($revisionDocumentId).''; ?>wire:key="artwork-revision-replacement-<?php echo e($task->id); ?>-<?php echo e($revisionDocumentId); ?>"
+                                        x-data="{ uploadingReplacement: false, replacementProgress: 0 }"
+                                        x-on:livewire-upload-start="uploadingReplacement = true; replacementProgress = 0"
+                                        x-on:livewire-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                        x-on:livewire-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
+                                        x-on:livewire-upload-error="uploadingReplacement = false; replacementProgress = 0"
+                                        x-on:livewire-upload-cancel="uploadingReplacement = false; replacementProgress = 0"
                                     >
                                         <div class="ft-artwork-revision-replacement-summary">
                                             <div class="ft-artwork-revision-replacement-source">
@@ -210,7 +216,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php endif; ?>
                                                 <span class="ft-artwork-revision-upload-selector-copy">
                                                     <b title="<?php echo e($revisionCandidate->name); ?>"><?php echo e($revisionCandidate->name); ?></b>
-                                                    <small><?php echo e($candidateExtension); ?> · Version <?php echo e(max(1, (int) $revisionCandidate->version)); ?></small>
+                                                    <small><?php echo e($candidateExtension); ?> · Current artwork</small>
                                                 </span>
                                             </div>
                                             <div class="ft-artwork-revision-replacement-actions">
@@ -294,7 +300,27 @@ unset($__defined_vars, $__key, $__value); ?>
                                                     <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?></small>
                                                 </label>
 
-                                                <div class="ft-artwork-revision-replacement-uploading" wire:loading wire:target="overviewTaskRevisionUpload.<?php echo e($revisionDocumentId); ?>">Uploading replacement…</div>
+                                                <div
+                                                    class="ft-prototype-upload-progress ft-artwork-revision-replacement-uploading"
+                                                    x-cloak
+                                                    x-show="uploadingReplacement"
+                                                    x-transition.opacity.duration.120ms
+                                                >
+                                                    <div class="ft-prototype-upload-progress-meta">
+                                                        <span>Uploading replacement...</span>
+                                                        <b x-text="`${replacementProgress}%`">0%</b>
+                                                    </div>
+                                                    <div
+                                                        class="ft-prototype-upload-progress-track"
+                                                        role="progressbar"
+                                                        aria-label="Replacement artwork upload progress"
+                                                        aria-valuemin="0"
+                                                        aria-valuemax="100"
+                                                        x-bind:aria-valuenow="replacementProgress"
+                                                    >
+                                                        <span x-bind:style="`width: ${replacementProgress}%`"></span>
+                                                    </div>
+                                                </div>
                                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['overviewTaskRevisionUpload.'.$revisionDocumentId];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :

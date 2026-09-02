@@ -91,7 +91,7 @@
                     <div class="ft-order-artwork-revision-attachment">
                         <x-ui.file-type-badge :extension="$revisionExtension" class="ft-order-artwork-revision-file-icon" />
                         <span class="ft-order-artwork-revision-file-copy">
-                            <b>{{ $revisionDocumentName }}@if($revisionDocument) · Version {{ max(1, (int) $revisionDocument->version) }}@endif</b>
+                            <b>{{ $revisionDocumentName }}</b>
                             <small>{{ $revisionExtension }} · This artwork requires replacement</small>
                         </span>
                         @if($revisionDocument)

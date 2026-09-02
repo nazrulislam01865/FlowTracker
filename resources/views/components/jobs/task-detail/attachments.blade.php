@@ -53,12 +53,7 @@
                             <div class="ft-order-task-document-row ft-task-detail-document-row {{ $isArtworkUploadTask ? 'is-latest-artwork' : '' }}" wire:key="task-detail-document-{{ $doc->id }}">
                                 <span class="ft-order-task-file-type">{{ strtoupper(pathinfo($doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
                                 <div class="ft-order-task-file-copy">
-                                    <b title="{{ $doc->name }}">
-                                        {{ $doc->name }}
-                                        @if($isArtworkUploadTask)
-                                            · Version {{ max(1, (int) $doc->version) }}
-                                        @endif
-                                    </b>
+                                    <b title="{{ $doc->name }}">{{ $doc->name }}</b>
                                     @if($doc->note)<span class="ft-order-task-file-note">{{ $doc->note }}</span>@endif
                                     <small>
                                         {{ $doc->category ?: 'Task attachment' }} · {{ $doc->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}

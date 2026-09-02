@@ -41,14 +41,12 @@ final class OrderShipmentPresenter
             ->values();
         $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
 
-        $rows = $shipmentTasks->map(function ($task, int $index) use ($job, $phase, $context, $workflowActions, $isCancelled, $shipmentTasks): array {
+        $rows = $shipmentTasks->map(function ($task, int $index) use ($job, $phase, $context, $workflowActions, $isCancelled): array {
             $key = $workflowActions->automationKey($task);
             $mode = OrderDetailPresenter::taskMode($job, $task);
             $permissions = data_get($context, 'taskPermissions.'.(int) $task->id, []);
             $assigneeName = trim((string) ($task->assignee?->name ?: 'Unassigned'));
             $isDone = OrderDetailPresenter::isCompletedTask($task);
-            $previousTask = $index > 0 ? ($shipmentTasks[$index - 1] ?? null) : null;
-
             [$title, $description] = match ($key) {
                 'SHIP_CONFIRM_INFO' => [
                     'Review or update shipment details',
@@ -83,7 +81,6 @@ final class OrderShipmentPresenter
                 'assignee_avatar' => $task->assignee?->profileImageUrl(),
                 'due_date' => $task->due_date?->format('M j, Y') ?: 'No due date',
                 'label_generated' => $key === 'SHIP_LABEL' && str_contains(strtolower(trim((string) $task->status)), 'label generated'),
-                'progress_line_done' => $previousTask ? OrderDetailPresenter::isCompletedTask($previousTask) : false,
             ];
         })->values();
 
@@ -98,6 +95,18 @@ final class OrderShipmentPresenter
         $recipient = trim((string) ($shipmentMeta['contact_name'] ?? $shipmentMeta['recipient'] ?? $job->shipping_contact_name ?? $clientName));
         $countryCode = trim((string) ($shipmentMeta['phone_country_code'] ?? $job->shipping_phone_country_code ?? ''));
         $phoneNumber = trim((string) ($shipmentMeta['phone_number'] ?? $job->shipping_phone ?? ''));
+        $couriers = collect((array) data_get($context, 'courierOptions', []))
+            ->map(fn ($option) => [
+                'value' => trim((string) ($option['value'] ?? $option['id'] ?? '')),
+                'label' => trim((string) ($option['label'] ?? $option['name'] ?? $option['value'] ?? '')),
+            ])
+            ->filter(fn (array $option) => $option['value'] !== '')
+            ->unique('value')
+            ->values();
+        $carrier = trim((string) ($labelMeta['carrier'] ?? data_get($couriers->first(), 'value', '')));
+        if ($carrier !== '' && ! $couriers->contains(fn (array $option) => strcasecmp($option['value'], $carrier) === 0)) {
+            $couriers->prepend(['value' => $carrier, 'label' => $carrier]);
+        }
 
         return [
             'tasks' => $rows,
@@ -108,8 +117,9 @@ final class OrderShipmentPresenter
             'phone' => trim($countryCode.' '.$phoneNumber),
             'address' => trim((string) ($shipmentMeta['address'] ?? $job->shipping_address ?? '')),
             'postal_code' => trim((string) ($shipmentMeta['postal_code'] ?? $job->shipping_postal_code ?? '')),
-            'carrier' => trim((string) ($labelMeta['carrier'] ?? '')),
+            'carrier' => $carrier,
             'tracking' => trim((string) ($labelMeta['tracking_number'] ?? '')),
+            'couriers' => $couriers->all(),
         ];
     }
 }

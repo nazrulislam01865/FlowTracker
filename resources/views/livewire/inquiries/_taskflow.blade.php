@@ -34,6 +34,7 @@
                 </div>
 
                 <div class="ft-inquiry-assignee-inline ft-inline-edit-shell"
+                    wire:key="inquiry-task-assignee-{{ $task->id }}-{{ (int) ($task->assignee_id ?? 0) }}"
                     x-data="window.FlowTrack.ui.inlineEdit({ key: @js('inquiry-task-'.$task->id.'-assignee'), label: 'task assignee', value: @js($task->assignee_id ?? ''), display: @js($task->assignee?->name ?? 'Unassigned'), avatarUrl: @js($task->assignee?->profileImageUrl() ?? '') })"
                     :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }"
                     x-on:click.outside="if (editing) cancelEdit()"

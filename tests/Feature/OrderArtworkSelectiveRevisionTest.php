@@ -6,6 +6,15 @@ use Tests\TestCase;
 
 class OrderArtworkSelectiveRevisionTest extends TestCase
 {
+    public function test_revision_supporting_attachments_show_live_upload_progress(): void
+    {
+        $view = file_get_contents(resource_path('views/components/jobs/order-detail/workflow-action-modal.blade.php'));
+
+        $this->assertStringContainsString('x-on:livewire-upload-progress="progress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"', $view);
+        $this->assertStringContainsString('aria-label="Supporting attachment upload progress"', $view);
+        $this->assertStringContainsString('x-bind:style="`width: ${progress}%`"', $view);
+    }
+
     public function test_artwork_review_can_preview_every_file_and_request_multiple_file_specific_revisions(): void
     {
         $modal = file_get_contents(resource_path('views/components/jobs/order-detail/workflow-action-modal.blade.php'));
@@ -57,6 +66,9 @@ class OrderArtworkSelectiveRevisionTest extends TestCase
         $this->assertStringContainsString('wire:model="overviewTaskRevisionUpload.{{ $revisionDocumentId }}"', $uploadModal);
         $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $revisionDocumentId }})', $uploadModal);
         $this->assertStringContainsString('ft-artwork-revision-replacement-dropzone', $uploadModal);
+        $this->assertStringContainsString('x-on:livewire-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"', $uploadModal);
+        $this->assertStringContainsString('aria-label="Replacement artwork upload progress"', $uploadModal);
+        $this->assertStringContainsString('x-bind:style="`width: ${replacementProgress}%`"', $uploadModal);
         $this->assertStringContainsString('Upload Revised Artwork', $uploadModal);
         $this->assertStringContainsString('Files not listed here remain unchanged.', $uploadModal);
 

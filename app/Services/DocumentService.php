@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Document;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\ArtworkDocumentName;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -84,6 +85,7 @@ class DocumentService
             ?: $task?->setupTemplate?->documentCategory?->name
             ?: ($data['category'] ?? ($task ? 'Task attachment' : 'Other'));
 
+        $originalName = $file->getClientOriginalName();
         $isArtworkTask = $task
             && app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
         $batchVersion = max(0, (int) ($data['artwork_batch_version'] ?? 0));
@@ -94,8 +96,11 @@ class DocumentService
                 $task?->flow_job_id ?: ($data['flow_job_id'] ?? null),
                 $task?->id ?: ($data['task_id'] ?? null),
                 $category,
-                $file->getClientOriginalName(),
+                $originalName,
             );
+        $documentName = $isArtworkTask
+            ? ArtworkDocumentName::versioned((string) ($data['artwork_base_name'] ?? $originalName), $version, $originalName)
+            : $originalName;
 
         $document = Document::create([
             'document_number' => $this->nextNumber(),
@@ -104,10 +109,10 @@ class DocumentService
             'task_id' => $task?->id ?: ($data['task_id'] ?? null),
             'uploaded_by' => $user->id,
             'category' => $category,
-            'name' => $file->getClientOriginalName(),
+            'name' => $documentName,
             'note' => filled($data['note'] ?? null) ? trim((string) $data['note']) : null,
             'path' => $path,
-            'mime_type' => StoredFileResponse::mimeType($file->getClientOriginalName(), $stored['mime']),
+            'mime_type' => StoredFileResponse::mimeType($documentName, $stored['mime']),
             'size' => $stored['size'],
             'version' => $version,
             'is_final' => false,
@@ -182,9 +187,14 @@ class DocumentService
      * current Artwork set can legitimately contain V1, V2, V3, ... together.
      *
      * @param Collection<int,Document>|null $taskDocuments
+     * @param Collection<int,mixed>|null $appliedRevisionActivities Preloaded job-level revision activities for query-free batch presentation.
      * @return Collection<int,Document>
      */
-    public function currentArtworkDocuments(Task $task, ?Collection $taskDocuments = null): Collection
+    public function currentArtworkDocuments(
+        Task $task,
+        ?Collection $taskDocuments = null,
+        ?Collection $appliedRevisionActivities = null,
+    ): Collection
     {
         $task->loadMissing(['setupTemplate', 'job']);
         if (app(OrderWorkflowActionService::class)->automationKey($task) !== 'ART_PREPARE_UPLOAD') {
@@ -203,15 +213,22 @@ class DocumentService
             return collect();
         }
 
-        $latestApplied = $task->job?->activities()
-            ->where('event', 'job.artwork_revision_applied')
-            ->latest('id')
-            ->limit(50)
-            ->get()
-            ->first(function ($activity) use ($task) {
-                $activityTaskId = (int) data_get($activity->meta, 'target_task_id', data_get($activity->meta, 'task_id', 0));
-                return $activityTaskId === (int) $task->id;
-            });
+        if ($appliedRevisionActivities !== null) {
+            $appliedActivities = $appliedRevisionActivities;
+        } else {
+            $appliedActivities = $task->job
+                ? $task->job->activities()
+                    ->where('event', 'job.artwork_revision_applied')
+                    ->latest('id')
+                    ->limit(50)
+                    ->get()
+                : collect();
+        }
+
+        $latestApplied = $appliedActivities->first(function ($activity) use ($task) {
+            $activityTaskId = (int) data_get($activity->meta, 'target_task_id', data_get($activity->meta, 'task_id', 0));
+            return $activityTaskId === (int) $task->id;
+        });
 
         if ($latestApplied) {
             $meta = (array) $latestApplied->meta;
@@ -626,6 +643,7 @@ class DocumentService
                         'task_id' => $task->id,
                         'note' => $note,
                         'artwork_batch_version' => $replacementVersion,
+                        'artwork_base_name' => (string) $source->name,
                     ];
                     if ($this->taskHasRequirement($task)) {
                         $storeData['require_task_pack_requirement'] = true;
@@ -692,9 +710,14 @@ class DocumentService
             $source->name,
         );
 
+        $isArtworkTask = app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+        $linkedName = $isArtworkTask
+            ? ArtworkDocumentName::versioned((string) $source->name, max(1, $version))
+            : (string) $source->name;
+
         $document = Document::create([
             'document_number' => $this->nextNumber(), 'flow_job_id' => $task->flow_job_id, 'client_id' => $task->job?->client_id,
-            'task_id' => $task->id, 'uploaded_by' => $user->id, 'category' => $category, 'name' => $source->name,
+            'task_id' => $task->id, 'uploaded_by' => $user->id, 'category' => $category, 'name' => $linkedName,
             'note' => filled($note) ? trim((string) $note) : null, 'path' => $source->path, 'mime_type' => $source->mime_type, 'size' => $source->size, 'version' => max(1, $version), 'is_final' => (bool) $source->is_final,
         ]);
         $this->recordDocumentActivity($document, $user, 'linked');
@@ -733,6 +756,12 @@ class DocumentService
         $name = trim($name);
         abort_if($name === '' || str_contains($name, '/') || str_contains($name, '\\'), 422, 'Enter a valid file name.');
 
+        $document->loadMissing(['task.setupTemplate', 'job']);
+        if ($document->task
+            && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD') {
+            $name = ArtworkDocumentName::versioned($name, max(1, (int) $document->version));
+        }
+
         $oldName = (string) $document->name;
         Document::query()
             ->where('flow_job_id', $document->flow_job_id)
@@ -747,7 +776,6 @@ class DocumentService
         app(WorkspaceRefreshService::class)->touch('Document:renamed');
 
         $document->name = $name;
-        $document->loadMissing(['task', 'job']);
         if ($document->task) {
             $document->setRelation('task', app(TaskService::class)->claimForAction($document->task, $user, 'renamed a document'));
             $document->task->activities()->create([
@@ -800,6 +828,12 @@ class DocumentService
             (string) $document->name,
         );
 
+        $isArtworkTask = $document->task
+            && app(OrderWorkflowActionService::class)->automationKey($document->task) === 'ART_PREPARE_UPLOAD';
+        $versionedName = $isArtworkTask
+            ? ArtworkDocumentName::versioned((string) $document->name, max(1, $version), $file->getClientOriginalName())
+            : (string) $document->name;
+
         $created = Document::create([
             'document_number' => $this->nextNumber(),
             'flow_job_id' => $document->flow_job_id,
@@ -807,10 +841,10 @@ class DocumentService
             'task_id' => $document->task_id,
             'uploaded_by' => $user->id,
             'category' => $document->category,
-            'name' => $document->name,
+            'name' => $versionedName,
             'note' => $document->note,
             'path' => $path,
-            'mime_type' => StoredFileResponse::mimeType($document->name, $stored['mime']),
+            'mime_type' => StoredFileResponse::mimeType($versionedName, $stored['mime']),
             'size' => $stored['size'],
             'version' => max(1, $version),
             'is_final' => false,

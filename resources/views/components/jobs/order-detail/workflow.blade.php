@@ -31,6 +31,10 @@
         ? \App\Support\OrderShipmentPresenter::present($job, $selectedPhase, $selectedTasks, $context)
         : [];
 
+    $archivedArtworkDocuments = ! $isShipmentPhase
+        ? \App\Support\OrderDetailPresenter::archivedArtworkDocuments($job, $selectedTasks)
+        : collect();
+
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
         'active' => 'Complete the active task to continue the workflow',
@@ -113,6 +117,11 @@
                 </div>
               </div>
             </section>
+
+            <x-jobs.order-detail.archived-artwork
+                :documents="$archivedArtworkDocuments"
+                :can-export-document="(bool) ($context['canExportDocument'] ?? false)"
+            />
         @endif
     @endif
 </section>

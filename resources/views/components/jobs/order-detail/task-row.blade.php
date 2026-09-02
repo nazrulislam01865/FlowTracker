@@ -59,23 +59,29 @@
     $workflowActionLabel = (string) ($workflowAction['label'] ?? 'Take action');
     $workflowActionType = (string) ($workflowAction['type'] ?? 'workflow');
     $workflowEmailStatus = (array) data_get($context, 'workflowEmailStatuses.'.(int) $task->id, []);
+    $workflowInvoice = (array) data_get($context, 'workflowInvoices.'.(int) $task->id, []);
+    $workflowInvoiceId = (int) ($workflowInvoice['id'] ?? 0);
+    $workflowInvoicePdfName = trim((string) ($workflowInvoice['pdf_name'] ?? ''));
     $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
     $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
     $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
     $emailResendFeedbackStatus = strtolower(trim((string) ($emailResendFeedback['email_status'] ?? '')));
     $isArtworkEmailTask = $automationKey === 'ART_SEND_ORDER_TEAM';
+    $isInvoiceEmailTask = $automationKey === 'BILL_SEND';
+    $isTrackedEmailTask = $isArtworkEmailTask || $isInvoiceEmailTask;
     $emailDeliveryStatus = strtolower(trim((string) ($workflowEmailStatus['status'] ?? '')));
     if (in_array($emailResendFeedbackStatus, ['sent', 'failed', 'not_sent'], true)) $emailDeliveryStatus = $emailResendFeedbackStatus;
     // Completed legacy rows may predate delivery tracking. Show an explicit
     // Not Sent state instead of silently hiding email status.
-    if ($isArtworkEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
-    $emailDeliveryFailed = $isArtworkEmailTask && $emailDeliveryStatus === 'failed';
-    $emailDeliverySent = $isArtworkEmailTask && $emailDeliveryStatus === 'sent';
-    $emailDeliveryNotSent = $isArtworkEmailTask && $emailDeliveryStatus === 'not_sent';
-    $emailCanResend = $isArtworkEmailTask
+    if ($isTrackedEmailTask && $mode === 'done' && $emailDeliveryStatus === '') $emailDeliveryStatus = 'not_sent';
+    $emailDeliveryFailed = $isTrackedEmailTask && $emailDeliveryStatus === 'failed';
+    $emailDeliverySent = $isTrackedEmailTask && $emailDeliveryStatus === 'sent';
+    $emailDeliveryNotSent = $isTrackedEmailTask && $emailDeliveryStatus === 'not_sent';
+    $emailCanResend = $isTrackedEmailTask
         && $mode === 'done'
         && $canEditTask
         && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
+    $emailResourceLabel = $isInvoiceEmailTask ? 'invoice' : 'artwork';
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
@@ -151,24 +157,30 @@
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status {{ $statusClass }}">{{ $displayStatus }}</span>
-        @if($isArtworkEmailTask && $mode === 'done')
+        @if($isTrackedEmailTask && $mode === 'done')
             @if($emailDeliverySent)
-                <span class="ft-order-task-email-status is-sent" title="The latest artwork email was sent successfully.">Email Sent</span>
+                <span class="ft-order-task-email-status is-sent" title="The latest {{ $emailResourceLabel }} email was sent successfully.">Email Sent</span>
             @elseif($emailDeliveryFailed)
-                <span class="ft-order-task-email-status is-failed" title="The artwork email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
+                <span class="ft-order-task-email-status is-failed" title="The {{ $emailResourceLabel }} email did not reach the selected recipients. The completed task can still resend it.">Email Failed</span>
             @elseif($emailDeliveryNotSent)
-                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful artwork email delivery.">Email Not Sent</span>
+                <span class="ft-order-task-email-status is-not-sent" title="The task was completed without a successful {{ $emailResourceLabel }} email delivery.">Email Not Sent</span>
             @endif
             @if($emailResendFeedbackMessage !== '')
                 <div class="ft-order-task-email-feedback {{ $emailResendFeedbackType === 'success' ? 'is-success' : 'is-error' }}" role="status" aria-live="polite">{{ $emailResendFeedbackMessage }}</div>
             @endif
         @endif
-        @if($taskDocuments->isNotEmpty())
+        @if($workflowInvoiceId > 0)
+            <div class="card-sub ft-order-task-invoice-file">
+                <span aria-hidden="true">📎</span>
+                <a href="{{ route('invoices.pdf.open', $workflowInvoiceId) }}" target="_blank" rel="noopener">{{ $workflowInvoicePdfName !== '' ? $workflowInvoicePdfName : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf') }}</a>
+                <a href="{{ route('invoices.pdf.download', $workflowInvoiceId) }}" class="ft-order-task-invoice-download">Download</a>
+            </div>
+        @elseif($taskDocuments->isNotEmpty())
             @php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); @endphp
             <div class="card-sub">
                 📎 {{ $latestTaskDocument->name }}
                 @if($isArtworkUploadTask)
-                    · Version {{ max(1, (int) $latestTaskDocument->version) }} · Latest
+                    · Latest
                     @if($latestArtworkDocuments->count() > 1)
                         · +{{ $latestArtworkDocuments->count() - 1 }} file{{ $latestArtworkDocuments->count() === 2 ? '' : 's' }}
                     @endif
@@ -197,11 +209,12 @@
         @elseif($mode === 'done')
             @if($automationKey === 'NEW_UPLOAD_PO' && $canEditTask && ($canUploadDocument || $canLinkDocument))
                 <button type="button" class="btn small" wire:click="openOverviewTaskDocumentModal({{ $task->id }})">Add other documents</button>
-            @elseif($isArtworkEmailTask && $canEditTask)
+            @elseif($isTrackedEmailTask && $canEditTask)
                 @if($emailCanResend)
-                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="resendCompletedArtworkEmail({{ $task->id }})" wire:loading.attr="disabled" wire:target="resendCompletedArtworkEmail({{ $task->id }})">
-                        <span wire:loading.remove wire:target="resendCompletedArtworkEmail({{ $task->id }})">Resend</span>
-                        <span wire:loading wire:target="resendCompletedArtworkEmail({{ $task->id }})">Sending...</span>
+                    @php $resendMethod = $isInvoiceEmailTask ? 'resendCompletedInvoiceEmail' : 'resendCompletedArtworkEmail'; @endphp
+                    <button type="button" class="btn small primary ft-order-task-resend-email" wire:click="{{ $resendMethod }}({{ $task->id }})" wire:loading.attr="disabled" wire:target="{{ $resendMethod }}({{ $task->id }})">
+                        <span wire:loading.remove wire:target="{{ $resendMethod }}({{ $task->id }})">Resend</span>
+                        <span wire:loading wire:target="{{ $resendMethod }}({{ $task->id }})">Sending...</span>
                     </button>
                 @endif
                 <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
@@ -236,12 +249,7 @@
             >
                 <x-ui.file-type-badge :name="$document->name" class="ft-order-file-icon" />
                 <span>
-                    <b>
-                        {{ $document->name }}
-                        @if($isArtworkUploadTask)
-                            · Version {{ max(1, (int) $document->version) }}
-                        @endif
-                    </b>
+                    <b>{{ $document->name }}</b>
                     <small>
                         {{ $document->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') }}
                         @if($isArtworkUploadTask) · Latest revision @endif

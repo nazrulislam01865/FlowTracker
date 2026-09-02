@@ -240,6 +240,142 @@ final class OrderDetailPresenter
         return (string) ($task->task_number ?: str_pad((string) $task->id, 3, '0', STR_PAD_LEFT));
     }
 
+    /**
+     * Artwork files that were actually replaced by a completed revision.
+     *
+     * This is intentionally event-driven rather than "all non-current files".
+     * A normal upload or an accepted/unselected artwork must never appear in the
+     * archive. A source document enters the archive only after the corresponding
+     * job.artwork_revision_applied activity exists. Both documents and applied
+     * activities are hydrated once by LegacyJobService, so this presenter is
+     * query-free and safe from N+1 queries.
+     *
+     * @param Collection<int,Task> $phaseTasks
+     * @return Collection<int,\App\Models\Document>
+     */
+    public static function archivedArtworkDocuments(FlowJob $job, Collection $phaseTasks): Collection
+    {
+        if (! $job->relationLoaded('documents')
+            || ! $job->relationLoaded('artworkRevisionAppliedActivities')
+            || $phaseTasks->isEmpty()) {
+            return collect();
+        }
+
+        $artworkTasks = $phaseTasks
+            ->filter(fn (Task $task): bool => $task->relationLoaded('currentArtworkDocuments'))
+            ->values();
+
+        if ($artworkTasks->isEmpty()) {
+            return collect();
+        }
+
+        $artworkTaskIds = $artworkTasks
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        $currentDocumentIds = $artworkTasks
+            ->flatMap(fn (Task $task) => collect($task->getRelation('currentArtworkDocuments'))->pluck('id'))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        $appliedBySourceDocumentId = collect();
+        $replacedDocumentIds = collect($job->getRelation('artworkRevisionAppliedActivities'))
+            ->flatMap(function ($activity) use ($artworkTaskIds, $appliedBySourceDocumentId): Collection {
+                $meta = (array) ($activity->meta ?? []);
+                $targetTaskId = (int) data_get($meta, 'target_task_id', data_get($meta, 'task_id', 0));
+                if ($targetTaskId <= 0 || ! $artworkTaskIds->has($targetTaskId)) {
+                    return collect();
+                }
+
+                // Current selective revisions explicitly record only the source
+                // rows that received replacement uploads. replacement_document_map
+                // is a safe compatibility fallback for earlier selective events.
+                $ids = collect(data_get($meta, 'replaced_source_document_ids', []));
+                if ($ids->isEmpty()) {
+                    $ids = collect(array_keys((array) data_get($meta, 'replacement_document_map', [])));
+                }
+
+                // Very old revision-applied events predate selective replacement:
+                // every source file was re-uploaded, so the full source set was
+                // genuinely replaced and can be treated as archived.
+                if ($ids->isEmpty()) {
+                    $ids = collect(data_get($meta, 'source_document_ids', []));
+                }
+
+                $ids->each(function ($id) use ($activity, $appliedBySourceDocumentId): void {
+                    $documentId = (int) $id;
+                    if ($documentId > 0 && ! $appliedBySourceDocumentId->has($documentId)) {
+                        $appliedBySourceDocumentId->put($documentId, $activity);
+                    }
+                });
+
+                return $ids;
+            })
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        if ($replacedDocumentIds->isEmpty()) {
+            return collect();
+        }
+
+        $revisionRequests = $job->relationLoaded('artworkRevisionRequestActivities')
+            ? collect($job->getRelation('artworkRevisionRequestActivities'))
+            : collect();
+        $revisionRequestsById = $revisionRequests->keyBy(fn ($activity) => (int) $activity->id);
+        $richText = app(\App\Services\RichTextService::class);
+
+        return $job->documents
+            ->filter(fn ($document): bool => $replacedDocumentIds->has((int) $document->id))
+            ->filter(fn ($document): bool => $artworkTaskIds->has((int) ($document->task_id ?? 0)))
+            ->reject(fn ($document): bool => $currentDocumentIds->has((int) $document->id))
+            ->unique(fn ($document) => (int) $document->id)
+            ->sortByDesc(fn ($document) => (int) $document->id)
+            ->sortByDesc(fn ($document) => max(1, (int) $document->version))
+            ->values()
+            ->each(function ($document) use ($appliedBySourceDocumentId, $revisionRequests, $revisionRequestsById, $richText): void {
+                $documentId = (int) $document->id;
+                $applied = $appliedBySourceDocumentId->get($documentId);
+                $revisionActivityId = (int) data_get($applied?->meta, 'revision_activity_id', 0);
+                $request = $revisionActivityId > 0 ? $revisionRequestsById->get($revisionActivityId) : null;
+
+                // Compatibility for older applied events that did not persist the
+                // originating revision activity id. Match against the exact source
+                // document entirely in memory; no per-row query is introduced.
+                if (! $request) {
+                    $request = $revisionRequests->first(function ($activity) use ($documentId): bool {
+                        $meta = (array) ($activity->meta ?? []);
+                        if ((int) data_get($meta, 'reference_document_id', 0) === $documentId) {
+                            return true;
+                        }
+                        if (collect(data_get($meta, 'revision_document_ids', []))->map(fn ($id) => (int) $id)->contains($documentId)) {
+                            return true;
+                        }
+                        return collect(data_get($meta, 'revision_items', []))
+                            ->contains(fn ($item) => (int) data_get($item, 'document_id', 0) === $documentId);
+                    });
+                }
+
+                $reason = '';
+                if ($request) {
+                    $item = collect(data_get($request->meta, 'revision_items', []))
+                        ->first(fn ($entry) => (int) data_get($entry, 'document_id', 0) === $documentId);
+                    $reason = trim((string) data_get($item, 'comment', ''));
+                    if ($reason === '') {
+                        $reason = trim((string) data_get($request->meta, 'revision_comment', ''));
+                    }
+                }
+
+                $document->setAttribute('artwork_revision_reason', $richText->plainText($reason));
+            });
+    }
+
     public static function activeItems(FlowJob $job): Collection
     {
         return JobDetailPresenter::products($job)

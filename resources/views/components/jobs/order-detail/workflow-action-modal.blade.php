@@ -49,16 +49,41 @@
     $emailHandoffPreview = in_array($variant, ['purchase_order_email', 'artwork_email'], true)
         ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user(), $payload)
         : [];
-    $emailServiceEnabled = (bool) ($emailHandoffPreview['email_service_enabled'] ?? true);
+    $invoiceEmailPreview = $variant === 'invoice_send'
+        ? $workflowActions->invoiceEmailPreview($task, $payload)
+        : [];
+    $workflowInvoice = $variant === 'invoice_send'
+        ? $workflowActions->preparedWorkflowInvoice($job)
+        : null;
+    $emailServiceEnabled = (bool) (($variant === 'invoice_send' ? $invoiceEmailPreview : $emailHandoffPreview)['email_service_enabled'] ?? true);
     if (! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)) {
         $title = $variant === 'artwork_email' ? 'Complete Artwork Handoff' : 'Complete Purchase Order Handoff';
         $copy = 'Email sending is currently disabled. Choose the intended recipients, then complete the handoff and send the file manually.';
+    } elseif (! $emailServiceEnabled && $variant === 'invoice_send') {
+        $title = 'Complete Send Invoice';
+        $copy = 'Email sending is currently disabled. Confirm the intended recipient and complete the task now; the invoice can be resent from the completed task later.';
     }
     $emailFallbackDocumentId = (int) ($emailHandoffPreview['document_id'] ?? 0);
     $emailFallbackDocument = $emailFallbackDocumentId > 0
         ? $job->documents->firstWhere('id', $emailFallbackDocumentId)
         : null;
     $emailFallbackAttachmentLabel = $variant === 'artwork_email' ? 'Artwork' : 'Purchase Order';
+    $artworkHandoffCommentHistory = ($variant === 'artwork_email' && $job->relationLoaded('workflowEmailActivities'))
+        ? collect($job->getRelation('workflowEmailActivities'))
+            ->filter(fn ($activity) => (int) data_get($activity->meta, 'task_id', 0) === (int) $task->id)
+            ->filter(fn ($activity) => in_array((string) $activity->event, [
+                'job.artwork_emailed_to_order_team',
+                'job.workflow_email_skipped',
+            ], true))
+            ->sortByDesc('id')
+            ->map(fn ($activity) => [
+                'id' => (int) $activity->id,
+                'comment' => trim((string) data_get($activity->meta, 'customer_comment', '')),
+                'created_at' => $activity->created_at,
+            ])
+            ->filter(fn (array $entry) => $entry['comment'] !== '')
+            ->values()
+        : collect();
     $revisionMentionUsers = collect($mentionUsers)->values();
     $selectedRevisionDocumentIds = collect($payload['revision_document_ids'] ?? [])
         ->map(fn($id) => (int) $id)
@@ -77,7 +102,7 @@
     // or horizontally shift the popup after submit.
     $usesStableFinanceValidation = $step === 'main'
         && in_array($variant, ['invoice_prepare', 'payment'], true);
-    $modalWide = in_array($variant, ['courier_label', 'shipment_info'], true);
+    $modalWide = in_array($variant, ['courier_label', 'shipment_info', 'invoice_send'], true);
     // Every artwork revision dialog uses the same compact prototype shell.
     // The copy/labels still vary by task, but layout and controls stay consistent.
     $isArtworkRevisionRequest = $step === 'revision';
@@ -95,7 +120,11 @@
         $copy = 'Describe the issue before notifying the supplier and blocking progression.';
     }
 @endphp
-<div class="ft-order-task-document-modal-backdrop" wire:key="order-workflow-action-modal-{{ $task->id }}-{{ $step }}" wire:click.self="closeOrderWorkflowAction">
+{{-- Workflow action dialogs close only through their explicit controls.
+     Native selects/date pickers and embedded PDF viewers can finish a pointer
+     interaction outside the dialog; backdrop-click dismissal made those normal
+     interactions close the invoice modal unexpectedly. --}}
+<div class="ft-order-task-document-modal-backdrop" wire:key="order-workflow-action-modal-{{ $task->id }}-{{ $step }}">
     <section
         class="ft-order-task-document-modal ft-order-workflow-action-modal {{ $isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '') }} {{ $usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : '' }} {{ $isArtworkRevisionRequest ? 'ft-order-workflow-action-modal--artwork-revision-request' : '' }}"
         data-ft-feedback-scope="form"
@@ -167,7 +196,7 @@
                                         <x-ui.file-type-badge :extension="$revisionExtension" size="sm" />
                                         <span class="ft-artwork-revision-selector-copy">
                                             <b title="{{ $revisionDocument->name }}">{{ $revisionDocument->name }}</b>
-                                            <small>Artwork V{{ max(1, (int) $revisionDocument->version) }}</small>
+                                            <small>Artwork</small>
                                         </span>
                                     </label>
                                     <a href="{{ route('documents.open', $revisionDocument) }}" target="_blank" rel="noopener">View</a>
@@ -186,7 +215,15 @@
                                         </label>
                                         @error('orderWorkflowActionRevisionComments.'.$revisionDocumentId)<p class="validation-error">{{ $message }}</p>@enderror
 
-                                        <div class="ft-artwork-revision-item-support">
+                                        <div
+                                            class="ft-artwork-revision-item-support"
+                                            x-data="{ uploading: false, progress: 0 }"
+                                            x-on:livewire-upload-start="uploading = true; progress = 0"
+                                            x-on:livewire-upload-progress="progress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                            x-on:livewire-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 350)"
+                                            x-on:livewire-upload-error="uploading = false; progress = 0"
+                                            x-on:livewire-upload-cancel="uploading = false; progress = 0"
+                                        >
                                             <div class="ft-artwork-revision-item-support-head">
                                                 <div>
                                                     <strong>Supporting attachments <span>(optional)</span></strong>
@@ -237,7 +274,28 @@
                                                 <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(20) }} · Up to 10 files</small>
                                             </label>
 
-                                            <div class="ft-artwork-revision-evidence-uploading" wire:loading wire:target="orderWorkflowActionRevisionAttachments.{{ $revisionDocumentId }}">Uploading files…</div>
+                                            <div
+                                                class="ft-create-attachment-progress"
+                                                x-cloak
+                                                x-show="uploading"
+                                                x-transition.opacity.duration.120ms
+                                                aria-live="polite"
+                                            >
+                                                <div class="ft-create-attachment-progress-meta">
+                                                    <span>Uploading attachment{{ $documentAttachments->count() === 1 ? '' : 's' }}...</span>
+                                                    <b x-text="`${Math.round(progress)}%`">0%</b>
+                                                </div>
+                                                <div
+                                                    class="ft-create-attachment-progress-track"
+                                                    role="progressbar"
+                                                    aria-label="Supporting attachment upload progress"
+                                                    aria-valuemin="0"
+                                                    aria-valuemax="100"
+                                                    x-bind:aria-valuenow="Math.round(progress)"
+                                                >
+                                                    <span x-bind:style="`width: ${progress}%`"></span>
+                                                </div>
+                                            </div>
                                             @error('orderWorkflowActionRevisionAttachments.'.$revisionDocumentId)<p class="validation-error">{{ $message }}</p>@enderror
                                             @error('orderWorkflowActionRevisionAttachments.'.$revisionDocumentId.'.*')<p class="validation-error">{{ $message }}</p>@enderror
                                         </div>
@@ -449,7 +507,7 @@
                                     @if(in_array($previewExtension, ['jpg','jpeg','png','webp','gif'], true))
                                         <img src="{{ route('documents.open', $previewDocument) }}" alt="Artwork preview: {{ $previewDocument->name }}">
                                     @else
-                                        <div class="ft-prototype-artwork-file"><span>{{ strtoupper($previewExtension ?: 'FILE') }}</span><strong>{{ $previewDocument->name }} · Version {{ max(1, (int) $previewDocument->version) }}</strong><a href="{{ route('documents.open', $previewDocument) }}" target="_blank" rel="noopener">Open artwork</a></div>
+                                        <div class="ft-prototype-artwork-file"><span>{{ strtoupper($previewExtension ?: 'FILE') }}</span><strong>{{ $previewDocument->name }}</strong><a href="{{ route('documents.open', $previewDocument) }}" target="_blank" rel="noopener">Open artwork</a></div>
                                     @endif
                                 </div>
                             @endforeach
@@ -490,7 +548,7 @@
                                         <span class="ft-artwork-current-file-choice-type">{{ strtoupper(pathinfo((string) $doc->name, PATHINFO_EXTENSION) ?: 'FILE') }}</span>
                                         <span class="ft-artwork-current-file-choice-copy">
                                             <b title="{{ $doc->name }}">{{ $doc->name }}</b>
-                                            <small>Artwork V{{ max(1, (int) $doc->version) }}</small>
+                                            <small>Artwork</small>
                                         </span>
                                         <em x-text="selectedArtworkId === {{ (int) $doc->id }} ? 'Viewing' : 'Preview'">Preview</em>
                                     </button>
@@ -504,7 +562,7 @@
                                     @foreach($archivedArtworkDocuments as $index => $doc)
                                         <div>
                                             <span class="ft-prototype-version-file">
-                                                <strong>{{ $doc->name }} · Version {{ max(1, (int) $doc->version) }}</strong>
+                                                <strong>{{ $doc->name }}</strong>
                                                 <small>{{ \App\Support\UserLocalTime::format($doc->created_at, 'M j, Y, g:i A') }}</small>
                                             </span>
                                             <span class="ft-prototype-version-status">
@@ -592,6 +650,24 @@
                         @error('orderWorkflowActionPayload.to_emails')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
                     </section>
 
+                    @if($artworkHandoffCommentHistory->isNotEmpty())
+                        <x-jobs.order-detail.artwork-handoff-comment-history
+                            :history="$artworkHandoffCommentHistory"
+                            label="Previous customer comments"
+                        />
+                    @endif
+
+                    <label class="ft-artwork-handoff-comment" for="artwork-customer-comment-{{ $task->id }}">
+                        <span>Comment to customer <em>(optional)</em></span>
+                        <textarea
+                            id="artwork-customer-comment-{{ $task->id }}"
+                            wire:model.live.debounce.300ms="orderWorkflowActionPayload.customer_comment"
+                            rows="3"
+                            maxlength="2000"
+                            placeholder="Write your message or any important note for the customer..."
+                        ></textarea>
+                    </label>
+
                     <x-email.handoff-preview
                         :preview="$emailHandoffPreview"
                         :defaultSubject="'Artwork ready — '.$orderNumber"
@@ -647,6 +723,32 @@
                 </div>
             @elseif($variant === 'shipment_info')
                 <x-jobs.order-detail.shipment.update-details-form :job="$job" :payload="$payload" />
+            @elseif($variant === 'shipment_tracking')
+                @php
+                    $shipmentCourierOptions = collect($payload['courier_options'] ?? []);
+                @endphp
+                <div class="ft-prototype-form-grid">
+                    <label class="ft-prototype-field">
+                        <span>Courier</span>
+                        <select wire:model="orderWorkflowActionPayload.carrier">
+                            <option value="">Select courier</option>
+                            @foreach($shipmentCourierOptions as $courierOption)
+                                <option value="{{ $courierOption['value'] }}">{{ $courierOption['label'] }}</option>
+                            @endforeach
+                        </select>
+                        @error('orderWorkflowActionPayload.carrier')<p class="validation-error">{{ $message }}</p>@enderror
+                        @error('shipmentLabel')<p class="validation-error">{{ $message }}</p>@enderror
+                    </label>
+                    <label class="ft-prototype-field">
+                        <span>Tracking number</span>
+                        <input wire:model="orderWorkflowActionPayload.tracking_number" placeholder="Enter tracking number">
+                        @error('orderWorkflowActionPayload.tracking_number')<p class="validation-error">{{ $message }}</p>@enderror
+                    </label>
+                </div>
+                <div class="ft-prototype-email-preview">
+                    <b>Shipment task:</b> Add tracking number &amp; print courier label<br>
+                    <span>Saving the courier and tracking number completes Task 5.2 and unlocks Dispatch shipment.</span>
+                </div>
             @elseif($variant === 'courier_label')
                 <div class="ft-prototype-label-preview">
                     <div><small>SHIP TO</small><h3>{{ mb_strtoupper($clientName) }}</h3><p>{!! nl2br(e((string) ($payload['address'] ?? $job->shipping_address ?? ''))) !!}</p><div class="ft-prototype-barcode"></div><b>FLOWTRACK · {{ $orderNumber }}</b></div>
@@ -661,7 +763,7 @@
                 </div>
             @elseif($variant === 'invoice_prepare')
                 <div class="ft-prototype-form-grid">
-                    <label class="ft-prototype-field"><span>Invoice number</span><input wire:model="orderWorkflowActionPayload.invoice_number">@error('orderWorkflowActionPayload.invoice_number')<p class="validation-error">{{ $message }}</p>@enderror</label>
+                    <label class="ft-prototype-field"><span>Invoice number</span><input value="{{ $payload['invoice_number'] ?? '' }}" readonly aria-readonly="true" title="Generated automatically">@error('orderWorkflowActionPayload.invoice_number')<p class="validation-error">{{ $message }}</p>@enderror</label>
                     <label class="ft-prototype-field"><span>Invoice date</span><input type="date" wire:model="orderWorkflowActionPayload.invoice_date">@error('orderWorkflowActionPayload.invoice_date')<p class="validation-error">{{ $message }}</p>@enderror</label>
                     <label class="ft-prototype-field"><span>Amount</span><input type="number" step="0.01" wire:model="orderWorkflowActionPayload.invoice_amount">@error('orderWorkflowActionPayload.invoice_amount')<p class="validation-error">{{ $message }}</p>@enderror</label>
                     <label class="ft-prototype-field"><span>Currency</span><select wire:model="orderWorkflowActionPayload.invoice_currency"><option>USD</option><option>GBP</option><option>EUR</option></select>@error('orderWorkflowActionPayload.invoice_currency')<p class="validation-error">{{ $message }}</p>@enderror</label>
@@ -670,7 +772,204 @@
                 </div>
                 <div class="ft-prototype-email-preview"><b>Included order:</b> {{ $orderNumber }}<br><b>Client:</b> {{ $clientName }}<br><b>Total:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2) }}</div>
             @elseif($variant === 'invoice_send')
-                <div class="ft-prototype-email-preview"><b>To:</b> Client accounts contact<br><b>Subject:</b> Invoice {{ $payload['invoice_number'] ?: '—' }} — {{ $orderNumber }}<br><br>Hello {{ $clientName }},<br><br>Please find attached the invoice for Order {{ $orderNumber }}.<br><br>Amount due: {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2) }}<br>Due date: {{ $payload['invoice_due_date'] ?: 'As agreed' }}<br><br>Regards,<br>{{ $ownerName }}</div>
+                @php
+                    $invoiceRecipientOptions = collect($invoiceEmailPreview['recipient_options'] ?? []);
+                    $invoiceToEmail = trim((string) ($payload['to_email'] ?? ''));
+                    $invoiceMatchedToUser = $invoiceRecipientOptions->first(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === mb_strtolower($invoiceToEmail)
+                    );
+                    $invoiceToQuery = mb_strtolower($invoiceToEmail);
+                    $invoiceToSuggestions = $invoiceToQuery === '' || $invoiceMatchedToUser
+                        ? collect()
+                        : $invoiceRecipientOptions
+                            ->filter(function($option) use ($invoiceToQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $invoiceToQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $invoiceToQuery);
+                            })
+                            ->take(6)
+                            ->values();
+                    $invoiceToIsValidEmail = $invoiceToEmail !== '' && filter_var($invoiceToEmail, FILTER_VALIDATE_EMAIL);
+                    $invoiceNoSystemMatch = $invoiceToQuery !== ''
+                        && ! $invoiceMatchedToUser
+                        && $invoiceToSuggestions->isEmpty()
+                        && ! $invoiceToIsValidEmail;
+
+                    $invoiceCcEmails = trim((string) ($payload['cc_emails'] ?? ''));
+                    $invoiceCcParts = collect(preg_split('/[,;]+/', $invoiceCcEmails) ?: [])
+                        ->map(fn($value) => trim((string) $value));
+                    $invoiceCcQuery = mb_strtolower((string) ($invoiceCcParts->last() ?? ''));
+                    $invoiceCcPrefix = $invoiceCcParts
+                        ->slice(0, max(0, $invoiceCcParts->count() - 1))
+                        ->filter()
+                        ->values();
+                    $invoiceCcExactMatch = $invoiceRecipientOptions->contains(
+                        fn($option) => mb_strtolower(trim((string) ($option['email'] ?? ''))) === $invoiceCcQuery
+                    );
+                    $invoiceCcSuggestions = $invoiceCcQuery === '' || $invoiceCcExactMatch
+                        ? collect()
+                        : $invoiceRecipientOptions
+                            ->reject(fn($option) => $invoiceMatchedToUser && (int) $option['id'] === (int) $invoiceMatchedToUser['id'])
+                            ->filter(function($option) use ($invoiceCcQuery) {
+                                return str_contains(mb_strtolower((string) ($option['name'] ?? '')), $invoiceCcQuery)
+                                    || str_contains(mb_strtolower((string) ($option['email'] ?? '')), $invoiceCcQuery);
+                            })
+                            ->reject(function($option) use ($invoiceCcPrefix) {
+                                $email = mb_strtolower(trim((string) ($option['email'] ?? '')));
+                                return $invoiceCcPrefix->contains(fn($value) => mb_strtolower((string) $value) === $email);
+                            })
+                            ->take(6)
+                            ->values();
+                @endphp
+                <div class="ft-invoice-send-workspace">
+                    {{-- Recipient search is a live Livewire interaction. Keep the generated
+                             invoice viewer outside morph updates so its iframe is not reloaded
+                             on every To/CC keystroke (which caused the modal/PDF flash). --}}
+                        <section
+                            class="ft-invoice-send-document"
+                            aria-label="Generated invoice"
+                            wire:key="invoice-send-document-{{ $task->id }}-{{ $workflowInvoice?->id ?? 0 }}"
+                            wire:ignore
+                        >
+                        <header class="ft-invoice-send-document__head">
+                            <div>
+                                <small>GENERATED INVOICE</small>
+                                <strong>{{ $workflowInvoice?->invoice_number ?: ($payload['invoice_number'] ?? 'Invoice') }}</strong>
+                                <span>This exact PDF will be attached to the client email.</span>
+                            </div>
+                            @if($workflowInvoice)
+                                <div class="ft-invoice-send-document__actions">
+                                    <a href="{{ route('invoices.pdf.open', $workflowInvoice) }}" target="_blank" rel="noopener">Open invoice</a>
+                                    <a href="{{ route('invoices.pdf.download', $workflowInvoice) }}">Download PDF</a>
+                                </div>
+                            @endif
+                        </header>
+
+                        @if($workflowInvoice)
+                            <div class="ft-invoice-send-document__summary">
+                                <span><b>{{ $workflowInvoice->currency }} {{ number_format((float) $workflowInvoice->total, 2) }}</b><small>Amount due</small></span>
+                                <span><b>{{ $workflowInvoice->issue_date?->format('M j, Y') ?: '—' }}</b><small>Invoice date</small></span>
+                                <span><b>{{ $workflowInvoice->due_date?->format('M j, Y') ?: '—' }}</b><small>Due date</small></span>
+                            </div>
+                            <div class="ft-invoice-send-pdf-preview">
+                                <div class="ft-invoice-send-pdf-preview__bar"><span>PDF</span><b>{{ $workflowInvoice->pdf_name ?: $workflowInvoice->invoice_number.'.pdf' }}</b></div>
+                                <iframe title="Generated invoice PDF preview" src="{{ route('invoices.pdf.open', $workflowInvoice) }}"></iframe>
+                            </div>
+                        @else
+                            <div class="ft-order-email-preview-unavailable">The generated invoice PDF could not be found. Return to Prepare Invoice and generate it before sending.</div>
+                        @endif
+                    </section>
+
+                    <section class="ft-invoice-send-compose" aria-label="Invoice email compose and preview">
+                        <div class="ft-invoice-send-compose__title">
+                            <small>EMAIL DELIVERY</small>
+                            <strong>Review recipients and message</strong>
+                            <span>Change the billing email if needed, then verify the exact message before sending.</span>
+                        </div>
+
+                        <section
+                            class="ft-po-mail-recipients ft-invoice-mail-recipients"
+                            aria-label="Invoice email recipients"
+                            x-data="{ ccOpen: @js(filled($payload['cc_emails'] ?? '')) }"
+                        >
+                            <div class="ft-po-mail-row ft-po-mail-row--to">
+                                <label for="invoice-to-email-{{ $task->id }}">To</label>
+                                <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                    <input
+                                        id="invoice-to-email-{{ $task->id }}"
+                                        type="text"
+                                        wire:model.live.debounce.300ms="orderWorkflowActionPayload.to_email"
+                                        placeholder="Enter email or search system users"
+                                        autocomplete="off"
+                                        spellcheck="false"
+                                    >
+
+                                    @if($invoiceToSuggestions->isNotEmpty())
+                                        <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user suggestions">
+                                            @foreach($invoiceToSuggestions as $option)
+                                                <button
+                                                    type="button"
+                                                    wire:key="invoice-to-suggestion-{{ $task->id }}-{{ (int) $option['id'] }}"
+                                                    wire:click="$set('orderWorkflowActionPayload.to_email', @js((string) $option['email']))"
+                                                    class="ft-po-mail-suggestion"
+                                                >
+                                                    <span class="ft-po-mail-suggestion__avatar">{{ mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1)) }}</span>
+                                                    <span><b>{{ $option['name'] }}</b><small>{{ $option['email'] }}</small></span>
+                                                </button>
+                                            @endforeach
+                                        </div>
+                                    @endif
+                                </div>
+                                <button
+                                    type="button"
+                                    class="ft-po-mail-cc-toggle"
+                                    x-on:click="ccOpen = !ccOpen"
+                                    x-bind:aria-expanded="ccOpen.toString()"
+                                    aria-controls="invoice-cc-fields-{{ $task->id }}"
+                                >Cc</button>
+                            </div>
+                            @error('orderWorkflowActionPayload.to_email')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
+
+                            @if($invoiceMatchedToUser)
+                                <div class="ft-po-assignment-note ft-po-assignment-note--mail ft-invoice-system-user-note">
+                                    <span aria-hidden="true">✓</span>
+                                    <p><b>{{ $invoiceMatchedToUser['name'] }}</b> is an active FlowTrack user. The invoice will be sent to <strong>{{ $invoiceMatchedToUser['email'] }}</strong>.</p>
+                                </div>
+                            @elseif($invoiceToIsValidEmail)
+                                <p class="ft-po-mail-help">This address does not match an active FlowTrack user. It will be sent as an external email recipient.</p>
+                            @elseif($invoiceNoSystemMatch)
+                                <p class="ft-po-mail-help ft-invoice-user-search-empty">No active system user matches “{{ $invoiceToEmail }}”. Choose a suggested user or enter a complete external email address.</p>
+                            @else
+                                <p class="ft-po-mail-help">Billing contact: {{ $workflowInvoice?->billing_contact_name ?: $clientName }} · You can search active system users by name or email.</p>
+                            @endif
+
+                            <div id="invoice-cc-fields-{{ $task->id }}" class="ft-po-mail-cc" x-cloak x-show="ccOpen">
+                                <div class="ft-po-mail-row ft-po-mail-row--cc">
+                                    <label for="invoice-cc-emails-{{ $task->id }}">Cc</label>
+                                    <div class="ft-po-mail-row__control ft-po-mail-recipient-control">
+                                        <input
+                                            id="invoice-cc-emails-{{ $task->id }}"
+                                            type="text"
+                                            wire:model.live.debounce.300ms="orderWorkflowActionPayload.cc_emails"
+                                            placeholder="Add email or search system users"
+                                            autocomplete="off"
+                                            spellcheck="false"
+                                        >
+
+                                        @if($invoiceCcSuggestions->isNotEmpty())
+                                            <div class="ft-po-mail-suggestions" role="listbox" aria-label="System user CC suggestions">
+                                                @foreach($invoiceCcSuggestions as $option)
+                                                    @php
+                                                        $nextInvoiceCcEmails = $invoiceCcPrefix
+                                                            ->concat([(string) $option['email']])
+                                                            ->unique(fn($email) => mb_strtolower(trim((string) $email)))
+                                                            ->implode(', ');
+                                                    @endphp
+                                                    <button
+                                                        type="button"
+                                                        wire:key="invoice-cc-suggestion-{{ $task->id }}-{{ (int) $option['id'] }}"
+                                                        wire:click="$set('orderWorkflowActionPayload.cc_emails', @js($nextInvoiceCcEmails))"
+                                                        class="ft-po-mail-suggestion"
+                                                    >
+                                                        <span class="ft-po-mail-suggestion__avatar">{{ mb_strtoupper(mb_substr((string) ($option['name'] ?? $option['email']), 0, 1)) }}</span>
+                                                        <span><b>{{ $option['name'] }}</b><small>{{ $option['email'] }}</small></span>
+                                                    </button>
+                                                @endforeach
+                                            </div>
+                                        @endif
+                                    </div>
+                                </div>
+                                @error('orderWorkflowActionPayload.cc_emails')<p class="validation-error ft-po-mail-validation">{{ $message }}</p>@enderror
+                            </div>
+                        </section>
+
+                        <x-email.handoff-preview
+                            :preview="$invoiceEmailPreview"
+                            :defaultSubject="'Invoice '.($payload['invoice_number'] ?? '').' — '.$orderNumber"
+                            emptyRecipientText="Enter the client billing email in To before sending this invoice."
+                        />
+                        @error('orderWorkflowActionEmail')<p class="validation-error ft-invoice-send-email-error">{{ $message }}</p>@enderror
+                    </section>
+                </div>
             @elseif($variant === 'payment')
                 <div class="ft-prototype-form-grid">
                     <label class="ft-prototype-field"><span>Outstanding balance</span><input value="{{ number_format((float) ($payload['payment_amount'] ?? $orderTotal), 2) }}" disabled></label>
@@ -703,6 +1002,8 @@
             $usesInlineWorkflowActions = $step === 'main'
                 && in_array($variant, ['client_decision','production_check','qc_check'], true);
             $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
+            $editingCompletedShipmentInformation = $usesShipmentFooter
+                && \App\Support\OrderDetailPresenter::isCompletedTask($task);
         @endphp
         @if($usesShipmentFooter)
             <footer class="ft-order-task-document-modal-actions ft-shipment-modal-footer">
@@ -710,9 +1011,9 @@
                 <div class="ft-shipment-modal-footer__actions">
                     <div>
                         <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
-                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Save &amp; complete task</button>
+                        <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">{{ $editingCompletedShipmentInformation ? 'Save changes' : 'Save & complete task' }}</button>
                     </div>
-                    <small>Saving unlocks Add tracking number &amp; print courier label.</small>
+                    <small>{{ $editingCompletedShipmentInformation ? 'The shipment task stays completed; only the latest shipment details are updated.' : 'Saving unlocks Add tracking number & print courier label.' }}</small>
                 </div>
             </footer>
         @endif
@@ -729,11 +1030,12 @@
                 @else
                     @foreach($choices as $decision => $label)
                         @php
-                            $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email'], true)
+                            $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email', 'invoice_send'], true)
                                 ? 'Complete without email'
                                 : $label;
+                            $actionDisabled = $variant === 'invoice_send' && ! $workflowInvoice;
                         @endphp
-                        <button type="button" class="{{ in_array($decision, ['revise','issue'], true) ? 'danger' : 'primary' }}" wire:click="submitOrderWorkflowAction('{{ $decision }}')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">{{ $actionLabel }}</button>
+                        <button type="button" class="{{ in_array($decision, ['revise','issue'], true) ? 'danger' : 'primary' }}" wire:click="submitOrderWorkflowAction('{{ $decision }}')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" @disabled($actionDisabled)>{{ $actionLabel }}</button>
                     @endforeach
                 @endif
             </footer>

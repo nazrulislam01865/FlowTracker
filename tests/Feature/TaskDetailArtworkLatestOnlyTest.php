@@ -15,7 +15,7 @@ class TaskDetailArtworkLatestOnlyTest extends TestCase
         $this->assertStringContainsString('currentArtworkDocuments(', $attachments);
         $this->assertStringContainsString('? $latestArtworkDocuments', $attachments);
         $this->assertStringContainsString('@foreach($visibleTaskDocuments as $doc)', $attachments);
-        $this->assertStringContainsString('· Version {{ max(1, (int) $doc->version) }}', $attachments);
+        $this->assertStringNotContainsString('· Version {{ max(1, (int) $doc->version) }}', $attachments);
         $this->assertStringContainsString('· Latest', $attachments);
         $this->assertStringContainsString('Older artwork revisions remain available in document/version history.', $attachments);
 

@@ -15,9 +15,10 @@ use Illuminate\Support\Collection;
  */
 class OrderDetailViewService
 {
-    public function build(FlowJob $job, User $user, Collection $shipmentUrgencyOptions): array
+    public function build(FlowJob $job, User $user, Collection $shipmentUrgencyOptions, ?Collection $courierOptions = null): array
     {
         $access = app(AccessControlService::class);
+        $courierOptions ??= collect();
         $canEdit = $access->canEditVisibleJob($user, $job);
         $inactive = (bool) $job->completed_at
             || $job->status === 'Completed'
@@ -50,13 +51,41 @@ class OrderDetailViewService
         $workflowEmailStatuses = [];
         if ($job->relationLoaded('tasks') && $job->relationLoaded('workflowEmailActivities')) {
             $emailService = app(\App\Services\Orders\OrderWorkflowEmailService::class);
+            $invoiceEmailService = app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class);
             $workflowEmailStatuses = $job->tasks
-                ->filter(fn ($task) => $workflowActions->automationKey($task) === 'ART_SEND_ORDER_TEAM')
-                ->mapWithKeys(function ($task) use ($job, $emailService): array {
+                ->filter(fn ($task) => in_array($workflowActions->automationKey($task), ['ART_SEND_ORDER_TEAM', 'BILL_SEND'], true))
+                ->mapWithKeys(function ($task) use ($job, $emailService, $invoiceEmailService, $workflowActions): array {
                     $task->setRelation('job', $job);
-                    return [(int) $task->id => $emailService->artworkHandoffDeliveryStatus($task)];
+                    $status = $workflowActions->automationKey($task) === 'BILL_SEND'
+                        ? $invoiceEmailService->deliveryStatus($task)
+                        : $emailService->artworkHandoffDeliveryStatus($task);
+
+                    return [(int) $task->id => $status];
                 })
                 ->all();
+        }
+
+        $workflowInvoices = [];
+        $hasPreparedWorkflowInvoice = $job->relationLoaded('workflowInvoiceActivities')
+            && $job->workflowInvoiceActivities->isNotEmpty();
+        if ($access->can($user, 'finance', 'view')
+            && $hasPreparedWorkflowInvoice
+            && $job->relationLoaded('tasks')
+            && $job->relationLoaded('invoices')) {
+            $preparedInvoice = app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)
+                ->preparedInvoice($job);
+
+            if ($preparedInvoice) {
+                $workflowInvoices = $job->tasks
+                    ->filter(fn ($task) => $workflowActions->automationKey($task) === 'BILL_PREPARE')
+                    ->mapWithKeys(fn ($task) => [(int) $task->id => [
+                        'id' => (int) $preparedInvoice->id,
+                        'invoice_number' => (string) $preparedInvoice->invoice_number,
+                        'pdf_name' => (string) ($preparedInvoice->pdf_name ?: $preparedInvoice->invoice_number.'.pdf'),
+                        'pdf_path' => (string) ($preparedInvoice->pdf_path ?: ''),
+                    ]])
+                    ->all();
+            }
         }
 
         return [
@@ -78,6 +107,7 @@ class OrderDetailViewService
             'taskActions' => $taskActionDescriptors,
             'taskActionModals' => $taskActionModals,
             'workflowEmailStatuses' => $workflowEmailStatuses,
+            'workflowInvoices' => $workflowInvoices,
             'canCancel' => $canEdit && !$inactive && (int) ($job->phase?->sequence ?? 999) <= 4,
             'attentionLocked' => $inactive,
             'flagged' => (bool) ($job->attention_requested ?? false),
@@ -86,6 +116,14 @@ class OrderDetailViewService
             'shipmentUrgencyId' => OrderDetailPresenter::shipmentUrgencyId($job),
             'shipmentUrgencyName' => $shipmentUrgencyName,
             'shipmentUrgencyTone' => OrderDetailPresenter::urgencyTone($shipmentUrgencyName),
+            'courierOptions' => $courierOptions
+                ->map(fn ($courier) => [
+                    'value' => trim((string) ($courier->name ?? '')),
+                    'label' => trim((string) ($courier->name ?? '')),
+                ])
+                ->filter(fn (array $courier) => $courier['value'] !== '')
+                ->values()
+                ->all(),
         ];
     }
 }
