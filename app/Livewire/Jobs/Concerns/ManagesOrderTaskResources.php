@@ -114,7 +114,7 @@ trait ManagesOrderTaskResources
         if ($this->overviewTaskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
             $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
-            $isArtworkUpload = $automationKey === 'ART_PREPARE_UPLOAD';
+            $isArtworkUpload = in_array($automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
             $isPurchaseOrderUpload = $automationKey === 'NEW_UPLOAD_PO';
             $artworkRevision = $isArtworkUpload ? $documentService->pendingArtworkRevision($task) : ['active' => false, 'documents' => collect()];
             $isArtworkRevision = $isArtworkUpload && (bool) ($artworkRevision['active'] ?? false);
@@ -135,9 +135,9 @@ trait ManagesOrderTaskResources
 
                 foreach ($revisionDocuments as $revisionDocument) {
                     $revisionDocumentId = (int) $revisionDocument->id;
-                    $revisionRules['overviewTaskRevisionUpload.'.$revisionDocumentId] = AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480);
+                    $revisionRules['overviewTaskRevisionUpload.'.$revisionDocumentId] = AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 409600);
                     $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.required'] = 'Choose a replacement file for this artwork.';
-                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.max'] = 'This replacement file must be 20 MB or smaller.';
+                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.max'] = 'This replacement file must be 400 MB or smaller.';
                 }
 
                 $this->validate($revisionRules, $revisionMessages);
@@ -152,14 +152,24 @@ trait ManagesOrderTaskResources
             $allowsMultiple = $isArtworkUpload || $isPurchaseOrderUpload || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
             $uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;
             if (! $isArtworkRevision) {
+                // Artwork source uploads support larger design packages (up to 400MB).
+                // All other order document upload flows continue using the existing 20MB limit.
+                $uploadMaxKilobytes = $isArtworkUpload ? 409600 : 20480;
+                $uploadSizeMessage = $isArtworkUpload
+                    ? 'Each artwork file must be 400 MB or smaller.'
+                    : 'Each file must be 20 MB or smaller.';
+
+                $maxUploads = $allowsMultiple ? ($isArtworkUpload ? 50 : 10) : 1;
+                $maxUploadsMessage = $allowsMultiple
+                    ? 'You can upload a maximum of ' . $maxUploads . ' files at a time.'
+                    : 'Choose one file for this task.';
+
                 $this->validate([
-                    'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.($allowsMultiple ? 10 : 1)],
-                    'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+                    'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.$maxUploads],
+                    'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, $uploadMaxKilobytes),
                 ], [
-                    'overviewTaskDocumentUpload.max' => $allowsMultiple
-                        ? 'You can upload a maximum of 10 files at a time.'
-                        : 'Choose one file for this task.',
-                    'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
+                    'overviewTaskDocumentUpload.max' => $maxUploadsMessage,
+                    'overviewTaskDocumentUpload.*.max' => $uploadSizeMessage,
                 ]);
             }
 

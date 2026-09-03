@@ -389,11 +389,11 @@ trait ManagesOrderWorkflow
             $messages = [];
             foreach ($revisionIds as $documentId) {
                 $rules['orderWorkflowActionRevisionComments.'.$documentId] = ['required', 'string', 'max:10000'];
-                $rules['orderWorkflowActionRevisionAttachments.'.$documentId] = ['nullable', 'array', 'max:10'];
-                $rules['orderWorkflowActionRevisionAttachments.'.$documentId.'.*'] = AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480);
+                $rules['orderWorkflowActionRevisionAttachments.'.$documentId] = ['nullable', 'array', 'max:50'];
+                $rules['orderWorkflowActionRevisionAttachments.'.$documentId.'.*'] = AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 409600);
                 $messages['orderWorkflowActionRevisionComments.'.$documentId.'.required'] = 'Describe the required change for this artwork.';
-                $messages['orderWorkflowActionRevisionAttachments.'.$documentId.'.max'] = 'You can attach a maximum of 10 supporting files to each artwork.';
-                $messages['orderWorkflowActionRevisionAttachments.'.$documentId.'.*.max'] = 'Each supporting file must be 20 MB or smaller.';
+                $messages['orderWorkflowActionRevisionAttachments.'.$documentId.'.max'] = 'You can attach a maximum of 50 supporting files to each artwork.';
+                $messages['orderWorkflowActionRevisionAttachments.'.$documentId.'.*.max'] = 'Each supporting file must be 400 MB or smaller.';
             }
             if ($rules !== []) $this->validate($rules, $messages);
 

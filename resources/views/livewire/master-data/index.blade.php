@@ -3,7 +3,7 @@
     @php
         $hasParent = in_array($group, ['product', 'state'], true);
         $hasColor = in_array($group, \App\Services\MasterDataService::COLOR_TYPES, true);
-        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0) + ($group === 'task_pack_work_calendar' ? 2 : 0);
+        $columnCount = 6 + ($hasParent ? 1 : 0) + ($hasColor ? 1 : 0) + ($group === 'inquiry_task_status' ? 2 : 0) + (in_array($group, ['order_task_status', 'order_task_flag'], true) ? 1 : 0) + ($group === 'task_pack_work_calendar' ? 2 : 0) + ($group === 'remote_area' ? 2 : 0);
         $colorUsageLabel = match ($group) {
             'department' => 'department and team performance',
             'task_status' => 'legacy task status',
@@ -34,6 +34,7 @@
             'production_unit' => 'production unit',
             'shipment_method' => 'shipment method',
             'courier' => 'courier',
+            'remote_area' => 'remote area',
             'task_status' => 'legacy task status',
             'inquiry_task_status' => 'inquiry task status',
             'task_flag' => 'legacy task flag',
@@ -55,6 +56,7 @@
             'production_unit' => 'Maintain the production units used by workflows and operations.',
             'shipment_method' => 'Maintain shipment methods available for orders and deliveries.',
             'courier' => 'Maintain couriers available when recording shipment tracking details.',
+            'remote_area' => 'Maintain remote delivery areas, their postal codes and an optional extra charge.',
             'currency' => 'Maintain currencies available for clients, orders, invoices and payments.',
             'received_account' => 'Maintain the receiving accounts available when recording customer payments.',
             'payment_method' => 'Maintain payment methods available when recording payments.',

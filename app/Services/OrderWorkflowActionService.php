@@ -252,6 +252,10 @@ class OrderWorkflowActionService
             ? app(\App\Services\Orders\OrderInvoiceWorkflowEmailService::class)->preparedInvoice($job)
             : null;
         $total = $this->orderTotal($job);
+        $remoteArea = $key === 'BILL_PREPARE'
+            ? app(MasterDataService::class)->remoteAreaForPostalCode($job->shipping_postal_code)
+            : null;
+        $remoteAreaCharge = max(0, (float) ($remoteArea?->remoteAreaExtraCharge() ?? 0));
         $paid = $this->recordedPaymentTotal($job);
         $units = (int) $job->items->filter(fn ($item) => ! ($item->is_removed ?? false))->sum(fn ($item) => (int) ($item->quantity ?? 0));
         $inspected = $units > 0 ? max(1, min($units, (int) ceil($units * 0.10))) : 1;
@@ -292,6 +296,9 @@ class OrderWorkflowActionService
             'invoice_number' => (string) ($preparedInvoice?->invoice_number ?: data_get($invoiceActivity?->meta, 'invoice_number', '')),
             'invoice_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
             'invoice_amount' => $total > 0 ? number_format($total, 2, '.', '') : '0.00',
+            'remote_area_charge' => $remoteAreaCharge,
+            'remote_area_name' => trim((string) ($remoteArea?->name ?? '')),
+            'remote_area_postal_code' => $remoteArea?->remoteAreaPostalCode() ?? '',
             'invoice_currency' => 'USD',
             'payment_terms' => 'Net 30',
             'invoice_due_date' => app(WorkspaceSettingsService::class)->localToday()->addDays(30)->toDateString(),
@@ -762,6 +769,12 @@ class OrderWorkflowActionService
                     'invoice_id' => (int) $invoice->id,
                     'invoice_number' => (string) $invoice->invoice_number,
                     'invoice_date' => $invoice->issue_date?->format('Y-m-d'),
+                    // Keep both the user-entered base amount and generated
+                    // total. If a legacy activity ever has to recreate a missing
+                    // Invoice record, the Remote Area surcharge will not be added
+                    // a second time.
+                    'invoice_base_amount' => (float) ($payload['invoice_amount'] ?? 0),
+                    'remote_area_charge' => max(0, (float) $invoice->total - (float) ($payload['invoice_amount'] ?? 0)),
                     'invoice_amount' => (float) $invoice->total,
                     'invoice_currency' => (string) $invoice->currency,
                     'invoice_due_date' => $invoice->due_date?->format('Y-m-d'),

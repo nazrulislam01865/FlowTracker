@@ -143,8 +143,12 @@ final class OrderInvoiceWorkflowEmailService
         abort_unless($prepared, 422, 'Prepare the invoice before sending it.');
 
         $meta = (array) ($prepared->meta ?? []);
+        $storedRemoteAreaCharge = max(0, (float) ($meta['remote_area_charge'] ?? 0));
+        $baseAmount = array_key_exists('invoice_base_amount', $meta)
+            ? (float) $meta['invoice_base_amount']
+            : max(0, (float) ($meta['invoice_amount'] ?? 0) - $storedRemoteAreaCharge);
         $invoice = $this->prepare($job, $actor, [
-            'invoice_amount' => $meta['invoice_amount'] ?? 0,
+            'invoice_amount' => $baseAmount,
             'invoice_currency' => $meta['invoice_currency'] ?? 'USD',
             'invoice_date' => $meta['invoice_date'] ?? now()->toDateString(),
             'invoice_due_date' => $meta['invoice_due_date'] ?? now()->addDays(30)->toDateString(),
@@ -156,6 +160,8 @@ final class OrderInvoiceWorkflowEmailService
             'meta' => array_merge($meta, [
                 'invoice_id' => (int) $invoice->id,
                 'invoice_number' => (string) $invoice->invoice_number,
+                'invoice_base_amount' => $baseAmount,
+                'remote_area_charge' => max(0, (float) $invoice->total - $baseAmount),
                 'invoice_amount' => (float) $invoice->total,
                 'invoice_currency' => (string) $invoice->currency,
                 'invoice_date' => $invoice->issue_date?->format('Y-m-d'),

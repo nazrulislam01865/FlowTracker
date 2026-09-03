@@ -17,6 +17,12 @@ use Illuminate\Support\Facades\DB;
 
 class OrderFinanceService
 {
+    private const REMOTE_AREA_SURCHARGE_PREFIX = 'Remote area surcharge';
+
+    public function __construct(private readonly MasterDataService $masterData)
+    {
+    }
+
     public function summary(FlowJob $job): array
     {
         $invoices = $job->relationLoaded('invoices') ? $job->invoices : $job->invoices()->with('payments')->get();
@@ -98,6 +104,11 @@ class OrderFinanceService
                     ->findOrFail((int) $payload['billing_contact_id']);
             }
 
+            // Re-resolve from the locked Order immediately before totals are
+            // calculated. The browser/Livewire preview is informational only, so
+            // a changed postal code or Master Data charge cannot be bypassed by a
+            // stale or tampered client-side value.
+            $items = $this->applyRemoteAreaSurcharge($lockedJob, $items);
             [$subtotal, $normalizedItems] = $this->normalizeInvoiceItems($items);
             $taxRate = max(0, min(100, (float) ($payload['tax_rate'] ?? 0)));
             $taxAmount = round($subtotal * ($taxRate / 100), 2);
@@ -273,6 +284,47 @@ class OrderFinanceService
     public function deleteSupportingDocument(Invoice $invoice): void
     {
         if ($invoice->supporting_document_path) app(SecureDocumentStorage::class)->delete($invoice->supporting_document_path);
+    }
+
+    /**
+     * Append the authoritative Remote Area surcharge as an immutable invoice
+     * line item. A matching area with no positive charge still displays its UI
+     * flag, but intentionally does not change the invoice total.
+     *
+     * @param array<int,array<string,mixed>> $items
+     * @return array<int,array<string,mixed>>
+     */
+    private function applyRemoteAreaSurcharge(FlowJob $job, array $items): array
+    {
+        // The surcharge description is a reserved system line. Strip any
+        // browser-supplied copy first, even when the current postal code is no
+        // longer remote. The authoritative line below is the only surcharge
+        // allowed to affect the persisted invoice.
+        $prefix = mb_strtolower(self::REMOTE_AREA_SURCHARGE_PREFIX);
+        $items = array_values(array_filter($items, function (array $item) use ($prefix): bool {
+            $description = mb_strtolower(trim((string) ($item['description'] ?? '')));
+            return ! str_starts_with($description, $prefix);
+        }));
+
+        $remoteArea = $this->masterData->remoteAreaForPostalCode($job->shipping_postal_code);
+        $charge = $remoteArea?->remoteAreaExtraCharge();
+        if (! $remoteArea || $charge === null || $charge <= 0) return $items;
+
+        $description = self::REMOTE_AREA_SURCHARGE_PREFIX;
+        $areaName = trim((string) $remoteArea->name);
+        $postalCode = $remoteArea->remoteAreaPostalCode();
+        if ($areaName !== '') $description .= ' - '.$areaName;
+        if ($postalCode !== '') $description .= ' ('.$postalCode.')';
+
+        $items[] = [
+            // invoice_items.description is VARCHAR(255). Guard against a very
+            // long Master Data name turning invoice generation into a DB error.
+            'description' => mb_substr($description, 0, 255),
+            'quantity' => 1,
+            'unit_price' => round($charge, 2),
+        ];
+
+        return $items;
     }
 
     private function normalizeInvoiceItems(array $items): array

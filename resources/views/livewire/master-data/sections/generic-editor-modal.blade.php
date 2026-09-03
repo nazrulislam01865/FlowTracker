@@ -17,10 +17,23 @@
                         @error('code')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
                     <div class="field">
-                        <label>{{ $group === 'phone_country_code' ? 'Phone code *' : ($group === 'task_pack_work_calendar' ? 'Calendar name *' : 'Name *') }}</label>
-                        <input wire:model="name" @if($group === 'phone_country_code') placeholder="e.g. +880" inputmode="tel" @elseif($group === 'task_pack_work_calendar') placeholder="e.g. Workspace hours" @endif>
+                        <label>{{ $group === 'phone_country_code' ? 'Phone code *' : ($group === 'task_pack_work_calendar' ? 'Calendar name *' : ($group === 'remote_area' ? 'Remote area *' : 'Name *')) }}</label>
+                        <input wire:model="name" @if($group === 'phone_country_code') placeholder="e.g. +880" inputmode="tel" @elseif($group === 'task_pack_work_calendar') placeholder="e.g. Workspace hours" @elseif($group === 'remote_area') placeholder="e.g. Highland District" @endif>
                         @error('name')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
+
+                    @if($group === 'remote_area')
+                        <div class="field">
+                            <label>Postal code *</label>
+                            <input wire:model.blur="remoteAreaPostalCode" maxlength="32" autocomplete="postal-code" placeholder="e.g. SW1A 1AA">
+                            @error('remoteAreaPostalCode')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Extra charge <span class="small muted">(optional)</span></label>
+                            <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" wire:model.blur="remoteAreaExtraCharge" placeholder="0.00">
+                            @error('remoteAreaExtraCharge')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                    @endif
 
                     @if($group === 'task_pack_work_calendar')
                         @php
@@ -203,8 +216,8 @@
                     @endif
 
                     <div class="field full">
-                        <label>{{ $group === 'phone_country_code' ? 'Country / label' : 'Description' }}</label>
-                        <textarea wire:model="description" rows="3" @if($group === 'phone_country_code') placeholder="e.g. Bangladesh" @endif></textarea>
+                        <label>{{ $group === 'phone_country_code' ? 'Country / label' : ($group === 'remote_area' ? 'Notes' : 'Description') }}</label>
+                        <textarea wire:model="description" rows="3" @if($group === 'phone_country_code') placeholder="e.g. Bangladesh" @elseif($group === 'remote_area') placeholder="Optional notes about this remote delivery area" @endif></textarea>
                         @error('description')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
                 </div>

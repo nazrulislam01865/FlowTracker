@@ -2,7 +2,7 @@
     'job','summary'=>[],'redoContext'=>[],'contacts'=>collect(),'users'=>collect(),
     'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'paymentMethods'=>collect(),'receivedAccounts'=>collect(),
     'canCreate'=>false,'canEdit'=>false,
-    'showCreateInvoiceModal'=>false,'invoiceType'=>'Final invoice','invoiceCurrency'=>'USD','invoiceIssueDate'=>'','invoicePaymentTerms'=>'Net 15 days','invoiceDueDate'=>'','invoiceBillingContactId'=>null,'invoiceLineItems'=>[],'invoicePurchaseOrderReference'=>'','invoiceNotes'=>'','invoiceTaxRate'=>'0','invoiceSupportingDocument'=>null,'invoiceEmailAfterCreation'=>false,
+    'showCreateInvoiceModal'=>false,'invoiceType'=>'Final invoice','invoiceCurrency'=>'USD','invoiceIssueDate'=>'','invoicePaymentTerms'=>'Net 15 days','invoiceDueDate'=>'','invoiceBillingContactId'=>null,'invoiceLineItems'=>[],'invoicePurchaseOrderReference'=>'','invoiceNotes'=>'','invoiceTaxRate'=>'0','invoiceRemoteAreaCharge'=>0,'invoiceRemoteAreaName'=>'','invoiceRemoteAreaPostalCode'=>'','invoiceSupportingDocument'=>null,'invoiceEmailAfterCreation'=>false,
     'showRecordPaymentModal'=>false,'paymentInvoiceId'=>null,'paymentDate'=>'','paymentMethod'=>'Bank transfer','paymentAmount'=>'','paymentReference'=>'','paymentNotes'=>'','paymentReceipt'=>null,
     'showCollectionUpdateModal'=>false,'collectionOwnerId'=>null,'collectionFollowUpDate'=>'','collectionNextFollowUpDate'=>'','collectionNote'=>'',
 ])
@@ -135,6 +135,7 @@
             :job="$job" :contacts="$contacts" :summary="$summary"
             :invoice-types="$invoiceTypes" :currencies="$currencies" :payment-terms="$paymentTerms"
             :invoice-line-items="$invoiceLineItems" :invoice-tax-rate="$invoiceTaxRate" :invoice-currency="$invoiceCurrency" :invoice-type="$invoiceType"
+            :invoice-remote-area-charge="$invoiceRemoteAreaCharge" :invoice-remote-area-name="$invoiceRemoteAreaName" :invoice-remote-area-postal-code="$invoiceRemoteAreaPostalCode"
             :invoice-supporting-document="$invoiceSupportingDocument"
         />
     @endif

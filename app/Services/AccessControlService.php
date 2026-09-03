@@ -330,19 +330,13 @@ class AccessControlService
         $query = $this->eloquentBuilder($query);
         if (!$this->can($user, 'inquiries', 'view')) return $query->whereRaw('1 = 0');
 
-        // Inquiry visibility is deliberately participant-based, not role-scope based.
-        // Admin and super-admin users can see every Inquiry in the workspace. Every
-        // other user can see an Inquiry only when they created it or when at least
-        // one Inquiry task is assigned directly to them. In particular, a regular
-        // role with an `all_records`, `department`, or owner-based Inquiry scope
-        // must not make unrelated Inquiries appear in the Inquiry list or detail.
-        if ($this->isAdministrator($user)) return $query;
-
-        return $query->where(function (Builder $scopeQuery) use ($user): void {
-            $scopeQuery
-                ->where('created_by', $user->id)
-                ->orWhereHas('tasks', fn (Builder $task) => $task->where('assignee_id', $user->id));
-        });
+        // Inquiries are shared operational records inside the current workspace.
+        // Once a user's role grants Inquiry View access, the user must see the same
+        // Inquiry list as every other user with that access. Record ownership and
+        // task assignment must not hide unrelated Inquiries. Create/edit/delete/
+        // assign/export capabilities remain independently enforced by their own
+        // Inquiry action permissions, so View access does not grant write access.
+        return $query;
     }
 
     public function applyClientScope(Builder|Relation $query, User $user): Builder

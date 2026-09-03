@@ -271,7 +271,7 @@
                                                     <b>or choose from your computer</b>
                                                     <span class="ft-order-attachment-browse">Browse files</span>
                                                 @endif
-                                                <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(20) }} · Up to 10 files</small>
+                                                <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(400) }} · Up to 50 files</small>
                                             </label>
 
                                             <div
@@ -770,7 +770,8 @@
                     <label class="ft-prototype-field"><span>Payment terms</span><select wire:model="orderWorkflowActionPayload.payment_terms"><option>Net 15</option><option>Net 30</option><option>Due on receipt</option></select>@error('orderWorkflowActionPayload.payment_terms')<p class="validation-error">{{ $message }}</p>@enderror</label>
                     <label class="ft-prototype-field"><span>Due date</span><input type="date" wire:model="orderWorkflowActionPayload.invoice_due_date">@error('orderWorkflowActionPayload.invoice_due_date')<p class="validation-error">{{ $message }}</p>@enderror</label>
                 </div>
-                <div class="ft-prototype-email-preview"><b>Included order:</b> {{ $orderNumber }}<br><b>Client:</b> {{ $clientName }}<br><b>Total:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2) }}</div>
+                @php($workflowRemoteAreaCharge = max(0, (float) ($payload['remote_area_charge'] ?? 0)))
+                <div class="ft-prototype-email-preview"><b>Included order:</b> {{ $orderNumber }}<br><b>Client:</b> {{ $clientName }}@if($workflowRemoteAreaCharge > 0)<br><b>Remote area charge:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format($workflowRemoteAreaCharge, 2) }}@endif<br><b>Total:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format((float) ($payload['invoice_amount'] ?? $orderTotal) + $workflowRemoteAreaCharge, 2) }}</div>
             @elseif($variant === 'invoice_send')
                 @php
                     $invoiceRecipientOptions = collect($invoiceEmailPreview['recipient_options'] ?? []);

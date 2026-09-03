@@ -112,6 +112,8 @@ class Index extends Component
     public string $status = 'active';
     public int $sortOrder = 0;
     public string $metadataJson = '';
+    public string $remoteAreaPostalCode = '';
+    public string $remoteAreaExtraCharge = '';
     public string $workCalendarDayFrom = 'monday';
     public string $workCalendarDayTo = 'friday';
     public string $workCalendarTimeFrom = '09:00';

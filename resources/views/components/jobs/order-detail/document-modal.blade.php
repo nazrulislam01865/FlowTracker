@@ -52,18 +52,18 @@
                     ? 'Upload each replacement directly under the artwork it replaces. '.$revisionCount.' artwork file'.($revisionCount === 1 ? ' is' : 's are').' waiting for replacement. Unselected artwork remains unchanged automatically.'
                     : 'Upload one replacement directly under each artwork selected in the revision request.')
                 : ($hasExistingEvidence
-                    ? 'Upload up to 10 corrected artwork files as one revision. The previous version remains in Order history.'
-                    : 'Upload up to 10 artwork files together for internal review.'),
+                    ? 'Upload up to 50 corrected artwork files as one revision. The previous version remains in Order history.'
+                    : 'Upload up to 50 artwork files together for internal review.'),
             'hint' => $artworkRevisionActive
-                ? \App\Support\AttachmentUpload::helperText(20).' · '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
-                : \App\Support\AttachmentUpload::helperText(20).' · Up to 10 files',
+                ? \App\Support\AttachmentUpload::helperText(400).' · '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
+                : \App\Support\AttachmentUpload::helperText(400).' · Up to 50 files',
             'button' => $artworkRevisionActive ? 'Upload Revised Artwork' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
         ],
         'ART_SAMPLE_APPROVAL' => [
             'title' => 'Upload Sample Approval',
             'label' => 'Signed sample approval',
             'copy' => 'Attach the client sample/swatch approval to continue to Production.',
-            'hint' => \App\Support\AttachmentUpload::helperText(20),
+            'hint' => \App\Support\AttachmentUpload::helperText(400).' · Up to 50 files',
             'button' => 'Upload Sample Approval',
         ],
         default => [
@@ -227,7 +227,7 @@
                                                         <b>or choose from your computer</b>
                                                         <span class="ft-order-attachment-browse">Browse file</span>
                                                     @endif
-                                                    <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(20) }}</small>
+                                                    <small data-drop-status>{{ \App\Support\AttachmentUpload::helperText(400) }}</small>
                                                 </label>
 
                                                 <div

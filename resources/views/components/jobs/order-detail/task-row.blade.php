@@ -12,6 +12,10 @@
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
     $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
     $isArtworkUploadTask = $automationKey === 'ART_PREPARE_UPLOAD';
+    // Purchase Order upload tasks use the same document presentation style as
+    // artwork uploads: show the uploaded file card with uploader, timestamp,
+    // latest marker and document actions.
+    $isPurchaseOrderUploadTask = $automationKey === 'NEW_UPLOAD_PO';
     $isProductionEstimatedDeliveryTask = $automationKey === 'PROD_SET_ESTIMATED_DELIVERY';
     $artworkRevisionNotes = $task->relationLoaded('artworkRevisionNotes') ? $task->artworkRevisionNotes : collect();
     $revisionReferenceDocumentIds = $artworkRevisionNotes
@@ -243,20 +247,20 @@
 @if($resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
     <div class="task-resources ft-order-task-resources">
         @foreach($resourceDocuments as $document)
-            <div
+<div
                 wire:key="order-task-document-{{ $document->id }}"
-                class="ft-order-task-resource-row {{ $isArtworkUploadTask ? 'is-latest-artwork' : '' }}"
+                class="ft-order-task-resource-row {{ ($isArtworkUploadTask || $isPurchaseOrderUploadTask) ? 'is-latest-artwork' : '' }}"
             >
                 <x-ui.file-type-badge :name="$document->name" class="ft-order-file-icon" />
                 <span>
                     <b>{{ $document->name }}</b>
                     <small>
                         {{ $document->uploader?->name ?? 'FlowTrack' }} · {{ \App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A') }}
-                        @if($isArtworkUploadTask) · Latest revision @endif
+                        @if($isArtworkUploadTask || $isPurchaseOrderUploadTask) · Latest version @endif
                     </small>
                 </span>
                 <span class="ft-order-task-resource-actions">
-                    @if($isArtworkUploadTask)
+                    @if($isArtworkUploadTask || $isPurchaseOrderUploadTask)
                         <em class="ft-order-artwork-version-state is-latest">Latest</em>
                     @endif
                     <a href="{{ route('documents.open', $document) }}" target="_blank" rel="noopener">Open</a>

@@ -670,6 +670,24 @@
     min-width: 0
 }
 
+.ft-order-prototype-detail .ft-order-remote-area-pill {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 5px;
+    white-space: nowrap
+}
+
+.ft-order-prototype-detail .ft-order-remote-area-pill svg {
+    width: 12px;
+    height: 12px;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.9;
+    stroke-linecap: round;
+    stroke-linejoin: round
+}
+
 .ft-order-prototype-detail .inline-edit {
     border: 0;
     background: transparent;

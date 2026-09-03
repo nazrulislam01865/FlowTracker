@@ -90,6 +90,9 @@
     'invoicePurchaseOrderReference'=>'',
     'invoiceNotes'=>'',
     'invoiceTaxRate'=>'0',
+    'invoiceRemoteAreaCharge'=>0,
+    'invoiceRemoteAreaName'=>'',
+    'invoiceRemoteAreaPostalCode'=>'',
     'invoiceSupportingDocument'=>null,
     'invoiceEmailAfterCreation'=>false,
     'showRecordPaymentModal'=>false,
@@ -266,6 +269,9 @@
             :invoice-purchase-order-reference="$invoicePurchaseOrderReference"
             :invoice-notes="$invoiceNotes"
             :invoice-tax-rate="$invoiceTaxRate"
+            :invoice-remote-area-charge="$invoiceRemoteAreaCharge"
+            :invoice-remote-area-name="$invoiceRemoteAreaName"
+            :invoice-remote-area-postal-code="$invoiceRemoteAreaPostalCode"
             :invoice-supporting-document="$invoiceSupportingDocument"
             :invoice-email-after-creation="$invoiceEmailAfterCreation"
             :show-record-payment-modal="$showRecordPaymentModal"

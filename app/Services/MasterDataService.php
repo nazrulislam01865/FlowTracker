@@ -17,6 +17,9 @@ class MasterDataService
     /** @var array<string,array<string,string>> */
     private array $colorMaps = [];
 
+    /** @var array<string,MasterRecord>|null */
+    private ?array $remoteAreaByPostalCode = null;
+
     public const COLOR_TYPES = ['department', 'priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
 
     /** Financial setup values are governed by the Finance role-matrix module. */
@@ -87,6 +90,7 @@ class MasterDataService
         'production_unit' => 'Production Units',
         'shipment_method' => 'Shipment Methods',
         'courier' => 'Couriers',
+        'remote_area' => 'Remote Areas',
         'currency' => 'Currencies',
         'invoice_type' => 'Invoice Types',
         'payment_term' => 'Payment Terms',
@@ -125,6 +129,7 @@ class MasterDataService
         'production_unit' => 'PUN',
         'shipment_method' => 'SHM',
         'courier' => 'COU',
+        'remote_area' => 'RMA',
         'currency' => 'CUR',
         'invoice_type' => 'IVT',
         'payment_term' => 'PTR',
@@ -156,6 +161,7 @@ class MasterDataService
         'supplier' => 'suppliers',
         'production_unit' => 'production_units',
         'shipment_method' => 'shipment_methods',
+        'remote_area' => 'remote_areas',
         'currency' => 'currencies',
         'country' => 'countries',
         'state' => 'states',
@@ -218,11 +224,14 @@ class MasterDataService
                     $productId = (int) $matches[1];
                 }
 
-                $q->where(function ($x) use ($normalized, $productId) {
+                $q->where(function ($x) use ($normalized, $productId, $type) {
                     $x->whereLike('code', "%{$normalized}%")
                         ->orWhereLike('name', "%{$normalized}%")
                         ->orWhereLike('description', "%{$normalized}%")
                         ->orWhereLike('metadata->reference_code', "%{$normalized}%");
+                    if ($type === 'remote_area') {
+                        $x->orWhereLike('metadata->postal_code', "%{$normalized}%");
+                    }
                     if ($productId) $x->orWhere('id', $productId);
                 });
             })
@@ -444,6 +453,37 @@ class MasterDataService
 
         if ($type === 'state' && !$parentId) {
             throw ValidationException::withMessages(['parentId' => 'Select the country this state belongs to.']);
+        }
+
+        if ($type === 'remote_area') {
+            $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
+            $postalCode = $this->normalizePostalCode((string) ($metadata['postal_code'] ?? ''));
+            if ($postalCode === '') {
+                throw ValidationException::withMessages(['remoteAreaPostalCode' => 'Postal code is required.']);
+            }
+
+            $postalMatchKey = $this->postalCodeMatchKey($postalCode);
+            $duplicatePostalCode = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('remote_area')
+                ->when($id, fn ($query) => $query->whereKeyNot($id))
+                ->get(['id', 'metadata'])
+                ->contains(fn (MasterRecord $record) => $this->postalCodeMatchKey((string) data_get($record->metadata, 'postal_code')) === $postalMatchKey);
+            if ($duplicatePostalCode) {
+                throw ValidationException::withMessages(['remoteAreaPostalCode' => 'This postal code already exists in Remote Areas.']);
+            }
+
+            $metadata['postal_code'] = $postalCode;
+            $extraCharge = $metadata['extra_charge'] ?? null;
+            if ($extraCharge === null || trim((string) $extraCharge) === '') {
+                unset($metadata['extra_charge']);
+            } else {
+                if (! is_numeric($extraCharge) || (float) $extraCharge < 0 || (float) $extraCharge > 999999.99) {
+                    throw ValidationException::withMessages(['remoteAreaExtraCharge' => 'Extra charge must be a number between 0 and 999999.99.']);
+                }
+                $metadata['extra_charge'] = round((float) $extraCharge, 2);
+            }
+            $data['metadata'] = $metadata;
         }
 
         if ($type === 'order_task_status' && filled(data_get($data, 'metadata.order_task_flag_id'))) {
@@ -850,6 +890,44 @@ class MasterDataService
             ]
         );
     }
+    public function normalizePostalCode(string $postalCode): string
+    {
+        $postalCode = strtoupper(trim($postalCode));
+        return (string) preg_replace('/\s+/', ' ', $postalCode);
+    }
+
+    public function remoteAreaForPostalCode(?string $postalCode): ?MasterRecord
+    {
+        $matchKey = $this->postalCodeMatchKey((string) $postalCode);
+        if ($matchKey === '') return null;
+
+        // Build one request-local lookup map from the existing cached active
+        // Master Data collection. Repeated checks therefore do not issue a query
+        // per Order/invoice and do not repeatedly scan every Remote Area row.
+        if ($this->remoteAreaByPostalCode === null) {
+            $this->remoteAreaByPostalCode = [];
+            foreach ($this->active('remote_area') as $record) {
+                // Postal-code matching ignores letter case and whitespace while
+                // preserving the human-friendly stored value for display. This
+                // covers common inputs such as "SW1A1AA" vs "SW1A 1AA".
+                $key = $this->postalCodeMatchKey($record->remoteAreaPostalCode());
+                // save() prevents duplicates. Keep the first configured row as a
+                // defensive fallback for old databases that may predate validation.
+                if ($key !== '' && ! isset($this->remoteAreaByPostalCode[$key])) {
+                    $this->remoteAreaByPostalCode[$key] = $record;
+                }
+            }
+        }
+
+        return $this->remoteAreaByPostalCode[$matchKey] ?? null;
+    }
+
+    private function postalCodeMatchKey(string $postalCode): string
+    {
+        $normalized = $this->normalizePostalCode($postalCode);
+        return (string) preg_replace('/\s+/', '', $normalized);
+    }
+
     private function activeCacheKey(int $workspaceId, string $type): string
     {
         return "flowtrack:master:active:{$workspaceId}:{$type}";
@@ -859,6 +937,7 @@ class MasterDataService
     {
         Cache::forget($this->activeCacheKey($this->workspaceId(), $type));
         unset($this->colorMaps[$type]);
+        if ($type === 'remote_area') $this->remoteAreaByPostalCode = null;
     }
 
     private function assertAction(string $type, string $action): void

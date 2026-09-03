@@ -25,6 +25,10 @@ class OrderDetailViewService
             || in_array((string) $job->status, JobService::INACTIVE_STATUSES, true);
 
         $shipmentUrgencyName = OrderDetailPresenter::shipmentUrgencyName($job, $shipmentUrgencyOptions);
+        // Resolve the Remote Area once while building the detail context. Blade
+        // remains query-free, and MasterDataService serves lookups from one cached
+        // active collection instead of querying once per rendered field.
+        $remoteArea = app(MasterDataService::class)->remoteAreaForPostalCode($job->shipping_postal_code);
         $workflowActions = app(OrderWorkflowActionService::class);
         $documentTaskIds = $job->relationLoaded('documents')
             ? $job->documents->pluck('task_id')->filter()->map(fn ($id) => (int) $id)->flip()
@@ -116,6 +120,12 @@ class OrderDetailViewService
             'shipmentUrgencyId' => OrderDetailPresenter::shipmentUrgencyId($job),
             'shipmentUrgencyName' => $shipmentUrgencyName,
             'shipmentUrgencyTone' => OrderDetailPresenter::urgencyTone($shipmentUrgencyName),
+            'remoteArea' => $remoteArea ? [
+                'id' => (int) $remoteArea->id,
+                'name' => trim((string) $remoteArea->name),
+                'postal_code' => $remoteArea->remoteAreaPostalCode(),
+                'extra_charge' => $remoteArea->remoteAreaExtraCharge(),
+            ] : null,
             'courierOptions' => $courierOptions
                 ->map(fn ($courier) => [
                     'value' => trim((string) ($courier->name ?? '')),

@@ -77,6 +77,7 @@
                 :can-change-owner="$canChangeOwner"
                 :shipment-urgency-options="$shipmentUrgencyOptions"
                 :context="$orderDetailContext"
+                :remote-area="$orderDetailContext['remoteArea'] ?? null"
             />
             <x-jobs.order-detail.shipping :job="$job" :can-edit-job="$canEditJob" />
         </div>

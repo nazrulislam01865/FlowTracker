@@ -1,7 +1,27 @@
-@props(['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => []])
+@props(['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => [], 'remoteArea' => null])
+@php
+    // Remote Area is resolved once in OrderDetailViewService. Keep this Blade
+    // component presentation-only so moving the flag here never adds queries.
+    $remoteArea = is_array($remoteArea) && ! empty($remoteArea['postal_code']) ? $remoteArea : null;
+@endphp
 <section class="section-card ft-order-section-card ft-order-planning-card">
     <div class="section-head ft-order-section-head"><h2>Planning &amp; ownership</h2><span class="card-sub">Quick edits</span></div>
     <div class="section-body info-list ft-order-info-list">
+        @if($remoteArea)
+            <div class="info-row ft-order-info-row ft-order-remote-area-row">
+                <span>Remote area</span>
+                <b>
+                    <span
+                        class="pill amber ft-order-remote-area-pill"
+                        title="{{ trim((string) ($remoteArea['name'] ?? 'Remote Area')) }} · {{ $remoteArea['postal_code'] }}"
+                        aria-label="Remote Area postal code match"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h10l-1.5 3L15 11H5"></path></svg>
+                        Remote Area
+                    </span>
+                </b>
+            </div>
+        @endif
         <div class="info-row ft-order-info-row ft-inline-edit-shell"
             x-data="window.FlowTrack.ui.inlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j, Y') ?? 'Not set') })">
             <span>Required delivery</span>

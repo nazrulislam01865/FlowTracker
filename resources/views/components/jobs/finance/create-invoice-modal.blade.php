@@ -1,10 +1,13 @@
-@props(['job','contacts'=>collect(),'summary'=>[],'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'invoiceLineItems'=>[],'invoiceTaxRate'=>'0','invoiceCurrency'=>'USD','invoiceType'=>'Final invoice','invoiceSupportingDocument'=>null])
+@props(['job','contacts'=>collect(),'summary'=>[],'invoiceTypes'=>collect(),'currencies'=>collect(),'paymentTerms'=>collect(),'invoiceLineItems'=>[],'invoiceTaxRate'=>'0','invoiceCurrency'=>'USD','invoiceType'=>'Final invoice','invoiceRemoteAreaCharge'=>0,'invoiceRemoteAreaName'=>'','invoiceRemoteAreaPostalCode'=>'','invoiceSupportingDocument'=>null])
 @php
-    $subtotal = collect($invoiceLineItems)->sum(fn($item) => max(0, (float)($item['quantity'] ?? 0)) * max(0, (float)($item['unit_price'] ?? 0)));
+    $itemsSubtotal = collect($invoiceLineItems)->sum(fn($item) => max(0, (float)($item['quantity'] ?? 0)) * max(0, (float)($item['unit_price'] ?? 0)));
+    $remoteAreaCharge = max(0, (float) $invoiceRemoteAreaCharge);
+    $subtotal = $itemsSubtotal + $remoteAreaCharge;
     $taxRate = max(0, min(100, (float)$invoiceTaxRate));
     $taxAmount = $subtotal * ($taxRate / 100);
-    // The current invoice total is based only on its own line items and tax.
-    // Payments are handled separately through Record Payment.
+    // The current invoice total is based only on its own line items, the
+    // authoritative Remote Area charge (when applicable), and tax. Payments are
+    // handled separately through Record Payment.
     $total = $subtotal + $taxAmount;
     $currencyValue = strtoupper(trim((string) $invoiceCurrency));
     $currencyPrefix = match ($currencyValue) {
@@ -111,7 +114,10 @@
                 @error('invoiceSupportingDocument')<small class="error">{{ $message }}</small>@enderror
             </div>
             <aside class="ft-invoice-summary">
-                <div><span>Subtotal</span><strong>{{ $currencyPrefix }}{{ number_format($subtotal, 2) }}</strong></div>
+                <div><span>Subtotal</span><strong>{{ $currencyPrefix }}{{ number_format($itemsSubtotal, 2) }}</strong></div>
+                @if($remoteAreaCharge > 0)
+                    <div title="{{ trim((string) $invoiceRemoteAreaName) }}{{ $invoiceRemoteAreaPostalCode !== '' ? ' · '.$invoiceRemoteAreaPostalCode : '' }}"><span>Remote area charge</span><strong>{{ $currencyPrefix }}{{ number_format($remoteAreaCharge, 2) }}</strong></div>
+                @endif
                 <div><span>Tax {{ number_format($taxRate, $taxRate == floor($taxRate) ? 0 : 2) }}%</span><strong>{{ $currencyPrefix }}{{ number_format($taxAmount, 2) }}</strong></div>
                 <div class="total amount"><span>Total</span><strong>{{ $currencyPrefix }}{{ number_format($total, 2) }}</strong></div>
             </aside>

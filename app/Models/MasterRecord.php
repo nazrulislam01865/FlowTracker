@@ -156,6 +156,24 @@ class MasterRecord extends Model
         return $schedule !== '' ? $name.' · '.$schedule : $name;
     }
 
+    public function remoteAreaPostalCode(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+
+        $postalCode = strtoupper(trim((string) data_get($this->metadata, 'postal_code')));
+        return (string) preg_replace('/\s+/', ' ', $postalCode);
+    }
+
+    public function remoteAreaExtraCharge(): ?float
+    {
+        if ($this->type !== 'remote_area') return null;
+
+        $value = data_get($this->metadata, 'extra_charge');
+        if ($value === null || trim((string) $value) === '' || ! is_numeric($value)) return null;
+
+        return max(0, round((float) $value, 2));
+    }
+
     public function productDisplayCode(): string
     {
         if ($this->type !== 'product') return trim((string) $this->code);

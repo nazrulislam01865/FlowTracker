@@ -95,6 +95,9 @@ class Index extends Component
     public string $invoicePurchaseOrderReference = '';
     public string $invoiceNotes = 'Please include the invoice number with your payment.';
     public string $invoiceTaxRate = '0';
+    public float $invoiceRemoteAreaCharge = 0.0;
+    public string $invoiceRemoteAreaName = '';
+    public string $invoiceRemoteAreaPostalCode = '';
     public $invoiceSupportingDocument = null;
     public bool $invoiceEmailAfterCreation = false;
 

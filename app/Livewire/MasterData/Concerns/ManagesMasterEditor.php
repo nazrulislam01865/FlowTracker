@@ -61,6 +61,8 @@ trait ManagesMasterEditor
         $this->workCalendarDayTo = 'friday';
         $this->workCalendarTimeFrom = '09:00';
         $this->workCalendarTimeTo = '18:00';
+        $this->remoteAreaPostalCode = '';
+        $this->remoteAreaExtraCharge = '';
         $this->resetValidation();
 
         if ($id) {
@@ -161,6 +163,13 @@ Remote Area charge	".$remoteRow;
                 $this->workCalendarTimeFrom = trim((string) ($metadata['time_from'] ?? '09:00')) ?: '09:00';
                 $this->workCalendarTimeTo = trim((string) ($metadata['time_to'] ?? '18:00')) ?: '18:00';
             }
+            if ($this->group === 'remote_area') {
+                $this->remoteAreaPostalCode = $r->remoteAreaPostalCode();
+                $remoteAreaExtraCharge = $r->remoteAreaExtraCharge();
+                $this->remoteAreaExtraCharge = $remoteAreaExtraCharge === null
+                    ? ''
+                    : rtrim(rtrim(number_format($remoteAreaExtraCharge, 2, '.', ''), '0'), '.');
+            }
             if ($this->group === 'inquiry_task_status') {
                 $this->autoInquiryStatus = (string) ($metadata['auto_inquiry_status'] ?? '__task_status__');
                 $this->requiresAttention = filter_var($metadata['requires_attention'] ?? false, FILTER_VALIDATE_BOOL);
@@ -201,6 +210,8 @@ Remote Area charge	".$remoteRow;
             $this->productTestCertificateNumber = '';
         }
         $this->status = 'active';
+        $this->remoteAreaPostalCode = '';
+        $this->remoteAreaExtraCharge = '';
         $this->autoInquiryStatus = 'To do';
         $this->requiresAttention = false;
         $this->orderTaskFlagId = null;
@@ -334,6 +345,8 @@ Remote Area charge	".$remoteRow;
             'status' => ['required', 'in:active,inactive'],
             'sortOrder' => ['required', 'integer', 'min:0', 'max:1000000'],
             'metadataJson' => ['nullable', 'string'],
+            'remoteAreaPostalCode' => $this->group === 'remote_area' ? ['required', 'string', 'max:32'] : ['nullable'],
+            'remoteAreaExtraCharge' => $this->group === 'remote_area' ? ['nullable', 'numeric', 'min:0', 'max:999999.99'] : ['nullable'],
             'workCalendarDayFrom' => $this->group === 'task_pack_work_calendar'
                 ? ['required', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])]
                 : ['nullable'],
@@ -420,6 +433,16 @@ Remote Area charge	".$remoteRow;
             $metadata = json_decode($data['metadataJson'], true);
             if (json_last_error() !== JSON_ERROR_NONE || !is_array($metadata)) {
                 throw ValidationException::withMessages(['metadataJson' => 'Metadata must be valid JSON.']);
+            }
+        }
+
+        if ($this->group === 'remote_area') {
+            $metadata ??= [];
+            $metadata['postal_code'] = $service->normalizePostalCode((string) $data['remoteAreaPostalCode']);
+            if ($data['remoteAreaExtraCharge'] === null || trim((string) $data['remoteAreaExtraCharge']) === '') {
+                unset($metadata['extra_charge']);
+            } else {
+                $metadata['extra_charge'] = round((float) $data['remoteAreaExtraCharge'], 2);
             }
         }
 
