@@ -20,6 +20,12 @@
     'searchPlaceholder' => null,
     'footerMessage' => null,
     'showAvatar' => false,
+    // Optional progressive paging for selectors that are expected to browse
+    // many records. The shared remote selector still fetches nothing until the
+    // trigger is opened; when enabled, reaching the bottom of the option list
+    // automatically requests the next bounded page instead of showing a
+    // separate "Load more" button.
+    'infiniteScroll' => false,
 ])
 @php
     $remote = filled($type);
@@ -172,8 +178,15 @@
             </button>
         @endif
 
-        <div id="{{ $componentId }}-listbox" class="ft-remote-filter-list ft-search-select__list" role="listbox">
-            <template x-if="loading"><div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div></template>
+        <div
+            id="{{ $componentId }}-listbox"
+            class="ft-remote-filter-list ft-search-select__list{{ $infiniteScroll ? ' ft-search-select__list--infinite' : '' }}"
+            role="listbox"
+            @if($remote && $infiniteScroll)
+                x-on:scroll.passive="if (hasMore && !loading && ($el.scrollHeight - $el.scrollTop - $el.clientHeight <= 56)) loadMore()"
+            @endif
+        >
+            <template x-if="loading && visibleItems.length === 0"><div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div></template>
             <template x-if="!loading && visibleItems.length === 0"><div class="ft-remote-filter-message">No matching options</div></template>
             <template x-for="item in visibleItems" :key="item.id">
                 <button
@@ -206,12 +219,25 @@
                     @endif
                 </button>
             </template>
+
+            @if($remote && $infiniteScroll)
+                {{-- Keep infinite-scroll feedback inside the scroll container.
+                     This makes wheel/touch scrolling work even when the pointer
+                     is over the hint itself and keeps the load trigger attached
+                     to the element that actually owns scrollTop. --}}
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="loading && visibleItems.length > 0">Loading more…</div>
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="!loading && hasMore && message !== 'Could not load options. Try again.'">Scroll to load more</div>
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="!loading && message === 'Could not load options. Try again.'" x-text="message"></div>
+            @endif
         </div>
 
-        @if($remote)
+        @if($remote && !$infiniteScroll)
             <button type="button" class="ft-search-select__load-more" x-show="hasMore && !loading" x-on:click="loadMore()">Load more</button>
+            <div class="ft-remote-filter-message" x-text="message"></div>
         @endif
-        <div class="ft-remote-filter-message" x-text="message"></div>
+        @unless($remote)
+            <div class="ft-remote-filter-message" x-text="message"></div>
+        @endunless
         @if($footerMessage)<div class="ft-remote-filter-message">{{ $footerMessage }}</div>@endif
     </div>
     @if($fixedMenu)

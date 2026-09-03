@@ -17,6 +17,8 @@ class OrderSummaryExportController extends Controller
             'urgency' => ['nullable', 'in:Y,N'],
             'from_date' => ['nullable', 'date_format:Y-m-d'],
             'to_date' => ['nullable', 'date_format:Y-m-d'],
+            'client_ids' => ['nullable', 'array', 'max:500'],
+            'client_ids.*' => ['integer', 'min:1', 'distinct'],
             'quick' => ['nullable', 'in:all,urgent,awaiting,overdue'],
         ]);
 

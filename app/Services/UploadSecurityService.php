@@ -29,12 +29,12 @@ class UploadSecurityService
     ];
 
     /** @return array{status:string,engine:string,reason:?string,mime:string,size:int} */
-    public function inspect(string $absolutePath, string $originalName, ?string $reportedMime = null): array
+    public function inspect(string $absolutePath, string $originalName, ?string $reportedMime = null, ?int $maxFileBytes = null): array
     {
         abort_unless(is_file($absolutePath), 422, 'The uploaded file could not be inspected.');
 
         $size = (int) filesize($absolutePath);
-        $maxBytes = max(1, (int) config('flowtrack.upload_security.max_file_bytes', 52428800));
+        $maxBytes = max(1, $maxFileBytes ?? (int) config('flowtrack.upload_security.max_file_bytes', 52428800));
         abort_if($size <= 0, 422, 'Empty files are not allowed.');
         abort_if($size > $maxBytes, 422, 'The uploaded file exceeds the secure storage limit.');
 
@@ -52,7 +52,7 @@ class UploadSecurityService
 
         $engine = strtolower((string) config('flowtrack.upload_security.scanner', 'basic'));
         if ($engine === 'clamav') {
-            $this->scanWithClamAv($absolutePath);
+            $this->scanWithClamAv($absolutePath, $size);
         }
 
         return [
@@ -258,14 +258,19 @@ class UploadSecurityService
         }
     }
 
-    private function scanWithClamAv(string $path): void
+    private function scanWithClamAv(string $path, int $size): void
     {
         $binary = trim((string) config('flowtrack.upload_security.clamav_binary', 'clamdscan'));
         abort_if($binary === '', 503, 'Malware scanning is required but not configured.');
 
         try {
             $process = new Process([$binary, '--no-summary', $path]);
-            $process->setTimeout(max(5, (int) config('flowtrack.upload_security.scan_timeout_seconds', 30)));
+            $normalTimeout = max(5, (int) config('flowtrack.upload_security.scan_timeout_seconds', 30));
+            $normalMaxBytes = max(1, (int) config('flowtrack.upload_security.max_file_bytes', 52428800));
+            $timeout = $size > $normalMaxBytes
+                ? max($normalTimeout, (int) config('flowtrack.upload_security.large_artwork_scan_timeout_seconds', 300))
+                : $normalTimeout;
+            $process->setTimeout($timeout);
             $process->run();
         } catch (\Throwable $exception) {
             report($exception);

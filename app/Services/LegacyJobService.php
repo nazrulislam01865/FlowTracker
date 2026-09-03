@@ -231,6 +231,12 @@ class LegacyJobService
                     ->orWhereHas('items', fn (Builder $item) => $item
                         ->whereLike('product_name', $like)
                         ->orWhereLike('category_name', $like))
+                    ->orWhereHas('linkedInquiries', fn (Builder $inquiry) => $inquiry
+                        ->whereLike('inquiry_number', $like)
+                        ->orWhereLike('reference_number', $like)
+                        ->orWhereLike('subject', $like))
+                    // Legacy fallback for an Order not yet backfilled into the
+                    // many-link table during a rolling deployment.
                     ->orWhereHas('sourceInquiry', fn (Builder $inquiry) => $inquiry
                         ->whereLike('inquiry_number', $like)
                         ->orWhereLike('reference_number', $like)
@@ -504,7 +510,7 @@ class LegacyJobService
                 'cancelledBy:id,name,profile_image_path',
                 'members.user:id,name,profile_image_path',
             ])
-            ->withCount('documents')
+            ->withCount(['documents', 'linkedInquiries'])
             ->findOrFail($id);
     }
 
@@ -534,6 +540,7 @@ class LegacyJobService
             ->with([
                 'client:id,name,logo_path',
                 'owner:id,name,profile_image_path',
+                'linkedOrders:id,job_number,order_number',
                 'sourceOrder:id,source_inquiry_id,job_number,order_number',
                 'convertedJob:id,job_number,order_number',
                 'items' => fn ($items) => $items
@@ -569,9 +576,10 @@ class LegacyJobService
     }
 
     /**
-     * Link one source Inquiry to an Order. The relationship is traceability
-     * only: no Inquiry files are copied and no Inquiry lifecycle status is
-     * changed by this action.
+     * Link an Inquiry to an Order. An Order may have many linked Inquiries,
+     * while each Inquiry remains attached to at most one Order. The legacy
+     * source_inquiry_id column is retained as the primary/oldest link so older
+     * Order and reporting code continues to work unchanged.
      */
     public function linkSourceInquiry(FlowJob $job, int $inquiryId, User $actor): FlowJob
     {
@@ -588,58 +596,118 @@ class LegacyJobService
                 ->lockForUpdate()
                 ->findOrFail($inquiryId);
 
-            abort_if($lockedJob->source_inquiry_id, 409, 'This Order is already linked to an Inquiry.');
-            abort_if((string) $inquiry->result === 'dead', 422, 'A closed Inquiry cannot be linked to an Order.');
-
-            $otherOrderExists = FlowJob::query()
-                ->where('source_inquiry_id', $inquiry->id)
-                ->where('id', '!=', $lockedJob->id)
-                ->exists();
-            abort_if($otherOrderExists, 409, 'This Inquiry is already linked to another Order.');
-
-            if ($inquiry->converted_job_id && (int) $inquiry->converted_job_id !== (int) $lockedJob->id) {
-                abort(409, 'This Inquiry is already linked to another Order.');
-            }
-
-            $lockedJob->update(['source_inquiry_id' => $inquiry->id]);
-
-            // Keep the existing reverse reference synchronized without changing
-            // the Inquiry status/result. This also preserves current Inquiry
-            // detail navigation to its linked Order.
-            if (!$inquiry->converted_job_id) {
-                $inquiry->update(['converted_job_id' => $lockedJob->id]);
-            }
-
-            $lockedJob->activities()->create([
-                'user_id' => $actor->id,
-                'event' => 'job.inquiry_linked',
-                'description' => $inquiry->inquiry_number.' linked as source Inquiry.',
-            ]);
-
-            return $lockedJob->refresh();
+            return $this->attachInquiryToOrder($lockedJob, $inquiry, $actor);
         }, 3);
     }
 
-    /** Remove only the Inquiry/Order traceability relationship. */
-    public function unlinkSourceInquiry(FlowJob $job, User $actor): FlowJob
+    /**
+     * Attach one eligible Inquiry while the caller already owns the Order
+     * transaction/lock. Shared by Create Order and Order Details so both paths
+     * enforce exactly the same one-Inquiry-to-one-Order integrity rules.
+     */
+    private function attachInquiryToOrder(FlowJob $lockedJob, Inquiry $inquiry, User $actor): FlowJob
+    {
+        abort_if((string) $inquiry->result === 'dead', 422, 'A closed Inquiry cannot be linked to an Order.');
+
+        $existingLink = DB::table('flow_job_inquiries')
+            ->where('inquiry_id', $inquiry->id)
+            ->lockForUpdate()
+            ->first(['flow_job_id']);
+
+        if ($existingLink) {
+            abort_if((int) $existingLink->flow_job_id === (int) $lockedJob->id, 409, 'This Inquiry is already linked to this Order.');
+            abort(409, 'This Inquiry is already linked to another Order.');
+        }
+
+        // Protect upgraded databases that contain a legacy pointer but have
+        // not yet been normalized into the pivot for any reason.
+        $legacyOrderId = FlowJob::query()
+            ->where('source_inquiry_id', $inquiry->id)
+            ->where('id', '!=', $lockedJob->id)
+            ->value('id');
+        abort_if($legacyOrderId, 409, 'This Inquiry is already linked to another Order.');
+
+        if ($inquiry->converted_job_id && (int) $inquiry->converted_job_id !== (int) $lockedJob->id) {
+            abort(409, 'This Inquiry is already linked to another Order.');
+        }
+
+        $lockedJob->linkedInquiries()->attach($inquiry->id, [
+            'linked_by' => $actor->id,
+            'created_at' => now(),
+            'updated_at' => now(),
+        ]);
+
+        // The first linked Inquiry remains the legacy primary/source Inquiry.
+        // Additional links live in flow_job_inquiries without replacing it.
+        if (!$lockedJob->source_inquiry_id) {
+            $lockedJob->update(['source_inquiry_id' => $inquiry->id]);
+        }
+
+        // Keep the existing reverse reference synchronized without changing
+        // the Inquiry lifecycle status/result. Multiple Inquiries may point
+        // to the same Order through converted_job_id.
+        if (!$inquiry->converted_job_id) {
+            $inquiry->update(['converted_job_id' => $lockedJob->id]);
+        }
+
+        $lockedJob->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.inquiry_linked',
+            'description' => $inquiry->inquiry_number.' linked to this Order.',
+        ]);
+
+        return $lockedJob->refresh();
+    }
+
+    /** Remove one Inquiry/Order traceability relationship. */
+    public function unlinkSourceInquiry(FlowJob $job, User $actor, ?int $inquiryId = null): FlowJob
     {
         abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'link'), 403);
         $this->visibleQuery($actor)->whereKey($job->id)->firstOrFail();
 
-        return DB::transaction(function () use ($job, $actor): FlowJob {
+        return DB::transaction(function () use ($job, $actor, $inquiryId): FlowJob {
             $lockedJob = $this->visibleQuery($actor)
                 ->lockForUpdate()
                 ->findOrFail($job->id);
 
-            $inquiryId = (int) ($lockedJob->source_inquiry_id ?? 0);
-            abort_unless($inquiryId > 0, 409, 'This Order does not have a linked Inquiry.');
+            $targetInquiryId = (int) ($inquiryId ?: $lockedJob->source_inquiry_id ?: 0);
+            abort_unless($targetInquiryId > 0, 409, 'This Order does not have a linked Inquiry.');
 
-            $inquiry = Inquiry::query()->lockForUpdate()->find($inquiryId);
-            $number = (string) ($inquiry?->inquiry_number ?: 'Inquiry #'.$inquiryId);
+            $pivotLink = DB::table('flow_job_inquiries')
+                ->where('flow_job_id', $lockedJob->id)
+                ->where('inquiry_id', $targetInquiryId)
+                ->lockForUpdate()
+                ->exists();
 
-            $lockedJob->update(['source_inquiry_id' => null]);
+            // Legacy fallback keeps pre-migration data recoverable, but never
+            // allows an arbitrary Inquiry to be detached from the wrong Order.
+            $isLegacyPrimary = (int) ($lockedJob->source_inquiry_id ?? 0) === $targetInquiryId;
+            abort_unless($pivotLink || $isLegacyPrimary, 409, 'This Inquiry is not linked to this Order.');
+
+            $inquiry = Inquiry::query()->lockForUpdate()->find($targetInquiryId);
+            $number = (string) ($inquiry?->inquiry_number ?: 'Inquiry #'.$targetInquiryId);
+
+            DB::table('flow_job_inquiries')
+                ->where('flow_job_id', $lockedJob->id)
+                ->where('inquiry_id', $targetInquiryId)
+                ->delete();
+
             if ($inquiry && (int) $inquiry->converted_job_id === (int) $lockedJob->id) {
                 $inquiry->update(['converted_job_id' => null]);
+            }
+
+            if ($isLegacyPrimary) {
+                $replacementInquiryId = DB::table('flow_job_inquiries')
+                    ->join('inquiries', 'inquiries.id', '=', 'flow_job_inquiries.inquiry_id')
+                    ->where('flow_job_inquiries.flow_job_id', $lockedJob->id)
+                    ->whereNull('inquiries.deleted_at')
+                    ->orderBy('flow_job_inquiries.created_at')
+                    ->orderBy('flow_job_inquiries.id')
+                    ->value('flow_job_inquiries.inquiry_id');
+
+                $lockedJob->update([
+                    'source_inquiry_id' => $replacementInquiryId ? (int) $replacementInquiryId : null,
+                ]);
             }
 
             $lockedJob->activities()->create([
@@ -727,10 +795,51 @@ class LegacyJobService
         }
 
         if ($tab === 'inquiry') {
-            $job->load([
-                'sourceInquiry.client:id,name,logo_path',
-                'sourceInquiry.owner:id,name,profile_image_path',
-            ]);
+            $access = app(AccessControlService::class);
+            $canViewInquiries = $access->can($user, 'inquiries', 'view');
+            $canViewDocuments = $canViewInquiries && $access->can($user, 'documents', 'view');
+
+            if (!$canViewInquiries) {
+                // Do not hydrate Inquiry metadata when the role cannot view the
+                // Inquiry module. The tab shell can still explain the permission.
+                $job->setRelation('linkedInquiries', new \Illuminate\Database\Eloquent\Collection());
+                return $job;
+            }
+
+            $relations = [
+                'linkedInquiries.client:id,name,logo_path',
+                'linkedInquiries.owner:id,name,profile_image_path',
+            ];
+
+            if ($canViewDocuments) {
+                // Read every linked Inquiry directly. No files are copied into the
+                // Order; the existing document routes remain the final authorization
+                // boundary when a user opens or downloads an attachment.
+                $relations[] = 'linkedInquiries.documents:id,inquiry_id,inquiry_task_id,uploaded_by,name,mime_type,size,created_at';
+                $relations[] = 'linkedInquiries.documents.uploader:id,name,profile_image_path';
+                $relations[] = 'linkedInquiries.documents.task:id,title';
+            }
+
+            $job->load($relations);
+
+            // Backward-compatible recovery for a legacy source pointer that was not
+            // yet copied into flow_job_inquiries. Normal deployments are backfilled
+            // by the migration, so this path is rarely used.
+            if ($job->linkedInquiries->isEmpty() && $job->source_inquiry_id) {
+                $fallback = [
+                    'sourceInquiry.client:id,name,logo_path',
+                    'sourceInquiry.owner:id,name,profile_image_path',
+                ];
+                if ($canViewDocuments) {
+                    $fallback[] = 'sourceInquiry.documents:id,inquiry_id,inquiry_task_id,uploaded_by,name,mime_type,size,created_at';
+                    $fallback[] = 'sourceInquiry.documents.uploader:id,name,profile_image_path';
+                    $fallback[] = 'sourceInquiry.documents.task:id,title';
+                }
+                $job->load($fallback);
+                if ($job->sourceInquiry) {
+                    $job->linkedInquiries->push($job->sourceInquiry);
+                }
+            }
 
             return $job;
         }
@@ -915,7 +1024,7 @@ class LegacyJobService
             'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'workflowEmailActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
             'workflowInvoiceActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
-            'invoices',
+            'invoices.creator:id,name',
             'tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
                 ->with([
@@ -1427,6 +1536,46 @@ class LegacyJobService
                 'description' => $draft ? 'Job saved as draft' : 'Job created at '.$operationalPhase->name,
             ]);
 
+            $createInquiryIds = collect($data['source_inquiry_ids'] ?? [])
+                ->prepend($data['source_inquiry_id'] ?? null)
+                ->map(fn ($id) => (int) $id)
+                ->filter(fn (int $id) => $id > 0)
+                ->unique()
+                ->values();
+
+            if ($createInquiryIds->isNotEmpty()) {
+                $access = app(AccessControlService::class);
+                abort_unless($access->can($actor, 'jobs', 'link') && $access->can($actor, 'inquiries', 'view'), 403);
+
+                // Lock in deterministic primary-key order to reduce deadlock risk
+                // when two users create Orders with overlapping Inquiry choices.
+                // We still attach in the user's original selection order so the
+                // first selection remains the legacy primary/source Inquiry.
+                $lockedInquiries = app(InquiryService::class)
+                    ->visibleQuery($actor)
+                    ->whereIn('inquiries.id', $createInquiryIds->all())
+                    ->orderBy('inquiries.id')
+                    ->lockForUpdate()
+                    ->get()
+                    ->keyBy('id');
+
+                abort_unless(
+                    $lockedInquiries->count() === $createInquiryIds->count(),
+                    422,
+                    'One or more selected Inquiries are no longer available.'
+                );
+
+                foreach ($createInquiryIds as $createInquiryId) {
+                    $inquiry = $lockedInquiries->get($createInquiryId);
+                    abort_unless($inquiry, 422, 'One or more selected Inquiries are no longer available.');
+
+                    // All links are created inside this transaction. If any
+                    // Inquiry becomes unavailable, every preceding attachment
+                    // and the newly-created Order roll back together.
+                    $job = $this->attachInquiryToOrder($job, $inquiry, $actor);
+                }
+            }
+
             $mentionIds = app(MentionService::class)->userIdsFromText((string) $job->description);
             if (!$draft || $mentionIds) {
                 $jobId = $job->id;
@@ -1859,22 +2008,35 @@ class LegacyJobService
                 'description' => 'Order deleted',
             ]);
 
-            // If this Order was created from an Inquiry, remove the stale
-            // conversion link and return that Inquiry to its automatic
-            // completed/ready state. This lets an accidentally deleted Order
-            // be created again without leaving a broken converted record.
-            $sourceInquiry = $job->sourceInquiry()->first();
-            if ($sourceInquiry && (int) $sourceInquiry->converted_job_id === (int) $job->id) {
-                $sourceInquiry->update([
-                    'result' => null,
-                    'converted_job_id' => null,
-                    'completed_at' => null,
-                ]);
-                app(InquiryService::class)->syncAutomaticStatus($sourceInquiry, $actor);
+            // Release every Inquiry relationship before the soft delete so
+            // each Inquiry can be linked/converted again. Only the legacy primary
+            // source can represent a true Inquiry -> Order conversion; additional
+            // manually-linked Inquiries keep their lifecycle result/status intact.
+            $primaryInquiryId = (int) ($job->source_inquiry_id ?? 0);
+            $linkedInquiries = $job->linkedInquiries()->get();
+            if ($linkedInquiries->isEmpty() && $primaryInquiryId > 0) {
+                $legacySource = $job->sourceInquiry()->first();
+                if ($legacySource) $linkedInquiries->push($legacySource);
             }
 
-            // Release the one-to-one source link before soft deletion so the
-            // Inquiry can be linked/converted again without a unique-index conflict.
+            foreach ($linkedInquiries as $linkedInquiry) {
+                if ((int) $linkedInquiry->converted_job_id !== (int) $job->id) {
+                    continue;
+                }
+
+                if ((int) $linkedInquiry->id === $primaryInquiryId && (string) $linkedInquiry->result === 'converted') {
+                    $linkedInquiry->update([
+                        'result' => null,
+                        'converted_job_id' => null,
+                        'completed_at' => null,
+                    ]);
+                    app(InquiryService::class)->syncAutomaticStatus($linkedInquiry, $actor);
+                } else {
+                    $linkedInquiry->update(['converted_job_id' => null]);
+                }
+            }
+
+            DB::table('flow_job_inquiries')->where('flow_job_id', $job->id)->delete();
             if ($job->source_inquiry_id) {
                 $job->update(['source_inquiry_id' => null]);
             }

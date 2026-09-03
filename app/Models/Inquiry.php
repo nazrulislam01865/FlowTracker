@@ -5,6 +5,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
@@ -67,6 +68,13 @@ class Inquiry extends Model
     public function sourceWorkflow(): BelongsTo { return $this->belongsTo(WorkflowTemplate::class, 'source_workflow_template_id'); }
     public function convertedJob(): BelongsTo { return $this->belongsTo(FlowJob::class, 'converted_job_id'); }
     public function sourceOrder(): HasOne { return $this->hasOne(FlowJob::class, 'source_inquiry_id'); }
+    public function linkedOrders(): BelongsToMany
+    {
+        return $this->belongsToMany(FlowJob::class, 'flow_job_inquiries', 'inquiry_id', 'flow_job_id')
+            ->withPivot(['linked_by'])
+            ->withTimestamps()
+            ->orderByPivot('created_at');
+    }
     public function items(): HasMany { return $this->hasMany(InquiryItem::class)->orderBy('sort_order'); }
     public function tasks(): HasMany { return $this->hasMany(InquiryTask::class)->orderBy('sequence'); }
     public function currentTask(): HasOne

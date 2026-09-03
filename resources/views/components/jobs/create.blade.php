@@ -9,6 +9,7 @@
     'showMissingProductSupplierModal'=>false,'missingProductSupplierName'=>'',
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'','newProductSupplierId'=>null,
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'workflowPhaseId'=>null,'mentionUsers'=>collect(),
+    'createInquiryFilterOptions'=>collect(),'selectedCreateInquiry'=>null,'selectedCreateInquiries'=>collect(),'createInquirySelectorVersion'=>0,'canLinkInquiryOnCreate'=>false,
     'savedShippingAddresses'=>collect(),'savedDeliveryContacts'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,
     'phoneCountryCodeOptions'=>collect(),'shippingPhoneCountryCode'=>'+1','shippingPhone'=>'',
     'shippingContactType'=>'end_customer','shippingContactId'=>null,'shippingContactSelection'=>'','shippingContactName'=>'','shippingSaveContact'=>true,
@@ -60,6 +61,14 @@
                 </div>
                 <label class="ft-create-field"><b>Client contact</b><input value="{{ $selectedClient?->contact_name ?? 'No contact recorded' }}" readonly></label>
                 <label class="ft-create-field"><b>Client Reference Number *</b><input wire:model.live.debounce.300ms="referenceNumber" required aria-required="true" placeholder="e.g. FO-333119 or customer PO number">@error('referenceNumber')<small class="validation-error">{{ $message }}</small>@enderror</label>
+                @if($canLinkInquiryOnCreate)
+                    <x-jobs.create.inquiry-link
+                        :selected-inquiries="$selectedCreateInquiries"
+                        :initial-options="$createInquiryFilterOptions"
+                        :client-id="$clientId"
+                        :selector-version="$createInquirySelectorVersion"
+                    />
+                @endif
                 <div class="ft-create-field ft-repeat-order-option">
                     <b>Repeated order</b>
                     <label class="ft-repeat-order-check">

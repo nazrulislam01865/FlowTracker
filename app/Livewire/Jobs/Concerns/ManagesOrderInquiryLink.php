@@ -10,11 +10,10 @@ use App\Services\AccessControlService;
 use Throwable;
 
 /**
- * Phase 5 Order UI workflow extracted from the legacy Jobs coordinator.
+ * Order <-> Inquiry linking workflow.
  *
- * Public method names and parent Livewire state are intentionally preserved so
- * existing Blade bindings, deep links, validation keys and realtime behavior do
- * not change during the incremental decomposition.
+ * One Order may contain multiple linked Inquiries. Each Inquiry still belongs
+ * to at most one Order, preserving the existing Inquiry conversion model.
  */
 trait ManagesOrderInquiryLink
 {
@@ -39,17 +38,28 @@ trait ManagesOrderInquiryLink
 
         $user = auth()->user();
         $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
-        abort_unless(app(AccessControlService::class)->canEditVisibleJob($user, $job), 403);
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($user, 'jobs', 'link') && $access->canEditVisibleJob($user, $job), 403);
 
         $inquiry = app(InquiryDetailQuery::class)->find(
             $user,
             $inquiryId,
-            ['sourceOrder:id,source_inquiry_id', 'convertedJob:id'],
+            [
+                'linkedOrders:id,job_number,order_number',
+                'sourceOrder:id,source_inquiry_id,job_number,order_number',
+                'convertedJob:id,job_number,order_number',
+            ],
         );
 
-        $alreadyLinked = $inquiry->sourceOrder !== null
-            || ($inquiry->converted_job_id && (int) $inquiry->converted_job_id !== (int) $job->id);
-        abort_if($alreadyLinked, 409, 'This Inquiry is already linked to another Order.');
+        $linkedOrder = $inquiry->linkedOrders->first()
+            ?: $inquiry->sourceOrder
+            ?: $inquiry->convertedJob;
+
+        if ($linkedOrder) {
+            abort_if((int) $linkedOrder->id === (int) $job->id, 409, 'This Inquiry is already linked to this Order.');
+            abort(409, 'This Inquiry is already linked to another Order.');
+        }
+
         abort_if((string) $inquiry->result === 'dead', 422, 'A closed Inquiry cannot be linked.');
 
         $this->selectedLinkInquiryId = $inquiry->id;
@@ -81,7 +91,7 @@ trait ManagesOrderInquiryLink
             $this->selectedLinkInquiryId = null;
             $this->inquirySearch = '';
             $this->resetValidation('inquiryLink');
-            session()->flash('success', 'Inquiry linked successfully.');
+            session()->flash('success', 'Inquiry linked successfully. You can link another Inquiry to the same Order.');
         } catch (Throwable $exception) {
             report($exception);
             $this->showInquiryLinkConfirm = false;
@@ -90,9 +100,20 @@ trait ManagesOrderInquiryLink
         }
     }
 
-    public function openInquiryUnlinkConfirm(): void
+    public function openInquiryUnlinkConfirm(int $inquiryId): void
     {
-        abort_unless($this->selectedJobId, 422);
+        abort_unless($this->selectedJobId && $this->detailTab === 'inquiry', 422);
+
+        $user = auth()->user();
+        $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
+        $access = app(AccessControlService::class);
+        abort_unless($access->can($user, 'jobs', 'link') && $access->canEditVisibleJob($user, $job), 403);
+
+        $linked = $job->linkedInquiries()->whereKey($inquiryId)->exists()
+            || (int) ($job->source_inquiry_id ?? 0) === $inquiryId;
+        abort_unless($linked, 409, 'This Inquiry is not linked to this Order.');
+
+        $this->unlinkInquiryId = $inquiryId;
         $this->showInquiryUnlinkConfirm = true;
         $this->resetValidation('inquiryLink');
     }
@@ -100,27 +121,28 @@ trait ManagesOrderInquiryLink
     public function closeInquiryUnlinkConfirm(): void
     {
         $this->showInquiryUnlinkConfirm = false;
+        $this->unlinkInquiryId = null;
     }
 
     public function confirmInquiryUnlink(): void
     {
-        abort_unless($this->selectedJobId, 422);
+        abort_unless($this->selectedJobId && $this->unlinkInquiryId, 422);
 
         try {
             $user = auth()->user();
-            app(UnlinkOrderInquiry::class)->handle($user, $this->selectedJobId);
+            app(UnlinkOrderInquiry::class)->handle($user, $this->selectedJobId, $this->unlinkInquiryId);
 
             $this->showInquiryUnlinkConfirm = false;
+            $this->unlinkInquiryId = null;
             $this->selectedLinkInquiryId = null;
-            $this->inquirySearch = '';
             $this->resetValidation('inquiryLink');
             session()->flash('success', 'Inquiry unlinked and activity recorded.');
         } catch (Throwable $exception) {
             report($exception);
             $this->showInquiryUnlinkConfirm = false;
+            $this->unlinkInquiryId = null;
             $message = trim($exception->getMessage());
             $this->addError('inquiryLink', $message !== '' ? $message : 'The Inquiry could not be unlinked. Please try again.');
         }
     }
-
 }

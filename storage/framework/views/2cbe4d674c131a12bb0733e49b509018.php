@@ -345,7 +345,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                                     <b>or choose from your computer</b>
                                                     <span class="ft-order-attachment-browse">Browse files</span>
                                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                                <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?> · Up to 10 files</small>
+                                                <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(400)); ?> · Up to 50 files</small>
                                             </label>
 
                                             <div
@@ -1134,9 +1134,10 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
                 </div>
-                <div class="ft-prototype-email-preview"><b>Included order:</b> <?php echo e($orderNumber); ?><br><b>Client:</b> <?php echo e($clientName); ?><br><b>Total:</b> <?php echo e($payload['invoice_currency'] ?? 'USD'); ?> <?php echo e(number_format((float) ($payload['invoice_amount'] ?? $orderTotal), 2)); ?></div>
-            <?php elseif($variant === 'invoice_send'): ?>
-                <?php
+                <?php($workflowRemoteAreaCharge = max(0, (float) ($payload['remote_area_charge'] ?? 0)))
+                <div class="ft-prototype-email-preview"><b>Included order:</b> {{ $orderNumber }}<br><b>Client:</b> {{ $clientName }}@if($workflowRemoteAreaCharge > 0)<br><b>Remote area charge:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format($workflowRemoteAreaCharge, 2) }}@endif<br><b>Total:</b> {{ $payload['invoice_currency'] ?? 'USD' }} {{ number_format((float) ($payload['invoice_amount'] ?? $orderTotal) + $workflowRemoteAreaCharge, 2) }}</div>
+            @elseif($variant === 'invoice_send')
+                @php
                     $invoiceRecipientOptions = collect($invoiceEmailPreview['recipient_options'] ?? []);
                     $invoiceToEmail = trim((string) ($payload['to_email'] ?? ''));
                     $invoiceMatchedToUser = $invoiceRecipientOptions->first(

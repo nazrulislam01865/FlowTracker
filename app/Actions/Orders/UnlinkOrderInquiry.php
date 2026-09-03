@@ -14,8 +14,8 @@ final class UnlinkOrderInquiry
         private readonly OrderLifecycleService $jobs
     ) {}
 
-    public function handle(User $actor, int $orderId): FlowJob
+    public function handle(User $actor, int $orderId, ?int $inquiryId = null): FlowJob
     {
-        return $this->jobs->unlinkSourceInquiry($this->orders->base($actor, $orderId), $actor);
+        return $this->jobs->unlinkSourceInquiry($this->orders->base($actor, $orderId), $actor, $inquiryId);
     }
 }

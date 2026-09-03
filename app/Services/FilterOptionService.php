@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Models\Client;
 use App\Models\Department;
 use App\Models\FlowJob;
+use App\Models\Inquiry;
 use App\Models\InquiryDocument;
 use App\Models\MasterRecord;
 use App\Models\Task;
@@ -23,7 +24,7 @@ class FilterOptionService
     public const MAX_SELECTED = 100;
 
     public const TYPES = [
-        'clients', 'jobs', 'users', 'product-categories', 'products', 'workflows',
+        'clients', 'jobs', 'inquiries', 'users', 'product-categories', 'products', 'workflows',
         'priorities', 'task-statuses', 'document-categories', 'document-category-records',
         'department-records', 'departments', 'suppliers', 'countries', 'phone-country-codes',
         'job-statuses', 'phases',
@@ -131,11 +132,22 @@ class FilterOptionService
     ): Collection {
         abort_unless($this->supports($type), 404);
 
-        return collect($selectedIds)
+        $selectedIds = collect($selectedIds)
             ->map(fn ($value) => is_scalar($value) ? trim((string) $value) : '')
             ->filter(fn ($value) => $value !== '')
             ->unique()
             ->take(self::MAX_SELECTED)
+            ->values();
+
+        // Multi-Inquiry Create Order validation can legitimately resolve many
+        // selected ids at once. Resolve that set in one bounded query instead of
+        // issuing one query per Inquiry; all other selector types keep their
+        // existing single-row resolver semantics.
+        if ($type === 'inquiries' && $context === 'create-job') {
+            return $this->inquiriesByIds($user, $context, $selectedIds->all());
+        }
+
+        return $selectedIds
             ->map(fn ($selectedId) => $this->resolveSelected($user, $type, $context, $selectedId, $constraints))
             ->filter()
             ->unique(fn ($item) => (string) ($item['id'] ?? ''))
@@ -154,6 +166,15 @@ class FilterOptionService
         return match ($type) {
             'clients' => $this->clients($user, $context, $search, $limit, $offset),
             'jobs' => $this->jobs($user, $context, $search, $limit, $offset),
+            'inquiries' => $this->inquiries(
+                $user,
+                $context,
+                $search,
+                $limit,
+                $offset,
+                (int) ($constraints['client_id'] ?? 0) ?: null,
+                array_values(array_map('intval', (array) ($constraints['exclude_ids'] ?? []))),
+            ),
             'users' => $this->users($user, $context, $search, $limit, $constraints, $offset),
             'product-categories' => $this->productCategories($user, $context, $search, $limit, $offset),
             'products' => $this->products($user, $context, $search, $limit, (string) ($constraints['category'] ?? ''), $offset),
@@ -182,6 +203,7 @@ class FilterOptionService
         return match ($type) {
             'clients' => $this->clientById($user, $context, $selectedId),
             'jobs' => $this->jobById($user, $context, $selectedId),
+            'inquiries' => $this->inquiryById($user, $context, $selectedId, (int) ($constraints['client_id'] ?? 0) ?: null),
             'users' => $this->userById($user, $context, $selectedId, $constraints),
             'product-categories' => $this->productCategoryByName($user, $context, (string) $selectedId),
             'products' => $this->productByName($user, $context, (string) $selectedId, (string) ($constraints['category'] ?? '')),
@@ -265,6 +287,157 @@ class FilterOptionService
         }
 
         return app(ClientService::class)->visibleQuery($user);
+    }
+
+    /**
+     * Create Order Inquiry-link options.
+     *
+     * Keep this selector remote and bounded: only currently linkable Inquiries
+     * are returned, with same-client records ranked first for convenience.
+     * The selected item is resolved through the exact same scope, preventing a
+     * stale/linked Inquiry from remaining silently valid in the Create Order UI.
+     */
+    private function inquiries(
+        User $user,
+        string $context,
+        string $search,
+        int $limit,
+        int $offset = 0,
+        ?int $clientId = null,
+        array $excludeIds = [],
+    ): Collection {
+        $query = $this->eligibleInquiryLinkQuery($user, $context);
+        $excludeIds = collect($excludeIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->take(self::MAX_SELECTED)
+            ->values()
+            ->all();
+        if ($excludeIds !== []) {
+            $query->whereNotIn('inquiries.id', $excludeIds);
+        }
+        $term = trim($search);
+
+        if (mb_strlen($term) >= self::MIN_SEARCH_LENGTH) {
+            $query->where(function ($match) use ($term): void {
+                $prefix = $term.'%';
+                $contains = '%'.$term.'%';
+                $match->whereLike('inquiries.inquiry_number', $prefix)
+                    ->orWhereLike('inquiries.reference_number', $prefix)
+                    ->orWhereLike('inquiries.subject', $contains)
+                    ->orWhereHas('client', fn ($client) => $client->whereLike('name', $contains));
+            });
+        }
+
+        return $query
+            ->with('client:id,name')
+            ->when($clientId, fn ($q) => $q->orderByRaw('CASE WHEN inquiries.client_id = ? THEN 0 ELSE 1 END', [$clientId]))
+            ->when($term !== '', fn ($q) => $q->orderByRaw('CASE WHEN inquiries.inquiry_number = ? THEN 0 ELSE 1 END', [$term]))
+            ->orderByDesc('inquiries.updated_at')
+            ->orderByDesc('inquiries.id')
+            ->offset($offset)
+            ->limit($limit)
+            ->get([
+                'inquiries.id',
+                'inquiries.inquiry_number',
+                'inquiries.client_id',
+                'inquiries.subject',
+                'inquiries.reference_number',
+                'inquiries.status',
+                'inquiries.updated_at',
+            ])
+            ->map(fn (Inquiry $inquiry) => $this->inquiryOption($inquiry));
+    }
+
+    /** Resolve many Create Order Inquiry selections in a single query. */
+    private function inquiriesByIds(User $user, string $context, array $ids): Collection
+    {
+        $orderedIds = collect($ids)
+            ->filter(fn ($id) => is_numeric($id) && (int) $id > 0)
+            ->map(fn ($id) => (int) $id)
+            ->unique()
+            ->take(self::MAX_SELECTED)
+            ->values();
+
+        if ($orderedIds->isEmpty()) return collect();
+
+        $rows = $this->eligibleInquiryLinkQuery($user, $context)
+            ->whereIn('inquiries.id', $orderedIds->all())
+            ->with('client:id,name')
+            ->get([
+                'inquiries.id',
+                'inquiries.inquiry_number',
+                'inquiries.client_id',
+                'inquiries.subject',
+                'inquiries.reference_number',
+                'inquiries.status',
+            ])
+            ->keyBy('id');
+
+        return $orderedIds
+            ->map(fn (int $id) => $rows->get($id))
+            ->filter()
+            ->map(fn (Inquiry $inquiry) => $this->inquiryOption($inquiry))
+            ->values();
+    }
+
+    private function inquiryById(User $user, string $context, int|string $id, ?int $clientId = null): ?array
+    {
+        if (!is_numeric($id)) return null;
+
+        $row = $this->eligibleInquiryLinkQuery($user, $context)
+            ->with('client:id,name')
+            ->find((int) $id, [
+                'inquiries.id',
+                'inquiries.inquiry_number',
+                'inquiries.client_id',
+                'inquiries.subject',
+                'inquiries.reference_number',
+                'inquiries.status',
+            ]);
+
+        return $row ? $this->inquiryOption($row) : null;
+    }
+
+    private function eligibleInquiryLinkQuery(User $user, string $context): \Illuminate\Database\Eloquent\Builder
+    {
+        $this->authorizeInquiryLinkOptions($user, $context);
+
+        return app(InquiryService::class)
+            ->visibleQuery($user)
+            ->where(function ($query): void {
+                $query->whereNull('inquiries.result')
+                    ->orWhere('inquiries.result', '!=', 'dead');
+            })
+            ->whereNull('inquiries.converted_job_id')
+            ->whereDoesntHave('linkedOrders')
+            ->whereDoesntHave('sourceOrder');
+    }
+
+    private function inquiryOption(Inquiry $inquiry): array
+    {
+        $number = trim((string) $inquiry->inquiry_number);
+        $subject = trim((string) ($inquiry->subject ?: $inquiry->reference_number));
+        $label = $subject !== '' ? $number.' — '.$subject : $number;
+        $meta = collect([
+            trim((string) ($inquiry->client?->name ?? '')),
+            trim((string) ($inquiry->status ?? '')),
+        ])->filter()->implode(' · ');
+
+        return [
+            'id' => (int) $inquiry->id,
+            'label' => $label,
+            'meta' => $meta,
+        ];
+    }
+
+    private function authorizeInquiryLinkOptions(User $user, string $context): void
+    {
+        abort_unless($context === 'create-job', 403);
+        abort_unless($user->canModule('jobs', 'create'), 403);
+        abort_unless(app(AccessControlService::class)->can($user, 'jobs', 'link'), 403);
+        abort_unless(app(AccessControlService::class)->can($user, 'inquiries', 'view'), 403);
     }
 
     private function departments(User $user, string $context, string $search, int $limit, int $offset = 0): Collection

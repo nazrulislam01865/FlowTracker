@@ -83,6 +83,7 @@ class Index extends Component
     public ?int $selectedLinkInquiryId = null;
     public bool $showInquiryLinkConfirm = false;
     public bool $showInquiryUnlinkConfirm = false;
+    public ?int $unlinkInquiryId = null;
 
     public bool $showCreateInvoiceModal = false;
     public string $invoiceType = '';
@@ -153,6 +154,19 @@ class Index extends Component
     public array $productionUrgencyIds = [];
     public array $shipmentUrgencyIds = [];
     public ?int $clientId = null;
+    /** Temporary remote-selector value used to add one Inquiry at a time. */
+    public ?int $createInquiryId = null;
+    /** Ordered Inquiry ids selected for the new Order. The first remains the legacy primary/source Inquiry. */
+    public array $createInquiryIds = [];
+    /** Cached server-validated display rows keyed by Inquiry id; prevents repeat DB lookups on normal form rerenders. */
+    public array $createInquirySelections = [];
+    /** Cached picker copy kept for backward-compatible Livewire snapshots while the multi-link UI is active. */
+    public string $createInquiryLabel = '';
+    public string $createInquiryMeta = '';
+    /** Re-key the add-Inquiry selector after add/remove so optimistic Alpine state cannot retain a stale choice. */
+    public int $createInquirySelectorVersion = 0;
+    /** When set, the next picker selection replaces this selected Inquiry instead of appending. */
+    public ?int $createInquiryReplaceId = null;
     public ?int $workflowId = null;
     public ?int $workflowPhaseId = null;
     public ?int $ownerId = null;
@@ -262,6 +276,10 @@ class Index extends Component
     public array $overviewTaskDocumentUpload = [];
     /** Replacement files for the currently selected Artwork revision targets. */
     public array $overviewTaskRevisionUpload = [];
+    /** Completed chunk-staged Artwork files; payload bytes never enter Livewire state. */
+    public array $overviewTaskStagedUploads = [];
+    /** Completed chunk-staged selective replacements keyed by source document id. */
+    public array $overviewTaskStagedRevisionUploads = [];
     /** Artwork files selected for replacement in an active revision upload. */
     public array $overviewTaskRevisionDocumentIds = [];
     public ?int $overviewTaskExistingDocumentId = null;

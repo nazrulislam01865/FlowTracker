@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'stagedUploads' => [], 'stagedRevisionUploads' => [], 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'stagedUploads' => [], 'stagedRevisionUploads' => [], 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -33,7 +33,8 @@ unset($__defined_vars, $__key, $__value); ?>
     $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
     $automationKey = $workflowActions->automationKey($task);
     $prototypeUpload = in_array($automationKey, ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
-    $allowMultipleUploads = $automationKey === 'ART_PREPARE_UPLOAD'
+    $chunkedArtworkUpload = in_array($automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
+    $allowMultipleUploads = $chunkedArtworkUpload
         || $automationKey === 'NEW_UPLOAD_PO'
         || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
     $hasExistingEvidence = $task->relationLoaded('documents') ? $task->documents->isNotEmpty() : false;
@@ -80,18 +81,18 @@ unset($__defined_vars, $__key, $__value); ?>
                     ? 'Upload each replacement directly under the artwork it replaces. '.$revisionCount.' artwork file'.($revisionCount === 1 ? ' is' : 's are').' waiting for replacement. Unselected artwork remains unchanged automatically.'
                     : 'Upload one replacement directly under each artwork selected in the revision request.')
                 : ($hasExistingEvidence
-                    ? 'Upload up to 10 corrected artwork files as one revision. The previous version remains in Order history.'
-                    : 'Upload up to 10 artwork files together for internal review.'),
+                    ? 'Upload up to 50 corrected artwork files as one revision. The previous version remains in Order history.'
+                    : 'Upload up to 50 artwork files together for internal review.'),
             'hint' => $artworkRevisionActive
-                ? \App\Support\AttachmentUpload::helperText(20).' · '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
-                : \App\Support\AttachmentUpload::helperText(20).' · Up to 10 files',
+                ? \App\Support\AttachmentUpload::helperText(400).' · '.$revisionCount.' replacement'.($revisionCount === 1 ? '' : 's').' required'
+                : \App\Support\AttachmentUpload::helperText(400).' · Up to 50 files',
             'button' => $artworkRevisionActive ? 'Upload Revised Artwork' : ($hasExistingEvidence ? 'Upload Revised Artwork' : 'Upload Artwork'),
         ],
         'ART_SAMPLE_APPROVAL' => [
             'title' => 'Upload Sample Approval',
             'label' => 'Signed sample approval',
             'copy' => 'Attach the client sample/swatch approval to continue to Production.',
-            'hint' => \App\Support\AttachmentUpload::helperText(20),
+            'hint' => \App\Support\AttachmentUpload::helperText(400).' · Up to 50 files',
             'button' => 'Upload Sample Approval',
         ],
         default => [
@@ -103,22 +104,40 @@ unset($__defined_vars, $__key, $__value); ?>
         ],
     };
     $effectiveUpload = $artworkRevisionActive ? $revisionUpload : $upload;
-    $selectedUploads = collect(is_array($effectiveUpload) ? $effectiveUpload : ($effectiveUpload ? [$effectiveUpload] : []))->filter()->values();
-    $selectedUploadCount = $selectedUploads->count();
-    $selectedUploadDetails = $selectedUploads->map(function ($file) {
-        $name = $file->getClientOriginalName();
+    if ($chunkedArtworkUpload) {
+        $selectedUploads = $artworkRevisionActive
+            ? collect($stagedRevisionUploads)->filter()
+            : collect($stagedUploads)->filter()->values();
+        $selectedUploadCount = $selectedUploads->count();
+        $selectedUploadDetails = $artworkRevisionActive ? collect() : $selectedUploads->map(function ($file) {
+            $name = (string) data_get($file, 'name', 'Artwork file');
+            $size = (int) data_get($file, 'size', 0);
+            return [
+                'name' => $name,
+                'type' => (string) (data_get($file, 'type') ?: (strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE')),
+                'size' => $size >= 1048576
+                    ? number_format($size / 1048576, 1).' MB'
+                    : number_format(max(1, (int) ceil($size / 1024))).' KB',
+            ];
+        });
+    } else {
+        $selectedUploads = collect(is_array($effectiveUpload) ? $effectiveUpload : ($effectiveUpload ? [$effectiveUpload] : []))->filter()->values();
+        $selectedUploadCount = $selectedUploads->count();
+        $selectedUploadDetails = $selectedUploads->map(function ($file) {
+            $name = $file->getClientOriginalName();
 
-        return [
-            'name' => $name,
-            'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
-            'size' => $file->getSize() >= 1048576
-                ? number_format($file->getSize() / 1048576, 1).' MB'
-                : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
-        ];
-    });
+            return [
+                'name' => $name,
+                'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
+                'size' => $file->getSize() >= 1048576
+                    ? number_format($file->getSize() / 1048576, 1).' MB'
+                    : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
+            ];
+        });
+    }
 ?>
 <div class="ft-order-task-document-modal-backdrop" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-document-modal-'.e($task->id).''; ?>wire:key="order-task-document-modal-<?php echo e($task->id); ?>" wire:click.self="closeOverviewTaskDocumentModal">
-    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal <?php echo e($prototypeUpload ? 'ft-order-prototype-upload-modal' : ''); ?> <?php echo e($artworkRevisionActive ? 'ft-order-prototype-upload-modal--artwork-revision' : ''); ?>" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
+    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal <?php echo e($prototypeUpload ? 'ft-order-prototype-upload-modal' : ''); ?> <?php echo e($artworkRevisionActive ? 'ft-order-prototype-upload-modal--artwork-revision' : ''); ?>" data-ft-feedback-scope="form" data-artwork-upload-modal-task="<?php echo e($task->id); ?>" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
         <header class="ft-order-task-document-modal-head">
             <div>
                 <h2 id="order-task-document-modal-title"><?php echo e($prototypeConfig['title']); ?></h2>
@@ -148,6 +167,10 @@ unset($__defined_vars, $__key, $__value); ?>
                     x-on:livewire-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 250)"
                     x-on:livewire-upload-error="uploading = false; progress = 0"
                     x-on:livewire-upload-cancel="uploading = false; progress = 0"
+                    x-on:flowtrack-artwork-upload-start="uploading = true; progress = 0"
+                    x-on:flowtrack-artwork-upload-progress="progress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                    x-on:flowtrack-artwork-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 250)"
+                    x-on:flowtrack-artwork-upload-error="uploading = false; progress = 0"
                 >
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($artworkRevisionActive): ?>
                         <div class="ft-artwork-revision-upload-plan">
@@ -167,8 +190,19 @@ unset($__defined_vars, $__key, $__value); ?>
                                         $revisionItem = (array) ($revisionItemsByDocumentId[$revisionDocumentId] ?? []);
                                         $revisionInstruction = trim((string) data_get($revisionItem, 'comment', ''));
                                         $replacementFile = $revisionUpload[$revisionDocumentId] ?? $revisionUpload[(string) $revisionDocumentId] ?? null;
+                                        $stagedReplacement = $stagedRevisionUploads[$revisionDocumentId] ?? $stagedRevisionUploads[(string) $revisionDocumentId] ?? null;
                                         $replacementDetail = null;
-                                        if ($replacementFile) {
+                                        if ($stagedReplacement) {
+                                            $replacementName = (string) data_get($stagedReplacement, 'name', 'Artwork file');
+                                            $replacementSize = (int) data_get($stagedReplacement, 'size', 0);
+                                            $replacementDetail = [
+                                                'name' => $replacementName,
+                                                'type' => (string) (data_get($stagedReplacement, 'type') ?: (strtoupper((string) pathinfo($replacementName, PATHINFO_EXTENSION)) ?: 'FILE')),
+                                                'size' => $replacementSize >= 1048576
+                                                    ? number_format($replacementSize / 1048576, 1).' MB'
+                                                    : number_format(max(1, (int) ceil($replacementSize / 1024))).' KB',
+                                            ];
+                                        } elseif ($replacementFile) {
                                             $replacementName = $replacementFile->getClientOriginalName();
                                             $replacementDetail = [
                                                 'name' => $replacementName,
@@ -188,6 +222,10 @@ unset($__defined_vars, $__key, $__value); ?>
                                         x-on:livewire-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
                                         x-on:livewire-upload-error="uploadingReplacement = false; replacementProgress = 0"
                                         x-on:livewire-upload-cancel="uploadingReplacement = false; replacementProgress = 0"
+                                        x-on:flowtrack-artwork-upload-start="uploadingReplacement = true; replacementProgress = 0"
+                                        x-on:flowtrack-artwork-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                        x-on:flowtrack-artwork-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
+                                        x-on:flowtrack-artwork-upload-error="uploadingReplacement = false; replacementProgress = 0"
                                     >
                                         <div class="ft-artwork-revision-replacement-summary">
                                             <div class="ft-artwork-revision-replacement-source">
@@ -283,7 +321,10 @@ unset($__defined_vars, $__key, $__value); ?>
                                                 <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone ft-artwork-revision-replacement-dropzone <?php echo e($replacementDetail ? 'is-compact' : ''); ?>" data-file-dropzone>
                                                     <input
                                                         type="file"
-                                                        wire:model="overviewTaskRevisionUpload.<?php echo e($revisionDocumentId); ?>"
+                                                        data-artwork-chunk-input
+                                                        data-artwork-upload-start-url="<?php echo e(route('orders.artwork-uploads.start', [], false)); ?>"
+                                                        data-artwork-task-id="<?php echo e($task->id); ?>"
+                                                        data-revision-document-id="<?php echo e($revisionDocumentId); ?>"
                                                         accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>"
                                                         aria-label="Choose replacement artwork for <?php echo e($revisionCandidate->name); ?>"
                                                         title="Choose replacement file"
@@ -297,7 +338,7 @@ unset($__defined_vars, $__key, $__value); ?>
                                                         <b>or choose from your computer</b>
                                                         <span class="ft-order-attachment-browse">Browse file</span>
                                                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                                    <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(20)); ?></small>
+                                                    <small data-drop-status><?php echo e(\App\Support\AttachmentUpload::helperText(400)); ?></small>
                                                 </label>
 
                                                 <div
@@ -378,7 +419,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                 <span class="ft-order-attachment-selected-copy">
                                     <strong class="<?php echo e($prototypeUpload ? 'ft-prototype-selected-file-name' : ''); ?>" title="<?php echo e($selectedUpload['name']); ?>"><?php echo e($selectedUpload['name']); ?></strong>
-                                    <small><?php echo e($selectedUpload['type']); ?> · <?php echo e($selectedUpload['size']); ?> · Ready to upload</small>
+                                    <small><?php echo e($selectedUpload['type']); ?> · <?php echo e($selectedUpload['size']); ?> · Uploaded · Ready to save</small>
                                 </span>
                                 <button type="button" wire:click="removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)" wire:loading.attr="disabled" wire:target="overviewTaskDocumentUpload,overviewTaskRevisionUpload,removeOverviewTaskDocumentUpload(<?php echo e($index); ?>)">Remove</button>
                             </div>
@@ -388,7 +429,21 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                     <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone <?php echo e($selectedUploads->isNotEmpty() ? 'is-compact' : ''); ?>">
-                        <input type="file" wire:model="<?php echo e($artworkRevisionActive ? 'overviewTaskRevisionUpload' : 'overviewTaskDocumentUpload'); ?>" <?php if($inputAllowsMultiple): ?> multiple <?php endif; ?> accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>" aria-label="<?php echo e($uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload'); ?>" title="<?php echo e($uploadCopyPlural ? 'Choose files' : 'Choose file'); ?>">
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($chunkedArtworkUpload): ?>
+                            <input
+                                type="file"
+                                data-artwork-chunk-input
+                                data-artwork-upload-start-url="<?php echo e(route('orders.artwork-uploads.start', [], false)); ?>"
+                                data-artwork-task-id="<?php echo e($task->id); ?>"
+                                data-artwork-current-count="<?php echo e($selectedUploadCount); ?>"
+                                <?php if($inputAllowsMultiple): ?> multiple <?php endif; ?>
+                                accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>"
+                                aria-label="<?php echo e($uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload'); ?>"
+                                title="<?php echo e($uploadCopyPlural ? 'Choose files' : 'Choose file'); ?>"
+                            >
+                        <?php else: ?>
+                            <input type="file" wire:model="overviewTaskDocumentUpload" <?php if($inputAllowsMultiple): ?> multiple <?php endif; ?> accept="<?php echo e(\App\Support\AttachmentUpload::accept()); ?>" aria-label="<?php echo e($uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload'); ?>" title="<?php echo e($uploadCopyPlural ? 'Choose files' : 'Choose file'); ?>">
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($selectedUploads->isNotEmpty()): ?>
                             <strong><?php echo e($uploadCopyPlural ? 'Choose a different file set' : 'Choose a different file'); ?></strong>
@@ -492,6 +547,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <button
                 type="button"
                 class="primary"
+                data-artwork-upload-save
+                data-server-disabled="<?php echo e(($source === 'upload' ? ($artworkRevisionActive ? ($revisionCount < 1 || $selectedUploadCount !== $revisionCount) : $selectedUploads->isEmpty()) : !$existingDocumentId) ? '1' : '0'); ?>"
                 wire:click="saveOverviewTaskDocument"
                 wire:loading.attr="disabled"
                 wire:target="saveOverviewTaskDocument,overviewTaskDocumentUpload,overviewTaskRevisionUpload"
@@ -511,7 +568,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     wire:loading
                     wire:target="saveOverviewTaskDocument"
                 >
-                    Uploading...
+                    Saving...
                 </span>
             </button>
         </footer>

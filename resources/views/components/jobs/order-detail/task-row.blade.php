@@ -66,6 +66,11 @@
     $workflowInvoice = (array) data_get($context, 'workflowInvoices.'.(int) $task->id, []);
     $workflowInvoiceId = (int) ($workflowInvoice['id'] ?? 0);
     $workflowInvoicePdfName = trim((string) ($workflowInvoice['pdf_name'] ?? ''));
+    $workflowInvoiceDisplayName = $workflowInvoicePdfName !== ''
+        ? $workflowInvoicePdfName
+        : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf');
+    $workflowInvoiceCreatorName = trim((string) ($workflowInvoice['creator_name'] ?? '')) ?: 'FlowTrack';
+    $workflowInvoicePreparedAt = $workflowInvoice['prepared_at'] ?? null;
     $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
     $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
     $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
@@ -174,10 +179,8 @@
             @endif
         @endif
         @if($workflowInvoiceId > 0)
-            <div class="card-sub ft-order-task-invoice-file">
-                <span aria-hidden="true">📎</span>
-                <a href="{{ route('invoices.pdf.open', $workflowInvoiceId) }}" target="_blank" rel="noopener">{{ $workflowInvoicePdfName !== '' ? $workflowInvoicePdfName : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf') }}</a>
-                <a href="{{ route('invoices.pdf.download', $workflowInvoiceId) }}" class="ft-order-task-invoice-download">Download</a>
+            <div class="card-sub">
+                📎 {{ $workflowInvoiceDisplayName }} · Latest
             </div>
         @elseif($taskDocuments->isNotEmpty())
             @php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); @endphp
@@ -244,8 +247,27 @@
     />
 @endforeach
 
-@if($resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
+@if($workflowInvoiceId > 0 || $resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty())
     <div class="task-resources ft-order-task-resources">
+        @if($workflowInvoiceId > 0)
+            <div
+                wire:key="order-task-invoice-{{ $task->id }}-{{ $workflowInvoiceId }}"
+                class="ft-order-task-resource-row is-latest-artwork ft-order-task-invoice-resource-row"
+            >
+                <x-ui.file-type-badge :name="$workflowInvoiceDisplayName" class="ft-order-file-icon" />
+                <span>
+                    <b>{{ $workflowInvoiceDisplayName }}</b>
+                    <small>
+                        {{ $workflowInvoiceCreatorName }} · {{ \App\Support\UserLocalTime::format($workflowInvoicePreparedAt, 'M j, Y, g:i A') }} · Latest version
+                    </small>
+                </span>
+                <span class="ft-order-task-resource-actions">
+                    <em class="ft-order-artwork-version-state is-latest">Latest</em>
+                    <a href="{{ route('invoices.pdf.open', $workflowInvoiceId) }}" target="_blank" rel="noopener">Open</a>
+                    <a href="{{ route('invoices.pdf.download', $workflowInvoiceId) }}">Download</a>
+                </span>
+            </div>
+        @endif
         @foreach($resourceDocuments as $document)
 <div
                 wire:key="order-task-document-{{ $document->id }}"

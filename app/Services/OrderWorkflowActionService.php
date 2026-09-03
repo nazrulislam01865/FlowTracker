@@ -8,6 +8,7 @@ use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Task;
 use App\Models\User;
+use App\Support\AttachmentUpload;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -1152,7 +1153,7 @@ class OrderWorkflowActionService
                 'task_id' => $reviewTask->id,
                 'category' => 'Artwork revision evidence',
                 'note' => 'Supporting attachment for artwork revision request: '.($item['document_name'] ?? 'Artwork').'.',
-            ], $actor);
+            ], $actor, 'documents', AttachmentUpload::ARTWORK_MAX_BYTES);
 
             foreach ($documents as $document) $allStored->push($document);
             $item['revision_attachment_document_ids'] = $documents->pluck('id')->map(fn ($id) => (int) $id)->values()->all();

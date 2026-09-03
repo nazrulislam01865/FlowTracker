@@ -47,12 +47,12 @@ class OrderDocumentUploadPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("ft-order-task-document-modal ft-order-attachment-upload-modal {{ \$prototypeUpload ? 'ft-order-prototype-upload-modal' : '' }}", $view);
         $this->assertStringContainsString('ft-prototype-selected-file-name', $view);
         $this->assertStringContainsString('ft-order-attachment-selected-file', $view);
-        $this->assertStringContainsString("\$allowMultipleUploads = \$automationKey === 'ART_PREPARE_UPLOAD'", $view);
+        $this->assertStringContainsString("\$chunkedArtworkUpload = in_array(\$automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true)", $view);
         $this->assertStringContainsString('@if($inputAllowsMultiple) multiple @endif', $view);
         $this->assertStringContainsString('$selectedUploadCount', $view);
         $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $index }})', $view);
         $this->assertStringContainsString('One artwork version', $view);
-        $this->assertStringContainsString('Ready to upload', $view);
+        $this->assertStringContainsString('Uploaded · Ready to save', $view);
         $this->assertStringContainsString("'Choose files' : 'Choose file'", $view);
         $this->assertMatchesRegularExpression('/height:\s*500px;/', $css);
         $this->assertMatchesRegularExpression('/grid-template-rows:\s*auto minmax\(0,\s*1fr\) auto;/', $css);

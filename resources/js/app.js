@@ -1,5 +1,6 @@
 import { installBrowserApi } from './core/browser-api.js';
 import { bootAttachmentAutoUpload } from './components/attachment-auto-upload.js';
+import { bootArtworkChunkUpload } from './components/artwork-chunk-upload.js';
 import { bootAsyncFeedback, resetAsyncFeedback } from './components/async-feedback.js';
 import { bootFileDropzones } from './components/file-dropzones.js';
 import { bootLocalFileActions } from './components/local-file-actions.js';
@@ -48,6 +49,7 @@ const bootShared = () => {
     bootFileDropzones();
     bootLocalFileActions();
     bootAttachmentAutoUpload();
+    bootArtworkChunkUpload();
     bootMasterColors();
     bootRouteFeatures();
 };

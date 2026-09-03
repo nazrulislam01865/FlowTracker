@@ -66,6 +66,8 @@
                     :source="$overviewTaskDocumentSource"
                     :upload="$overviewTaskDocumentUpload"
                     :revision-upload="$overviewTaskRevisionUpload"
+                    :staged-uploads="$overviewTaskStagedUploads"
+                    :staged-revision-uploads="$overviewTaskStagedRevisionUploads"
                     :existing-document-id="$overviewTaskExistingDocumentId"
                     :artwork-revision="$listActionArtworkRevision"
                     :revision-document-ids="$overviewTaskRevisionDocumentIds"

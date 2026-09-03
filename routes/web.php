@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\AdministrationController;
 use App\Http\Controllers\Auth\AuthController;
+use App\Http\Controllers\ArtworkChunkUploadController;
 use App\Http\Controllers\BoardController;
 use App\Http\Controllers\BulkOrderImportController;
 use App\Http\Controllers\CancelledOrdersController;
@@ -145,6 +146,24 @@ Route::middleware('auth')->group(function () {
     Route::get('/orders/export', [ListExportController::class, 'orders'])->middleware(['permission:jobs.view', 'permission:reports.export'])->name('orders.export');
     Route::get('/orders/cancelled', CancelledOrdersController::class)->middleware('permission:jobs.view')->name('orders.cancelled');
     Route::get('/orders/cancelled/export', CancelledOrdersExportController::class)->middleware(['permission:jobs.view', 'permission:reports.export'])->name('orders.cancelled.export');
+    // Large Artwork uses small resumable-ish chunks instead of one long
+    // Livewire temporary-upload request. Standard document uploads are unchanged.
+    Route::post('/orders/artwork-uploads', [ArtworkChunkUploadController::class, 'start'])
+        ->middleware(['permission:documents.create', 'throttle:240,1'])
+        ->name('orders.artwork-uploads.start');
+    Route::post('/orders/artwork-uploads/{token}/chunks', [ArtworkChunkUploadController::class, 'chunk'])
+        ->middleware(['permission:documents.create', 'throttle:600,1'])
+        ->whereUuid('token')
+        ->name('orders.artwork-uploads.chunk');
+    Route::post('/orders/artwork-uploads/{token}/complete', [ArtworkChunkUploadController::class, 'complete'])
+        ->middleware(['permission:documents.create', 'throttle:240,1'])
+        ->whereUuid('token')
+        ->name('orders.artwork-uploads.complete');
+    Route::delete('/orders/artwork-uploads/{token}', [ArtworkChunkUploadController::class, 'destroy'])
+        ->middleware(['permission:documents.create', 'throttle:240,1'])
+        ->whereUuid('token')
+        ->name('orders.artwork-uploads.destroy');
+
     Route::get('/orders', JobsController::class)->middleware('permission:jobs.view')->name('jobs.index');
     Route::get('/jobs', function (\Illuminate\Http\Request $request) {
         return redirect()->route('jobs.index', $request->query());

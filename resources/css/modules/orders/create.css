@@ -1072,3 +1072,312 @@
         max-width:calc(100vw - 24px);
     }
 }
+
+
+/* 2026-09-03 Create Order optional Inquiry link.
+   Matches the supplied prototype and reuses the shared remote search-select.
+   Scope is deliberately limited to Create Order so no existing selector or
+   Order Details typography/layout is changed. */
+.ft-create-job-page .ft-create-inquiry-link{
+    position:relative;
+    gap:0;
+}
+.ft-create-job-page .ft-create-inquiry-link>b{
+    margin-bottom:5px;
+}
+.ft-create-job-page .ft-create-inquiry-help{
+    display:block;
+    margin:0 0 8px;
+    color:var(--ft-text-muted,#7586a1);
+    font-size:12px;
+    font-weight:400;
+    line-height:1.4;
+}
+.ft-create-job-page .ft-create-inquiry-picker{
+    position:relative;
+    min-width:0;
+}
+.ft-create-job-page .ft-create-inquiry-search-icon{
+    position:absolute;
+    z-index:2;
+    top:50%;
+    left:14px;
+    width:18px;
+    height:18px;
+    color:#8292aa;
+    pointer-events:none;
+    transform:translateY(-50%);
+}
+.ft-create-job-page .ft-create-inquiry-select{
+    min-width:0;
+}
+.ft-create-job-page .ft-create-inquiry-select .ft-search-select__trigger{
+    min-height:46px;
+    width:100%;
+    padding-left:43px;
+    border:1px solid #d5dee9;
+    border-radius:8px;
+    background:#fff;
+    color:#6f7f98;
+    font-size:13px;
+    font-weight:400;
+    box-shadow:none;
+}
+.ft-create-job-page .ft-create-inquiry-select .ft-search-select__trigger:hover:not(:disabled),
+.ft-create-job-page .ft-create-inquiry-select .ft-search-select__trigger[aria-expanded="true"],
+.ft-create-job-page .ft-create-inquiry-select .ft-search-select__trigger:focus-visible{
+    border-color:var(--ft-focus-border);
+    box-shadow:0 0 0 3px color-mix(in srgb, var(--ft-theme-primary) 9%, transparent);
+}
+.ft-create-job-page .ft-create-inquiry-select .ft-filter-chevron{
+    color:#72839d;
+}
+.ft-create-job-page .ft-create-inquiry-selected{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    min-height:66px;
+    padding:10px 14px 10px 12px;
+    border:1px solid #d5dee9;
+    border-radius:8px;
+    background:#fff;
+}
+.ft-create-job-page .ft-create-inquiry-link-icon{
+    display:inline-flex;
+    flex:0 0 40px;
+    width:40px;
+    height:40px;
+    align-items:center;
+    justify-content:center;
+    border-radius:8px;
+    background:var(--ft-order-create-accent-soft);
+    color:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-inquiry-link-icon svg{
+    width:20px;
+    height:20px;
+}
+.ft-create-job-page .ft-create-inquiry-selected-copy{
+    display:flex;
+    flex:1 1 auto;
+    min-width:0;
+    flex-direction:column;
+    gap:4px;
+}
+.ft-create-job-page .ft-create-inquiry-selected-copy>strong{
+    overflow:hidden;
+    color:#14233f;
+    font-size:14px;
+    font-weight:700;
+    line-height:1.3;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ft-create-job-page .ft-create-inquiry-selected-copy>small{
+    display:flex;
+    align-items:center;
+    gap:7px;
+    color:#7788a1;
+    font-size:12px;
+    line-height:1.2;
+}
+.ft-create-job-page .ft-create-inquiry-selected-copy>small>i{
+    display:block;
+    width:6px;
+    height:6px;
+    border-radius:50%;
+    background:var(--ft-order-create-accent);
+}
+.ft-create-job-page .ft-create-inquiry-change{
+    flex:0 0 auto;
+    padding:8px 9px;
+    border:0;
+    background:transparent;
+    color:var(--ft-order-create-accent);
+    font:inherit;
+    font-size:13px;
+    font-weight:700;
+    cursor:pointer;
+}
+.ft-create-job-page .ft-create-inquiry-change:hover,
+.ft-create-job-page .ft-create-inquiry-change:focus-visible{
+    color:var(--ft-order-create-accent-hover);
+    text-decoration:underline;
+    text-underline-offset:3px;
+}
+.ft-create-job-page .ft-create-inquiry-change:focus-visible{
+    outline:2px solid color-mix(in srgb, var(--ft-theme-primary) 28%, transparent);
+    outline-offset:1px;
+    border-radius:5px;
+}
+.ft-create-job-page .ft-create-inquiry-link>.validation-error{
+    margin-top:6px;
+}
+@media (max-width:760px){
+    .ft-create-job-page .ft-create-inquiry-selected{
+        align-items:flex-start;
+    }
+    .ft-create-job-page .ft-create-inquiry-selected-copy>strong{
+        white-space:normal;
+    }
+    .ft-create-job-page .ft-create-inquiry-change{
+        align-self:center;
+    }
+}
+
+/* 2026-09-03 Create Order multiple Inquiry selection.
+   Reuses the shared remote search-select and keeps the prototype's typography,
+   spacing and linked-Inquiry card treatment while allowing many links. */
+.ft-create-job-page .ft-create-inquiry-selected-list{
+    display:grid;
+    gap:8px;
+    min-width:0;
+}
+.ft-create-job-page .ft-create-inquiry-selected-list .ft-create-inquiry-selected{
+    min-height:64px;
+}
+.ft-create-job-page .ft-create-inquiry-selected-copy>small{
+    min-width:0;
+    flex-wrap:wrap;
+}
+.ft-create-job-page .ft-create-inquiry-meta{
+    overflow:hidden;
+    max-width:100%;
+    text-overflow:ellipsis;
+    white-space:nowrap;
+}
+.ft-create-job-page .ft-create-inquiry-remove{
+    flex:0 0 auto;
+    padding:7px 9px;
+    border:0;
+    border-radius:6px;
+    background:transparent;
+    color:#8b98aa;
+    font:inherit;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+}
+.ft-create-job-page .ft-create-inquiry-remove:hover,
+.ft-create-job-page .ft-create-inquiry-remove:focus-visible{
+    background:#fff2f2;
+    color:#c84444;
+}
+.ft-create-job-page .ft-create-inquiry-remove:focus-visible{
+    outline:2px solid color-mix(in srgb, #c84444 24%, transparent);
+    outline-offset:1px;
+}
+.ft-create-job-page .ft-create-inquiry-remove:disabled{
+    cursor:wait;
+    opacity:.55;
+}
+.ft-create-job-page .ft-create-inquiry-actions{
+    display:flex;
+    align-items:center;
+    gap:8px;
+    min-height:36px;
+    margin-top:8px;
+}
+.ft-create-job-page .ft-create-inquiry-actions .ft-create-inquiry-change{
+    padding-left:0;
+}
+.ft-create-job-page .ft-create-inquiry-add,
+.ft-create-job-page .ft-create-inquiry-cancel{
+    border:0;
+    background:transparent;
+    color:var(--ft-order-create-accent);
+    font:inherit;
+    font-size:12px;
+    font-weight:700;
+    cursor:pointer;
+}
+.ft-create-job-page .ft-create-inquiry-add{
+    padding:8px 9px;
+    margin-left:auto;
+}
+.ft-create-job-page .ft-create-inquiry-add:hover,
+.ft-create-job-page .ft-create-inquiry-add:focus-visible,
+.ft-create-job-page .ft-create-inquiry-cancel:hover,
+.ft-create-job-page .ft-create-inquiry-cancel:focus-visible{
+    color:var(--ft-order-create-accent-hover);
+    text-decoration:underline;
+    text-underline-offset:3px;
+}
+.ft-create-job-page .ft-create-inquiry-count{
+    margin-left:0;
+    color:#8190a6;
+    font-size:11px;
+    font-weight:500;
+    white-space:nowrap;
+}
+.ft-create-job-page .ft-create-inquiry-picker-wrap{
+    margin-top:8px;
+}
+.ft-create-job-page .ft-create-inquiry-selected-list + .ft-create-inquiry-actions + .ft-create-inquiry-picker-wrap{
+    margin-top:2px;
+}
+.ft-create-job-page .ft-create-inquiry-picker-footer{
+    display:flex;
+    align-items:center;
+    gap:12px;
+    padding:7px 2px 0;
+}
+.ft-create-job-page .ft-create-inquiry-picker-footer>small{
+    color:#8291a6;
+    font-size:11px;
+    line-height:1.35;
+}
+.ft-create-job-page .ft-create-inquiry-cancel{
+    margin-left:auto;
+    padding:4px 2px;
+    color:#75849a;
+}
+@media (max-width:760px){
+    .ft-create-job-page .ft-create-inquiry-selected-list .ft-create-inquiry-selected{
+        align-items:center;
+    }
+    .ft-create-job-page .ft-create-inquiry-actions{
+        flex-wrap:wrap;
+    }
+    .ft-create-job-page .ft-create-inquiry-count{
+        width:100%;
+        margin-left:0;
+    }
+    .ft-create-job-page .ft-create-inquiry-add{
+        margin-left:auto;
+    }
+    .ft-create-job-page .ft-create-inquiry-picker-footer{
+        align-items:flex-start;
+    }
+}
+.ft-create-job-page .ft-create-inquiry-row-actions{
+    display:inline-flex;
+    flex:0 0 auto;
+    align-items:center;
+    gap:2px;
+}
+.ft-create-job-page .ft-create-inquiry-row-actions .ft-create-inquiry-change{
+    padding:8px 7px;
+}
+.ft-create-job-page .ft-create-inquiry-row-actions .ft-create-inquiry-remove{
+    display:inline-flex;
+    width:30px;
+    height:30px;
+    padding:0;
+    align-items:center;
+    justify-content:center;
+    border-radius:7px;
+    font-size:18px;
+    font-weight:500;
+    line-height:1;
+}
+.ft-create-job-page .ft-create-inquiry-change:disabled,
+.ft-create-job-page .ft-create-inquiry-add:disabled{
+    cursor:wait;
+    opacity:.55;
+}
+@media (max-width:760px){
+    .ft-create-job-page .ft-create-inquiry-row-actions{
+        align-self:center;
+    }
+}

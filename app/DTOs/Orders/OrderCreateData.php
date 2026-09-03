@@ -11,6 +11,17 @@ final readonly class OrderCreateData
     public static function fromLivewire(array $data, bool $draft): self
     {
         $first = collect($data['jobItems'])->first();
+        $rawInquiryIds = (array) ($data['createInquiryIds'] ?? []);
+        if ($rawInquiryIds === [] && filled($data['createInquiryId'] ?? null)) {
+            // Graceful compatibility for a Create Order page left open across a
+            // deployment from the previous single-Inquiry implementation.
+            $rawInquiryIds = [(int) $data['createInquiryId']];
+        }
+        $inquiryIds = collect($rawInquiryIds)
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn (int $id) => $id > 0)
+            ->unique()
+            ->values();
 
         return new self([
             'order_number' => $data['referenceNumber'],
@@ -25,6 +36,11 @@ final readonly class OrderCreateData
             'production_urgency_ids' => [],
             'shipment_urgency_ids' => array_values(array_map('intval', $data['shipmentUrgencyIds'] ?? [])),
             'client_id' => $data['clientId'],
+            // The first selected Inquiry remains the legacy primary/source id;
+            // the full ordered set is consumed by LegacyJobService inside the
+            // same transaction so an Order can start with multiple Inquiry links.
+            'source_inquiry_id' => $inquiryIds->first(),
+            'source_inquiry_ids' => $inquiryIds->all(),
             'workflow_id' => $data['workflowId'],
             'workflow_phase_id' => $data['workflowPhaseId'],
             'owner_id' => $data['ownerId'],

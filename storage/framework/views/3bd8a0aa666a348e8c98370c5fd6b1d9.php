@@ -23,6 +23,12 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'searchPlaceholder' => null,
     'footerMessage' => null,
     'showAvatar' => false,
+    // Optional progressive paging for selectors that are expected to browse
+    // many records. The shared remote selector still fetches nothing until the
+    // trigger is opened; when enabled, reaching the bottom of the option list
+    // automatically requests the next bounded page instead of showing a
+    // separate "Load more" button.
+    'infiniteScroll' => false,
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -60,6 +66,12 @@ foreach (array_filter(([
     'searchPlaceholder' => null,
     'footerMessage' => null,
     'showAvatar' => false,
+    // Optional progressive paging for selectors that are expected to browse
+    // many records. The shared remote selector still fetches nothing until the
+    // trigger is opened; when enabled, reaching the bottom of the option list
+    // automatically requests the next bounded page instead of showing a
+    // separate "Load more" button.
+    'infiniteScroll' => false,
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -223,8 +235,15 @@ unset($__defined_vars, $__key, $__value); ?>
             </button>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-        <div id="<?php echo e($componentId); ?>-listbox" class="ft-remote-filter-list ft-search-select__list" role="listbox">
-            <template x-if="loading"><div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div></template>
+        <div
+            id="<?php echo e($componentId); ?>-listbox"
+            class="ft-remote-filter-list ft-search-select__list<?php echo e($infiniteScroll ? ' ft-search-select__list--infinite' : ''); ?>"
+            role="listbox"
+            <?php if($remote && $infiniteScroll): ?>
+                x-on:scroll.passive="if (hasMore && !loading && ($el.scrollHeight - $el.scrollTop - $el.clientHeight <= 56)) loadMore()"
+            <?php endif; ?>
+        >
+            <template x-if="loading && visibleItems.length === 0"><div><div class="ft-filter-skeleton"></div><div class="ft-filter-skeleton"></div></div></template>
             <template x-if="!loading && visibleItems.length === 0"><div class="ft-remote-filter-message">No matching options</div></template>
             <template x-for="item in visibleItems" :key="item.id">
                 <button
@@ -257,12 +276,22 @@ unset($__defined_vars, $__key, $__value); ?>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </button>
             </template>
+
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($remote && $infiniteScroll): ?>
+                
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="loading && visibleItems.length > 0">Loading more…</div>
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="!loading && hasMore && message !== 'Could not load options. Try again.'">Scroll to load more</div>
+                <div class="ft-remote-filter-message ft-search-select__scroll-status" x-show="!loading && message === 'Could not load options. Try again.'" x-text="message"></div>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
 
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($remote): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($remote && !$infiniteScroll): ?>
             <button type="button" class="ft-search-select__load-more" x-show="hasMore && !loading" x-on:click="loadMore()">Load more</button>
+            <div class="ft-remote-filter-message" x-text="message"></div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <div class="ft-remote-filter-message" x-text="message"></div>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($remote)): ?>
+            <div class="ft-remote-filter-message" x-text="message"></div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($footerMessage): ?><div class="ft-remote-filter-message"><?php echo e($footerMessage); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($fixedMenu): ?>

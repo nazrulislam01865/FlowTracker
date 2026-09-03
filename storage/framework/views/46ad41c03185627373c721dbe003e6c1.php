@@ -29,7 +29,8 @@ foreach ($attributes->all() as $__key => $__value) {
 unset($__defined_vars, $__key, $__value); ?>
 <nav class="page-tabs ft-order-prototype-tabs" aria-label="Order detail tabs">
     <button type="button" class="page-tab <?php echo e($detailTab === 'overview' ? 'active' : ''); ?>" wire:click="setDetailTab('overview')">Overview</button>
-    <button type="button" class="page-tab <?php echo e($detailTab === 'inquiry' ? 'active' : ''); ?>" wire:click="setDetailTab('inquiry')">Inquiry &nbsp;<span class="status-pill"><?php echo e($job->source_inquiry_id ? 1 : 0); ?></span></button>
+    <?php ($linkedInquiryCount = max((int) ($job->linked_inquiries_count ?? 0), $job->source_inquiry_id ? 1 : 0)); ?>
+    <button type="button" class="page-tab <?php echo e($detailTab === 'inquiry' ? 'active' : ''); ?>" wire:click="setDetailTab('inquiry')">Inquiry &nbsp;<span class="status-pill"><?php echo e($linkedInquiryCount); ?></span></button>
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canViewFinance): ?>
         <button type="button" class="page-tab <?php echo e($detailTab === 'finance' ? 'active' : ''); ?>" wire:click="setDetailTab('finance')">Invoices &amp; Payments</button>
     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>

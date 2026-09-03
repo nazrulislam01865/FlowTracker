@@ -1,11 +1,12 @@
-@props(['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []])
+@props(['job', 'task', 'availableDocuments' => collect(), 'source' => 'upload', 'upload' => null, 'revisionUpload' => null, 'stagedUploads' => [], 'stagedRevisionUploads' => [], 'existingDocumentId' => null, 'artworkRevision' => [], 'revisionDocumentIds' => [], 'context' => []])
 @php
     $canUpload = (bool) ($context['canUploadDocument'] ?? false);
     $canLink = (bool) ($context['canLinkDocument'] ?? false);
     $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
     $automationKey = $workflowActions->automationKey($task);
     $prototypeUpload = in_array($automationKey, ['NEW_UPLOAD_PO', 'ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
-    $allowMultipleUploads = $automationKey === 'ART_PREPARE_UPLOAD'
+    $chunkedArtworkUpload = in_array($automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true);
+    $allowMultipleUploads = $chunkedArtworkUpload
         || $automationKey === 'NEW_UPLOAD_PO'
         || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
     $hasExistingEvidence = $task->relationLoaded('documents') ? $task->documents->isNotEmpty() : false;
@@ -75,22 +76,40 @@
         ],
     };
     $effectiveUpload = $artworkRevisionActive ? $revisionUpload : $upload;
-    $selectedUploads = collect(is_array($effectiveUpload) ? $effectiveUpload : ($effectiveUpload ? [$effectiveUpload] : []))->filter()->values();
-    $selectedUploadCount = $selectedUploads->count();
-    $selectedUploadDetails = $selectedUploads->map(function ($file) {
-        $name = $file->getClientOriginalName();
+    if ($chunkedArtworkUpload) {
+        $selectedUploads = $artworkRevisionActive
+            ? collect($stagedRevisionUploads)->filter()
+            : collect($stagedUploads)->filter()->values();
+        $selectedUploadCount = $selectedUploads->count();
+        $selectedUploadDetails = $artworkRevisionActive ? collect() : $selectedUploads->map(function ($file) {
+            $name = (string) data_get($file, 'name', 'Artwork file');
+            $size = (int) data_get($file, 'size', 0);
+            return [
+                'name' => $name,
+                'type' => (string) (data_get($file, 'type') ?: (strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE')),
+                'size' => $size >= 1048576
+                    ? number_format($size / 1048576, 1).' MB'
+                    : number_format(max(1, (int) ceil($size / 1024))).' KB',
+            ];
+        });
+    } else {
+        $selectedUploads = collect(is_array($effectiveUpload) ? $effectiveUpload : ($effectiveUpload ? [$effectiveUpload] : []))->filter()->values();
+        $selectedUploadCount = $selectedUploads->count();
+        $selectedUploadDetails = $selectedUploads->map(function ($file) {
+            $name = $file->getClientOriginalName();
 
-        return [
-            'name' => $name,
-            'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
-            'size' => $file->getSize() >= 1048576
-                ? number_format($file->getSize() / 1048576, 1).' MB'
-                : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
-        ];
-    });
+            return [
+                'name' => $name,
+                'type' => strtoupper((string) pathinfo($name, PATHINFO_EXTENSION)) ?: 'FILE',
+                'size' => $file->getSize() >= 1048576
+                    ? number_format($file->getSize() / 1048576, 1).' MB'
+                    : number_format(max(1, (int) ceil($file->getSize() / 1024))).' KB',
+            ];
+        });
+    }
 @endphp
 <div class="ft-order-task-document-modal-backdrop" wire:key="order-task-document-modal-{{ $task->id }}" wire:click.self="closeOverviewTaskDocumentModal">
-    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal {{ $prototypeUpload ? 'ft-order-prototype-upload-modal' : '' }} {{ $artworkRevisionActive ? 'ft-order-prototype-upload-modal--artwork-revision' : '' }}" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
+    <section class="ft-order-task-document-modal ft-order-attachment-upload-modal {{ $prototypeUpload ? 'ft-order-prototype-upload-modal' : '' }} {{ $artworkRevisionActive ? 'ft-order-prototype-upload-modal--artwork-revision' : '' }}" data-ft-feedback-scope="form" data-artwork-upload-modal-task="{{ $task->id }}" role="dialog" aria-modal="true" aria-labelledby="order-task-document-modal-title">
         <header class="ft-order-task-document-modal-head">
             <div>
                 <h2 id="order-task-document-modal-title">{{ $prototypeConfig['title'] }}</h2>
@@ -120,6 +139,10 @@
                     x-on:livewire-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 250)"
                     x-on:livewire-upload-error="uploading = false; progress = 0"
                     x-on:livewire-upload-cancel="uploading = false; progress = 0"
+                    x-on:flowtrack-artwork-upload-start="uploading = true; progress = 0"
+                    x-on:flowtrack-artwork-upload-progress="progress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                    x-on:flowtrack-artwork-upload-finish="progress = 100; window.setTimeout(() => { uploading = false; progress = 0 }, 250)"
+                    x-on:flowtrack-artwork-upload-error="uploading = false; progress = 0"
                 >
                     @if($artworkRevisionActive)
                         <div class="ft-artwork-revision-upload-plan">
@@ -139,8 +162,19 @@
                                         $revisionItem = (array) ($revisionItemsByDocumentId[$revisionDocumentId] ?? []);
                                         $revisionInstruction = trim((string) data_get($revisionItem, 'comment', ''));
                                         $replacementFile = $revisionUpload[$revisionDocumentId] ?? $revisionUpload[(string) $revisionDocumentId] ?? null;
+                                        $stagedReplacement = $stagedRevisionUploads[$revisionDocumentId] ?? $stagedRevisionUploads[(string) $revisionDocumentId] ?? null;
                                         $replacementDetail = null;
-                                        if ($replacementFile) {
+                                        if ($stagedReplacement) {
+                                            $replacementName = (string) data_get($stagedReplacement, 'name', 'Artwork file');
+                                            $replacementSize = (int) data_get($stagedReplacement, 'size', 0);
+                                            $replacementDetail = [
+                                                'name' => $replacementName,
+                                                'type' => (string) (data_get($stagedReplacement, 'type') ?: (strtoupper((string) pathinfo($replacementName, PATHINFO_EXTENSION)) ?: 'FILE')),
+                                                'size' => $replacementSize >= 1048576
+                                                    ? number_format($replacementSize / 1048576, 1).' MB'
+                                                    : number_format(max(1, (int) ceil($replacementSize / 1024))).' KB',
+                                            ];
+                                        } elseif ($replacementFile) {
                                             $replacementName = $replacementFile->getClientOriginalName();
                                             $replacementDetail = [
                                                 'name' => $replacementName,
@@ -160,6 +194,10 @@
                                         x-on:livewire-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
                                         x-on:livewire-upload-error="uploadingReplacement = false; replacementProgress = 0"
                                         x-on:livewire-upload-cancel="uploadingReplacement = false; replacementProgress = 0"
+                                        x-on:flowtrack-artwork-upload-start="uploadingReplacement = true; replacementProgress = 0"
+                                        x-on:flowtrack-artwork-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"
+                                        x-on:flowtrack-artwork-upload-finish="replacementProgress = 100; window.setTimeout(() => { uploadingReplacement = false; replacementProgress = 0 }, 250)"
+                                        x-on:flowtrack-artwork-upload-error="uploadingReplacement = false; replacementProgress = 0"
                                     >
                                         <div class="ft-artwork-revision-replacement-summary">
                                             <div class="ft-artwork-revision-replacement-source">
@@ -213,7 +251,10 @@
                                                 <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone ft-artwork-revision-replacement-dropzone {{ $replacementDetail ? 'is-compact' : '' }}" data-file-dropzone>
                                                     <input
                                                         type="file"
-                                                        wire:model="overviewTaskRevisionUpload.{{ $revisionDocumentId }}"
+                                                        data-artwork-chunk-input
+                                                        data-artwork-upload-start-url="{{ route('orders.artwork-uploads.start', [], false) }}"
+                                                        data-artwork-task-id="{{ $task->id }}"
+                                                        data-revision-document-id="{{ $revisionDocumentId }}"
                                                         accept="{{ \App\Support\AttachmentUpload::accept() }}"
                                                         aria-label="Choose replacement artwork for {{ $revisionCandidate->name }}"
                                                         title="Choose replacement file"
@@ -273,7 +314,7 @@
                                 @endif
                                 <span class="ft-order-attachment-selected-copy">
                                     <strong class="{{ $prototypeUpload ? 'ft-prototype-selected-file-name' : '' }}" title="{{ $selectedUpload['name'] }}">{{ $selectedUpload['name'] }}</strong>
-                                    <small>{{ $selectedUpload['type'] }} · {{ $selectedUpload['size'] }} · Ready to upload</small>
+                                    <small>{{ $selectedUpload['type'] }} · {{ $selectedUpload['size'] }} · Uploaded · Ready to save</small>
                                 </span>
                                 <button type="button" wire:click="removeOverviewTaskDocumentUpload({{ $index }})" wire:loading.attr="disabled" wire:target="overviewTaskDocumentUpload,overviewTaskRevisionUpload,removeOverviewTaskDocumentUpload({{ $index }})">Remove</button>
                             </div>
@@ -283,7 +324,21 @@
                     @endif
 
                     <label class="ft-order-task-document-dropzone ft-order-attachment-dropzone {{ $selectedUploads->isNotEmpty() ? 'is-compact' : '' }}">
-                        <input type="file" wire:model="{{ $artworkRevisionActive ? 'overviewTaskRevisionUpload' : 'overviewTaskDocumentUpload' }}" @if($inputAllowsMultiple) multiple @endif accept="{{ \App\Support\AttachmentUpload::accept() }}" aria-label="{{ $uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload' }}" title="{{ $uploadCopyPlural ? 'Choose files' : 'Choose file' }}">
+                        @if($chunkedArtworkUpload)
+                            <input
+                                type="file"
+                                data-artwork-chunk-input
+                                data-artwork-upload-start-url="{{ route('orders.artwork-uploads.start', [], false) }}"
+                                data-artwork-task-id="{{ $task->id }}"
+                                data-artwork-current-count="{{ $selectedUploadCount }}"
+                                @if($inputAllowsMultiple) multiple @endif
+                                accept="{{ \App\Support\AttachmentUpload::accept() }}"
+                                aria-label="{{ $uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload' }}"
+                                title="{{ $uploadCopyPlural ? 'Choose files' : 'Choose file' }}"
+                            >
+                        @else
+                            <input type="file" wire:model="overviewTaskDocumentUpload" @if($inputAllowsMultiple) multiple @endif accept="{{ \App\Support\AttachmentUpload::accept() }}" aria-label="{{ $uploadCopyPlural ? 'Choose files to upload' : 'Choose a file to upload' }}" title="{{ $uploadCopyPlural ? 'Choose files' : 'Choose file' }}">
+                        @endif
                         <svg class="ft-order-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
                         @if($selectedUploads->isNotEmpty())
                             <strong>{{ $uploadCopyPlural ? 'Choose a different file set' : 'Choose a different file' }}</strong>
@@ -296,7 +351,7 @@
                         <small>{{ $prototypeConfig['hint'] }}</small>
                     </label>
 
-                    {{-- CHANGED: shown only while Livewire is transferring the selected file. --}}
+                    {{-- Shows progress for legacy Livewire uploads and Artwork chunk transport. --}}
                     <div
                         class="ft-prototype-upload-progress"
                         x-cloak
@@ -356,6 +411,8 @@
             <button
                 type="button"
                 class="primary"
+                data-artwork-upload-save
+                data-server-disabled="{{ ($source === 'upload' ? ($artworkRevisionActive ? ($revisionCount < 1 || $selectedUploadCount !== $revisionCount) : $selectedUploads->isEmpty()) : !$existingDocumentId) ? '1' : '0' }}"
                 wire:click="saveOverviewTaskDocument"
                 wire:loading.attr="disabled"
                 wire:target="saveOverviewTaskDocument,overviewTaskDocumentUpload,overviewTaskRevisionUpload"
@@ -376,7 +433,7 @@
                     wire:loading
                     wire:target="saveOverviewTaskDocument"
                 >
-                    Uploading...
+                    Saving...
                 </span>
             </button>
         </footer>

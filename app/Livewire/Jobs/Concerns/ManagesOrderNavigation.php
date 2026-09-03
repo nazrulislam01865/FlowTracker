@@ -107,6 +107,7 @@ trait ManagesOrderNavigation
         $this->selectedLinkInquiryId = null;
         $this->showInquiryLinkConfirm = false;
         $this->showInquiryUnlinkConfirm = false;
+        $this->unlinkInquiryId = null;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->overviewTaskUploads = [];
@@ -152,6 +153,7 @@ trait ManagesOrderNavigation
         $this->selectedLinkInquiryId = null;
         $this->showInquiryLinkConfirm = false;
         $this->showInquiryUnlinkConfirm = false;
+        $this->unlinkInquiryId = null;
         $this->jobTaskSearch = '';
         $this->jobDocumentUploads = [];
         $this->overviewTaskUploads = [];
@@ -218,6 +220,13 @@ trait ManagesOrderNavigation
         }
         if ($tab !== 'finance') $this->closeFinanceModals();
         if ($tab !== 'redo') $this->closeRedoModal();
+        if ($tab !== 'inquiry') {
+            $this->inquirySearch = '';
+            $this->selectedLinkInquiryId = null;
+            $this->showInquiryLinkConfirm = false;
+            $this->showInquiryUnlinkConfirm = false;
+            $this->unlinkInquiryId = null;
+        }
         $this->resetValidation(['inquiryLink', 'invoiceForm', 'paymentForm', 'collectionForm']);
     }
 

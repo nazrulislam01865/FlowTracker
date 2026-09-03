@@ -40,6 +40,10 @@ unset($__defined_vars, $__key, $__value); ?>
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
     $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
     $isArtworkUploadTask = $automationKey === 'ART_PREPARE_UPLOAD';
+    // Purchase Order upload tasks use the same document presentation style as
+    // artwork uploads: show the uploaded file card with uploader, timestamp,
+    // latest marker and document actions.
+    $isPurchaseOrderUploadTask = $automationKey === 'NEW_UPLOAD_PO';
     $isProductionEstimatedDeliveryTask = $automationKey === 'PROD_SET_ESTIMATED_DELIVERY';
     $artworkRevisionNotes = $task->relationLoaded('artworkRevisionNotes') ? $task->artworkRevisionNotes : collect();
     $revisionReferenceDocumentIds = $artworkRevisionNotes
@@ -90,6 +94,11 @@ unset($__defined_vars, $__key, $__value); ?>
     $workflowInvoice = (array) data_get($context, 'workflowInvoices.'.(int) $task->id, []);
     $workflowInvoiceId = (int) ($workflowInvoice['id'] ?? 0);
     $workflowInvoicePdfName = trim((string) ($workflowInvoice['pdf_name'] ?? ''));
+    $workflowInvoiceDisplayName = $workflowInvoicePdfName !== ''
+        ? $workflowInvoicePdfName
+        : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf');
+    $workflowInvoiceCreatorName = trim((string) ($workflowInvoice['creator_name'] ?? '')) ?: 'FlowTrack';
+    $workflowInvoicePreparedAt = $workflowInvoice['prepared_at'] ?? null;
     $emailResendFeedback = (array) data_get($context, 'workflowEmailResendFeedback.'.(int) $task->id, []);
     $emailResendFeedbackType = strtolower(trim((string) ($emailResendFeedback['type'] ?? '')));
     $emailResendFeedbackMessage = trim((string) ($emailResendFeedback['message'] ?? ''));
@@ -304,10 +313,8 @@ unset($__defined_vars, $__key, $__value); ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoiceId > 0): ?>
-            <div class="card-sub ft-order-task-invoice-file">
-                <span aria-hidden="true">📎</span>
-                <a href="<?php echo e(route('invoices.pdf.open', $workflowInvoiceId)); ?>" target="_blank" rel="noopener"><?php echo e($workflowInvoicePdfName !== '' ? $workflowInvoicePdfName : (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf')); ?></a>
-                <a href="<?php echo e(route('invoices.pdf.download', $workflowInvoiceId)); ?>" class="ft-order-task-invoice-download">Download</a>
+            <div class="card-sub">
+                📎 <?php echo e($workflowInvoiceDisplayName); ?> · Latest
             </div>
         <?php elseif($taskDocuments->isNotEmpty()): ?>
             <?php $latestTaskDocument = $isArtworkUploadTask ? $latestArtworkDocument : $taskDocuments->first(); ?>
@@ -402,12 +409,52 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php endif; ?>
 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::endLoop(); ?><?php endif; ?><?php endforeach; $__env->popLoop(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::closeLoop(); ?><?php endif; ?>
 
-<?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty()): ?>
+<?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoiceId > 0 || $resourceDocuments->isNotEmpty() || $taskLinks->isNotEmpty()): ?>
     <div class="task-resources ft-order-task-resources">
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $resourceDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $document): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowInvoiceId > 0): ?>
             <div
+                <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-invoice-'.e($task->id).'-'.e($workflowInvoiceId).''; ?>wire:key="order-task-invoice-<?php echo e($task->id); ?>-<?php echo e($workflowInvoiceId); ?>"
+                class="ft-order-task-resource-row is-latest-artwork ft-order-task-invoice-resource-row"
+            >
+                <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.file-type-badge','data' => ['name' => $workflowInvoiceDisplayName,'class' => 'ft-order-file-icon']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('ui.file-type-badge'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowInvoiceDisplayName),'class' => 'ft-order-file-icon']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $attributes = $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__attributesOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b)): ?>
+<?php $component = $__componentOriginal8cc2d9c978b2c497e659881c0713db1b; ?>
+<?php unset($__componentOriginal8cc2d9c978b2c497e659881c0713db1b); ?>
+<?php endif; ?>
+                <span>
+                    <b><?php echo e($workflowInvoiceDisplayName); ?></b>
+                    <small>
+                        <?php echo e($workflowInvoiceCreatorName); ?> · <?php echo e(\App\Support\UserLocalTime::format($workflowInvoicePreparedAt, 'M j, Y, g:i A')); ?> · Latest version
+                    </small>
+                </span>
+                <span class="ft-order-task-resource-actions">
+                    <em class="ft-order-artwork-version-state is-latest">Latest</em>
+                    <a href="<?php echo e(route('invoices.pdf.open', $workflowInvoiceId)); ?>" target="_blank" rel="noopener">Open</a>
+                    <a href="<?php echo e(route('invoices.pdf.download', $workflowInvoiceId)); ?>">Download</a>
+                </span>
+            </div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $resourceDocuments; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $document): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
+<div
                 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-document-'.e($document->id).''; ?>wire:key="order-task-document-<?php echo e($document->id); ?>"
-                class="ft-order-task-resource-row <?php echo e($isArtworkUploadTask ? 'is-latest-artwork' : ''); ?>"
+                class="ft-order-task-resource-row <?php echo e(($isArtworkUploadTask || $isPurchaseOrderUploadTask) ? 'is-latest-artwork' : ''); ?>"
             >
                 <?php if (isset($component)) { $__componentOriginal8cc2d9c978b2c497e659881c0713db1b = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal8cc2d9c978b2c497e659881c0713db1b = $attributes; } ?>
@@ -436,11 +483,11 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     <small>
                         <?php echo e($document->uploader?->name ?? 'FlowTrack'); ?> · <?php echo e(\App\Support\UserLocalTime::format($document->created_at, 'M j, Y, g:i A')); ?>
 
-                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask): ?> · Latest revision <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask || $isPurchaseOrderUploadTask): ?> · Latest version <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     </small>
                 </span>
                 <span class="ft-order-task-resource-actions">
-                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask): ?>
+                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isArtworkUploadTask || $isPurchaseOrderUploadTask): ?>
                         <em class="ft-order-artwork-version-state is-latest">Latest</em>
                     <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                     <a href="<?php echo e(route('documents.open', $document)); ?>" target="_blank" rel="noopener">Open</a>

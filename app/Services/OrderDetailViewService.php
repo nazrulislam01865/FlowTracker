@@ -87,6 +87,8 @@ class OrderDetailViewService
                         'invoice_number' => (string) $preparedInvoice->invoice_number,
                         'pdf_name' => (string) ($preparedInvoice->pdf_name ?: $preparedInvoice->invoice_number.'.pdf'),
                         'pdf_path' => (string) ($preparedInvoice->pdf_path ?: ''),
+                        'creator_name' => (string) ($preparedInvoice->creator?->name ?: 'FlowTrack'),
+                        'prepared_at' => $preparedInvoice->created_at,
                     ]])
                     ->all();
             }

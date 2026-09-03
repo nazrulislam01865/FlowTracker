@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\Task;
 use App\Models\User;
 use App\Support\ArtworkDocumentName;
+use App\Support\AttachmentUpload;
 use App\Support\StoredFileResponse;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Collection;
@@ -52,7 +53,7 @@ class DocumentService
         return $this->query($user, $filters, $permissionModule)->latest()->paginate($perPage);
     }
 
-    public function store(UploadedFile $file, array $data, User $user, string $permissionModule = 'documents'): Document
+    public function store(UploadedFile $file, array $data, User $user, string $permissionModule = 'documents', ?int $securityMaxBytes = null): Document
     {
         $access = app(AccessControlService::class);
         abort_unless($access->can($user, $permissionModule, 'create'), 403);
@@ -77,8 +78,15 @@ class DocumentService
             }
         }
 
+        $automationKey = $task ? app(OrderWorkflowActionService::class)->automationKey($task) : null;
+        if ($securityMaxBytes === null && in_array($automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true)) {
+            // Artwork is the only normal document flow allowed above the global
+            // secure-storage ceiling. Keep all other uploads on the existing cap.
+            $securityMaxBytes = AttachmentUpload::ARTWORK_MAX_BYTES;
+        }
+
         $jobId = $task?->flow_job_id ?: ($data['flow_job_id'] ?? 'general');
-        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/'.$jobId);
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/'.$jobId, $securityMaxBytes);
         $path = $stored['path'];
 
         $category = $task?->documentCategory?->name
@@ -86,8 +94,7 @@ class DocumentService
             ?: ($data['category'] ?? ($task ? 'Task attachment' : 'Other'));
 
         $originalName = $file->getClientOriginalName();
-        $isArtworkTask = $task
-            && app(OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD';
+        $isArtworkTask = $task && $automationKey === 'ART_PREPARE_UPLOAD';
         $batchVersion = max(0, (int) ($data['artwork_batch_version'] ?? 0));
         $version = $isArtworkTask && $batchVersion > 0
             ? $batchVersion
@@ -132,12 +139,12 @@ class DocumentService
      * @param array<int,UploadedFile> $files
      * @return Collection<int,Document>
      */
-    public function storeMany(array $files, array $data, User $user, string $permissionModule = 'documents'): Collection
+    public function storeMany(array $files, array $data, User $user, string $permissionModule = 'documents', ?int $securityMaxBytes = null): Collection
     {
         $storedPaths = [];
 
         try {
-            return DB::transaction(function () use ($files, $data, $user, $permissionModule, &$storedPaths): Collection {
+            return DB::transaction(function () use ($files, $data, $user, $permissionModule, $securityMaxBytes, &$storedPaths): Collection {
                 $documents = collect();
                 $artworkBatchVersion = null;
 
@@ -147,7 +154,7 @@ class DocumentService
                         $fileData['artwork_batch_version'] = $artworkBatchVersion;
                     }
 
-                    $document = $this->store($file, $fileData, $user, $permissionModule);
+                    $document = $this->store($file, $fileData, $user, $permissionModule, $securityMaxBytes);
                     $documents->push($document);
                     if (filled($document->path)) {
                         $storedPaths[] = (string) $document->path;
@@ -651,7 +658,7 @@ class DocumentService
                         $storeData['category'] = (string) ($source->category ?: 'Task attachment');
                     }
 
-                    $replacement = $this->store($replacementFiles[$sourceId], $storeData, $user, $permissionModule);
+                    $replacement = $this->store($replacementFiles[$sourceId], $storeData, $user, $permissionModule, AttachmentUpload::ARTWORK_MAX_BYTES);
                     $created->push($replacement);
                     $replacedSourceIds[] = $sourceId;
                     $replacementDocumentMap[$sourceId] = (int) $replacement->id;

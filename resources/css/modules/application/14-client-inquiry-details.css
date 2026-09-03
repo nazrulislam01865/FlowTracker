@@ -541,6 +541,11 @@
     gap: 11px
 }
 
+.ft-oil-linked-content {
+    min-width: 0;
+    flex: 1 1 auto
+}
+
 .ft-oil-linked-icon {
     display: grid;
     place-items: center;
@@ -590,6 +595,143 @@
     display: flex;
     align-items: center;
     gap: 7px
+}
+
+.ft-oil-files {
+    margin-top: 13px;
+    overflow: hidden;
+    border: 1px solid #d9e5ee;
+    border-radius: 9px;
+    background: #fff
+}
+
+.ft-oil-files-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+    padding: 9px 10px;
+    border-bottom: 1px solid #e7edf3;
+    background: #f8fbfd;
+    color: #344057;
+    font-size: .6875rem;
+    font-weight: 760
+}
+
+.ft-oil-files-head b {
+    display: inline-grid;
+    min-width: 20px;
+    height: 20px;
+    place-items: center;
+    padding: 0 6px;
+    border-radius: 999px;
+    background: var(--ft-theme-primary-soft);
+    color: var(--ft-theme-primary);
+    font-size: .625rem
+}
+
+.ft-oil-files-list {
+    max-height: 420px;
+    overflow: auto
+}
+
+.ft-oil-file-row {
+    display: grid;
+    grid-template-columns: 42px minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-top: 1px solid #edf1f5
+}
+
+.ft-oil-file-row:first-child {
+    border-top: 0
+}
+
+.ft-oil-file-type {
+    display: grid;
+    width: 42px;
+    height: 34px;
+    place-items: center;
+    overflow: hidden;
+    border-radius: 7px;
+    background: #eef5f8;
+    color: #476178;
+    font-size: .5625rem;
+    font-weight: 800;
+    text-overflow: ellipsis
+}
+
+.ft-oil-file-copy {
+    display: grid;
+    min-width: 0;
+    gap: 3px
+}
+
+.ft-oil-file-copy strong {
+    overflow: hidden;
+    color: #26354a;
+    font-size: .75rem;
+    font-weight: 720;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.ft-oil-file-copy small {
+    overflow: hidden;
+    color: #718096;
+    font-size: .625rem;
+    line-height: 1.35;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.ft-oil-file-actions {
+    display: flex;
+    align-items: center;
+    gap: 6px
+}
+
+.ft-oil-file-actions a {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    justify-content: center;
+    padding: 0 8px;
+    border: 1px solid #cad7e8;
+    border-radius: 7px;
+    background: #fff;
+    color: var(--ft-theme-primary-800);
+    font-size: .625rem;
+    font-weight: 720;
+    text-decoration: none
+}
+
+.ft-oil-file-actions a:hover {
+    border-color: var(--ft-theme-primary-300);
+    color: var(--ft-theme-primary)
+}
+
+.ft-oil-files-empty,
+.ft-oil-files-locked {
+    color: #718096;
+    font-size: .6875rem;
+    line-height: 1.45
+}
+
+.ft-oil-files-empty {
+    padding: 13px 10px
+}
+
+.ft-oil-files-locked {
+    display: flex;
+    align-items: center;
+    gap: 7px;
+    margin-top: 12px;
+    padding: 9px 10px;
+    border: 1px solid #e3e8ef;
+    border-radius: 8px;
+    background: #f8fafc
 }
 
 .ft-oil-secondary,
@@ -870,6 +1012,215 @@
     font-size: .75rem
 }
 
+
+/* Multiple linked Inquiries -------------------------------------------------
+ * Orders can now contain several Inquiry relationships. Keep each relationship
+ * visually self-contained so users can scan identity, status and files without
+ * confusing one Inquiry's documents with another's.
+ */
+.ft-oil-linked-section {
+    display: grid;
+    gap: 12px
+}
+
+.ft-oil-linked-section-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px
+}
+
+.ft-oil-linked-section-head h3,
+.ft-oil-add-section-head h3 {
+    margin: 0;
+    color: #26354a;
+    font-size: .8125rem;
+    font-weight: 760
+}
+
+.ft-oil-linked-section-head p,
+.ft-oil-add-section-head p {
+    margin: 3px 0 0;
+    color: #718096;
+    font-size: .6875rem;
+    line-height: 1.45
+}
+
+.ft-oil-linked-stats {
+    display: flex;
+    flex: 0 0 auto;
+    align-items: center;
+    gap: 7px
+}
+
+.ft-oil-linked-stats span {
+    display: inline-flex;
+    min-height: 28px;
+    align-items: center;
+    gap: 4px;
+    padding: 0 9px;
+    border: 1px solid #d9e5ee;
+    border-radius: 999px;
+    background: #f8fbfd;
+    color: #617187;
+    font-size: .625rem;
+    font-weight: 650
+}
+
+.ft-oil-linked-stats b {
+    color: var(--ft-theme-primary);
+    font-size: .6875rem
+}
+
+.ft-oil-inquiry-stack {
+    display: grid;
+    gap: 12px
+}
+
+.ft-oil-inquiry-card {
+    overflow: hidden;
+    border: 1px solid #cfe2da;
+    border-radius: 11px;
+    background: #fbfffd;
+    box-shadow: 0 1px 2px rgb(15 23 42 / 3%)
+}
+
+.ft-oil-inquiry-card-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 14px;
+    padding: 13px 14px
+}
+
+.ft-oil-inquiry-identity {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 auto;
+    align-items: flex-start;
+    gap: 11px
+}
+
+.ft-oil-inquiry-title-block {
+    min-width: 0;
+    flex: 1 1 auto
+}
+
+.ft-oil-inquiry-kicker {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 6px;
+    margin-bottom: 1px
+}
+
+.ft-oil-primary-source-badge,
+.ft-oil-inquiry-file-chip {
+    display: inline-flex;
+    min-height: 20px;
+    align-items: center;
+    padding: 0 7px;
+    border-radius: 999px;
+    font-size: .5625rem;
+    font-weight: 720
+}
+
+.ft-oil-primary-source-badge {
+    background: var(--oil-green-soft);
+    color: var(--oil-green)
+}
+
+.ft-oil-inquiry-file-chip {
+    border: 1px solid #dbe5ed;
+    background: #fff;
+    color: #68798e
+}
+
+.ft-oil-inquiry-card .ft-oil-linked-title {
+    max-width: 980px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap
+}
+
+.ft-oil-inquiry-card .ft-oil-linked-actions {
+    flex: 0 0 auto;
+    align-self: center
+}
+
+.ft-oil-inquiry-card .ft-oil-files {
+    margin: 0 14px 14px
+}
+
+.ft-oil-files-collapsible>summary {
+    cursor: pointer;
+    list-style: none;
+    user-select: none
+}
+
+.ft-oil-files-collapsible>summary::-webkit-details-marker {
+    display: none
+}
+
+.ft-oil-files-head-label,
+.ft-oil-files-head-right {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px
+}
+
+.ft-oil-files-head-label i {
+    color: var(--ft-theme-primary);
+    font-style: normal
+}
+
+.ft-oil-files-head-right small {
+    color: #8290a3;
+    font-size: .5625rem;
+    font-weight: 550
+}
+
+.ft-oil-files-chevron {
+    color: #738399;
+    font-style: normal;
+    transition: transform .16s ease
+}
+
+.ft-oil-files-collapsible:not([open]) .ft-oil-files-chevron {
+    transform: rotate(-90deg)
+}
+
+.ft-oil-add-section {
+    display: grid;
+    gap: 10px;
+    margin-top: 16px;
+    padding-top: 16px;
+    border-top: 1px solid #e4ebf1
+}
+
+.ft-oil-add-section-head {
+    display: flex;
+    align-items: flex-start;
+    gap: 9px
+}
+
+.ft-oil-add-icon {
+    display: grid;
+    width: 28px;
+    height: 28px;
+    flex: 0 0 28px;
+    place-items: center;
+    border-radius: 8px;
+    background: var(--ft-theme-primary-soft);
+    color: var(--ft-theme-primary);
+    font-size: .875rem;
+    font-weight: 750
+}
+
+.ft-oil-inquiry-access-note {
+    margin: 0 0 4px
+}
+
 @keyframes ft-oil-spin {
     to {
         transform: rotate(360deg)
@@ -940,6 +1291,24 @@
 
     .ft-oil-linked-actions>* {
         width: 100%
+    }
+
+    .ft-oil-file-row {
+        grid-template-columns: 38px minmax(0, 1fr);
+        gap: 8px
+    }
+
+    .ft-oil-file-type {
+        width: 38px
+    }
+
+    .ft-oil-file-actions {
+        grid-column: 1 / -1;
+        padding-left: 46px
+    }
+
+    .ft-oil-file-actions a {
+        flex: 1
     }
 
     .ft-oil-pair {
@@ -2382,3 +2751,42 @@
     margin-left: auto
 }
 
+
+@media(max-width:760px) {
+    .ft-oil-linked-section-head,
+    .ft-oil-inquiry-card-head {
+        flex-direction: column
+    }
+
+    .ft-oil-linked-stats {
+        align-self: stretch
+    }
+
+    .ft-oil-inquiry-card .ft-oil-linked-actions {
+        width: 100%;
+        align-self: stretch
+    }
+}
+
+@media(max-width:520px) {
+    .ft-oil-linked-stats {
+        flex-wrap: wrap
+    }
+
+    .ft-oil-linked-stats span {
+        flex: 1 1 auto;
+        justify-content: center
+    }
+
+    .ft-oil-inquiry-card-head {
+        padding: 11px
+    }
+
+    .ft-oil-inquiry-card .ft-oil-files {
+        margin: 0 11px 11px
+    }
+
+    .ft-oil-files-head-right small {
+        display: none
+    }
+}

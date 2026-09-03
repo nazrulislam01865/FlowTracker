@@ -729,14 +729,44 @@ class LegacyInquiryService
                 $inquiry->inquiry_number.' deleted',
             );
 
-            // Deleting an Inquiry must not delete an already-created Order.
-            // Detach the active Order link so its list/detail pages do not
-            // retain a reference to a soft-deleted Inquiry.
+            // Deleting an Inquiry must not delete any already-created Order.
+            // Remove the many-link row and, when this was the legacy primary
+            // source, promote the oldest remaining linked Inquiry so older Order
+            // code still has a stable source_inquiry_id value.
+            $linkedOrderIds = DB::table('flow_job_inquiries')
+                ->where('inquiry_id', $inquiry->id)
+                ->pluck('flow_job_id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
             if ($inquiry->converted_job_id) {
-                FlowJob::query()
-                    ->whereKey($inquiry->converted_job_id)
-                    ->where('source_inquiry_id', $inquiry->id)
-                    ->update(['source_inquiry_id' => null]);
+                $linkedOrderIds[] = (int) $inquiry->converted_job_id;
+            }
+            $linkedOrderIds = array_merge(
+                $linkedOrderIds,
+                FlowJob::query()->where('source_inquiry_id', $inquiry->id)->pluck('id')->map(fn ($id) => (int) $id)->all(),
+            );
+
+            $linkedOrderIds = array_values(array_unique(array_filter($linkedOrderIds)));
+            DB::table('flow_job_inquiries')->where('inquiry_id', $inquiry->id)->delete();
+
+            foreach ($linkedOrderIds as $orderId) {
+                $order = FlowJob::query()->whereKey($orderId)->lockForUpdate()->first();
+                if (!$order || (int) ($order->source_inquiry_id ?? 0) !== (int) $inquiry->id) {
+                    continue;
+                }
+
+                $replacementInquiryId = DB::table('flow_job_inquiries')
+                    ->join('inquiries', 'inquiries.id', '=', 'flow_job_inquiries.inquiry_id')
+                    ->where('flow_job_inquiries.flow_job_id', $order->id)
+                    ->whereNull('inquiries.deleted_at')
+                    ->orderBy('flow_job_inquiries.created_at')
+                    ->orderBy('flow_job_inquiries.id')
+                    ->value('flow_job_inquiries.inquiry_id');
+
+                $order->update([
+                    'source_inquiry_id' => $replacementInquiryId ? (int) $replacementInquiryId : null,
+                ]);
             }
 
             $inquiry->delete();
@@ -2238,7 +2268,7 @@ class LegacyInquiryService
         abort_unless($this->canEdit($actor, $inquiry), 403);
         abort_unless(app(AccessControlService::class)->can($actor, 'jobs', 'create'), 403, 'You need Order create access to convert this Inquiry.');
         abort_if($inquiry->result, 422, 'This Inquiry already has a final result.');
-        abort_if($inquiry->converted_job_id || $inquiry->sourceOrder()->exists(), 422, 'This Inquiry is already linked to an Order. Unlink it before creating another Order from it.');
+        abort_if($inquiry->converted_job_id || $inquiry->sourceOrder()->exists() || $inquiry->linkedOrders()->exists(), 422, 'This Inquiry is already linked to an Order. Unlink it before creating another Order from it.');
         abort_if($inquiry->tasks()->whereNull('completed_at')->exists(), 422, 'Complete every Inquiry taskflow task first.');
 
         $template = WorkflowTemplate::query()
@@ -2286,6 +2316,13 @@ class LegacyInquiryService
             ], $actor);
 
             $job->update(['source_inquiry_id' => $inquiry->id, 'currency' => $inquiry->currency ?: 'USD']);
+            $job->linkedInquiries()->syncWithoutDetaching([
+                $inquiry->id => [
+                    'linked_by' => $actor->id,
+                    'created_at' => now(),
+                    'updated_at' => now(),
+                ],
+            ]);
             $inquiry->update([
                 'result' => 'converted',
                 'status' => 'Converted',

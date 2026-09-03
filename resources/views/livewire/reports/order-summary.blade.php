@@ -77,6 +77,11 @@
             </div>
         </div>
 
+        <x-reports.client-checkbox-filter
+            :clients="$clientOptions"
+            :selected-ids="$clientIds"
+        />
+
         <div class="ft-osr-quickbar">
             <div class="ft-osr-chips">
                 <button type="button" class="ft-osr-chip {{ $quick === 'all' ? 'active' : '' }}" wire:click="setQuick('all')">

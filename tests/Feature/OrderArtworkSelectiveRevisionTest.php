@@ -63,7 +63,9 @@ class OrderArtworkSelectiveRevisionTest extends TestCase
 
         $this->assertStringContainsString('Artwork selected for revision', $uploadModal);
         $this->assertStringContainsString('Upload one replacement under each artwork below.', $uploadModal);
-        $this->assertStringContainsString('wire:model="overviewTaskRevisionUpload.{{ $revisionDocumentId }}"', $uploadModal);
+        $this->assertStringContainsString('data-artwork-chunk-input', $uploadModal);
+        $this->assertStringContainsString('data-revision-document-id="{{ $revisionDocumentId }}"', $uploadModal);
+        $this->assertStringNotContainsString('wire:model="overviewTaskRevisionUpload.{{ $revisionDocumentId }}"', $uploadModal);
         $this->assertStringContainsString('removeOverviewTaskDocumentUpload({{ $revisionDocumentId }})', $uploadModal);
         $this->assertStringContainsString('ft-artwork-revision-replacement-dropzone', $uploadModal);
         $this->assertStringContainsString('x-on:livewire-upload-progress="replacementProgress = Math.max(0, Math.min(100, Number($event.detail.progress) || 0))"', $uploadModal);
@@ -77,8 +79,9 @@ class OrderArtworkSelectiveRevisionTest extends TestCase
             $this->assertStringContainsString('updatePendingArtworkRevisionSelection(', $component);
             $this->assertStringContainsString('storeArtworkRevision(', $component);
             $this->assertStringContainsString("'overviewTaskRevisionDocumentIds' => ['required', 'array', 'min:1']", $component);
-            $this->assertStringContainsString("'overviewTaskRevisionUpload' => ['required', 'array', 'size:'", $component);
-            $this->assertStringContainsString("\$revisionRules['overviewTaskRevisionUpload.'.\$revisionDocumentId] = AttachmentUpload::requiredRules", $component);
+            $this->assertStringContainsString('overviewTaskStagedRevisionUploads', $component);
+            $this->assertStringContainsString('registerOverviewTaskArtworkRevisionUpload(', $component);
+            $this->assertStringContainsString('materialize($stagedTokens', $component);
             $this->assertStringContainsString('$uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;', $component);
         }
     }
@@ -90,13 +93,23 @@ class OrderArtworkSelectiveRevisionTest extends TestCase
         $overview = file_get_contents(resource_path('views/components/jobs/detail-overview.blade.php'));
 
         $this->assertStringContainsString(':overview-task-artwork-revision="$overviewTaskArtworkRevision ?? []"', $page);
+        $this->assertStringContainsString(':overview-task-staged-uploads="$overviewTaskStagedUploads"', $page);
+        $this->assertStringContainsString(':overview-task-staged-revision-uploads="$overviewTaskStagedRevisionUploads"', $page);
         $this->assertStringContainsString("'overviewTaskArtworkRevision'=>[]", $detail);
+        $this->assertStringContainsString("'overviewTaskStagedUploads'=>[]", $detail);
+        $this->assertStringContainsString("'overviewTaskStagedRevisionUploads'=>[]", $detail);
+        $this->assertStringContainsString(':overview-task-staged-uploads="$overviewTaskStagedUploads"', $detail);
+        $this->assertStringContainsString(':overview-task-staged-revision-uploads="$overviewTaskStagedRevisionUploads"', $detail);
         $this->assertStringContainsString(':overview-task-artwork-revision="$overviewTaskArtworkRevision"', $detail);
         $this->assertStringContainsString("'overviewTaskArtworkRevision' => []", $overview);
+        $this->assertStringContainsString("'overviewTaskStagedUploads' => []", $overview);
+        $this->assertStringContainsString("'overviewTaskStagedRevisionUploads' => []", $overview);
         $this->assertStringContainsString(':artwork-revision="$overviewTaskArtworkRevision"', $overview);
         $this->assertStringContainsString(':overview-task-revision-document-ids="$overviewTaskRevisionDocumentIds"', $detail);
         $this->assertStringContainsString(':revision-document-ids="$overviewTaskRevisionDocumentIds"', $overview);
         $this->assertStringContainsString(':revision-upload="$overviewTaskRevisionUpload"', $overview);
+        $this->assertStringContainsString(':staged-uploads="$overviewTaskStagedUploads"', $overview);
+        $this->assertStringContainsString(':staged-revision-uploads="$overviewTaskStagedRevisionUploads"', $overview);
         $this->assertStringContainsString(':revision-comments="$orderWorkflowActionRevisionComments"', $overview);
         $this->assertStringContainsString(':revision-attachments="$orderWorkflowActionRevisionAttachments"', $overview);
     }

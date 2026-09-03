@@ -139,6 +139,13 @@
         overflow: auto;
     }
 
+    /* Progressive remote selectors use a deliberately shorter first viewport.
+       Five recent rows are enough to orient the user while still creating a
+       real scroll boundary that can request the next bounded page. */
+    .ft-search-select__list--infinite {
+        max-height: 9rem;
+    }
+
     .ft-search-select__option {
         width: 100%;
         min-height: var(--ft-control-height-sm);

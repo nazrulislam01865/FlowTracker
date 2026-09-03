@@ -6,6 +6,7 @@ use App\Models\Document;
 use App\Models\FlowJob;
 use App\Models\Task;
 use App\Services\AccessControlService;
+use App\Services\ArtworkUploadStagingService;
 use App\Services\DocumentService;
 use App\Services\TaskService;
 use App\Support\AttachmentUpload;
@@ -23,6 +24,7 @@ trait ManagesOrderTaskResources
 {
     public function openOverviewTaskDocumentModal(int $taskId): void
     {
+        $this->discardOverviewTaskStagedUploads();
         abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
         $task = app(TaskService::class)->visibleQuery(auth()->user())
             ->with(['job', 'documentCategory', 'setupTemplate.documentCategory', 'documents:id,task_id,name'])
@@ -41,6 +43,8 @@ trait ManagesOrderTaskResources
         $this->overviewTaskDocumentSource = $canCreate ? 'upload' : 'existing';
         $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskRevisionUpload = [];
+        $this->overviewTaskStagedUploads = [];
+        $this->overviewTaskStagedRevisionUploads = [];
         $pendingArtworkRevision = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'ART_PREPARE_UPLOAD'
             ? app(DocumentService::class)->pendingArtworkRevision($task)
             : ['active' => false, 'document_ids' => []];
@@ -61,11 +65,14 @@ trait ManagesOrderTaskResources
 
     public function closeOverviewTaskDocumentModal(): void
     {
+        $this->discardOverviewTaskStagedUploads();
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentSource = 'upload';
         $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskRevisionUpload = [];
+        $this->overviewTaskStagedUploads = [];
+        $this->overviewTaskStagedRevisionUploads = [];
         $this->overviewTaskRevisionDocumentIds = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
@@ -80,6 +87,7 @@ trait ManagesOrderTaskResources
 
     public function setOverviewTaskDocumentSource(string $source): void
     {
+        $this->discardOverviewTaskStagedUploads();
         abort_unless(in_array($source, ['upload', 'existing'], true), 422);
         if ($source === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
@@ -90,8 +98,81 @@ trait ManagesOrderTaskResources
         $this->overviewTaskDocumentSource = $source;
         $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskRevisionUpload = [];
+        $this->overviewTaskStagedUploads = [];
+        $this->overviewTaskStagedRevisionUploads = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskRevisionUpload', 'overviewTaskExistingDocumentId']);
+    }
+
+    /**
+     * Register completed chunk-staged Artwork files in compact Livewire state.
+     * Only tokens/metadata cross the Livewire boundary; the file bytes already
+     * live on the server quarantine disk.
+     *
+     * @param array<int,string> $tokens
+     */
+    public function registerOverviewTaskArtworkUploads(array $tokens): void
+    {
+        $task = $this->overviewArtworkUploadTask();
+        $staging = app(ArtworkUploadStagingService::class);
+        $existingTokens = collect($this->overviewTaskStagedUploads)->pluck('token')->map('strval')->all();
+
+        foreach (array_values(array_unique(array_filter(array_map('strval', $tokens)))) as $token) {
+            if (in_array($token, $existingTokens, true)) continue;
+            abort_if(count($this->overviewTaskStagedUploads) >= 50, 422, 'You can upload a maximum of 50 artwork files at a time.');
+
+            $descriptor = $staging->describe($token, auth()->user(), $task);
+            abort_if(($descriptor['revision_document_id'] ?? null) !== null, 422, 'This staged file belongs to a selective artwork revision.');
+            $this->overviewTaskStagedUploads[] = $descriptor;
+            $existingTokens[] = $token;
+        }
+
+        $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskDocumentUpload.*']);
+    }
+
+    public function registerOverviewTaskArtworkRevisionUpload(int $documentId, string $token): void
+    {
+        $task = $this->overviewArtworkUploadTask();
+        abort_unless(in_array($documentId, array_map('intval', $this->overviewTaskRevisionDocumentIds), true), 422, 'This artwork is not selected for revision.');
+
+        $staging = app(ArtworkUploadStagingService::class);
+        $descriptor = $staging->describe($token, auth()->user(), $task);
+        abort_unless((int) ($descriptor['revision_document_id'] ?? 0) === $documentId, 422, 'This replacement belongs to a different artwork file.');
+
+        $oldToken = (string) data_get($this->overviewTaskStagedRevisionUploads, $documentId.'.token', '');
+        if ($oldToken !== '' && $oldToken !== $token) {
+            $staging->discard($oldToken, auth()->user());
+        }
+
+        $this->overviewTaskStagedRevisionUploads[$documentId] = $descriptor;
+        $this->resetValidation(['overviewTaskRevisionUpload', 'overviewTaskRevisionUpload.'.$documentId]);
+    }
+
+    private function overviewArtworkUploadTask(): Task
+    {
+        abort_unless($this->selectedJobId && $this->overviewTaskDocumentModalTaskId && $this->detailTab === 'overview', 422);
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job', 'documentCategory', 'setupTemplate.documentCategory'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail((int) $this->overviewTaskDocumentModalTaskId);
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        abort_unless(in_array(app(\App\Services\OrderWorkflowActionService::class)->automationKey($task), ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true), 422);
+        return $task;
+    }
+
+    private function discardOverviewTaskStagedUploads(): void
+    {
+        if (! auth()->check()) return;
+        $staging = app(ArtworkUploadStagingService::class);
+        $tokens = collect($this->overviewTaskStagedUploads)
+            ->concat(collect($this->overviewTaskStagedRevisionUploads)->values())
+            ->pluck('token')
+            ->map('strval')
+            ->filter()
+            ->unique();
+        foreach ($tokens as $token) {
+            $staging->discard($token, auth()->user());
+        }
     }
 
     public function saveOverviewTaskDocument(): void
@@ -118,62 +199,99 @@ trait ManagesOrderTaskResources
             $isPurchaseOrderUpload = $automationKey === 'NEW_UPLOAD_PO';
             $artworkRevision = $isArtworkUpload ? $documentService->pendingArtworkRevision($task) : ['active' => false, 'documents' => collect()];
             $isArtworkRevision = $isArtworkUpload && (bool) ($artworkRevision['active'] ?? false);
+            $revisionDocuments = collect();
+            $expectedRevisionCount = 0;
             if ($isArtworkRevision) {
                 $revisionDocuments = collect($artworkRevision['documents'] ?? [])->values();
                 $expectedRevisionCount = $revisionDocuments->count();
-                $revisionRules = [
+
+                $this->validate([
                     'overviewTaskRevisionDocumentIds' => ['required', 'array', 'min:1'],
                     'overviewTaskRevisionDocumentIds.*' => ['integer', 'distinct'],
-                    'overviewTaskRevisionUpload' => ['required', 'array', 'size:'.$expectedRevisionCount],
-                ];
-                $revisionMessages = [
+                ], [
                     'overviewTaskRevisionDocumentIds.required' => 'No artwork is selected for this revision.',
                     'overviewTaskRevisionDocumentIds.min' => 'No artwork is selected for this revision.',
-                    'overviewTaskRevisionUpload.required' => 'Choose one replacement file under each artwork selected for revision.',
-                    'overviewTaskRevisionUpload.size' => 'Choose one replacement file under each of the '.$expectedRevisionCount.' selected artwork file'.($expectedRevisionCount === 1 ? '' : 's').'.',
-                ];
+                ]);
 
-                foreach ($revisionDocuments as $revisionDocument) {
-                    $revisionDocumentId = (int) $revisionDocument->id;
-                    $revisionRules['overviewTaskRevisionUpload.'.$revisionDocumentId] = AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 409600);
-                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.required'] = 'Choose a replacement file for this artwork.';
-                    $revisionMessages['overviewTaskRevisionUpload.'.$revisionDocumentId.'.max'] = 'This replacement file must be 400 MB or smaller.';
+                $expectedIds = $revisionDocuments->pluck('id')->map(fn ($id) => (int) $id)->sort()->values()->all();
+                $stagedIds = collect(array_keys($this->overviewTaskStagedRevisionUploads))->map(fn ($id) => (int) $id)->sort()->values()->all();
+                if ($expectedRevisionCount < 1 || $expectedIds !== $stagedIds) {
+                    $this->addError(
+                        'overviewTaskRevisionUpload',
+                        'Choose one completed replacement file under each of the '.$expectedRevisionCount.' selected artwork file'.($expectedRevisionCount === 1 ? '' : 's').'.',
+                    );
+                    return;
                 }
 
-                $this->validate($revisionRules, $revisionMessages);
                 $artworkRevision = $documentService->updatePendingArtworkRevisionSelection(
                     $task,
                     $this->overviewTaskRevisionDocumentIds,
                 );
             }
+
             $revisionFileCount = (bool) ($artworkRevision['active'] ?? false)
                 ? collect($artworkRevision['documents'] ?? [])->count()
                 : 0;
             $allowsMultiple = $isArtworkUpload || $isPurchaseOrderUpload || (bool) ($task->setupTemplate?->allow_multiple_documents ?? false);
-            $uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;
+
             if (! $isArtworkRevision) {
-                // Artwork source uploads support larger design packages (up to 400MB).
-                // All other order document upload flows continue using the existing 20MB limit.
-                $uploadMaxKilobytes = $isArtworkUpload ? 409600 : 20480;
-                $uploadSizeMessage = $isArtworkUpload
-                    ? 'Each artwork file must be 400 MB or smaller.'
-                    : 'Each file must be 20 MB or smaller.';
+                if ($isArtworkUpload) {
+                    $stagedCount = count($this->overviewTaskStagedUploads);
+                    if ($stagedCount < 1) {
+                        $this->addError('overviewTaskDocumentUpload', 'Choose at least one artwork file to upload.');
+                        return;
+                    }
+                    if ($stagedCount > 50) {
+                        $this->addError('overviewTaskDocumentUpload', 'You can upload a maximum of 50 artwork files at a time.');
+                        return;
+                    }
+                } else {
+                    // All non-Artwork order document flows retain the existing
+                    // Livewire upload transport and 20MB business limit.
+                    $uploadMaxKilobytes = AttachmentUpload::STANDARD_MAX_KILOBYTES;
+                    $maxUploads = $allowsMultiple ? 10 : 1;
+                    $maxUploadsMessage = $allowsMultiple
+                        ? 'You can upload a maximum of '.$maxUploads.' files at a time.'
+                        : 'Choose one file for this task.';
 
-                $maxUploads = $allowsMultiple ? ($isArtworkUpload ? 50 : 10) : 1;
-                $maxUploadsMessage = $allowsMultiple
-                    ? 'You can upload a maximum of ' . $maxUploads . ' files at a time.'
-                    : 'Choose one file for this task.';
-
-                $this->validate([
-                    'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.$maxUploads],
-                    'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, $uploadMaxKilobytes),
-                ], [
-                    'overviewTaskDocumentUpload.max' => $maxUploadsMessage,
-                    'overviewTaskDocumentUpload.*.max' => $uploadSizeMessage,
-                ]);
+                    $this->validate([
+                        'overviewTaskDocumentUpload' => ['required', 'array', 'min:1', 'max:'.$maxUploads],
+                        'overviewTaskDocumentUpload.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, $uploadMaxKilobytes),
+                    ], [
+                        'overviewTaskDocumentUpload.max' => $maxUploadsMessage,
+                        'overviewTaskDocumentUpload.*.max' => 'Each file must be 20 MB or smaller.',
+                    ]);
+                }
             }
 
+            $staging = app(ArtworkUploadStagingService::class);
+            $materializedPaths = [];
+            $stagedTokens = [];
+            $uploads = $isArtworkRevision ? $this->overviewTaskRevisionUpload : $this->overviewTaskDocumentUpload;
+
             try {
+                if ($isArtworkUpload) {
+                    if ($isArtworkRevision) {
+                        foreach ($revisionDocuments as $revisionDocument) {
+                            $documentId = (int) $revisionDocument->id;
+                            $token = (string) data_get($this->overviewTaskStagedRevisionUploads, $documentId.'.token', '');
+                            abort_if($token === '', 422, 'One replacement artwork upload is missing.');
+                            $stagedTokens[$documentId] = $token;
+                        }
+                    } else {
+                        $stagedTokens = collect($this->overviewTaskStagedUploads)
+                            ->pluck('token')
+                            ->map('strval')
+                            ->filter()
+                            ->values()
+                            ->all();
+                    }
+
+                    $materialized = $staging->materialize($stagedTokens, auth()->user(), $task);
+                    $uploads = $materialized['files'];
+                    $materializedPaths = $materialized['temporary_paths'];
+                }
+
                 if ($revisionFileCount > 0) {
                     $documentService->storeArtworkRevision(
                         $uploads,
@@ -195,6 +313,10 @@ trait ManagesOrderTaskResources
                     }
                     $documentService->storeMany($uploads, $storeData, auth()->user());
                 }
+
+                if ($isArtworkUpload) {
+                    $staging->consume($stagedTokens, auth()->user());
+                }
             } catch (\Symfony\Component\HttpKernel\Exception\HttpExceptionInterface $exception) {
                 if ($exception->getStatusCode() !== 422) {
                     throw $exception;
@@ -206,6 +328,8 @@ trait ManagesOrderTaskResources
                     $message !== '' ? $message : 'One of the selected files could not be verified. Re-export it and try again.',
                 );
                 return;
+            } finally {
+                $staging->releaseMaterialized($materializedPaths);
             }
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
@@ -237,6 +361,25 @@ trait ManagesOrderTaskResources
 
     public function removeOverviewTaskDocumentUpload(int $index): void
     {
+        $staging = app(ArtworkUploadStagingService::class);
+
+        if (array_key_exists($index, $this->overviewTaskStagedRevisionUploads)) {
+            $token = (string) data_get($this->overviewTaskStagedRevisionUploads, $index.'.token', '');
+            if ($token !== '') $staging->discard($token, auth()->user());
+            unset($this->overviewTaskStagedRevisionUploads[$index]);
+            $this->resetValidation(['overviewTaskRevisionUpload', 'overviewTaskRevisionUpload.'.$index]);
+            return;
+        }
+
+        if (array_key_exists($index, $this->overviewTaskStagedUploads)) {
+            $token = (string) data_get($this->overviewTaskStagedUploads, $index.'.token', '');
+            if ($token !== '') $staging->discard($token, auth()->user());
+            unset($this->overviewTaskStagedUploads[$index]);
+            $this->overviewTaskStagedUploads = array_values($this->overviewTaskStagedUploads);
+            $this->resetValidation(['overviewTaskDocumentUpload', 'overviewTaskDocumentUpload.*']);
+            return;
+        }
+
         if (array_key_exists($index, $this->overviewTaskRevisionUpload)) {
             unset($this->overviewTaskRevisionUpload[$index]);
             $this->resetValidation(['overviewTaskRevisionUpload', 'overviewTaskRevisionUpload.'.$index]);
@@ -252,11 +395,14 @@ trait ManagesOrderTaskResources
 
     public function openOverviewTaskLinkForm(int $taskId): void
     {
+        $this->discardOverviewTaskStagedUploads();
         $task = $this->editableOverviewTask($taskId);
         $this->showOverviewTaskDocumentModal = false;
         $this->overviewTaskDocumentModalTaskId = null;
         $this->overviewTaskDocumentUpload = [];
         $this->overviewTaskRevisionUpload = [];
+        $this->overviewTaskStagedUploads = [];
+        $this->overviewTaskStagedRevisionUploads = [];
         $this->overviewTaskExistingDocumentId = null;
         $this->overviewTaskDocumentNote = '';
         $this->overviewTaskLinkFormTaskId = $task->id;

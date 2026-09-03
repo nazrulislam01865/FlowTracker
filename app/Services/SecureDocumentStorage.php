@@ -15,7 +15,7 @@ class SecureDocumentStorage
     public function __construct(private readonly UploadSecurityService $security) {}
 
     /** @return array{path:string,mime:string,size:int,scan_engine:string} */
-    public function store(UploadedFile $file, string $directory): array
+    public function store(UploadedFile $file, string $directory, ?int $maxFileBytes = null): array
     {
         $directory = trim($directory, '/');
         abort_if($directory === '' || str_contains($directory, '..'), 500, 'Invalid secure storage directory.');
@@ -31,7 +31,7 @@ class SecureDocumentStorage
         try {
             [$absolutePath, $temporaryCopy] = $this->inspectionPath($quarantineDisk, $quarantinePath);
             try {
-                $scan = $this->security->inspect($absolutePath, $file->getClientOriginalName(), $file->getMimeType());
+                $scan = $this->security->inspect($absolutePath, $file->getClientOriginalName(), $file->getMimeType(), $maxFileBytes);
             } finally {
                 if ($temporaryCopy && is_file($absolutePath)) {
                     @unlink($absolutePath);

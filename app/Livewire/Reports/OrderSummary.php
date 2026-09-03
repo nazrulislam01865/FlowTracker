@@ -33,12 +33,24 @@ class OrderSummary extends Component
     #[Url(as: 'quick', history: true, except: 'all')]
     public string $quick = 'all';
 
+    /** @var array<int|string> */
+    public array $clientIds = [];
+
+    public function updatedClientIds($value): void
+    {
+        if (count($this->clientIds) > 1) {
+            $this->clientIds = [end($this->clientIds)];
+        }
+        $this->resetPage();
+    }
+
     public function updated($property): void
     {
         if (in_array($property, ['search', 'supplierId', 'warehouse', 'urgency', 'fromDate', 'toDate'], true)) {
             $this->resetPage();
         }
     }
+
 
     public function applyFilters(): void
     {
@@ -54,8 +66,14 @@ class OrderSummary extends Component
 
     public function resetFilters(): void
     {
-        $this->reset(['search', 'supplierId', 'warehouse', 'urgency', 'fromDate', 'toDate']);
+        $this->reset(['search', 'supplierId', 'warehouse', 'urgency', 'fromDate', 'toDate', 'clientIds']);
         $this->quick = 'all';
+        $this->resetPage();
+    }
+
+    public function clearClientFilter(): void
+    {
+        $this->clientIds = [];
         $this->resetPage();
     }
 
@@ -79,8 +97,12 @@ class OrderSummary extends Component
             'counts' => $service->counts($user, $filters),
             'supplierOptions' => $service->supplierOptions(),
             'warehouseOptions' => $service->warehouseOptions($user),
+            'clientOptions' => $service->clientOptions($user),
             'canExport' => app(AccessControlService::class)->can($user, 'reports', 'export'),
-            'exportQuery' => array_filter($filters, fn ($value) => $value !== '' && $value !== null && $value !== 'all'),
+            'exportQuery' => array_filter(
+                $filters,
+                fn ($value) => ! ($value === '' || $value === null || $value === 'all' || $value === [])
+            ),
         ]);
     }
 
@@ -94,7 +116,20 @@ class OrderSummary extends Component
             'urgency' => in_array($this->urgency, ['Y', 'N'], true) ? $this->urgency : '',
             'from_date' => trim($this->fromDate),
             'to_date' => trim($this->toDate),
+            'client_ids' => $this->normalizedClientIds(),
             'quick' => in_array($this->quick, ['all', 'urgent', 'awaiting', 'overdue'], true) ? $this->quick : 'all',
         ];
+    }
+
+    /** @return array<int,int> */
+    private function normalizedClientIds(): array
+    {
+        return collect($this->clientIds)
+            ->filter(fn ($value) => is_int($value) || (is_string($value) && ctype_digit($value)))
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0)
+            ->unique()
+            ->values()
+            ->all();
     }
 }

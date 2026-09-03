@@ -2,7 +2,6 @@
 
 namespace App\Livewire\Jobs\Concerns;
 
-use App\Queries\Inquiries\InquiryDetailQuery;
 use App\Queries\Orders\OrderListQuery;
 use App\Queries\Orders\VisibleOrderQuery;
 use App\Models\ClientDeliveryContact;
@@ -81,6 +80,34 @@ trait BuildsOrderPageData
             $this->shippingPhoneCountryCode,
             5,
         );
+
+        $access = app(AccessControlService::class);
+        $canLinkInquiryOnCreate = $access->can($user, 'jobs', 'link')
+            && $access->can($user, 'inquiries', 'view');
+        // Keep Create Order light: each selected Inquiry's authorized display
+        // row is cached in Livewire state when it is picked. Normal form rerenders
+        // therefore do not query the Inquiry table again. Fresh eligibility is
+        // still checked for the full set immediately before the Order is created.
+        $selectedCreateInquiries = $canLinkInquiryOnCreate
+            ? collect($this->createInquiryIds)
+                ->map(function ($id) {
+                    $id = (int) $id;
+                    $selection = $this->createInquirySelections[$id]
+                        ?? $this->createInquirySelections[(string) $id]
+                        ?? null;
+                    if (!is_array($selection) || blank($selection['label'] ?? null)) return null;
+
+                    return [
+                        'id' => $id,
+                        'label' => (string) ($selection['label'] ?? ''),
+                        'meta' => (string) ($selection['meta'] ?? ''),
+                    ];
+                })
+                ->filter()
+                ->values()
+            : collect();
+        $selectedCreateInquiry = $selectedCreateInquiries->first(); // backwards-compatible view data
+        $createInquiryFilterOptions = collect();
 
         // Render Create Order from the shared Workflow Setup source of truth.
         // Only active, client-available and runtime-complete Order workflows are
@@ -263,6 +290,11 @@ trait BuildsOrderPageData
             'savedShippingAddresses' => $savedShippingAddresses,
             'savedDeliveryContacts' => $savedDeliveryContacts,
             'phoneCountryCodeOptions' => $phoneCountryCodeOptions,
+            'createInquiryFilterOptions' => $createInquiryFilterOptions,
+            'selectedCreateInquiry' => $selectedCreateInquiry,
+            'selectedCreateInquiries' => $selectedCreateInquiries,
+            'createInquirySelectorVersion' => $this->createInquirySelectorVersion,
+            'canLinkInquiryOnCreate' => $canLinkInquiryOnCreate,
             'workflows' => $workflows,
             'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
@@ -485,28 +517,28 @@ trait BuildsOrderPageData
 
         $inquiryResults = collect();
         $selectedLinkInquiry = null;
-        $linkedInquiryCanOpen = false;
-        $canViewInquiries = app(AccessControlService::class)->can($user, 'inquiries', 'view');
+        $access = app(AccessControlService::class);
+        $canViewInquiries = $access->can($user, 'inquiries', 'view');
+        $linkedInquiryCanOpen = $this->detailTab === 'inquiry' && $canViewInquiries;
+        $canViewLinkedInquiryDocuments = $this->detailTab === 'inquiry'
+            && $canViewInquiries
+            && $access->can($user, 'documents', 'view');
+        $canExportLinkedInquiryDocuments = $canViewLinkedInquiryDocuments
+            && $access->can($user, 'documents', 'export');
         $canManageInquiryLink = $this->detailTab === 'inquiry'
             && $canViewInquiries
-            && app(AccessControlService::class)->canEditVisibleJob($user, $selected);
+            && $access->can($user, 'jobs', 'link')
+            && $access->canEditVisibleJob($user, $selected);
 
-        if ($this->detailTab === 'inquiry') {
-            if ($selected->sourceInquiry && $canViewInquiries) {
-                try {
-                    app(InquiryDetailQuery::class)->find($user, (int) $selected->sourceInquiry->id);
-                    $linkedInquiryCanOpen = true;
-                } catch (\Illuminate\Database\Eloquent\ModelNotFoundException) {
-                    $linkedInquiryCanOpen = false;
-                }
-            }
-
-            if (!$selected->source_inquiry_id && $canManageInquiryLink && mb_strlen(trim($this->inquirySearch)) >= 2) {
-                $inquiryResults = $orderQuery->inquiryLinkResults($user, $selected, $this->inquirySearch, 8);
-                if ($this->selectedLinkInquiryId) {
-                    $selectedLinkInquiry = $inquiryResults->firstWhere('id', $this->selectedLinkInquiryId);
-                    if (!$selectedLinkInquiry) $this->selectedLinkInquiryId = null;
-                }
+        if ($this->detailTab === 'inquiry'
+            && $canManageInquiryLink
+            && mb_strlen(trim($this->inquirySearch)) >= 2) {
+            // Keep the search available after the first link so users can attach
+            // as many eligible Inquiries as this Order requires.
+            $inquiryResults = $orderQuery->inquiryLinkResults($user, $selected, $this->inquirySearch, 8);
+            if ($this->selectedLinkInquiryId) {
+                $selectedLinkInquiry = $inquiryResults->firstWhere('id', $this->selectedLinkInquiryId);
+                if (!$selectedLinkInquiry) $this->selectedLinkInquiryId = null;
             }
         }
 
@@ -619,6 +651,8 @@ trait BuildsOrderPageData
             'selectedLinkInquiry' => $selectedLinkInquiry,
             'canManageInquiryLink' => $canManageInquiryLink,
             'linkedInquiryCanOpen' => $linkedInquiryCanOpen,
+            'canViewLinkedInquiryDocuments' => $canViewLinkedInquiryDocuments,
+            'canExportLinkedInquiryDocuments' => $canExportLinkedInquiryDocuments,
             'financeSummary' => $financeSummary,
             'financeContacts' => $financeContacts,
             'financeUsers' => $financeUsers,

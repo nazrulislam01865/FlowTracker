@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => []]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => [], 'remoteArea' => null]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job', 'canEditJob' => false, 'canChangeOwner' => false, 'shipmentUrgencyOptions' => collect(), 'context' => [], 'remoteArea' => null]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -27,9 +27,29 @@ foreach ($attributes->all() as $__key => $__value) {
 }
 
 unset($__defined_vars, $__key, $__value); ?>
+<?php
+    // Remote Area is resolved once in OrderDetailViewService. Keep this Blade
+    // component presentation-only so moving the flag here never adds queries.
+    $remoteArea = is_array($remoteArea) && ! empty($remoteArea['postal_code']) ? $remoteArea : null;
+?>
 <section class="section-card ft-order-section-card ft-order-planning-card">
     <div class="section-head ft-order-section-head"><h2>Planning &amp; ownership</h2><span class="card-sub">Quick edits</span></div>
     <div class="section-body info-list ft-order-info-list">
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($remoteArea): ?>
+            <div class="info-row ft-order-info-row ft-order-remote-area-row">
+                <span>Remote area</span>
+                <b>
+                    <span
+                        class="pill amber ft-order-remote-area-pill"
+                        title="<?php echo e(trim((string) ($remoteArea['name'] ?? 'Remote Area'))); ?> · <?php echo e($remoteArea['postal_code']); ?>"
+                        aria-label="Remote Area postal code match"
+                    >
+                        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4m0 1h10l-1.5 3L15 11H5"></path></svg>
+                        Remote Area
+                    </span>
+                </b>
+            </div>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <div class="info-row ft-order-info-row ft-inline-edit-shell"
             x-data="window.FlowTrack.ui.inlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-'.$job->id.'-delivery-date')->toHtml() ?>, label: 'delivery date', value: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('Y-m-d') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('M j, Y') ?? 'Not set')->toHtml() ?> })">
             <span>Required delivery</span>

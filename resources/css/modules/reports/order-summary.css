@@ -186,3 +186,130 @@
 .ft-order-summary-report .ft-osr-table tbody tr.row-urgent:hover td.sticky2{background:#fff5ea!important}
 .ft-order-summary-report .ft-osr-table tbody tr.row-complete:hover td.sticky1,
 .ft-order-summary-report .ft-osr-table tbody tr.row-complete:hover td.sticky2{background:#eef8f0!important}
+
+/* -------------------------------------------------------------------------
+   Client checkbox filter
+   Mirrors the compact checkbox-card language used elsewhere in FlowTrack
+   while remaining horizontally scrollable when the workspace has many
+   clients. No client selection means the report remains unfiltered.
+   ------------------------------------------------------------------------- */
+.ft-order-summary-report .ft-osr-client-filter{
+  border-top:1px solid var(--osr-border);
+  padding:12px 15px 13px;
+  background:#fff;
+}
+.ft-order-summary-report .ft-osr-client-filter-head{
+  display:flex;
+  align-items:flex-end;
+  justify-content:space-between;
+  gap:14px;
+  margin-bottom:9px;
+}
+.ft-order-summary-report .ft-osr-client-filter-label{
+  font-size:11px;
+  line-height:1.2;
+  font-weight:700;
+  color:#667069;
+  letter-spacing:.01em;
+}
+.ft-order-summary-report .ft-osr-client-filter-help{
+  margin-top:4px;
+  font-size:11.5px;
+  line-height:1.35;
+  color:var(--osr-muted);
+}
+.ft-order-summary-report .ft-osr-client-filter-actions{
+  display:flex;
+  align-items:center;
+  gap:9px;
+  flex:0 0 auto;
+  font-size:11.5px;
+  color:var(--osr-muted);
+}
+.ft-order-summary-report .ft-osr-clear-filters{
+  display:inline-flex;
+  width:auto;
+  align-items:center;
+  justify-content:center;
+  gap:5px;
+  height:38px;
+  padding:0 12px;
+  border:1px solid #fecaca;
+  border-radius:7px;
+  background:#fff;
+  color:#b42318;
+  font-size:13px;
+  font-weight:700;
+  line-height:1.2;
+  cursor:pointer;
+  text-decoration:none;
+  transition:all .15s ease;
+}
+.ft-order-summary-report .ft-osr-clear-filters .clear-filter-icon{
+  display:inline-grid;
+  width:16px;
+  height:16px;
+  place-items:center;
+  border-radius:50%;
+  background:#fee2e2;
+  color:#b42318;
+  font-size:11px;
+  font-weight:800;
+  line-height:1;
+}
+.ft-order-summary-report .ft-osr-clear-filters:hover{
+  border-color:#fca5a5;
+  background:#fff1f2;
+  color:#991b1b;
+  text-decoration:none;
+}
+.ft-order-summary-report .ft-osr-client-options{
+  display:flex;
+  flex-wrap:wrap;
+  gap:7px;
+  width:100%;
+}
+.ft-order-summary-report .ft-osr-client-option{
+  height:38px;
+  padding:0 12px 0 10px;
+  border:1px solid #cfdad2;
+  border-radius:999px;
+  background:#fff;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  color:#334039;
+  font-size:13px;
+  font-weight:600;
+  line-height:1.2;
+  cursor:pointer;
+  user-select:none;
+  transition:border-color .15s ease,background-color .15s ease,box-shadow .15s ease;
+}
+.ft-order-summary-report .ft-osr-client-option:hover{
+  border-color:#9fc4a2;
+  background:#fbfdfb;
+}
+.ft-order-summary-report .ft-osr-client-option.is-selected{
+  border-color:#79b17d;
+  background:#f2f9f2;
+  box-shadow:inset 0 0 0 1px rgba(47,125,50,.08);
+  color:var(--osr-primary-dark);
+}
+.ft-order-summary-report .ft-osr-client-option input{
+  width:16px;
+  height:16px;
+  margin:0;
+  flex:0 0 auto;
+  accent-color:var(--osr-primary);
+  cursor:pointer;
+}
+.ft-order-summary-report .ft-osr-client-option span{
+  min-width:0;
+  overflow:hidden;
+  text-overflow:ellipsis;
+  white-space:nowrap;
+}
+@media(max-width:700px){
+  .ft-order-summary-report .ft-osr-client-filter-head{align-items:flex-start;flex-direction:column;gap:6px}
+}

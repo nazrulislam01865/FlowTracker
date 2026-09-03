@@ -14,6 +14,14 @@ use Illuminate\Support\Facades\Validator;
  */
 final class AttachmentUpload
 {
+    /** Existing business-document ceiling outside the Artwork phase. */
+    public const STANDARD_MAX_KILOBYTES = 20480;
+
+    /** Artwork source/revision files are intentionally allowed up to 400MB. */
+    public const ARTWORK_MAX_KILOBYTES = 409600;
+
+    public const ARTWORK_MAX_BYTES = self::ARTWORK_MAX_KILOBYTES * 1024;
+
     /**
      * Business attachment formats supported throughout FlowTrack.
      *

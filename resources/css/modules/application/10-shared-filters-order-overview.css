@@ -86,6 +86,27 @@
     scrollbar-gutter: stable
 }
 
+/* Infinite remote selectors must remain a real scroll container.
+ * This rule intentionally lives in the unlayered application cascade because
+ * the legacy shared-filter sizing above overrides the component-layer
+ * max-height. Without this override, all five initial Inquiry rows expand the
+ * menu and there is no scroll event to request the next page. */
+.ft-remote-filter-list.ft-search-select__list--infinite {
+    flex: 1 1 auto;
+    max-height: 9rem;
+    overflow-y: auto;
+    overflow-x: hidden;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable
+}
+
+.ft-search-select__scroll-status {
+    min-height: 1.75rem;
+    display: flex;
+    align-items: center;
+    padding-inline: var(--ft-space-3);
+}
+
 .ft-remote-filter-option {
     width: 100%;
     min-width: 0;

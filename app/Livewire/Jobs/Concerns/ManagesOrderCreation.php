@@ -584,6 +584,77 @@ trait ManagesOrderCreation
         $raw = trim((string) $value);
         $options = app(\App\Services\FilterOptionService::class);
 
+        // Create Order supports multiple Inquiry links. Keep the control as a
+        // reusable remote single-search picker, then append each validated choice
+        // to ordered Livewire state. This avoids loading the Inquiry catalogue on
+        // page render and keeps the first selected Inquiry as the legacy primary.
+        if ($property === 'createInquiryId') {
+            $access = app(\App\Services\AccessControlService::class);
+            abort_unless(
+                $access->can($user, 'jobs', 'link') && $access->can($user, 'inquiries', 'view'),
+                403
+            );
+
+            if ($raw === '') {
+                $this->createInquiryId = null;
+                $this->createInquiryLabel = '';
+                $this->createInquiryMeta = '';
+                $this->resetValidation('createInquiryId');
+                return;
+            }
+
+            abort_unless(ctype_digit($raw), 422, 'Please choose a valid Inquiry.');
+            $id = (int) $raw;
+            $selected = $options->selectedOptions(
+                $user,
+                'inquiries',
+                'create-job',
+                [(string) $id],
+                ['client_id' => $this->clientId],
+            )->first(fn ($item) => (string) ($item['id'] ?? '') === (string) $id);
+            abort_unless($selected, 422, 'That Inquiry is no longer available to link.');
+
+            $ids = collect($this->createInquiryIds)
+                ->map(fn ($value) => (int) $value)
+                ->filter(fn (int $value) => $value > 0)
+                ->unique()
+                ->values();
+            $replaceId = (int) ($this->createInquiryReplaceId ?? 0);
+
+            // Bound the selection to keep the create payload/UI predictable while
+            // still allowing substantially more than normal business use requires.
+            abort_if($replaceId <= 0 && !$ids->contains($id) && $ids->count() >= 100, 422, 'You can link up to 100 Inquiries to one Order.');
+
+            if ($replaceId > 0 && $ids->contains($replaceId)) {
+                abort_if($id !== $replaceId && $ids->contains($id), 422, 'That Inquiry is already selected for this Order.');
+                $ids = $ids->map(fn (int $value) => $value === $replaceId ? $id : $value)->unique()->values();
+                if ($replaceId !== $id) {
+                    unset($this->createInquirySelections[$replaceId], $this->createInquirySelections[(string) $replaceId]);
+                }
+            } elseif (!$ids->contains($id)) {
+                $ids->push($id);
+            }
+
+            $this->createInquiryIds = $ids->all();
+            $this->createInquirySelections[$id] = [
+                'id' => $id,
+                'label' => (string) ($selected['label'] ?? ''),
+                'meta' => (string) ($selected['meta'] ?? ''),
+            ];
+
+            // Reset/re-key the optimistic search-select after an add. The chosen
+            // Inquiry remains in the summary list, while the picker is immediately
+            // ready to add another one without carrying a stale Alpine value.
+            $this->createInquiryId = null;
+            $this->createInquiryLabel = '';
+            $this->createInquiryMeta = '';
+            $this->createInquiryReplaceId = null;
+            $this->createInquirySelectorVersion++;
+            $this->resetValidation('createInquiryId');
+            $this->resetValidation('createInquiryIds');
+            return;
+        }
+
         // Create Order selects only complete Order workflows from the shared
         // Workflow Setup. Inquiry workflows never appear in this picker.
         if ($property === 'workflowId') {
@@ -657,6 +728,65 @@ trait ManagesOrderCreation
             $this->jobItems[$index]['product'] = '';
             $this->resetValidation("jobItems.$index.product");
         }
+    }
+
+    public function openCreateInquiryPicker(?int $replaceInquiryId = null): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+
+        $access = app(\App\Services\AccessControlService::class);
+        abort_unless(
+            $access->can(auth()->user(), 'jobs', 'link') && $access->can(auth()->user(), 'inquiries', 'view'),
+            403
+        );
+
+        $selectedIds = collect($this->createInquiryIds)->map(fn ($id) => (int) $id)->filter()->unique();
+        $this->createInquiryReplaceId = $replaceInquiryId && $selectedIds->contains($replaceInquiryId)
+            ? (int) $replaceInquiryId
+            : null;
+        $this->createInquiryId = null;
+        $this->createInquiryLabel = '';
+        $this->createInquiryMeta = '';
+        $this->createInquirySelectorVersion++;
+
+        $this->dispatch('flowtrack-create-inquiry-picker-open');
+    }
+
+    public function cancelCreateInquiryPicker(): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+        $this->createInquiryReplaceId = null;
+        $this->createInquiryId = null;
+        $this->createInquiryLabel = '';
+        $this->createInquiryMeta = '';
+        $this->createInquirySelectorVersion++;
+    }
+
+    public function removeCreateInquiry(int $inquiryId): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canAccess('jobs.create'), 403);
+
+        $access = app(\App\Services\AccessControlService::class);
+        abort_unless(
+            $access->can(auth()->user(), 'jobs', 'link') && $access->can(auth()->user(), 'inquiries', 'view'),
+            403
+        );
+
+        $this->createInquiryIds = collect($this->createInquiryIds)
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0 && $value !== $inquiryId)
+            ->unique()
+            ->values()
+            ->all();
+        unset($this->createInquirySelections[$inquiryId], $this->createInquirySelections[(string) $inquiryId]);
+
+        $this->createInquiryId = null;
+        $this->createInquiryLabel = '';
+        $this->createInquiryMeta = '';
+        $this->createInquiryReplaceId = null;
+        $this->createInquirySelectorVersion++;
+        $this->resetValidation('createInquiryId');
+        $this->resetValidation('createInquiryIds');
     }
 
     private function canUseCreateOrderProducts(User $user): bool
@@ -1001,6 +1131,9 @@ trait ManagesOrderCreation
                     ->whereNull('deleted_at')),
             ],
             'clientId' => ['required','exists:clients,id'],
+            'createInquiryId' => ['nullable','integer'],
+            'createInquiryIds' => ['array','max:100'],
+            'createInquiryIds.*' => ['integer','distinct'],
             'workflowId' => ['required','integer'],
             'workflowPhaseId' => ['required','integer'],
             'ownerId' => ['required','exists:users,id'],
@@ -1086,6 +1219,48 @@ trait ManagesOrderCreation
         if (!$clientAvailable) {
             $this->addError('clientId', 'That client is no longer available.');
             return;
+        }
+
+        $rawCreateInquiryIds = (array) ($data['createInquiryIds'] ?? []);
+        if ($rawCreateInquiryIds === [] && !empty($data['createInquiryId'])) {
+            // Support a stale pre-deployment browser snapshot that still sends
+            // the previous single selector property.
+            $rawCreateInquiryIds = [(int) $data['createInquiryId']];
+        }
+        $createInquiryIds = collect($rawCreateInquiryIds)
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0)
+            ->unique()
+            ->values();
+
+        if ($createInquiryIds->isNotEmpty()) {
+            $access = app(\App\Services\AccessControlService::class);
+            abort_unless(
+                $access->can(auth()->user(), 'jobs', 'link') && $access->can(auth()->user(), 'inquiries', 'view'),
+                403
+            );
+
+            // Re-check every selected Inquiry immediately before creation. A
+            // second user may have linked one since it was picked; if so, fail
+            // the whole create cleanly instead of producing a partial relation.
+            $availableIds = app(\App\Services\FilterOptionService::class)
+                ->selectedOptions(
+                    auth()->user(),
+                    'inquiries',
+                    'create-job',
+                    $createInquiryIds->map(fn (int $id) => (string) $id)->all(),
+                    ['client_id' => (int) $data['clientId']],
+                )
+                ->pluck('id')
+                ->map(fn ($id) => (int) $id)
+                ->all();
+
+            if ($createInquiryIds->diff($availableIds)->isNotEmpty()) {
+                $this->addError('createInquiryIds', 'One or more selected Inquiries are already linked, closed, or no longer available. Remove them and try again.');
+                return;
+            }
+
+            $data['createInquiryIds'] = $createInquiryIds->all();
         }
 
         $workflowAvailable = OrderWorkflowSetupService::orderWorkflowQuery()
@@ -1254,6 +1429,13 @@ trait ManagesOrderCreation
             'productionUrgencyIds',
             'shipmentUrgencyIds',
             'clientId',
+            'createInquiryId',
+            'createInquiryIds',
+            'createInquirySelections',
+            'createInquiryLabel',
+            'createInquiryMeta',
+            'createInquirySelectorVersion',
+            'createInquiryReplaceId',
             'workflowId',
             'workflowPhaseId',
             'ownerId',

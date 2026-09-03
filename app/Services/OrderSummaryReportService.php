@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Models\Client;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\Task;
@@ -80,6 +81,28 @@ class OrderSummaryReportService
             ->pluck('warehouse')
             ->filter(fn ($value) => trim((string) $value) !== '')
             ->values();
+    }
+
+    /**
+     * Client choices are derived from the same Order visibility scope as the
+     * report itself. This prevents the filter from exposing client names that
+     * the current user cannot reach through Orders, while keeping the option
+     * query independent from the currently selected report filters.
+     */
+    public function clientOptions(User $user): Collection
+    {
+        $visibleClientIds = app(JobService::class)
+            ->visibleQuery($user)
+            ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+            ->whereNotNull('flow_jobs.client_id')
+            ->reorder()
+            ->select('flow_jobs.client_id')
+            ->distinct();
+
+        return Client::query()
+            ->whereIn('id', $visibleClientIds)
+            ->orderBy('name')
+            ->get(['id', 'name']);
     }
 
     /** @return array<int,array<string,mixed>> */
@@ -237,6 +260,7 @@ class OrderSummaryReportService
     {
         $search = trim((string) ($filters['search'] ?? ''));
         $supplierId = max(0, (int) ($filters['supplier_id'] ?? 0));
+        $clientIds = $this->normalizeClientIds($filters['client_ids'] ?? []);
         $warehouse = trim((string) ($filters['warehouse'] ?? ''));
         $urgency = strtoupper(trim((string) ($filters['urgency'] ?? '')));
         $fromDate = trim((string) ($filters['from_date'] ?? ''));
@@ -274,6 +298,7 @@ class OrderSummaryReportService
                             ->where('supplier_id', $supplierId));
                 });
             })
+            ->when($clientIds !== [], fn (Builder $query) => $query->whereIn('flow_jobs.client_id', $clientIds))
             ->when($warehouse !== '', fn (Builder $query) => $query->where('flow_jobs.warehouse', $warehouse))
             ->when($urgency === 'Y', fn (Builder $query) => $this->applyUrgentScope($query))
             ->when($urgency === 'N', function (Builder $query): void {
@@ -308,6 +333,21 @@ class OrderSummaryReportService
             ->orderByDesc('flow_jobs.received_date')
             ->orderByDesc('flow_jobs.created_at')
             ->orderByDesc('flow_jobs.id');
+    }
+
+    /** @return array<int,int> */
+    private function normalizeClientIds(mixed $clientIds): array
+    {
+        if (! is_array($clientIds)) return [];
+
+        return collect($clientIds)
+            ->filter(fn ($value) => is_int($value) || (is_string($value) && ctype_digit($value)))
+            ->map(fn ($value) => (int) $value)
+            ->filter(fn (int $value) => $value > 0)
+            ->unique()
+            ->take(500)
+            ->values()
+            ->all();
     }
 
     private function applyUrgentScope(Builder $query): Builder
