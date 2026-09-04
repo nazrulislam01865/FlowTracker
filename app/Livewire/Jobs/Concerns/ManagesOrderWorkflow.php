@@ -244,7 +244,7 @@ trait ManagesOrderWorkflow
         $workflowActions->perform($task, auth()->user(), 'confirm', null, $payload);
         $this->dispatchTaskAssigneeSync($task->id);
         $this->refreshShipmentWorkflowSelection();
-        session()->flash('success', 'Shipment marked as dispatched.');
+        session()->flash('success', 'Shipment marked as dispatched. Billing is now active.');
     }
 
     public function selectShipmentContact(string $selection): void
@@ -570,8 +570,20 @@ trait ManagesOrderWorkflow
 
     private function refreshShipmentWorkflowSelection(): void
     {
-        $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
-        if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
+        if (! $this->selectedJobId) return;
+
+        // Shipment completion can advance the Order to Billing inside the same
+        // request. Keep the overview explicitly pinned to the freshly persisted
+        // current stage and keep the workflow section hydrated so Livewire does
+        // not leave the user looking at the now-historical Shipment branch.
+        $currentPhaseId = FlowJob::query()
+            ->whereKey($this->selectedJobId)
+            ->value('workflow_phase_id');
+
+        if (! $currentPhaseId) return;
+
+        $this->overviewPhaseId = (int) $currentPhaseId;
+        $this->orderDetailSectionsReady['workflow'] = true;
     }
 
     public function resendCompletedArtworkEmail(int $taskId): void

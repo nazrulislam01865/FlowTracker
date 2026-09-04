@@ -80,6 +80,16 @@ final class StoredFileResponse
     public static function mimeType(string $filename, ?string $storedMimeType = null): string
     {
         $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
+        $storedMimeType = strtolower(trim((string) $storedMimeType));
+
+        // SecureDocumentStorage can safely normalize a mislabeled raster image
+        // after signature inspection (for example JPEG bytes received as .PNG).
+        // In that case the scanner result is more authoritative than the client
+        // filename and must drive the response/record MIME type.
+        if (in_array($storedMimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
+            return $storedMimeType;
+        }
+
         $known = [
             'pdf' => 'application/pdf',
             'doc' => 'application/msword',
@@ -102,7 +112,7 @@ final class StoredFileResponse
         ];
 
         if ($extension !== '' && isset($known[$extension])) return $known[$extension];
-        return trim((string) $storedMimeType);
+        return $storedMimeType;
     }
 
     public static function mustDownload(string $filename): bool

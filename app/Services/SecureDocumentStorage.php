@@ -38,7 +38,15 @@ class SecureDocumentStorage
                 }
             }
 
-            $targetPath = $directory.'/'.$storedName;
+            // The security service may normalize a safely detected raster image
+            // whose filename extension did not match its bytes (for example a
+            // JPEG named .PNG). Keep the quarantine object exactly as received,
+            // but promote the verified file using the detected safe extension so
+            // the private object metadata/path never lies about its content type.
+            $verifiedExtension = strtolower(trim((string) ($scan['extension'] ?? $extension)));
+            $storedBaseName = pathinfo($storedName, PATHINFO_FILENAME);
+            $verifiedStoredName = $storedBaseName.($verifiedExtension !== '' ? '.'.$verifiedExtension : '');
+            $targetPath = $directory.'/'.$verifiedStoredName;
             $targetDisk = Storage::disk((string) config('flowtrack.document_disk', 'flowtrack_private'));
             $stream = $quarantineDisk->readStream($quarantinePath);
             abort_if($stream === false, 500, 'The quarantined upload could not be read.');
@@ -55,6 +63,7 @@ class SecureDocumentStorage
                 'original_name' => basename($file->getClientOriginalName()),
                 'scan_engine' => (string) $scan['engine'],
                 'size' => (int) $scan['size'],
+                'stored_extension' => $verifiedExtension,
             ]);
 
             return [
