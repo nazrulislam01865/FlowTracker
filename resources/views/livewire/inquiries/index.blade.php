@@ -65,4 +65,18 @@
     @else
         @include('livewire.inquiries.sections.detail')
     @endif
+
+    <x-catalog.missing-product-supplier-modal
+        :show="$showMissingProductSupplierModal"
+        :product-name="$missingProductSupplierName"
+        :choice="$missingProductSupplierChoice"
+        :existing-supplier-id="$missingProductExistingSupplierId"
+        :existing-supplier-label="$missingProductExistingSupplierLabel"
+        :new-supplier-name="$missingProductNewSupplierName"
+        :new-supplier-email="$missingProductNewSupplierEmail"
+        :allow-skip="$missingProductSupplierAllowSkip"
+        :record-label="$missingProductSupplierRecordLabel"
+        :submit-mode="$missingProductSupplierSubmitMode"
+        :selector-context="$missingProductSupplierSelectorContext"
+    />
 </div>

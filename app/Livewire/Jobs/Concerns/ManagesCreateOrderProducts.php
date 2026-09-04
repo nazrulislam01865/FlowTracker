@@ -79,14 +79,12 @@ trait ManagesCreateOrderProducts
         if (!$alreadySelected) {
             abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
 
-            // Start from the Product Master default supplier. The selected row may
-            // later use an Order-only supplier override through the reusable Change control.
+            // Start from the Product Master default supplier. When one is
+            // missing, the dedicated resolution modal can link an existing
+            // supplier, create and link a new supplier, or explicitly skip.
             $productSupplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
             if (!$productSupplier) {
-                $this->missingProductSupplierName = (string) $product->name;
-                $this->pendingMissingSupplierProductId = (int) $product->id;
-                $this->pendingMissingSupplierRowIndex = null;
-                $this->showMissingProductSupplierModal = true;
+                $this->openMissingProductSupplierModalFor($product);
                 $this->dispatch('create-order-product-selected');
                 return;
             }
@@ -100,66 +98,6 @@ trait ManagesCreateOrderProducts
 
         $this->createProductShowAllResults = false;
         $this->resetValidation('jobItems');
-        $this->dispatch('create-order-product-selected');
-    }
-
-    /**
-     * Add the pending Product even though Product Master has no supplier linked.
-     * This is intentionally limited to Create Order; Order Details keeps its
-     * existing supplier requirements and editing controls.
-     */
-    public function skipMissingCreateOrderProductSupplier(): void
-    {
-        $this->authorizeCreateOrderProducts();
-
-        if ($this->pendingMissingSupplierRowIndex !== null) {
-            $index = $this->pendingMissingSupplierRowIndex;
-            abort_unless(array_key_exists($index, $this->jobItems), 422, 'That product row is no longer available.');
-
-            $productId = (int) ($this->jobItems[$index]['product_id'] ?? 0);
-            abort_unless($productId > 0, 422, 'That product row is no longer available.');
-
-            $this->jobItems[$index]['supplier_id'] = null;
-            if (!in_array($productId, $this->createOrderSupplierSkipProductIds, true)) {
-                $this->createOrderSupplierSkipProductIds[] = $productId;
-            }
-            $this->resetValidation("jobItems.$index.supplier_id");
-            $this->closeMissingProductSupplierModal();
-            return;
-        }
-
-        $productId = (int) ($this->pendingMissingSupplierProductId ?? 0);
-        abort_unless($productId > 0, 422, 'No pending product is available to add.');
-
-        $product = app(\App\Services\ProductCatalogService::class)
-            ->findActiveProductOrFail($productId);
-
-        $alreadySelected = collect($this->jobItems)->contains(
-            fn (array $row): bool => (int) ($row['product_id'] ?? 0) === (int) $product->id
-        );
-
-        if (!$alreadySelected) {
-            abort_if(count($this->jobItems) >= 25, 422, 'An Order can contain up to 25 products.');
-
-            // Re-check Product Master in case an admin linked a supplier while
-            // this confirmation dialog was open. Prefer the canonical supplier
-            // when one now exists; otherwise preserve the explicit skip choice.
-            $supplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
-            if ($supplier) {
-                $this->createOrderSupplierSkipProductIds = array_values(array_filter(
-                    $this->createOrderSupplierSkipProductIds,
-                    fn (int $id): bool => $id !== (int) $product->id
-                ));
-            } elseif (!in_array((int) $product->id, $this->createOrderSupplierSkipProductIds, true)) {
-                $this->createOrderSupplierSkipProductIds[] = (int) $product->id;
-            }
-
-            $this->appendCreateOrderProduct($product, $supplier?->id);
-        }
-
-        $this->createProductShowAllResults = false;
-        $this->resetValidation('jobItems');
-        $this->closeMissingProductSupplierModal();
         $this->dispatch('create-order-product-selected');
     }
 
@@ -295,14 +233,6 @@ trait ManagesCreateOrderProducts
     {
         $this->showCreateOrderProductModal = false;
         $this->resetCreateOrderProductModal();
-    }
-
-    public function closeMissingProductSupplierModal(): void
-    {
-        $this->showMissingProductSupplierModal = false;
-        $this->missingProductSupplierName = '';
-        $this->pendingMissingSupplierProductId = null;
-        $this->pendingMissingSupplierRowIndex = null;
     }
 
     public function selectCreateOrderProductCategory(int $categoryId): void

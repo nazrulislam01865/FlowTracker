@@ -130,7 +130,7 @@ class OrderWorkflowActionService
                 'variant' => 'artwork_review',
                 'title' => 'Review Artwork',
                 'copy' => 'Review the latest uploaded artwork before sending it to the Order Team.',
-                'choices' => ['revise' => 'Revise Artwork', 'confirm' => 'Artwork Confirmed'],
+                'choices' => ['revise' => 'Revise Artwork', 'cancel_artwork' => 'Cancel Artwork', 'confirm' => 'Artwork Confirmed'],
             ],
             'ART_SEND_ORDER_TEAM' => [
                 'variant' => 'artwork_email',
@@ -265,6 +265,8 @@ class OrderWorkflowActionService
             'revision_document_id' => null,
             'revision_document_ids' => [],
             'revision_items' => [],
+            'cancel_artwork_document_ids' => [],
+            'cancel_product_item_ids' => [],
             'recipient_type' => 'team',
             'to_user_id' => null,
             'to_email' => '',
@@ -299,7 +301,9 @@ class OrderWorkflowActionService
             'invoice_amount' => $total > 0 ? number_format($total, 2, '.', '') : '0.00',
             'remote_area_charge' => $remoteAreaCharge,
             'remote_area_name' => trim((string) ($remoteArea?->name ?? '')),
-            'remote_area_postal_code' => $remoteArea?->remoteAreaPostalCode() ?? '',
+            'remote_area_postal_code' => $remoteArea
+                ? app(MasterDataService::class)->normalizePostalCode((string) $job->shipping_postal_code)
+                : '',
             'invoice_currency' => 'USD',
             'payment_terms' => 'Net 30',
             'invoice_due_date' => app(WorkspaceSettingsService::class)->localToday()->addDays(30)->toDateString(),
@@ -491,6 +495,11 @@ class OrderWorkflowActionService
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'revise') {
                 $activity = $this->restartArtwork($locked, $actor, 'Internal artwork revision requested', $payload, $comment);
                 $this->storeArtworkRevisionAttachments($activity, $locked, $actor, $attachments);
+                return $locked->refresh();
+            }
+
+            if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'cancel_artwork') {
+                app(OrderArtworkCancellationService::class)->cancel($job, $locked, $actor, $payload, $comment);
                 return $locked->refresh();
             }
 

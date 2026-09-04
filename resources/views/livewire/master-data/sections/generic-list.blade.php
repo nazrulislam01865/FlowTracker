@@ -61,14 +61,14 @@
                             <tr>
                                 <th>Sort order</th>
                                 <th>Code</th>
-                                <th>{{ $group === 'phone_country_code' ? 'Phone code' : ($group === 'remote_area' ? 'Remote area' : 'Name') }}</th>
-                                @if($group === 'remote_area')<th>Postal code</th><th>Extra charge</th>@endif
+                                @if($group !== 'remote_area')<th>{{ $group === 'phone_country_code' ? 'Phone code' : 'Name' }}</th>@endif
+                                @if($group === 'remote_area')<th>Carrier</th><th>Country</th><th>Postal range / City</th><th>Origin surcharge</th><th>Destination surcharge</th><th>Extra charge</th>@endif
                                 @if($group === 'task_pack_work_calendar')<th>Days</th><th>Working hours</th>@endif
                                 @if($group === 'inquiry_task_status')<th>Inquiry status auto</th><th>Flag</th>@endif
                                 @if($group === 'order_task_status')<th>Automatic task flag</th>@endif
                                 @if($group === 'order_task_flag')<th>Order flag</th>@endif
                                 @if($hasParent)<th>{{ $group === 'state' ? 'Country' : 'Product Category' }}</th>@endif
-                                <th>Description / Use</th>
+                                @if($group !== 'remote_area')<th>Description / Use</th>@endif
                                 @if($hasColor)<th>Color</th>@endif
                                 <th>Status</th>
                                 <th>Actions</th>
@@ -79,10 +79,17 @@
                             <tr>
                                 <td class="ft-master-mobile-sort" data-label="Sort order">{{ $r->sort_order }}</td>
                                 <td class="ft-master-mobile-code" data-label="Code"><strong class="ft-master-product-code">{{ $r->code }}</strong></td>
-                                <td class="ft-master-mobile-name" data-label="{{ $group === 'phone_country_code' ? 'Phone code' : ($group === 'remote_area' ? 'Remote area' : 'Name') }}">{{ $r->name }}</td>
+                                @if($group !== 'remote_area')<td class="ft-master-mobile-name" data-label="{{ $group === 'phone_country_code' ? 'Phone code' : 'Name' }}">{{ $r->name }}</td>@endif
                                 @if($group === 'remote_area')
                                     @php $remoteAreaExtraCharge = $r->remoteAreaExtraCharge(); @endphp
-                                    <td data-label="Postal code"><strong>{{ $r->remoteAreaPostalCode() ?: '—' }}</strong></td>
+                                    <td data-label="Carrier"><strong>{{ $r->remoteAreaCarrier() ?: '—' }}</strong></td>
+                                    <td data-label="Country">
+                                        <strong>{{ $r->remoteAreaCountry() ?: '—' }}</strong>
+                                        @if($r->remoteAreaIataCode() !== '')<div class="small muted">{{ $r->remoteAreaIataCode() }}</div>@endif
+                                    </td>
+                                    <td data-label="Postal range / City"><strong>{{ $r->remoteAreaLocationLabel() }}</strong></td>
+                                    <td data-label="Origin surcharge">{{ $r->remoteAreaOriginSurcharge() ?: 'No' }}</td>
+                                    <td data-label="Destination surcharge">{{ $r->remoteAreaDestinationSurcharge() ?: 'No' }}</td>
                                     <td data-label="Extra charge">{{ $remoteAreaExtraCharge === null ? '—' : number_format($remoteAreaExtraCharge, 2) }}</td>
                                 @endif
                                 @if($group === 'task_pack_work_calendar')
@@ -116,7 +123,7 @@
                                     </td>
                                 @endif
                                 @if($hasParent)<td class="ft-master-mobile-parent" data-label="{{ $group === 'state' ? 'Country' : 'Product Category' }}">{{ $r->parent?->name ?? '—' }}</td>@endif
-                                <td class="ft-master-mobile-description" data-label="Description / Use">{{ $r->description ?: '—' }}</td>
+                                @if($group !== 'remote_area')<td class="ft-master-mobile-description" data-label="Description / Use">{{ $r->description ?: '—' }}</td>@endif
                                 @if($hasColor)
                                     @php
                                         $rowColor = \App\Support\MasterColor::normalize($r->color) ?: \App\Support\MasterColor::defaultFor($group, $r->name);

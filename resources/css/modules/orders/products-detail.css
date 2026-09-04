@@ -2637,7 +2637,7 @@
     font-weight: 700;
 }
 
-.ft-detail-products-scope .ft-detail-product-edit-flow__supplier .ft-pq-supplier-box button {
+.ft-detail-products-scope .ft-detail-product-edit-flow__supplier .ft-pq-supplier-box > button {
     flex: 0 0 auto;
     margin-left: auto;
     padding: 0;
@@ -2647,6 +2647,26 @@
     font: inherit;
     font-size: .625rem;
     font-weight: 800;
+    cursor: pointer;
+}
+
+.ft-detail-products-scope .ft-detail-product-edit-flow__supplier .ft-pq-supplier-box > .ft-pq-supplier-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+}
+
+.ft-detail-products-scope .ft-detail-product-edit-flow__supplier .ft-pq-supplier-box > .ft-pq-supplier-actions button {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--ft-theme-primary);
+    font: inherit;
+    font-size: .625rem;
+    font-weight: 800;
+    white-space: nowrap;
     cursor: pointer;
 }
 

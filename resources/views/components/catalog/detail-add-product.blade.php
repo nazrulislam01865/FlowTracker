@@ -19,6 +19,7 @@
     'supplierValue' => null,
     'supplierLabel' => '',
     'supplierLocked' => false,
+    'supplierSkipped' => false,
     'supplierRequired' => false,
     'currencySymbol' => '$',
     'closeMethod',
@@ -27,6 +28,7 @@
     'quantityErrorKey',
     'unitPriceErrorKey',
     'supplierErrorKey' => null,
+    'missingSupplierMethod' => null,
     'showHeader' => true,
     'recordLabel' => 'Order',
 ])
@@ -40,6 +42,8 @@
         ? trim((string) $supplierLabel)
         : trim((string) ($selectedSupplier?->name ?? ''));
     $selectedSupplierExists = filled($selectedSupplierName) || filled($supplierValue);
+    $supplierSkipped = (bool) $supplierSkipped;
+    $supplierResolved = $selectedSupplierExists || $supplierSkipped;
     $selectedSupplierIsDefault = $supplierRequired
         && $selectedSupplier
         && (int) $supplierValue === (int) $selectedSupplier->id;
@@ -167,10 +171,16 @@
                     <div class="ft-pq-selected-field ft-pq-selected-supplier" x-on:create-order-product-supplier-selected.window="changingSupplier = false">
                         <span>Supplier for this {{ strtolower($recordLabel) }}</span>
                         @if($supplierRequired)
-                            <div x-show="!changingSupplier" class="ft-pq-supplier-box {{ !$selectedSupplierExists ? 'is-missing' : '' }}">
-                                <strong>{{ $selectedSupplierName ?: 'No default supplier linked' }}</strong>
+                            <div x-show="!changingSupplier" class="ft-pq-supplier-box {{ !$supplierResolved ? 'is-missing' : '' }}">
+                                <strong>{{ $selectedSupplierName ?: ($supplierSkipped ? 'Supplier skipped for now' : 'No default supplier linked') }}</strong>
                                 @if($selectedSupplierExists)<i>&middot;</i><b>{{ $selectedSupplierIsDefault ? 'Default' : 'Selected' }}</b>@endif
-                                <button type="button" x-on:click="changingSupplier = true">Change</button>
+                                @if($supplierSkipped)<i>&middot;</i><b>Assign later</b>@endif
+                                <span class="ft-pq-supplier-actions">
+                                    @if(!$selectedSupplierExists && $missingSupplierMethod)
+                                        <button type="button" wire:click="{{ $missingSupplierMethod }}">Create supplier</button>
+                                    @endif
+                                    <button type="button" x-on:click="changingSupplier = true">Change</button>
+                                </span>
                             </div>
                             <div x-cloak x-show="changingSupplier" class="ft-pq-supplier-picker">
                                 <x-ui.search-select
@@ -195,6 +205,11 @@
                             <div class="ft-pq-supplier-box {{ !$selectedSupplierExists ? 'is-missing' : '' }}">
                                 <strong>{{ $selectedSupplierName ?: 'No default supplier linked' }}</strong>
                                 @if($selectedSupplierExists)<i>&middot;</i><b>Default</b>@endif
+                                @if(!$selectedSupplierExists && $missingSupplierMethod)
+                                    <span class="ft-pq-supplier-actions">
+                                        <button type="button" wire:click="{{ $missingSupplierMethod }}">Create supplier</button>
+                                    </span>
+                                @endif
                             </div>
                         @endif
                     </div>
@@ -227,7 +242,7 @@
 
     <div class="ft-detail-add-product__parity-actions">
         <button type="button" class="ft-detail-add-product__cancel" wire:click="{{ $closeMethod }}">Cancel</button>
-        <button type="button" class="ft-detail-add-product__submit" wire:click="{{ $saveMethod }}" wire:loading.attr="disabled" wire:target="{{ $saveMethod }}" @disabled(!$selectedProduct || ($supplierRequired && !$supplierValue))>
+        <button type="button" class="ft-detail-add-product__submit" wire:click="{{ $saveMethod }}" wire:loading.attr="disabled" wire:target="{{ $saveMethod }}" @disabled(!$selectedProduct || ($supplierRequired && !$supplierResolved))>
             <span wire:loading.remove wire:target="{{ $saveMethod }}">Add product</span>
             <span wire:loading wire:target="{{ $saveMethod }}">Adding…</span>
         </button>

@@ -112,7 +112,17 @@ class Index extends Component
     public string $status = 'active';
     public int $sortOrder = 0;
     public string $metadataJson = '';
+    // Remote Area Surcharge editor state. Keep the legacy postal-code
+    // property for backwards compatibility with existing exact-match records.
     public string $remoteAreaPostalCode = '';
+    public string $remoteAreaCarrier = 'UPS';
+    public string $remoteAreaCountry = '';
+    public string $remoteAreaIataCode = '';
+    public string $remoteAreaPostalCodeFrom = '';
+    public string $remoteAreaPostalCodeTo = '';
+    public string $remoteAreaCity = '';
+    public string $remoteAreaOriginSurcharge = 'No';
+    public string $remoteAreaDestinationSurcharge = 'No';
     public string $remoteAreaExtraCharge = '';
     public string $workCalendarDayFrom = 'monday';
     public string $workCalendarDayTo = 'friday';

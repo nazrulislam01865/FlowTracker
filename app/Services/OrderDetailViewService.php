@@ -28,7 +28,8 @@ class OrderDetailViewService
         // Resolve the Remote Area once while building the detail context. Blade
         // remains query-free, and MasterDataService serves lookups from one cached
         // active collection instead of querying once per rendered field.
-        $remoteArea = app(MasterDataService::class)->remoteAreaForPostalCode($job->shipping_postal_code);
+        $masterData = app(MasterDataService::class);
+        $remoteArea = $masterData->remoteAreaForPostalCode($job->shipping_postal_code);
         $workflowActions = app(OrderWorkflowActionService::class);
         $documentTaskIds = $job->relationLoaded('documents')
             ? $job->documents->pluck('task_id')->filter()->map(fn ($id) => (int) $id)->flip()
@@ -125,7 +126,10 @@ class OrderDetailViewService
             'remoteArea' => $remoteArea ? [
                 'id' => (int) $remoteArea->id,
                 'name' => trim((string) $remoteArea->name),
-                'postal_code' => $remoteArea->remoteAreaPostalCode(),
+                // Show the actual Order postal code that matched. UPS-style
+                // range rows intentionally do not populate legacy postal_code.
+                'postal_code' => $masterData->normalizePostalCode((string) $job->shipping_postal_code),
+                'location' => $remoteArea->remoteAreaLocationLabel(),
                 'extra_charge' => $remoteArea->remoteAreaExtraCharge(),
             ] : null,
             'courierOptions' => $courierOptions

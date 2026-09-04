@@ -371,12 +371,16 @@ trait ManagesOrderProducts
         $this->jobProductUnitPrice = '0.00';
         $this->jobProductSupplierId = null;
         $this->jobProductSupplierLabel = '';
+        $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
         $this->showAddJobProductForm = true;
     }
 
     public function closeAddJobProductForm(): void
     {
+        if ($this->showMissingProductSupplierModal && $this->missingProductSupplierContext === 'order_detail') {
+            $this->closeMissingProductSupplierModal();
+        }
         $this->showAddJobProductForm = false;
         $this->jobProductSearch = '';
         $this->jobProductShowAllResults = false;
@@ -386,6 +390,7 @@ trait ManagesOrderProducts
         $this->jobProductUnitPrice = '0.00';
         $this->jobProductSupplierId = null;
         $this->jobProductSupplierLabel = '';
+        $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
         $this->resetValidation([
             'jobProductSelectedId', 'jobProductCategory', 'jobProductQuantity', 'jobProductUnitPrice', 'jobProductSupplierId',
@@ -429,10 +434,17 @@ trait ManagesOrderProducts
         $this->jobProductUnitPrice = $basePrice !== null ? number_format((float) $basePrice, 2, '.', '') : '0.00';
         $this->jobProductSupplierId = $linkedSupplier ? (int) $linkedSupplier->id : null;
         $this->jobProductSupplierLabel = $linkedSupplier ? (string) $linkedSupplier->name : '';
+        $this->jobProductSupplierSkipped = false;
         // Match Create Order: a linked supplier is the default for this row,
         // but the user may change the supplier for this Order only.
         $this->jobProductSupplierLocked = false;
         $this->resetValidation(['jobProductSelectedId', 'jobProductCategory', 'jobProductSupplierId', 'jobProductQuantity', 'jobProductUnitPrice']);
+
+        if (!$linkedSupplier) {
+            // Mirror Create Order: users may link/create a supplier or explicitly
+            // continue without one and assign it later from Order Details.
+            $this->openMissingProductSupplierModalFor($product, null, 'order_detail', true, 'Order', 'continue');
+        }
     }
 
     #[Renderless]
@@ -463,6 +475,7 @@ trait ManagesOrderProducts
 
         $this->jobProductSupplierId = (int) $supplier->id;
         $this->jobProductSupplierLabel = (string) $supplier->name;
+        $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
         $this->resetValidation('jobProductSupplierId');
         $this->dispatch('create-order-product-supplier-selected');
@@ -514,7 +527,8 @@ trait ManagesOrderProducts
         $data = $this->validate([
             'jobProductSelectedId' => ['required', 'integer'],
             'jobProductSupplierId' => [
-                'required',
+                Rule::requiredIf(fn (): bool => ! $this->jobProductSupplierSkipped),
+                'nullable',
                 'integer',
                 Rule::exists('master_records', 'id')->where(fn ($query) => $query
                     ->where('workspace_id', app(MasterDataService::class)->workspaceId())
@@ -548,7 +562,9 @@ trait ManagesOrderProducts
             return;
         }
 
-        $supplierId = (int) $data['jobProductSupplierId'];
+        $supplierId = filled($data['jobProductSupplierId'] ?? null)
+            ? (int) $data['jobProductSupplierId']
+            : null;
         $basePrice = $product->productPriceForQuantity((int) $data['jobProductQuantity']);
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice

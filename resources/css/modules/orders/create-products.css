@@ -1873,8 +1873,7 @@
     color: #8e2f2a;
 }
 
-.ft-order-product-supplier-missing-icon,
-.ft-order-product-supplier-modal-icon {
+.ft-order-product-supplier-missing-icon {
     width: 26px;
     height: 26px;
     flex: 0 0 26px;
@@ -1924,130 +1923,6 @@
 
 .ft-order-product-supplier-missing.is-skipped small {
     color: #8c6b2b;
-}
-
-.ft-order-product-supplier-missing-modal .ft-modal__dialog {
-    width: min(100%, 430px);
-}
-
-.ft-order-product-supplier-modal-close {
-    width: 30px;
-    height: 30px;
-    display: grid;
-    place-items: center;
-    border: 0;
-    border-radius: 6px;
-    background: transparent;
-    color: #667085;
-    font: inherit;
-    font-size: 1.375rem;
-    line-height: 1;
-    cursor: pointer;
-}
-
-.ft-order-product-supplier-modal-close:hover,
-.ft-order-product-supplier-modal-close:focus-visible {
-    background: #f2f4f7;
-    color: #344054;
-    outline: 0;
-}
-
-.ft-order-product-supplier-modal-message {
-    display: flex;
-    align-items: flex-start;
-    gap: 12px;
-}
-
-.ft-order-product-supplier-modal-message > div {
-    min-width: 0;
-}
-
-.ft-order-product-supplier-modal-message strong {
-    display: block;
-    margin-bottom: 5px;
-    color: #172235;
-    font-size: .8125rem;
-    font-weight: 760;
-}
-
-.ft-order-product-supplier-modal-message p {
-    margin: 0;
-    color: #59677a;
-    font-size: .6875rem;
-    line-height: 1.55;
-}
-
-.ft-order-product-supplier-modal-note {
-    display: block;
-    margin-top: 10px;
-    padding: 8px 10px;
-    border: 1px solid #dbe5f1;
-    border-radius: 7px;
-    background: #f7f9fc;
-    color: #52647c;
-    font-size: .59375rem;
-    line-height: 1.45;
-}
-
-.ft-order-product-supplier-modal-actions {
-    width: 100%;
-    display: flex;
-    align-items: center;
-    justify-content: flex-end;
-    gap: 10px;
-}
-
-.ft-order-product-supplier-modal-action.ft-btn[data-ft-ui-component="button"] {
-    min-height: 42px;
-    padding: 0 18px;
-    border-radius: 8px;
-    font-size: .6875rem;
-    font-weight: 760;
-    line-height: 1;
-}
-
-.ft-order-product-supplier-modal-action--cancel.ft-btn[data-ft-ui-component="button"] {
-    min-width: 96px;
-    border-color: #cbd7e5;
-    background: #fff;
-    color: #31445f;
-}
-
-.ft-order-product-supplier-modal-action--cancel.ft-btn[data-ft-ui-component="button"]:hover:not(:disabled) {
-    border-color: #9fb2c9;
-    background: #f7f9fc;
-}
-
-.ft-order-product-supplier-modal-action--skip.ft-btn[data-ft-ui-component="button"] {
-    min-width: 196px;
-    border-color: var(--ft-theme-primary);
-    background: var(--ft-theme-primary);
-    color: #fff !important;
-    box-shadow: 0 4px 12px rgba(11, 138, 124, .2);
-}
-
-.ft-order-product-supplier-modal-action--skip.ft-btn[data-ft-ui-component="button"]:hover:not(:disabled) {
-    border-color: var(--ft-theme-primary-hover);
-    background: var(--ft-theme-primary);
-    color: #fff !important;
-}
-
-.ft-order-product-supplier-modal-action--skip.ft-btn[data-ft-ui-component="button"]:disabled {
-    border-color: var(--ft-theme-primary-300);
-    background: var(--ft-theme-primary-300);
-    color: #fff !important;
-    box-shadow: none;
-}
-
-@media (max-width: 520px) {
-    .ft-order-product-supplier-modal-actions {
-        align-items: stretch;
-        flex-direction: column-reverse;
-    }
-
-    .ft-order-product-supplier-modal-action.ft-btn[data-ft-ui-component="button"] {
-        width: 100%;
-    }
 }
 
 .ft-order-product-card-field .validation-error {
@@ -3183,6 +3058,26 @@
     font: inherit;
     font-size: .65625rem;
     font-weight: 850;
+    cursor: pointer;
+}
+
+.ft-product-quantity-prototype-exact .ft-pq-supplier-box > .ft-pq-supplier-actions {
+    flex: 0 0 auto;
+    margin-left: auto;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.ft-product-quantity-prototype-exact .ft-pq-supplier-box > .ft-pq-supplier-actions button {
+    border: 0;
+    background: transparent;
+    color: var(--ft-theme-primary);
+    padding: 0;
+    font: inherit;
+    font-size: .65625rem;
+    font-weight: 850;
+    white-space: nowrap;
     cursor: pointer;
 }
 

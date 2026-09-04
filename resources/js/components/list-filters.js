@@ -356,7 +356,7 @@ const normaliseOptionValue = (value) => String(value ?? '')
             `top:${Math.round(top)}px!important`,
             'right:auto!important',
             'bottom:auto!important',
-            'z-index:1200!important',
+            `z-index:${Math.max(1, Number(component.menuZIndex || 1200))}!important`,
         ].join(';');
     };
 

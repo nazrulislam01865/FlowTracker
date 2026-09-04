@@ -2,51 +2,53 @@
 
 namespace Tests\Feature;
 
-use Tests\TestCase;
 use Tests\Support\OrderPhase5Source;
+use Tests\TestCase;
 
 class CreateOrderProductSupplierUxTest extends TestCase
 {
-    public function test_create_order_uses_product_supplier_and_labelled_product_cards(): void
+    public function test_create_order_uses_the_shared_missing_supplier_resolution_flow(): void
     {
         $jobs = OrderPhase5Source::livewire();
-        $model = file_get_contents(app_path('Models/MasterRecord.php'));
-        $selector = file_get_contents(resource_path('views/components/catalog/create-product-quantity.blade.php'));
-        $card = file_get_contents(resource_path('views/components/catalog/create-order-product-card.blade.php'));
-        $create = file_get_contents(resource_path('views/livewire/jobs/index.blade.php'));
-        $css = $this->compatibilityCss('flowtrack-order-create-products.css');
+        $sharedConcern = file_get_contents(app_path('Livewire/Concerns/ManagesMissingProductSupplier.php'));
+        $jobContext = file_get_contents(app_path('Livewire/Jobs/Concerns/HandlesMissingProductSupplierContext.php'));
+        $resolver = file_get_contents(app_path('Services/Catalog/ProductSupplierResolutionService.php'));
+        $modal = file_get_contents(resource_path('views/components/catalog/missing-product-supplier-modal.blade.php'));
+        $wrapper = file_get_contents(resource_path('views/components/jobs/create/missing-product-supplier-modal.blade.php'));
+        $createProducts = OrderPhase5Source::createProductsView();
+        $resolutionCss = file_get_contents(resource_path('css/modules/orders/create-order-supplier-resolution.css'));
+        $afterDashboard = file_get_contents(resource_path('css/application/after-dashboard.css'));
 
         $this->assertStringContainsString('supplierForProduct($product)', $jobs);
-        $this->assertStringContainsString('appendCreateOrderProduct($product, (int) $productSupplier->id)', $jobs);
-        $this->assertStringContainsString('skipMissingCreateOrderProductSupplier', $jobs);
-        $this->assertStringContainsString('createOrderSupplierSkipProductIds', $jobs);
-        $this->assertStringContainsString('in_array($productId, $this->createOrderSupplierSkipProductIds, true)', $jobs);
-        $this->assertStringNotContainsString("'supplier_skipped' =>", $jobs);
-        $this->assertStringNotContainsString("'jobItems.*.supplier_skipped'", $jobs);
-        $this->assertStringContainsString('productSupplierId()', $model);
-        $this->assertStringContainsString('<x-catalog.create-order-product-card', $selector);
-        $this->assertStringContainsString('From product', $card);
-        $this->assertStringContainsString('Supplier is not linked', $card);
-        $this->assertStringContainsString('Supplier skipped for now', $card);
-        $this->assertStringContainsString('You can assign a supplier later from Order Details.', $card);
-        $this->assertStringNotContainsString('<x-ui.search-select', $card);
-        $this->assertStringContainsString('showMissingProductSupplierModal', $jobs);
-        $this->assertStringContainsString('synchronizeCreateOrderProductSuppliersFromCatalog', $jobs);
-        $this->assertStringContainsString('Skip supplier for now', $jobs);
-        $this->assertStringContainsString('Quantity', $card);
-        $this->assertStringContainsString('Unit price', $card);
-        $this->assertStringContainsString('Notes', $card);
-        $this->assertStringContainsString(':selected-product-suppliers="$selectedProductSuppliers"', $create);
-        $this->assertStringContainsString(':create-order-supplier-skip-product-ids="$createOrderSupplierSkipProductIds"', $create);
-        $this->assertStringContainsString(':new-product-supplier-id="$newProductSupplierId"', $create);
-        $createProducts = OrderPhase5Source::createProductsView();
-        $this->assertStringContainsString('Supplier not linked', $createProducts);
-        $this->assertStringContainsString('Skip supplier &amp; add product', $createProducts);
-        $this->assertStringContainsString(':supplier-skipped-product-ids="$createOrderSupplierSkipProductIds"', $createProducts);
-        $this->assertStringContainsString('variant="secondary"', $createProducts);
-        $this->assertStringContainsString('.ft-order-selected-product-card-fields', $css);
-        $this->assertStringContainsString('.ft-order-product-supplier-modal-action--skip', $css);
-        $this->assertStringContainsString('color: #fff !important;', $css);
-        $this->assertStringContainsString('.ft-create-job-page .ft-order-products-prototype', $css);
+        $this->assertStringContainsString('openMissingProductSupplierModalFor($product)', $jobs);
+        $this->assertStringContainsString("'create_order'", $jobContext);
+        $this->assertStringContainsString('completeCreateOrderMissingProductSupplier', $jobContext);
+        $this->assertStringContainsString('appendCreateOrderProduct($product, $supplierId)', $jobContext);
+
+        $this->assertStringContainsString('resolveMissingProductSupplier', $sharedConcern);
+        $this->assertStringContainsString('assertMissingProductSupplierTargetCurrent', $sharedConcern);
+        $this->assertStringContainsString('selectMissingProductSupplier', $sharedConcern);
+        $this->assertStringContainsString('skipMissingCreateOrderProductSupplier', $sharedConcern);
+        $this->assertStringContainsString("['existing', 'create', 'skip']", $sharedConcern);
+        $this->assertStringContainsString("->canModule('suppliers', 'create')", $sharedConcern);
+
+        $this->assertStringContainsString('lockForUpdate()', $resolver);
+        $this->assertStringContainsString('assignSupplierToProduct', $resolver);
+        $this->assertStringContainsString('SaveMasterRecordAction', $resolver);
+
+        $this->assertStringContainsString('<x-catalog.missing-product-supplier-modal', $wrapper);
+        $this->assertStringContainsString('Supplier not linked', $modal);
+        $this->assertStringContainsString('Link existing supplier', $modal);
+        $this->assertStringContainsString('Create new supplier', $modal);
+        $this->assertStringContainsString('Continue without supplier', $modal);
+        $this->assertStringContainsString('action="selectMissingProductSupplier"', $modal);
+        $this->assertStringContainsString('wire:click="resolveMissingProductSupplier"', $modal);
+        $this->assertStringContainsString('wire:model.blur="missingProductNewSupplierName"', $modal);
+        $this->assertStringContainsString('wire:model.blur="missingProductNewSupplierEmail"', $modal);
+        $this->assertStringNotContainsString("@include('components.jobs.create.missing-product-supplier-modal')", $createProducts);
+
+        $this->assertStringContainsString("@import '../modules/orders/create-order-supplier-resolution.css';", $afterDashboard);
+        $this->assertStringContainsString('.ft-order-supplier-resolution__notice', $resolutionCss);
+        $this->assertStringContainsString('.ft-order-supplier-resolution__option.is-selected', $resolutionCss);
     }
 }

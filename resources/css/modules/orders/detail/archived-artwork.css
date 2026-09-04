@@ -214,3 +214,13 @@
         padding: 12px;
     }
 }
+
+.ft-order-prototype-detail .ft-order-archived-artwork__reason--products strong {
+    color: var(--text);
+}
+
+.ft-order-prototype-detail .ft-order-archived-artwork__status.is-cancelled {
+    border-color: var(--ft-border-danger);
+    background: var(--ft-bg-danger);
+    color: var(--ft-text-danger);
+}

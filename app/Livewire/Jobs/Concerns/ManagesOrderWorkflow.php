@@ -85,8 +85,7 @@ trait ManagesOrderWorkflow
             $decision = ($descriptor['key'] ?? null) === 'SHIP_LABEL' ? 'generate' : 'confirm';
             $workflowActions->perform($task, auth()->user(), $decision);
             $this->dispatchTaskAssigneeSync($task->id);
-            $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
-            if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
+            $this->syncOverviewWorkflowSelectionToCurrentPhase();
             session()->flash('success', 'Order workflow updated.');
             return;
         }
@@ -244,7 +243,7 @@ trait ManagesOrderWorkflow
         $workflowActions->perform($task, auth()->user(), 'confirm', null, $payload);
         $this->dispatchTaskAssigneeSync($task->id);
         $this->refreshShipmentWorkflowSelection();
-        session()->flash('success', 'Shipment marked as dispatched. Billing is now active.');
+        session()->flash('success', 'Shipment marked as dispatched.');
     }
 
     public function selectShipmentContact(string $selection): void
@@ -340,6 +339,15 @@ trait ManagesOrderWorkflow
             $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionAttachment', 'orderWorkflowActionRevisionComments', 'orderWorkflowActionRevisionAttachments', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
             return;
         }
+        if ($this->orderWorkflowActionStep === 'main' && $decision === 'cancel_artwork'
+            && $key === 'ART_INTERNAL_REVIEW') {
+            $this->orderWorkflowActionStep = 'cancel_artwork';
+            $this->orderWorkflowActionComment = '';
+            $this->orderWorkflowActionPayload['cancel_artwork_document_ids'] = [];
+            $this->orderWorkflowActionPayload['cancel_product_item_ids'] = [];
+            $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+            return;
+        }
         if ($this->orderWorkflowActionStep === 'main' && $decision === 'issue'
             && in_array($key, ['PROD_ISSUE', 'QC_CHECK'], true)) {
             $this->orderWorkflowActionStep = 'issue';
@@ -370,6 +378,9 @@ trait ManagesOrderWorkflow
         $isArtworkRevisionSubmission = $this->orderWorkflowActionStep === 'revision'
             && $decision === 'revise'
             && in_array($key, ['ART_INTERNAL_REVIEW', 'ART_CLIENT_ERP_DECISION'], true);
+        $isArtworkCancellationSubmission = $this->orderWorkflowActionStep === 'cancel_artwork'
+            && $decision === 'cancel_artwork'
+            && $key === 'ART_INTERNAL_REVIEW';
         $revisionAttachments = [];
         if ($isArtworkRevisionSubmission) {
             $this->validate([
@@ -404,6 +415,20 @@ trait ManagesOrderWorkflow
             $revisionAttachments = $revisionIds->mapWithKeys(fn ($documentId) => [
                 $documentId => array_values(array_filter((array) ($this->orderWorkflowActionRevisionAttachments[$documentId] ?? []))),
             ])->all();
+        }
+
+        if ($isArtworkCancellationSubmission) {
+            $this->validate([
+                'orderWorkflowActionPayload.cancel_artwork_document_ids' => ['required', 'array', 'min:1'],
+                'orderWorkflowActionPayload.cancel_artwork_document_ids.*' => ['integer', 'distinct'],
+                'orderWorkflowActionPayload.cancel_product_item_ids' => ['nullable', 'array'],
+                'orderWorkflowActionPayload.cancel_product_item_ids.*' => ['integer', 'distinct'],
+                'orderWorkflowActionComment' => ['required', 'string', 'max:2000'],
+            ], [
+                'orderWorkflowActionPayload.cancel_artwork_document_ids.required' => 'Select at least one artwork file to cancel.',
+                'orderWorkflowActionPayload.cancel_artwork_document_ids.min' => 'Select at least one artwork file to cancel.',
+                'orderWorkflowActionComment.required' => 'Enter a cancellation reason.',
+            ]);
         }
 
         try {
@@ -504,21 +529,22 @@ trait ManagesOrderWorkflow
             )))
             : '';
 
-        $successMessage = match ($key) {
-            'NEW_SEND_PO_ARTWORK' => 'Purchase Order emailed to the Artwork Team.',
-            'ART_SEND_ORDER_TEAM' => 'Artwork emailed to the Order Team.',
-            'BILL_PREPARE' => 'Invoice generated and ready to send.',
-            'BILL_SEND' => match ($invoiceDeliveryStatus) {
-                'failed' => 'Send Invoice task completed, but email delivery failed. Use Resend on the completed task to try again.',
-                'not_sent' => 'Send Invoice task completed without email delivery. Use Resend when Order Email is available.',
-                default => 'Invoice emailed to the client.',
-            },
-            default => 'Order workflow updated.',
-        };
+        $successMessage = $key === 'ART_INTERNAL_REVIEW' && $decision === 'cancel_artwork'
+            ? 'Selected artwork cancelled. Any selected products were removed from the active Order.'
+            : match ($key) {
+                'NEW_SEND_PO_ARTWORK' => 'Purchase Order emailed to the Artwork Team.',
+                'ART_SEND_ORDER_TEAM' => 'Artwork emailed to the Order Team.',
+                'BILL_PREPARE' => 'Invoice generated and ready to send.',
+                'BILL_SEND' => match ($invoiceDeliveryStatus) {
+                    'failed' => 'Send Invoice task completed, but email delivery failed. Use Resend on the completed task to try again.',
+                    'not_sent' => 'Send Invoice task completed without email delivery. Use Resend when Order Email is available.',
+                    default => 'Invoice emailed to the client.',
+                },
+                default => 'Order workflow updated.',
+            };
 
         $this->closeOrderWorkflowAction();
-        $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
-        if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
         session()->flash('success', $successMessage);
     }
 
@@ -568,22 +594,23 @@ trait ManagesOrderWorkflow
         return $task;
     }
 
+    protected function syncOverviewWorkflowSelectionToCurrentPhase(): ?int
+    {
+        if (! $this->selectedJobId) return null;
+
+        $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
+        if (! $currentPhaseId) return null;
+
+        $currentPhaseId = (int) $currentPhaseId;
+        $this->overviewPhaseId = $currentPhaseId;
+        $this->lastOverviewWorkflowPhaseId = $currentPhaseId;
+
+        return $currentPhaseId;
+    }
+
     private function refreshShipmentWorkflowSelection(): void
     {
-        if (! $this->selectedJobId) return;
-
-        // Shipment completion can advance the Order to Billing inside the same
-        // request. Keep the overview explicitly pinned to the freshly persisted
-        // current stage and keep the workflow section hydrated so Livewire does
-        // not leave the user looking at the now-historical Shipment branch.
-        $currentPhaseId = FlowJob::query()
-            ->whereKey($this->selectedJobId)
-            ->value('workflow_phase_id');
-
-        if (! $currentPhaseId) return;
-
-        $this->overviewPhaseId = (int) $currentPhaseId;
-        $this->orderDetailSectionsReady['workflow'] = true;
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
     }
 
     public function resendCompletedArtworkEmail(int $taskId): void
@@ -731,8 +758,7 @@ trait ManagesOrderWorkflow
 
         $attachmentLabel = $key === 'ART_SEND_ORDER_TEAM' ? 'artwork' : 'Purchase Order';
         $this->closeOrderWorkflowAction();
-        $currentPhaseId = FlowJob::query()->whereKey($this->selectedJobId)->value('workflow_phase_id');
-        if ($currentPhaseId) $this->overviewPhaseId = (int) $currentPhaseId;
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
         session()->flash('success', 'Task completed manually. Please send the '.$attachmentLabel.' outside FlowTrack using the downloaded file.');
     }
 

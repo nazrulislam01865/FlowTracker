@@ -27,6 +27,7 @@
     'jobProductUnitPrice'=>'0.00',
     'jobProductSupplierId'=>null,
     'jobProductSupplierLabel'=>'',
+    'jobProductSupplierSkipped'=>false,
     'jobProductSupplierLocked'=>false,
     'showEditOrderProductModal'=>false, 'editOrderProductItemId'=>null, 'editOrderProductName'=>'', 'editOrderProductCode'=>'',
     'editOrderProductCategory'=>'', 'editOrderProductSearch'=>'', 'editOrderProductSearchResults'=>collect(),
@@ -123,6 +124,13 @@
     'orderWorkflowEmailFallback'=>false,
     'orderWorkflowEmailFallbackMessage'=>'',
     'orderWorkflowEmailFallbackAttempts'=>0,
+    'showShipmentModal'=>false,
+    'shipmentModalTaskId'=>null,
+    'shipmentEditingId'=>null,
+    'shipmentModalMode'=>'same_address',
+    'shipmentForm'=>[],
+    'showShipmentDetailsModal'=>false,
+    'shipmentDetailsId'=>null,
 ])
 @php
     $manualAttention = (bool) ($job->attention_requested ?? false);
@@ -175,6 +183,7 @@
             :job-product-unit-price="$jobProductUnitPrice"
             :job-product-supplier-id="$jobProductSupplierId"
             :job-product-supplier-label="$jobProductSupplierLabel"
+            :job-product-supplier-skipped="$jobProductSupplierSkipped"
             :job-product-supplier-locked="$jobProductSupplierLocked"
             :show-edit-order-product-modal="$showEditOrderProductModal"
             :edit-order-product-item-id="$editOrderProductItemId"
@@ -222,6 +231,13 @@
             :order-workflow-email-fallback="$orderWorkflowEmailFallback"
             :order-workflow-email-fallback-message="$orderWorkflowEmailFallbackMessage"
             :order-workflow-email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"
+            :show-shipment-modal="$showShipmentModal"
+            :shipment-modal-task-id="$shipmentModalTaskId"
+            :shipment-editing-id="$shipmentEditingId"
+            :shipment-modal-mode="$shipmentModalMode"
+            :shipment-form="$shipmentForm"
+            :show-shipment-details-modal="$showShipmentDetailsModal"
+            :shipment-details-id="$shipmentDetailsId"
         />
     @elseif($detailTab==='inquiry')
         <x-jobs.detail-inquiry

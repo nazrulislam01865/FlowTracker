@@ -15,8 +15,10 @@ use App\Livewire\Inquiries\Concerns\ManagesInquiryWorkflow;
 use App\Livewire\Inquiries\Concerns\ManagesInquiryFinalDecision;
 use App\Livewire\Inquiries\Concerns\ManagesInquiryRfq;
 use App\Livewire\Inquiries\Concerns\BuildsInquiryPageData;
+use App\Livewire\Inquiries\Concerns\HandlesMissingProductSupplierContext;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
+use App\Livewire\Concerns\ManagesMissingProductSupplier;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 use App\Models\Inquiry;
 use Livewire\Attributes\On;
@@ -39,7 +41,9 @@ class Index extends Component
     use ManagesInquiryFinalDecision;
     use ManagesInquiryRfq;
     use BuildsInquiryPageData;
+    use HandlesMissingProductSupplierContext;
 
+    use ManagesMissingProductSupplier;
     use RefreshesFromWorkspace;
     use HandlesInlineEdits, WithFileUploads, WithPagination;
 

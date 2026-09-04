@@ -343,6 +343,9 @@ trait ManagesInquiryProducts
 
     public function closeAddInquiryProductForm(): void
     {
+        if ($this->showMissingProductSupplierModal && $this->missingProductSupplierContext === 'inquiry_detail') {
+            $this->closeMissingProductSupplierModal();
+        }
         $this->showAddInquiryProductForm = false;
         $this->inquiryProductSearch = '';
         $this->inquiryProductShowAllResults = false;
@@ -377,6 +380,7 @@ trait ManagesInquiryProducts
         );
 
         $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
+        $linkedSupplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
         $category = trim((string) ($product->parent?->name ?? ''));
         if ($category === '') {
             $legacy = trim((string) $product->description);
@@ -392,6 +396,10 @@ trait ManagesInquiryProducts
         $this->inquiryProductQuantity = (string) $defaultQuantity;
         $this->inquiryProductUnitPrice = $basePrice !== null ? number_format((float) $basePrice, 2, '.', '') : '0.00';
         $this->resetValidation(['inquiryProductSelectedId', 'inquiryProductCategory', 'inquiryProductQuantity', 'inquiryProductUnitPrice']);
+
+        if (!$linkedSupplier) {
+            $this->openMissingProductSupplierModalFor($product, null, 'inquiry_detail', true, 'Inquiry', 'continue');
+        }
     }
 
     public function updatedInquiryProductQuantity(): void

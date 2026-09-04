@@ -55,7 +55,10 @@ class FlowJob extends Model
         'repeat_order_number',
         'estimated_delivery_date',
         'production_urgency_ids',
+        'shipment_method_ids',
         'shipment_urgency_ids',
+        'allow_multiple_shipments',
+        'shipment_address_mode',
         'notes',
         'order_flag_id',
         'attention_requested',
@@ -85,7 +88,9 @@ class FlowJob extends Model
             'attention_at' => 'datetime',
             'is_repeat_order' => 'boolean',
             'production_urgency_ids' => 'array',
+            'shipment_method_ids' => 'array',
             'shipment_urgency_ids' => 'array',
+            'allow_multiple_shipments' => 'boolean',
             'completed_at' => 'datetime',
             'cancelled_at' => 'datetime',
             'commercial_value' => 'decimal:2',
@@ -117,6 +122,7 @@ class FlowJob extends Model
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->whereNotNull('order_task_flag_id')->whereNull('completed_at')->orderBy('id'); }
     public function documents(): HasMany { return $this->hasMany(Document::class); }
     public function items(): HasMany { return $this->hasMany(FlowJobItem::class, 'flow_job_id')->orderBy('sort_order'); }
+    public function shipments(): HasMany { return $this->hasMany(OrderShipment::class, 'flow_job_id')->orderBy('sequence')->orderBy('id'); }
     public function invoices(): HasMany { return $this->hasMany(Invoice::class, 'flow_job_id')->orderByDesc('issue_date')->orderByDesc('id'); }
     public function payments(): HasMany { return $this->hasMany(Payment::class, 'flow_job_id')->orderByDesc('payment_date')->orderByDesc('id'); }
     public function collection(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderCollection::class, 'flow_job_id'); }

@@ -181,6 +181,11 @@ trait ManagesOrderTasks
 
         if (($result['ok'] ?? false) && $updatedTask) {
             $result = array_merge($result, $this->dispatchTaskAssigneeSync($updatedTask));
+            $currentPhaseId = $this->syncOverviewWorkflowSelectionToCurrentPhase();
+            if ($currentPhaseId && $currentPhaseId !== (int) $updatedTask->workflow_phase_id) {
+                $result['refresh'] = true;
+                $result['workflowPhaseId'] = $currentPhaseId;
+            }
         }
 
         return $result;
@@ -192,6 +197,7 @@ trait ManagesOrderTasks
         try {
             $job = app(CompleteOrderPhase::class)->handle(app(VisibleOrderQuery::class)->detail(auth()->user(), $this->selectedJobId), auth()->user());
             $this->expandedPhaseIds = $job->phase ? [(int) $job->phase->id] : [];
+            $this->syncOverviewWorkflowSelectionToCurrentPhase();
             session()->flash('success', 'Phase completed and the next configured phase is active.');
         } catch (Throwable $e) {
             $this->addError('phaseCompletion', $e->getMessage());
@@ -219,6 +225,10 @@ trait ManagesOrderTasks
     private function openTaskWithMode(int $id, bool $editMode): void
     {
         $task = app(TaskService::class)->visibleQuery(auth()->user())->findOrFail($id);
+        if ($this->selectedJobId && (int) $this->selectedJobId !== (int) $task->flow_job_id) {
+            $this->overviewPhaseId = null;
+            $this->lastOverviewWorkflowPhaseId = null;
+        }
         if ($editMode) {
             abort_unless(app(AccessControlService::class)->canEditVisibleTask(auth()->user(), $task), 403);
         }
@@ -259,7 +269,17 @@ trait ManagesOrderTasks
 
         $task = app(TaskService::class)->moveStatus($task, 'Completed', auth()->user());
         $this->dispatchTaskAssigneeSync($task);
-        $this->loadTaskForm($task->id);
+        $currentPhaseId = $this->syncOverviewWorkflowSelectionToCurrentPhase();
+
+        if ($currentPhaseId && $currentPhaseId !== (int) $task->workflow_phase_id) {
+            // The completed task closed its stage. Drop the historical task
+            // detail so the freshly-active stage (Billing after Shipment) is
+            // immediately visible instead of leaving the user in Shipment.
+            $this->closeTask();
+        } else {
+            $this->loadTaskForm($task->id);
+        }
+
         session()->flash('success', 'Task marked complete.');
     }
 
@@ -336,6 +356,13 @@ trait ManagesOrderTasks
                 completedDate: $completedLocal?->format('M j, Y') ?? '—',
                 completedTime: $completedLocal?->format('g:i A') ?? ''
             );
+
+            $currentPhaseId = $this->syncOverviewWorkflowSelectionToCurrentPhase();
+            if ($currentPhaseId && $currentPhaseId !== (int) $updatedTask->workflow_phase_id) {
+                $result['refresh'] = true;
+                $result['workflowPhaseId'] = $currentPhaseId;
+                $this->closeTask();
+            }
         }
 
         if ($field === 'assignee_id' && ($result['ok'] ?? false) && $updatedTask) {
@@ -429,13 +456,14 @@ trait ManagesOrderTasks
             'taskProgress' => ['required','integer','between:0,100'],
             'taskAttentionReason' => ['nullable','string','max:1000'],
         ]);
-        app(TaskService::class)->update($task, [
+        $updatedTask = app(TaskService::class)->update($task, [
             'status' => $this->taskStatus,
             'assignee_id' => $this->taskAssigneeId,
             'progress' => $this->taskProgress,
             'attention_reason' => $this->taskAttentionReason,
         ], auth()->user());
-        if (trim($this->taskComment) !== '') app(TaskService::class)->addComment($task, $this->taskComment, auth()->user());
+        if (trim($this->taskComment) !== '') app(TaskService::class)->addComment($updatedTask, $this->taskComment, auth()->user());
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
         session()->flash('success', 'Task update saved.');
         $this->selectedTaskId = null;
         $this->taskComment = '';

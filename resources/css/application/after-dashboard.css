@@ -6,7 +6,9 @@
 @import '../modules/setup/master-data.css';
 @import '../modules/catalog/product-categories.css';
 @import '../modules/orders/create-products.css';
+@import '../modules/orders/create-order-supplier-resolution.css';
 @import '../modules/orders/create.css';
+@import '../modules/orders/create-shipping-setup.css';
 @import '../modules/orders/create-documents.css';
 @import '../modules/orders/detail-header.css';
 @import '../modules/tasks/detail-attachments.css';

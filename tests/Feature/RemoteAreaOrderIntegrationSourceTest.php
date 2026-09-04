@@ -18,8 +18,9 @@ class RemoteAreaOrderIntegrationSourceTest extends TestCase
         $planning = file_get_contents(resource_path('views/components/jobs/order-detail/planning.blade.php'));
         $shipping = file_get_contents(resource_path('views/components/jobs/order-detail/shipping.blade.php'));
 
-        $this->assertStringContainsString('remoteAreaForPostalCode($job->shipping_postal_code)', $viewService);
-        $this->assertStringContainsString("'remoteArea' => $remoteArea ? [", $viewService);
+        $this->assertStringContainsString('$remoteArea = $masterData->remoteAreaForPostalCode($job->shipping_postal_code);', $viewService);
+        $this->assertStringContainsString("'remoteArea' => \$remoteArea ? [", $viewService);
+        $this->assertStringContainsString("'postal_code' => \$masterData->normalizePostalCode((string) \$job->shipping_postal_code)", $viewService);
         $this->assertStringContainsString('@if($remoteArea)', $planning);
         $this->assertStringContainsString('Remote Area', $planning);
         $this->assertLessThan(
@@ -45,15 +46,18 @@ class RemoteAreaOrderIntegrationSourceTest extends TestCase
         $this->assertStringContainsString('$items = $this->applyRemoteAreaSurcharge($lockedJob, $items);', $finance);
         $this->assertStringContainsString('REMOTE_AREA_SURCHARGE_PREFIX', $finance);
         $this->assertStringContainsString('remoteAreaForPostalCode($job->shipping_postal_code)', $finance);
-        $this->assertStringContainsString("'unit_price' => round($charge, 2)", $finance);
+        $this->assertStringContainsString('normalizePostalCode((string) $job->shipping_postal_code)', $finance);
+        $this->assertStringContainsString("'unit_price' => round(\$charge, 2)", $finance);
     }
 
-    public function test_remote_area_lookup_uses_one_request_local_map(): void
+    public function test_remote_area_lookup_uses_request_local_exact_and_range_indexes(): void
     {
         $master = file_get_contents(app_path('Services/MasterDataService.php'));
 
         $this->assertStringContainsString('private ?array $remoteAreaByPostalCode = null;', $master);
-        $this->assertStringContainsString("foreach ($this->active('remote_area') as $record)", $master);
-        $this->assertStringContainsString('return $this->remoteAreaByPostalCode[$matchKey] ?? null;', $master);
+        $this->assertStringContainsString('private ?array $remoteAreaPostalRanges = null;', $master);
+        $this->assertStringContainsString('foreach ($this->active(\'remote_area\') as $record)', $master);
+        $this->assertStringContainsString('postalCodeFallsWithinRange', $master);
+        $this->assertStringContainsString("return \$range['record'];", $master);
     }
 }

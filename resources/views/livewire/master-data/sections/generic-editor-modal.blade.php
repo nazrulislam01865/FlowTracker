@@ -16,22 +16,72 @@
                         <small class="small muted">{{ $editId ? 'System code is permanently locked.' : 'Automatically generated and permanently locked.' }}</small>
                         @error('code')<div class="validation-error">{{ $message }}</div>@enderror
                     </div>
-                    <div class="field">
-                        <label>{{ $group === 'phone_country_code' ? 'Phone code *' : ($group === 'task_pack_work_calendar' ? 'Calendar name *' : ($group === 'remote_area' ? 'Remote area *' : 'Name *')) }}</label>
-                        <input wire:model="name" @if($group === 'phone_country_code') placeholder="e.g. +880" inputmode="tel" @elseif($group === 'task_pack_work_calendar') placeholder="e.g. Workspace hours" @elseif($group === 'remote_area') placeholder="e.g. Highland District" @endif>
-                        @error('name')<div class="validation-error">{{ $message }}</div>@enderror
-                    </div>
+                    @if($group !== 'remote_area')
+                        <div class="field">
+                            <label>{{ $group === 'phone_country_code' ? 'Phone code *' : ($group === 'task_pack_work_calendar' ? 'Calendar name *' : 'Name *') }}</label>
+                            <input wire:model="name" @if($group === 'phone_country_code') placeholder="e.g. +880" inputmode="tel" @elseif($group === 'task_pack_work_calendar') placeholder="e.g. Workspace hours" @endif>
+                            @error('name')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                    @endif
 
                     @if($group === 'remote_area')
+                        @php
+                            $originSurchargeOptions = ['No', 'Extended Area Surcharge', 'Pickup Area Surcharge', 'Pickup Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'];
+                            $destinationSurchargeOptions = ['No', 'Extended Area Surcharge', 'Delivery Area Surcharge', 'Delivery Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'];
+                        @endphp
                         <div class="field">
-                            <label>Postal code *</label>
-                            <input wire:model.blur="remoteAreaPostalCode" maxlength="32" autocomplete="postal-code" placeholder="e.g. SW1A 1AA">
-                            @error('remoteAreaPostalCode')<div class="validation-error">{{ $message }}</div>@enderror
+                            <label>Carrier *</label>
+                            <input wire:model.blur="remoteAreaCarrier" maxlength="80" placeholder="e.g. UPS">
+                            @error('remoteAreaCarrier')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Country *</label>
+                            <input wire:model.blur="remoteAreaCountry" maxlength="120" autocomplete="country-name" placeholder="e.g. United States">
+                            @error('remoteAreaCountry')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>IATA code *</label>
+                            <input wire:model.blur="remoteAreaIataCode" maxlength="2" autocapitalize="characters" placeholder="e.g. US">
+                            @error('remoteAreaIataCode')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>City <span class="small muted">(optional when postal code is used)</span></label>
+                            <input wire:model.blur="remoteAreaCity" maxlength="120" autocomplete="address-level2" placeholder="e.g. Kuala Belait">
+                            @error('remoteAreaCity')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Postal Code From <span class="small muted">(or use City)</span></label>
+                            <input wire:model.blur="remoteAreaPostalCodeFrom" maxlength="32" autocomplete="postal-code" placeholder="e.g. 68862">
+                            @error('remoteAreaPostalCodeFrom')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Postal Code To <span class="small muted">(optional for one code)</span></label>
+                            <input wire:model.blur="remoteAreaPostalCodeTo" maxlength="32" autocomplete="postal-code" placeholder="e.g. 68866">
+                            @error('remoteAreaPostalCodeTo')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Origin surcharge *</label>
+                            <select wire:model="remoteAreaOriginSurcharge">
+                                @foreach($originSurchargeOptions as $option)<option value="{{ $option }}">{{ $option }}</option>@endforeach
+                            </select>
+                            @error('remoteAreaOriginSurcharge')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Destination surcharge *</label>
+                            <select wire:model="remoteAreaDestinationSurcharge">
+                                @foreach($destinationSurchargeOptions as $option)<option value="{{ $option }}">{{ $option }}</option>@endforeach
+                            </select>
+                            @error('remoteAreaDestinationSurcharge')<div class="validation-error">{{ $message }}</div>@enderror
                         </div>
                         <div class="field">
                             <label>Extra charge <span class="small muted">(optional)</span></label>
                             <input type="number" min="0" max="999999.99" step="0.01" inputmode="decimal" wire:model.blur="remoteAreaExtraCharge" placeholder="0.00">
+                            <small class="small muted">Existing FlowTrack billing amount. The UPS sheet defines surcharge type, not the monetary rate.</small>
                             @error('remoteAreaExtraCharge')<div class="validation-error">{{ $message }}</div>@enderror
+                        </div>
+                        <div class="field">
+                            <label>Display label</label>
+                            <div class="ft-admin-locked">Generated automatically from country and postal range / city.</div>
                         </div>
                     @endif
 

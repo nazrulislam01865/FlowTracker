@@ -20,6 +20,9 @@ class MasterDataService
     /** @var array<string,MasterRecord>|null */
     private ?array $remoteAreaByPostalCode = null;
 
+    /** @var array<int,array{from:string,to:string,record:MasterRecord}>|null */
+    private ?array $remoteAreaPostalRanges = null;
+
     public const COLOR_TYPES = ['department', 'priority', 'task_status', 'inquiry_task_status', 'task_flag', 'order_task_status', 'order_task_flag', 'order_flag'];
 
     /** Financial setup values are governed by the Finance role-matrix module. */
@@ -230,7 +233,15 @@ class MasterDataService
                         ->orWhereLike('description', "%{$normalized}%")
                         ->orWhereLike('metadata->reference_code', "%{$normalized}%");
                     if ($type === 'remote_area') {
-                        $x->orWhereLike('metadata->postal_code', "%{$normalized}%");
+                        $x->orWhereLike('metadata->postal_code', "%{$normalized}%")
+                            ->orWhereLike('metadata->postal_code_from', "%{$normalized}%")
+                            ->orWhereLike('metadata->postal_code_to', "%{$normalized}%")
+                            ->orWhereLike('metadata->carrier', "%{$normalized}%")
+                            ->orWhereLike('metadata->country', "%{$normalized}%")
+                            ->orWhereLike('metadata->iata_code', "%{$normalized}%")
+                            ->orWhereLike('metadata->city', "%{$normalized}%")
+                            ->orWhereLike('metadata->origin_surcharge', "%{$normalized}%")
+                            ->orWhereLike('metadata->destination_surcharge', "%{$normalized}%");
                     }
                     if ($productId) $x->orWhere('id', $productId);
                 });
@@ -457,23 +468,69 @@ class MasterDataService
 
         if ($type === 'remote_area') {
             $metadata = is_array($data['metadata'] ?? null) ? $data['metadata'] : [];
-            $postalCode = $this->normalizePostalCode((string) ($metadata['postal_code'] ?? ''));
-            if ($postalCode === '') {
-                throw ValidationException::withMessages(['remoteAreaPostalCode' => 'Postal code is required.']);
+            $legacyPostalCode = $this->normalizePostalCode((string) ($metadata['postal_code'] ?? ''));
+            $postalFrom = $this->normalizePostalCode((string) ($metadata['postal_code_from'] ?? $legacyPostalCode));
+            $postalTo = $this->normalizePostalCode((string) ($metadata['postal_code_to'] ?? $postalFrom));
+            $city = trim((string) ($metadata['city'] ?? ''));
+
+            if ($postalFrom === '' && $city === '') {
+                throw ValidationException::withMessages(['remoteAreaPostalCodeFrom' => 'Enter a postal code range or a city.']);
+            }
+            if ($postalFrom === '' && $postalTo !== '') {
+                throw ValidationException::withMessages(['remoteAreaPostalCodeTo' => 'Enter Postal Code From before Postal Code To.']);
+            }
+            if ($postalFrom !== '' && $postalTo === '') $postalTo = $postalFrom;
+            if ($postalFrom !== '' && $postalTo !== '' && $this->postalRangeIsDescending($postalFrom, $postalTo)) {
+                throw ValidationException::withMessages(['remoteAreaPostalCodeTo' => 'Postal Code To must be greater than or equal to Postal Code From.']);
             }
 
-            $postalMatchKey = $this->postalCodeMatchKey($postalCode);
-            $duplicatePostalCode = MasterRecord::query()
+            $carrier = trim((string) ($metadata['carrier'] ?? 'UPS')) ?: 'UPS';
+            $country = trim((string) ($metadata['country'] ?? ''));
+            $iataCode = strtoupper(trim((string) ($metadata['iata_code'] ?? '')));
+            if ($iataCode !== '' && ! preg_match('/^[A-Z]{2}$/', $iataCode)) {
+                throw ValidationException::withMessages(['remoteAreaIataCode' => 'IATA code must contain exactly two letters.']);
+            }
+
+            $originSurcharge = trim((string) ($metadata['origin_surcharge'] ?? 'No')) ?: 'No';
+            $destinationSurcharge = trim((string) ($metadata['destination_surcharge'] ?? 'No')) ?: 'No';
+            $validOrigins = ['No', 'Extended Area Surcharge', 'Pickup Area Surcharge', 'Pickup Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'];
+            $validDestinations = ['No', 'Extended Area Surcharge', 'Delivery Area Surcharge', 'Delivery Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'];
+            if (! in_array($originSurcharge, $validOrigins, true)) {
+                throw ValidationException::withMessages(['remoteAreaOriginSurcharge' => 'Select a valid origin surcharge.']);
+            }
+            if (! in_array($destinationSurcharge, $validDestinations, true)) {
+                throw ValidationException::withMessages(['remoteAreaDestinationSurcharge' => 'Select a valid destination surcharge.']);
+            }
+
+            $metadata['carrier'] = $carrier;
+            if ($country !== '') $metadata['country'] = $country; else unset($metadata['country']);
+            if ($iataCode !== '') $metadata['iata_code'] = $iataCode; else unset($metadata['iata_code']);
+            if ($postalFrom !== '') $metadata['postal_code_from'] = $postalFrom; else unset($metadata['postal_code_from']);
+            if ($postalTo !== '') $metadata['postal_code_to'] = $postalTo; else unset($metadata['postal_code_to']);
+            if ($city !== '') $metadata['city'] = $city; else unset($metadata['city']);
+            $metadata['origin_surcharge'] = $originSurcharge;
+            $metadata['destination_surcharge'] = $destinationSurcharge;
+
+            // Preserve metadata.postal_code only for historical records that
+            // already use it. The Order matcher now reads postal_code_from /
+            // postal_code_to directly for new UPS-style exact and range rules.
+            if ($legacyPostalCode !== '' && $postalFrom !== '' && $postalFrom === $postalTo) {
+                $metadata['postal_code'] = $postalFrom;
+            } else {
+                unset($metadata['postal_code']);
+            }
+
+            $identity = $this->remoteAreaIdentityKey($metadata);
+            $duplicateArea = MasterRecord::query()
                 ->forWorkspace($workspaceId)
                 ->ofType('remote_area')
                 ->when($id, fn ($query) => $query->whereKeyNot($id))
                 ->get(['id', 'metadata'])
-                ->contains(fn (MasterRecord $record) => $this->postalCodeMatchKey((string) data_get($record->metadata, 'postal_code')) === $postalMatchKey);
-            if ($duplicatePostalCode) {
-                throw ValidationException::withMessages(['remoteAreaPostalCode' => 'This postal code already exists in Remote Areas.']);
+                ->contains(fn (MasterRecord $record) => $this->remoteAreaIdentityKey((array) ($record->metadata ?? [])) === $identity);
+            if ($identity !== '' && $duplicateArea) {
+                throw ValidationException::withMessages(['remoteAreaPostalCodeFrom' => 'This carrier, country and area rule already exists in Remote Areas.']);
             }
 
-            $metadata['postal_code'] = $postalCode;
             $extraCharge = $metadata['extra_charge'] ?? null;
             if ($extraCharge === null || trim((string) $extraCharge) === '') {
                 unset($metadata['extra_charge']);
@@ -896,30 +953,123 @@ class MasterDataService
         return (string) preg_replace('/\s+/', ' ', $postalCode);
     }
 
+    public function postalRangeIsDescending(string $from, string $to): bool
+    {
+        $fromKey = $this->postalCodeMatchKey($from);
+        $toKey = $this->postalCodeMatchKey($to);
+        if ($fromKey === '' || $toKey === '') return false;
+
+        $fromShape = $this->postalCodeRangeShape($fromKey);
+        $toShape = $this->postalCodeRangeShape($toKey);
+
+        return $fromShape !== null
+            && $fromShape === $toShape
+            && strcmp($fromKey, $toKey) > 0;
+    }
+
     public function remoteAreaForPostalCode(?string $postalCode): ?MasterRecord
     {
         $matchKey = $this->postalCodeMatchKey((string) $postalCode);
         if ($matchKey === '') return null;
 
-        // Build one request-local lookup map from the existing cached active
-        // Master Data collection. Repeated checks therefore do not issue a query
-        // per Order/invoice and do not repeatedly scan every Remote Area row.
-        if ($this->remoteAreaByPostalCode === null) {
+        // Build request-local exact and range indexes from the cached active
+        // Remote Area collection. New UPS-style rows store postal_code_from /
+        // postal_code_to, while older rows can still carry metadata.postal_code.
+        // Both formats must drive the Order flag and invoice surcharge.
+        if ($this->remoteAreaByPostalCode === null || $this->remoteAreaPostalRanges === null) {
             $this->remoteAreaByPostalCode = [];
+            $this->remoteAreaPostalRanges = [];
+
             foreach ($this->active('remote_area') as $record) {
-                // Postal-code matching ignores letter case and whitespace while
-                // preserving the human-friendly stored value for display. This
-                // covers common inputs such as "SW1A1AA" vs "SW1A 1AA".
-                $key = $this->postalCodeMatchKey($record->remoteAreaPostalCode());
-                // save() prevents duplicates. Keep the first configured row as a
-                // defensive fallback for old databases that may predate validation.
-                if ($key !== '' && ! isset($this->remoteAreaByPostalCode[$key])) {
-                    $this->remoteAreaByPostalCode[$key] = $record;
+                $legacyKey = $this->postalCodeMatchKey($record->remoteAreaPostalCode());
+                $fromKey = $this->postalCodeMatchKey($record->remoteAreaPostalCodeFrom());
+                $toKey = $this->postalCodeMatchKey($record->remoteAreaPostalCodeTo());
+
+                // Preserve legacy exact matching and also make single-value
+                // UPS rows (From = To) immediately matchable by Orders.
+                $exactKeys = array_unique([
+                    $legacyKey,
+                    $fromKey !== '' && ($toKey === '' || $fromKey === $toKey) ? $fromKey : '',
+                ]);
+                foreach ($exactKeys as $key) {
+                    if ($key !== '' && ! isset($this->remoteAreaByPostalCode[$key])) {
+                        $this->remoteAreaByPostalCode[$key] = $record;
+                    }
+                }
+
+                if ($fromKey !== '' && $toKey !== '' && $fromKey !== $toKey) {
+                    $this->remoteAreaPostalRanges[] = [
+                        'from' => $fromKey,
+                        'to' => $toKey,
+                        'record' => $record,
+                    ];
                 }
             }
         }
 
-        return $this->remoteAreaByPostalCode[$matchKey] ?? null;
+        // Exact rows win over a broader range when both happen to cover the
+        // same code. This keeps explicitly configured exceptions deterministic.
+        if (isset($this->remoteAreaByPostalCode[$matchKey])) {
+            return $this->remoteAreaByPostalCode[$matchKey];
+        }
+
+        foreach ($this->remoteAreaPostalRanges as $range) {
+            if ($this->postalCodeFallsWithinRange($matchKey, $range['from'], $range['to'])) {
+                return $range['record'];
+            }
+        }
+
+        return null;
+    }
+
+    private function postalCodeFallsWithinRange(string $candidate, string $from, string $to): bool
+    {
+        if ($candidate === '' || $from === '' || $to === '') return false;
+
+        // Postal codes are identifiers, not integers. Compare normalized values
+        // only when all three have the same letter/digit shape (for example
+        // DDDDD, LLDDD or LLDLDLL). This preserves leading zeroes and supports
+        // mixed alphanumeric UPS ranges without letting unrelated formats bleed
+        // into one another.
+        $candidateShape = $this->postalCodeRangeShape($candidate);
+        $fromShape = $this->postalCodeRangeShape($from);
+        $toShape = $this->postalCodeRangeShape($to);
+        if ($candidateShape === null || $candidateShape !== $fromShape || $fromShape !== $toShape) return false;
+        if (strcmp($from, $to) > 0) return false;
+
+        return strcmp($candidate, $from) >= 0 && strcmp($candidate, $to) <= 0;
+    }
+
+    private function postalCodeRangeShape(string $postalCode): ?string
+    {
+        if ($postalCode === '') return null;
+
+        $shape = '';
+        foreach (str_split($postalCode) as $character) {
+            if ($character >= '0' && $character <= '9') {
+                $shape .= 'D';
+            } elseif ($character >= 'A' && $character <= 'Z') {
+                $shape .= 'L';
+            } else {
+                // Punctuation can still be used in an exact rule, but is not
+                // interpreted as an ordered range boundary.
+                return null;
+            }
+        }
+
+        return $shape;
+    }
+
+    private function remoteAreaIdentityKey(array $metadata): string
+    {
+        $carrier = mb_strtolower(trim((string) ($metadata['carrier'] ?? 'UPS')));
+        $country = mb_strtolower(trim((string) ($metadata['country'] ?? '')));
+        $iata = strtoupper(trim((string) ($metadata['iata_code'] ?? '')));
+        $from = $this->postalCodeMatchKey((string) ($metadata['postal_code_from'] ?? $metadata['postal_code'] ?? ''));
+        $to = $this->postalCodeMatchKey((string) ($metadata['postal_code_to'] ?? $from));
+        $city = mb_strtolower(trim((string) ($metadata['city'] ?? '')));
+        if ($from === '' && $city === '') return '';
+        return implode('|', [$carrier, $country, $iata, $from, $to, $city]);
     }
 
     private function postalCodeMatchKey(string $postalCode): string
@@ -937,7 +1087,10 @@ class MasterDataService
     {
         Cache::forget($this->activeCacheKey($this->workspaceId(), $type));
         unset($this->colorMaps[$type]);
-        if ($type === 'remote_area') $this->remoteAreaByPostalCode = null;
+        if ($type === 'remote_area') {
+            $this->remoteAreaByPostalCode = null;
+            $this->remoteAreaPostalRanges = null;
+        }
     }
 
     private function assertAction(string $type, string $action): void

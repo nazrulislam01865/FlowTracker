@@ -1,0 +1,328 @@
+/* Add / edit / details modal */
+.ft-order-prototype-detail .ft-ms-modal-backdrop {
+    position: fixed;
+    z-index: 1200;
+    inset: 0;
+    background: rgba(20, 30, 43, .48);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 24px;
+}
+
+.ft-order-prototype-detail .ft-ms-modal {
+    width: min(720px, calc(100vw - 48px));
+    max-height: calc(100vh - 48px);
+    overflow: visible;
+    border: 1px solid #d9e1ea;
+    border-radius: 12px;
+    background: #fff;
+    box-shadow: 0 22px 65px rgba(20, 32, 49, .24);
+    color: var(--ms-text);
+}
+
+.ft-order-prototype-detail .ft-ms-modal--details {
+    width: min(620px, calc(100vw - 48px));
+}
+
+.ft-order-prototype-detail .ft-ms-modal__head {
+    padding: 17px 22px 14px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 20px;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__head h2 {
+    margin: 0;
+    font-size: 20px;
+    line-height: 1.15;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__head p {
+    margin: 4px 0 0;
+    color: #667892;
+    font-size: 11px;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__close {
+    width: 30px;
+    height: 30px;
+    border: 0;
+    background: transparent;
+    color: #41536e;
+    font-size: 24px;
+    line-height: 1;
+    cursor: pointer;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__modes {
+    margin: 0 22px;
+    padding: 0 11px;
+    min-height: 43px;
+    border: 1px solid #dce5ef;
+    border-radius: 7px;
+    gap: 40px;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__body {
+    padding: 16px 22px 18px;
+    max-height: calc(100vh - 230px);
+    overflow-y: auto;
+    overflow-x: visible;
+}
+
+.ft-order-prototype-detail .ft-ms-same-address {
+    min-height: 72px;
+    margin-bottom: 18px;
+    border: 1px solid #d4ebe6;
+    border-radius: 6px;
+    background: #f0faf7;
+    padding: 11px 14px;
+    display: flex;
+    align-items: flex-start;
+    gap: 11px;
+}
+
+.ft-order-prototype-detail .ft-ms-same-address > svg {
+    width: 18px;
+    height: 18px;
+    color: var(--ms-green);
+    flex: 0 0 18px;
+    margin-top: 2px;
+}
+
+.ft-order-prototype-detail .ft-ms-same-address strong {
+    display: block;
+    font-size: 11px;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-ms-same-address p,
+.ft-order-prototype-detail .ft-ms-same-address small {
+    margin: 3px 0 0;
+    font-size: 10px;
+    color: #42536c;
+}
+
+.ft-order-prototype-detail .ft-ms-same-address p span {
+    padding: 0 5px;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid {
+    display: grid;
+    gap: 14px;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--two {
+    grid-template-columns: 1fr 1fr;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--address {
+    grid-template-columns: .9fr 1fr .9fr 1fr;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--shipping {
+    grid-template-columns: .62fr .72fr 1fr 1.22fr;
+    align-items: start;
+    margin-top: 16px;
+}
+
+.ft-order-prototype-detail .ft-ms-field {
+    display: grid;
+    gap: 5px;
+    margin-bottom: 12px;
+    min-width: 0;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid .ft-ms-field {
+    margin-bottom: 0;
+}
+
+.ft-order-prototype-detail .ft-ms-field > span {
+    color: #5c6d86;
+    font-size: 9px;
+    font-weight: 800;
+    letter-spacing: .04em;
+}
+
+.ft-order-prototype-detail .ft-ms-field input,
+.ft-order-prototype-detail .ft-ms-field select {
+    width: 100%;
+    min-height: 37px;
+    border: 1px solid #cedae8;
+    border-radius: 6px;
+    background: #fff;
+    padding: 0 10px;
+    color: var(--ms-text);
+    font-size: 11px;
+    outline: none;
+}
+
+.ft-order-prototype-detail .ft-ms-field input:focus,
+.ft-order-prototype-detail .ft-ms-field select:focus {
+    border-color: var(--ms-green);
+    box-shadow: 0 0 0 2px rgba(0, 139, 122, .08);
+}
+
+.ft-order-prototype-detail .ft-ms-field input[readonly] {
+    background: #fbfcfe;
+}
+
+.ft-order-prototype-detail .ft-ms-add-address {
+    border: 0;
+    background: transparent;
+    color: var(--ms-green);
+    padding: 8px 0 0;
+    font-size: 11px;
+    font-weight: 800;
+    cursor: pointer;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__footer {
+    padding: 14px 22px 18px;
+    border-top: 1px solid #e3e9f0;
+    display: flex;
+    justify-content: flex-end;
+    gap: 12px;
+}
+
+.ft-order-prototype-detail .ft-ms-modal__footer .ft-ms-outline-btn,
+.ft-order-prototype-detail .ft-ms-modal__footer .ft-ms-primary-btn {
+    min-height: 38px;
+    min-width: 102px;
+}
+
+.ft-order-prototype-detail .ft-ms-details-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 0;
+}
+
+.ft-order-prototype-detail .ft-ms-details-grid > div {
+    border: 1px solid #e1e8f0;
+    border-radius: 7px;
+    padding: 10px 12px;
+}
+
+.ft-order-prototype-detail .ft-ms-details-grid > div.is-wide {
+    grid-column: 1 / -1;
+}
+
+.ft-order-prototype-detail .ft-ms-details-grid dt {
+    color: #65758c;
+    font-size: 9px;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+}
+
+.ft-order-prototype-detail .ft-ms-details-grid dd {
+    margin: 4px 0 0;
+    color: var(--ms-text);
+    font-size: 11px;
+    font-weight: 650;
+}
+
+
+@media (max-width: 860px) {
+    .ft-order-prototype-detail .ft-ms-modal__modes {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 10px;
+    }
+    .ft-order-prototype-detail .ft-ms-form-grid--address,
+    .ft-order-prototype-detail .ft-ms-form-grid--shipping { grid-template-columns: 1fr 1fr; }
+}
+
+@media (max-width: 600px) {
+    .ft-order-prototype-detail .ft-ms-modal-backdrop {
+        padding: 10px;
+        align-items: flex-start;
+    }
+    .ft-order-prototype-detail .ft-ms-modal {
+        width: 100%;
+        max-height: calc(100vh - 20px);
+        margin-top: 0;
+    }
+    .ft-order-prototype-detail .ft-ms-form-grid--two,
+    .ft-order-prototype-detail .ft-ms-form-grid--address,
+    .ft-order-prototype-detail .ft-ms-form-grid--shipping,
+    .ft-order-prototype-detail .ft-ms-details-grid { grid-template-columns: 1fr; }
+    .ft-order-prototype-detail .ft-ms-details-grid > div.is-wide { grid-column: auto; }
+}
+
+/* Keep the shipment service row labels on one baseline so all controls align. */
+.ft-order-prototype-detail .ft-ms-form-grid--shipping .ft-ms-field > span {
+    white-space: nowrap;
+    font-size: 8.5px;
+    line-height: 1.2;
+}
+
+/* Keep shipment address validation feedback directly aligned under its field. */
+.ft-order-prototype-detail .ft-ms-form-grid--address .validation-error{
+    width:100%;
+    margin:0;
+    line-height:1.2;
+    text-align:left;
+    overflow-wrap:normal;
+    word-break:normal;
+}
+
+/* Keep validation feedback in a dedicated row so errors never move sibling
+   controls or make the next shipment row look misaligned. */
+.ft-order-prototype-detail .ft-ms-validation-slot {
+    display: block;
+    width: 100%;
+    min-height: 16px;
+    margin: 0;
+    color: #dc2626;
+    font-size: 9px;
+    font-weight: 600;
+    line-height: 1.2;
+    text-align: left;
+    overflow-wrap: break-word;
+}
+
+.ft-order-prototype-detail .ft-ms-validation-slot:empty {
+    visibility: hidden;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--two {
+    margin-bottom: 14px;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--address,
+.ft-order-prototype-detail .ft-ms-form-grid--shipping {
+    align-items: start;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--address .ft-ms-field,
+.ft-order-prototype-detail .ft-ms-form-grid--shipping .ft-ms-field {
+    grid-template-rows: auto minmax(37px, auto) 16px;
+    align-content: start;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--address .ft-ms-field > .ft-ms-field-hint {
+    grid-row: 3;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--address .ft-ms-field > .ft-ms-field-hint + .ft-ms-validation-slot {
+    grid-row: 4;
+}
+
+.ft-order-prototype-detail .ft-ms-form-grid--shipping {
+    margin-top: 14px;
+}
+
+@media (max-width: 600px) {
+    .ft-order-prototype-detail .ft-ms-validation-slot {
+        min-height: 15px;
+    }
+
+    .ft-order-prototype-detail .ft-ms-form-grid--two {
+        margin-bottom: 10px;
+    }
+}

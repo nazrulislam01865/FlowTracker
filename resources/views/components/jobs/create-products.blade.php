@@ -49,5 +49,4 @@
     </section>
 @endif
 
-@include('components.jobs.create.missing-product-supplier-modal')
 @include('components.jobs.create.product-modal')

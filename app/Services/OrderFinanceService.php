@@ -312,7 +312,7 @@ class OrderFinanceService
 
         $description = self::REMOTE_AREA_SURCHARGE_PREFIX;
         $areaName = trim((string) $remoteArea->name);
-        $postalCode = $remoteArea->remoteAreaPostalCode();
+        $postalCode = $this->masterData->normalizePostalCode((string) $job->shipping_postal_code);
         if ($areaName !== '') $description .= ' - '.$areaName;
         if ($postalCode !== '') $description .= ' ('.$postalCode.')';
 

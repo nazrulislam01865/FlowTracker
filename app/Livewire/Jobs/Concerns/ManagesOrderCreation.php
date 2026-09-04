@@ -8,7 +8,6 @@ use App\Actions\Orders\CreateOrder;
 use App\Models\Client;
 use App\Models\ClientContact;
 use App\Models\ClientDeliveryContact;
-use App\Models\ClientShippingAddress;
 use App\Models\MasterRecord;
 use App\Models\Task;
 use App\Models\User;
@@ -17,6 +16,7 @@ use App\Services\ClientService;
 use App\Services\MasterDataService;
 use App\Services\OrderWorkflowSetupService;
 use App\Support\AttachmentUpload;
+use App\Support\CreateOrderShippingMethodPresenter;
 use Illuminate\Validation\Rule;
 use Livewire\Attributes\Renderless;
 
@@ -691,6 +691,7 @@ trait ManagesOrderCreation
                 $this->applyClientWorkflowDefault($id);
                 $this->resetCreateShippingAddress();
                 $this->initializeCreateShippingContact($id);
+                $this->initializeCreateShipments();
             }
 
             return;
@@ -808,6 +809,8 @@ trait ManagesOrderCreation
         abort_unless(auth()->user()->canModule('jobs', 'create'), 403);
         $this->selectedJobId = null;
         $this->selectedTaskId = null;
+        $this->overviewPhaseId = null;
+        $this->lastOverviewWorkflowPhaseId = null;
         $this->showCreate = true;
         $this->initializeCreateForm();
     }
@@ -891,71 +894,18 @@ trait ManagesOrderCreation
 
     public function openSavedShippingAddressPicker(): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
-        abort_unless($this->clientId, 422, 'Select a client first.');
-
-        $clientAvailable = app(ClientService::class)
-            ->referenceQuery(auth()->user(), 'create-job')
-            ->where('is_active', true)
-            ->whereKey($this->clientId)
-            ->exists();
-        abort_unless($clientAvailable, 403);
-
-        $hasSavedAddress = ClientShippingAddress::query()
-            ->where('client_id', $this->clientId)
-            ->exists();
-
-        if (!$hasSavedAddress) {
-            $this->addError('shippingAddress', 'The selected client does not have a saved shipping address yet.');
-            return;
-        }
-
-        $this->resetValidation('shippingAddress');
-        $this->showSavedShippingAddressPicker = true;
+        $this->openSavedShippingAddressPickerForShipment(0);
     }
 
     public function closeSavedShippingAddressPicker(): void
     {
         $this->showSavedShippingAddressPicker = false;
+        $this->savedShippingAddressShipmentIndex = null;
     }
 
     public function useSavedShippingAddress(int $addressId): void
     {
-        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
-        abort_unless($this->clientId, 422, 'Select a client first.');
-
-        $clientAvailable = app(ClientService::class)
-            ->referenceQuery(auth()->user(), 'create-job')
-            ->where('is_active', true)
-            ->whereKey($this->clientId)
-            ->exists();
-        abort_unless($clientAvailable, 403);
-
-        $address = ClientShippingAddress::query()
-            ->where('client_id', $this->clientId)
-            ->findOrFail($addressId);
-
-        $lines = collect([
-            trim((string) $address->recipient),
-            trim(collect([$address->address_line1, $address->suite])->filter(fn ($part) => filled($part))->implode(', ')),
-            trim(collect([$address->city, $address->state, $address->country])->filter(fn ($part) => filled($part))->implode(', ')),
-        ])->filter(fn ($line) => $line !== '')->values();
-
-        $this->shippingAddress = $lines->implode("\n");
-        $this->shippingPostalCode = trim((string) $address->zip);
-        if ($this->shippingContactType === 'end_customer' && filled($address->recipient)) {
-            $this->shippingContactName = trim((string) $address->recipient);
-            $this->shippingContactId = null;
-            $this->shippingContactSelection = 'custom:'.$this->shippingContactName;
-            $this->shippingSaveContact = true;
-        }
-        $this->shippingSourceAddressId = $address->id;
-        $this->showSavedShippingAddressPicker = false;
-        $this->resetValidation([
-            'shippingAddress',
-            'shippingPostalCode',
-            'shippingSourceAddressId',
-        ]);
+        $this->applySavedShippingAddressToCreateShipment($addressId);
     }
 
     private function resetCreateShippingAddress(): void
@@ -1015,7 +965,59 @@ trait ManagesOrderCreation
 
     public function selectCreateShipmentUrgency(int $urgencyId): void
     {
+        // Backward-compatible endpoint for a Create Order form left open across
+        // this deployment. New renders use selectCreateShippingMethod().
         $this->shipmentUrgencyIds = [$urgencyId];
+        if (isset($this->createShipments[0])) {
+            $this->createShipments[0]['shipment_urgency_id'] = $urgencyId;
+        }
+        $this->resetErrorBag('shipmentUrgencyIds');
+    }
+
+    public function selectCreateShippingMethod(int $methodId, ?int $urgencyId = null): void
+    {
+        abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
+
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $method = MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('shipment_method')
+            ->active()
+            ->find($methodId);
+
+        abort_unless($method, 422, 'That shipping method is no longer available.');
+
+        $kind = CreateOrderShippingMethodPresenter::methodKind($method);
+        $normalizedUrgencyId = null;
+
+        if ($urgencyId !== null) {
+            abort_unless($kind === 'express', 422, 'Shipping urgency is available only for Standard Express Shipping.');
+
+            $urgency = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('shipment_urgency')
+                ->active()
+                ->find($urgencyId);
+
+            abort_unless($urgency, 422, 'That shipping urgency is no longer available.');
+            $normalizedUrgencyId = (int) $urgency->id;
+        }
+
+        // Legacy global state mirrors Shipment 1. New renders select the method
+        // on each shipment row, while this endpoint keeps stale browser snapshots
+        // and older callers aligned with the primary shipment.
+        $this->shipmentMethodIds = [(int) $method->id];
+        $this->shipmentUrgencyIds = $kind === 'express' && $normalizedUrgencyId
+            ? [$normalizedUrgencyId]
+            : [];
+        if (isset($this->createShipments[0])) {
+            $this->createShipments[0]['shipment_method_id'] = (int) $method->id;
+            $this->createShipments[0]['shipment_urgency_id'] = $kind === 'express'
+                ? $normalizedUrgencyId
+                : null;
+        }
+
+        $this->resetErrorBag('shipmentMethodIds');
         $this->resetErrorBag('shipmentUrgencyIds');
     }
 
@@ -1086,14 +1088,11 @@ trait ManagesOrderCreation
             $missingSupplier = true;
             $this->addError(
                 "jobItems.$index.supplier_id",
-                'Supplier is not linked. Choose a supplier for this Order or choose “Skip supplier for now”.'
+                'Supplier is not linked. Link or create a supplier, or continue without one.'
             );
 
             if (!$this->showMissingProductSupplierModal) {
-                $this->missingProductSupplierName = (string) $product->name;
-                $this->pendingMissingSupplierProductId = (int) $product->id;
-                $this->pendingMissingSupplierRowIndex = $index;
-                $this->showMissingProductSupplierModal = true;
+                $this->openMissingProductSupplierModalFor($product, $index);
             }
         }
 
@@ -1109,6 +1108,7 @@ trait ManagesOrderCreation
             return;
         }
 
+        $this->normalizeCreateShipmentsBeforeSave();
         $this->normalizeShippingContactSelectionBeforeSave();
 
         // Re-resolve defaults and validate any explicit Order-only supplier override
@@ -1121,6 +1121,74 @@ trait ManagesOrderCreation
             'referenceNumber' => ['required','string','max:255'],
             'isRepeatedOrder' => ['boolean'],
             'repeatedOrderNumber' => [Rule::requiredIf($this->isRepeatedOrder), 'nullable', 'string', 'max:255'],
+            'createShipmentMode' => ['required', Rule::in([
+                self::CREATE_SHIPMENT_MODE_MULTIPLE,
+                self::CREATE_SHIPMENT_MODE_SAME_ADDRESS,
+                self::CREATE_SHIPMENT_MODE_MULTIPLE_ADDRESS,
+            ])],
+            'createShipments' => ['required', 'array', 'min:1', 'max:20'],
+            'createShipments.*.contact_name' => ['required', 'string', 'max:255'],
+            'createShipments.*.phone_country_code' => [
+                'required',
+                'string',
+                'max:12',
+                'regex:/^\+[0-9]{1,4}$/',
+                Rule::exists('master_records', 'name')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'phone_country_code')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'createShipments.*.phone' => ['required', 'string', 'max:60', 'regex:/^[0-9()\s.\-]{5,40}$/'],
+            'createShipments.*.address' => ['required', 'string', 'max:2000'],
+            'createShipments.*.city' => ['required', 'string', 'max:120'],
+            'createShipments.*.state' => ['nullable', 'string', 'max:120'],
+            'createShipments.*.postal_code' => ['required', 'string', 'max:30'],
+            'createShipments.*.country' => [
+                'required',
+                'string',
+                'max:120',
+                Rule::exists('master_records', 'name')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'country')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'createShipments.*.shipping_source_address_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('client_shipping_addresses', 'id')->where(fn ($query) => $query->where('client_id', $this->clientId)),
+            ],
+            'createShipments.*.shipment_method_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_records', 'id')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'shipment_method')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'createShipments.*.shipment_urgency_id' => [
+                'nullable',
+                'integer',
+                Rule::exists('master_records', 'id')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'shipment_urgency')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
+            'createShipments.*.quantity' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
+            'createShipments.*.package_reference' => ['nullable', 'string', 'max:255'],
+            'shipmentMethodIds' => ['array', 'max:1'],
+            'shipmentMethodIds.*' => [
+                'integer',
+                'distinct',
+                Rule::exists('master_records', 'id')->where(fn ($query) => $query
+                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
+                    ->where('type', 'shipment_method')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ],
             'shipmentUrgencyIds' => ['array', 'max:1'],
             'shipmentUrgencyIds.*' => [
                 'integer',
@@ -1195,6 +1263,22 @@ trait ManagesOrderCreation
             'repeatedOrderNumber.required' => 'Enter the previous reference number for this repeated Order.',
             'jobItems.required' => 'Select at least one product for this Order.',
             'jobItems.min' => 'Select at least one product for this Order.',
+            'createShipments.required' => 'Configure at least one shipment.',
+            'createShipments.min' => 'Configure at least one shipment.',
+            'createShipments.*.contact_name.required' => 'Contact person is required.',
+            'createShipments.*.phone_country_code.required' => 'Country code is required.',
+            'createShipments.*.phone_country_code.regex' => 'Choose a valid international phone code.',
+            'createShipments.*.phone_country_code.exists' => 'Choose an active phone country code from Master Data.',
+            'createShipments.*.phone.required' => 'Phone number is required.',
+            'createShipments.*.phone.regex' => 'Enter a valid shipping contact phone number.',
+            'createShipments.*.address.required' => 'Street address is required.',
+            'createShipments.*.city.required' => 'City is required.',
+            'createShipments.*.postal_code.required' => 'Postal code is required.',
+            'createShipments.*.country.required' => 'Country is required.',
+            'createShipments.*.country.exists' => 'Choose an active country from Country master data.',
+            'createShipments.*.quantity.integer' => 'Quantity must be a whole number.',
+            'createShipments.*.quantity.min' => 'Quantity must be at least 1 when provided.',
+            'createShipments.*.quantity.max' => 'Quantity is too large.',
             'shippingAddress.required' => 'Shipping address is required.',
             'deliveryDate.date' => 'Order hand date must be a valid date.',
             'shippingPostalCode.required' => 'Postal code is required.',
@@ -1206,6 +1290,8 @@ trait ManagesOrderCreation
             'shippingPhone.regex' => 'Enter a valid shipping contact phone number.',
             'purchaseOrderUpload.max' => 'The Purchase Order is too large. Maximum file size is 20 MB.',
         ]);
+
+        if (!$this->validateCreateShipmentLocations((array) ($data['createShipments'] ?? []))) return;
 
         if ($this->purchaseOrderUpload || count($this->jobAttachments) > 0) {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
@@ -1415,6 +1501,7 @@ trait ManagesOrderCreation
             : $clientQuery->value('id');
         $this->applyClientWorkflowDefault($this->clientId);
         $this->initializeCreateShippingContact($this->clientId);
+        $this->initializeCreateShipments();
         $this->jobItems = [];
     }
 
@@ -1427,7 +1514,11 @@ trait ManagesOrderCreation
             'repeatedOrderNumber',
             'priority',
             'productionUrgencyIds',
+            'shipmentMethodIds',
             'shipmentUrgencyIds',
+            'createShipmentMode',
+            'createShipments',
+            'savedShippingAddressShipmentIndex',
             'clientId',
             'createInquiryId',
             'createInquiryIds',
@@ -1462,8 +1553,18 @@ trait ManagesOrderCreation
             'showCreateOrderProductModal',
             'showMissingProductSupplierModal',
             'missingProductSupplierName',
+            'missingProductSupplierChoice',
+            'missingProductExistingSupplierId',
+            'missingProductExistingSupplierLabel',
+            'missingProductNewSupplierName',
+            'missingProductNewSupplierEmail',
             'pendingMissingSupplierProductId',
             'pendingMissingSupplierRowIndex',
+            'missingProductSupplierContext',
+            'missingProductSupplierAllowSkip',
+            'missingProductSupplierRecordLabel',
+            'missingProductSupplierSubmitMode',
+            'missingProductSupplierSelectorContext',
             'createOrderSupplierSkipProductIds',
             'createOrderSupplierOverrides',
             'newProductCode',

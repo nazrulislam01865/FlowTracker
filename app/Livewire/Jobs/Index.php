@@ -3,11 +3,13 @@
 namespace App\Livewire\Jobs;
 
 use App\Livewire\Jobs\Concerns\ManagesOrderCreation;
+use App\Livewire\Jobs\Concerns\ManagesCreateOrderShipments;
 use App\Livewire\Jobs\Concerns\ManagesCreateOrderProducts;
 use App\Livewire\Jobs\Concerns\ManagesOrderNavigation;
 use App\Livewire\Jobs\Concerns\ManagesOrderFinance;
 use App\Livewire\Jobs\Concerns\ManagesOrderInquiryLink;
 use App\Livewire\Jobs\Concerns\ManagesOrderWorkflow;
+use App\Livewire\Jobs\Concerns\ManagesOrderShipments;
 use App\Livewire\Jobs\Concerns\ManagesOrderDetail;
 use App\Livewire\Jobs\Concerns\ManagesOrderProducts;
 use App\Livewire\Jobs\Concerns\ManagesOrderTasks;
@@ -17,8 +19,10 @@ use App\Livewire\Jobs\Concerns\ManagesOrderActivity;
 use App\Livewire\Jobs\Concerns\ManagesOrderRedo;
 use App\Livewire\Jobs\Concerns\ManagesDetailProgressiveLoading;
 use App\Livewire\Jobs\Concerns\BuildsOrderPageData;
+use App\Livewire\Jobs\Concerns\HandlesMissingProductSupplierContext;
 
 use App\Livewire\Concerns\HandlesInlineEdits;
+use App\Livewire\Concerns\ManagesMissingProductSupplier;
 use App\Livewire\Concerns\UsesPagePlaceholder;
 use App\Livewire\Concerns\RefreshesFromWorkspace;
 
@@ -34,12 +38,14 @@ use Livewire\WithPagination;
 
 class Index extends Component
 {
+    use ManagesCreateOrderShipments;
     use ManagesOrderCreation;
     use ManagesCreateOrderProducts;
     use ManagesOrderNavigation;
     use ManagesOrderFinance;
     use ManagesOrderInquiryLink;
     use ManagesOrderWorkflow;
+    use ManagesOrderShipments;
     use ManagesOrderDetail;
     use ManagesOrderProducts;
     use ManagesOrderTasks;
@@ -49,7 +55,9 @@ class Index extends Component
     use ManagesOrderRedo;
     use ManagesDetailProgressiveLoading;
     use BuildsOrderPageData;
+    use HandlesMissingProductSupplierContext;
 
+    use ManagesMissingProductSupplier;
     use RefreshesFromWorkspace;
     use UsesPagePlaceholder;
     use HandlesInlineEdits;
@@ -122,6 +130,8 @@ class Index extends Component
     public array $expandedPhaseIds = [];
     /** Selected historical/current stage shown in the prototype task panel. */
     public ?int $overviewPhaseId = null;
+    /** Last current workflow stage observed while this Order detail is open. */
+    public ?int $lastOverviewWorkflowPhaseId = null;
     public bool $showOrderWorkflowActionModal = false;
     public ?int $orderWorkflowActionTaskId = null;
     public string $orderWorkflowActionComment = '';
@@ -152,7 +162,13 @@ class Index extends Component
     public string $repeatedOrderNumber = '';
     public string $priority = 'Medium';
     public array $productionUrgencyIds = [];
+    public array $shipmentMethodIds = [];
     public array $shipmentUrgencyIds = [];
+    /** Create Order shipment-plan mode shown by the Shipping setup prototype. */
+    public string $createShipmentMode = self::CREATE_SHIPMENT_MODE_MULTIPLE;
+    /** @var array<int,array<string,mixed>> */
+    public array $createShipments = [];
+    public ?int $savedShippingAddressShipmentIndex = null;
     public ?int $clientId = null;
     /** Temporary remote-selector value used to add one Inquiry at a time. */
     public ?int $createInquiryId = null;
@@ -194,10 +210,6 @@ class Index extends Component
     public string $createProductCategoryFilter = '';
     public bool $createProductShowAllResults = false;
     public bool $showCreateOrderProductModal = false;
-    public bool $showMissingProductSupplierModal = false;
-    public string $missingProductSupplierName = '';
-    public ?int $pendingMissingSupplierProductId = null;
-    public ?int $pendingMissingSupplierRowIndex = null;
     /** @var array<int,int> Product IDs explicitly allowed without a supplier for this Create Order draft. */
     public array $createOrderSupplierSkipProductIds = [];
     /** @var array<int,int> Product ID => Supplier ID explicitly chosen for this Order only. */
@@ -214,6 +226,8 @@ class Index extends Component
     public string $jobProductUnitPrice = '0.00';
     public ?int $jobProductSupplierId = null;
     public string $jobProductSupplierLabel = '';
+    /** Explicit detail-flow opt-out matching Create Order's temporary supplier skip. */
+    public bool $jobProductSupplierSkipped = false;
     public bool $jobProductSupplierLocked = false;
 
     // Order Details > prototype product editor. The modal mirrors the supplied

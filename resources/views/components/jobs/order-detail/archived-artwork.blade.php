@@ -11,9 +11,9 @@
         <div class="ft-order-archived-artwork__head">
             <div class="ft-order-archived-artwork__title-row">
                 <h3 id="archived-artwork-title">Archived Artwork</h3>
-                <span class="ft-order-archived-artwork__count">{{ $archivedDocuments->count() }} archived</span>
+                <span class="ft-order-archived-artwork__count">{{ $archivedDocuments->count() }} in history</span>
             </div>
-            <p>View previous versions of artwork that have been replaced.</p>
+            <p>View previous versions of artwork that have been replaced. Cancelled artwork is retained here for audit history.</p>
         </div>
 
         <div class="ft-order-archived-artwork__table-scroll">
@@ -38,8 +38,14 @@
                                         <span class="ft-order-archived-artwork__filename" title="{{ $document->name }}">{{ $document->name }}</span>
                                         @if(filled($document->artwork_revision_reason))
                                             <div class="ft-order-archived-artwork__reason" title="{{ $document->artwork_revision_reason }}">
-                                                <strong>Revision reason</strong>
+                                                <strong>{{ $document->artwork_archive_reason_label ?: 'Revision reason' }}</strong>
                                                 <span>{{ \Illuminate\Support\Str::limit($document->artwork_revision_reason, 120) }}</span>
+                                            </div>
+                                        @endif
+                                        @if(!empty($document->artwork_cancelled_product_names))
+                                            <div class="ft-order-archived-artwork__reason ft-order-archived-artwork__reason--products">
+                                                <strong>Removed product{{ count($document->artwork_cancelled_product_names) === 1 ? '' : 's' }}</strong>
+                                                <span>{{ implode(', ', $document->artwork_cancelled_product_names) }}</span>
                                             </div>
                                         @endif
                                     </div>
@@ -48,7 +54,7 @@
                             <td class="ft-order-archived-artwork__version">v{{ max(1, (int) $document->version) }}</td>
                             <td>{{ $document->relationLoaded('uploader') ? ($document->uploader?->name ?? 'FlowTrack') : 'FlowTrack' }}</td>
                             <td>{{ \App\Support\UserLocalTime::format($document->created_at, 'M j, Y \\a\\t g:i A') }}</td>
-                            <td><span class="ft-order-archived-artwork__status">Archived</span></td>
+                            <td><span class="ft-order-archived-artwork__status {{ (string) ($document->artwork_archive_status ?: 'Archived') === 'Cancelled' ? 'is-cancelled' : '' }}">{{ $document->artwork_archive_status ?: 'Archived' }}</span></td>
                             <td>
                                 <div class="ft-order-archived-artwork__actions">
                                     <a href="{{ route('documents.open', $document) }}" target="_blank" rel="noopener">Open</a>

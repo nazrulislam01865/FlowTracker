@@ -330,6 +330,7 @@ class OrderRedoService
                 'is_repeat_order' => false,
                 'repeat_order_number' => null,
                 'production_urgency_ids' => $root->production_urgency_ids ?: [],
+                'shipment_method_ids' => $root->shipment_method_ids ?: [],
                 'shipment_urgency_ids' => $root->shipment_urgency_ids ?: [],
                 'notes' => trim((string) ($data['internal_instructions'] ?? '')) ?: null,
                 'shipping_address' => $root->shipping_address,
@@ -340,6 +341,11 @@ class OrderRedoService
                 'shipping_postal_code' => $root->shipping_postal_code,
                 'shipping_source_address_id' => $root->shipping_source_address_id,
             ]);
+
+            // Redo Orders get their own Shipment aggregate from the legacy
+            // shipping fields copied above. The Shipment stage can then fan it
+            // out into same-address or multi-address shipments independently.
+            app(OrderShipmentService::class)->seedPrimaryShipment($redoOrder, $actor);
 
             $this->cloneRedoItems($root, $redoOrder, $redoQuantity, $supplierId, $actor);
             $this->ensureCoreMembers($redoOrder);

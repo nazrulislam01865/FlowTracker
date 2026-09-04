@@ -81,6 +81,38 @@ trait BuildsOrderPageData
             5,
         );
 
+        // Shipping setup is visible before the lazy assignment section, so its
+        // compact per-shipment selectors are intentionally sourced here. The
+        // LocationMasterDataService keeps Country -> State parent rules shared
+        // with Client and Order Detail address editors.
+        $createShipmentLocationMaster = app(\App\Services\LocationMasterDataService::class);
+        $createShipmentCountries = $createShipmentLocationMaster->countries()
+            ->map(fn (MasterRecord $country) => [
+                'id' => (string) $country->name,
+                'label' => (string) $country->name,
+                'meta' => trim((string) $country->code),
+            ])
+            ->values();
+        $createShipmentStatesByCountry = collect($this->createShipments)
+            ->pluck('country')
+            ->map(fn ($country) => trim((string) $country))
+            ->filter()
+            ->unique(fn (string $country) => mb_strtolower($country))
+            ->mapWithKeys(fn (string $country) => [
+                $country => $createShipmentLocationMaster->statesForCountry($country)
+                    ->map(fn (MasterRecord $state) => [
+                        'id' => (string) $state->name,
+                        'label' => (string) $state->name,
+                        'meta' => trim((string) $state->code),
+                    ])
+                    ->values()
+                    ->all(),
+            ]);
+        $createShipmentPhoneCodes = $master->active('phone_country_code')
+            ->map(fn (MasterRecord $record) => (string) $record->name)
+            ->filter()
+            ->values();
+
         $access = app(AccessControlService::class);
         $canLinkInquiryOnCreate = $access->can($user, 'jobs', 'link')
             && $access->can($user, 'inquiries', 'view');
@@ -290,6 +322,9 @@ trait BuildsOrderPageData
             'savedShippingAddresses' => $savedShippingAddresses,
             'savedDeliveryContacts' => $savedDeliveryContacts,
             'phoneCountryCodeOptions' => $phoneCountryCodeOptions,
+            'createShipmentCountries' => $createShipmentCountries,
+            'createShipmentStatesByCountry' => $createShipmentStatesByCountry,
+            'createShipmentPhoneCodes' => $createShipmentPhoneCodes,
             'createInquiryFilterOptions' => $createInquiryFilterOptions,
             'selectedCreateInquiry' => $selectedCreateInquiry,
             'selectedCreateInquiries' => $selectedCreateInquiries,
@@ -299,7 +334,8 @@ trait BuildsOrderPageData
             'categories' => collect(),
             'priorities' => $this->createAssignmentReady ? $master->active('priority') : collect(),
             'productionUrgencies' => $this->createAssignmentReady ? $master->active('production_urgency') : collect(),
-            'shipmentUrgencies' => $this->createAssignmentReady ? $master->active('shipment_urgency') : collect(),
+            'shipmentMethods' => $master->active('shipment_method'),
+            'shipmentUrgencies' => $master->active('shipment_urgency'),
             'categoryFilterOptions' => $this->createCatalogReady && $canUseOrderProductSelector && $canViewProductCategories
                 ? $options->options($user, 'product-categories', 'create-job', '', null, 6)
                 : collect(),
@@ -475,9 +511,27 @@ trait BuildsOrderPageData
                 );
             }
 
+            $currentWorkflowPhaseId = (int) ($selected->workflow_phase_id ?: 0);
+            $previousWorkflowPhaseId = (int) ($this->lastOverviewWorkflowPhaseId ?: 0);
+
+            // If the workflow itself advanced while the user was looking at the
+            // previously-current stage (for example Shipment -> Billing), follow
+            // the new current stage automatically. If the user intentionally
+            // opened an older historical stage, preserve that historical view.
+            if ($currentWorkflowPhaseId > 0
+                && $previousWorkflowPhaseId > 0
+                && $currentWorkflowPhaseId !== $previousWorkflowPhaseId
+                && (int) ($this->overviewPhaseId ?: 0) === $previousWorkflowPhaseId) {
+                $this->overviewPhaseId = $currentWorkflowPhaseId;
+            }
+
+            if ($currentWorkflowPhaseId > 0) {
+                $this->lastOverviewWorkflowPhaseId = $currentWorkflowPhaseId;
+            }
+
             $selectedPhase = $selected->workflow?->phases?->firstWhere('id', (int) ($this->overviewPhaseId ?: 0));
             if (!$selectedPhase || (int) $selectedPhase->sequence > (int) ($selected->phase?->sequence ?? 0)) {
-                $this->overviewPhaseId = (int) $selected->workflow_phase_id;
+                $this->overviewPhaseId = $currentWorkflowPhaseId;
             }
         } else {
             $orderQuery->loadTab($selected, $user, $this->detailTab);
@@ -617,10 +671,43 @@ trait BuildsOrderPageData
         }
 
         $shipmentUrgencyOptions = $master->active('shipment_urgency');
+        $shipmentMethodOptions = $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow']
+            ? $master->active('shipment_method')
+            : collect();
         $courierOptions = $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow']
             ? $master->active('courier')
             : collect();
+
+        // Address master data is loaded only while the Add/Edit Shipment modal
+        // is open. LocationMasterDataService reads the cached Country/State
+        // master tables and keeps the parent-country rule in one reusable place.
+        $locationMaster = app(\App\Services\LocationMasterDataService::class);
+        $shipmentCountryOptions = $this->showShipmentModal ? $locationMaster->countries() : collect();
+        $shipmentCountry = trim((string) ($this->shipmentForm['country'] ?? ''));
+        $shipmentStateOptions = $this->showShipmentModal && $shipmentCountry !== ''
+            ? $locationMaster->statesForCountry($shipmentCountry)
+            : collect();
+
         $orderDetailContext = app(OrderDetailViewService::class)->build($selected, $user, $shipmentUrgencyOptions, $courierOptions);
+        $orderDetailContext['shipmentMethods'] = $shipmentMethodOptions;
+        $orderDetailContext['shipmentUrgencies'] = $shipmentUrgencyOptions;
+        $orderDetailContext['shipmentCouriers'] = $courierOptions;
+        $orderDetailContext['shipmentCountries'] = $shipmentCountryOptions
+            ->map(fn (MasterRecord $country) => [
+                'id' => (string) $country->name,
+                'label' => (string) $country->name,
+                'meta' => trim((string) $country->code),
+            ])
+            ->values()
+            ->all();
+        $orderDetailContext['shipmentStates'] = $shipmentStateOptions
+            ->map(fn (MasterRecord $state) => [
+                'id' => (string) $state->name,
+                'label' => (string) $state->name,
+                'meta' => trim((string) $state->code),
+            ])
+            ->values()
+            ->all();
         $orderDetailContext['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
         $orderRedoContext = $preloadedRedoContext
             ?? app(OrderRedoService::class)->context($selected, $user);

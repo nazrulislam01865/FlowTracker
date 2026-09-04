@@ -28,7 +28,7 @@ class UploadSecurityService
         'html', 'htm', 'xhtml', 'svg', 'svgz', 'vbs', 'wsf', 'ps1', 'reg',
     ];
 
-    /** @return array{status:string,engine:string,reason:?string,mime:string,size:int,extension:string} */
+    /** @return array{status:string,engine:string,reason:?string,mime:string,size:int,extension:string,extension_normalized:bool} */
     public function inspect(string $absolutePath, string $originalName, ?string $reportedMime = null, ?int $maxFileBytes = null): array
     {
         abort_unless(is_file($absolutePath), 422, 'The uploaded file could not be inspected.');
@@ -45,7 +45,13 @@ class UploadSecurityService
         $detectedMime = $this->detectMime($absolutePath, $reportedMime);
         $this->rejectExecutableSignature($absolutePath);
         $verifiedExtension = $this->validateKnownSignature($absolutePath, $extension, $detectedMime, $originalName);
-        $detectedMime = $this->normalizedMime($detectedMime, $verifiedExtension);
+
+        // Browsers/design tools occasionally preserve an old raster-image file
+        // extension after conversion (for example JPEG bytes named *.PNG). The
+        // byte signature is authoritative for these passive image formats. Keep
+        // rejecting document/archive mismatches, but normalize verified raster
+        // images so they can be stored and served with their real content type.
+        $detectedMime = $this->verifiedImageMime($verifiedExtension) ?: $detectedMime;
 
         if ($extension === 'zip' || in_array($extension, ['docx', 'xlsx'], true)) {
             $this->inspectZipContainer($absolutePath);
@@ -63,6 +69,7 @@ class UploadSecurityService
             'mime' => $detectedMime,
             'size' => $size,
             'extension' => $verifiedExtension,
+            'extension_normalized' => $verifiedExtension !== $extension,
         ];
     }
 
@@ -104,7 +111,6 @@ class UploadSecurityService
             return $extension;
         }
 
-        $verifiedExtension = $extension;
         $signatureFlexible = in_array($extension, ['eps', 'esp', 'ai', 'cdr', 'txt', 'csv'], true);
 
         if (! $signatureFlexible) {
@@ -116,32 +122,25 @@ class UploadSecurityService
             $prefix = file_get_contents($path, false, null, 0, max(self::PDF_HEADER_SCAN_BYTES, 16));
             abort_if($prefix === false, 422, 'The uploaded file could not be inspected.');
 
-            if (in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true)) {
-                // Business users regularly receive images whose filename extension
-                // was changed by email clients/export tools without re-encoding the
-                // bytes (for example, a JPEG named .PNG). The previous implementation
-                // rejected those safe files even though the shared Laravel validator
-                // had already confirmed that the actual content was an allowed image.
-                // Accept only a positively identified supported raster signature and
-                // carry its canonical extension forward to private storage. Unknown or
-                // non-image content is still rejected exactly as before.
-                $detectedImageExtension = $this->detectRasterImageExtension($prefix);
-                $ok = $detectedImageExtension !== null;
-                if ($ok && ! $this->sameRasterType($extension, $detectedImageExtension)) {
-                    $verifiedExtension = $detectedImageExtension;
-                }
-            } else {
-                $ok = match ($extension) {
-                    'pdf' => $this->hasPdfHeader($prefix),
-                    'zip', 'docx', 'xlsx' => str_starts_with($prefix, "PK\x03\x04") || str_starts_with($prefix, "PK\x05\x06") || str_starts_with($prefix, "PK\x07\x08"),
-                    default => true,
-                };
-            }
+            $ok = match ($extension) {
+                'pdf' => $this->hasPdfHeader($prefix),
+                'jpg', 'jpeg' => str_starts_with($prefix, "\xFF\xD8\xFF"),
+                'png' => str_starts_with($prefix, "\x89PNG\r\n\x1A\n"),
+                'gif' => str_starts_with($prefix, 'GIF87a') || str_starts_with($prefix, 'GIF89a'),
+                'webp' => str_starts_with($prefix, 'RIFF') && substr($prefix, 8, 4) === 'WEBP',
+                'zip', 'docx', 'xlsx' => str_starts_with($prefix, "PK\x03\x04") || str_starts_with($prefix, "PK\x05\x06") || str_starts_with($prefix, "PK\x07\x08"),
+                default => true,
+            };
 
             if (! $ok) {
-                $safeName = basename($originalName);
-                $type = strtoupper($extension);
-                abort(422, 'The contents of "'.$safeName.'" do not match its '.$type.' file type. Re-export the file or choose the correct file format.');
+                $actualRasterExtension = $this->rasterImageExtension($prefix);
+                if ($this->isRasterImageExtension($extension) && $actualRasterExtension !== null) {
+                    $extension = $actualRasterExtension;
+                } else {
+                    $safeName = basename($originalName);
+                    $type = strtoupper($extension);
+                    abort(422, 'The contents of "'.$safeName.'" do not match its '.$type.' file type. Re-export the file or choose the correct file format.');
+                }
             }
         }
 
@@ -151,10 +150,15 @@ class UploadSecurityService
             abort(422, 'HTML content is not allowed in uploaded business documents.');
         }
 
-        return $verifiedExtension;
+        return $extension;
     }
 
-    private function detectRasterImageExtension(string $prefix): ?string
+    private function isRasterImageExtension(string $extension): bool
+    {
+        return in_array($extension, ['jpg', 'jpeg', 'png', 'gif', 'webp'], true);
+    }
+
+    private function rasterImageExtension(string $prefix): ?string
     {
         if (str_starts_with($prefix, "\xFF\xD8\xFF")) return 'jpg';
         if (str_starts_with($prefix, "\x89PNG\r\n\x1A\n")) return 'png';
@@ -164,23 +168,14 @@ class UploadSecurityService
         return null;
     }
 
-    private function sameRasterType(string $declaredExtension, string $detectedExtension): bool
+    private function verifiedImageMime(string $extension): ?string
     {
-        if (in_array($declaredExtension, ['jpg', 'jpeg'], true) && $detectedExtension === 'jpg') {
-            return true;
-        }
-
-        return $declaredExtension === $detectedExtension;
-    }
-
-    private function normalizedMime(string $detectedMime, string $verifiedExtension): string
-    {
-        return match ($verifiedExtension) {
+        return match ($extension) {
             'jpg', 'jpeg' => 'image/jpeg',
             'png' => 'image/png',
             'gif' => 'image/gif',
             'webp' => 'image/webp',
-            default => $detectedMime,
+            default => null,
         };
     }
 

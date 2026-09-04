@@ -62,6 +62,14 @@ trait ManagesMasterEditor
         $this->workCalendarTimeFrom = '09:00';
         $this->workCalendarTimeTo = '18:00';
         $this->remoteAreaPostalCode = '';
+        $this->remoteAreaCarrier = 'UPS';
+        $this->remoteAreaCountry = '';
+        $this->remoteAreaIataCode = '';
+        $this->remoteAreaPostalCodeFrom = '';
+        $this->remoteAreaPostalCodeTo = '';
+        $this->remoteAreaCity = '';
+        $this->remoteAreaOriginSurcharge = 'No';
+        $this->remoteAreaDestinationSurcharge = 'No';
         $this->remoteAreaExtraCharge = '';
         $this->resetValidation();
 
@@ -165,6 +173,14 @@ Remote Area charge	".$remoteRow;
             }
             if ($this->group === 'remote_area') {
                 $this->remoteAreaPostalCode = $r->remoteAreaPostalCode();
+                $this->remoteAreaCarrier = $r->remoteAreaCarrier() ?: 'UPS';
+                $this->remoteAreaCountry = $r->remoteAreaCountry();
+                $this->remoteAreaIataCode = $r->remoteAreaIataCode();
+                $this->remoteAreaPostalCodeFrom = $r->remoteAreaPostalCodeFrom();
+                $this->remoteAreaPostalCodeTo = $r->remoteAreaPostalCodeTo();
+                $this->remoteAreaCity = $r->remoteAreaCity();
+                $this->remoteAreaOriginSurcharge = $r->remoteAreaOriginSurcharge() ?: 'No';
+                $this->remoteAreaDestinationSurcharge = $r->remoteAreaDestinationSurcharge() ?: 'No';
                 $remoteAreaExtraCharge = $r->remoteAreaExtraCharge();
                 $this->remoteAreaExtraCharge = $remoteAreaExtraCharge === null
                     ? ''
@@ -211,6 +227,14 @@ Remote Area charge	".$remoteRow;
         }
         $this->status = 'active';
         $this->remoteAreaPostalCode = '';
+        $this->remoteAreaCarrier = 'UPS';
+        $this->remoteAreaCountry = '';
+        $this->remoteAreaIataCode = '';
+        $this->remoteAreaPostalCodeFrom = '';
+        $this->remoteAreaPostalCodeTo = '';
+        $this->remoteAreaCity = '';
+        $this->remoteAreaOriginSurcharge = 'No';
+        $this->remoteAreaDestinationSurcharge = 'No';
         $this->remoteAreaExtraCharge = '';
         $this->autoInquiryStatus = 'To do';
         $this->requiresAttention = false;
@@ -273,6 +297,12 @@ Remote Area charge	".$remoteRow;
         // code is stored separately in metadata.
         if (!$this->editId) {
             $this->code = $service->nextCode($this->group);
+        }
+
+        // Remote Area names are internal display labels generated from the UPS
+        // location fields, so admins do not have to maintain a duplicate name.
+        if ($this->group === 'remote_area') {
+            $this->name = $this->remoteAreaGeneratedName();
         }
 
         $data = $this->validate([
@@ -345,7 +375,15 @@ Remote Area charge	".$remoteRow;
             'status' => ['required', 'in:active,inactive'],
             'sortOrder' => ['required', 'integer', 'min:0', 'max:1000000'],
             'metadataJson' => ['nullable', 'string'],
-            'remoteAreaPostalCode' => $this->group === 'remote_area' ? ['required', 'string', 'max:32'] : ['nullable'],
+            'remoteAreaPostalCode' => ['nullable'],
+            'remoteAreaCarrier' => $this->group === 'remote_area' ? ['required', 'string', 'max:80'] : ['nullable'],
+            'remoteAreaCountry' => $this->group === 'remote_area' ? ['required', 'string', 'max:120'] : ['nullable'],
+            'remoteAreaIataCode' => $this->group === 'remote_area' ? ['required', 'string', 'size:2', 'regex:/^[A-Za-z]{2}$/'] : ['nullable'],
+            'remoteAreaPostalCodeFrom' => $this->group === 'remote_area' ? ['nullable', 'string', 'max:32', 'required_without:remoteAreaCity'] : ['nullable'],
+            'remoteAreaPostalCodeTo' => $this->group === 'remote_area' ? ['nullable', 'string', 'max:32'] : ['nullable'],
+            'remoteAreaCity' => $this->group === 'remote_area' ? ['nullable', 'string', 'max:120', 'required_without:remoteAreaPostalCodeFrom'] : ['nullable'],
+            'remoteAreaOriginSurcharge' => $this->group === 'remote_area' ? ['required', Rule::in(['No', 'Extended Area Surcharge', 'Pickup Area Surcharge', 'Pickup Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'])] : ['nullable'],
+            'remoteAreaDestinationSurcharge' => $this->group === 'remote_area' ? ['required', Rule::in(['No', 'Extended Area Surcharge', 'Delivery Area Surcharge', 'Delivery Area Surcharge - Extended', 'Remote Area Surcharge', 'Remote Area Surcharge - Extended'])] : ['nullable'],
             'remoteAreaExtraCharge' => $this->group === 'remote_area' ? ['nullable', 'numeric', 'min:0', 'max:999999.99'] : ['nullable'],
             'workCalendarDayFrom' => $this->group === 'task_pack_work_calendar'
                 ? ['required', Rule::in(['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'])]
@@ -438,12 +476,47 @@ Remote Area charge	".$remoteRow;
 
         if ($this->group === 'remote_area') {
             $metadata ??= [];
-            $metadata['postal_code'] = $service->normalizePostalCode((string) $data['remoteAreaPostalCode']);
+            $postalFrom = $service->normalizePostalCode((string) ($data['remoteAreaPostalCodeFrom'] ?? ''));
+            $postalTo = $service->normalizePostalCode((string) ($data['remoteAreaPostalCodeTo'] ?? ''));
+            if ($postalFrom === '' && $postalTo !== '') {
+                throw ValidationException::withMessages([
+                    'remoteAreaPostalCodeTo' => 'Enter Postal Code From before Postal Code To.',
+                ]);
+            }
+            if ($postalFrom !== '' && $postalTo === '') {
+                $postalTo = $postalFrom;
+            }
+            if ($postalFrom !== '' && $postalTo !== '' && $service->postalRangeIsDescending($postalFrom, $postalTo)) {
+                throw ValidationException::withMessages([
+                    'remoteAreaPostalCodeTo' => 'Postal Code To must be greater than or equal to Postal Code From.',
+                ]);
+            }
+
+            $metadata['carrier'] = trim((string) $data['remoteAreaCarrier']);
+            $metadata['country'] = trim((string) $data['remoteAreaCountry']);
+            $metadata['iata_code'] = strtoupper(trim((string) $data['remoteAreaIataCode']));
+            $metadata['postal_code_from'] = $postalFrom ?: null;
+            $metadata['postal_code_to'] = $postalTo ?: null;
+            $metadata['city'] = trim((string) ($data['remoteAreaCity'] ?? '')) ?: null;
+            $metadata['origin_surcharge'] = $data['remoteAreaOriginSurcharge'];
+            $metadata['destination_surcharge'] = $data['remoteAreaDestinationSurcharge'];
+
+            // Preserve metadata.postal_code only on historical rows that
+            // already carried it. New UPS-style rows are matched directly from
+            // postal_code_from / postal_code_to and do not need duplication.
+            $hadLegacyExactPostalCode = trim((string) ($metadata['postal_code'] ?? '')) !== '';
+            if ($hadLegacyExactPostalCode && $postalFrom !== '' && $postalFrom === $postalTo) {
+                $metadata['postal_code'] = $postalFrom;
+            } else {
+                unset($metadata['postal_code']);
+            }
+
             if ($data['remoteAreaExtraCharge'] === null || trim((string) $data['remoteAreaExtraCharge']) === '') {
                 unset($metadata['extra_charge']);
             } else {
                 $metadata['extra_charge'] = round((float) $data['remoteAreaExtraCharge'], 2);
             }
+            $metadata = array_filter($metadata, fn ($value) => $value !== null && $value !== '');
         }
 
         if ($this->group === 'task_pack_work_calendar') {
@@ -651,6 +724,23 @@ Remote Area charge	".$remoteRow;
             auth()->user(),
         );
     }
+    private function remoteAreaGeneratedName(): string
+    {
+        $country = trim($this->remoteAreaCountry);
+        $city = trim($this->remoteAreaCity);
+        $from = app(MasterDataService::class)->normalizePostalCode($this->remoteAreaPostalCodeFrom);
+        $to = app(MasterDataService::class)->normalizePostalCode($this->remoteAreaPostalCodeTo);
+        if ($from !== '' && $to === '') $to = $from;
+
+        $location = $city;
+        if ($location === '' && $from !== '') {
+            $location = ($to !== '' && $to !== $from) ? $from.'–'.$to : $from;
+        }
+
+        $label = collect([$country, $location])->filter()->implode(' · ');
+        return $label !== '' ? $label : 'Remote Area Surcharge';
+    }
+
     public function updateColor(int $id, string $color): void
     {
         $this->recordsReady = true;

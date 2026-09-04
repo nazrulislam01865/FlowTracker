@@ -156,12 +156,77 @@ class MasterRecord extends Model
         return $schedule !== '' ? $name.' · '.$schedule : $name;
     }
 
+    public function remoteAreaCarrier(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return trim((string) data_get($this->metadata, 'carrier', 'UPS'));
+    }
+
+    public function remoteAreaCountry(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return trim((string) data_get($this->metadata, 'country'));
+    }
+
+    public function remoteAreaIataCode(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return strtoupper(trim((string) data_get($this->metadata, 'iata_code')));
+    }
+
+    public function remoteAreaPostalCodeFrom(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        $postalCode = strtoupper(trim((string) (data_get($this->metadata, 'postal_code_from') ?: data_get($this->metadata, 'postal_code'))));
+        return (string) preg_replace('/\s+/', ' ', $postalCode);
+    }
+
+    public function remoteAreaPostalCodeTo(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        $postalCode = strtoupper(trim((string) (data_get($this->metadata, 'postal_code_to') ?: $this->remoteAreaPostalCodeFrom())));
+        return (string) preg_replace('/\s+/', ' ', $postalCode);
+    }
+
+    public function remoteAreaCity(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return trim((string) data_get($this->metadata, 'city'));
+    }
+
+    public function remoteAreaOriginSurcharge(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return trim((string) data_get($this->metadata, 'origin_surcharge', 'No')) ?: 'No';
+    }
+
+    public function remoteAreaDestinationSurcharge(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        return trim((string) data_get($this->metadata, 'destination_surcharge', 'No')) ?: 'No';
+    }
+
+    public function remoteAreaLocationLabel(): string
+    {
+        if ($this->type !== 'remote_area') return '';
+        $city = $this->remoteAreaCity();
+        if ($city !== '') return $city;
+
+        $from = $this->remoteAreaPostalCodeFrom();
+        $to = $this->remoteAreaPostalCodeTo();
+        if ($from === '') return '—';
+        return $to !== '' && $to !== $from ? $from.'–'.$to : $from;
+    }
+
     public function remoteAreaPostalCode(): string
     {
         if ($this->type !== 'remote_area') return '';
 
-        $postalCode = strtoupper(trim((string) data_get($this->metadata, 'postal_code')));
-        return (string) preg_replace('/\s+/', ' ', $postalCode);
+        // This accessor remains the legacy exact-postal value only. The current
+        // Order matcher reads postal_code_from / postal_code_to directly, so a
+        // new UPS-style row does not need to duplicate data into postal_code.
+        $legacy = strtoupper(trim((string) data_get($this->metadata, 'postal_code')));
+        return $legacy !== '' ? (string) preg_replace('/\s+/', ' ', $legacy) : '';
     }
 
     public function remoteAreaExtraCharge(): ?float

@@ -3,32 +3,31 @@
 namespace Tests\Feature;
 
 use Tests\TestCase;
-use Tests\Support\OrderPhase5Source;
 
 class OrderDetailsAddProductSupplierFallbackTest extends TestCase
 {
-    public function test_order_details_add_product_uses_linked_supplier_and_only_allows_manual_fallback_when_missing(): void
+    public function test_order_details_can_create_link_or_skip_a_missing_product_supplier_from_the_shared_modal(): void
     {
-        $jobs = OrderPhase5Source::livewire();
+        $products = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderProducts.php'));
+        $context = file_get_contents(app_path('Livewire/Jobs/Concerns/HandlesMissingProductSupplierContext.php'));
         $picker = file_get_contents(resource_path('views/components/catalog/detail-add-product.blade.php'));
-        $products = file_get_contents(resource_path('views/components/jobs/order-detail/products.blade.php'));
-        $css = $this->orderDetailCss();
+        $view = file_get_contents(resource_path('views/components/jobs/order-detail/products.blade.php'));
 
-        $this->assertStringContainsString('public string $jobProductSupplierLabel', $jobs);
-        $this->assertStringContainsString('public bool $jobProductSupplierLocked', $jobs);
-        $this->assertStringContainsString('$linkedSupplier = app(\\App\\Services\\ProductCatalogService::class)->supplierForProduct($product);', $jobs);
-        $this->assertStringContainsString('updateAddJobProductSupplierFromSelector', $jobs);
-        $this->assertStringContainsString('$this->jobProductSupplierLocked = (bool) $linkedSupplier;', $jobs);
-        $this->assertStringContainsString('$supplierId = $linkedSupplier', $jobs);
+        $this->assertStringContainsString('$linkedSupplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);', $products);
+        $this->assertStringContainsString("openMissingProductSupplierModalFor($product, null, 'order_detail', true, 'Order', 'continue')", $products);
+        $this->assertStringContainsString('openJobProductSupplierResolution', $context);
+        $this->assertStringContainsString('assertMissingProductSupplierTargetCurrent', $context);
+        $this->assertStringContainsString("authorizeMissingProductSupplierContext('order_detail')", $context);
+        $this->assertStringContainsString('$this->jobProductSupplierId = (int) $supplier->id;', $context);
+        $this->assertStringContainsString('$this->jobProductSupplierLabel = (string) $supplier->name;', $context);
+        $this->assertStringContainsString('$this->jobProductSupplierSkipped = true;', $context);
+        $this->assertStringContainsString("Rule::requiredIf(fn (): bool => ! $this->jobProductSupplierSkipped)", $products);
 
-        $this->assertStringContainsString('@if($supplierLocked)', $picker);
-        $this->assertStringContainsString('Linked from Product Master', $picker);
-        $this->assertStringContainsString('No supplier is linked in Product Master. Select a supplier for this {{ $recordLabel }}.', $picker);
+        $this->assertStringContainsString("'missingSupplierMethod' => null", $picker);
+        $this->assertStringContainsString("'supplierSkipped' => false", $picker);
+        $this->assertStringContainsString('Supplier skipped for now', $picker);
+        $this->assertStringContainsString('Create supplier', $picker);
+        $this->assertStringContainsString('missing-supplier-method="openJobProductSupplierResolution"', $view);
         $this->assertStringContainsString('action="updateAddJobProductSupplierFromSelector"', $picker);
-        $this->assertStringContainsString(':selected-label="$supplierLabel ?: null"', $picker);
-
-        $this->assertStringContainsString(':supplier-label="$jobProductSupplierLabel"', $products);
-        $this->assertStringContainsString(':supplier-locked="$jobProductSupplierLocked"', $products);
-        $this->assertStringContainsString('.ft-order-detail-supplier-readonly', $css);
     }
 }

@@ -681,6 +681,7 @@ trait ManagesInquiryCreation
         $this->createWorkflowReady = false;
         $this->showCreateOrderProductModal = false;
         $this->resetCreateOrderProductModal();
+        $this->closeMissingProductSupplierModal();
         $this->createWorkflowId = null;
         $this->selectedWorkflowLabel = '';
         $this->resetCreateCollections();

@@ -3,7 +3,7 @@
     'jobProductSearchResults' => collect(), 'jobProductSearchSuppliers' => collect(), 'jobProductResultTotal' => 0,
     'jobProductShowAllResults' => false, 'jobProductSelectedProduct' => null, 'jobProductSelectedSupplier' => null,
     'jobProductCategory' => '', 'jobProductQuantity' => '1000', 'jobProductUnitPrice' => '0.00', 'jobProductSupplierId' => null,
-    'jobProductSupplierLabel' => '', 'jobProductSupplierLocked' => false,
+    'jobProductSupplierLabel' => '', 'jobProductSupplierSkipped' => false, 'jobProductSupplierLocked' => false,
     'showEditOrderProductModal' => false, 'editOrderProductItemId' => null, 'editOrderProductName' => '', 'editOrderProductCode' => '',
     'editOrderProductCategory' => '', 'editOrderProductSearch' => '', 'editOrderProductSearchResults' => collect(),
     'editOrderProductSearchSuppliers' => collect(), 'editOrderProductResultTotal' => 0, 'editOrderProductSelectedProduct' => null,
@@ -204,6 +204,7 @@
                     :supplier-value="$jobProductSupplierId"
                     :supplier-label="$jobProductSupplierLabel"
                     :supplier-locked="$jobProductSupplierLocked"
+                    :supplier-skipped="$jobProductSupplierSkipped"
                     :supplier-required="true"
                     :currency-symbol="$symbol"
                     close-method="closeAddJobProductForm"
@@ -212,6 +213,7 @@
                     quantity-error-key="jobProductQuantity"
                     unit-price-error-key="jobProductUnitPrice"
                     supplier-error-key="jobProductSupplierId"
+                    missing-supplier-method="openJobProductSupplierResolution"
                 />
             </div>
         @endif

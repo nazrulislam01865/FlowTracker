@@ -4,6 +4,13 @@
     'taskStatuses' => collect(),
     'context' => [],
     'overviewTaskLinkFormTaskId' => null,
+    'showShipmentModal' => false,
+    'shipmentModalTaskId' => null,
+    'shipmentEditingId' => null,
+    'shipmentModalMode' => 'same_address',
+    'shipmentForm' => [],
+    'showShipmentDetailsModal' => false,
+    'shipmentDetailsId' => null,
 ])
 @php
     /*
@@ -43,7 +50,7 @@
     };
 @endphp
 
-<section class="section-card integrated-process ft-order-section-card ft-order-workflow-card" id="workflowSection" wire:key="order-detail-workflow-{{ $job->id }}-current-{{ (int) $job->workflow_phase_id }}-selected-{{ (int) ($selectedPhase?->id ?? 0) }}">
+<section class="section-card integrated-process ft-order-section-card ft-order-workflow-card" id="workflowSection" wire:key="order-detail-workflow-{{ $job->id }}">
     <div class="process-head">
         <div>
             <h2>Order process &amp; tasks</h2>
@@ -80,6 +87,31 @@
                 :phase="$selectedPhase"
                 :presentation="$shipmentPresentation"
             />
+
+            @if($showShipmentModal && $shipmentModalTaskId)
+                @php
+                    $shipmentModalTask = $job->tasks->firstWhere('id', (int) $shipmentModalTaskId);
+                @endphp
+                @if($shipmentModalTask)
+                    <x-jobs.order-detail.shipment.add-modal
+                        :job="$job"
+                        :task="$shipmentModalTask"
+                        :presentation="$shipmentPresentation"
+                        :editing-id="$shipmentEditingId"
+                        :mode="$shipmentModalMode"
+                        :form="$shipmentForm"
+                    />
+                @endif
+            @endif
+
+            @if($showShipmentDetailsModal && $shipmentDetailsId)
+                @php
+                    $shipmentDetailsRow = collect($shipmentPresentation['shipments'] ?? [])->firstWhere('id', (int) $shipmentDetailsId);
+                @endphp
+                @if($shipmentDetailsRow)
+                    <x-jobs.order-detail.shipment.details-modal :shipment="$shipmentDetailsRow" />
+                @endif
+            @endif
         @else
             <section class="grid ft-order-workflow-layout ft-order-workflow-layout--full">
               <div class="card ft-order-task-panel">

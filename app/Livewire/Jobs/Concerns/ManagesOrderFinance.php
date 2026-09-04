@@ -57,7 +57,9 @@ trait ManagesOrderFinance
         // the Remote Area again from the locked Order before persisting totals.
         $this->invoiceRemoteAreaCharge = max(0, (float) ($remoteArea?->remoteAreaExtraCharge() ?? 0));
         $this->invoiceRemoteAreaName = trim((string) ($remoteArea?->name ?? ''));
-        $this->invoiceRemoteAreaPostalCode = $remoteArea?->remoteAreaPostalCode() ?? '';
+        $this->invoiceRemoteAreaPostalCode = $remoteArea
+            ? $master->normalizePostalCode((string) $job->shipping_postal_code)
+            : '';
         $this->invoiceSupportingDocument = null;
         $this->invoiceEmailAfterCreation = false;
         $this->showCreateInvoiceModal = true;

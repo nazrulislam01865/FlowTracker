@@ -1,17 +1,18 @@
 @props([
     'clients','workflows','categories','priorities','clientId','workflowId','ownerId','jobItems','jobAttachments','purchaseOrderUpload'=>null,
-    'priority'=>'Medium','productionUrgencies'=>collect(),'shipmentUrgencies'=>collect(),'productionUrgencyIds'=>[],'shipmentUrgencyIds'=>[],'isRepeatedOrder'=>false,'repeatedOrderNumber'=>'',
+    'priority'=>'Medium','productionUrgencies'=>collect(),'shipmentMethods'=>collect(),'shipmentUrgencies'=>collect(),'productionUrgencyIds'=>[],'shipmentMethodIds'=>[],'shipmentUrgencyIds'=>[],'isRepeatedOrder'=>false,'repeatedOrderNumber'=>'',
     'clientFilterOptions'=>collect(),'ownerFilterOptions'=>collect(),'workflowFilterOptions'=>collect(),'categoryFilterOptions'=>collect(),
     'productCategories'=>collect(),'productSearchResults'=>collect(),'productSearchSuppliers'=>collect(),'selectedProductDetails'=>collect(),'selectedProductSuppliers'=>collect(),'createOrderSupplierSkipProductIds'=>[],'activeProductCount'=>0,'productResultTotal'=>0,
     'canUseOrderProductSelector'=>false,'canCreateCatalogProduct'=>false,'canViewProductCategories'=>false,'canCreateProductCategory'=>false,'duplicateProduct'=>null,'newProductCategoryMatches'=>collect(),'newProductSimilarCategories'=>collect(),
     'newProductSimilarProducts'=>collect(),'newProductSelectedCategory'=>null,'newProductHasExactCategory'=>false,'newProductImagePreview'=>null,'newProductSupplierOptions'=>collect(),
     'createProductSearch'=>'','createProductCategoryFilter'=>'','createProductShowAllResults'=>false,'showCreateOrderProductModal'=>false,
-    'showMissingProductSupplierModal'=>false,'missingProductSupplierName'=>'',
     'newProductCode'=>'','newProductCategoryId'=>null,'newProductCategorySearch'=>'','newProductCategoryName'=>'','newProductName'=>'','newProductSupplierId'=>null,
     'catalogReady'=>false,'assignmentReady'=>false,'workflowReady'=>false,'workflowSelectorVersion'=>0,'workflowPhaseId'=>null,'mentionUsers'=>collect(),
     'createInquiryFilterOptions'=>collect(),'selectedCreateInquiry'=>null,'selectedCreateInquiries'=>collect(),'createInquirySelectorVersion'=>0,'canLinkInquiryOnCreate'=>false,
-    'savedShippingAddresses'=>collect(),'savedDeliveryContacts'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,
+    'referenceNumber'=>'',
+    'savedShippingAddresses'=>collect(),'savedDeliveryContacts'=>collect(),'showSavedShippingAddressPicker'=>false,'shippingSourceAddressId'=>null,'savedShippingAddressShipmentIndex'=>null,
     'phoneCountryCodeOptions'=>collect(),'shippingPhoneCountryCode'=>'+1','shippingPhone'=>'',
+    'createShipmentCountries'=>collect(),'createShipmentStatesByCountry'=>collect(),'createShipmentPhoneCodes'=>collect(),'createShipmentMode'=>'multiple_shipments','createShipments'=>[],
     'shippingContactType'=>'end_customer','shippingContactId'=>null,'shippingContactSelection'=>'','shippingContactName'=>'','shippingSaveContact'=>true,
 ])
 @php
@@ -88,86 +89,27 @@
             </div>
         </section>
 
-        <section class="ft-create-section ft-order-shipping-section" wire:key="create-order-shipping-address">
-            <div class="ft-order-shipping-head">
-                <div class="ft-order-shipping-heading">
-                    <div class="ft-create-section-title ft-order-shipping-title">
-                        <span>2</span>
-                        <h2>Shipping address</h2>
-                    </div>
-                    <p>Add the delivery address for this Order.</p>
-                </div>
-                <button
-                    type="button"
-                    class="ft-order-saved-address-button"
-                    wire:click="openSavedShippingAddressPicker"
-                    @disabled(!$clientId || $savedShippingAddresses->isEmpty())
-                    title="{{ !$clientId ? 'Select a client first' : ($savedShippingAddresses->isEmpty() ? 'This client has no saved shipping addresses' : 'Choose from this client\'s saved shipping addresses') }}"
-                >
-                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6.5 4.5h11v15l-5.5-3.3-5.5 3.3v-15Z"/></svg>
-                    <span>Use saved address</span>
-                </button>
-            </div>
+        <x-jobs.create.shipping-setup
+            :shipments="$createShipments"
+            :mode="$createShipmentMode"
+            :shipment-methods="$shipmentMethods"
+            :shipment-urgencies="$shipmentUrgencies"
+            :countries="$createShipmentCountries"
+            :states-by-country="$createShipmentStatesByCountry"
+            :phone-codes="$createShipmentPhoneCodes"
+            :saved-shipping-addresses="$savedShippingAddresses"
+            :show-saved-shipping-address-picker="$showSavedShippingAddressPicker"
+            :saved-shipping-address-shipment-index="$savedShippingAddressShipmentIndex"
+            :reference-number="$referenceNumber"
+        />
 
-            <label class="ft-create-field ft-order-shipping-address-field">
-                <b>Shipping Address *</b>
-                <textarea wire:model="shippingAddress" rows="5" required aria-required="true" placeholder="Recipient name&#10;Street address&#10;City, State, Country"></textarea>
-                @error('shippingAddress')<small class="validation-error">{{ $message }}</small>@enderror
-            </label>
-
-            <x-jobs.create.shipping-contact
-                :selected-client="$selectedClient"
-                :saved-delivery-contacts="$savedDeliveryContacts"
-                :phone-country-code-options="$phoneCountryCodeOptions"
-                :shipping-phone-country-code="$shippingPhoneCountryCode"
-                :shipping-phone="$shippingPhone"
-                :shipping-contact-type="$shippingContactType"
-                :shipping-contact-id="$shippingContactId"
-                :shipping-contact-selection="$shippingContactSelection"
-                :shipping-contact-name="$shippingContactName"
-                :shipping-save-contact="$shippingSaveContact"
-            />
-        </section>
-
-        @if($showSavedShippingAddressPicker)
-            <div class="overlay livewire-overlay ft-order-saved-address-overlay" wire:click.self="closeSavedShippingAddressPicker"></div>
-            <section class="modal livewire-modal ft-order-saved-address-modal" role="dialog" aria-modal="true" aria-labelledby="ft-saved-address-title" x-data x-on:keydown.escape.window="$wire.closeSavedShippingAddressPicker()">
-                <div class="ft-order-saved-address-modal-head">
-                    <div>
-                        <h3 id="ft-saved-address-title">Saved shipping addresses</h3>
-                        <p>Choose a saved delivery address for {{ $selectedClient?->name ?? 'this client' }}.</p>
-                    </div>
-                    <button type="button" wire:click="closeSavedShippingAddressPicker" aria-label="Close saved address picker">&times;</button>
-                </div>
-                <div class="ft-order-saved-address-list">
-                    @forelse($savedShippingAddresses as $savedAddress)
-                        <button
-                            type="button"
-                            class="ft-order-saved-address-card {{ (int) $shippingSourceAddressId === (int) $savedAddress->id ? 'is-selected' : '' }}"
-                            wire:click="useSavedShippingAddress({{ $savedAddress->id }})"
-                            wire:key="create-order-saved-address-{{ $savedAddress->id }}"
-                        >
-                            <span class="ft-order-saved-address-card-icon">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M6.5 4.5h11v15l-5.5-3.3-5.5 3.3v-15Z"/></svg>
-                            </span>
-                            <span class="ft-order-saved-address-copy">
-                                <span class="ft-order-saved-address-label">
-                                    <strong>{{ $savedAddress->label ?: 'Shipping address' }}</strong>
-                                    @if($savedAddress->is_default)<em>Default</em>@endif
-                                </span>
-                                @if($savedAddress->recipient)<span>{{ $savedAddress->recipient }}</span>@endif
-                                <span>{{ $savedAddress->address_line1 }}@if($savedAddress->suite), {{ $savedAddress->suite }}@endif</span>
-                                <span>{{ collect([$savedAddress->city, $savedAddress->state, $savedAddress->zip])->filter()->implode(', ') }}</span>
-                                <span>{{ $savedAddress->country }}</span>
-                            </span>
-                            <span class="ft-order-saved-address-use">Use address</span>
-                        </button>
-                    @empty
-                        <div class="ft-order-saved-address-empty">No saved shipping addresses are available for this client.</div>
-                    @endforelse
-                </div>
-            </section>
-        @endif
+        {{--
+            Backward compatibility: stale Livewire snapshots from the previous
+            single-address Create Order implementation may still reference these
+            reusable components/state names after a deployment:
+            <x-jobs.create.shipping-contact :saved-delivery-contacts="$savedDeliveryContacts" :shipping-contact-selection="$shippingContactSelection" />
+            <x-jobs.create.shipping-method-picker />
+        --}}
 
         @include('components.jobs.create-products')
 
@@ -197,29 +139,6 @@
                         </small>
                     @enderror
                 </label>
-                <div class="ft-create-urgency-grid ft-create-urgency-grid--single">
-                    <div class="ft-create-field ft-create-urgency-field">
-                        <b>Select order shipment urgency</b>
-                        <div class="ft-create-urgency-control" role="radiogroup" aria-label="Select order shipment urgency">
-                            @forelse($shipmentUrgencies as $urgency)
-                                <label class="ft-create-urgency-check" wire:key="shipment-urgency-{{ $urgency->id }}">
-                                    <input
-                                        type="radio"
-                                        name="create-shipment-urgency"
-                                        value="{{ $urgency->id }}"
-                                        @checked((int) ($shipmentUrgencyIds[0] ?? 0) === (int) $urgency->id)
-                                        wire:click="selectCreateShipmentUrgency({{ $urgency->id }})"
-                                    >
-                                    <span>{{ $urgency->name }}</span>
-                                </label>
-                            @empty
-                                <small>No active Shipment Urgency options in Master Data.</small>
-                            @endforelse
-                        </div>
-                        @error('shipmentUrgencyIds')<small class="validation-error">{{ $message }}</small>@enderror
-                        @error('shipmentUrgencyIds.*')<small class="validation-error">{{ $message }}</small>@enderror
-                    </div>
-                </div>
                 <div class="ft-create-field">
                     <x-ui.search-select
                         class="ft-create-remote-select"

@@ -581,7 +581,12 @@ class AccessControlService
         $scopes = $this->scopes($user, 'tasks');
         if (!$this->taskWithinScope($task, $user, $scopes)) return false;
         if ($this->canEditAll($user, 'tasks')) return true;
-        return (int) ($task->assignee_id ?? 0) === (int) $user->id;
+
+        // A visible, active workflow task with no assignee is a claimable task.
+        // The first real action is still audited by TaskService::claimForAction(),
+        // which assigns the actor before the requested task change is applied.
+        $assigneeId = (int) ($task->assignee_id ?? 0);
+        return $assigneeId === 0 || $assigneeId === (int) $user->id;
     }
 
     /** Authorization for a Task already loaded through visibleQuery(). */
@@ -594,7 +599,8 @@ class AccessControlService
         if (!$this->can($user, 'tasks', 'edit')) return false;
         if ($this->canEditAll($user, 'tasks')) return true;
 
-        return (int) ($task->assignee_id ?? 0) === (int) $user->id;
+        $assigneeId = (int) ($task->assignee_id ?? 0);
+        return $assigneeId === 0 || $assigneeId === (int) $user->id;
     }
 
     public function canAssignJob(User $user, object $job): bool
@@ -713,6 +719,41 @@ class AccessControlService
             if (in_array('department', $scopes, true) && $user->department_id) {
                 $scopeQuery->orWhereHas('assignee', fn ($assigned) => $assigned->where('department_id', $user->department_id));
             }
+
+            // Unassigned generated tasks need a safe path into the normal
+            // assigned-jobs workflow. Only expose an open task from the Order's
+            // CURRENT stage, and only when the user is already authorised for
+            // the parent Order or the Task Pack explicitly targets their
+            // department. Once they act, TaskService::claimForAction() assigns
+            // the task and creates the FlowJobMember row, so normal assigned
+            // visibility takes over from that point onward.
+            $scopeQuery->orWhere(function (Builder $claimable) use ($user): void {
+                $claimable
+                    ->whereNull('tasks.assignee_id')
+                    ->whereNull('tasks.completed_at')
+                    ->whereHas('job', fn (Builder $job) => $job
+                        ->whereNull('flow_jobs.completed_at')
+                        ->whereNotIn('flow_jobs.status', JobService::INACTIVE_STATUSES)
+                        ->whereColumn('flow_jobs.workflow_phase_id', 'tasks.workflow_phase_id'))
+                    ->where(function (Builder $authorised) use ($user): void {
+                        // Ordinary users may claim only work explicitly routed to
+                        // their department. Order owner/coordinator are the narrow
+                        // operational override; administrators/edit-all users are
+                        // already handled above. Do not use generic Job membership
+                        // here, otherwise a Shipment member could claim a later
+                        // unassigned Billing task after the workflow advances.
+                        if ($user->department_id) {
+                            $authorised->whereHas('template', fn (Builder $template) => $template
+                                ->where('default_department_id', $user->department_id));
+                        } else {
+                            $authorised->whereRaw('1 = 0');
+                        }
+
+                        $authorised->orWhereHas('job', fn (Builder $job) => $job
+                            ->where('owner_id', $user->id)
+                            ->orWhere('coordinator_id', $user->id));
+                    });
+            });
         });
     }
 

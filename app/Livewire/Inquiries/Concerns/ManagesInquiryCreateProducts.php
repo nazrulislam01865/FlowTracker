@@ -106,12 +106,6 @@ trait ManagesInquiryCreateProducts
         $this->authorizeCreateInquiryProducts();
 
         $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
-        $productCategory = trim((string) ($product->parent?->name ?? ''));
-        if ($productCategory === '') {
-            $legacyDescription = trim((string) $product->description);
-            $productCategory = trim(explode(' ·', $legacyDescription, 2)[0]);
-        }
-        $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
 
         $alreadySelected = collect($this->createProductRows)->contains(
             fn (array $row): bool => (int) ($row['product_id'] ?? 0) === (int) $product->id
@@ -119,25 +113,14 @@ trait ManagesInquiryCreateProducts
 
         if (!$alreadySelected) {
             abort_if(count($this->createProductRows) >= 25, 422, 'An Inquiry can contain up to 25 products.');
-            $defaultQuantity = 1000;
-            $basePrice = $product->productPriceForQuantity($defaultQuantity);
 
-            $this->createProductRows[] = [
-                'row_key' => (string) \Illuminate\Support\Str::uuid(),
-                'product_id' => (int) $product->id,
-                'category' => $productCategory,
-                'product' => (string) $product->name,
-                'quantity' => $defaultQuantity,
-                'unit' => 'units',
-                'unit_price' => $basePrice !== null ? number_format($basePrice, 2, '.', '') : '',
-                'notes' => '',
-            ];
+            if (!app(\App\Services\ProductCatalogService::class)->supplierForProduct($product)) {
+                $this->openMissingProductSupplierModalFor($product, null, 'create_inquiry', true, 'Inquiry');
+                $this->dispatch('create-order-product-selected');
+                return;
+            }
 
-            // Each product owns its RFQ state. The Product Master default Supplier
-            // is seeded into that product only, matching the prototype while the
-            // final invitation plan is still de-duplicated by supplier on save.
-            $this->createProductRfqRows[] = $this->newCreateProductRfqState($product);
-            $this->syncLegacyCreateRfqState();
+            $this->appendCreateInquiryProduct($product);
         }
 
         // Keep the product search permanently available for the next product.
@@ -147,6 +130,34 @@ trait ManagesInquiryCreateProducts
         $this->createProductShowAllResults = false;
         $this->resetValidation('createProductRows');
         $this->dispatch('create-order-product-selected');
+    }
+
+    private function appendCreateInquiryProduct(MasterRecord $product): void
+    {
+        $productCategory = trim((string) ($product->parent?->name ?? ''));
+        if ($productCategory === '') {
+            $legacyDescription = trim((string) $product->description);
+            $productCategory = trim(explode(' ·', $legacyDescription, 2)[0]);
+        }
+        $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
+
+        $defaultQuantity = 1000;
+        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $this->createProductRows[] = [
+            'row_key' => (string) \Illuminate\Support\Str::uuid(),
+            'product_id' => (int) $product->id,
+            'category' => $productCategory,
+            'product' => (string) $product->name,
+            'quantity' => $defaultQuantity,
+            'unit' => 'units',
+            'unit_price' => $basePrice !== null ? number_format($basePrice, 2, '.', '') : '',
+            'notes' => '',
+        ];
+
+        // RFQ state remains product-scoped. If supplier resolution created or
+        // linked a Product-Master supplier, it is seeded here automatically.
+        $this->createProductRfqRows[] = $this->newCreateProductRfqState($product->fresh());
+        $this->syncLegacyCreateRfqState();
     }
 
     private function syncCreateInquiryProductBasePrice(int $index): void

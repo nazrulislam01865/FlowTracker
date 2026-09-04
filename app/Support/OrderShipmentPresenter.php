@@ -3,15 +3,18 @@
 namespace App\Support;
 
 use App\Models\FlowJob;
+use App\Models\OrderShipment;
 use App\Models\WorkflowPhase;
+use App\Services\OrderShipmentService;
 use App\Services\OrderWorkflowActionService;
 use Illuminate\Support\Collection;
 
 /**
  * Query-free view model for the Shipment phase on Order Details.
  *
- * The workflow/services own state transitions; this presenter only translates
- * already-hydrated models into the exact Shipment prototype vocabulary.
+ * The service layer owns shipment persistence and aggregate task completion;
+ * this class only translates already-hydrated Order/Shipment records into the
+ * exact prototype vocabulary used by Blade.
  */
 final class OrderShipmentPresenter
 {
@@ -40,8 +43,9 @@ final class OrderShipmentPresenter
             ->filter()
             ->values();
         $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
+        $addressMode = (string) ($job->shipment_address_mode ?: OrderShipmentService::MODE_SAME_ADDRESS);
 
-        $rows = $shipmentTasks->map(function ($task, int $index) use ($job, $phase, $context, $workflowActions, $isCancelled): array {
+        $rows = $shipmentTasks->map(function ($task, int $index) use ($job, $phase, $context, $workflowActions, $isCancelled, $addressMode): array {
             $key = $workflowActions->automationKey($task);
             $mode = OrderDetailPresenter::taskMode($job, $task);
             $permissions = data_get($context, 'taskPermissions.'.(int) $task->id, []);
@@ -50,15 +54,17 @@ final class OrderShipmentPresenter
             [$title, $description] = match ($key) {
                 'SHIP_CONFIRM_INFO' => [
                     'Review or update shipment details',
-                    'Shipment information was captured when the order was created. Review it before preparing the courier label.',
+                    $addressMode === OrderShipmentService::MODE_MULTIPLE_ADDRESS
+                        ? 'Review recipient and shipping methods for each shipment. Shipments may use different delivery addresses.'
+                        : 'Review recipient and shipping methods for each shipment. All shipments will be sent to the same address.',
                 ],
                 'SHIP_LABEL' => [
-                    'Add tracking number & print courier label',
-                    'Select the courier, enter the tracking number, then generate and print the shipping label.',
+                    'Add courier & tracking number',
+                    'Select the courier and add or update the tracking number for each shipment.',
                 ],
                 'SHIP_PACKAGE' => [
                     'Dispatch shipment',
-                    'Complete this task only after the package has been handed to the courier.',
+                    'Mark each shipment as dispatched after the package has been handed to the courier.',
                 ],
                 default => [
                     (string) $task->title,
@@ -79,47 +85,86 @@ final class OrderShipmentPresenter
                 'assignee_name' => $assigneeName,
                 'assignee_initial' => mb_strtoupper(mb_substr($assigneeName, 0, 1)) ?: 'U',
                 'assignee_avatar' => $task->assignee?->profileImageUrl(),
-                'due_date' => $task->due_date?->format('M j, Y') ?: 'No due date',
-                'label_generated' => $key === 'SHIP_LABEL' && str_contains(strtolower(trim((string) $task->status)), 'label generated'),
+                'due_date' => $task->due_date?->format('M j, Y') ?: 'Set due date',
             ];
         })->values();
 
-        $shipmentMeta = $job->relationLoaded('latestShipmentInformationActivity')
-            ? (array) ($job->latestShipmentInformationActivity?->meta ?? [])
-            : [];
-        $labelMeta = $job->relationLoaded('latestCourierLabelActivity')
-            ? (array) ($job->latestCourierLabelActivity?->meta ?? [])
-            : [];
+        $methods = collect(data_get($context, 'shipmentMethods', []))->values();
+        $urgencies = collect(data_get($context, 'shipmentUrgencies', []))->values();
+        $couriers = collect(data_get($context, 'shipmentCouriers', []))->values();
+        $shipments = $job->relationLoaded('shipments') ? $job->shipments->values() : collect();
 
-        $clientName = trim((string) ($shipmentMeta['client_name'] ?? $job->client?->name ?? 'Client'));
-        $recipient = trim((string) ($shipmentMeta['contact_name'] ?? $shipmentMeta['recipient'] ?? $job->shipping_contact_name ?? $clientName));
-        $countryCode = trim((string) ($shipmentMeta['phone_country_code'] ?? $job->shipping_phone_country_code ?? ''));
-        $phoneNumber = trim((string) ($shipmentMeta['phone_number'] ?? $job->shipping_phone ?? ''));
-        $couriers = collect((array) data_get($context, 'courierOptions', []))
-            ->map(fn ($option) => [
-                'value' => trim((string) ($option['value'] ?? $option['id'] ?? '')),
-                'label' => trim((string) ($option['label'] ?? $option['name'] ?? $option['value'] ?? '')),
-            ])
-            ->filter(fn (array $option) => $option['value'] !== '')
-            ->unique('value')
-            ->values();
-        $carrier = trim((string) ($labelMeta['carrier'] ?? data_get($couriers->first(), 'value', '')));
-        if ($carrier !== '' && ! $couriers->contains(fn (array $option) => strcasecmp($option['value'], $carrier) === 0)) {
-            $couriers->prepend(['value' => $carrier, 'label' => $carrier]);
-        }
+        $shipmentRows = $shipments->map(function (OrderShipment $shipment) use ($methods, $urgencies, $couriers): array {
+            $methodOptions = $methods;
+            if ($shipment->relationLoaded('shippingMethod') && $shipment->shippingMethod
+                && ! $methodOptions->contains(fn ($option) => (int) data_get($option, 'id') === (int) $shipment->shippingMethod->id)) {
+                $methodOptions = $methodOptions->prepend($shipment->shippingMethod);
+            }
+            $urgencyOptions = $urgencies;
+            if ($shipment->relationLoaded('shipmentUrgency') && $shipment->shipmentUrgency
+                && ! $urgencyOptions->contains(fn ($option) => (int) data_get($option, 'id') === (int) $shipment->shipmentUrgency->id)) {
+                $urgencyOptions = $urgencyOptions->prepend($shipment->shipmentUrgency);
+            }
+
+            $courier = $shipment->relationLoaded('courier') ? $shipment->courier : null;
+            if (! $courier && $shipment->courier_id) {
+                $courier = $couriers->first(fn ($option) => (int) data_get($option, 'id') === (int) $shipment->courier_id);
+            }
+
+            $methodCard = CreateOrderShippingMethodPresenter::selectedCard(
+                $methodOptions,
+                $urgencyOptions,
+                $shipment->shipment_method_id ? [(int) $shipment->shipment_method_id] : [],
+                $shipment->shipment_urgency_id ? [(int) $shipment->shipment_urgency_id] : [],
+            );
+
+            return [
+                'id' => (int) $shipment->id,
+                'sequence' => (int) $shipment->sequence,
+                'is_primary' => (bool) $shipment->is_primary,
+                'recipient' => trim((string) ($shipment->recipient ?? '')),
+                'phone' => $shipment->fullPhone(),
+                'address' => trim((string) ($shipment->address ?? '')),
+                'city' => trim((string) ($shipment->city ?? '')),
+                'state' => trim((string) ($shipment->state ?? '')),
+                'postal_code' => trim((string) ($shipment->postal_code ?? '')),
+                'country' => trim((string) ($shipment->country ?? '')),
+                'quantity' => $shipment->quantity !== null ? (int) $shipment->quantity : null,
+                'package_reference' => trim((string) ($shipment->package_reference ?? '')),
+                'courier_id' => $shipment->courier_id ? (int) $shipment->courier_id : null,
+                'courier_name' => trim((string) data_get($courier, 'name', '')),
+                'tracking_number' => trim((string) ($shipment->tracking_number ?? '')),
+                'dispatched' => (bool) $shipment->dispatched_at,
+                'dispatched_on' => $shipment->dispatched_at?->format('M j, Y h:i A') ?: '—',
+                'method_card' => $methodCard,
+            ];
+        })->values();
+
+        $primary = $shipmentRows->firstWhere('is_primary', true) ?: $shipmentRows->first();
 
         return [
             'tasks' => $rows,
+            'task_by_key' => $rows->keyBy('key')->all(),
             'completed_count' => $rows->where('is_done', true)->count(),
             'total_count' => $rows->count(),
-            'client_name' => $clientName,
-            'recipient' => $recipient,
-            'phone' => trim($countryCode.' '.$phoneNumber),
-            'address' => trim((string) ($shipmentMeta['address'] ?? $job->shipping_address ?? '')),
-            'postal_code' => trim((string) ($shipmentMeta['postal_code'] ?? $job->shipping_postal_code ?? '')),
-            'carrier' => $carrier,
-            'tracking' => trim((string) ($labelMeta['tracking_number'] ?? '')),
-            'couriers' => $couriers->all(),
+            'shipments' => $shipmentRows->all(),
+            'shipment_count' => $shipmentRows->count(),
+            'next_sequence' => ((int) $shipmentRows->max('sequence')) + 1,
+            'allow_multiple_shipments' => (bool) $job->allow_multiple_shipments,
+            'address_mode' => $addressMode,
+            'primary_shipment' => $primary,
+            'shipment_methods' => $methods,
+            'shipment_urgencies' => $urgencies,
+            'couriers' => $couriers
+                ->map(fn ($courier) => [
+                    'id' => (int) data_get($courier, 'id'),
+                    'name' => trim((string) data_get($courier, 'name', '')),
+                ])
+                ->filter(fn (array $courier) => $courier['id'] > 0 && $courier['name'] !== '')
+                ->values()
+                ->all(),
+            'countries' => (array) data_get($context, 'shipmentCountries', []),
+            'states' => (array) data_get($context, 'shipmentStates', []),
         ];
     }
 }

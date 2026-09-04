@@ -241,23 +241,31 @@ final class OrderDetailPresenter
     }
 
     /**
-     * Artwork files that were actually replaced by a completed revision.
+     * Artwork files that left the current set because they were replaced by a
+     * completed revision or explicitly cancelled from the Order.
      *
-     * This is intentionally event-driven rather than "all non-current files".
-     * A normal upload or an accepted/unselected artwork must never appear in the
-     * archive. A source document enters the archive only after the corresponding
-     * job.artwork_revision_applied activity exists. Both documents and applied
-     * activities are hydrated once by LegacyJobService, so this presenter is
-     * query-free and safe from N+1 queries.
+     * The archive is event-driven rather than "all non-current files". Normal
+     * uploads and accepted artwork therefore never appear here accidentally.
+     * LegacyJobService hydrates the relevant activities once, keeping this
+     * presenter query-free and safe from N+1 queries.
      *
      * @param Collection<int,Task> $phaseTasks
      * @return Collection<int,\App\Models\Document>
      */
     public static function archivedArtworkDocuments(FlowJob $job, Collection $phaseTasks): Collection
     {
-        if (! $job->relationLoaded('documents')
-            || ! $job->relationLoaded('artworkRevisionAppliedActivities')
-            || $phaseTasks->isEmpty()) {
+        if (! $job->relationLoaded('documents') || $phaseTasks->isEmpty()) {
+            return collect();
+        }
+
+        $appliedRevisionActivities = $job->relationLoaded('artworkRevisionAppliedActivities')
+            ? collect($job->getRelation('artworkRevisionAppliedActivities'))
+            : collect();
+        $cancellationActivities = $job->relationLoaded('artworkCancellationActivities')
+            ? collect($job->getRelation('artworkCancellationActivities'))
+            : collect();
+
+        if ($appliedRevisionActivities->isEmpty() && $cancellationActivities->isEmpty()) {
             return collect();
         }
 
@@ -284,7 +292,7 @@ final class OrderDetailPresenter
             ->flip();
 
         $appliedBySourceDocumentId = collect();
-        $replacedDocumentIds = collect($job->getRelation('artworkRevisionAppliedActivities'))
+        $replacedDocumentIds = $appliedRevisionActivities
             ->flatMap(function ($activity) use ($artworkTaskIds, $appliedBySourceDocumentId): Collection {
                 $meta = (array) ($activity->meta ?? []);
                 $targetTaskId = (int) data_get($meta, 'target_task_id', data_get($meta, 'task_id', 0));
@@ -292,17 +300,10 @@ final class OrderDetailPresenter
                     return collect();
                 }
 
-                // Current selective revisions explicitly record only the source
-                // rows that received replacement uploads. replacement_document_map
-                // is a safe compatibility fallback for earlier selective events.
                 $ids = collect(data_get($meta, 'replaced_source_document_ids', []));
                 if ($ids->isEmpty()) {
                     $ids = collect(array_keys((array) data_get($meta, 'replacement_document_map', [])));
                 }
-
-                // Very old revision-applied events predate selective replacement:
-                // every source file was re-uploaded, so the full source set was
-                // genuinely replaced and can be treated as archived.
                 if ($ids->isEmpty()) {
                     $ids = collect(data_get($meta, 'source_document_ids', []));
                 }
@@ -321,7 +322,38 @@ final class OrderDetailPresenter
             ->unique()
             ->flip();
 
-        if ($replacedDocumentIds->isEmpty()) {
+        $cancellationByDocumentId = collect();
+        $cancelledDocumentIds = $cancellationActivities
+            ->flatMap(function ($activity) use ($artworkTaskIds, $cancellationByDocumentId): Collection {
+                $meta = (array) ($activity->meta ?? []);
+                $targetTaskId = (int) data_get($meta, 'target_task_id', 0);
+                if ($targetTaskId <= 0 || ! $artworkTaskIds->has($targetTaskId)) {
+                    return collect();
+                }
+
+                $ids = collect(data_get($meta, 'document_ids', []));
+                $ids->each(function ($id) use ($activity, $cancellationByDocumentId): void {
+                    $documentId = (int) $id;
+                    if ($documentId > 0 && ! $cancellationByDocumentId->has($documentId)) {
+                        $cancellationByDocumentId->put($documentId, $activity);
+                    }
+                });
+
+                return $ids;
+            })
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        $archivedDocumentIds = $replacedDocumentIds->keys()
+            ->merge($cancelledDocumentIds->keys())
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        if ($archivedDocumentIds->isEmpty()) {
             return collect();
         }
 
@@ -332,22 +364,36 @@ final class OrderDetailPresenter
         $richText = app(\App\Services\RichTextService::class);
 
         return $job->documents
-            ->filter(fn ($document): bool => $replacedDocumentIds->has((int) $document->id))
+            ->filter(fn ($document): bool => $archivedDocumentIds->has((int) $document->id))
             ->filter(fn ($document): bool => $artworkTaskIds->has((int) ($document->task_id ?? 0)))
             ->reject(fn ($document): bool => $currentDocumentIds->has((int) $document->id))
             ->unique(fn ($document) => (int) $document->id)
             ->sortByDesc(fn ($document) => (int) $document->id)
             ->sortByDesc(fn ($document) => max(1, (int) $document->version))
             ->values()
-            ->each(function ($document) use ($appliedBySourceDocumentId, $revisionRequests, $revisionRequestsById, $richText): void {
+            ->each(function ($document) use ($appliedBySourceDocumentId, $cancellationByDocumentId, $revisionRequests, $revisionRequestsById, $richText): void {
                 $documentId = (int) $document->id;
+                $cancellation = $cancellationByDocumentId[$documentId] ?? null;
+
+                if ($cancellation) {
+                    $reason = trim((string) data_get($cancellation->meta, 'reason', ''));
+                    $productNames = collect(data_get($cancellation->meta, 'product_names', []))
+                        ->map(fn ($name) => trim((string) $name))
+                        ->filter()
+                        ->values()
+                        ->all();
+
+                    $document->setAttribute('artwork_archive_status', 'Cancelled');
+                    $document->setAttribute('artwork_archive_reason_label', 'Cancellation reason');
+                    $document->setAttribute('artwork_revision_reason', $richText->plainText($reason));
+                    $document->setAttribute('artwork_cancelled_product_names', $productNames);
+                    return;
+                }
+
                 $applied = $appliedBySourceDocumentId->get($documentId);
                 $revisionActivityId = (int) data_get($applied?->meta, 'revision_activity_id', 0);
                 $request = $revisionActivityId > 0 ? $revisionRequestsById->get($revisionActivityId) : null;
 
-                // Compatibility for older applied events that did not persist the
-                // originating revision activity id. Match against the exact source
-                // document entirely in memory; no per-row query is introduced.
                 if (! $request) {
                     $request = $revisionRequests->first(function ($activity) use ($documentId): bool {
                         $meta = (array) ($activity->meta ?? []);
@@ -372,7 +418,10 @@ final class OrderDetailPresenter
                     }
                 }
 
+                $document->setAttribute('artwork_archive_status', 'Archived');
+                $document->setAttribute('artwork_archive_reason_label', 'Revision reason');
                 $document->setAttribute('artwork_revision_reason', $richText->plainText($reason));
+                $document->setAttribute('artwork_cancelled_product_names', []);
             });
     }
 

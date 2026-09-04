@@ -98,6 +98,8 @@ trait ManagesOrderNavigation
     {
         $this->selectedJobId = $id;
         $this->selectedTaskId = null;
+        $this->overviewPhaseId = null;
+        $this->lastOverviewWorkflowPhaseId = null;
         $this->resetOrderDetailProgressiveSections();
         $this->resetTaskDetailProgressiveSections();
         $this->focusComment = null;
@@ -127,6 +129,7 @@ trait ManagesOrderNavigation
         $this->closeFinanceModals();
         $this->closeOrderWorkflowAction();
         $this->closeRedoModal();
+        $this->resetShipmentPrototypeUi();
         $this->prepareSelectedJob($id);
     }
 
@@ -144,6 +147,8 @@ trait ManagesOrderNavigation
     {
         $this->selectedJobId = null;
         $this->selectedTaskId = null;
+        $this->overviewPhaseId = null;
+        $this->lastOverviewWorkflowPhaseId = null;
         $this->resetOrderDetailProgressiveSections();
         $this->resetTaskDetailProgressiveSections();
         $this->focusComment = null;
@@ -169,6 +174,7 @@ trait ManagesOrderNavigation
         $this->closeEditOrderProductModal();
         $this->closeFinanceModals();
         $this->closeRedoModal();
+        $this->resetShipmentPrototypeUi();
 
         $this->redirectRoute('jobs.index', navigate: true);
     }
@@ -192,6 +198,7 @@ trait ManagesOrderNavigation
         abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
         $job = app(VisibleOrderQuery::class)->base(auth()->user(), $this->selectedJobId);
         $this->overviewPhaseId = (int) $job->workflow_phase_id;
+        $this->lastOverviewWorkflowPhaseId = (int) $job->workflow_phase_id;
     }
 
     public function setDetailTab(string $tab): void

@@ -731,9 +731,16 @@ class LegacyJobService
         abort_unless(in_array($tab, ['overview', 'workflow', 'documents', 'inquiry', 'finance', 'redo'], true), 422);
 
         if ($tab === 'overview') {
+            if (! $job->shipments()->exists()) {
+                app(OrderShipmentService::class)->seedPrimaryShipment($job, $user);
+            }
+
             $relations = [
                 'workflow.phases.taskPack.items.documentCategory',
                 'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+                'shipments.shippingMethod:id,type,name,code,sort_order,status',
+                'shipments.shipmentUrgency:id,type,name,code,sort_order,status',
+                'shipments.courier:id,type,name,code,sort_order,status',
                 'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
                 'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
                 'tasks' => fn ($query) => app(AccessControlService::class)
@@ -1017,9 +1024,16 @@ class LegacyJobService
     /** Load the full interactive workflow/task graph only near the taskflow. */
     public function loadVisibleOverviewWorkflow(FlowJob $job, User $user): FlowJob
     {
+        if (! $job->shipments()->exists()) {
+            app(OrderShipmentService::class)->seedPrimaryShipment($job, $user);
+        }
+
         $job->load([
             'workflow.phases.taskPack.items.documentCategory',
             'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
+            'shipments.shippingMethod:id,type,name,code,sort_order,status',
+            'shipments.shipmentUrgency:id,type,name,code,sort_order,status',
+            'shipments.courier:id,type,name,code,sort_order,status',
             'latestShipmentInformationActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'workflowEmailActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
@@ -1167,19 +1181,24 @@ class LegacyJobService
             ->filter(fn ($document) => (int) ($document->task_id ?? 0) > 0)
             ->groupBy(fn ($document) => (int) $document->task_id);
 
-        // Load applied Artwork revisions once for the whole Order. The same
-        // collection drives both current-version reconstruction and resolution
-        // checks below, avoiding one activity query per Artwork upload task.
-        $appliedRevisionActivities = $job->activities()
-            ->where('event', 'job.artwork_revision_applied')
+        // Load applied revisions and individual cancellations in one query.
+        // Both event types rebuild the current Artwork set, and preloading them
+        // once keeps every Order-detail surface query-free during presentation.
+        $artworkStateActivities = $job->activities()
+            ->whereIn('event', ['job.artwork_revision_applied', 'job.artwork_cancelled'])
             ->latest('id')
-            ->get(['id', 'meta']);
+            ->get(['id', 'user_id', 'event', 'description', 'meta', 'created_at']);
+        $appliedRevisionActivities = $artworkStateActivities
+            ->where('event', 'job.artwork_revision_applied')
+            ->values();
+        $artworkCancellationActivities = $artworkStateActivities
+            ->where('event', 'job.artwork_cancelled')
+            ->values();
 
-        // Reuse the same preloaded revision history in the Archived Artwork
-        // presenter. The archive is event-driven: only files that were actually
-        // replaced by a completed revision belong there. Keeping the activities
-        // on the hydrated Job avoids an extra query from Blade/presenter code.
+        // Reuse the same preloaded histories in current-version reconstruction
+        // and Archived Artwork presentation.
         $job->setRelation('artworkRevisionAppliedActivities', $appliedRevisionActivities);
+        $job->setRelation('artworkCancellationActivities', $artworkCancellationActivities);
 
         $appliedRevisionActivityIds = $appliedRevisionActivities
             ->map(fn ($activity) => (int) data_get($activity->meta, 'revision_activity_id', 0))
@@ -1201,6 +1220,7 @@ class LegacyJobService
                     $artworkUploadTask,
                     $taskDocuments,
                     $appliedRevisionActivities,
+                    $artworkCancellationActivities,
                 ),
             );
         }
@@ -1455,7 +1475,12 @@ class LegacyJobService
                 'bulk_import_id' => blank($data['bulk_import_id'] ?? null) ? null : trim((string) $data['bulk_import_id']),
                 'priority' => $data['priority'] ?? 'Medium',
                 'production_urgency_ids' => array_values(array_map('intval', (array) ($data['production_urgency_ids'] ?? []))),
+                'shipment_method_ids' => array_values(array_map('intval', (array) ($data['shipment_method_ids'] ?? []))),
                 'shipment_urgency_ids' => array_values(array_map('intval', (array) ($data['shipment_urgency_ids'] ?? []))),
+                'allow_multiple_shipments' => (bool) ($data['allow_multiple_shipments'] ?? false),
+                'shipment_address_mode' => ($data['shipment_address_mode'] ?? 'same_address') === 'multiple_address'
+                    ? 'multiple_address'
+                    : 'same_address',
                 'description' => app(RichTextService::class)->normalize($data['description'] ?? null, 10000, 'description'),
                 'shipping_address' => blank($data['shipping_address'] ?? null) ? null : trim((string) $data['shipping_address']),
                 'shipping_contact_type' => blank($data['shipping_contact_type'] ?? null) ? null : trim((string) $data['shipping_contact_type']),
@@ -1472,6 +1497,16 @@ class LegacyJobService
                 'start_handling' => $data['start_handling'] ?? 'Normal start',
                 'start_reason' => $data['start_reason'] ?? null,
             ]);
+
+            // Persist the Create Order shipment plan as one aggregate. Older
+            // browser snapshots and non-UI callers still use the legacy single
+            // shipment seed path, so both paths intentionally remain supported.
+            $initialShipments = (array) ($data['initial_shipments'] ?? []);
+            if ($initialShipments !== []) {
+                app(OrderShipmentService::class)->createInitialShipments($job, $actor, $initialShipments);
+            } else {
+                app(OrderShipmentService::class)->seedPrimaryShipment($job, $actor);
+            }
 
             $items = collect($data['items'] ?? [])->filter(fn ($item) => filled($item['product'] ?? null))->values();
             if ($items->isEmpty() && filled($job->product)) {
@@ -2534,15 +2569,7 @@ class LegacyJobService
 
     private function syncItemSummary(FlowJob $job): void
     {
-        $items = $job->items()->active()->orderBy('sort_order')->get();
-        $completeItems = $items->filter(fn (FlowJobItem $row) => filled($row->product_name))->values();
-        $first = $completeItems->first();
-
-        $job->update([
-            'product' => $first?->product_name,
-            'category' => $first?->category_name,
-            'quantity' => (int) $completeItems->sum('quantity'),
-        ]);
+        app(\App\Services\Orders\OrderItemSummaryService::class)->sync($job);
     }
 
     public function syncWorkflowTasks(FlowJob $job, ?User $actor = null, bool $includeDraft = false): void

@@ -336,6 +336,7 @@
                                         selected-error-key="inquiryProductSelectedId"
                                         quantity-error-key="inquiryProductQuantity"
                                         unit-price-error-key="inquiryProductUnitPrice"
+                                        missing-supplier-method="openInquiryProductSupplierResolution"
                                         record-label="Inquiry"
                                     />
                                 </div>

@@ -82,10 +82,10 @@ final class StoredFileResponse
         $extension = strtolower((string) pathinfo($filename, PATHINFO_EXTENSION));
         $storedMimeType = strtolower(trim((string) $storedMimeType));
 
-        // SecureDocumentStorage can safely normalize a mislabeled raster image
-        // after signature inspection (for example JPEG bytes received as .PNG).
-        // In that case the scanner result is more authoritative than the client
-        // filename and must drive the response/record MIME type.
+        // SecureDocumentStorage verifies raster signatures before persisting the
+        // MIME type. Prefer that verified value so a harmless converted image
+        // whose old filename extension was retained is served correctly under
+        // X-Content-Type-Options: nosniff.
         if (in_array($storedMimeType, ['image/jpeg', 'image/png', 'image/gif', 'image/webp'], true)) {
             return $storedMimeType;
         }

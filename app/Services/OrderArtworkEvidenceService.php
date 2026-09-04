@@ -145,10 +145,11 @@ final class OrderArtworkEvidenceService
                 ->whereIn('task_id', $historicalArtworkTaskIds->all())
                 ->update(['task_id' => (int) $artworkTask->id]);
 
-            // Revision cards reference the upload task in activity metadata.
-            // Keep those references aligned with the repaired task identity.
+            // Revision and cancellation events reference the upload task in
+            // activity metadata. Keep those references aligned when a Task Pack
+            // change replaces the generated Artwork upload task identity.
             $job->activities()
-                ->where('event', 'job.artwork_revision_requested')
+                ->whereIn('event', ['job.artwork_revision_requested', 'job.artwork_cancelled'])
                 ->get()
                 ->each(function ($activity) use ($historicalArtworkTaskIds, $artworkTask): void {
                     $meta = is_array($activity->meta) ? $activity->meta : [];

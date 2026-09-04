@@ -195,12 +195,14 @@ class DocumentService
      *
      * @param Collection<int,Document>|null $taskDocuments
      * @param Collection<int,mixed>|null $appliedRevisionActivities Preloaded job-level revision activities for query-free batch presentation.
+     * @param Collection<int,mixed>|null $cancellationActivities Preloaded artwork cancellation activities for query-free Order detail rendering.
      * @return Collection<int,Document>
      */
     public function currentArtworkDocuments(
         Task $task,
         ?Collection $taskDocuments = null,
         ?Collection $appliedRevisionActivities = null,
+        ?Collection $cancellationActivities = null,
     ): Collection
     {
         $task->loadMissing(['setupTemplate', 'job']);
@@ -260,20 +262,71 @@ class DocumentService
                 : collect();
 
             if ($laterDocuments->isEmpty() && $current->isNotEmpty()) {
-                return $current;
+                return $this->withoutCancelledArtwork($task, $current, $cancellationActivities);
             }
 
             if ($laterDocuments->isNotEmpty()) {
                 $latestLaterVersion = max(1, (int) $laterDocuments->max('version'));
-                return $laterDocuments
-                    ->where('version', $latestLaterVersion)
-                    ->sortBy('id')
-                    ->values();
+                return $this->withoutCancelledArtwork(
+                    $task,
+                    $laterDocuments->where('version', $latestLaterVersion)->sortBy('id')->values(),
+                    $cancellationActivities,
+                );
             }
         }
 
         $latestVersion = max(1, (int) $documents->max('version'));
-        return $documents->where('version', $latestVersion)->sortBy('id')->values();
+        return $this->withoutCancelledArtwork(
+            $task,
+            $documents->where('version', $latestVersion)->sortBy('id')->values(),
+            $cancellationActivities,
+        );
+    }
+
+    /**
+     * Remove artwork explicitly cancelled from this Order while retaining the
+     * underlying Document rows for audit/history. Cancellation ids are immutable
+     * document ids, so later full uploads/revisions are unaffected automatically.
+     *
+     * @param Collection<int,Document> $documents
+     * @param Collection<int,mixed>|null $cancellationActivities
+     * @return Collection<int,Document>
+     */
+    private function withoutCancelledArtwork(Task $task, Collection $documents, ?Collection $cancellationActivities = null): Collection
+    {
+        if ($documents->isEmpty()) {
+            return $documents->values();
+        }
+
+        $activities = $cancellationActivities;
+        if ($activities === null) {
+            $task->loadMissing('job');
+            $activities = $task->job
+                ? $task->job->activities()
+                    ->where('event', 'job.artwork_cancelled')
+                    ->latest('id')
+                    ->get(['id', 'meta'])
+                : collect();
+        }
+
+        $cancelledIds = collect($activities)
+            ->filter(function ($activity) use ($task): bool {
+                $targetTaskId = (int) data_get($activity->meta, 'target_task_id', 0);
+                return $targetTaskId === (int) $task->id;
+            })
+            ->flatMap(fn ($activity) => collect(data_get($activity->meta, 'document_ids', [])))
+            ->map(fn ($id) => (int) $id)
+            ->filter(fn ($id) => $id > 0)
+            ->unique()
+            ->flip();
+
+        if ($cancelledIds->isEmpty()) {
+            return $documents->values();
+        }
+
+        return $documents
+            ->reject(fn (Document $document): bool => $cancelledIds->has((int) $document->id))
+            ->values();
     }
 
     /**

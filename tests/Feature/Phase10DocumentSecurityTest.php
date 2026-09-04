@@ -53,6 +53,51 @@ class Phase10DocumentSecurityTest extends TestCase
         $this->assertSame([], Storage::disk('flowtrack_quarantine')->allFiles('pending'));
     }
 
+    public function test_safe_raster_image_with_stale_extension_is_normalized_instead_of_rejected(): void
+    {
+        Storage::fake('flowtrack_private');
+        Storage::fake('flowtrack_quarantine');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.quarantine_disk', 'flowtrack_quarantine');
+        config()->set('flowtrack.upload_security.scanner', 'basic');
+
+        // Common client-side conversion edge case: the file is genuinely a
+        // JPEG, but the old PNG filename was retained by the browser/exporter.
+        $file = UploadedFile::fake()->createWithContent(
+            'FO-333998.PNG',
+            "\xFF\xD8\xFF\xE0".str_repeat("\x00", 128),
+        );
+
+        $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/1');
+
+        $this->assertSame('jpg', $stored['extension']);
+        $this->assertTrue($stored['extension_normalized']);
+        $this->assertSame('image/jpeg', $stored['mime']);
+        $this->assertStringEndsWith('.jpg', $stored['path']);
+        Storage::disk('flowtrack_private')->assertExists($stored['path']);
+        $this->assertSame('image/jpeg', StoredFileResponse::mimeType('FO-333998.PNG', $stored['mime']));
+    }
+
+    public function test_fake_png_with_no_valid_raster_signature_is_still_rejected(): void
+    {
+        Storage::fake('flowtrack_private');
+        Storage::fake('flowtrack_quarantine');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.quarantine_disk', 'flowtrack_quarantine');
+        config()->set('flowtrack.upload_security.scanner', 'basic');
+
+        $file = UploadedFile::fake()->createWithContent('fake.PNG', 'not an image');
+
+        try {
+            app(SecureDocumentStorage::class)->store($file, 'flowtrack/documents/1');
+            $this->fail('A non-image file with a PNG extension must remain rejected.');
+        } catch (HttpException $exception) {
+            $this->assertSame(422, $exception->getStatusCode());
+            $this->assertStringContainsString('fake.PNG', $exception->getMessage());
+            $this->assertSame([], Storage::disk('flowtrack_private')->allFiles());
+        }
+    }
+
     public function test_mislabeled_pdf_is_still_rejected_by_signature_validation(): void
     {
         Storage::fake('flowtrack_private');
