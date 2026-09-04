@@ -103,23 +103,53 @@ class OrderListPrototypeService
         int $departmentId = 0,
         int $rangeDays = 7,
     ): Collection {
-        $clientId = max(0, $clientId);
-        $departmentId = max(0, $departmentId);
         $rangeDays = in_array($rangeDays, [1, 7, 30], true) ? $rangeDays : 7;
+        $today = app(WorkspaceSettingsService::class)->localToday();
 
-        $settings = app(WorkspaceSettingsService::class);
-        $today = $settings->localToday();
-        [$rangeFrom, $rangeTo] = $settings->localDateRangeUtcBounds(
+        return $this->dashboardScopedStages(
+            $user,
             $today->copy()->subDays($rangeDays - 1)->toDateString(),
             $today->toDateString(),
+            $clientId,
+            $departmentId,
         );
+    }
+
+    /**
+     * Exact Dashboard-scope stage counts for the Orders page.
+     *
+     * Dashboard deep links carry explicit local dates. The Orders table already
+     * uses those exact dates, so its stage cards must use the same date/client/
+     * team population rather than the normal unfiltered Orders totals.
+     *
+     * @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}>
+     */
+    public function dashboardScopedStages(
+        User $user,
+        string $dateFrom,
+        string $dateTo,
+        int $clientId = 0,
+        int $departmentId = 0,
+    ): Collection {
+        $clientId = max(0, $clientId);
+        $departmentId = max(0, $departmentId);
+        [$rangeFrom, $rangeTo] = app(WorkspaceSettingsService::class)
+            ->localDateRangeUtcBounds($dateFrom, $dateTo);
+
+        // A malformed/partial dashboard scope should never produce misleading
+        // card totals. The Livewire page normally disables dashboard scope in
+        // this case; keep the service safe for direct callers as well.
+        if ($rangeFrom === null || $rangeTo === null) {
+            return $this->stages($user);
+        }
 
         $workspaceId = app(SetupContext::class)->workspaceId();
         $key = implode(':', [
-            'flowtrack', 'dashboard', 'stage-counts', 'v2',
+            'flowtrack', 'dashboard', 'stage-counts', 'v3',
             'workspace', max(1, $workspaceId),
             'user', (int) $user->id,
-            'range', $rangeDays,
+            'from', $dateFrom,
+            'to', $dateTo,
             'client', $clientId,
             'team', $departmentId,
         ]);
@@ -132,24 +162,37 @@ class OrderListPrototypeService
                     $user,
                     false,
                     function (Builder $query) use ($clientId, $departmentId, $rangeFrom, $rangeTo): void {
-                        // Match the global dashboard semantics used by Summary and Flow:
-                        // only operational Orders touched during the selected local date
-                        // window, optionally narrowed to one Client and the Order owner's Team.
-                        $query
-                            ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true))
-                            ->whereBetween('flow_jobs.updated_at', [$rangeFrom, $rangeTo])
-                            ->when($clientId > 0, fn (Builder $orders) => $orders->where('flow_jobs.client_id', $clientId))
-                            ->when(
-                                $departmentId > 0,
-                                fn (Builder $orders) => $orders->whereHas(
-                                    'owner',
-                                    fn (Builder $owner) => $owner->where('users.department_id', $departmentId),
-                                ),
-                            );
+                        $this->applyDashboardStageCountScope(
+                            $query,
+                            $clientId,
+                            $departmentId,
+                            $rangeFrom,
+                            $rangeTo,
+                        );
                     },
                 )->values()->all();
             },
         ));
+    }
+
+    private function applyDashboardStageCountScope(
+        Builder $query,
+        int $clientId,
+        int $departmentId,
+        $rangeFrom,
+        $rangeTo,
+    ): void {
+        $query
+            ->whereHas('client', fn (Builder $client) => $client->where('clients.is_active', true))
+            ->whereBetween('flow_jobs.updated_at', [$rangeFrom, $rangeTo])
+            ->when($clientId > 0, fn (Builder $orders) => $orders->where('flow_jobs.client_id', $clientId))
+            ->when(
+                $departmentId > 0,
+                fn (Builder $orders) => $orders->whereHas(
+                    'owner',
+                    fn (Builder $owner) => $owner->where('users.department_id', $departmentId),
+                ),
+            );
     }
 
     /**
@@ -358,17 +401,17 @@ class OrderListPrototypeService
         }
 
         if ($sequence > 0) {
-            $query->where(function (Builder $phaseQuery) use ($phaseIds): void {
-                if ($phaseIds === []) {
-                    $phaseQuery->whereRaw('1 = 0');
-                    return;
-                }
-                $phaseQuery->whereIn('flow_jobs.source_workflow_phase_id', $phaseIds)
-                    ->orWhere(function (Builder $legacy) use ($phaseIds): void {
-                        $legacy->whereNull('flow_jobs.source_workflow_phase_id')
-                            ->whereIn('flow_jobs.workflow_phase_id', $phaseIds);
-                    });
-            });
+            // The stage cards/counts are resolved from the Order's *current runtime*
+            // workflow_phase_id, so the table filter must use the same source of truth.
+            // source_workflow_phase_id is provenance for snapshot/template mapping and
+            // can legitimately differ on older/rebound Orders. Using it here allowed a
+            // Shipment Order to leak into Billing even while its live Shipment tasks
+            // were still incomplete.
+            if ($phaseIds === []) {
+                $query->whereRaw('1 = 0');
+            } else {
+                $query->whereIn('flow_jobs.workflow_phase_id', $phaseIds);
+            }
         }
 
         // The supplied prototype is an operational queue. Completed Orders are
@@ -990,7 +1033,7 @@ class OrderListPrototypeService
         if ($sequence < 1 || $sequence > count(OrderWorkflowSetupService::fixedStages())) return [];
 
         $workspaceId = app(SetupContext::class)->workspaceId();
-        $key = 'flowtrack:orders:stage-phase-map:v2:workspace:'.max(1, $workspaceId);
+        $key = 'flowtrack:orders:stage-phase-map:v3:workspace:'.max(1, $workspaceId);
 
         $map = Cache::remember(
             $key,
@@ -1002,7 +1045,7 @@ class OrderListPrototypeService
                 }
 
                 WorkflowPhase::query()
-                    ->get(['id', 'source_workflow_phase_id', 'name', 'short_name', 'sequence'])
+                    ->get(['id', 'name', 'short_name', 'sequence'])
                     ->each(function (WorkflowPhase $phase) use (&$map): void {
                         foreach (array_keys($map) as $stageSequence) {
                             if (! OrderStageResolver::matchesSequence(
@@ -1014,10 +1057,11 @@ class OrderListPrototypeService
                                 continue;
                             }
 
+                            // Only runtime WorkflowPhase ids belong in the Orders
+                            // table filter. Snapshot source ids are provenance metadata;
+                            // adding them here can make one logical source phase appear
+                            // in more than one operational stage after workflow changes.
                             $map[$stageSequence][] = (int) $phase->id;
-                            if ((int) ($phase->source_workflow_phase_id ?: 0) > 0) {
-                                $map[$stageSequence][] = (int) $phase->source_workflow_phase_id;
-                            }
                             break;
                         }
                     });

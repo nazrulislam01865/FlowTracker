@@ -72,6 +72,23 @@ final class OrderListQuery
     }
 
     /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
+    public function dashboardScopedStages(
+        User $actor,
+        string $dateFrom,
+        string $dateTo,
+        ?int $clientId = null,
+        ?int $departmentId = null,
+    ): Collection {
+        return $this->prototype->dashboardScopedStages(
+            $actor,
+            $dateFrom,
+            $dateTo,
+            $clientId ?? 0,
+            $departmentId ?? 0,
+        );
+    }
+
+    /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
     public function myTaskStages(User $actor): Collection
     {
         return $this->prototype->stages($actor, true);

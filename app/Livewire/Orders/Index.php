@@ -1139,7 +1139,15 @@ class Index extends Component
         $user = auth()->user();
         $options = app(FilterOptionService::class);
         $list = app(OrderListQuery::class);
-        $stages = $list->stages($user);
+        $stages = $this->dashboardScope === 1
+            ? $list->dashboardScopedStages(
+                $user,
+                $this->dateFrom,
+                $this->dateTo,
+                $this->filterId($this->client),
+                $this->filterId($this->dashboardTeam),
+            )
+            : $list->stages($user);
         $urgencies = $list->urgencyOptions();
 
         $jobs = $list->paginate($user, [
