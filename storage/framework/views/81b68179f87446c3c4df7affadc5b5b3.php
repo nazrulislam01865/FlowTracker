@@ -6,8 +6,6 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'shipment' => [],
     'shipmentCount' => 1,
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -33,8 +31,6 @@ foreach (array_filter(([
     'shipment' => [],
     'shipmentCount' => 1,
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -87,7 +83,7 @@ unset($__defined_vars, $__key, $__value); ?>
         <div class="ft-create-shipment-card-title">
             <div>
                 <strong>Shipment <?php echo e($shipmentNumber); ?></strong>
-                <small><?php echo e($sameAddressLocked ? 'Uses Shipment 1 delivery details' : 'Enter delivery and shipping details'); ?></small>
+                <small><?php echo e($sameAddressLocked ? 'Uses Shipment 1 delivery details' : 'Enter delivery details'); ?></small>
             </div>
         </div>
 
@@ -122,7 +118,7 @@ unset($__defined_vars, $__key, $__value); ?>
     <?php else: ?>
         <div class="ft-create-shipment-primary-grid">
             <label class="ft-create-shipment-field">
-                <span>Contact person</span>
+                <span>Contact person <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 <input
                     type="text"
                     wire:model.blur="createShipments.<?php echo e($index); ?>.contact_name"
@@ -141,7 +137,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             </label>
 
             <div class="ft-create-shipment-field">
-                <span>Phone</span>
+                <span>Phone <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 <div class="ft-create-shipment-phone-row">
                     <div class="ft-create-shipment-phone-control ft-create-shipment-phone-code">
                         <select
@@ -186,7 +182,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
         <div class="ft-create-shipment-address-block">
             <div class="ft-create-shipment-address-toolbar">
-                <span>Shipping address</span>
+                <span>Shipping address <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hasSavedAddresses): ?>
                     <button type="button" wire:click="openSavedShippingAddressPickerForShipment(<?php echo e($index); ?>)">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5.5 3.5h9v13l-4.5-2.6-4.5 2.6v-13Z"/></svg>
@@ -216,7 +212,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
             <div class="ft-create-shipment-location-grid">
                 <div class="ft-create-shipment-field">
-                    <span>Country</span>
+                    <span>Country <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                     <?php if (isset($component)) { $__componentOriginal4c441a1c27191c086ffa43032f3a6cc2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4c441a1c27191c086ffa43032f3a6cc2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.select-filter','data' => ['label' => 'Country','property' => 'createShipments.'.$index.'.country','value' => $country,'placeholder' => 'Select country','options' => $countries,'disabled' => collect($countries)->isEmpty(),'searchPlaceholder' => 'Search country…','menuWidth' => 320,'fixedMenu' => true,'hideLabel' => true,'class' => 'ft-create-shipment-select']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -250,7 +246,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
 
                 <div class="ft-create-shipment-field">
-                    <span>State</span>
+                    <span>State <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($states->isNotEmpty()): ?><b class="ft-order-required-star" aria-hidden="true">*</b><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
                     <?php if (isset($component)) { $__componentOriginal4c441a1c27191c086ffa43032f3a6cc2 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4c441a1c27191c086ffa43032f3a6cc2 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.select-filter','data' => ['label' => 'State','property' => 'createShipments.'.$index.'.state','value' => $shipment['state'] ?? '','placeholder' => $country === '' ? 'Select country first' : ($states->isEmpty() ? 'No states configured' : 'Select state'),'options' => $states,'disabled' => $country === '' || $states->isEmpty(),'searchPlaceholder' => 'Search state…','menuWidth' => 300,'fixedMenu' => true,'hideLabel' => true,'class' => 'ft-create-shipment-select']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
@@ -284,7 +280,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
 
                 <label class="ft-create-shipment-field">
-                    <span>City</span>
+                    <span>City <em>Optional</em></span>
                     <input
                         type="text"
                         wire:model.blur="createShipments.<?php echo e($index); ?>.city"
@@ -303,7 +299,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </label>
 
                 <label class="ft-create-shipment-field">
-                    <span>Postal code</span>
+                    <span>Postal code <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                     <input
                         type="text"
                         wire:model.blur="createShipments.<?php echo e($index); ?>.postal_code"
@@ -370,31 +366,6 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </label>
 
-        <div class="ft-create-shipment-field ft-create-shipment-method-cell">
-            <span>Shipping method</span>
-            <?php if (isset($component)) { $__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-method-picker','data' => ['shipmentMethods' => $shipmentMethods,'shipmentUrgencies' => $shipmentUrgencies,'shipmentIndex' => $index,'selectedMethodId' => $shipment['shipment_method_id'] ?? null,'selectedUrgencyId' => $shipment['shipment_urgency_id'] ?? null,'compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.create.shipping-method-picker'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['shipment-methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentMethods),'shipment-urgencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentUrgencies),'shipment-index' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($index),'selected-method-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment['shipment_method_id'] ?? null),'selected-urgency-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment['shipment_urgency_id'] ?? null),'compact' => true]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
-
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9)): ?>
-<?php $attributes = $__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9; ?>
-<?php unset($__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9)): ?>
-<?php $component = $__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9; ?>
-<?php unset($__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9); ?>
-<?php endif; ?>
-        </div>
     </div>
 </article>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/flowtrack/resources/views/components/jobs/create/shipping-row.blade.php ENDPATH**/ ?>

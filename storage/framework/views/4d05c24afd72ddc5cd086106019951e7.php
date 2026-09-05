@@ -138,8 +138,8 @@ unset($__defined_vars, $__key, $__value); ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(!$isSameAddress || $isPrimaryEdit): ?>
                 <div class="ft-ms-form-grid ft-ms-form-grid--two">
                     <label class="ft-ms-field">
-                        <span>CONTACT PERSON</span>
-                        <input type="text" wire:model.defer="shipmentForm.recipient" maxlength="255" placeholder="e.g. John Smith">
+                        <span>CONTACT PERSON <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                        <input type="text" wire:model.defer="shipmentForm.recipient" maxlength="255" placeholder="e.g. John Smith" aria-required="true">
                         <small class="validation-error ft-ms-validation-slot"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['shipmentForm.recipient'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -164,8 +164,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 </div>
 
                 <label class="ft-ms-field">
-                    <span>SHIPPING ADDRESS</span>
-                    <input type="text" wire:model.defer="shipmentForm.address" maxlength="2000" placeholder="e.g. 123 Main St, Apt 4B">
+                    <span>SHIPPING ADDRESS <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                    <input type="text" wire:model.defer="shipmentForm.address" maxlength="2000" placeholder="e.g. 123 Main St, Apt 4B" aria-required="true">
                     <small class="validation-error ft-ms-validation-slot"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['shipmentForm.address'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -178,17 +178,17 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                 <div class="ft-ms-form-grid ft-ms-form-grid--address">
                     <div class="ft-ms-field">
-                        <span>COUNTRY</span>
+                        <span>COUNTRY <b class="ft-ms-required" aria-hidden="true">*</b></span>
                         <?php if (isset($component)) { $__componentOriginal655167214ff7da69eb027810b956fa88 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal655167214ff7da69eb027810b956fa88 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-ms-location-select','label' => 'Country','property' => 'shipmentForm.country','value' => $currentCountry,'options' => $countries,'placeholder' => 'Select country','selectedLabel' => $currentCountry !== '' ? $currentCountry : null,'clearable' => false,'hideLabel' => true,'fixedMenu' => true,'disabled' => $countries->isEmpty(),'menuWidth' => 320,'searchPlaceholder' => 'Search country…','wire:key' => 'shipment-country-select-'.e($task->id).'-'.e($editingId ?: 'new').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-ms-location-select','label' => 'Country','property' => 'shipmentForm.country','value' => $currentCountry,'options' => $countries,'placeholder' => 'Select country','selectedLabel' => $currentCountry !== '' ? $currentCountry : null,'clearable' => false,'required' => true,'hideLabel' => true,'fixedMenu' => true,'disabled' => $countries->isEmpty(),'menuWidth' => 320,'searchPlaceholder' => 'Search country…','wire:key' => 'shipment-country-select-'.e($task->id).'-'.e($editingId ?: 'new').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.search-select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['class' => 'ft-ms-location-select','label' => 'Country','property' => 'shipmentForm.country','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry),'options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries),'placeholder' => 'Select country','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry !== '' ? $currentCountry : null),'clearable' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(false),'hide-label' => true,'fixed-menu' => true,'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries->isEmpty()),'menu-width' => 320,'search-placeholder' => 'Search country…','wire:key' => 'shipment-country-select-'.e($task->id).'-'.e($editingId ?: 'new').'']); ?>
+<?php $component->withAttributes(['class' => 'ft-ms-location-select','label' => 'Country','property' => 'shipmentForm.country','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry),'options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries),'placeholder' => 'Select country','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry !== '' ? $currentCountry : null),'clearable' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(false),'required' => true,'hide-label' => true,'fixed-menu' => true,'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries->isEmpty()),'menu-width' => 320,'search-placeholder' => 'Search country…','wire:key' => 'shipment-country-select-'.e($task->id).'-'.e($editingId ?: 'new').'']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -214,17 +214,17 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></small>
                     </div>
                     <div class="ft-ms-field">
-                        <span>STATE</span>
+                        <span>STATE <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($currentCountry !== '' && $states->isNotEmpty()): ?><b class="ft-ms-required" aria-hidden="true">*</b><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></span>
                         <?php if (isset($component)) { $__componentOriginal655167214ff7da69eb027810b956fa88 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal655167214ff7da69eb027810b956fa88 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-ms-location-select','label' => 'State','property' => 'shipmentForm.state','value' => $currentState,'options' => $states,'placeholder' => 'Select state','selectedLabel' => $currentState !== '' ? $currentState : null,'clearable' => false,'hideLabel' => true,'fixedMenu' => true,'disabled' => $currentCountry === '' || $states->isEmpty(),'menuWidth' => 300,'searchPlaceholder' => 'Search state…','wire:key' => 'shipment-state-select-'.e($task->id).'-'.e(\Illuminate\Support\Str::slug($currentCountry ?: 'none')).'-'.e($editingId ?: 'new').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.search-select','data' => ['class' => 'ft-ms-location-select','label' => 'State','property' => 'shipmentForm.state','value' => $currentState,'options' => $states,'placeholder' => 'Select state','selectedLabel' => $currentState !== '' ? $currentState : null,'clearable' => false,'required' => $currentCountry !== '' && $states->isNotEmpty(),'hideLabel' => true,'fixedMenu' => true,'disabled' => $currentCountry === '' || $states->isEmpty(),'menuWidth' => 300,'searchPlaceholder' => 'Search state…','wire:key' => 'shipment-state-select-'.e($task->id).'-'.e(\Illuminate\Support\Str::slug($currentCountry ?: 'none')).'-'.e($editingId ?: 'new').'']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('ui.search-select'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['class' => 'ft-ms-location-select','label' => 'State','property' => 'shipmentForm.state','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentState),'options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($states),'placeholder' => 'Select state','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentState !== '' ? $currentState : null),'clearable' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(false),'hide-label' => true,'fixed-menu' => true,'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry === '' || $states->isEmpty()),'menu-width' => 300,'search-placeholder' => 'Search state…','wire:key' => 'shipment-state-select-'.e($task->id).'-'.e(\Illuminate\Support\Str::slug($currentCountry ?: 'none')).'-'.e($editingId ?: 'new').'']); ?>
+<?php $component->withAttributes(['class' => 'ft-ms-location-select','label' => 'State','property' => 'shipmentForm.state','value' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentState),'options' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($states),'placeholder' => 'Select state','selected-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentState !== '' ? $currentState : null),'clearable' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute(false),'required' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry !== '' && $states->isNotEmpty()),'hide-label' => true,'fixed-menu' => true,'disabled' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentCountry === '' || $states->isEmpty()),'menu-width' => 300,'search-placeholder' => 'Search state…','wire:key' => 'shipment-state-select-'.e($task->id).'-'.e(\Illuminate\Support\Str::slug($currentCountry ?: 'none')).'-'.e($editingId ?: 'new').'']); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -250,7 +250,7 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></small>
                     </div>
                     <label class="ft-ms-field">
-                        <span>CITY</span>
+                        <span>CITY <small class="ft-ms-field-hint">Optional</small></span>
                         <input type="text" wire:model.defer="shipmentForm.city" maxlength="120" placeholder="e.g. Miami">
                         <small class="validation-error ft-ms-validation-slot"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['shipmentForm.city'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
@@ -262,8 +262,8 @@ endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></small>
                     </label>
                     <label class="ft-ms-field">
-                        <span>POSTAL CODE</span>
-                        <input type="text" wire:model.defer="shipmentForm.postal_code" maxlength="30" placeholder="e.g. 33101">
+                        <span>POSTAL CODE <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                        <input type="text" wire:model.defer="shipmentForm.postal_code" maxlength="30" placeholder="e.g. 33101" aria-required="true">
                         <small class="validation-error ft-ms-validation-slot"><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['shipmentForm.postal_code'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -300,7 +300,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     <small class="validation-error ft-ms-validation-slot" aria-hidden="true"></small>
                 </label>
                 <div class="ft-ms-field">
-                    <span>SHIPPING METHOD</span>
+                    <span>SHIPPING METHOD <b class="ft-ms-required" aria-hidden="true">*</b></span>
                     <?php if (isset($component)) { $__componentOriginal35e3b281c47117d59d117e40a9d6d494 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal35e3b281c47117d59d117e40a9d6d494 = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.method-picker','data' => ['selected' => $selectedCard,'methods' => $presentation['shipment_methods'] ?? collect(),'urgencies' => $presentation['shipment_urgencies'] ?? collect(),'mode' => 'modal']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

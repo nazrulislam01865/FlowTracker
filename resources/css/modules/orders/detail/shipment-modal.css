@@ -147,6 +147,11 @@
     letter-spacing: .04em;
 }
 
+.ft-order-prototype-detail .ft-ms-field > span .ft-ms-required {
+    color: #dc2626;
+    font-weight: 900;
+}
+
 .ft-order-prototype-detail .ft-ms-field input,
 .ft-order-prototype-detail .ft-ms-field select {
     width: 100%;

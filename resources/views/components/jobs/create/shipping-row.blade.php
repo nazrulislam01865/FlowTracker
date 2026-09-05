@@ -3,8 +3,6 @@
     'shipment' => [],
     'shipmentCount' => 1,
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -47,7 +45,7 @@
         <div class="ft-create-shipment-card-title">
             <div>
                 <strong>Shipment {{ $shipmentNumber }}</strong>
-                <small>{{ $sameAddressLocked ? 'Uses Shipment 1 delivery details' : 'Enter delivery and shipping details' }}</small>
+                <small>{{ $sameAddressLocked ? 'Uses Shipment 1 delivery details' : 'Enter delivery details' }}</small>
             </div>
         </div>
 
@@ -82,7 +80,7 @@
     @else
         <div class="ft-create-shipment-primary-grid">
             <label class="ft-create-shipment-field">
-                <span>Contact person</span>
+                <span>Contact person <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 <input
                     type="text"
                     wire:model.blur="createShipments.{{ $index }}.contact_name"
@@ -94,7 +92,7 @@
             </label>
 
             <div class="ft-create-shipment-field">
-                <span>Phone</span>
+                <span>Phone <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 <div class="ft-create-shipment-phone-row">
                     <div class="ft-create-shipment-phone-control ft-create-shipment-phone-code">
                         <select
@@ -125,7 +123,7 @@
 
         <div class="ft-create-shipment-address-block">
             <div class="ft-create-shipment-address-toolbar">
-                <span>Shipping address</span>
+                <span>Shipping address <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                 @if($hasSavedAddresses)
                     <button type="button" wire:click="openSavedShippingAddressPickerForShipment({{ $index }})">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5.5 3.5h9v13l-4.5-2.6-4.5 2.6v-13Z"/></svg>
@@ -148,7 +146,7 @@
 
             <div class="ft-create-shipment-location-grid">
                 <div class="ft-create-shipment-field">
-                    <span>Country</span>
+                    <span>Country <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                     <x-ui.select-filter
                         label="Country"
                         :property="'createShipments.'.$index.'.country'"
@@ -166,7 +164,7 @@
                 </div>
 
                 <div class="ft-create-shipment-field">
-                    <span>State</span>
+                    <span>State @if($states->isNotEmpty())<b class="ft-order-required-star" aria-hidden="true">*</b>@endif</span>
                     <x-ui.select-filter
                         label="State"
                         :property="'createShipments.'.$index.'.state'"
@@ -184,7 +182,7 @@
                 </div>
 
                 <label class="ft-create-shipment-field">
-                    <span>City</span>
+                    <span>City <em>Optional</em></span>
                     <input
                         type="text"
                         wire:model.blur="createShipments.{{ $index }}.city"
@@ -196,7 +194,7 @@
                 </label>
 
                 <label class="ft-create-shipment-field">
-                    <span>Postal code</span>
+                    <span>Postal code <b class="ft-order-required-star" aria-hidden="true">*</b></span>
                     <input
                         type="text"
                         wire:model.blur="createShipments.{{ $index }}.postal_code"
@@ -242,16 +240,5 @@
             @error("createShipments.$index.package_reference")<small class="validation-error">{{ $message }}</small>@enderror
         </label>
 
-        <div class="ft-create-shipment-field ft-create-shipment-method-cell">
-            <span>Shipping method</span>
-            <x-jobs.create.shipping-method-picker
-                :shipment-methods="$shipmentMethods"
-                :shipment-urgencies="$shipmentUrgencies"
-                :shipment-index="$index"
-                :selected-method-id="$shipment['shipment_method_id'] ?? null"
-                :selected-urgency-id="$shipment['shipment_urgency_id'] ?? null"
-                :compact="true"
-            />
-        </div>
     </div>
 </article>

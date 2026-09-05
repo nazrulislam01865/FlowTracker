@@ -6,6 +6,7 @@
     'shipmentId' => null,
     'mode' => 'row',
     'disabled' => false,
+    'appearance' => 'field',
 ])
 
 @php
@@ -17,11 +18,16 @@
     $expressUrgencies = $presenter::expressUrgencies($urgencies);
     $hardDisabled = (bool) $disabled;
     $clientDisabledExpression = $hardDisabled ? 'true' : 'false';
-    $action = $mode === 'modal' ? 'selectShipmentModalMethod' : 'selectOrderShipmentMethod';
+    $inlineAppearance = $appearance === 'inline';
+    $action = match ($mode) {
+        'modal' => 'selectShipmentModalMethod',
+        'inline' => 'selectInlineShipmentMethod',
+        default => 'selectOrderShipmentMethod',
+    };
 @endphp
 
 <div
-    class="ft-ms-method"
+    class="ft-ms-method {{ $inlineAppearance ? 'ft-ms-method--inline-display' : '' }}"
     x-data="{
         ...window.FlowTrack.ui.floatingActionMenu(),
         menuZIndex: 2450,
@@ -61,17 +67,31 @@
         @else
             <span class="ft-ms-method__copy"><strong>Select shipping method</strong></span>
         @endif
-        <svg
-            class="ft-ms-method__chevron"
-            x-cloak
-            x-show="!({!! $clientDisabledExpression !!})"
-            :class="open ? 'is-open' : ''"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            aria-hidden="true"
-        ><path d="m6 8 4 4 4-4"/></svg>
+
+        @if($inlineAppearance)
+            <svg
+                class="ft-ms-method__edit-icon"
+                x-cloak
+                x-show="!({!! $clientDisabledExpression !!})"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                aria-hidden="true"
+            ><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>
+        @else
+            <svg
+                class="ft-ms-method__chevron"
+                x-cloak
+                x-show="!({!! $clientDisabledExpression !!})"
+                :class="open ? 'is-open' : ''"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+            ><path d="m6 8 4 4 4-4"/></svg>
+        @endif
     </button>
 
     @unless($hardDisabled)
@@ -89,7 +109,7 @@
                     @php
                         $kind = $presenter::methodKind($method);
                         $label = $presenter::methodLabel($method);
-                        $actionArgs = $mode === 'modal'
+                        $actionArgs = in_array($mode, ['modal', 'inline'], true)
                             ? ((int) $method->id).', null'
                             : ((int) $taskId).', '.((int) $shipmentId).', '.((int) $method->id).', null';
                     @endphp
@@ -114,7 +134,7 @@
                         @php
                             $urgencyId = $urgency['id'];
                             $urgencyArg = $urgencyId === null ? 'null' : (string) ((int) $urgencyId);
-                            $actionArgs = $mode === 'modal'
+                            $actionArgs = in_array($mode, ['modal', 'inline'], true)
                                 ? ((int) $expressMethod->id).', '.$urgencyArg
                                 : ((int) $taskId).', '.((int) $shipmentId).', '.((int) $expressMethod->id).', '.$urgencyArg;
                         @endphp

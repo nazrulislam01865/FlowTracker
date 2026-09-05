@@ -194,14 +194,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
         <?php if (isset($component)) { $__componentOriginalfad564098d922e377b755e81752b4e23 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalfad564098d922e377b755e81752b4e23 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-setup','data' => ['shipments' => $createShipments,'mode' => $createShipmentMode,'shipmentMethods' => $shipmentMethods,'shipmentUrgencies' => $shipmentUrgencies,'countries' => $createShipmentCountries,'statesByCountry' => $createShipmentStatesByCountry,'phoneCodes' => $createShipmentPhoneCodes,'savedShippingAddresses' => $savedShippingAddresses,'showSavedShippingAddressPicker' => $showSavedShippingAddressPicker,'savedShippingAddressShipmentIndex' => $savedShippingAddressShipmentIndex,'referenceNumber' => $referenceNumber]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-setup','data' => ['shipments' => $createShipments,'mode' => $createShipmentMode,'countries' => $createShipmentCountries,'statesByCountry' => $createShipmentStatesByCountry,'phoneCodes' => $createShipmentPhoneCodes,'savedShippingAddresses' => $savedShippingAddresses,'showSavedShippingAddressPicker' => $showSavedShippingAddressPicker,'savedShippingAddressShipmentIndex' => $savedShippingAddressShipmentIndex,'referenceNumber' => $referenceNumber]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.create.shipping-setup'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['shipments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipments),'mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentMode),'shipment-methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentMethods),'shipment-urgencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentUrgencies),'countries' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentCountries),'states-by-country' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentStatesByCountry),'phone-codes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentPhoneCodes),'saved-shipping-addresses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($savedShippingAddresses),'show-saved-shipping-address-picker' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showSavedShippingAddressPicker),'saved-shipping-address-shipment-index' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($savedShippingAddressShipmentIndex),'reference-number' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($referenceNumber)]); ?>
+<?php $component->withAttributes(['shipments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipments),'mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentMode),'countries' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentCountries),'states-by-country' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentStatesByCountry),'phone-codes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($createShipmentPhoneCodes),'saved-shipping-addresses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($savedShippingAddresses),'show-saved-shipping-address-picker' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showSavedShippingAddressPicker),'saved-shipping-address-shipment-index' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($savedShippingAddressShipmentIndex),'reference-number' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($referenceNumber)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -229,7 +229,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     x-data
                     x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"
                 >
-                    <b>Order hand date</b>
+                    <b>Expected delivery date</b>
 
                     <input
                         x-ref="deliveryDate"
@@ -251,6 +251,28 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                 </label>
+                <?php if (isset($component)) { $__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-method-picker','data' => ['shipmentMethods' => $shipmentMethods,'shipmentUrgencies' => $shipmentUrgencies,'selectedMethodIds' => $shipmentMethodIds,'selectedUrgencyIds' => $shipmentUrgencyIds,'required' => true,'helpText' => 'Applied automatically to every shipment address. You can change a shipment\'s method later in the Shipment stage.']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.create.shipping-method-picker'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['shipment-methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentMethods),'shipment-urgencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentUrgencies),'selected-method-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentMethodIds),'selected-urgency-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentUrgencyIds),'required' => true,'help-text' => 'Applied automatically to every shipment address. You can change a shipment\'s method later in the Shipment stage.']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9)): ?>
+<?php $attributes = $__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9; ?>
+<?php unset($__attributesOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9)): ?>
+<?php $component = $__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9; ?>
+<?php unset($__componentOriginal2b7eb2cc82005dd6fbbfabb8b5fb6aa9); ?>
+<?php endif; ?>
                 <div class="ft-create-field">
                     <?php if (isset($component)) { $__componentOriginal655167214ff7da69eb027810b956fa88 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal655167214ff7da69eb027810b956fa88 = $attributes; } ?>

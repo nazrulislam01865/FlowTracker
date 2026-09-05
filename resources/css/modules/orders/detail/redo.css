@@ -626,33 +626,239 @@
 }
 
 
-/* Redo percentage fields: Customer discount + Supplier recovery */
-.ft-redo-percent-input {
+/* Redo customer/supplier amount with selectable % or pcs unit. */
+.ft-order-prototype-detail .ft-redo-unit-input {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 118px;
+    width: 100%;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-input input,
+.ft-order-prototype-detail .ft-redo-unit-input select {
+    min-width: 0;
+    border-radius: 0;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-input input {
+    border-radius: 8px 0 0 8px;
+    border-right: 0;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-input select {
+    border-radius: 0 8px 8px 0;
+    background: #f7fafc;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-redo-field-help {
+    display: block;
+    margin-top: 1px;
+    color: #6c7d93;
+    font-size: .59375rem;
+    line-height: 1.35;
+}
+
+
+/* Compact customer/supplier adjustment cards with direct % / pcs toggles. */
+.ft-order-prototype-detail .ft-redo-adjustment-card {
+    margin-bottom: 12px;
+    padding: 12px;
+    border: 1px solid #dbe4ec;
+    border-radius: 10px;
+    background: #fff;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-head {
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    gap: 10px;
+    margin-bottom: 9px;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-head > div {
+    min-width: 0;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-title {
+    display: block;
+    color: #33465f;
+    font-size: .6875rem;
+    font-weight: 900;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-head small {
+    display: block;
+    margin-top: 2px;
+    color: #77879b;
+    font-size: .59375rem;
+    line-height: 1.35;
+}
+
+.ft-order-prototype-detail .ft-redo-required-pill {
+    flex: 0 0 auto;
+    padding: 3px 7px;
+    border-radius: 999px;
+    background: #fff4f2;
+    color: #b42318;
+    font-size: .53125rem;
+    font-weight: 850;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-control {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+    align-items: end;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-value {
+    display: grid;
+    gap: 4px;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-value > span {
+    color: #6b7c92;
+    font-size: .5625rem;
+    font-weight: 800;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-value input {
+    width: 100%;
+    min-height: 38px;
+    padding: 8px 10px;
+    border: 1px solid #cbd7e2;
+    border-radius: 8px;
+    background: #fff;
+    color: var(--text);
+    font-size: .8125rem;
+    font-weight: 700;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-value input:focus {
+    outline: none;
+    border-color: #79c8bc;
+    box-shadow: 0 0 0 3px color-mix(in srgb, var(--ft-theme-primary) 10%, transparent);
+}
+
+.ft-order-prototype-detail .ft-redo-unit-toggle {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(54px, 1fr));
+    padding: 3px;
+    border: 1px solid #cbd7e2;
+    border-radius: 9px;
+    background: #f4f7fa;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-toggle label {
     position: relative;
-    display: block;
-    width: 100%;
+    min-width: 54px;
+    cursor: pointer;
 }
 
-.ft-redo-percent-input input {
-    display: block;
-    width: 100%;
-    padding-right: 44px !important;
-}
-
-.ft-redo-percent-input .ft-redo-percent-suffix {
+.ft-order-prototype-detail .ft-redo-unit-toggle input {
     position: absolute;
-    top: 50%;
-    right: 16px;
-    transform: translateY(-50%);
-    display: inline-flex;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-toggle label > span {
+    min-height: 30px;
+    padding: 6px 10px;
+    display: flex;
     align-items: center;
     justify-content: center;
-    margin: 0;
+    border-radius: 6px;
+    color: #607187;
+    font-size: .6875rem;
+    font-weight: 900;
+    user-select: none;
+    transition: background .15s ease, color .15s ease, box-shadow .15s ease;
+}
+
+.ft-order-prototype-detail .ft-redo-unit-toggle label.active > span,
+.ft-order-prototype-detail .ft-redo-unit-toggle label:has(input:checked) > span {
+    background: #fff;
+    color: var(--teal);
+    box-shadow: 0 1px 3px rgba(15, 23, 42, .12);
+}
+
+.ft-order-prototype-detail .ft-redo-unit-toggle label:focus-within > span {
+    outline: 2px solid #79c8bc;
+    outline-offset: 1px;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-note {
+    margin-top: 7px;
+    display: flex;
+    align-items: flex-start;
+    gap: 6px;
+    color: #6c7d93;
+    font-size: .5625rem;
+    line-height: 1.4;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-note.is-missing {
+    padding: 7px 8px;
+    border-radius: 7px;
+    background: #f1faf8;
+    color: #47685f;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-note b {
+    color: #315e55;
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-note-dot {
+    width: 6px;
+    height: 6px;
+    margin-top: 4px;
+    flex: 0 0 6px;
+    border-radius: 999px;
+    background: var(--teal);
+}
+
+.ft-order-prototype-detail .ft-redo-adjustment-card .validation-error {
+    display: block;
+    margin-top: 5px;
+    color: #d92d20;
+    font-size: .59375rem;
+    font-weight: 650;
+}
+
+.ft-order-prototype-detail .ft-redo-sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
     padding: 0;
-    line-height: 1;
-    color: #667991;
-    font-size: 0.875rem;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.ft-order-prototype-detail .ft-redo-calc.adjusted {
+    color: #0f766e;
     font-weight: 800;
-    pointer-events: none;
-    z-index: 2;
+}
+
+@media (max-width: 520px) {
+    .ft-order-prototype-detail .ft-redo-unit-input {
+        grid-template-columns: minmax(0, 1fr) 104px;
+    }
+
+    .ft-order-prototype-detail .ft-redo-adjustment-control {
+        grid-template-columns: 1fr;
+    }
+
+    .ft-order-prototype-detail .ft-redo-unit-toggle {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .ft-order-prototype-detail .ft-redo-unit-toggle label > span {
+        min-height: 32px;
+    }
 }

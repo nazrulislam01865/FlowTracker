@@ -9,6 +9,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'shipmentId' => null,
     'mode' => 'row',
     'disabled' => false,
+    'appearance' => 'field',
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -32,6 +33,7 @@ foreach (array_filter(([
     'shipmentId' => null,
     'mode' => 'row',
     'disabled' => false,
+    'appearance' => 'field',
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -53,11 +55,16 @@ unset($__defined_vars, $__key, $__value); ?>
     $expressUrgencies = $presenter::expressUrgencies($urgencies);
     $hardDisabled = (bool) $disabled;
     $clientDisabledExpression = $hardDisabled ? 'true' : 'false';
-    $action = $mode === 'modal' ? 'selectShipmentModalMethod' : 'selectOrderShipmentMethod';
+    $inlineAppearance = $appearance === 'inline';
+    $action = match ($mode) {
+        'modal' => 'selectShipmentModalMethod',
+        'inline' => 'selectInlineShipmentMethod',
+        default => 'selectOrderShipmentMethod',
+    };
 ?>
 
 <div
-    class="ft-ms-method"
+    class="ft-ms-method <?php echo e($inlineAppearance ? 'ft-ms-method--inline-display' : ''); ?>"
     x-data="{
         ...window.FlowTrack.ui.floatingActionMenu(),
         menuZIndex: 2450,
@@ -118,17 +125,31 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php else: ?>
             <span class="ft-ms-method__copy"><strong>Select shipping method</strong></span>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-        <svg
-            class="ft-ms-method__chevron"
-            x-cloak
-            x-show="!(<?php echo $clientDisabledExpression; ?>)"
-            :class="open ? 'is-open' : ''"
-            viewBox="0 0 20 20"
-            fill="none"
-            stroke="currentColor"
-            stroke-width="1.8"
-            aria-hidden="true"
-        ><path d="m6 8 4 4 4-4"/></svg>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($inlineAppearance): ?>
+            <svg
+                class="ft-ms-method__edit-icon"
+                x-cloak
+                x-show="!(<?php echo $clientDisabledExpression; ?>)"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.7"
+                aria-hidden="true"
+            ><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>
+        <?php else: ?>
+            <svg
+                class="ft-ms-method__chevron"
+                x-cloak
+                x-show="!(<?php echo $clientDisabledExpression; ?>)"
+                :class="open ? 'is-open' : ''"
+                viewBox="0 0 20 20"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.8"
+                aria-hidden="true"
+            ><path d="m6 8 4 4 4-4"/></svg>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </button>
 
     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($hardDisabled)): ?>
@@ -146,7 +167,7 @@ unset($__defined_vars, $__key, $__value); ?>
                     <?php
                         $kind = $presenter::methodKind($method);
                         $label = $presenter::methodLabel($method);
-                        $actionArgs = $mode === 'modal'
+                        $actionArgs = in_array($mode, ['modal', 'inline'], true)
                             ? ((int) $method->id).', null'
                             : ((int) $taskId).', '.((int) $shipmentId).', '.((int) $method->id).', null';
                     ?>
@@ -192,7 +213,7 @@ unset($__defined_vars, $__key, $__value); ?>
                         <?php
                             $urgencyId = $urgency['id'];
                             $urgencyArg = $urgencyId === null ? 'null' : (string) ((int) $urgencyId);
-                            $actionArgs = $mode === 'modal'
+                            $actionArgs = in_array($mode, ['modal', 'inline'], true)
                                 ? ((int) $expressMethod->id).', '.$urgencyArg
                                 : ((int) $taskId).', '.((int) $shipmentId).', '.((int) $expressMethod->id).', '.$urgencyArg;
                         ?>

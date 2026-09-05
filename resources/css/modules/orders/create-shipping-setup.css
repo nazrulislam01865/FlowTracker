@@ -290,7 +290,7 @@
 
 .ft-create-job-page .ft-create-shipment-service-grid{
     display:grid;
-    grid-template-columns:minmax(95px,.42fr) minmax(120px,.55fr) minmax(210px,1fr) minmax(280px,1.35fr);
+    grid-template-columns:minmax(95px,.42fr) minmax(120px,.55fr) minmax(240px,1.4fr);
     gap:14px;
     padding:14px 0 16px;
     border-top:1px solid #edf1f5;
@@ -627,7 +627,7 @@
     }
 
     .ft-create-job-page .ft-create-shipment-service-grid{
-        grid-template-columns:minmax(90px,.4fr) minmax(110px,.5fr) minmax(190px,.9fr) minmax(240px,1.2fr);
+        grid-template-columns:minmax(90px,.4fr) minmax(110px,.5fr) minmax(220px,1.25fr);
     }
 }
 

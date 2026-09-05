@@ -91,16 +91,50 @@ trait ManagesCreateOrderShipments
             $normalizedUrgencyId = (int) $urgency->id;
         }
 
-        $this->createShipments[$index]['shipment_method_id'] = (int) $method->id;
-        $this->createShipments[$index]['shipment_urgency_id'] = $normalizedUrgencyId;
-        $this->resetValidation([
-            "createShipments.$index.shipment_method_id",
-            "createShipments.$index.shipment_urgency_id",
-        ]);
+        // The Create Order form now owns one Order-level shipping method in
+        // Schedule & owner. Keep this legacy per-row endpoint compatible with
+        // browser snapshots that were opened before the deployment, but apply
+        // the selected value to every shipment rather than allowing the draft
+        // rows to diverge. Individual methods can still be changed later in the
+        // Shipment stage.
+        $this->setCreateShippingSelectionForAllShipments((int) $method->id, $normalizedUrgencyId);
+    }
 
-        if ($index === 0) {
-            $this->shipmentMethodIds = [(int) $method->id];
-            $this->shipmentUrgencyIds = $normalizedUrgencyId ? [$normalizedUrgencyId] : [];
+    /**
+     * Store the Order-level Create Order shipping choice and mirror it onto every
+     * draft shipment. The shipment rows are the persistence source of truth, so
+     * this guarantees that each address arrives in the Shipment stage with the
+     * Schedule & owner selection already attached.
+     */
+    private function setCreateShippingSelectionForAllShipments(?int $methodId, ?int $urgencyId = null): void
+    {
+        $this->ensureCreateShipmentRows();
+
+        $this->shipmentMethodIds = $methodId ? [$methodId] : [];
+        $this->shipmentUrgencyIds = $methodId && $urgencyId ? [$urgencyId] : [];
+        $this->syncCreateShipmentMethodsFromGlobalSelection();
+
+        $validationKeys = ['shipmentMethodIds', 'shipmentUrgencyIds'];
+        foreach (array_keys($this->createShipments) as $shipmentIndex) {
+            $validationKeys[] = "createShipments.$shipmentIndex.shipment_method_id";
+            $validationKeys[] = "createShipments.$shipmentIndex.shipment_urgency_id";
+        }
+        $this->resetValidation($validationKeys);
+    }
+
+    /** Apply the current global selection to all draft rows without UI side effects. */
+    private function syncCreateShipmentMethodsFromGlobalSelection(): void
+    {
+        $methodId = collect($this->shipmentMethodIds)
+            ->map(fn ($value): int => (int) $value)
+            ->first(fn (int $value): bool => $value > 0);
+        $urgencyId = collect($this->shipmentUrgencyIds)
+            ->map(fn ($value): int => (int) $value)
+            ->first(fn (int $value): bool => $value > 0);
+
+        foreach (array_keys($this->createShipments) as $shipmentIndex) {
+            $this->createShipments[$shipmentIndex]['shipment_method_id'] = $methodId ?: null;
+            $this->createShipments[$shipmentIndex]['shipment_urgency_id'] = $methodId && $urgencyId ? $urgencyId : null;
         }
     }
 
@@ -229,6 +263,13 @@ trait ManagesCreateOrderShipments
         $defaultCountry = $locations->defaultCountryName();
         $source ??= [];
 
+        $selectedMethodId = collect($this->shipmentMethodIds)
+            ->map(fn ($value): int => (int) $value)
+            ->first(fn (int $value): bool => $value > 0);
+        $selectedUrgencyId = collect($this->shipmentUrgencyIds)
+            ->map(fn ($value): int => (int) $value)
+            ->first(fn (int $value): bool => $value > 0);
+
         $row = [
             'contact_name' => '',
             'phone_country_code' => self::DEFAULT_SHIPPING_PHONE_COUNTRY_CODE,
@@ -239,8 +280,8 @@ trait ManagesCreateOrderShipments
             'postal_code' => '',
             'country' => $defaultCountry,
             'shipping_source_address_id' => null,
-            'shipment_method_id' => null,
-            'shipment_urgency_id' => null,
+            'shipment_method_id' => $selectedMethodId ?: null,
+            'shipment_urgency_id' => $selectedMethodId && $selectedUrgencyId ? $selectedUrgencyId : null,
             'quantity' => null,
             'package_reference' => '',
         ];
@@ -265,6 +306,21 @@ trait ManagesCreateOrderShipments
         if ($this->createShipmentMode === self::CREATE_SHIPMENT_MODE_SAME_ADDRESS) {
             $this->syncCreateShipmentAddressesToPrimary();
         }
+
+        // Compatibility for an already-open Create Order page from the previous
+        // per-shipment method UI: if the global arrays are empty, promote the
+        // primary row's method to the new Order-level selection, then copy it to
+        // every address before validation/persistence.
+        if (collect($this->shipmentMethodIds)->filter(fn ($value) => (int) $value > 0)->isEmpty()) {
+            $primary = $this->createShipments[0] ?? [];
+            if (filled($primary['shipment_method_id'] ?? null)) {
+                $this->shipmentMethodIds = [(int) $primary['shipment_method_id']];
+                $this->shipmentUrgencyIds = filled($primary['shipment_urgency_id'] ?? null)
+                    ? [(int) $primary['shipment_urgency_id']]
+                    : [];
+            }
+        }
+        $this->syncCreateShipmentMethodsFromGlobalSelection();
 
         foreach ($this->createShipments as $index => $shipment) {
             foreach (['contact_name', 'phone_country_code', 'phone', 'address', 'city', 'state', 'postal_code', 'country', 'package_reference'] as $field) {

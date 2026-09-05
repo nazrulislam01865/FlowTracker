@@ -12,6 +12,10 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'shipmentEditingId' => null,
     'shipmentModalMode' => 'same_address',
     'shipmentForm' => [],
+    'shipmentInlineTaskId' => null,
+    'shipmentInlineEditingId' => null,
+    'shipmentInlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'shipmentInlineForm' => [],
     'showShipmentDetailsModal' => false,
     'shipmentDetailsId' => null,
 ]));
@@ -40,6 +44,10 @@ foreach (array_filter(([
     'shipmentEditingId' => null,
     'shipmentModalMode' => 'same_address',
     'shipmentForm' => [],
+    'shipmentInlineTaskId' => null,
+    'shipmentInlineEditingId' => null,
+    'shipmentInlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'shipmentInlineForm' => [],
     'showShipmentDetailsModal' => false,
     'shipmentDetailsId' => null,
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
@@ -141,14 +149,14 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isShipmentPhase): ?>
             <?php if (isset($component)) { $__componentOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal4b8a3bff262dd7a3dfecfbbe1a23bd37 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.phase','data' => ['job' => $job,'phase' => $selectedPhase,'presentation' => $shipmentPresentation]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.phase','data' => ['job' => $job,'phase' => $selectedPhase,'presentation' => $shipmentPresentation,'inlineEditingId' => $shipmentInlineEditingId,'inlineTaskId' => $shipmentInlineTaskId,'inlineAddressMode' => $shipmentInlineAddressMode,'inlineForm' => $shipmentInlineForm]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.shipment.phase'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedPhase),'presentation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentPresentation)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'phase' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($selectedPhase),'presentation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentPresentation),'inline-editing-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineEditingId),'inline-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineTaskId),'inline-address-mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineAddressMode),'inline-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineForm)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

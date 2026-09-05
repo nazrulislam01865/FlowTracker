@@ -2,6 +2,10 @@
     'job',
     'phase',
     'presentation' => [],
+    'inlineEditingId' => null,
+    'inlineTaskId' => null,
+    'inlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'inlineForm' => [],
 ])
 
 <section class="ft-shipment-phase ft-ms-phase" aria-label="Shipment tasks" wire:key="shipment-phase-{{ $job->id }}-{{ $phase->id }}">
@@ -50,7 +54,14 @@
 
                     <div class="ft-ms-task__body">
                         @if($row['key'] === 'SHIP_CONFIRM_INFO')
-                            <x-jobs.order-detail.shipment.plan-table :row="$row" :presentation="$presentation" />
+                            <x-jobs.order-detail.shipment.plan-table
+                                :row="$row"
+                                :presentation="$presentation"
+                                :inline-editing-id="$inlineEditingId"
+                                :inline-task-id="$inlineTaskId"
+                                :inline-address-mode="$inlineAddressMode"
+                                :inline-form="$inlineForm"
+                            />
                         @elseif($row['key'] === 'SHIP_LABEL')
                             <x-jobs.order-detail.shipment.tracking-table :row="$row" :presentation="$presentation" />
                         @elseif($row['key'] === 'SHIP_PACKAGE')

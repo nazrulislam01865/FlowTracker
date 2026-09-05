@@ -5,18 +5,37 @@
     $isDiscountScope = $record?->scope === 'discount';
     $scopeLabel = match ($record?->scope) {
         'production' => 'Production only',
-        'discount' => 'Discount instead of redo',
+        'discount' => 'No redo / financial adjustment',
         default => 'Artwork + production',
     };
     $restartLabel = $isDiscountScope
         ? 'No workflow restart'
         : ($record?->redoOrder?->phase?->name
             ?: ($record?->scope === 'production' ? 'Production phase' : 'Artwork phase'));
+    $customerAdjustmentType = (string) ($record?->customer_adjustment_type ?: 'percent');
+    $customerAdjustmentValue = (float) ($record?->customer_adjustment_value ?? $record?->customer_discount_percent ?? 0);
+    $supplierAdjustmentType = (string) ($record?->supplier_adjustment_type ?: 'percent');
+    $supplierAdjustmentValue = (float) ($record?->supplier_adjustment_value ?? $record?->supplier_redo_charge_percent ?? 0);
+    $isMissingQty = $isDiscountScope && $customerAdjustmentType === 'pcs';
+    $customerAdjustmentLabel = $customerAdjustmentType === 'pcs'
+        ? number_format((int) $customerAdjustmentValue).' pcs missing quantity'
+        : rtrim(rtrim(number_format($customerAdjustmentValue, 2), '0'), '.').'% customer adjustment';
+    $supplierAdjustmentLabel = $supplierAdjustmentType === 'pcs'
+        ? number_format((int) $supplierAdjustmentValue).' pcs'
+        : rtrim(rtrim(number_format($supplierAdjustmentValue, 2), '0'), '.').'%';
     $resolution = $record?->customer_resolution === 'discount'
-        ? rtrim(rtrim(number_format((float) $record->customer_discount_percent, 2), '0'), '.').'% customer discount instead of redo'
+        ? $customerAdjustmentLabel
         : 'Free redo for customer';
     $currency = (string) ($record?->originalOrder?->currency ?: $job->currency ?: 'USD');
     $money = fn ($value) => ($currency === 'USD' ? '$' : $currency.' ').number_format((float) $value, 2);
+    $originalOrderValue = max(0, (float) ($record?->order_value_before_adjustment ?? 0));
+    if ($originalOrderValue <= 0) {
+        $originalOrderValue = max(0, (float) ($record?->originalOrder?->commercial_value ?? 0));
+    }
+    $adjustedOrderValue = max(0, (float) ($record?->order_value_after_adjustment ?? 0));
+    if ($adjustedOrderValue <= 0 && $originalOrderValue > 0) {
+        $adjustedOrderValue = max(0, $originalOrderValue - (float) ($record?->customer_impact ?? 0));
+    }
 @endphp
 
 @if($record)
@@ -24,8 +43,8 @@
         <div class="ft-redo-grid">
             <article class="ft-redo-card">
                 <header class="ft-redo-cardhead">
-                    <h2>{{ $isDiscountScope ? 'Discount adjustment relationship' : 'Redo order relationship' }}</h2>
-                    <span class="pill redo">{{ $isDiscountScope ? 'Discount adjustment' : '↻ Redo order' }}</span>
+                    <h2>{{ $isDiscountScope ? ($isMissingQty ? 'Missing quantity adjustment' : 'Customer adjustment relationship') : 'Redo order relationship' }}</h2>
+                    <span class="pill redo">{{ $isDiscountScope ? ($isMissingQty ? 'Missing qty' : 'Adjustment') : '↻ Redo order' }}</span>
                 </header>
                 <div class="ft-redo-cardbody">
                     <div class="ft-redo-relation">
@@ -45,8 +64,8 @@
                         @if($isDiscountScope)
                             <div class="ft-redo-order-chip current ft-redo-order-chip-static">
                                 <small>Resolution</small>
-                                <b>Customer discount</b>
-                                <span>{{ rtrim(rtrim(number_format((float) $record->customer_discount_percent, 2), '0'), '.') }}% discount · {{ number_format((int) $record->affected_quantity) }} affected units</span>
+                                <b>{{ $isMissingQty ? 'Missing quantity' : 'Customer adjustment' }}</b>
+                                <span>{{ $customerAdjustmentLabel }} · {{ number_format((int) $record->affected_quantity) }} affected units</span>
                             </div>
                         @else
                             <button
@@ -76,7 +95,7 @@
 
                     @if($records->count() > 1)
                         <div class="ft-redo-history-note">
-                            This original Order has {{ $records->count() }} redo/discount records. The newest record is shown here.
+                            This original Order has {{ $records->count() }} redo/adjustment records. The newest record is shown here.
                         </div>
                     @endif
                 </div>
@@ -84,21 +103,26 @@
 
             <div class="ft-redo-stack">
                 <article class="ft-redo-card">
-                    <header class="ft-redo-cardhead"><h2>{{ $isDiscountScope ? 'Discount financial impact' : 'Redo financial impact' }}</h2></header>
+                    <header class="ft-redo-cardhead"><h2>{{ $isDiscountScope ? ($isMissingQty ? 'Missing quantity financial impact' : 'Customer adjustment financial impact') : 'Redo financial impact' }}</h2></header>
                     <div class="ft-redo-cardbody">
                         <table class="ft-redo-fin-table">
                             <tr><td>Affected value</td><td>{{ $money($record->affected_order_value) }}</td></tr>
                             <tr>
-                                <td>Customer charge / credit</td>
+                                <td>Customer · {{ $customerAdjustmentLabel }}</td>
                                 <td>{{ $record->customer_resolution === 'discount' ? '-'.$money($record->customer_impact) : $money(0) }}</td>
                             </tr>
-                            <tr><td>{{ $isDiscountScope ? 'Supplier recovery' : 'Supplier redo charge' }}</td><td>{{ $money($record->supplier_redo_charge) }}</td></tr>
+                            @if($isDiscountScope && $record->customer_resolution === 'discount')
+                                <tr><td>Order total after deduction</td><td>{{ $money($adjustedOrderValue) }}</td></tr>
+                            @endif
+                            <tr><td>Supplier · {{ $supplierAdjustmentLabel }}</td><td>{{ $money($record->supplier_redo_charge) }}</td></tr>
                             <tr><td>Freight deduction</td><td>{{ $money($record->freight_amount) }}</td></tr>
                             <tr class="total"><td>Total supplier recovery</td><td>{{ $money($record->total_supplier_recovery) }}</td></tr>
                         </table>
                         <p class="ft-redo-footnote">
                             {{ $isDiscountScope
-                                ? 'The customer credit is recorded against the original Order. No replacement Order or workflow restart was created; the original invoice remains unchanged.'
+                                ? ($isMissingQty
+                                    ? 'The missing quantity value is deducted from the order total for this financial adjustment. No replacement Order or workflow restart was created.'
+                                    : 'The customer adjustment is recorded against the original Order. No replacement Order or workflow restart was created.')
                                 : 'All amounts are recorded as financial adjustments against the redo Order; the original invoice remains unchanged.' }}
                         </p>
                     </div>
@@ -117,7 +141,7 @@
                         <div class="ft-redo-event">
                             <i></i>
                             <div>
-                                <b>{{ $isDiscountScope ? 'Discount approved' : 'Redo approved' }}</b>
+                                <b>{{ $isDiscountScope ? ($isMissingQty ? 'Missing quantity approved' : 'Adjustment approved') : 'Redo approved' }}</b>
                                 <small>{{ $scopeLabel }} · {{ $record->creator?->name ?: 'FlowTrack user' }}</small>
                             </div>
                         </div>
@@ -125,7 +149,7 @@
                             <i></i>
                             <div>
                                 @if($isDiscountScope)
-                                    <b>Discount adjustment recorded</b>
+                                    <b>{{ $isMissingQty ? 'Missing quantity deduction recorded' : 'Customer adjustment recorded' }}</b>
                                     <small>No redo Order created · original workflow remained unchanged</small>
                                 @else
                                     <b>Redo order created</b>

@@ -33,11 +33,16 @@ unset($__defined_vars, $__key, $__value); ?>
     $isDiscountScope = $record?->scope === 'discount';
     $scopeLabel = match ($record?->scope) {
         'production' => 'Production',
-        'discount' => 'Discount only',
+        'discount' => 'No redo / adjustment',
         default => 'Artwork and production',
     };
     $reportedBy = trim((string) ($record?->issue_reported_by ?? ''));
-    $discountPercent = rtrim(rtrim(number_format((float) ($record?->customer_discount_percent ?? 0), 2), '0'), '.');
+    $customerAdjustmentType = (string) ($record?->customer_adjustment_type ?: 'percent');
+    $customerAdjustmentValue = (float) ($record?->customer_adjustment_value ?? $record?->customer_discount_percent ?? 0);
+    $isMissingQty = $isDiscountScope && $customerAdjustmentType === 'pcs';
+    $customerAdjustmentLabel = $customerAdjustmentType === 'pcs'
+        ? number_format((int) $customerAdjustmentValue).' pcs missing quantity'
+        : rtrim(rtrim(number_format($customerAdjustmentValue, 2), '0'), '.').'% customer adjustment';
 ?>
 
 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($hasRedo && $record): ?>
@@ -45,11 +50,12 @@ unset($__defined_vars, $__key, $__value); ?>
         <div class="ft-redo-banner-icon">↻</div>
         <div>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isDiscountScope): ?>
-                <h3>Customer discount recorded for <?php echo e($record->originalOrder?->displayOrderNumber() ?? $job->displayOrderNumber()); ?></h3>
+                <h3><?php echo e($isMissingQty ? 'Missing quantity deduction' : 'Customer adjustment'); ?> recorded for <?php echo e($record->originalOrder?->displayOrderNumber() ?? $job->displayOrderNumber()); ?></h3>
                 <p>
                     <?php echo e($reportedBy !== '' ? $reportedBy.'-reported issue' : 'Reported issue'); ?>
 
-                    · <?php echo e($discountPercent); ?>% client discount
+                    · <?php echo e($customerAdjustmentLabel); ?>
+
                     · <?php echo e(number_format((int) $record->affected_quantity)); ?> units affected
                     · workflow remains unchanged.
                 </p>

@@ -1,4 +1,7 @@
-@props(['row', 'presentation'])
+@props([
+    'row',
+    'presentation',
+])
 
 @php
     $task = $row['task'];
@@ -18,7 +21,7 @@
         <div class="ft-ms-plan-summary__copy">
             <span class="ft-ms-plan-summary__count">{{ $shipmentCount }} {{ \Illuminate\Support\Str::plural('shipment', $shipmentCount) }}</span>
             <span class="ft-ms-plan-summary__mode">{{ $planLabel }}</span>
-            <span class="ft-ms-plan-summary__hint">Edit each shipment individually.</span>
+            <span class="ft-ms-plan-summary__hint">Shipping method can be changed directly. Use Edit for the remaining shipment details.</span>
         </div>
 
         @if($canEditPlan)
@@ -57,9 +60,11 @@
                                 @if($shipment['is_primary'])<span class="ft-ms-primary">Primary</span>@endif
                             </div>
                         </td>
+
                         <td data-label="Quantity">
                             <span class="ft-ms-package-reference">{{ $shipment['quantity'] ?? '—' }}</span>
                         </td>
+
                         <td data-label="Delivery details">
                             <div class="ft-ms-delivery">
                                 <div class="ft-ms-delivery__recipient">
@@ -77,29 +82,40 @@
                                 </div>
                             </div>
                         </td>
-                        <td data-label="Shipping method">
-                            @if($shipment['method_card'])
+
+                        <td data-label="Shipping method" class="ft-ms-method-cell">
+                            @if($canEditPlan && ! $shipment['dispatched'])
+                                <x-jobs.order-detail.shipment.method-picker
+                                    :selected="$shipment['method_card']"
+                                    :methods="$presentation['shipment_methods'] ?? collect()"
+                                    :urgencies="$presentation['shipment_urgencies'] ?? collect()"
+                                    :task-id="$task->id"
+                                    :shipment-id="$shipment['id']"
+                                    mode="row"
+                                    appearance="inline"
+                                />
+                            @elseif($shipment['method_card'])
                                 <div class="ft-ms-method-display">
                                     <span class="ft-ms-method-label__icon"><x-jobs.create.shipping-method-icon :type="$shipment['method_card']['kind']" /></span>
-                                    <span>
-                                        <strong>{{ $shipment['method_card']['title'] }}</strong>
-                                    </span>
+                                    <span><strong>{{ $shipment['method_card']['title'] }}</strong></span>
                                 </div>
                             @else
                                 <span class="ft-ms-missing-value">Not selected</span>
                             @endif
                         </td>
+
                         <td data-label="Package / Reference">
                             <span class="ft-ms-package-reference">{{ $shipment['package_reference'] ?: '—' }}</span>
                         </td>
+
                         <td data-label="Actions">
-                            @if($canEditPlan && !$shipment['dispatched'])
+                            @if($canEditPlan && ! $shipment['dispatched'])
                                 <div class="ft-ms-row-actions">
                                     <button
                                         type="button"
                                         class="ft-ms-row-edit"
                                         wire:click="openEditShipment({{ $task->id }}, {{ $shipment['id'] }})"
-                                        title="Edit Shipment {{ $shipment['sequence'] }}"
+                                        title="Edit Shipment {{ $shipment['sequence'] }} details"
                                     >
                                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>
                                         <span>Edit</span>
@@ -131,12 +147,12 @@
             @if($row['is_done'])
                 <div>
                     <strong>Shipment details confirmed</strong>
-                    <p>Each shipment can still be edited individually while the Shipment stage is active.</p>
+                    <p>Shipping method can still be changed directly while the Shipment stage is active.</p>
                 </div>
             @else
                 <div>
                     <strong>Are the shipment details correct?</strong>
-                    <p>Use Edit on a shipment if anything needs changing, or continue with the current details.</p>
+                    <p>Change the shipping method directly, or use Edit for other shipment details.</p>
                 </div>
                 <div class="ft-ms-review-panel__actions">
                     <button

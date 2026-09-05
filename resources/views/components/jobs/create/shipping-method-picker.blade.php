@@ -7,6 +7,8 @@
     'selectedMethodId' => null,
     'selectedUrgencyId' => null,
     'compact' => false,
+    'required' => false,
+    'helpText' => null,
 ])
 
 @php
@@ -33,7 +35,7 @@
     x-on:click.outside="open = false"
     x-on:keydown.escape.window="open = false"
 >
-    @unless($compact)<b>Shipping method</b>@endunless
+    @unless($compact)<b>Shipping method @if($required)<span class="ft-order-required-star" aria-hidden="true">*</span>@endif</b>@endunless
 
     @if($hasOptions)
         <div class="ft-create-shipping-picker">
@@ -122,6 +124,10 @@
         </div>
     @else
         <small>No active Shipment Methods are available in Master Data.</small>
+    @endif
+
+    @if(filled($helpText))
+        <small>{{ $helpText }}</small>
     @endif
 
     @if($validationPrefix)

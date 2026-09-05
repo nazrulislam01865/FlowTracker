@@ -207,12 +207,12 @@
     flex: 0 0 auto;
 }
 
-/* Tracking starts in a clean view state for every shipment. Editing happens
- * only after Add/Edit tracking is chosen for that row. */
+/* Task 5.2 opens incomplete courier/tracking fields automatically when the
+ * task becomes active. Once saved, each value returns to a compact inline
+ * display with a pencil control, matching the task assignee interaction. */
 .ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(1) { width: 14%; }
-.ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(2) { width: 28%; }
-.ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(3) { width: 34%; }
-.ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(4) { width: 24%; }
+.ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(2) { width: 34%; }
+.ft-order-prototype-detail .ft-ms-table--tracking th:nth-child(3) { width: 52%; }
 
 .ft-order-prototype-detail .ft-ms-tracking-value {
     min-height: 30px;
@@ -229,28 +229,46 @@
     font-weight: 600;
 }
 
-.ft-order-prototype-detail .ft-ms-table--tracking .ft-ms-actions {
-    flex-wrap: nowrap;
+.ft-order-prototype-detail .ft-ms-inline-field {
+    width: 100%;
+    min-width: 0;
 }
 
-.ft-order-prototype-detail .ft-ms-table--tracking .ft-ms-actions .ft-ms-outline-btn,
-.ft-order-prototype-detail .ft-ms-table--tracking .ft-ms-actions .ft-ms-ghost-btn,
-.ft-order-prototype-detail .ft-ms-table--tracking .ft-ms-actions .ft-ms-primary-btn {
-    min-width: 92px;
-    min-height: 30px;
-    padding: 0 10px;
-    font-size: 10px;
-}
-
-.ft-order-prototype-detail .ft-ms-actions--editing {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+.ft-order-prototype-detail .ft-ms-courier-value,
+.ft-order-prototype-detail .ft-ms-tracking-value {
     gap: 6px;
 }
 
-.ft-order-prototype-detail .ft-ms-actions--editing > button {
-    min-width: 0 !important;
-    width: 100%;
+.ft-order-prototype-detail .ft-ms-cell-edit-button {
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    flex: 0 0 22px;
+    padding: 0;
+    border: 0;
+    border-radius: 5px;
+    background: transparent;
+    color: #238e84;
+    cursor: pointer;
+}
+
+.ft-order-prototype-detail .ft-ms-cell-edit-button:hover {
+    background: #e9f6f3;
+}
+
+.ft-order-prototype-detail .ft-ms-cell-edit-button:focus-visible {
+    outline: 2px solid rgba(7, 141, 128, .18);
+    outline-offset: 2px;
+}
+
+.ft-order-prototype-detail .ft-ms-cell-edit-button svg {
+    width: 12px;
+    height: 12px;
+}
+
+.ft-order-prototype-detail .ft-ms-table--tracking tr.is-inline-saving {
+    opacity: .72;
 }
 
 /* Add/Edit Shipment uses a simple per-shipment address choice rather than the

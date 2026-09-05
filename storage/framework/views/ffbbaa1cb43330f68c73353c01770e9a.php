@@ -1,7 +1,10 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['row', 'presentation']));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
+    'row',
+    'presentation',
+]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +19,10 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['row', 'presentation']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter(([
+    'row',
+    'presentation',
+]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -46,7 +52,7 @@ unset($__defined_vars, $__key, $__value); ?>
         <div class="ft-ms-plan-summary__copy">
             <span class="ft-ms-plan-summary__count"><?php echo e($shipmentCount); ?> <?php echo e(\Illuminate\Support\Str::plural('shipment', $shipmentCount)); ?></span>
             <span class="ft-ms-plan-summary__mode"><?php echo e($planLabel); ?></span>
-            <span class="ft-ms-plan-summary__hint">Edit each shipment individually.</span>
+            <span class="ft-ms-plan-summary__hint">Shipping method can be changed directly. Use Edit for the remaining shipment details.</span>
         </div>
 
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditPlan): ?>
@@ -99,9 +105,11 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($shipment['is_primary']): ?><span class="ft-ms-primary">Primary</span><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                             </div>
                         </td>
+
                         <td data-label="Quantity">
                             <span class="ft-ms-package-reference"><?php echo e($shipment['quantity'] ?? '—'); ?></span>
                         </td>
+
                         <td data-label="Delivery details">
                             <div class="ft-ms-delivery">
                                 <div class="ft-ms-delivery__recipient">
@@ -119,8 +127,32 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                                 </div>
                             </div>
                         </td>
-                        <td data-label="Shipping method">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($shipment['method_card']): ?>
+
+                        <td data-label="Shipping method" class="ft-ms-method-cell">
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditPlan && ! $shipment['dispatched']): ?>
+                                <?php if (isset($component)) { $__componentOriginal35e3b281c47117d59d117e40a9d6d494 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal35e3b281c47117d59d117e40a9d6d494 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.method-picker','data' => ['selected' => $shipment['method_card'],'methods' => $presentation['shipment_methods'] ?? collect(),'urgencies' => $presentation['shipment_urgencies'] ?? collect(),'taskId' => $task->id,'shipmentId' => $shipment['id'],'mode' => 'row','appearance' => 'inline']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.shipment.method-picker'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['selected' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment['method_card']),'methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($presentation['shipment_methods'] ?? collect()),'urgencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($presentation['shipment_urgencies'] ?? collect()),'task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task->id),'shipment-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment['id']),'mode' => 'row','appearance' => 'inline']); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal35e3b281c47117d59d117e40a9d6d494)): ?>
+<?php $attributes = $__attributesOriginal35e3b281c47117d59d117e40a9d6d494; ?>
+<?php unset($__attributesOriginal35e3b281c47117d59d117e40a9d6d494); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal35e3b281c47117d59d117e40a9d6d494)): ?>
+<?php $component = $__componentOriginal35e3b281c47117d59d117e40a9d6d494; ?>
+<?php unset($__componentOriginal35e3b281c47117d59d117e40a9d6d494); ?>
+<?php endif; ?>
+                            <?php elseif($shipment['method_card']): ?>
                                 <div class="ft-ms-method-display">
                                     <span class="ft-ms-method-label__icon"><?php if (isset($component)) { $__componentOriginal937251c6395c013b7e12535197664182 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal937251c6395c013b7e12535197664182 = $attributes; } ?>
@@ -144,25 +176,25 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 <?php $component = $__componentOriginal937251c6395c013b7e12535197664182; ?>
 <?php unset($__componentOriginal937251c6395c013b7e12535197664182); ?>
 <?php endif; ?></span>
-                                    <span>
-                                        <strong><?php echo e($shipment['method_card']['title']); ?></strong>
-                                    </span>
+                                    <span><strong><?php echo e($shipment['method_card']['title']); ?></strong></span>
                                 </div>
                             <?php else: ?>
                                 <span class="ft-ms-missing-value">Not selected</span>
                             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                         </td>
+
                         <td data-label="Package / Reference">
                             <span class="ft-ms-package-reference"><?php echo e($shipment['package_reference'] ?: '—'); ?></span>
                         </td>
+
                         <td data-label="Actions">
-                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditPlan && !$shipment['dispatched']): ?>
+                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditPlan && ! $shipment['dispatched']): ?>
                                 <div class="ft-ms-row-actions">
                                     <button
                                         type="button"
                                         class="ft-ms-row-edit"
                                         wire:click="openEditShipment(<?php echo e($task->id); ?>, <?php echo e($shipment['id']); ?>)"
-                                        title="Edit Shipment <?php echo e($shipment['sequence']); ?>"
+                                        title="Edit Shipment <?php echo e($shipment['sequence']); ?> details"
                                     >
                                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true"><path d="m4 14.5-.5 2 2-.5L14 7.5 12.5 6 4 14.5Z"/><path d="m11.5 7 1.5-1.5a1.1 1.1 0 0 1 1.6 0l.4.4a1.1 1.1 0 0 1 0 1.6L13.5 9"/></svg>
                                         <span>Edit</span>
@@ -194,12 +226,12 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['is_done']): ?>
                 <div>
                     <strong>Shipment details confirmed</strong>
-                    <p>Each shipment can still be edited individually while the Shipment stage is active.</p>
+                    <p>Shipping method can still be changed directly while the Shipment stage is active.</p>
                 </div>
             <?php else: ?>
                 <div>
                     <strong>Are the shipment details correct?</strong>
-                    <p>Use Edit on a shipment if anything needs changing, or continue with the current details.</p>
+                    <p>Change the shipping method directly, or use Edit for other shipment details.</p>
                 </div>
                 <div class="ft-ms-review-panel__actions">
                     <button

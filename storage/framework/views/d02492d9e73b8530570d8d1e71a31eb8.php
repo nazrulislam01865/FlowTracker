@@ -44,7 +44,9 @@ unset($__defined_vars, $__key, $__value); ?>
     $redoSupplierId = $form['supplierId'] ?? null;
     $redoInstructions = (string) ($form['instructions'] ?? '');
     $redoCustomerResolution = (string) ($form['customerResolution'] ?? 'free');
+    $redoCustomerAdjustmentType = (string) ($form['customerAdjustmentType'] ?? 'percent');
     $redoCustomerDiscount = (string) ($form['customerDiscount'] ?? '20');
+    $redoSupplierAdjustmentType = (string) ($form['supplierAdjustmentType'] ?? 'percent');
     $redoSupplierChargePercent = (string) ($form['supplierChargePercent'] ?? '40');
     $redoDeductFreight = (bool) ($form['deductFreight'] ?? true);
     $redoFreightAmount = (string) ($form['freightAmount'] ?? '0.00');
@@ -53,13 +55,16 @@ unset($__defined_vars, $__key, $__value); ?>
     $isDiscountScope = $redoScope === 'discount';
     $scopeLabel = match ($redoScope) {
         'production' => 'Production phase → QC & Dispatch',
-        'discount' => 'No workflow restart · customer discount only',
+        'discount' => 'No workflow restart · financial adjustment only',
         default => 'Artwork phase → Production → QC & Dispatch',
     };
+    $supplierUnit = $redoSupplierAdjustmentType === 'pcs' ? ' pcs' : '%';
     $customerLabel = $isDiscountScope || $redoCustomerResolution === 'discount'
-        ? $redoCustomerDiscount.'% customer discount instead of redo'
+        ? ($redoCustomerAdjustmentType === 'pcs'
+            ? $redoCustomerDiscount.' pcs missing quantity deduction'
+            : $redoCustomerDiscount.'% customer adjustment')
         : 'Free redo';
-    $recoveryLabel = ($isDiscountScope ? $redoSupplierChargePercent.'% supplier recovery' : $redoSupplierChargePercent.'% redo charge')
+    $recoveryLabel = $redoSupplierChargePercent.$supplierUnit.' supplier recovery'
         .($redoDeductFreight && (float) $redoFreightAmount > 0 ? ' + '.$money($redoFreightAmount).' freight deduction' : '');
 ?>
 
@@ -69,7 +74,7 @@ unset($__defined_vars, $__key, $__value); ?>
             <header class="ft-redo-modalhead">
                 <div>
                     <h2 id="order-redo-modal-title">Initiate redo</h2>
-                    <div class="sub">Create a controlled redo or resolve the issue with a customer discount.</div>
+                    <div class="sub">Create a controlled redo or resolve the issue with a customer financial adjustment.</div>
                 </div>
                 <button type="button" class="ft-redo-close" wire:click="closeRedoModal" aria-label="Close">×</button>
             </header>
@@ -211,8 +216,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             <label class="ft-redo-choice <?php echo e($redoScope === 'discount' ? 'selected' : ''); ?>">
                                 <input type="radio" value="discount" wire:model.live="redoScope">
                                 <div>
-                                    <b>Discount (instead of redo)</b>
-                                    <small>Do not restart any workflow phase. Give a discount to the client and record the financial adjustment only.</small>
+                                    <b>No redo / customer adjustment</b>
+                                    <small>Do not restart workflow. Use either a % customer adjustment or pcs for a missing-quantity deduction.</small>
                                 </div>
                             </label>
                         </div>
@@ -229,7 +234,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isDiscountScope): ?>
                                 <div class="ft-redo-discount-note wide">
                                     <b>No workflow restart</b>
-                                    <small><?php echo e(number_format($redoAffectedQuantity)); ?> affected unit<?php echo e($redoAffectedQuantity === 1 ? '' : 's'); ?> will be used to calculate the client discount. No redo Order or redo tasks will be created.</small>
+                                    <small><?php echo e(number_format($redoAffectedQuantity)); ?> affected unit<?php echo e($redoAffectedQuantity === 1 ? '' : 's'); ?> can be adjusted by % or missing quantity (pcs). No redo Order or redo tasks will be created.</small>
                                 </div>
                             <?php else: ?>
                                 <label class="ft-redo-field">
@@ -266,7 +271,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                             <label class="ft-redo-field wide">
                                 <span><?php echo e($isDiscountScope ? 'Internal note' : 'Internal instructions'); ?></span>
-                                <textarea rows="4" wire:model="redoInstructions" placeholder="<?php echo e($isDiscountScope ? 'Reason or approval note for the customer discount.' : 'Instructions for revised artwork, replacement production and repeat QC.'); ?>"></textarea>
+                                <textarea rows="4" wire:model="redoInstructions" placeholder="<?php echo e($isDiscountScope ? 'Reason or approval note for the customer adjustment.' : 'Instructions for revised artwork, replacement production and repeat QC.'); ?>"></textarea>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoInstructions'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
@@ -280,52 +285,28 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     </div>
                 <?php elseif($step === 3): ?>
                     <div class="ft-redo-pane show">
-                        <h3>Set customer resolution and supplier recovery</h3>
-                        <p>Customer treatment and supplier recovery are recorded separately.</p>
+                        <h3>Set customer and supplier adjustments</h3>
+                        <p>Choose either percentage or pieces. In no-redo mode, Customer + pcs is treated as missing quantity and its value is deducted from the order total.</p>
 
                         <div class="ft-redo-formgrid">
                             <div>
                                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isDiscountScope): ?>
                                     <div class="ft-redo-fixed-resolution">
                                         <span>Customer resolution</span>
-                                        <b>Discount instead of redo</b>
-                                        <small>No replacement Order or workflow restart will be created.</small>
+                                        <b><?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'Missing quantity · no redo' : 'Customer adjustment · no redo'); ?></b>
+                                        <small>
+                                            <?php echo e($redoCustomerAdjustmentType === 'pcs'
+                                                ? 'Missing quantity is priced using the current unit value. No replacement Order or workflow restart will be created.'
+                                                : 'A percentage adjustment will be recorded. No replacement Order or workflow restart will be created.'); ?>
+
+                                        </small>
                                     </div>
-
-                                    <label class="ft-redo-field">
-                                        <span>Customer discount *</span>
-
-                                        <div class="ft-redo-percent-input">
-                                            <input
-                                                type="number"
-                                                min="0"
-                                                max="100"
-                                                step="0.01"
-                                                inputmode="decimal"
-                                                wire:model.live.debounce.250ms="redoCustomerDiscount"
-                                                placeholder="Enter discount"
-                                            >
-
-                                            <span class="ft-redo-percent-suffix">%</span>
-                                        </div>
-
-                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoCustomerDiscount'];
-$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
-if ($__bag->has($__errorArgs[0])) :
-if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?>
-                                            <small class="validation-error"><?php echo e($message); ?></small>
-                                        <?php unset($message);
-if (isset($__messageOriginal)) { $message = $__messageOriginal; }
-endif;
-unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                    </label>
                                 <?php else: ?>
                                     <label class="ft-redo-field">
                                         <span>Customer resolution *</span>
                                         <select wire:model.live="redoCustomerResolution">
                                             <option value="free">Free redo</option>
-                                            <option value="discount">Discount instead of redo</option>
+                                            <option value="discount">Customer adjustment</option>
                                         </select>
                                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoCustomerResolution'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
@@ -336,71 +317,138 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
                                     </label>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($redoCustomerResolution === 'discount'): ?>
-                                        <label class="ft-redo-field" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'redo-'.e($redoScope).'-customer-discount'; ?>wire:key="redo-<?php echo e($redoScope); ?>-customer-discount">
-                                            <span>Customer discount *</span>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isDiscountScope || $redoCustomerResolution === 'discount'): ?>
+                                    <div class="ft-redo-adjustment-card" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'redo-'.e($redoScope).'-customer-adjustment'; ?>wire:key="redo-<?php echo e($redoScope); ?>-customer-adjustment">
+                                        <div class="ft-redo-adjustment-head">
+                                            <div>
+                                                <span class="ft-redo-adjustment-title">Customer</span>
+                                                <small><?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'Enter the missing quantity to deduct.' : 'Enter the customer deduction percentage.'); ?></small>
+                                            </div>
+                                            <span class="ft-redo-required-pill">Required</span>
+                                        </div>
 
-                                            <div class="ft-redo-percent-input">
+                                        <div class="ft-redo-adjustment-control">
+                                            <div class="ft-redo-adjustment-value">
+                                                <span><?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'Missing qty' : 'Adjustment'); ?></span>
                                                 <input
                                                     type="number"
                                                     min="0"
-                                                    max="100"
-                                                    step="0.01"
-                                                    inputmode="decimal"
+                                                    max="<?php echo e($redoCustomerAdjustmentType === 'percent' ? 100 : max(1, $isDiscountScope ? $redoAffectedQuantity : $redoQuantity)); ?>"
+                                                    step="<?php echo e($redoCustomerAdjustmentType === 'percent' ? '0.01' : '1'); ?>"
+                                                    inputmode="<?php echo e($redoCustomerAdjustmentType === 'percent' ? 'decimal' : 'numeric'); ?>"
                                                     wire:model.live.debounce.250ms="redoCustomerDiscount"
-                                                    placeholder="Enter discount"
-                                                    aria-label="Customer discount percentage"
+                                                    placeholder="<?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'e.g. 10' : 'e.g. 20'); ?>"
+                                                    aria-label="Customer adjustment value"
                                                 >
-
-                                                <span class="ft-redo-percent-suffix" aria-hidden="true">%</span>
                                             </div>
 
-                                            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoCustomerDiscount'];
+                                            <div class="ft-redo-unit-toggle" role="group" aria-label="Customer adjustment unit">
+                                                <label class="<?php echo e($redoCustomerAdjustmentType === 'percent' ? 'active' : ''); ?>">
+                                                    <input type="radio" name="redo-customer-adjustment-type" value="percent" wire:model.live="redoCustomerAdjustmentType">
+                                                    <span>%</span>
+                                                </label>
+                                                <label class="<?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'active' : ''); ?>">
+                                                    <input type="radio" name="redo-customer-adjustment-type" value="pcs" wire:model.live="redoCustomerAdjustmentType">
+                                                    <span>pcs</span>
+                                                </label>
+                                            </div>
+                                        </div>
+
+                                        <div class="ft-redo-adjustment-note <?php echo e($redoCustomerAdjustmentType === 'pcs' ? 'is-missing' : ''); ?>">
+                                            <span class="ft-redo-adjustment-note-dot" aria-hidden="true"></span>
+                                            <span>
+                                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($redoCustomerAdjustmentType === 'pcs'): ?>
+                                                    <b>Missing quantity.</b> The selected pcs are deducted from the order total using the current unit value.
+                                                <?php else: ?>
+                                                    Percentage is calculated from the affected order value.
+                                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                            </span>
+                                        </div>
+
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoCustomerDiscount'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?>
-                                                <small class="validation-error"><?php echo e($message); ?></small>
-                                            <?php unset($message);
+$message = $__bag->first($__errorArgs[0]); ?><small class="validation-error"><?php echo e($message); ?></small><?php unset($message);
 if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                        </label>
-                                    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoCustomerAdjustmentType'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><small class="validation-error"><?php echo e($message); ?></small><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                        <span class="ft-redo-sr-only">pcs (missing qty)</span>
+                                    </div>
                                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
-                                <label class="ft-redo-field">
-                                    <span>Supplier recovery</span>
+                                <div class="ft-redo-adjustment-card">
+                                    <div class="ft-redo-adjustment-head">
+                                        <div>
+                                            <span class="ft-redo-adjustment-title">Supplier</span>
+                                            <small><?php echo e($redoSupplierAdjustmentType === 'pcs' ? 'Enter the quantity to recover from the supplier.' : 'Enter the supplier recovery percentage.'); ?></small>
+                                        </div>
+                                    </div>
 
-                                    <div class="ft-redo-percent-input">
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            max="100"
-                                            step="0.01"
-                                            inputmode="decimal"
-                                            wire:model.live.debounce.250ms="redoSupplierChargePercent"
-                                            placeholder="Enter supplier recovery"
-                                        >
+                                    <div class="ft-redo-adjustment-control">
+                                        <div class="ft-redo-adjustment-value">
+                                            <span><?php echo e($redoSupplierAdjustmentType === 'pcs' ? 'Quantity' : 'Recovery'); ?></span>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                max="<?php echo e($redoSupplierAdjustmentType === 'percent' ? 100 : max(1, $isDiscountScope ? $redoAffectedQuantity : $redoQuantity)); ?>"
+                                                step="<?php echo e($redoSupplierAdjustmentType === 'percent' ? '0.01' : '1'); ?>"
+                                                inputmode="<?php echo e($redoSupplierAdjustmentType === 'percent' ? 'decimal' : 'numeric'); ?>"
+                                                wire:model.live.debounce.250ms="redoSupplierChargePercent"
+                                                placeholder="<?php echo e($redoSupplierAdjustmentType === 'pcs' ? 'e.g. 10' : 'e.g. 40'); ?>"
+                                                aria-label="Supplier adjustment value"
+                                            >
+                                        </div>
 
-                                        <span class="ft-redo-percent-suffix">%</span>
+                                        <div class="ft-redo-unit-toggle" role="group" aria-label="Supplier adjustment unit">
+                                            <label class="<?php echo e($redoSupplierAdjustmentType === 'percent' ? 'active' : ''); ?>">
+                                                <input type="radio" name="redo-supplier-adjustment-type" value="percent" wire:model.live="redoSupplierAdjustmentType">
+                                                <span>%</span>
+                                            </label>
+                                            <label class="<?php echo e($redoSupplierAdjustmentType === 'pcs' ? 'active' : ''); ?>">
+                                                <input type="radio" name="redo-supplier-adjustment-type" value="pcs" wire:model.live="redoSupplierAdjustmentType">
+                                                <span>pcs</span>
+                                            </label>
+                                        </div>
+                                    </div>
+
+                                    <div class="ft-redo-adjustment-note">
+                                        <span class="ft-redo-adjustment-note-dot" aria-hidden="true"></span>
+                                        <span>
+                                            <?php echo e($redoSupplierAdjustmentType === 'pcs'
+                                                ? 'The selected pcs are converted to a recovery amount using the current unit value.'
+                                                : 'Percentage is calculated from the affected order value.'); ?>
+
+                                        </span>
                                     </div>
 
                                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoSupplierChargePercent'];
 $__bag = $errors->getBag($__errorArgs[1] ?? 'default');
 if ($__bag->has($__errorArgs[0])) :
 if (isset($message)) { $__messageOriginal = $message; }
-$message = $__bag->first($__errorArgs[0]); ?>
-                                        <small class="validation-error">
-                                            <?php echo e($message); ?>
-
-                                        </small>
-                                    <?php unset($message);
+$message = $__bag->first($__errorArgs[0]); ?><small class="validation-error"><?php echo e($message); ?></small><?php unset($message);
 if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                                </label>
+                                    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php $__errorArgs = ['redoSupplierAdjustmentType'];
+$__bag = $errors->getBag($__errorArgs[1] ?? 'default');
+if ($__bag->has($__errorArgs[0])) :
+if (isset($message)) { $__messageOriginal = $message; }
+$message = $__bag->first($__errorArgs[0]); ?><small class="validation-error"><?php echo e($message); ?></small><?php unset($message);
+if (isset($__messageOriginal)) { $message = $__messageOriginal; }
+endif;
+unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                </div>
 
                                 <label class="ft-redo-check">
                                     <input type="checkbox" wire:model.live="redoDeductFreight">
@@ -428,9 +476,13 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
 
                             <div class="ft-redo-amounts">
                                 <h4>Financial preview</h4>
+                                <div class="ft-redo-calc"><span>Order total</span><b><?php echo e($money($preview['orderValue'] ?? 0)); ?></b></div>
                                 <div class="ft-redo-calc"><span>Affected order value</span><b><?php echo e($money($preview['affectedValue'] ?? 0)); ?></b></div>
-                                <div class="ft-redo-calc"><span>Customer charge / credit</span><b><?php echo e($redoCustomerResolution === 'discount' ? '-'.$money($preview['customerImpact'] ?? 0) : $money(0)); ?></b></div>
-                                <div class="ft-redo-calc"><span><?php echo e($isDiscountScope ? 'Supplier recovery' : 'Supplier redo charge'); ?></span><b><?php echo e($money($preview['supplierCharge'] ?? 0)); ?></b></div>
+                                <div class="ft-redo-calc"><span>Customer</span><b><?php echo e($redoCustomerResolution === 'discount' ? '-'.$money($preview['customerImpact'] ?? 0) : $money(0)); ?></b></div>
+                                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($redoCustomerResolution === 'discount'): ?>
+                                    <div class="ft-redo-calc adjusted"><span>Order total after deduction</span><b><?php echo e($money($preview['adjustedOrderValue'] ?? 0)); ?></b></div>
+                                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                                <div class="ft-redo-calc"><span>Supplier</span><b><?php echo e($money($preview['supplierCharge'] ?? 0)); ?></b></div>
                                 <div class="ft-redo-calc"><span>Freight deduction</span><b><?php echo e($money($preview['freight'] ?? 0)); ?></b></div>
                                 <div class="ft-redo-calc total"><span>Total supplier recovery</span><b><?php echo e($money($preview['recovery'] ?? 0)); ?></b></div>
                             </div>
@@ -438,10 +490,10 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                     </div>
                 <?php else: ?>
                     <div class="ft-redo-pane show">
-                        <h3><?php echo e($isDiscountScope ? 'Review and record the customer discount' : 'Review and create the redo order'); ?></h3>
+                        <h3><?php echo e($isDiscountScope ? ($redoCustomerAdjustmentType === 'pcs' ? 'Review missing quantity deduction' : 'Review customer adjustment') : 'Review and create the redo order'); ?></h3>
                         <p>
                             <?php echo e($isDiscountScope
-                                ? 'The original Order and its workflow remain exactly where they are. Only a financial discount adjustment will be recorded.'
+                                ? 'The original Order and its workflow remain exactly where they are. Only the customer/supplier financial adjustment will be recorded.'
                                 : 'The original Order remains intact. A linked redo Order and audit record will be created.'); ?>
 
                         </p>
@@ -450,17 +502,19 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($isDiscountScope)): ?>
                                 <div class="ft-redo-confirmrow"><span>New order number</span><b><?php echo e($nextOrderNumber); ?></b></div>
                             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-                            <div class="ft-redo-confirmrow"><span>Action</span><b><?php echo e($isDiscountScope ? 'Discount instead of redo' : '↻ Redo order'); ?></b></div>
+                            <div class="ft-redo-confirmrow"><span>Action</span><b><?php echo e($isDiscountScope ? ($redoCustomerAdjustmentType === 'pcs' ? 'Missing quantity · no redo' : 'Customer adjustment · no redo') : '↻ Redo order'); ?></b></div>
                             <div class="ft-redo-confirmrow"><span>Original order</span><b><?php echo e($job->displayOrderNumber()); ?></b></div>
                             <div class="ft-redo-confirmrow"><span>Issue</span><b><?php echo e($redoIssueSource); ?> · <?php echo e($redoIssueCategory); ?> · <?php echo e(number_format($isDiscountScope ? $redoAffectedQuantity : $redoQuantity)); ?> units</b></div>
                             <div class="ft-redo-confirmrow"><span>Workflow restart</span><b><?php echo e($scopeLabel); ?></b></div>
-                            <div class="ft-redo-confirmrow"><span>Customer resolution</span><b><?php echo e($customerLabel); ?></b></div>
-                            <div class="ft-redo-confirmrow"><span>Supplier recovery</span><b><?php echo e($recoveryLabel); ?></b></div>
+                            <div class="ft-redo-confirmrow"><span>Customer</span><b><?php echo e($customerLabel); ?></b></div>
+                            <div class="ft-redo-confirmrow"><span>Supplier</span><b><?php echo e($recoveryLabel); ?></b></div>
                         </div>
 
                         <div class="ft-redo-warning">
                             <?php echo e($isDiscountScope
-                                ? 'No redo Order or replacement tasks will be created. The current workflow stays unchanged. The customer credit is recorded as a financial adjustment and can be reviewed in Invoices & Payments.'
+                                ? ($redoCustomerAdjustmentType === 'pcs'
+                                    ? 'No redo Order or replacement tasks will be created. The missing quantity value is deducted from the order total in this financial adjustment.'
+                                    : 'No redo Order or replacement tasks will be created. The current workflow stays unchanged and the customer adjustment is recorded financially.')
                                 : 'Creating the redo will not change the original invoice or payment. Financial adjustments are stored against the redo Order and can be reviewed in Invoices & Payments.'); ?>
 
                         </div>
@@ -473,7 +527,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <div class="ft-redo-modal-actions">
                     <button type="button" class="btn" wire:click="previousRedoStep" <?php if($step === 1): echo 'disabled'; endif; ?>>Back</button>
                     <button type="button" class="btn primary" wire:click="nextRedoStep" wire:loading.attr="disabled" wire:target="nextRedoStep,createRedoOrder">
-                        <span wire:loading.remove wire:target="nextRedoStep,createRedoOrder"><?php echo e($step === 4 ? ($isDiscountScope ? 'Record discount' : 'Create redo order') : 'Continue'); ?></span>
+                        <span wire:loading.remove wire:target="nextRedoStep,createRedoOrder"><?php echo e($step === 4 ? ($isDiscountScope ? 'Record adjustment' : 'Create redo order') : 'Continue'); ?></span>
                         <span wire:loading wire:target="nextRedoStep,createRedoOrder"><?php echo e($step === 4 ? ($isDiscountScope ? 'Recording...' : 'Creating...') : 'Working...'); ?></span>
                     </button>
                 </div>

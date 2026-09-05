@@ -410,3 +410,21 @@
     .ft-order-prototype-detail .ft-shipment-phase__status,
     .ft-order-prototype-detail .ft-shipment-phase__head { display: none !important; }
 }
+
+/* Task 5.2 initial courier/tracking entry: explicit row save. */
+.ft-order-prototype-detail .ft-ms-table--tracking td:last-child .ft-ms-actions {
+    justify-content: flex-end;
+}
+
+.ft-order-prototype-detail .ft-ms-table--tracking td:last-child .ft-ms-primary-btn {
+    min-width: 84px;
+    min-height: 30px;
+    padding: 0 12px;
+    font-size: 10px;
+}
+
+.ft-order-prototype-detail .ft-ms-row-action-empty {
+    display: block;
+    text-align: right;
+    color: #94a3b8;
+}

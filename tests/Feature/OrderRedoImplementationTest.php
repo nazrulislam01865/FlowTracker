@@ -38,7 +38,7 @@ class OrderRedoImplementationTest extends TestCase
         self::assertStringContainsString('x-jobs.order-detail.redo-panel', $detail);
         self::assertStringContainsString('Record the redo issue', $modal);
         self::assertStringContainsString('Choose the redo scope', $modal);
-        self::assertStringContainsString('Set customer resolution and supplier recovery', $modal);
+        self::assertStringContainsString('Set customer and supplier adjustments', $modal);
         self::assertStringContainsString('Review and create the redo order', $modal);
         self::assertStringContainsString('Redo order relationship', $panel);
         self::assertStringContainsString('Redo financial impact', $panel);
@@ -79,9 +79,10 @@ class OrderRedoImplementationTest extends TestCase
         $modal = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-modal.blade.php');
         $panel = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-panel.blade.php');
         $migration = file_get_contents($root.'/database/migrations/2026_08_25_170500_make_order_redo_order_nullable_for_discount_scope.php');
+        $adjustmentMigration = file_get_contents($root.'/database/migrations/2026_09_05_230000_add_adjustment_units_to_order_redos_table.php');
 
         self::assertStringContainsString("Rule::in(['artwork', 'production', 'discount'])", $redo);
-        self::assertStringContainsString('Discount (instead of redo)', $modal);
+        self::assertStringContainsString('No redo / customer adjustment', $modal);
         self::assertStringContainsString("if (\$scope === 'discount')", $service);
         self::assertStringContainsString("'redo_order_id' => null", $service);
         self::assertStringContainsString("'customer_resolution' => 'discount'", $service);
@@ -89,6 +90,9 @@ class OrderRedoImplementationTest extends TestCase
         self::assertStringContainsString("\$record->scope === 'discount'", $redo);
         self::assertStringContainsString('No workflow restart', $panel);
         self::assertStringContainsString("nullable()->change()", $migration);
+        self::assertStringContainsString("customer_adjustment_type", $adjustmentMigration);
+        self::assertStringContainsString("supplier_adjustment_type", $adjustmentMigration);
+        self::assertStringContainsString("order_value_after_adjustment", $adjustmentMigration);
     }
 
     public function test_redo_financial_preview_can_resolve_current_product_master_pricing(): void
@@ -103,7 +107,11 @@ class OrderRedoImplementationTest extends TestCase
         self::assertStringContainsString("wire:model.live.debounce.250ms=\"redoCustomerDiscount\"", $modal);
         self::assertStringContainsString("wire:model.live.debounce.250ms=\"redoSupplierChargePercent\"", $modal);
         self::assertStringNotContainsString("<select wire:model.live=\"redoCustomerDiscount\">", $modal);
-        self::assertSame(2, substr_count($modal, "wire:model.live.debounce.250ms=\"redoCustomerDiscount\""));
+        self::assertSame(1, substr_count($modal, "wire:model.live.debounce.250ms=\"redoCustomerDiscount\""));
+        self::assertStringContainsString('wire:model.live="redoCustomerAdjustmentType"', $modal);
+        self::assertStringContainsString('wire:model.live="redoSupplierAdjustmentType"', $modal);
+        self::assertStringContainsString('pcs (missing qty)', $modal);
+        self::assertStringContainsString('Order total after deduction', $modal);
     }
 
 

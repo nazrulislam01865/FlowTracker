@@ -678,13 +678,16 @@ trait BuildsOrderPageData
             ? $master->active('courier')
             : collect();
 
-        // Address master data is loaded only while the Add/Edit Shipment modal
-        // is open. LocationMasterDataService reads the cached Country/State
-        // master tables and keeps the parent-country rule in one reusable place.
+        // Address master data is loaded only while the Add Shipment modal or
+        // a shipment's inline editor is open. LocationMasterDataService reads
+        // the cached Country/State master tables and preserves parent-country rules.
         $locationMaster = app(\App\Services\LocationMasterDataService::class);
-        $shipmentCountryOptions = $this->showShipmentModal ? $locationMaster->countries() : collect();
-        $shipmentCountry = trim((string) ($this->shipmentForm['country'] ?? ''));
-        $shipmentStateOptions = $this->showShipmentModal && $shipmentCountry !== ''
+        $shipmentLocationEditorOpen = $this->showShipmentModal || filled($this->shipmentInlineEditingId);
+        $shipmentCountryOptions = $shipmentLocationEditorOpen ? $locationMaster->countries() : collect();
+        $shipmentCountry = trim((string) ($this->showShipmentModal
+            ? ($this->shipmentForm['country'] ?? '')
+            : ($this->shipmentInlineForm['country'] ?? '')));
+        $shipmentStateOptions = $shipmentLocationEditorOpen && $shipmentCountry !== ''
             ? $locationMaster->statesForCountry($shipmentCountry)
             : collect();
 

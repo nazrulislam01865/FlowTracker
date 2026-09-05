@@ -21,6 +21,8 @@ class CreateOrderShippingMethodPrototypeTest extends TestCase
         $this->assertStringContainsString('selectCreateShippingMethod', $picker);
         $this->assertStringContainsString('ft-create-shipping-selected-card', $picker);
         $this->assertStringContainsString('selectedCard(', $picker);
+        $this->assertStringContainsString('ft-order-required-star', $picker);
+        $this->assertStringContainsString('Applied automatically to every shipment address.', $create);
     }
 
     public function test_presenter_matches_the_approved_shipping_copy(): void
@@ -53,7 +55,11 @@ class CreateOrderShippingMethodPrototypeTest extends TestCase
 
         $this->assertStringContainsString('public array $shipmentMethodIds = [];', $index);
         $this->assertStringContainsString("'shipmentMethodIds' => ['array', 'max:1']", $creation);
-        $this->assertStringContainsString('$this->shipmentMethodIds = [(int) $method->id];', $creation);
+        $this->assertStringContainsString('setCreateShippingSelectionForAllShipments(', $creation);
+        $this->assertStringContainsString("'shipmentMethodIds' => ['required', 'array', 'size:1']", $creation);
+        $shipments = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesCreateOrderShipments.php'));
+        $this->assertStringContainsString('syncCreateShipmentMethodsFromGlobalSelection', $shipments);
+        $this->assertStringContainsString("'shipment_method_id' => $selectedMethodId ?: null", $shipments);
         $this->assertStringContainsString("'shipment_method_ids' => self::singlePositiveId", $dto);
         $this->assertStringContainsString("->where('type', 'shipment_method')", $creation);
         $this->assertStringContainsString("'shipment_method_ids' => 'array'", $model);

@@ -21,19 +21,19 @@ class CreateOrderShippingSetupUxTest extends TestCase
     public function test_editable_shipment_follows_reference_form_structure(): void
     {
         $row = file_get_contents(resource_path('views/components/jobs/create/shipping-row.blade.php'));
+        $create = file_get_contents(resource_path('views/components/jobs/create.blade.php'));
 
-        $contact = strpos($row, '<span>Contact person</span>');
-        $phone = strpos($row, '<span>Phone</span>');
-        $address = strpos($row, '<span>Shipping address</span>');
-        $country = strpos($row, '<span>Country</span>');
-        $state = strpos($row, '<span>State</span>');
-        $city = strpos($row, '<span>City</span>');
-        $postal = strpos($row, '<span>Postal code</span>');
+        $contact = strpos($row, 'Contact person <b class="ft-order-required-star"');
+        $phone = strpos($row, 'Phone <b class="ft-order-required-star"');
+        $address = strpos($row, 'Shipping address <b class="ft-order-required-star"');
+        $country = strpos($row, 'Country <b class="ft-order-required-star"');
+        $state = strpos($row, 'State @if($states->isNotEmpty())<b class="ft-order-required-star"');
+        $city = strpos($row, 'City <em>Optional</em>');
+        $postal = strpos($row, 'Postal code <b class="ft-order-required-star"');
         $shipmentNo = strpos($row, '<span>Shipment no.</span>');
         $reference = strpos($row, 'Package / reference <em>Optional</em>');
-        $method = strpos($row, '<span>Shipping method</span>');
 
-        foreach ([$contact, $phone, $address, $country, $state, $city, $postal, $shipmentNo, $reference, $method] as $position) {
+        foreach ([$contact, $phone, $address, $country, $state, $city, $postal, $shipmentNo, $reference] as $position) {
             $this->assertNotFalse($position);
         }
 
@@ -45,7 +45,21 @@ class CreateOrderShippingSetupUxTest extends TestCase
         $this->assertLessThan($postal, $city);
         $this->assertLessThan($shipmentNo, $postal);
         $this->assertLessThan($reference, $shipmentNo);
-        $this->assertLessThan($method, $reference);
+
+        $this->assertStringNotContainsString('<span>Shipping method</span>', $row);
+        $this->assertStringContainsString('<h2>Schedule & owner</h2>', $create);
+        $this->assertStringContainsString('<b>Expected delivery date</b>', $create);
+        $this->assertStringContainsString('<x-jobs.create.shipping-method-picker', $create);
+        $this->assertStringContainsString('Applied automatically to every shipment address.', $create);
+
+        $date = strpos($create, '<b>Expected delivery date</b>');
+        $method = strpos($create, '<x-jobs.create.shipping-method-picker', $date);
+        $owner = strpos($create, 'label="Order owner *"');
+        $this->assertNotFalse($date);
+        $this->assertNotFalse($method);
+        $this->assertNotFalse($owner);
+        $this->assertLessThan($method, $date);
+        $this->assertLessThan($owner, $method);
     }
 
     public function test_same_address_mode_keeps_repeated_shipments_compact(): void

@@ -966,11 +966,10 @@ trait ManagesOrderCreation
     public function selectCreateShipmentUrgency(int $urgencyId): void
     {
         // Backward-compatible endpoint for a Create Order form left open across
-        // this deployment. New renders use selectCreateShippingMethod().
+        // this deployment. New renders use selectCreateShippingMethod(). Keep any
+        // existing Order-level method aligned across all draft shipment rows.
         $this->shipmentUrgencyIds = [$urgencyId];
-        if (isset($this->createShipments[0])) {
-            $this->createShipments[0]['shipment_urgency_id'] = $urgencyId;
-        }
+        $this->syncCreateShipmentMethodsFromGlobalSelection();
         $this->resetErrorBag('shipmentUrgencyIds');
     }
 
@@ -1003,22 +1002,13 @@ trait ManagesOrderCreation
             $normalizedUrgencyId = (int) $urgency->id;
         }
 
-        // Legacy global state mirrors Shipment 1. New renders select the method
-        // on each shipment row, while this endpoint keeps stale browser snapshots
-        // and older callers aligned with the primary shipment.
-        $this->shipmentMethodIds = [(int) $method->id];
-        $this->shipmentUrgencyIds = $kind === 'express' && $normalizedUrgencyId
-            ? [$normalizedUrgencyId]
-            : [];
-        if (isset($this->createShipments[0])) {
-            $this->createShipments[0]['shipment_method_id'] = (int) $method->id;
-            $this->createShipments[0]['shipment_urgency_id'] = $kind === 'express'
-                ? $normalizedUrgencyId
-                : null;
-        }
-
-        $this->resetErrorBag('shipmentMethodIds');
-        $this->resetErrorBag('shipmentUrgencyIds');
+        // Create Order now chooses one shipping method in Schedule & owner.
+        // Mirror that choice onto every draft shipment so every delivery address
+        // enters the Shipment stage with the selected method already attached.
+        $this->setCreateShippingSelectionForAllShipments(
+            (int) $method->id,
+            $kind === 'express' ? $normalizedUrgencyId : null,
+        );
     }
 
     public function createJob(): void { $this->persistJob(false); }
@@ -1141,7 +1131,7 @@ trait ManagesOrderCreation
             ],
             'createShipments.*.phone' => ['required', 'string', 'max:60', 'regex:/^[0-9()\s.\-]{5,40}$/'],
             'createShipments.*.address' => ['required', 'string', 'max:2000'],
-            'createShipments.*.city' => ['required', 'string', 'max:120'],
+            'createShipments.*.city' => ['nullable', 'string', 'max:120'],
             'createShipments.*.state' => ['nullable', 'string', 'max:120'],
             'createShipments.*.postal_code' => ['required', 'string', 'max:30'],
             'createShipments.*.country' => [
@@ -1179,7 +1169,7 @@ trait ManagesOrderCreation
             ],
             'createShipments.*.quantity' => ['nullable', 'integer', 'min:1', 'max:2147483647'],
             'createShipments.*.package_reference' => ['nullable', 'string', 'max:255'],
-            'shipmentMethodIds' => ['array', 'max:1'],
+            'shipmentMethodIds' => ['required', 'array', 'size:1'],
             'shipmentMethodIds.*' => [
                 'integer',
                 'distinct',
@@ -1206,7 +1196,7 @@ trait ManagesOrderCreation
             'workflowPhaseId' => ['required','integer'],
             'ownerId' => ['required','exists:users,id'],
             'coordinatorId' => ['nullable','exists:users,id'],
-            // Order hand date is intentionally optional on Create Order.
+            // Expected delivery date is intentionally optional on Create Order.
             // The DTO already normalizes an empty value to null and the database column is nullable.
             'deliveryDate' => ['nullable','date'],
             'estimatedDeliveryDate' => ['nullable','date'],
@@ -1272,15 +1262,16 @@ trait ManagesOrderCreation
             'createShipments.*.phone.required' => 'Phone number is required.',
             'createShipments.*.phone.regex' => 'Enter a valid shipping contact phone number.',
             'createShipments.*.address.required' => 'Street address is required.',
-            'createShipments.*.city.required' => 'City is required.',
             'createShipments.*.postal_code.required' => 'Postal code is required.',
             'createShipments.*.country.required' => 'Country is required.',
             'createShipments.*.country.exists' => 'Choose an active country from Country master data.',
+            'shipmentMethodIds.required' => 'Select a shipping method.',
+            'shipmentMethodIds.size' => 'Select one shipping method.',
             'createShipments.*.quantity.integer' => 'Quantity must be a whole number.',
             'createShipments.*.quantity.min' => 'Quantity must be at least 1 when provided.',
             'createShipments.*.quantity.max' => 'Quantity is too large.',
             'shippingAddress.required' => 'Shipping address is required.',
-            'deliveryDate.date' => 'Order hand date must be a valid date.',
+            'deliveryDate.date' => 'Expected delivery date must be a valid date.',
             'shippingPostalCode.required' => 'Postal code is required.',
             'shippingContactName.required' => 'Contact person is required.',
             'shippingPhoneCountryCode.required' => 'Country code is required.',

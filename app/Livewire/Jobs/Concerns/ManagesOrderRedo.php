@@ -22,8 +22,10 @@ trait ManagesOrderRedo
     public ?int $redoSupplierId = null;
     public string $redoInstructions = '';
     public string $redoCustomerResolution = 'free';
+    public string $redoCustomerAdjustmentType = 'percent';
     public string $redoCustomerDiscount = '20';
-    public string $redoSupplierChargePercent = "40";
+    public string $redoSupplierAdjustmentType = 'percent';
+    public string $redoSupplierChargePercent = '40';
     public bool $redoDeductFreight = true;
     public string $redoFreightAmount = '320.00';
     /** @var array<int,array{id:int,label:string}> */
@@ -47,7 +49,9 @@ trait ManagesOrderRedo
         $this->redoQuantity = (string) $quantity;
         $this->redoInstructions = '';
         $this->redoCustomerResolution = 'free';
+        $this->redoCustomerAdjustmentType = 'percent';
         $this->redoCustomerDiscount = '20';
+        $this->redoSupplierAdjustmentType = 'percent';
         $this->redoSupplierChargePercent = '40';
         $this->redoDeductFreight = true;
         $this->redoFreightAmount = '320.00';
@@ -58,7 +62,8 @@ trait ManagesOrderRedo
         $this->resetValidation([
             'redoIssueSource', 'redoIssueCategory', 'redoAffectedQuantity', 'redoIssueDescription',
             'redoScope', 'redoQuantity', 'redoSupplierId', 'redoInstructions',
-            'redoCustomerResolution', 'redoCustomerDiscount', 'redoSupplierChargePercent', 'redoFreightAmount',
+            'redoCustomerResolution', 'redoCustomerAdjustmentType', 'redoCustomerDiscount',
+            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoFreightAmount',
         ]);
     }
 
@@ -69,7 +74,8 @@ trait ManagesOrderRedo
         $this->resetValidation([
             'redoIssueSource', 'redoIssueCategory', 'redoAffectedQuantity', 'redoIssueDescription',
             'redoScope', 'redoQuantity', 'redoSupplierId', 'redoInstructions',
-            'redoCustomerResolution', 'redoCustomerDiscount', 'redoSupplierChargePercent', 'redoFreightAmount',
+            'redoCustomerResolution', 'redoCustomerAdjustmentType', 'redoCustomerDiscount',
+            'redoSupplierAdjustmentType', 'redoSupplierChargePercent', 'redoFreightAmount',
         ]);
     }
 
@@ -87,30 +93,49 @@ trait ManagesOrderRedo
         $this->redoAffectedQuantity = (string) $quantity;
     }
 
+    public function updatedRedoCustomerAdjustmentType($value): void
+    {
+        $this->redoCustomerAdjustmentType = in_array((string) $value, ['percent', 'pcs'], true)
+            ? (string) $value
+            : 'percent';
+
+        if ($this->redoCustomerAdjustmentType === 'pcs') {
+            $this->redoCustomerDiscount = '1';
+        }
+    }
+
+    public function updatedRedoSupplierAdjustmentType($value): void
+    {
+        $this->redoSupplierAdjustmentType = in_array((string) $value, ['percent', 'pcs'], true)
+            ? (string) $value
+            : 'percent';
+
+        if ($this->redoSupplierAdjustmentType === 'pcs') {
+            $this->redoSupplierChargePercent = '1';
+        }
+    }
+
     public function updatedRedoScope($value): void
     {
         if ((string) $value === 'discount') {
-            // Discount is an alternative to operational redo. Keep the
-            // financial calculation tied to the affected quantity but do not
-            // prepare any supplier/workflow restart defaults.
+            // Financial-only resolution: a percentage is a customer adjustment;
+            // pcs is treated as missing quantity. Neither path restarts workflow.
             $this->redoCustomerResolution = 'discount';
             $this->redoQuantity = (string) max(1, (int) $this->redoAffectedQuantity);
-            $this->redoSupplierId = null;
-            $this->redoSupplierChargePercent = "0";
+            $this->redoSupplierAdjustmentType = 'percent';
+            $this->redoSupplierChargePercent = '0';
             $this->redoDeductFreight = false;
             $this->redoFreightAmount = '0.00';
             return;
         }
 
-        // If the user changes back from Discount to an operational redo scope,
-        // restore the normal redo defaults instead of carrying the discount-only
-        // zero values into Artwork/Production by accident.
+        // Restore operational defaults after leaving the no-redo adjustment path.
         if ((float) $this->redoSupplierChargePercent === 0.0
             && !$this->redoDeductFreight
             && (float) $this->redoFreightAmount === 0.0
-            && $this->redoSupplierId === null
             && $this->redoCustomerResolution === 'discount') {
             $this->redoCustomerResolution = 'free';
+            $this->redoSupplierAdjustmentType = 'percent';
             $this->redoSupplierChargePercent = '40';
             $this->redoDeductFreight = true;
             $this->redoFreightAmount = '320.00';
@@ -167,9 +192,18 @@ trait ManagesOrderRedo
             'supplier_id' => $this->redoSupplierId,
             'internal_instructions' => $this->redoInstructions,
             'customer_resolution' => $this->redoCustomerResolution,
-            'customer_discount_percent' => (float) $this->redoCustomerDiscount,
-            'supplier_redo_charge_percent' =>
-                (float) $this->redoSupplierChargePercent,
+            'customer_adjustment_type' => $this->redoCustomerAdjustmentType,
+            'customer_adjustment_value' => (float) $this->redoCustomerDiscount,
+            // Keep legacy percentage columns populated for older reports only
+            // when the selected unit is actually a percentage.
+            'customer_discount_percent' => $this->redoCustomerAdjustmentType === 'percent'
+                ? (float) $this->redoCustomerDiscount
+                : 0,
+            'supplier_adjustment_type' => $this->redoSupplierAdjustmentType,
+            'supplier_adjustment_value' => (float) $this->redoSupplierChargePercent,
+            'supplier_redo_charge_percent' => $this->redoSupplierAdjustmentType === 'percent'
+                ? (float) $this->redoSupplierChargePercent
+                : 0,
             'deduct_freight' => $this->redoDeductFreight,
             'freight_amount' => (float) $this->redoFreightAmount,
         ], auth()->user());
@@ -182,12 +216,14 @@ trait ManagesOrderRedo
         $this->resetValidation();
 
         if ($record->scope === 'discount' || $redoOrderId <= 0) {
-            // Discount-instead-of-redo is financial only. Stay on the original
-            // Order, keep its workflow/tasks untouched, and show the recorded
-            // adjustment in the Redo tab immediately.
+            // Financial-only adjustment: remain on the original Order and keep
+            // workflow/tasks untouched. pcs means missing quantity.
             $this->detailTab = 'redo';
-            $message = rtrim(rtrim(number_format((float) $record->customer_discount_percent, 2), '0'), '.')
-                .'% customer discount recorded. The Order workflow was not restarted.';
+            $customerType = (string) ($record->customer_adjustment_type ?: 'percent');
+            $customerValue = (float) ($record->customer_adjustment_value ?? $record->customer_discount_percent ?? 0);
+            $message = $customerType === 'pcs'
+                ? number_format((int) $customerValue).' pcs missing quantity deduction recorded. The Order workflow was not restarted.'
+                : rtrim(rtrim(number_format($customerValue, 2), '0'), '.').'% customer adjustment recorded. The Order workflow was not restarted.';
         } else {
             // Operational redo: open the NEW Redo Order immediately so the
             // selected restart phase is visible and actionable.
@@ -267,26 +303,31 @@ trait ManagesOrderRedo
             $this->redoCustomerResolution = 'discount';
         }
 
+        $adjustmentQuantity = min(
+            $this->redoSourceMaxQuantity(),
+            max(1, (int) ($this->redoScope === 'discount' ? $this->redoAffectedQuantity : $this->redoQuantity)),
+        );
+        $customerValueRules = $this->redoCustomerAdjustmentType === 'pcs'
+            ? ['required', 'integer', 'min:0', 'max:'.$adjustmentQuantity]
+            : ['required', 'numeric', 'min:0', 'max:100'];
+        $supplierValueRules = $this->redoSupplierAdjustmentType === 'pcs'
+            ? ['required', 'integer', 'min:0', 'max:'.$adjustmentQuantity]
+            : ['required', 'numeric', 'min:0', 'max:100'];
+
         $this->validate([
             'redoCustomerResolution' => ['required', Rule::in(['free', 'discount'])],
-            'redoCustomerDiscount' => [
-                                            'required',
-                                            'numeric',
-                                            'min:0',
-                                            'max:100',
-                                        ],
-            'redoSupplierChargePercent' => [
-                'required',
-                'numeric',
-                'min:0',
-                'max:100',
-            ],
+            'redoCustomerAdjustmentType' => ['required', Rule::in(['percent', 'pcs'])],
+            'redoCustomerDiscount' => $customerValueRules,
+            'redoSupplierAdjustmentType' => ['required', Rule::in(['percent', 'pcs'])],
+            'redoSupplierChargePercent' => $supplierValueRules,
             'redoDeductFreight' => ['boolean'],
             'redoFreightAmount' => ['required', 'numeric', 'min:0', 'max:999999999.99'],
         ], [], [
             'redoCustomerResolution' => 'customer resolution',
-            'redoCustomerDiscount' => 'customer discount',
-            'redoSupplierChargePercent' => 'supplier redo charge',
+            'redoCustomerAdjustmentType' => 'customer unit',
+            'redoCustomerDiscount' => 'customer value',
+            'redoSupplierAdjustmentType' => 'supplier unit',
+            'redoSupplierChargePercent' => 'supplier value',
             'redoFreightAmount' => 'freight amount',
         ]);
     }
@@ -313,7 +354,9 @@ trait ManagesOrderRedo
                 $job,
                 $effectiveQuantity,
                 $effectiveResolution,
+                $this->redoCustomerAdjustmentType,
                 (float) $this->redoCustomerDiscount,
+                $this->redoSupplierAdjustmentType,
                 (float) $this->redoSupplierChargePercent,
                 $this->redoDeductFreight,
                 (float) $this->redoFreightAmount,
@@ -321,8 +364,10 @@ trait ManagesOrderRedo
             : [
                 'quantity' => 0,
                 'unitValue' => 0.0,
+                'orderValue' => 0.0,
                 'affectedValue' => 0.0,
                 'customerImpact' => 0.0,
+                'adjustedOrderValue' => 0.0,
                 'supplierCharge' => 0.0,
                 'freight' => 0.0,
                 'recovery' => 0.0,
@@ -340,7 +385,9 @@ trait ManagesOrderRedo
             'supplierId' => $this->redoSupplierId,
             'instructions' => $this->redoInstructions,
             'customerResolution' => $effectiveResolution,
+            'customerAdjustmentType' => $this->redoCustomerAdjustmentType,
             'customerDiscount' => $this->redoCustomerDiscount,
+            'supplierAdjustmentType' => $this->redoSupplierAdjustmentType,
             'supplierChargePercent' => $this->redoSupplierChargePercent,
             'deductFreight' => $this->redoDeductFreight,
             'freightAmount' => $this->redoFreightAmount,

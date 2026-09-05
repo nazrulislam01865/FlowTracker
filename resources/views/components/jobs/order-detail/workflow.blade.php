@@ -9,6 +9,10 @@
     'shipmentEditingId' => null,
     'shipmentModalMode' => 'same_address',
     'shipmentForm' => [],
+    'shipmentInlineTaskId' => null,
+    'shipmentInlineEditingId' => null,
+    'shipmentInlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'shipmentInlineForm' => [],
     'showShipmentDetailsModal' => false,
     'shipmentDetailsId' => null,
 ])
@@ -86,6 +90,10 @@
                 :job="$job"
                 :phase="$selectedPhase"
                 :presentation="$shipmentPresentation"
+                :inline-editing-id="$shipmentInlineEditingId"
+                :inline-task-id="$shipmentInlineTaskId"
+                :inline-address-mode="$shipmentInlineAddressMode"
+                :inline-form="$shipmentInlineForm"
             />
 
             @if($showShipmentModal && $shipmentModalTaskId)

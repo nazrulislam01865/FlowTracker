@@ -4,8 +4,6 @@ $__newAttributes = [];
 $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'shipments' => [],
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -31,8 +29,6 @@ unset($__newAttributes);
 foreach (array_filter(([
     'shipments' => [],
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -91,7 +87,7 @@ unset($__defined_vars, $__key, $__value); ?>
             <span>2</span>
             <h2>Shipping setup</h2>
         </div>
-        <p>Configure one or more shipments for this order.</p>
+        <p>Configure one or more shipment addresses. Shipping method is selected in Schedule &amp; owner and applied to every shipment.</p>
     </div>
 
     <div class="ft-create-shipping-modes" role="radiogroup" aria-label="Shipping setup mode">
@@ -166,14 +162,14 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__currentLoopData = $rows; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $shipment): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>
                 <?php if (isset($component)) { $__componentOriginalaff887bc5cafb648ad544f3e061f8594 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalaff887bc5cafb648ad544f3e061f8594 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-row','data' => ['index' => $index,'shipment' => $shipment,'shipmentCount' => $shipmentCount,'mode' => $mode,'shipmentMethods' => $shipmentMethods,'shipmentUrgencies' => $shipmentUrgencies,'countries' => $countries,'statesByCountry' => $statesByCountry,'phoneCodes' => $phoneCodes,'referenceNumber' => $referenceNumber,'hasSavedAddresses' => $hasSavedAddresses]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.create.shipping-row','data' => ['index' => $index,'shipment' => $shipment,'shipmentCount' => $shipmentCount,'mode' => $mode,'countries' => $countries,'statesByCountry' => $statesByCountry,'phoneCodes' => $phoneCodes,'referenceNumber' => $referenceNumber,'hasSavedAddresses' => $hasSavedAddresses]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.create.shipping-row'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['index' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($index),'shipment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment),'shipment-count' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentCount),'mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mode),'shipment-methods' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentMethods),'shipment-urgencies' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentUrgencies),'countries' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries),'states-by-country' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($statesByCountry),'phone-codes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($phoneCodes),'reference-number' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($referenceNumber),'has-saved-addresses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($hasSavedAddresses)]); ?>
+<?php $component->withAttributes(['index' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($index),'shipment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipment),'shipment-count' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentCount),'mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mode),'countries' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($countries),'states-by-country' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($statesByCountry),'phone-codes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($phoneCodes),'reference-number' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($referenceNumber),'has-saved-addresses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($hasSavedAddresses)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -205,7 +201,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <?php elseif($mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS): ?>
                 <span class="ft-create-shipment-add-help">Each new shipment starts with a blank delivery address.</span>
             <?php else: ?>
-                <span class="ft-create-shipment-add-help">Add another package and adjust its address or shipping method as needed.</span>
+                <span class="ft-create-shipment-add-help">Add another package and adjust its delivery address or package details as needed.</span>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
     </div>

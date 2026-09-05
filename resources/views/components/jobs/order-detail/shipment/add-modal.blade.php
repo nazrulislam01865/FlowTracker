@@ -101,8 +101,8 @@
             @if(!$isSameAddress || $isPrimaryEdit)
                 <div class="ft-ms-form-grid ft-ms-form-grid--two">
                     <label class="ft-ms-field">
-                        <span>CONTACT PERSON</span>
-                        <input type="text" wire:model.defer="shipmentForm.recipient" maxlength="255" placeholder="e.g. John Smith">
+                        <span>CONTACT PERSON <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                        <input type="text" wire:model.defer="shipmentForm.recipient" maxlength="255" placeholder="e.g. John Smith" aria-required="true">
                         <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.recipient'){{ $message }}@enderror</small>
                     </label>
                     <label class="ft-ms-field">
@@ -113,14 +113,14 @@
                 </div>
 
                 <label class="ft-ms-field">
-                    <span>SHIPPING ADDRESS</span>
-                    <input type="text" wire:model.defer="shipmentForm.address" maxlength="2000" placeholder="e.g. 123 Main St, Apt 4B">
+                    <span>SHIPPING ADDRESS <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                    <input type="text" wire:model.defer="shipmentForm.address" maxlength="2000" placeholder="e.g. 123 Main St, Apt 4B" aria-required="true">
                     <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.address'){{ $message }}@enderror</small>
                 </label>
 
                 <div class="ft-ms-form-grid ft-ms-form-grid--address">
                     <div class="ft-ms-field">
-                        <span>COUNTRY</span>
+                        <span>COUNTRY <b class="ft-ms-required" aria-hidden="true">*</b></span>
                         <x-ui.search-select
                             class="ft-ms-location-select"
                             label="Country"
@@ -130,6 +130,7 @@
                             placeholder="Select country"
                             :selected-label="$currentCountry !== '' ? $currentCountry : null"
                             :clearable="false"
+                            :required="true"
                             :hide-label="true"
                             :fixed-menu="true"
                             :disabled="$countries->isEmpty()"
@@ -143,7 +144,7 @@
                         <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.country'){{ $message }}@enderror</small>
                     </div>
                     <div class="ft-ms-field">
-                        <span>STATE</span>
+                        <span>STATE @if($currentCountry !== '' && $states->isNotEmpty())<b class="ft-ms-required" aria-hidden="true">*</b>@endif</span>
                         <x-ui.search-select
                             class="ft-ms-location-select"
                             label="State"
@@ -153,6 +154,7 @@
                             placeholder="Select state"
                             :selected-label="$currentState !== '' ? $currentState : null"
                             :clearable="false"
+                            :required="$currentCountry !== '' && $states->isNotEmpty()"
                             :hide-label="true"
                             :fixed-menu="true"
                             :disabled="$currentCountry === '' || $states->isEmpty()"
@@ -166,13 +168,13 @@
                         <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.state'){{ $message }}@enderror</small>
                     </div>
                     <label class="ft-ms-field">
-                        <span>CITY</span>
+                        <span>CITY <small class="ft-ms-field-hint">Optional</small></span>
                         <input type="text" wire:model.defer="shipmentForm.city" maxlength="120" placeholder="e.g. Miami">
                         <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.city'){{ $message }}@enderror</small>
                     </label>
                     <label class="ft-ms-field">
-                        <span>POSTAL CODE</span>
-                        <input type="text" wire:model.defer="shipmentForm.postal_code" maxlength="30" placeholder="e.g. 33101">
+                        <span>POSTAL CODE <b class="ft-ms-required" aria-hidden="true">*</b></span>
+                        <input type="text" wire:model.defer="shipmentForm.postal_code" maxlength="30" placeholder="e.g. 33101" aria-required="true">
                         <small class="validation-error ft-ms-validation-slot">@error('shipmentForm.postal_code'){{ $message }}@enderror</small>
                     </label>
                 </div>
@@ -195,7 +197,7 @@
                     <small class="validation-error ft-ms-validation-slot" aria-hidden="true"></small>
                 </label>
                 <div class="ft-ms-field">
-                    <span>SHIPPING METHOD</span>
+                    <span>SHIPPING METHOD <b class="ft-ms-required" aria-hidden="true">*</b></span>
                     <x-jobs.order-detail.shipment.method-picker
                         :selected="$selectedCard"
                         :methods="$presentation['shipment_methods'] ?? collect()"

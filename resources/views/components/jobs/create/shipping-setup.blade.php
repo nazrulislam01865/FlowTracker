@@ -1,8 +1,6 @@
 @props([
     'shipments' => [],
     'mode' => 'multiple_shipments',
-    'shipmentMethods' => collect(),
-    'shipmentUrgencies' => collect(),
     'countries' => collect(),
     'statesByCountry' => collect(),
     'phoneCodes' => collect(),
@@ -51,7 +49,7 @@
             <span>2</span>
             <h2>Shipping setup</h2>
         </div>
-        <p>Configure one or more shipments for this order.</p>
+        <p>Configure one or more shipment addresses. Shipping method is selected in Schedule &amp; owner and applied to every shipment.</p>
     </div>
 
     <div class="ft-create-shipping-modes" role="radiogroup" aria-label="Shipping setup mode">
@@ -121,8 +119,6 @@
                     :shipment="$shipment"
                     :shipment-count="$shipmentCount"
                     :mode="$mode"
-                    :shipment-methods="$shipmentMethods"
-                    :shipment-urgencies="$shipmentUrgencies"
                     :countries="$countries"
                     :states-by-country="$statesByCountry"
                     :phone-codes="$phoneCodes"
@@ -148,7 +144,7 @@
             @elseif($mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS)
                 <span class="ft-create-shipment-add-help">Each new shipment starts with a blank delivery address.</span>
             @else
-                <span class="ft-create-shipment-add-help">Add another package and adjust its address or shipping method as needed.</span>
+                <span class="ft-create-shipment-add-help">Add another package and adjust its delivery address or package details as needed.</span>
             @endif
         </div>
     </div>

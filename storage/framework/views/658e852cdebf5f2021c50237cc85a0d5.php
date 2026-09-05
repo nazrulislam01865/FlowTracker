@@ -5,6 +5,10 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'job',
     'phase',
     'presentation' => [],
+    'inlineEditingId' => null,
+    'inlineTaskId' => null,
+    'inlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'inlineForm' => [],
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -24,6 +28,10 @@ foreach (array_filter(([
     'job',
     'phase',
     'presentation' => [],
+    'inlineEditingId' => null,
+    'inlineTaskId' => null,
+    'inlineAddressMode' => \App\Services\OrderShipmentService::MODE_SAME_ADDRESS,
+    'inlineForm' => [],
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -105,14 +113,14 @@ unset($__defined_vars, $__key, $__value); ?>
                         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($row['key'] === 'SHIP_CONFIRM_INFO'): ?>
                             <?php if (isset($component)) { $__componentOriginalbad3cff2ecaa3876eef66d6f9ec9edf7 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalbad3cff2ecaa3876eef66d6f9ec9edf7 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.plan-table','data' => ['row' => $row,'presentation' => $presentation]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipment.plan-table','data' => ['row' => $row,'presentation' => $presentation,'inlineEditingId' => $inlineEditingId,'inlineTaskId' => $inlineTaskId,'inlineAddressMode' => $inlineAddressMode,'inlineForm' => $inlineForm]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.shipment.plan-table'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['row' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($row),'presentation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($presentation)]); ?>
+<?php $component->withAttributes(['row' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($row),'presentation' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($presentation),'inline-editing-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inlineEditingId),'inline-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inlineTaskId),'inline-address-mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inlineAddressMode),'inline-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($inlineForm)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>

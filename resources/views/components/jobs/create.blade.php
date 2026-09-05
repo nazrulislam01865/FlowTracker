@@ -92,8 +92,6 @@
         <x-jobs.create.shipping-setup
             :shipments="$createShipments"
             :mode="$createShipmentMode"
-            :shipment-methods="$shipmentMethods"
-            :shipment-urgencies="$shipmentUrgencies"
             :countries="$createShipmentCountries"
             :states-by-country="$createShipmentStatesByCountry"
             :phone-codes="$createShipmentPhoneCodes"
@@ -118,14 +116,14 @@
             <div class="ft-create-section-title"><span>4</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                     {{-- CHANGE 2026-08-24:
-                    renamed the customer-required date for Create Order
+                    kept the optional delivery date field for Create Order
                     and removed Estimated Delivery from this form only. --}}
                 <label
                     class="ft-create-field ft-clickable-date-field"
                     x-data
                     x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"
                 >
-                    <b>Order hand date</b>
+                    <b>Expected delivery date</b>
 
                     <input
                         x-ref="deliveryDate"
@@ -139,6 +137,14 @@
                         </small>
                     @enderror
                 </label>
+                <x-jobs.create.shipping-method-picker
+                    :shipment-methods="$shipmentMethods"
+                    :shipment-urgencies="$shipmentUrgencies"
+                    :selected-method-ids="$shipmentMethodIds"
+                    :selected-urgency-ids="$shipmentUrgencyIds"
+                    :required="true"
+                    help-text="Applied automatically to every shipment address. You can change a shipment's method later in the Shipment stage."
+                />
                 <div class="ft-create-field">
                     <x-ui.search-select
                         class="ft-create-remote-select"

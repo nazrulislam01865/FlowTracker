@@ -30,16 +30,24 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringContainsString('overflow-wrap: anywhere;', $css);
     }
 
-    public function test_tracking_is_row_based_and_has_no_print_label_action(): void
+    public function test_tracking_opens_missing_fields_when_active_and_uses_inline_pencil_edits_after_save(): void
     {
         $tracking = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/tracking-table.blade.php'));
         $presenter = file_get_contents(app_path('Support/OrderShipmentPresenter.php'));
 
-        $this->assertStringContainsString("editing: false", $tracking);
-        $this->assertStringContainsString('Add tracking', $tracking);
-        $this->assertStringContainsString('Edit courier & tracking', $tracking);
+        $this->assertStringContainsString('$autoOpen = $editable && $row[\'mode\'] === \'active\'', $tracking);
+        $this->assertStringContainsString('courierEditing: @js($autoOpen)', $tracking);
+        $this->assertStringContainsString('trackingEditing: @js($autoOpen)', $tracking);
+        $this->assertStringContainsString('ft-ms-cell-edit-button', $tracking);
+        $this->assertStringContainsString('persist()', $tracking);
+        $this->assertStringContainsString('initialEntry: @js($initialEntry)', $tracking);
+        $this->assertStringContainsString('if (!initialEntry) persist()', $tracking);
+        $this->assertStringContainsString('x-on:click="persist()"', $tracking);
+        $this->assertStringContainsString("saving ? 'Saving...' : 'Save'", $tracking);
         $this->assertStringContainsString('<th>Courier</th>', $tracking);
         $this->assertStringContainsString('courier-select', $tracking);
+        $this->assertStringContainsString('<th>Actions</th>', $tracking);
+        $this->assertStringNotContainsString('Add courier & tracking</span>', $tracking);
         $this->assertStringNotContainsString('Print label', $tracking);
         $this->assertStringNotContainsString('printOrderShipmentLabel', $tracking);
         $this->assertStringContainsString("'Add courier & tracking number'", $presenter);
@@ -83,6 +91,30 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringContainsString("'allow_multiple_shipments' => \$allowMultiple", $service);
         $this->assertStringNotContainsString('Enable Allow multiple shipments before adding another shipment.', $service);
     }
+
+    public function test_shipment_modal_marks_only_required_fields_and_defaults_primary_shipping_from_order(): void
+    {
+        $modal = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/add-modal.blade.php'));
+        $css = file_get_contents(resource_path('css/modules/orders/detail/shipment-modal.css'));
+        $manager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderShipments.php'));
+        $service = file_get_contents(app_path('Services/OrderShipmentService.php'));
+
+        foreach (['CONTACT PERSON', 'SHIPPING ADDRESS', 'COUNTRY', 'CITY', 'POSTAL CODE', 'SHIPPING METHOD'] as $label) {
+            $this->assertMatchesRegularExpression('/'.preg_quote($label, '/').'.*ft-ms-required/s', $modal);
+        }
+        $this->assertStringContainsString("STATE @if(\$currentCountry !== '' && \$states->isNotEmpty())<b class=\"ft-ms-required\"", $modal);
+        $this->assertStringContainsString('<span>PHONE</span>', $modal);
+        $this->assertStringContainsString('<span>QUANTITY (OPTIONAL)</span>', $modal);
+        $this->assertStringContainsString('<span>PACKAGE / REFERENCE (OPTIONAL)</span>', $modal);
+        $this->assertStringContainsString('.ft-ms-required', $css);
+        $this->assertStringContainsString('color: #dc2626;', $css);
+
+        $this->assertStringContainsString('orderDefaultShippingSelection', $manager);
+        $this->assertStringContainsString('$useOrderShippingDefault = (bool) $shipment->is_primary || ! $shipment->shipment_method_id;', $manager);
+        $this->assertStringContainsString('if (! $methodId && $urgencyId)', $service);
+        $this->assertStringContainsString("CreateOrderShippingMethodPresenter::methodKind(\$method) === 'express'", $service);
+    }
+
     public function test_tracking_uses_courier_master_data_and_shipping_method_eta_copy_is_hidden(): void
     {
         $pageData = file_get_contents(app_path('Livewire/Jobs/Concerns/BuildsOrderPageData.php'));

@@ -159,25 +159,47 @@ class OrderRedoService
         FlowJob $order,
         int $redoQuantity,
         string $customerResolution,
-        float $customerDiscountPercent,
-        float $supplierRedoChargePercent,
+        string $customerAdjustmentType,
+        float $customerAdjustmentValue,
+        string $supplierAdjustmentType,
+        float $supplierAdjustmentValue,
         bool $deductFreight,
         float $freightAmount,
     ): array {
         $redoQuantity = max(1, min(max(1, (int) $order->quantity), $redoQuantity));
         $unitValue = $this->averageUnitValue($order);
         $affectedValue = round($redoQuantity * $unitValue, 2);
-        $customerImpact = $customerResolution === 'discount'
-            ? round($affectedValue * max(0, $customerDiscountPercent) / 100, 2)
-            : 0.0;
-        $supplierCharge = round($affectedValue * max(0, $supplierRedoChargePercent) / 100, 2);
+        $orderValue = round(max(0, (float) $order->commercial_value), 2);
+        if ($orderValue <= 0 && $unitValue > 0) {
+            $orderValue = round(max(1, (int) $order->quantity) * $unitValue, 2);
+        }
+
+        $customerAdjustmentType = in_array($customerAdjustmentType, ['percent', 'pcs'], true)
+            ? $customerAdjustmentType
+            : 'percent';
+        $supplierAdjustmentType = in_array($supplierAdjustmentType, ['percent', 'pcs'], true)
+            ? $supplierAdjustmentType
+            : 'percent';
+
+        $customerImpact = 0.0;
+        if ($customerResolution === 'discount') {
+            $customerImpact = $customerAdjustmentType === 'pcs'
+                ? round(min($redoQuantity, max(0, (int) $customerAdjustmentValue)) * $unitValue, 2)
+                : round($affectedValue * min(100, max(0, $customerAdjustmentValue)) / 100, 2);
+        }
+
+        $supplierCharge = $supplierAdjustmentType === 'pcs'
+            ? round(min($redoQuantity, max(0, (int) $supplierAdjustmentValue)) * $unitValue, 2)
+            : round($affectedValue * min(100, max(0, $supplierAdjustmentValue)) / 100, 2);
         $freight = $deductFreight ? round(max(0, $freightAmount), 2) : 0.0;
 
         return [
             'quantity' => $redoQuantity,
             'unitValue' => $unitValue,
+            'orderValue' => $orderValue,
             'affectedValue' => $affectedValue,
             'customerImpact' => $customerImpact,
+            'adjustedOrderValue' => round(max(0, $orderValue - $customerImpact), 2),
             'supplierCharge' => $supplierCharge,
             'freight' => $freight,
             'recovery' => round($supplierCharge + $freight, 2),
@@ -243,20 +265,29 @@ class OrderRedoService
                     ->findOrFail($supplierId);
             }
 
-            // Discount is a financial-only resolution. It never creates a new
-            // FlowJob, never rewinds the current workflow, and never generates
-            // replacement tasks. The affected quantity is used only to
-            // calculate the customer credit and optional supplier recovery.
+            // The financial-only scope can now represent either a percentage
+            // customer adjustment or a missing-quantity (pcs) deduction. Both
+            // paths intentionally leave the original workflow untouched.
             $customerResolution = $scope === 'discount'
                 ? 'discount'
                 : (string) $data['customer_resolution'];
+            $customerAdjustmentType = (string) ($data['customer_adjustment_type'] ?? 'percent');
+            $customerAdjustmentValue = (float) ($data['customer_adjustment_value']
+                ?? $data['customer_discount_percent']
+                ?? 0);
+            $supplierAdjustmentType = (string) ($data['supplier_adjustment_type'] ?? 'percent');
+            $supplierAdjustmentValue = (float) ($data['supplier_adjustment_value']
+                ?? $data['supplier_redo_charge_percent']
+                ?? 0);
 
             $preview = $this->financialPreview(
                 $root,
                 $redoQuantity,
                 $customerResolution,
-                (float) ($data['customer_discount_percent'] ?? 0),
-                (float) ($data['supplier_redo_charge_percent'] ?? 0),
+                $customerAdjustmentType,
+                $customerAdjustmentValue,
+                $supplierAdjustmentType,
+                $supplierAdjustmentValue,
                 (bool) ($data['deduct_freight'] ?? false),
                 (float) ($data['freight_amount'] ?? 0),
             );
@@ -376,11 +407,17 @@ class OrderRedoService
                 'supplier_id' => $supplierId,
                 'internal_instructions' => trim((string) ($data['internal_instructions'] ?? '')) ?: null,
                 'customer_resolution' => $customerResolution,
-                'customer_discount_percent' => (float) ($data['customer_discount_percent'] ?? 0),
-                'supplier_redo_charge_percent' => (float) ($data['supplier_redo_charge_percent'] ?? 0),
+                'customer_adjustment_type' => $customerAdjustmentType,
+                'customer_adjustment_value' => $customerAdjustmentValue,
+                'customer_discount_percent' => $customerAdjustmentType === 'percent' ? $customerAdjustmentValue : 0,
+                'supplier_adjustment_type' => $supplierAdjustmentType,
+                'supplier_adjustment_value' => $supplierAdjustmentValue,
+                'supplier_redo_charge_percent' => $supplierAdjustmentType === 'percent' ? $supplierAdjustmentValue : 0,
                 'deduct_freight' => (bool) ($data['deduct_freight'] ?? false),
                 'freight_amount' => $preview['freight'],
                 'affected_order_value' => $preview['affectedValue'],
+                'order_value_before_adjustment' => $preview['orderValue'],
+                'order_value_after_adjustment' => $preview['adjustedOrderValue'],
                 'customer_impact' => $preview['customerImpact'],
                 'supplier_redo_charge' => $preview['supplierCharge'],
                 'total_supplier_recovery' => $preview['recovery'],
@@ -461,6 +498,14 @@ class OrderRedoService
             'redoIssueDescription',
         );
         $mentionIds = app(MentionService::class)->userIdsFromText($storedIssueDescription);
+        $customerAdjustmentType = (string) ($data['customer_adjustment_type'] ?? 'percent');
+        $customerAdjustmentValue = (float) ($data['customer_adjustment_value']
+            ?? $data['customer_discount_percent']
+            ?? 0);
+        $supplierAdjustmentType = (string) ($data['supplier_adjustment_type'] ?? 'percent');
+        $supplierAdjustmentValue = (float) ($data['supplier_adjustment_value']
+            ?? $data['supplier_redo_charge_percent']
+            ?? 0);
 
         $record = OrderRedo::create([
             'original_order_id' => $root->id,
@@ -476,29 +521,41 @@ class OrderRedoService
             'supplier_id' => $supplierId,
             'internal_instructions' => trim((string) ($data['internal_instructions'] ?? '')) ?: null,
             'customer_resolution' => 'discount',
-            'customer_discount_percent' => (float) ($data['customer_discount_percent'] ?? 0),
-            'supplier_redo_charge_percent' => (float) ($data['supplier_redo_charge_percent'] ?? 0),
+            'customer_adjustment_type' => $customerAdjustmentType,
+            'customer_adjustment_value' => $customerAdjustmentValue,
+            'customer_discount_percent' => $customerAdjustmentType === 'percent' ? $customerAdjustmentValue : 0,
+            'supplier_adjustment_type' => $supplierAdjustmentType,
+            'supplier_adjustment_value' => $supplierAdjustmentValue,
+            'supplier_redo_charge_percent' => $supplierAdjustmentType === 'percent' ? $supplierAdjustmentValue : 0,
             'deduct_freight' => (bool) ($data['deduct_freight'] ?? false),
             'freight_amount' => $preview['freight'],
             'affected_order_value' => $preview['affectedValue'],
+            'order_value_before_adjustment' => $preview['orderValue'],
+            'order_value_after_adjustment' => $preview['adjustedOrderValue'],
             'customer_impact' => $preview['customerImpact'],
             'supplier_redo_charge' => $preview['supplierCharge'],
             'total_supplier_recovery' => $preview['recovery'],
             'created_by' => $actor->id,
         ]);
 
-        $discount = rtrim(rtrim(number_format((float) ($data['customer_discount_percent'] ?? 0), 2), '0'), '.');
+        $customerAdjustmentLabel = $customerAdjustmentType === 'pcs'
+            ? number_format((int) $customerAdjustmentValue).' pcs missing quantity deduction'
+            : rtrim(rtrim(number_format($customerAdjustmentValue, 2), '0'), '.').'% customer adjustment';
 
         $root->activities()->create([
             'user_id' => $actor->id,
             'event' => 'job.redo_discount_recorded',
-            'description' => $discount.'% customer discount recorded instead of redo.',
+            'description' => $customerAdjustmentLabel.' recorded instead of redo.',
             'meta' => [
                 'redo_sequence' => $sequence,
                 'redo_scope' => 'discount',
                 'affected_quantity' => $affectedQuantity,
-                'customer_discount_percent' => (float) ($data['customer_discount_percent'] ?? 0),
+                'customer_adjustment_type' => $customerAdjustmentType,
+                'customer_adjustment_value' => $customerAdjustmentValue,
                 'customer_credit' => $preview['customerImpact'],
+                'adjusted_order_value' => $preview['adjustedOrderValue'],
+                'supplier_adjustment_type' => $supplierAdjustmentType,
+                'supplier_adjustment_value' => $supplierAdjustmentValue,
                 'supplier_recovery' => $preview['recovery'],
                 'workflow_unchanged' => true,
                 'mention_user_ids' => $mentionIds,
@@ -554,13 +611,44 @@ class OrderRedoService
             $errors['redoCustomerResolution'] = 'Select the customer resolution.';
         }
         if ($scope === 'discount' && (string) ($data['customer_resolution'] ?? '') !== 'discount') {
-            $errors['redoCustomerResolution'] = 'Discount scope requires a customer discount.';
+            $errors['redoCustomerResolution'] = 'The no-redo scope requires a customer adjustment.';
         }
 
-        foreach (['customer_discount_percent', 'supplier_redo_charge_percent'] as $key) {
-            $value = (float) ($data[$key] ?? 0);
-            if ($value < 0 || $value > 100) {
-                $errors[$key === 'customer_discount_percent' ? 'redoCustomerDiscount' : 'redoSupplierChargePercent'] = 'Percentage must be between 0 and 100.';
+        $effectiveQuantity = max(1, min($maxQuantity, $scope === 'discount' ? $affected : $redoQuantity));
+        $adjustments = [
+            [
+                'type_key' => 'customer_adjustment_type',
+                'value_key' => 'customer_adjustment_value',
+                'legacy_key' => 'customer_discount_percent',
+                'type_error' => 'redoCustomerAdjustmentType',
+                'value_error' => 'redoCustomerDiscount',
+                'label' => 'Customer',
+            ],
+            [
+                'type_key' => 'supplier_adjustment_type',
+                'value_key' => 'supplier_adjustment_value',
+                'legacy_key' => 'supplier_redo_charge_percent',
+                'type_error' => 'redoSupplierAdjustmentType',
+                'value_error' => 'redoSupplierChargePercent',
+                'label' => 'Supplier',
+            ],
+        ];
+
+        foreach ($adjustments as $adjustment) {
+            $type = (string) ($data[$adjustment['type_key']] ?? 'percent');
+            $value = (float) ($data[$adjustment['value_key']] ?? $data[$adjustment['legacy_key']] ?? 0);
+
+            if (! in_array($type, ['percent', 'pcs'], true)) {
+                $errors[$adjustment['type_error']] = 'Choose % or pcs.';
+                continue;
+            }
+
+            if ($value < 0) {
+                $errors[$adjustment['value_error']] = $adjustment['label'].' value cannot be negative.';
+            } elseif ($type === 'percent' && $value > 100) {
+                $errors[$adjustment['value_error']] = $adjustment['label'].' percentage must be between 0 and 100.';
+            } elseif ($type === 'pcs' && (floor($value) !== $value || $value > $effectiveQuantity)) {
+                $errors[$adjustment['value_error']] = $adjustment['label'].' pcs must be a whole number between 0 and '.$effectiveQuantity.'.';
             }
         }
 
