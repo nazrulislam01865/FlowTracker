@@ -42,8 +42,8 @@
                         <x-ui.search-select
                             class="ft-inquiry-status-filter"
                             label="Task status"
-                            property="listStatus"
-                            :value="$listStatus"
+                            property="pendingListStatus"
+                            :value="$pendingListStatus"
                             placeholder="All task statuses"
                             :options="collect($listStatusOptions)->map(fn ($statusOption) => ['id' => $statusOption, 'label' => $statusOption])"
                             :hide-label="true"
@@ -53,41 +53,52 @@
                         <x-ui.search-select
                             class="ft-inquiry-list-client-filter"
                             label="Client"
-                            property="listClient"
+                            property="pendingListClient"
                             type="clients"
                             context="inquiries"
-                            action="setInquiryListFilter"
-                            :value="$listClient"
+                            action="setInquiryPendingListFilter"
+                            :value="$pendingListClient"
                             placeholder="All clients"
-                            :selected-label="$listClientLabel ?: null"
+                            :selected-label="$pendingListClientLabel ?: null"
                             :initial-options="$listClientFilterOptions"
                             :menu-width="300"
                             :fixed-menu="true"
-                            wire:key="inquiry-list-client-filter-{{ $listClient ?: 'all' }}-{{ substr(md5($listClientLabel ?: 'all'), 0, 8) }}"
+                            wire:key="inquiry-list-client-filter-{{ $pendingListClient ?: 'all' }}-{{ substr(md5($pendingListClientLabel ?: 'all'), 0, 8) }}"
                         />
-                        <label class="completed-toggle {{ $hideCompleted ? 'active' : '' }}">
-                            <input type="checkbox" wire:model.live="hideCompleted" aria-label="Hide completed inquiries">
+                        <label class="completed-toggle {{ $pendingHideCompleted ? 'active' : '' }}">
+                            <input type="checkbox" wire:model.live="pendingHideCompleted" aria-label="Hide completed inquiries">
                             <span class="completed-check" aria-hidden="true">✓</span>
                             <span>Hide completed</span>
                         </label>
                         <x-ui.date-range
                             class="ft-inquiry-date-range"
-                            from-property="dateFrom"
-                            to-property="dateTo"
-                            :from-value="$dateFrom"
-                            :to-value="$dateTo"
+                            from-property="pendingDateFrom"
+                            to-property="pendingDateTo"
+                            :from-value="$pendingDateFrom"
+                            :to-value="$pendingDateTo"
                             label="Created date"
                             from-label="From"
                             to-label="To"
                         />
-                        <x-ui.filter-reset
-                            class="chip ft-inquiry-clear-filter"
-                            action="clearFilters"
-                            label="Clear filter"
-                            icon="×"
-                            :disabled="! $inquiryAnyFilterActive"
-                            aria-label="Clear active inquiry filter"
-                        />
+                        <div class="ft-inquiry-filter-actions" aria-label="Inquiry filter actions">
+                            <button
+                                type="button"
+                                class="ft-inquiry-filter-action ft-inquiry-apply-filter"
+                                wire:click="applyFilters"
+                                wire:loading.attr="disabled"
+                                wire:target="applyFilters"
+                                @disabled(! $inquiryFilterDraftDirty)
+                                aria-label="Apply inquiry filter"
+                            >Apply filter</button>
+                            <x-ui.filter-reset
+                                class="chip ft-inquiry-filter-action ft-inquiry-clear-filter"
+                                action="clearFilters"
+                                label="Clear"
+                                icon="×"
+                                :disabled="! $inquiryAnyFilterActive"
+                                aria-label="Clear active inquiry filter"
+                            />
+                        </div>
                     </x-ui.filter-bar>
                 </div>
                 <div class="inquiry-list-table" role="region" aria-label="Inquiry list" tabindex="0">

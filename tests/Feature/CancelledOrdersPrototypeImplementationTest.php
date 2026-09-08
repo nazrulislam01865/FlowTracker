@@ -51,6 +51,9 @@ class CancelledOrdersPrototypeImplementationTest extends TestCase
         self::assertStringContainsString('cleanReasonText', $service);
         self::assertStringContainsString('<colgroup>', $view);
         self::assertStringContainsString('ft-cancelled-person-copy', $view);
+        self::assertStringContainsString(':src="$row[\'cancelled_by_image_url\']"', $view);
+        self::assertStringContainsString(':src="$row[\'owner_image_url\']"', $view);
+        self::assertStringContainsString('<x-ui.avatar', $view);
         self::assertStringContainsString('min-width: 1490px', $theme);
         self::assertStringContainsString('.ft-cancelled-orders-page', $theme);
     }

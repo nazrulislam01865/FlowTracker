@@ -277,7 +277,7 @@
             </table>
         </article>
 
-        <div class="ii-sect"><div><h2>Task start-to-completion detail</h2><p>Shows real task start/completion timing, Inquiry SLA target and every Completed → non-completed reopen event</p></div><small>10 rows per page</small></div>
+        <div class="ii-sect"><div><h2>Task start-to-completion detail</h2><p>Measures each task from its real In Progress/working transition to Completed, with Inquiry SLA target and every Completed → non-completed reopen event</p></div><small>10 rows per page</small></div>
         <div class="ii-focusbar">
             <div class="ii-subtabs">
                 <button type="button" class="ii-subtab {{ $taskTab === 'recent' ? 'active' : '' }}" wire:click="setTaskTab('recent')">Recent completions</button>

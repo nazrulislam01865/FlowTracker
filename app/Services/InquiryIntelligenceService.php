@@ -74,12 +74,13 @@ class InquiryIntelligenceService
         }
 
         $inquiryIds = $inquiries->pluck('id')->map(fn ($id) => (int) $id)->all();
-        $reopenEventStats = $this->reopenEventStats($inquiryIds);
-        $reopenEventCounts = collect($reopenEventStats)->map(fn (array $row) => (int) ($row['count'] ?? 0))->all();
-        $reopenLatestTimestamps = collect($reopenEventStats)->map(fn (array $row) => (int) ($row['latest_timestamp'] ?? 0))->all();
+        $lifecycleStats = $this->taskLifecycleStats($inquiryIds);
+        $reopenEventCounts = $lifecycleStats['reopen_counts'];
+        $reopenLatestTimestamps = $lifecycleStats['reopen_latest_timestamps'];
+        $taskTimingStats = $lifecycleStats['timings'];
 
         $portfolio = $this->portfolio($inquiries, $fromLocal, $toLocal, $timezone);
-        $people = $this->people($inquiries, $reopenEventCounts, $reopenLatestTimestamps, $timezone, $assigneeId);
+        $people = $this->people($inquiries, $reopenEventCounts, $reopenLatestTimestamps, $taskTimingStats, $timezone, $assigneeId);
         $products = $this->products($inquiries);
 
         return [
@@ -261,7 +262,7 @@ class InquiryIntelligenceService
         ];
     }
 
-    private function people(Collection $inquiries, array $reopenEventCounts, array $reopenLatestTimestamps, string $timezone, int $assigneeId = 0): array
+    private function people(Collection $inquiries, array $reopenEventCounts, array $reopenLatestTimestamps, array $taskTimingStats, string $timezone, int $assigneeId = 0): array
     {
         $performanceUserIds = $this->performanceUserIds();
         $tasks = $inquiries->flatMap(fn (Inquiry $inquiry) => $inquiry->tasks)
@@ -273,12 +274,12 @@ class InquiryIntelligenceService
         $groups = $tasks->groupBy('assignee_id');
         $completedTasks = $tasks->whereNotNull('completed_at')->values();
         $durations = $completedTasks
-            ->map(fn (InquiryTask $task) => $this->taskHours($task))
+            ->map(fn (InquiryTask $task) => $this->taskHours($task, $taskTimingStats))
             ->filter(fn ($hours) => $hours !== null && $hours >= 0)
             ->values();
         $today = app(WorkspaceSettingsService::class)->localToday()->toDateString();
 
-        $ranking = $groups->map(function (Collection $personTasks) use ($reopenEventCounts, $today, $timezone): array {
+        $ranking = $groups->map(function (Collection $personTasks) use ($reopenEventCounts, $taskTimingStats, $today, $timezone): array {
             /** @var InquiryTask $first */
             $first = $personTasks->first();
             $completed = $personTasks->whereNotNull('completed_at')->values();
@@ -286,7 +287,7 @@ class InquiryIntelligenceService
             $completedCount = $completed->count();
             $completionPct = $assigned > 0 ? $completedCount / $assigned * 100 : 0;
             $hours = $completed
-                ->map(fn (InquiryTask $task) => $this->taskHours($task))
+                ->map(fn (InquiryTask $task) => $this->taskHours($task, $taskTimingStats))
                 ->filter(fn ($value) => $value !== null && $value >= 0)
                 ->values();
             $avgHours = $hours->count() ? (float) $hours->avg() : null;
@@ -361,10 +362,11 @@ class InquiryIntelligenceService
 
         $taskDetails = $tasks
             ->sortByDesc(fn (InquiryTask $task) => $task->completed_at?->timestamp ?? $task->updated_at?->timestamp ?? 0)
-            ->map(function (InquiryTask $task) use ($reopenEventCounts, $reopenLatestTimestamps, $timezone, $today): array {
-                $started = $task->started_at?->copy()->setTimezone($timezone);
-                $completed = $task->completed_at?->copy()->setTimezone($timezone);
-                $hours = $this->taskHours($task);
+            ->map(function (InquiryTask $task) use ($reopenEventCounts, $reopenLatestTimestamps, $taskTimingStats, $timezone, $today): array {
+                $timing = $this->taskTiming($task, $taskTimingStats);
+                $started = $timing['started_at']?->copy()->setTimezone($timezone);
+                $completed = $timing['completed_at']?->copy()->setTimezone($timezone);
+                $hours = $this->taskHours($task, $taskTimingStats);
                 $reopenCount = (int) ($reopenEventCounts[(int) $task->id] ?? 0);
                 // Task detail SLA follows the Inquiry's client-facing required delivery date when available.
                 // If the Inquiry has no delivery target, fall back to the task's own due date.
@@ -419,7 +421,7 @@ class InquiryIntelligenceService
                     'reopened' => $reopenCount > 0,
                     'is_open' => !$task->completed_at,
                     'is_completed' => (bool) $task->completed_at,
-                    'completed_timestamp' => $task->completed_at?->timestamp ?? 0,
+                    'completed_timestamp' => $timing['completed_at']?->timestamp ?? $task->completed_at?->timestamp ?? 0,
                     'updated_timestamp' => $task->updated_at?->timestamp ?? 0,
                     'reopened_timestamp' => (int) ($reopenLatestTimestamps[(int) $task->id] ?? 0),
                 ];
@@ -718,36 +720,169 @@ class InquiryIntelligenceService
     }
 
     /**
-     * Count every real reopen transition for each Inquiry task and keep the
-     * latest reopen event timestamp for sorting the Reopened tasks tab.
+     * Build task lifecycle timing from the audit trail in one query.
+     *
+     * The report clock starts when a task actually enters a working/In Progress
+     * status and stops on the matching completion event. Reopened tasks begin a
+     * fresh cycle, so an old completion never contaminates the next duration.
+     * Historical rows written before explicit status metadata was added are
+     * recovered from their activity descriptions where possible.
+     *
+     * @return array{
+     *   reopen_counts: array<int,int>,
+     *   reopen_latest_timestamps: array<int,int>,
+     *   timings: array<int,array{started_at:mixed,completed_at:mixed,seconds:?int,active_started_at?:mixed}>
+     * }
      */
-    private function reopenEventStats(array $inquiryIds): array
+    private function taskLifecycleStats(array $inquiryIds): array
     {
-        if ($inquiryIds === []) return [];
+        if ($inquiryIds === []) {
+            return [
+                'reopen_counts' => [],
+                'reopen_latest_timestamps' => [],
+                'timings' => [],
+            ];
+        }
 
-        $stats = [];
+        $reopenCounts = [];
+        $reopenLatest = [];
+        $timings = [];
+        $activeStarts = [];
+        $inquiryService = app(InquiryService::class);
+
         Activity::query()
             ->where('subject_type', Inquiry::class)
             ->whereIn('subject_id', $inquiryIds)
-            ->where('event', 'inquiry.task_reopened')
+            ->whereIn('event', [
+                'inquiry.task_updated',
+                'inquiry.task_status_changed',
+                'inquiry.task_completed',
+                'inquiry.task_reopened',
+            ])
             ->orderBy('created_at')
-            ->get(['meta', 'created_at'])
-            ->each(function (Activity $activity) use (&$stats): void {
+            ->orderBy('id')
+            ->get(['id', 'event', 'description', 'meta', 'created_at'])
+            ->each(function (Activity $activity) use (&$reopenCounts, &$reopenLatest, &$timings, &$activeStarts, $inquiryService): void {
                 $taskId = (int) data_get($activity->meta, 'inquiry_task_id');
-                if ($taskId <= 0) return;
+                if ($taskId <= 0 || !$activity->created_at) return;
 
-                if (!isset($stats[$taskId])) {
-                    $stats[$taskId] = ['count' => 0, 'latest_timestamp' => 0];
+                $at = $activity->created_at;
+                $event = (string) $activity->event;
+                $toStatus = $this->activityTaskStatus($activity);
+
+                if ($event === 'inquiry.task_reopened') {
+                    $reopenCounts[$taskId] = (int) ($reopenCounts[$taskId] ?? 0) + 1;
+                    $reopenLatest[$taskId] = max(
+                        (int) ($reopenLatest[$taskId] ?? 0),
+                        (int) $at->timestamp
+                    );
+
+                    // A reopen closes the previous completed cycle. If the task
+                    // reopens directly into a working status, that transition is
+                    // the start of the new cycle; otherwise wait for In Progress.
+                    $activeStarts[$taskId] = null;
+                    if ($toStatus !== null && $inquiryService->isWorkingTaskStatus($toStatus)) {
+                        $activeStarts[$taskId] = $at;
+                    }
+                    return;
                 }
 
-                $stats[$taskId]['count']++;
-                $stats[$taskId]['latest_timestamp'] = max(
-                    (int) $stats[$taskId]['latest_timestamp'],
-                    (int) ($activity->created_at?->timestamp ?? 0)
-                );
+                if ($event === 'inquiry.task_completed') {
+                    $startedAt = $activeStarts[$taskId] ?? null;
+                    $seconds = null;
+                    if ($startedAt && $at->gte($startedAt)) {
+                        $seconds = max(1, $startedAt->diffInSeconds($at));
+                    }
+
+                    // Always keep the real completion-event timestamp. The start
+                    // remains null when no genuine In Progress transition exists.
+                    $timings[$taskId] = [
+                        'started_at' => $startedAt,
+                        'completed_at' => $at,
+                        'seconds' => $seconds,
+                    ];
+                    $activeStarts[$taskId] = null;
+                    return;
+                }
+
+                if ($toStatus === null) return;
+
+                $isCompletedStatus = strcasecmp(
+                    $inquiryService->autoInquiryStatusForTaskStatus($toStatus),
+                    InquiryService::AUTO_COMPLETED_STATUS
+                ) === 0;
+
+                if ($isCompletedStatus) {
+                    // Older/custom writers may have logged only a status change.
+                    $startedAt = $activeStarts[$taskId] ?? null;
+                    $seconds = $startedAt && $at->gte($startedAt)
+                        ? max(1, $startedAt->diffInSeconds($at))
+                        : null;
+                    $timings[$taskId] = [
+                        'started_at' => $startedAt,
+                        'completed_at' => $at,
+                        'seconds' => $seconds,
+                    ];
+                    $activeStarts[$taskId] = null;
+                    return;
+                }
+
+                if ($inquiryService->isWorkingTaskStatus($toStatus) && empty($activeStarts[$taskId])) {
+                    $activeStarts[$taskId] = $at;
+                }
             });
 
-        return $stats;
+        foreach ($activeStarts as $taskId => $activeStart) {
+            if (!$activeStart) continue;
+            $timings[(int) $taskId] = array_merge(
+                $timings[(int) $taskId] ?? [
+                    'started_at' => null,
+                    'completed_at' => null,
+                    'seconds' => null,
+                ],
+                ['active_started_at' => $activeStart]
+            );
+        }
+
+        return [
+            'reopen_counts' => $reopenCounts,
+            'reopen_latest_timestamps' => $reopenLatest,
+            'timings' => $timings,
+        ];
+    }
+
+    /**
+     * Resolve the target status from new structured metadata first, then from
+     * historical human-readable activity descriptions for backward compatibility.
+     */
+    private function activityTaskStatus(Activity $activity): ?string
+    {
+        foreach (['to_status', 'new_status'] as $key) {
+            $status = trim((string) data_get($activity->meta, $key, ''));
+            if ($status !== '') return $status;
+        }
+
+        $description = trim((string) $activity->description);
+        $event = (string) $activity->event;
+
+        if ($event === 'inquiry.task_completed') return InquiryService::AUTO_COMPLETED_STATUS;
+
+        if ($event === 'inquiry.task_status_changed'
+            && preg_match('/\bstatus changed from .+? to (.+?)\.\s*$/ui', $description, $matches)) {
+            return trim((string) ($matches[1] ?? '')) ?: null;
+        }
+
+        if ($event === 'inquiry.task_reopened'
+            && preg_match('/\bstatus changed to (.+?)\.\s*$/ui', $description, $matches)) {
+            return trim((string) ($matches[1] ?? '')) ?: null;
+        }
+
+        if ($event === 'inquiry.task_updated'
+            && preg_match('/\bupdated\s+[—-]\s+(.+?)\.\s*$/ui', $description, $matches)) {
+            return trim((string) ($matches[1] ?? '')) ?: null;
+        }
+
+        return null;
     }
 
     private function statusOptions(User $user, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): array
@@ -929,17 +1064,70 @@ class InquiryIntelligenceService
     }
 
     /**
-     * Average-cycle timing is deliberately status based: the clock starts only
-     * when InquiryService records started_at as the task first enters a working
-     * state (for example In Progress/Started), and stops at completed_at.
-     * Assignment/creation time is never used as a fallback.
+     * Return the effective task timing for reporting. Activity-derived timing is
+     * authoritative because it represents the real In Progress -> Completed
+     * cycle. The model timestamps are only a legacy fallback when they form a
+     * positive interval; equal timestamps are a direct-completion artifact and
+     * must not be reported as a genuine 0-minute work duration.
+     *
+     * @return array{started_at:mixed,completed_at:mixed,seconds:?int}
      */
-    private function taskHours(InquiryTask $task): ?float
+    private function taskTiming(InquiryTask $task, array $taskTimingStats = []): array
     {
-        if (!$task->started_at || !$task->completed_at) return null;
-        if ($task->completed_at->lt($task->started_at)) return null;
+        $history = $taskTimingStats[(int) $task->id] ?? null;
 
-        return $task->started_at->diffInSeconds($task->completed_at) / 3600;
+        // For a reopened/currently open task, never display its previous cycle's
+        // completion as though it were the current one. Show the current working
+        // start when the audit trail has it and keep the duration explicitly open.
+        if (!$task->completed_at) {
+            return [
+                'started_at' => is_array($history) ? ($history['active_started_at'] ?? null) : null,
+                'completed_at' => null,
+                'seconds' => null,
+            ];
+        }
+
+        if (is_array($history) && ($history['completed_at'] ?? null)) {
+            $historyCompleted = $history['completed_at'];
+            $historyStarted = $history['started_at'] ?? null;
+            $historySeconds = isset($history['seconds']) ? (int) $history['seconds'] : null;
+
+            // Some older activities recorded the completion event but not the
+            // preceding status value. In that case, preserve a trustworthy legacy
+            // started_at only when it is strictly before the real completion event.
+            if (!$historyStarted && $task->started_at && $historyCompleted->gt($task->started_at)) {
+                $historyStarted = $task->started_at;
+                $historySeconds = max(1, $task->started_at->diffInSeconds($historyCompleted));
+            }
+
+            return [
+                'started_at' => $historyStarted,
+                'completed_at' => $historyCompleted,
+                'seconds' => $historySeconds,
+            ];
+        }
+
+        if (!$task->started_at || !$task->completed_at || !$task->completed_at->gt($task->started_at)) {
+            return [
+                'started_at' => null,
+                'completed_at' => $task->completed_at,
+                'seconds' => null,
+            ];
+        }
+
+        return [
+            'started_at' => $task->started_at,
+            'completed_at' => $task->completed_at,
+            'seconds' => $task->started_at->diffInSeconds($task->completed_at),
+        ];
+    }
+
+    private function taskHours(InquiryTask $task, array $taskTimingStats = []): ?float
+    {
+        $timing = $this->taskTiming($task, $taskTimingStats);
+        if ($timing['seconds'] === null) return null;
+
+        return max(0, (int) $timing['seconds']) / 3600;
     }
 
     private function inquiryCycleHours(Inquiry $inquiry): ?float

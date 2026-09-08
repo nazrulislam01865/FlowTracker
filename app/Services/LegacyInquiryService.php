@@ -1427,6 +1427,7 @@ class LegacyInquiryService
         // handled by updateTaskStatus()/completeTask() because it also updates
         // completed_at and the parent Inquiry lifecycle.
         $requestedStatus = trim((string) ($data['status'] ?? ''));
+        $oldStatus = (string) $task->status;
         $allowedStatuses = $this->openTaskStatusOptions((string) $task->status);
         $nextStatus = $allowedStatuses->contains(fn (string $name) => strcasecmp($name, $requestedStatus) === 0)
             ? (string) $allowedStatuses->first(fn (string $name) => strcasecmp($name, $requestedStatus) === 0)
@@ -1478,7 +1479,11 @@ class LegacyInquiryService
             $this->forgetMyTaskShell($oldAssigneeId);
             $this->notifyTaskAssigned($task, $actor);
         }
-        $this->activity($task->inquiry, $actor, 'inquiry.task_updated', $task->title.' updated — '.$task->status.'.', ['inquiry_task_id' => $task->id]);
+        $this->activity($task->inquiry, $actor, 'inquiry.task_updated', $task->title.' updated — '.$task->status.'.', [
+            'inquiry_task_id' => $task->id,
+            'old_status' => $oldStatus,
+            'to_status' => (string) $task->status,
+        ]);
         $this->syncAutomaticStatus($task->inquiry, $actor);
         return $task->refresh();
     }
@@ -1557,11 +1562,23 @@ class LegacyInquiryService
             $this->forgetMyTaskShell($task->assignee_id ? (int) $task->assignee_id : null);
 
             if ($willComplete && !$wasCompleted) {
-                $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', ['inquiry_task_id' => $task->id]);
+                $this->activity($task->inquiry, $actor, 'inquiry.task_completed', $task->title.' completed.', [
+                    'inquiry_task_id' => $task->id,
+                    'old_status' => $oldStatus,
+                    'to_status' => $status,
+                ]);
             } elseif (!$willComplete && $wasCompleted) {
-                $this->activity($task->inquiry, $actor, 'inquiry.task_reopened', $task->title.' reopened — status changed to '.$status.'.', ['inquiry_task_id' => $task->id]);
+                $this->activity($task->inquiry, $actor, 'inquiry.task_reopened', $task->title.' reopened — status changed to '.$status.'.', [
+                    'inquiry_task_id' => $task->id,
+                    'old_status' => $oldStatus,
+                    'to_status' => $status,
+                ]);
             } else {
-                $this->activity($task->inquiry, $actor, 'inquiry.task_status_changed', $task->title.' status changed from '.$oldStatus.' to '.$status.'.', ['inquiry_task_id' => $task->id]);
+                $this->activity($task->inquiry, $actor, 'inquiry.task_status_changed', $task->title.' status changed from '.$oldStatus.' to '.$status.'.', [
+                    'inquiry_task_id' => $task->id,
+                    'old_status' => $oldStatus,
+                    'to_status' => $status,
+                ]);
             }
 
             $remaining = $task->inquiry->tasks()->whereNull('completed_at')->exists();
@@ -2057,7 +2074,12 @@ class LegacyInquiryService
                     $actor,
                     'inquiry.task_reopened',
                     $lockedTask->title.' reopened because its final required file/link was removed.',
-                    ['inquiry_task_id' => $lockedTask->id, 'removed_inquiry_task_link_id' => $linkId],
+                    [
+                        'inquiry_task_id' => $lockedTask->id,
+                        'removed_inquiry_task_link_id' => $linkId,
+                        'old_status' => self::AUTO_COMPLETED_STATUS,
+                        'to_status' => (string) $lockedTask->status,
+                    ],
                 );
             }
 
@@ -2150,7 +2172,12 @@ class LegacyInquiryService
                     $actor,
                     'inquiry.task_reopened',
                     $lockedTask->title.' reopened because its final required file/link evidence was removed.',
-                    ['inquiry_task_id' => $lockedTask->id, 'removed_inquiry_document_id' => $documentId],
+                    [
+                        'inquiry_task_id' => $lockedTask->id,
+                        'removed_inquiry_document_id' => $documentId,
+                        'old_status' => self::AUTO_COMPLETED_STATUS,
+                        'to_status' => (string) $lockedTask->status,
+                    ],
                 );
             }
 

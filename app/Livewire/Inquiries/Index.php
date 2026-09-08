@@ -59,6 +59,17 @@ class Index extends Component
     public string $dateFrom = '';
     public string $dateTo = '';
     public bool $hideCompleted = false;
+
+    // Draft values for the Inquiry filter bar. These are intentionally kept
+    // separate from the applied query state so changing a filter control does
+    // not change the result set until the user clicks Apply filter.
+    public string $pendingListClient = '';
+    public string $pendingListClientLabel = '';
+    public string $pendingListStatus = '';
+    public string $pendingDateFrom = '';
+    public string $pendingDateTo = '';
+    public bool $pendingHideCompleted = false;
+
     public array $metrics = ['createdToday' => 0, 'notStarted' => 0, 'inProgress' => 0, 'dueThisWeek' => 0, 'completedThisWeek' => 0, 'attention' => 0];
 
     public bool $showCreate = false;

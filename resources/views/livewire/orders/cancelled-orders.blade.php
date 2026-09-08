@@ -182,7 +182,12 @@
 
                             <td>
                                 <div class="ft-cancelled-person">
-                                    <span class="ft-cancelled-person-avatar" aria-hidden="true">{{ $row['cancelled_by_initial'] }}</span>
+                                    <x-ui.avatar
+                                        :name="$row['cancelled_by_name']"
+                                        :src="$row['cancelled_by_image_url']"
+                                        :size="30"
+                                        class="ft-cancelled-person-avatar"
+                                    />
                                     <span class="ft-cancelled-person-copy">
                                         <strong title="{{ $row['cancelled_by_name'] }}">{{ $row['cancelled_by_name'] }}</strong>
                                         <small>{{ $row['cancelled_at_date'] }} · {{ $row['cancelled_at_time'] }}</small>
@@ -192,7 +197,12 @@
 
                             <td>
                                 <div class="ft-cancelled-person">
-                                    <span class="ft-cancelled-person-avatar" aria-hidden="true">{{ $row['owner_initial'] }}</span>
+                                    <x-ui.avatar
+                                        :name="$row['owner_name']"
+                                        :src="$row['owner_image_url']"
+                                        :size="30"
+                                        class="ft-cancelled-person-avatar"
+                                    />
                                     <span class="ft-cancelled-person-copy">
                                         <strong title="{{ $row['owner_name'] }}">{{ $row['owner_name'] }}</strong>
                                         <small>Order owner</small>

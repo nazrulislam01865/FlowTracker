@@ -75,7 +75,7 @@ class ListFilterExperienceTest extends TestCase
 
         $this->assertStringContainsString('<x-ui.search-input', $inquiries);
         $this->assertStringContainsString('<x-ui.filter-bar', $inquiries);
-        $this->assertStringContainsString('property="listStatus"', $inquiries);
+        $this->assertStringContainsString('property="pendingListStatus"', $inquiries);
     }
 
     public function test_heavy_filter_lookups_are_not_loaded_as_full_lists_on_board_my_work_or_documents(): void

@@ -19,6 +19,7 @@ trait BuildsInquiryPageData
     {
         $listQuery = app(\App\Queries\Inquiries\InquiryListQuery::class);
         $selectedClientId = $this->listClient !== '' ? (int) $this->listClient : null;
+        $pendingClientId = $this->pendingListClient !== '' ? (int) $this->pendingListClient : $selectedClientId;
         $paginator = $listQuery->paginate($user, [
             'search' => $this->search,
             'quick' => $this->quick,
@@ -30,7 +31,7 @@ trait BuildsInquiryPageData
             'date_to' => $this->dateTo,
         ], self::INQUIRIES_PER_PAGE);
         $listClientFilterOptions = app(\App\Services\FilterOptionService::class)
-            ->options($user, 'clients', 'inquiries', '', $selectedClientId, 6);
+            ->options($user, 'clients', 'inquiries', '', $pendingClientId, 6);
         $detailQuery = app(\App\Queries\Inquiries\InquiryDetailQuery::class);
         $rows = $listQuery->rows($paginator, $user)->map(function (array $row) use ($detailQuery): array {
             $row['statusColor'] = $detailQuery->statusColor(

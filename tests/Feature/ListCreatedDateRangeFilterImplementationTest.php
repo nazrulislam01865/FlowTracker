@@ -25,6 +25,9 @@ class ListCreatedDateRangeFilterImplementationTest extends TestCase
         $this->assertStringContainsString('lang="en-GB"', $dateComponent);
         $this->assertStringContainsString('<x-ui.date-range', $inquiryView);
         $this->assertStringContainsString('class="ft-inquiry-date-range"', $inquiryView);
+        $this->assertStringContainsString('from-property="pendingDateFrom"', $inquiryView);
+        $this->assertStringContainsString('to-property="pendingDateTo"', $inquiryView);
+        $this->assertStringContainsString('wire:click="applyFilters"', $inquiryView);
         $hideCompletedPosition = strpos($inquiryView, '<label class="completed-toggle');
         $dateRangePosition = strpos($inquiryView, '<x-ui.date-range');
         $clearFilterPosition = strpos($inquiryView, 'class="chip ft-inquiry-clear-filter"');

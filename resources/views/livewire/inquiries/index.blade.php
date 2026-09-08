@@ -32,7 +32,17 @@
         && $dateFrom === ''
         && $dateTo === ''
         && ! $hideCompleted;
-    $inquiryAnyFilterActive = $metricFilter !== '' || ! $inquiryToolbarIsClear;
+    $inquiryPendingToolbarIsClear = $pendingListStatus === ''
+        && $pendingListClient === ''
+        && $pendingDateFrom === ''
+        && $pendingDateTo === ''
+        && ! $pendingHideCompleted;
+    $inquiryFilterDraftDirty = $pendingListStatus !== $listStatus
+        || $pendingListClient !== $listClient
+        || $pendingDateFrom !== $dateFrom
+        || $pendingDateTo !== $dateTo
+        || $pendingHideCompleted !== $hideCompleted;
+    $inquiryAnyFilterActive = $metricFilter !== '' || ! $inquiryToolbarIsClear || ! $inquiryPendingToolbarIsClear;
     $canDeleteInquiries = auth()->user()->canModule('inquiries', 'delete');
     $inquiryExportQuery = array_filter([
         'search' => filled($search) ? $search : null,

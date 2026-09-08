@@ -17,19 +17,23 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringNotContainsString('wire:click="setQuick(\'active\')">Active</button>', $view);
         $this->assertStringNotContainsString('wire:click="setQuick(\'dead\')">Closed</button>', $view);
         $this->assertStringContainsString('class="ft-inquiry-list-client-filter"', $view);
-        $this->assertStringContainsString('property="listClient"', $view);
-        $this->assertStringContainsString('action="setInquiryListFilter"', $view);
-        $this->assertStringContainsString(':selected-label="$listClientLabel ?: null"', $view);
+        $this->assertStringContainsString('property="pendingListClient"', $view);
+        $this->assertStringContainsString('action="setInquiryPendingListFilter"', $view);
+        $this->assertStringContainsString(':selected-label="$pendingListClientLabel ?: null"', $view);
         $this->assertStringContainsString('wire:key="inquiry-list-client-filter-', $view);
         $this->assertStringContainsString('type="clients"', $view);
         $this->assertStringContainsString('context="inquiries"', $view);
         $this->assertStringContainsString(':fixed-menu="true"', $view);
         $this->assertStringContainsString('public string $listClient', $component);
         $this->assertStringContainsString('public string $listClientLabel', $component);
-        $this->assertStringContainsString('public function setInquiryListFilter(string $property, mixed $value): void', $component);
+        $this->assertStringContainsString('public string $pendingListClient', $component);
+        $this->assertStringContainsString('public string $pendingListClientLabel', $component);
+        $this->assertStringContainsString('wire:click="applyFilters"', $view);
+        $this->assertStringContainsString('public function applyFilters(): void', $component);
+        $this->assertStringContainsString('public function setInquiryPendingListFilter(string $property, mixed $value): void', $component);
         $this->assertStringContainsString("->options(auth()->user(), 'clients', 'inquiries', '', \$id, 20)", $component);
         $this->assertStringContainsString("'client_id' => \$selectedClientId", $component);
-        $this->assertStringContainsString("->options(\$user, 'clients', 'inquiries', '', \$selectedClientId, 6)", $component);
+        $this->assertStringContainsString("->options(\$user, 'clients', 'inquiries', '', \$pendingClientId, 6)", $component);
         $this->assertStringContainsString('private const INQUIRIES_PER_PAGE = 10;', $component);
         $this->assertStringContainsString('], self::INQUIRIES_PER_PAGE);', $component);
         $this->assertStringContainsString("->when(\$clientId > 0, fn (Builder \$q) => \$q->where('inquiries.client_id', \$clientId))", $service);
@@ -225,7 +229,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("\$hideCompleted && \$metricFilter !== 'completedThisWeek'", $service);
         $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
         $this->assertStringContainsString('public function updatedHideCompleted(): void', $component);
-        $this->assertStringContainsString('wire:model.live="hideCompleted"', $view);
+        $this->assertStringContainsString('wire:model.live="pendingHideCompleted"', $view);
     }
 
     public function test_inquiry_tasks_use_explicit_my_work_adapters_without_legacy_group_merging(): void

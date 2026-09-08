@@ -15,7 +15,7 @@ class InquirySingleFilterBehaviorTest extends TestCase
 
         $this->assertStringContainsString('<x-ui.filter-reset', $view);
         $this->assertStringContainsString('action="clearFilters"', $view);
-        $this->assertStringContainsString('label="Clear filter"', $view);
+        $this->assertStringContainsString('label="Clear"', $view);
         $this->assertStringContainsString(':disabled="! $inquiryAnyFilterActive"', $view);
         $this->assertStringContainsString('wire:click="{{ $action }}"', $reset);
         $this->assertStringContainsString('@disabled($disabled)', $reset);
