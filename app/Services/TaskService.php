@@ -28,6 +28,7 @@ class TaskService
      */
     public function claimForAction(Task $task, User $actor, string $action = 'acted on the task'): Task
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         $task = Task::query()->findOrFail($task->id);
         $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
 
@@ -70,6 +71,7 @@ class TaskService
      */
     public function assignFromWorkflowHandoff(Task $task, User $assignee, User $actor): Task
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         $task = Task::query()->findOrFail($task->id);
         $previousAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
         if ($previousAssigneeId === (int) $assignee->id) return $task;
@@ -445,6 +447,7 @@ class TaskService
     private function assertEditable(Task $task, User $actor): void
     {
         abort_unless(app(AccessControlService::class)->canEditTask($actor, $task), 403);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
     }
 
     private function ensureCompletionRequirements(Task $task): void

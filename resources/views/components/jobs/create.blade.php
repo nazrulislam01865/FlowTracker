@@ -116,14 +116,14 @@
             <div class="ft-create-section-title"><span>4</span><h2>Schedule & owner</h2></div>
             <div class="ft-create-fields">
                     {{-- CHANGE 2026-08-24:
-                    kept the optional delivery date field for Create Order
+                    kept the optional Hand Date field for Create Order
                     and removed Estimated Delivery from this form only. --}}
                 <label
                     class="ft-create-field ft-clickable-date-field"
                     x-data
                     x-on:click="if (!$event.target.closest('.validation-error')) { $refs.deliveryDate?.showPicker?.(); $refs.deliveryDate?.focus(); }"
                 >
-                    <b>Expected delivery date</b>
+                    <b>Hand Date</b>
 
                     <input
                         x-ref="deliveryDate"

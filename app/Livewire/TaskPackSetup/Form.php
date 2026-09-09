@@ -86,8 +86,19 @@ class Form extends Component
     public function loadTaskPackOptions(): void
     {
         if ($this->optionsReady) return;
+
         app(TaskPackService::class)->ensureTaskPackMasterDataDefaults();
         $this->optionsReady = true;
+
+        // Older Task Packs can still contain the pre-master-data efficiency
+        // values (business_hours, status_in_progress, etc.) or a code that was
+        // later retired in Master Data. Native <select> controls visually fall
+        // back to their first option in that situation, but Livewire keeps the
+        // stale value in component state. Saving then reports "The selected
+        // option is invalid" even when the user only changed Required task.
+        // Normalize those references as soon as the real option sets are loaded
+        // so what the user sees is exactly what will be persisted.
+        $this->normalizeEfficiencyOptionValues();
     }
 
     public function loadCreateSection(string $section): void
@@ -267,6 +278,66 @@ class Form extends Component
             auth()->user(),
         );
         $this->redirectRoute('task-pack.setup', navigate: true);
+    }
+
+    private function normalizeEfficiencyOptionValues(): void
+    {
+        $master = app(MasterDataService::class);
+
+        $definitions = [
+            'standard_duration_unit' => [
+                'type' => 'task_pack_duration_unit',
+                'preferred' => 'TPD-001',
+                'legacy' => [
+                    'business_hours' => 'TPD-001',
+                    'calendar_hours' => 'TPD-002',
+                    'business_days' => 'TPD-003',
+                    'calendar_days' => 'TPD-004',
+                ],
+            ],
+            'timer_start_rule' => [
+                'type' => 'task_pack_timer_start',
+                'preferred' => 'TPS-001',
+                'legacy' => ['status_in_progress' => 'TPS-001'],
+            ],
+            'timer_stop_rule' => [
+                'type' => 'task_pack_timer_stop',
+                'preferred' => 'TPE-001',
+                'legacy' => ['status_completed' => 'TPE-001'],
+            ],
+            'work_calendar' => [
+                'type' => 'task_pack_work_calendar',
+                'preferred' => 'TPW-001',
+                'legacy' => ['workspace_hours' => 'TPW-001'],
+            ],
+        ];
+
+        foreach ($definitions as $field => $definition) {
+            $options = $master->active($definition['type']);
+            $validCodes = $options
+                ->pluck('code')
+                ->map(fn ($code) => trim((string) $code))
+                ->filter()
+                ->values();
+
+            if ($validCodes->isEmpty()) continue;
+
+            $fallback = $validCodes->contains($definition['preferred'])
+                ? $definition['preferred']
+                : (string) $validCodes->first();
+
+            foreach ($this->tasks as $index => $task) {
+                $current = trim((string) ($task[$field] ?? ''));
+                $mapped = $definition['legacy'][$current] ?? $current;
+
+                if ($mapped === '' || ! $validCodes->contains($mapped)) {
+                    $mapped = $fallback;
+                }
+
+                $this->tasks[$index][$field] = $mapped;
+                $this->resetValidation("tasks.$index.$field");
+            }
+        }
     }
 
     private function validateTaskReferences(array $tasks, int $workspaceId): void

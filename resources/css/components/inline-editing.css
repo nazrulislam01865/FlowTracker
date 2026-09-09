@@ -197,7 +197,7 @@
 }
 
 /* Job details planning card: person fields use the same one-control-at-a-time
-   inline-edit behavior as Priority and Required delivery. */
+   inline-edit behavior as Priority and Hand Date. */
 .ft-planning-person-value {
     max-width: 100%;
     overflow: hidden;

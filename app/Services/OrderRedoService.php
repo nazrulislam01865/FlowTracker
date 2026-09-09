@@ -214,6 +214,7 @@ class OrderRedoService
      */
     public function createRedo(FlowJob $sourceOrder, array $data, User $actor): OrderRedo
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($sourceOrder);
         abort_unless($this->canInitiate($actor, $sourceOrder), 403);
 
         return DB::transaction(function () use ($sourceOrder, $data, $actor): OrderRedo {

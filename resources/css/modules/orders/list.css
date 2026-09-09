@@ -4355,12 +4355,13 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
 .ft-order-list-v5 .ft-order-filter-controls-row {
     display: grid;
     grid-template-columns:
-        minmax(110px, .65fr)
+        minmax(90px, .55fr)
+        minmax(115px, .65fr)
         minmax(180px, 1fr)
         minmax(180px, 1fr)
         minmax(190px, 1.05fr)
         minmax(360px, 1.5fr)
-        minmax(180px, 1fr);
+        72px;
     gap: 8px;
     align-items: stretch;
     width: 100%;
@@ -4401,6 +4402,25 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     border-color: var(--ft-theme-primary-300);
     background: var(--ft-theme-primary-soft, #edf8f5);
     color: var(--ft-theme-primary);
+}
+
+.ft-order-list-v5 .ft-order-hold-filter {
+    cursor: pointer;
+    user-select: none;
+}
+
+.ft-order-list-v5 .ft-order-hold-filter input {
+    width: 15px !important;
+    height: 15px;
+    min-width: 15px !important;
+    margin: 0;
+    accent-color: #f28c28;
+}
+
+.ft-order-list-v5 .ft-order-hold-filter.active {
+    border-color: #f0a65a;
+    background: #fff5e9;
+    color: #b75a00;
 }
 
 .ft-order-list-v5 .ft-order-attention-filter > span {
@@ -4478,9 +4498,25 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    gap: 6px;
-    padding: 0 11px;
+    justify-self: end;
+    gap: 4px;
+    width: 72px !important;
+    min-width: 72px !important;
+    max-width: 72px !important;
+    padding: 0 8px;
     white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.ft-order-list-v5 .ft-order-filter-reset > .ft-filter-reset__icon {
+    font-size: .75rem;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.ft-order-list-v5 .ft-order-filter-reset > span:not(.ft-filter-reset__icon) {
+    font-size: .65625rem;
+    font-weight: 720;
 }
 
 .ft-order-list-v5 .ft-order-filter-reset:disabled {
@@ -4493,9 +4529,13 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range,
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
+    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range {
         grid-column: span 2;
+    }
+
+    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
+        grid-column: auto;
+        justify-self: end;
     }
 }
 
@@ -4504,9 +4544,16 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range,
+    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range {
+        grid-column: 1 / -1;
+    }
+
     .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
         grid-column: 1 / -1;
+        justify-self: stretch;
+        width: 100% !important;
+        min-width: 0 !important;
+        max-width: none !important;
     }
 }
 
@@ -4590,4 +4637,43 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
         width: 350px;
         max-width: 350px;
     }
+}
+
+
+/* 2026-09-09: Order Hold list visibility */
+.ft-order-list-v5 .orders-modern-table tbody tr.order-row.is-on-hold>td {
+    background-color: rgba(255, 106, 0, .10) !important;
+}
+
+.ft-order-list-v5 .orders-modern-table tbody tr.order-row.is-on-hold:hover>td {
+    background-color: rgba(255, 106, 0, .16) !important;
+}
+
+.ft-order-list-v5 .orders-modern-table tbody tr.order-row.is-on-hold>td:first-child {
+    box-shadow: inset 4px 0 0 #ff6a00 !important;
+}
+
+.ft-order-list-v5 .row-status.hold,
+.ft-order-list-v5 .order-hold-list-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    border: 1px solid #ffb27d;
+    border-radius: 999px;
+    background: #fff4ec;
+    color: #d95600;
+    font-weight: 900;
+    white-space: nowrap;
+}
+
+.ft-order-list-v5 .row-status.hold {
+    padding: 5px 9px;
+}
+
+.ft-order-list-v5 .order-hold-list-badge {
+    margin-top: 5px;
+    padding: 3px 7px;
+    width: max-content;
+    font-size: .5625rem;
+    line-height: 1;
 }

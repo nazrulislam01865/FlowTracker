@@ -31,6 +31,10 @@ unset($__defined_vars, $__key, $__value); ?>
     // Remote Area is resolved once in OrderDetailViewService. Keep this Blade
     // component presentation-only so moving the flag here never adds queries.
     $remoteArea = is_array($remoteArea) && ! empty($remoteArea['postal_code']) ? $remoteArea : null;
+    $isOnHold = (bool) ($context['isOnHold'] ?? false);
+    $hold = is_array($context['hold'] ?? null) ? $context['hold'] : null;
+    $canHold = (bool) ($context['canHold'] ?? false);
+    $canReleaseHold = (bool) ($context['canReleaseHold'] ?? false);
 ?>
 <section class="section-card ft-order-section-card ft-order-planning-card">
     <div class="section-head ft-order-section-head"><h2>Planning &amp; ownership</h2><span class="card-sub">Quick edits</span></div>
@@ -51,8 +55,8 @@ unset($__defined_vars, $__key, $__value); ?>
             </div>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <div class="info-row ft-order-info-row ft-inline-edit-shell"
-            x-data="window.FlowTrack.ui.inlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-'.$job->id.'-delivery-date')->toHtml() ?>, label: 'delivery date', value: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('Y-m-d') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('M j, Y') ?? 'Not set')->toHtml() ?> })">
-            <span>Required delivery</span>
+            x-data="window.FlowTrack.ui.inlineEdit({ key: <?php echo \Illuminate\Support\Js::from('job-'.$job->id.'-delivery-date')->toHtml() ?>, label: 'Hand Date', value: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('Y-m-d') ?? '')->toHtml() ?>, display: <?php echo \Illuminate\Support\Js::from($job->delivery_date?->format('M j, Y') ?? 'Not set')->toHtml() ?> })">
+            <span>Hand Date</span>
             <b><span x-show="!editing" x-text="display"><?php echo e($job->delivery_date?->format('M j, Y') ?? 'Not set'); ?></span>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditJob): ?>
                     <button x-show="!editing" type="button" class="inline-edit" x-on:click.stop="if(beginEdit()) $nextTick(() => $refs.delivery.focus())">✎</button>
@@ -82,6 +86,51 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </b>
         </div>
+
+        <div class="info-row ft-order-info-row ft-order-hold-row">
+            <span>Hold order</span>
+            <b>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isOnHold): ?>
+                    <span class="ft-order-hold-status-button" aria-label="Order is on hold">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>On Hold</span>
+                    </span>
+                <?php elseif($canHold): ?>
+                    <button type="button" class="ft-order-hold-action-button" wire:click="openOrderHoldModal" wire:loading.attr="disabled" wire:target="openOrderHoldModal" data-ft-feedback="off">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Hold order</span>
+                    </button>
+                <?php else: ?>
+                    <span class="ft-order-hold-static-state">Not on hold</span>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+            </b>
+        </div>
+
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isOnHold && $hold): ?>
+            <?php if (isset($component)) { $__componentOriginal88207bda303dde947a97afc03a4c8a1a = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal88207bda303dde947a97afc03a4c8a1a = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.hold-status-card','data' => ['hold' => $hold,'canReleaseHold' => $canReleaseHold]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.hold-status-card'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['hold' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($hold),'can-release-hold' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canReleaseHold)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal88207bda303dde947a97afc03a4c8a1a)): ?>
+<?php $attributes = $__attributesOriginal88207bda303dde947a97afc03a4c8a1a; ?>
+<?php unset($__attributesOriginal88207bda303dde947a97afc03a4c8a1a); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal88207bda303dde947a97afc03a4c8a1a)): ?>
+<?php $component = $__componentOriginal88207bda303dde947a97afc03a4c8a1a; ?>
+<?php unset($__componentOriginal88207bda303dde947a97afc03a4c8a1a); ?>
+<?php endif; ?>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
         <div class="info-row ft-order-info-row"><span>Reference number</span><b><?php echo e($job->order_number ?: '—'); ?></b></div>
         <div id="order-shipment-urgency" class="info-row ft-order-info-row ft-order-urgency-info-row">
             <span><span class="help" title="Shipment urgency determines operational prioritization for packing, carrier booking, and dispatch.">Shipment urgency</span></span>

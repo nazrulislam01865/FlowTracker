@@ -8,6 +8,7 @@
         :search-filter="$search"
         :client-filter="$client"
         :owner-filter="$owner"
+        :hold-on-filter="$holdOn"
         :phase-filter="$phase"
         :date-from="$dateFrom"
         :date-to="$dateTo"

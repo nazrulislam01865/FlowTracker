@@ -501,13 +501,14 @@ class LegacyJobService
     {
         return $this->visibleQuery($user)
             ->with([
-                'client:id,name,logo_path',
+                'client:id,name,contact_name,logo_path',
                 'orderFlag:id,type,name,color,status,sort_order,metadata',
                 'phase:id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'coordinator:id,name,profile_image_path',
                 'creator:id,name,profile_image_path',
                 'cancelledBy:id,name,profile_image_path',
+                'activeHold.holder:id,name,profile_image_path',
                 'members.user:id,name,profile_image_path',
             ])
             ->withCount(['documents', 'linkedInquiries'])
@@ -1038,6 +1039,7 @@ class LegacyJobService
             'latestCourierLabelActivity:activities.id,activities.subject_type,activities.subject_id,activities.event,activities.meta,activities.created_at',
             'workflowEmailActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
             'workflowInvoiceActivities:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
+            'latestProductionMonitorActivity:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
             'invoices.creator:id,name',
             'tasks' => fn ($query) => app(AccessControlService::class)
                 ->applyTaskScope($query, $user)
@@ -2603,6 +2605,8 @@ class LegacyJobService
 
     public function appendTask(FlowJob $job, array $data, User $actor): Task
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
+
         $access = app(AccessControlService::class);
         abort_unless($access->canCreateJobTask($actor, $job), 403);
         abort_if($job->completed_at || $job->status === 'Completed', 422, 'A completed Order cannot receive another task.');
@@ -2610,6 +2614,7 @@ class LegacyJobService
 
         return DB::transaction(function () use ($job, $data, $actor): Task {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($lockedJob);
             $lockedJob->loadMissing('phase', 'workflow.phases');
 
             $phaseId = (int) ($data['workflow_phase_id'] ?? 0);
@@ -2802,6 +2807,7 @@ class LegacyJobService
     public function maybeAutoAdvance(FlowJob $job, User $actor): void
     {
         $job = $this->findVisible($actor, $job->id);
+        if (app(\App\Services\Orders\OrderHoldService::class)->activeHold($job)) return;
 
         // The approved Order runtime stays sequential/automatic regardless of
         // which reusable Order workflow template was selected. Inquiry and
@@ -2831,6 +2837,7 @@ class LegacyJobService
     public function completePhase(FlowJob $job, User $actor, bool $automatic = false): FlowJob
     {
         if (!$automatic) $this->assertStatusEditable($job, $actor);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         return DB::transaction(function () use ($job, $actor) {
             $this->syncWorkflowTasks($job, $actor);
             $job = $this->findVisible($actor, $job->id);
@@ -2911,6 +2918,7 @@ class LegacyJobService
     public function moveToPhase(FlowJob $job, int $phaseId, User $actor): FlowJob
     {
         $this->assertStatusEditable($job, $actor);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         $job->load('phase', 'workflow.phases');
         $target = $job->workflow->phases->firstWhere('id', $phaseId)
             ?: $job->workflow->phases->firstWhere('source_workflow_phase_id', $phaseId);

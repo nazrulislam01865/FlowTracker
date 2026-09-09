@@ -107,6 +107,7 @@
             :show-task-document-picker="$showTaskDocumentPicker"
             :edit-mode="$taskEditMode"
             :task-detail-sections-ready="$taskDetailSectionsReady ?? []"
+            :order-hold-context="$taskOrderHoldContext ?? []"
             wire:key="task-detail-{{ $selectedTask->id }}-{{ $taskEditMode ? 'edit' : 'view' }}"
         />
     @elseif($selectedJob)
@@ -179,6 +180,9 @@
             :focus-comment="$focusComment"
             :show-order-attention-modal="$showOrderAttentionModal"
             :order-attention-reason="$orderAttentionReason"
+            :show-order-hold-modal="$showOrderHoldModal"
+            :order-hold-from="$orderHoldFrom"
+            :order-hold-reason="$orderHoldReason"
             :show-order-cancel-modal="$showOrderCancelModal"
             :order-cancellation-reason="$orderCancellationReason"
             :job-document-uploads="$jobDocumentUploads"

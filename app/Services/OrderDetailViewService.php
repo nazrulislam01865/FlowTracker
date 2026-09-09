@@ -23,6 +23,13 @@ class OrderDetailViewService
         $inactive = (bool) $job->completed_at
             || $job->status === 'Completed'
             || in_array((string) $job->status, JobService::INACTIVE_STATUSES, true);
+        $activeHold = $job->relationLoaded('activeHold') ? $job->activeHold : null;
+        $activeHoldSourceName = $activeHold
+            ? trim((string) ($activeHold->source_name
+                ?: ((string) $activeHold->hold_from === \App\Models\OrderHold::FROM_CLIENT
+                    ? ($job->client?->contact_name ?: $job->client?->name ?: 'Client')
+                    : ($activeHold->holder?->name ?: $activeHold->holdFromLabel()))))
+            : '';
 
         $shipmentUrgencyName = OrderDetailPresenter::shipmentUrgencyName($job, $shipmentUrgencyOptions);
         // Resolve the Remote Area once while building the detail context. Blade
@@ -70,6 +77,36 @@ class OrderDetailViewService
                 ->all();
         }
 
+        $productionMonitorDetails = [];
+        if ($job->relationLoaded('tasks')) {
+            $monitorActivity = $job->relationLoaded('latestProductionMonitorActivity')
+                ? $job->latestProductionMonitorActivity
+                : null;
+            $monitorMeta = is_array($monitorActivity?->meta) ? $monitorActivity->meta : [];
+            $monitorTaskId = (int) ($monitorMeta['task_id'] ?? 0);
+            $monitorDate = trim((string) ($monitorMeta['supplier_delivery_date'] ?? ''));
+            if ($monitorDate === '' && $job->supplier_delivery_date) {
+                $monitorDate = $job->supplier_delivery_date->format('Y-m-d');
+            }
+            $monitorNote = trim(app(RichTextService::class)->plainText((string) ($monitorMeta['production_issue_note'] ?? '')));
+
+            foreach ($job->tasks as $task) {
+                if ($workflowActions->automationKey($task) !== 'PROD_ISSUE') {
+                    continue;
+                }
+
+                // Older completed orders may not have task_id in the activity
+                // metadata. A PROD_ISSUE task is unique in the standard Task
+                // Pack, so that legacy activity can safely hydrate this row.
+                $matchesActivity = ! $monitorActivity || $monitorTaskId === 0 || $monitorTaskId === (int) $task->id;
+                $productionMonitorDetails[(int) $task->id] = [
+                    'supplierDeliveryDate' => $matchesActivity ? $monitorDate : ($job->supplier_delivery_date?->format('Y-m-d') ?? ''),
+                    'productionIssueNote' => $matchesActivity ? $monitorNote : '',
+                    'savedAt' => $matchesActivity ? $monitorActivity?->created_at : null,
+                ];
+            }
+        }
+
         $workflowInvoices = [];
         $hasPreparedWorkflowInvoice = $job->relationLoaded('workflowInvoiceActivities')
             && $job->workflowInvoiceActivities->isNotEmpty();
@@ -115,7 +152,21 @@ class OrderDetailViewService
             'taskActionModals' => $taskActionModals,
             'workflowEmailStatuses' => $workflowEmailStatuses,
             'workflowInvoices' => $workflowInvoices,
+            'productionMonitorDetails' => $productionMonitorDetails,
             'canCancel' => $canEdit && !$inactive && (int) ($job->phase?->sequence ?? 999) <= 4,
+            'canHold' => $canEdit && !$inactive && !$activeHold,
+            'canReleaseHold' => $canEdit && !$inactive && (bool) $activeHold,
+            'isOnHold' => (bool) $activeHold,
+            'hold' => $activeHold ? [
+                'id' => (int) $activeHold->id,
+                'holdFrom' => (string) $activeHold->hold_from,
+                'holdFromLabel' => $activeHold->holdFromLabel(),
+                'sourceName' => $activeHoldSourceName ?: '—',
+                'reason' => (string) $activeHold->reason,
+                'heldById' => $activeHold->held_by ? (int) $activeHold->held_by : null,
+                'heldBy' => (string) ($activeHold->holder?->name ?: 'Unknown user'),
+                'startedAt' => $activeHold->started_at,
+            ] : null,
             'attentionLocked' => $inactive,
             'flagged' => (bool) ($job->attention_requested ?? false),
             'flagReason' => trim((string) ($job->attention_reason ?? '')),

@@ -189,6 +189,8 @@ final class OrderWorkflowEmailService
      */
     public function send(Task $handoffTask, User $actor, array $selection = []): string
     {
+        app(OrderHoldService::class)->assertNotHeld((int) $handoffTask->flow_job_id);
+
         $key = $this->automationKey($handoffTask);
         abort_unless(in_array($key, [self::PURCHASE_ORDER_HANDOFF, self::ARTWORK_HANDOFF], true), 422);
 

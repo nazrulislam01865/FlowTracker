@@ -12,6 +12,7 @@ use App\Services\Orders\OrderWorkflowEmailService;
 use App\Services\TaskService;
 use App\Support\AttachmentUpload;
 use Illuminate\Validation\ValidationException;
+use Livewire\Attributes\Json;
 use Symfony\Component\HttpKernel\Exception\HttpExceptionInterface;
 use Throwable;
 
@@ -58,6 +59,7 @@ trait ManagesOrderWorkflow
             ->where('flow_job_id', $this->selectedJobId)
             ->findOrFail($taskId);
         abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
 
         $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
         $key = $workflowActions->automationKey($task);
@@ -296,6 +298,224 @@ trait ManagesOrderWorkflow
         $task = $this->shipmentEditableTask((int) $this->orderWorkflowActionTaskId, 'SHIP_CONFIRM_INFO');
         $this->orderWorkflowActionPayload = app(\App\Services\OrderWorkflowActionService::class)->initialPayload($task, $task->job);
         $this->resetValidation('orderWorkflowActionPayload');
+    }
+
+    /**
+     * Save the inline Production monitor form shown by the PROD_ISSUE Task Pack
+     * item. The task identity, ordering, required/optional behavior, assignee,
+     * document requirements and phase progression remain owned by Task Pack /
+     * Order workflow services; this method only adapts the prototype inline UI
+     * to the existing workflow action contract.
+     */
+    public function saveProductionMonitorTask(int $taskId, string $supplierDeliveryDate, string $productionIssueNote = ''): void
+    {
+        abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
+
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job.client', 'job.items', 'job.phase', 'setupTemplate'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+        $workflowActions = app(\App\Services\OrderWorkflowActionService::class);
+        abort_unless($workflowActions->automationKey($task) === 'PROD_ISSUE', 422, 'This task does not use the Production monitor form.');
+
+        $errorPrefix = 'productionMonitor.'.$taskId;
+        $this->resetValidation([
+            $errorPrefix.'.supplier_delivery_date',
+            $errorPrefix.'.production_issue_note',
+            $errorPrefix.'.task',
+        ]);
+
+        try {
+            $workflowActions->perform(
+                $task,
+                auth()->user(),
+                'confirm',
+                $productionIssueNote,
+                ['supplier_delivery_date' => $supplierDeliveryDate],
+            );
+        } catch (ValidationException $exception) {
+            foreach ($exception->errors() as $field => $messages) {
+                $target = match ($field) {
+                    'orderWorkflowActionPayload.supplier_delivery_date' => $errorPrefix.'.supplier_delivery_date',
+                    'orderWorkflowActionComment' => $errorPrefix.'.production_issue_note',
+                    default => $errorPrefix.'.task',
+                };
+
+                foreach ((array) $messages as $message) $this->addError($target, $message);
+            }
+            return;
+        }
+
+        $this->dispatchTaskAssigneeSync($task->id);
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
+        session()->flash('success', 'Supplier delivery date saved and Production task completed.');
+    }
+
+    public function clearProductionMonitorErrors(int $taskId): void
+    {
+        $prefix = 'productionMonitor.'.$taskId;
+        $this->resetValidation([
+            $prefix.'.supplier_delivery_date',
+            $prefix.'.production_issue_note',
+            $prefix.'.task',
+        ]);
+    }
+
+    #[Json]
+    public function updateCompletedProductionMonitorSupplierDate(int $taskId, mixed $supplierDeliveryDate): array
+    {
+        $savedValue = '';
+        $savedDisplay = '';
+
+        $result = $this->persistInlineEdit('supplier delivery date', function () use ($taskId, $supplierDeliveryDate, &$savedValue, &$savedDisplay) {
+            $task = $this->editableCompletedProductionMonitorTask($taskId);
+            $date = trim((string) $supplierDeliveryDate);
+
+            validator(
+                ['supplier_delivery_date' => $date],
+                ['supplier_delivery_date' => ['required', 'date_format:Y-m-d']],
+                [],
+                ['supplier_delivery_date' => 'supplier delivery date'],
+            )->validate();
+
+            $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+            if (! $parsedDate || $parsedDate->format('Y-m-d') !== $date) {
+                throw ValidationException::withMessages([
+                    'supplier_delivery_date' => 'Enter a valid supplier delivery date.',
+                ]);
+            }
+
+            $job = $task->job;
+            $currentDetails = $this->productionMonitorSavedDetailsForTask($job, (int) $task->id);
+            $note = (string) ($currentDetails['production_issue_note'] ?? '');
+
+            $job->update(['supplier_delivery_date' => $date]);
+            $this->recordCompletedProductionMonitorEdit($task, $date, $note, 'supplier_delivery_date');
+
+            $savedValue = $date;
+            $savedDisplay = $parsedDate->format('d/m/Y');
+        });
+
+        if (($result['ok'] ?? false) === true) {
+            $result['value'] = $savedValue;
+            $result['display'] = $savedDisplay;
+        }
+
+        return $result;
+    }
+
+    #[Json]
+    public function updateCompletedProductionMonitorIssueNote(int $taskId, mixed $productionIssueNote): array
+    {
+        $savedValue = '';
+        $savedDisplay = '—';
+
+        $result = $this->persistInlineEdit('production issue note', function () use ($taskId, $productionIssueNote, &$savedValue, &$savedDisplay) {
+            $task = $this->editableCompletedProductionMonitorTask($taskId);
+            $note = trim((string) $productionIssueNote);
+
+            validator(
+                ['production_issue_note' => $note],
+                ['production_issue_note' => ['nullable', 'string', 'max:10000']],
+                [],
+                ['production_issue_note' => 'production issue note'],
+            )->validate();
+
+            $job = $task->job;
+            $currentDetails = $this->productionMonitorSavedDetailsForTask($job, (int) $task->id);
+            $date = trim((string) ($currentDetails['supplier_delivery_date'] ?? ''));
+            if ($date === '' && $job->supplier_delivery_date) {
+                $date = $job->supplier_delivery_date->format('Y-m-d');
+            }
+
+            $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+            if (! $parsedDate || $parsedDate->format('Y-m-d') !== $date) {
+                throw ValidationException::withMessages([
+                    'production_issue_note' => 'Supplier delivery date is missing. Set the date before editing the production issue note.',
+                ]);
+            }
+
+            $this->recordCompletedProductionMonitorEdit($task, $date, $note, 'production_issue_note');
+
+            $savedValue = $note;
+            $savedDisplay = $note !== '' ? $note : '—';
+        });
+
+        if (($result['ok'] ?? false) === true) {
+            $result['value'] = $savedValue;
+            $result['display'] = $savedDisplay;
+        }
+
+        return $result;
+    }
+
+    private function editableCompletedProductionMonitorTask(int $taskId): Task
+    {
+        abort_unless($this->selectedJobId, 422);
+
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['job', 'setupTemplate'])
+            ->where('flow_job_id', $this->selectedJobId)
+            ->findOrFail($taskId);
+
+        abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+        abort_unless(app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'PROD_ISSUE', 422, 'This task does not use Production monitor details.');
+        abort_unless(\App\Support\OrderDetailPresenter::isCompletedTask($task), 422, 'Complete this task before editing the saved Production monitor details.');
+        abort_if(strcasecmp((string) ($task->job?->status ?? ''), 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
+
+        return $task;
+    }
+
+    private function productionMonitorSavedDetailsForTask(FlowJob $job, int $taskId): array
+    {
+        $activity = $job->activities()
+            ->where('event', 'job.supplier_delivery_date_set')
+            ->latest('id')
+            ->get()
+            ->first(function ($activity) use ($taskId): bool {
+                $meta = is_array($activity->meta) ? $activity->meta : [];
+                $activityTaskId = (int) ($meta['task_id'] ?? 0);
+
+                return $activityTaskId === 0 || $activityTaskId === $taskId;
+            });
+
+        $meta = is_array($activity?->meta) ? $activity->meta : [];
+        $date = trim((string) ($meta['supplier_delivery_date'] ?? ''));
+        if ($date === '' && $job->supplier_delivery_date) {
+            $date = $job->supplier_delivery_date->format('Y-m-d');
+        }
+
+        $note = trim(app(\App\Services\RichTextService::class)->plainText((string) ($meta['production_issue_note'] ?? '')));
+
+        return [
+            'supplier_delivery_date' => $date,
+            'production_issue_note' => $note,
+        ];
+    }
+
+    private function recordCompletedProductionMonitorEdit(Task $task, string $supplierDeliveryDate, string $productionIssueNote, string $changedField): void
+    {
+        $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $supplierDeliveryDate);
+        $description = $changedField === 'supplier_delivery_date'
+            ? 'Supplier delivery date updated to '.($parsedDate?->format('M j, Y') ?: $supplierDeliveryDate).'.'
+            : ($productionIssueNote !== '' ? 'Production issue note updated.' : 'Production issue note cleared.');
+
+        $task->job->activities()->create([
+            'user_id' => auth()->id(),
+            'event' => 'job.supplier_delivery_date_set',
+            'description' => $description,
+            'meta' => [
+                'supplier_delivery_date' => $supplierDeliveryDate,
+                'production_issue_note' => $productionIssueNote !== '' ? $productionIssueNote : null,
+                'task_id' => (int) $task->id,
+                'edited_after_completion' => true,
+                'changed_field' => $changedField,
+            ],
+        ]);
     }
 
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void

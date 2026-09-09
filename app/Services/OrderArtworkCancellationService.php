@@ -32,6 +32,7 @@ final class OrderArtworkCancellationService
      */
     public function cancel(FlowJob $order, Task $reviewTask, User $actor, array $payload, string $reason): Activity
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($order);
         abort_unless(
             $this->workflowActions->automationKey($reviewTask) === 'ART_INTERNAL_REVIEW',
             422,

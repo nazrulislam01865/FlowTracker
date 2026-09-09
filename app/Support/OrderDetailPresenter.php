@@ -61,7 +61,7 @@ final class OrderDetailPresenter
         if (strcasecmp((string) $job->status, 'Cancelled') === 0) return null;
 
         $tasks = self::currentTasks($job);
-        $required = $tasks->filter(fn (Task $task) => ($task->setupTemplate?->is_required ?? $task->template?->is_required ?? true) !== false);
+        $required = $tasks->filter(fn (Task $task) => OrderTaskRequirement::isRequired($task));
 
         $requiredNext = $required->first(fn (Task $task) => ! self::isCompletedTask($task) && ! self::isSkippedTask($task));
 
@@ -101,7 +101,7 @@ final class OrderDetailPresenter
         if ($manual) return $manual;
 
         return $tasks->first(fn (Task $task) =>
-            ($task->setupTemplate?->is_required ?? $task->template?->is_required ?? true) === false
+            OrderTaskRequirement::isConditionalOptional($task)
             && ! self::isCompletedTask($task)
             && ! self::isSkippedTask($task)
             && self::isConditionalTaskActivated($task)
@@ -119,9 +119,10 @@ final class OrderDetailPresenter
     }
 
     /**
-     * Optional Task Pack items are conditional branches. They are considered
-     * activated only after a backend workflow action moves them out of their
-     * untouched locked state (or evidence/progress already exists).
+     * True conditional Task Pack branches are considered activated only after
+     * a backend workflow action moves them out of their untouched locked state
+     * (or evidence/progress already exists). Regular optional tasks do not use
+     * this activation rule because they stay visible throughout the stage.
      */
     public static function isConditionalTaskActivated(Task $task): bool
     {
@@ -139,8 +140,8 @@ final class OrderDetailPresenter
         if (self::isSkippedTask($task)) return false;
         if (! $task->task_pack_task_id) return true;
 
-        $isRequired = ($task->setupTemplate?->is_required ?? $task->template?->is_required ?? true) !== false;
-        return $isRequired || self::isConditionalTaskActivated($task);
+        return OrderTaskRequirement::isRequired($task)
+            || (OrderTaskRequirement::isConditionalOptional($task) && self::isConditionalTaskActivated($task));
     }
 
     public static function taskMode(FlowJob $job, Task $task): string
@@ -149,8 +150,31 @@ final class OrderDetailPresenter
         if (strcasecmp((string) $job->status, 'Cancelled') === 0) return 'locked';
         if ((int) $task->workflow_phase_id !== (int) $job->workflow_phase_id) return 'locked';
 
+        // Regular optional tasks remain available in the active stage without
+        // becoming blockers. They become actionable once every earlier required
+        // task in their configured sequence has been completed. This lets, for
+        // example, Production Issue remain available beside Finish Production.
+        if (OrderTaskRequirement::isRegularOptional($task)) {
+            return self::regularOptionalTaskIsActionable($job, $task) ? 'active' : 'locked';
+        }
+
         $next = self::nextTask($job);
         return $next && (int) $next->id === (int) $task->id ? 'active' : 'locked';
+    }
+
+    public static function regularOptionalTaskIsActionable(FlowJob $job, Task $task): bool
+    {
+        if (! OrderTaskRequirement::isRegularOptional($task)) return false;
+        if ((int) $task->workflow_phase_id !== (int) $job->workflow_phase_id) return false;
+
+        $taskSequence = OrderTaskRequirement::sequence($task);
+
+        return self::currentTasks($job)
+            ->filter(fn (Task $candidate) =>
+                OrderTaskRequirement::isRequired($candidate)
+                && OrderTaskRequirement::sequence($candidate) < $taskSequence
+            )
+            ->every(fn (Task $candidate) => self::isCompletedTask($candidate) || self::isSkippedTask($candidate));
     }
 
 
@@ -172,16 +196,20 @@ final class OrderDetailPresenter
     /**
      * Tasks shown inside the Order Details stage panel.
      *
-     * Required setup tasks are always visible. Optional setup tasks remain
-     * hidden while untouched so conditional branches do not clutter the normal
-     * path; once an optional task has activity/evidence it becomes visible.
-     * Manual Order tasks remain visible as well.
+     * Required tasks and normal optional tasks are always visible in their
+     * configured order. True conditional branch tasks stay hidden until the
+     * workflow activates them. Optional visibility is therefore independent
+     * from whether the task blocks stage completion.
      */
     public static function displayTasksForPhase(FlowJob $job, WorkflowPhase $phase): Collection
     {
         return self::phaseTasks($job, $phase)
             ->filter(function (Task $task): bool {
-                return self::isApplicableTask($task);
+                if (! $task->task_pack_task_id) return true;
+                if (OrderTaskRequirement::isRequired($task)) return true;
+                if (OrderTaskRequirement::isRegularOptional($task)) return true;
+
+                return self::isConditionalTaskActivated($task);
             })
             ->sortBy(function (Task $task): array {
                 return [

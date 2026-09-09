@@ -78,6 +78,11 @@ class DocumentService
             }
         }
 
+        $orderIdForHold = $task?->flow_job_id ?: ($data['flow_job_id'] ?? null);
+        if ($orderIdForHold) {
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $orderIdForHold);
+        }
+
         $automationKey = $task ? app(OrderWorkflowActionService::class)->automationKey($task) : null;
         if ($securityMaxBytes === null && in_array($automationKey, ['ART_PREPARE_UPLOAD', 'ART_SAMPLE_APPROVAL'], true)) {
             // Artwork is the only normal document flow allowed above the global
@@ -520,6 +525,7 @@ class DocumentService
      */
     public function updatePendingArtworkRevisionSelection(Task $task, array $documentIds): array
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         $revision = $this->pendingArtworkRevision($task);
         if (! ($revision['active'] ?? false)) {
             throw ValidationException::withMessages([
@@ -631,6 +637,7 @@ class DocumentService
      */
     public function storeArtworkRevision(array $files, Task $task, User $user, ?string $note = null, string $permissionModule = 'documents'): Collection
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         $task->loadMissing(['job', 'documentCategory', 'setupTemplate.documentCategory']);
         $revision = $this->pendingArtworkRevision($task);
         if (! ($revision['active'] ?? false)) {
@@ -752,6 +759,7 @@ class DocumentService
 
     public function linkExisting(Document $source, Task $task, User $user, bool $allowGenericAttachment = false, ?string $note = null): Document
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         abort_unless(app(AccessControlService::class)->can($user, 'documents', 'link'), 403);
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $user)->firstOrFail();
         app(AccessControlService::class)->applyTaskScope(Task::query()->whereKey($task->id), $user)->firstOrFail();
@@ -787,6 +795,7 @@ class DocumentService
 
     public function delete(Document $document, ?User $actor = null, string $permissionModule = 'documents'): void
     {
+        $this->assertDocumentOrderNotHeld($document);
         if ($actor) {
             abort_unless(app(AccessControlService::class)->can($actor, $permissionModule, 'delete'), 403);
             app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $actor, $permissionModule)->firstOrFail();
@@ -810,6 +819,7 @@ class DocumentService
 
     public function rename(Document $document, string $name, User $user, string $permissionModule = 'documents'): void
     {
+        $this->assertDocumentOrderNotHeld($document);
         abort_unless(app(AccessControlService::class)->can($user, $permissionModule, 'edit'), 403);
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($document->id), $user, $permissionModule)->firstOrFail();
 
@@ -857,6 +867,7 @@ class DocumentService
 
     public function storeVersion(Document $document, UploadedFile $file, User $user, string $permissionModule = 'documents'): Document
     {
+        $this->assertDocumentOrderNotHeld($document);
         $access = app(AccessControlService::class);
         abort_unless($access->can($user, $permissionModule, 'create'), 403);
         $access->applyDocumentScope(Document::query()->whereKey($document->id), $user, $permissionModule)->firstOrFail();
@@ -1002,4 +1013,13 @@ class DocumentService
     {
         return 'DOC-'.str_pad((string) ((int) Document::max('id') + 1), 6, '0', STR_PAD_LEFT);
     }
+
+    private function assertDocumentOrderNotHeld(Document $document): void
+    {
+        $jobId = $document->flow_job_id ?: $document->task()->value('flow_job_id');
+        if ($jobId) {
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $jobId);
+        }
+    }
+
 }

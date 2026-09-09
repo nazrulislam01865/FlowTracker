@@ -82,6 +82,8 @@ final class OrderInvoiceWorkflowEmailService
     /** @param array<string,mixed> $payload */
     public function prepare(FlowJob $job, User $actor, array $payload): Invoice
     {
+        app(OrderHoldService::class)->assertNotHeld($job);
+
         $amount = round((float) ($payload['invoice_amount'] ?? 0), 2);
         if ($amount <= 0) {
             throw ValidationException::withMessages([
@@ -245,6 +247,8 @@ final class OrderInvoiceWorkflowEmailService
     /** @param array<string,mixed> $selection */
     public function send(Task $task, User $actor, array $selection = []): string
     {
+        app(OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
+
         $job = FlowJob::query()
             ->with(['client', 'owner', 'coordinator', 'items'])
             ->findOrFail($task->flow_job_id);

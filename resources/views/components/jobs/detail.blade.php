@@ -56,6 +56,9 @@
     'focusComment'=>null,
     'showOrderAttentionModal'=>false,
     'orderAttentionReason'=>'',
+    'showOrderHoldModal'=>false,
+    'orderHoldFrom'=>'client',
+    'orderHoldReason'=>'',
     'showOrderCancelModal'=>false,
     'orderCancellationReason'=>'',
     'jobDocumentUploads'=>[],
@@ -138,11 +141,18 @@
 ])
 @php
     $manualAttention = (bool) ($job->attention_requested ?? false);
+    $orderIsOnHold = (bool) ($orderDetailContext['isOnHold'] ?? false);
 @endphp
 <div
     {{ $attributes->class('ft-job-detail-page ft-order-prototype-detail ft-detail-products-scope') }}
-    x-data="{ redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } }"
+    x-data="Object.assign(window.FlowTrack.ui.orderHoldGuard({ held: @js($orderIsOnHold) }), { redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } })"
     x-on:order-redo-notice.window="showRedoNotice($event.detail.message ?? 'Redo update saved.')"
+    x-on:flowtrack:order-held-blocked.window="showHoldBlocked($event.detail?.action ?? '')"
+    x-on:flowtrack:order-hold-state.window="held = Boolean($event.detail?.held); if (!held) closeHoldBlocked()"
+    x-on:click.capture="guardInteraction($event)"
+    x-on:focusin.capture="guardInteraction($event)"
+    x-on:change.capture="guardInteraction($event)"
+    x-on:submit.capture="guardInteraction($event)"
 >
     <x-jobs.order-detail.header
         :job="$job"
@@ -326,6 +336,24 @@
 
 
     <x-jobs.order-detail.redo-modal :job="$job" :context="$orderRedoContext" :form="$orderRedoForm" :mention-users="$mentionUsers" />
+
+    @if($showOrderHoldModal)
+        <x-jobs.order-detail.hold-modal
+            :job="$job"
+            :hold-from="$orderHoldFrom"
+            :reason="$orderHoldReason"
+            :mention-users="$mentionUsers"
+        />
+    @endif
+
+    @if($orderIsOnHold)
+        <x-jobs.order-detail.hold-blocked-modal
+            :hold="$orderDetailContext['hold'] ?? null"
+            :can-release-hold="(bool) ($orderDetailContext['canReleaseHold'] ?? false)"
+            :order-id="$job->id"
+            :direct-release="true"
+        />
+    @endif
 
     <div class="ft-redo-toast" x-cloak x-show="redoNoticeOpen" x-transition x-text="redoNotice" role="status" aria-live="polite"></div>
 

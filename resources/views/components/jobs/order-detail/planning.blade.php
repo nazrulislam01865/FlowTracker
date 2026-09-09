@@ -3,6 +3,10 @@
     // Remote Area is resolved once in OrderDetailViewService. Keep this Blade
     // component presentation-only so moving the flag here never adds queries.
     $remoteArea = is_array($remoteArea) && ! empty($remoteArea['postal_code']) ? $remoteArea : null;
+    $isOnHold = (bool) ($context['isOnHold'] ?? false);
+    $hold = is_array($context['hold'] ?? null) ? $context['hold'] : null;
+    $canHold = (bool) ($context['canHold'] ?? false);
+    $canReleaseHold = (bool) ($context['canReleaseHold'] ?? false);
 @endphp
 <section class="section-card ft-order-section-card ft-order-planning-card">
     <div class="section-head ft-order-section-head"><h2>Planning &amp; ownership</h2><span class="card-sub">Quick edits</span></div>
@@ -23,8 +27,8 @@
             </div>
         @endif
         <div class="info-row ft-order-info-row ft-inline-edit-shell"
-            x-data="window.FlowTrack.ui.inlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'delivery date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j, Y') ?? 'Not set') })">
-            <span>Required delivery</span>
+            x-data="window.FlowTrack.ui.inlineEdit({ key: @js('job-'.$job->id.'-delivery-date'), label: 'Hand Date', value: @js($job->delivery_date?->format('Y-m-d') ?? ''), display: @js($job->delivery_date?->format('M j, Y') ?? 'Not set') })">
+            <span>Hand Date</span>
             <b><span x-show="!editing" x-text="display">{{ $job->delivery_date?->format('M j, Y') ?? 'Not set' }}</span>
                 @if($canEditJob)
                     <button x-show="!editing" type="button" class="inline-edit" x-on:click.stop="if(beginEdit()) $nextTick(() => $refs.delivery.focus())">✎</button>
@@ -33,6 +37,30 @@
                 @endif
             </b>
         </div>
+
+        <div class="info-row ft-order-info-row ft-order-hold-row">
+            <span>Hold order</span>
+            <b>
+                @if($isOnHold)
+                    <span class="ft-order-hold-status-button" aria-label="Order is on hold">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>On Hold</span>
+                    </span>
+                @elseif($canHold)
+                    <button type="button" class="ft-order-hold-action-button" wire:click="openOrderHoldModal" wire:loading.attr="disabled" wire:target="openOrderHoldModal" data-ft-feedback="off">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Hold order</span>
+                    </button>
+                @else
+                    <span class="ft-order-hold-static-state">Not on hold</span>
+                @endif
+            </b>
+        </div>
+
+        @if($isOnHold && $hold)
+            <x-jobs.order-detail.hold-status-card :hold="$hold" :can-release-hold="$canReleaseHold" />
+        @endif
+
         <div class="info-row ft-order-info-row"><span>Reference number</span><b>{{ $job->order_number ?: '—' }}</b></div>
         <div id="order-shipment-urgency" class="info-row ft-order-info-row ft-order-urgency-info-row">
             <span><span class="help" title="Shipment urgency determines operational prioritization for packing, carrier booking, and dispatch.">Shipment urgency</span></span>

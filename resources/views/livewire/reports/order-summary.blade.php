@@ -140,7 +140,7 @@
                     <th>Urgent or Not</th>
                     <th>Quantity</th>
                     <th>Material</th>
-                    <th>ERP Approval Date</th>
+                    <th>Artwork Approval Date</th>
                     <th>Special Orders</th>
                     <th>Sample/Swatch Sent Date</th>
                     <th>Sample/Swatch Confirmed Date</th>
@@ -165,7 +165,7 @@
                         </td>
                         <td class="center ft-osr-nowrap">{{ number_format((int) $row['quantity']) }}</td>
                         <td class="ft-osr-wrap">{{ $row['material'] }}</td>
-                        <td class="ft-osr-nowrap">{{ $row['erp_approval'] ?: '—' }}</td>
+                        <td class="ft-osr-nowrap">{{ $row['artwork_approval'] ?: '—' }}</td>
                         <td class="special">{{ $row['special_orders'] ?: '—' }}</td>
                         <td class="ft-osr-nowrap">{{ $row['sample_sent'] ?: '—' }}</td>
                         <td class="ft-osr-nowrap">{{ $row['sample_confirmed'] ?: '—' }}</td>

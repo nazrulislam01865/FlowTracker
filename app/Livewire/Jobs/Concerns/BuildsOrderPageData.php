@@ -405,6 +405,8 @@ trait BuildsOrderPageData
         $with = [
             'job.client:id,name,logo_path',
             'job.orderFlag:id,type,name,color,status,sort_order,metadata',
+            'job.activeHold.holder:id,name,profile_image_path',
+            'job.latestProductionMonitorActivity:activities.id,activities.subject_type,activities.subject_id,activities.user_id,activities.event,activities.description,activities.meta,activities.created_at',
             'assignee',
             'phase',
             'orderTaskStatus:id,type,name,color,status,sort_order,metadata',
@@ -429,6 +431,29 @@ trait BuildsOrderPageData
             ->with($with)
             ->findOrFail($this->selectedTaskId);
 
+        $taskActiveHold = $task->job?->activeHold;
+        $taskOrderHoldContext = null;
+        if ($taskActiveHold) {
+            $sourceName = trim((string) ($taskActiveHold->source_name
+                ?: ((string) $taskActiveHold->hold_from === \App\Models\OrderHold::FROM_CLIENT
+                    ? ($task->job?->client?->name ?: 'Client')
+                    : ($taskActiveHold->holder?->name ?: $taskActiveHold->holdFromLabel()))));
+
+            $taskOrderHoldContext = [
+                'isOnHold' => true,
+                'hold' => [
+                    'id' => (int) $taskActiveHold->id,
+                    'holdFrom' => (string) $taskActiveHold->hold_from,
+                    'holdFromLabel' => $taskActiveHold->holdFromLabel(),
+                    'sourceName' => $sourceName ?: '—',
+                    'reason' => (string) $taskActiveHold->reason,
+                    'heldById' => $taskActiveHold->held_by ? (int) $taskActiveHold->held_by : null,
+                    'heldBy' => (string) ($taskActiveHold->holder?->name ?: 'Unknown user'),
+                    'startedAt' => $taskActiveHold->started_at,
+                ],
+            ];
+        }
+
         $availableDocuments = $taskDetailSectionsReady['attachments'] && $this->showTaskDocumentPicker
             ? app(DocumentService::class)
                 ->query($user, ['client' => $task->job?->client_id])
@@ -448,6 +473,7 @@ trait BuildsOrderPageData
             'availableDocuments' => $availableDocuments,
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForTask($task, $user),
             'taskDetailSectionsReady' => $taskDetailSectionsReady,
+            'taskOrderHoldContext' => $taskOrderHoldContext ?? ['isOnHold' => false, 'hold' => null],
         ];
     }
 

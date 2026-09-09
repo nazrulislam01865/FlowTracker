@@ -7,6 +7,7 @@ use App\Models\Task;
 use App\Models\User;
 use App\Models\WorkflowPhase;
 use App\Support\BoardLaneResolver;
+use App\Support\OrderTaskRequirement;
 use Illuminate\Support\Collection;
 
 /**
@@ -29,6 +30,16 @@ class OrderTaskSequenceService
         if (!$job) return;
 
         abort_unless((int) $task->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
+
+        if (OrderTaskRequirement::isRegularOptional($task)) {
+            abort_unless(
+                $this->earlierRequiredTasksComplete($job, $task),
+                422,
+                'Complete the previous required task before performing this optional task.',
+            );
+
+            return;
+        }
 
         $first = $this->firstIncompleteRequiredTask($job, (int) $task->workflow_phase_id);
         if (!$first || (int) $first->id === (int) $task->id) return;
@@ -98,6 +109,29 @@ class OrderTaskSequenceService
                 ]);
             }
         }
+    }
+
+
+    private function earlierRequiredTasksComplete(FlowJob $job, Task $task): bool
+    {
+        $task->loadMissing('setupTemplate');
+        $sequence = OrderTaskRequirement::sequence($task);
+
+        return Task::query()
+            ->where('flow_job_id', $job->id)
+            ->where('workflow_phase_id', $task->workflow_phase_id)
+            ->whereNotNull('task_pack_task_id')
+            ->with('setupTemplate:id,task_pack_id,is_required,sort_order,automation_key')
+            ->get()
+            ->filter(fn (Task $candidate) =>
+                OrderTaskRequirement::isRequired($candidate)
+                && OrderTaskRequirement::sequence($candidate) < $sequence
+            )
+            ->every(fn (Task $candidate) =>
+                (bool) $candidate->completed_at
+                || BoardLaneResolver::isCompleted((string) $candidate->status)
+                || in_array(strtolower(trim((string) $candidate->status)), ['skipped', 'not applicable', 'n/a'], true)
+            );
     }
 
     public function firstIncompleteRequiredTask(FlowJob $job, int $phaseId): ?Task

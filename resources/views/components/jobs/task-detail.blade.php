@@ -14,9 +14,12 @@
     'showTaskDocumentPicker'=>false,
     'editMode'=>false,
     'taskDetailSectionsReady'=>[],
+    'orderHoldContext'=>[],
 ])
 @php
     $job = $task->job;
+    $taskOrderIsOnHold = (bool) ($orderHoldContext['isOnHold'] ?? false);
+    $taskOrderHold = is_array($orderHoldContext['hold'] ?? null) ? $orderHoldContext['hold'] : null;
     $checklistReady = (bool) ($taskDetailSectionsReady['checklist'] ?? false);
     $attachmentsReady = (bool) ($taskDetailSectionsReady['attachments'] ?? false);
     $activityReady = (bool) ($taskDetailSectionsReady['activity'] ?? false);
@@ -26,13 +29,14 @@
     $taskDocumentName = $task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name;
     $taskDocumentInstructions = trim((string) ($task->setupTemplate?->document_instructions ?? ''));
     $accessControl = app(\App\Services\AccessControlService::class);
-    $canModerateTaskActivity = $accessControl->isAdministrator(auth()->user());
+    $mayModerateTaskActivity = $accessControl->isAdministrator(auth()->user());
     $mayEditTask = $accessControl->canEditVisibleTask(auth()->user(), $task);
-    // Inline task editing is permission-driven on the Task Details page.
-    // Opening the page through a generic View action must not hide inline edit
-    // controls from a user who is authorized to edit this task.
-    $canEditTask = $mayEditTask;
-    $canAssignTask = $accessControl->canAssignTask(auth()->user(), $task);
+    // A held Order makes Task Details strictly view-only for every role,
+    // including administrators. Release hold is intentionally available only
+    // from the parent Order so task work cannot bypass the Order-level lock.
+    $canModerateTaskActivity = $mayModerateTaskActivity && ! $taskOrderIsOnHold;
+    $canEditTask = $mayEditTask && ! $taskOrderIsOnHold;
+    $canAssignTask = $accessControl->canAssignTask(auth()->user(), $task) && ! $taskOrderIsOnHold;
     $canCheck = $canEditTask;
     // Task Details permissions must be driven by the actual task authorization,
     // not by how the page was opened. A normal View action can still be an
@@ -52,6 +56,23 @@
     $currentTaskFlagColor = $currentTaskFlag !== '' ? $masterData->colorFor('order_task_flag', $currentTaskFlag) : null;
     $currentOrderFlag = $job ? (app(\App\Services\OrderTaskFlagService::class)->labelForOrder($job) ?: '') : '';
     $currentOrderFlagColor = $currentOrderFlag !== '' ? $masterData->colorFor('order_flag', $currentOrderFlag) : null;
+    $isProductionMonitorTask = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) === 'PROD_ISSUE';
+    $productionMonitorActivity = $job && $job->relationLoaded('latestProductionMonitorActivity')
+        ? $job->latestProductionMonitorActivity
+        : null;
+    $productionMonitorMeta = is_array($productionMonitorActivity?->meta) ? $productionMonitorActivity->meta : [];
+    $productionMonitorActivityTaskId = (int) ($productionMonitorMeta['task_id'] ?? 0);
+    $productionMonitorActivityMatchesTask = $productionMonitorActivity
+        && ($productionMonitorActivityTaskId === 0 || $productionMonitorActivityTaskId === (int) $task->id);
+    $productionMonitorDate = $productionMonitorActivityMatchesTask
+        ? trim((string) ($productionMonitorMeta['supplier_delivery_date'] ?? ''))
+        : '';
+    if ($productionMonitorDate === '' && $job?->supplier_delivery_date) {
+        $productionMonitorDate = $job->supplier_delivery_date->format('Y-m-d');
+    }
+    $productionMonitorNote = $productionMonitorActivityMatchesTask
+        ? trim(app(\App\Services\RichTextService::class)->plainText((string) ($productionMonitorMeta['production_issue_note'] ?? '')))
+        : '';
     $timeline = collect();
     $activityPerPage = 30;
     $timelineTotal = 0;
@@ -73,7 +94,15 @@
         $timeline = $timeline->forPage($timelineCurrentPage, $activityPerPage)->values();
     }
 @endphp
-<div {{ $attributes->class('ft-task-detail-page ft-exact-task-detail') }}>
+<div
+    {{ $attributes->class('ft-task-detail-page ft-exact-task-detail') }}
+    x-data="window.FlowTrack.ui.orderHoldGuard({ held: @js($taskOrderIsOnHold) })"
+    x-on:flowtrack:order-held-blocked.window="showHoldBlocked($event.detail?.action ?? '')"
+    x-on:click.capture="guardInteraction($event)"
+    x-on:focusin.capture="guardInteraction($event)"
+    x-on:change.capture="guardInteraction($event)"
+    x-on:submit.capture="guardInteraction($event)"
+>
     @if(session('success'))<div class="flash">{{ session('success') }}</div>@endif
     <div class="ft-detail-toolbar task-toolbar ft-exact-task-header">
         <div class="ft-task-heading-copy">
@@ -103,15 +132,49 @@
                 @if($task->phase?->name)<span class="ft-task-title-phase">· <x-ui.phase-label :phase="$task->phase" /></span>@endif
             </div>
         </div>
-        <div class="ft-detail-actions">@if($canEditTask)<button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>@endif<button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button></div>
+        <div class="ft-detail-actions">
+            @if($taskOrderIsOnHold && $mayEditTask && $task->status !== 'Completed')
+                <button type="button" class="ft-new-job-btn ft-mark-complete ft-task-held-action" x-on:click.prevent.stop="showHoldBlocked('Mark complete')" title="Order is on hold. Release the hold before completing this task.">
+                    <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                    <span>Mark complete</span>
+                </button>
+            @elseif($canEditTask)
+                <button class="ft-new-job-btn ft-mark-complete" wire:click="markTaskComplete" @disabled($task->status==='Completed')>{{ $task->status==='Completed' ? 'Completed' : 'Mark complete' }}</button>
+            @endif
+            <button class="ft-close-page" wire:click="closeTask" type="button" title="Back to order details" aria-label="Back to order details">×</button>
+        </div>
     </div>
     @error('taskCompletion')<div class="validation-error ft-task-completion-error">{{ $message }}</div>@enderror
+
+    @if($taskOrderIsOnHold && $taskOrderHold)
+        <div class="ft-task-order-hold-banner" data-order-hold-view-control>
+            <div class="ft-task-order-hold-banner__icon" aria-hidden="true"><span class="ft-order-hold-pause-icon"><i></i><i></i></span></div>
+            <div class="ft-task-order-hold-banner__copy">
+                <strong>Order on hold — task activities are locked</strong>
+                <span>{{ $taskOrderHold['holdFromLabel'] ?? 'Order' }} hold · held by {{ $taskOrderHold['heldBy'] ?? 'Unknown user' }}</span>
+            </div>
+            @if($job)
+                <button type="button" wire:click="openJob({{ $job->id }})" data-order-hold-allowed>View order</button>
+            @endif
+        </div>
+    @endif
 
     <div class="ft-task-detail-layout">
         <main>
             @include('components.jobs.task-detail.properties')
 
             @include('components.jobs.task-detail.description')
+
+            @if($isProductionMonitorTask && \App\Support\OrderDetailPresenter::isCompletedTask($task))
+                <x-jobs.order-detail.production-monitor-summary
+                    :task="$task"
+                    :details="[
+                        'supplierDeliveryDate' => $productionMonitorDate,
+                        'productionIssueNote' => $productionMonitorNote,
+                    ]"
+                    :can-edit="$canEditTask && strcasecmp((string) ($job?->status ?? ''), 'Cancelled') !== 0"
+                />
+            @endif
 
             @if($checklistReady)
                 @include('components.jobs.task-detail.checklist')
@@ -136,4 +199,13 @@
 
         </aside>
     </div>
+
+    @if($taskOrderIsOnHold && $taskOrderHold)
+        <x-jobs.order-detail.hold-blocked-modal
+            :hold="$taskOrderHold"
+            :can-release-hold="false"
+            :order-id="$job?->id"
+            :direct-release="false"
+        />
+    @endif
 </div>

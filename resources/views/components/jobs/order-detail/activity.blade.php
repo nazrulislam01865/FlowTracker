@@ -8,7 +8,7 @@
 @endphp
 <section class="section-card activity-wide ft-order-section-card" id="billingSection" x-data="{ open:true }">
     <div class="section-head ft-order-section-head">
-        <div><h2>Activity</h2><div class="card-sub">Comments, ownership changes, flags, cancellations, and workflow history.</div></div>
+        <div><h2>Activity</h2><div class="card-sub">Comments, ownership changes, flags, cancellations, holds and workflow history.</div></div>
         <div class="activity-head-actions">
             <div class="page-tabs activity-tabs-inline">
                 <button type="button" class="page-tab {{ $activityTab==='all'?'active':'' }}" wire:click="setJobActivityTab('all')">All</button>
@@ -33,6 +33,9 @@
                     $isComment = $activity->event === 'job.comment';
                     $isCancellation = $activity->event === 'job.cancelled';
                     $isArtworkRevision = $activity->event === 'job.artwork_revision_requested';
+                    $isHoldStarted = $activity->event === 'job.hold_started';
+                    $isHoldReleased = $activity->event === 'job.hold_released';
+                    $isHoldActivity = $isHoldStarted || $isHoldReleased;
                     $customerComment = trim((string) data_get($activity->meta, 'customer_comment', ''));
                     $isArtworkCustomerComment = $customerComment !== '' && in_array((string) $activity->event, [
                         'job.artwork_emailed_to_order_team',
@@ -49,11 +52,13 @@
                     <div>
                         <b>
                             {{ $actorName }}
-                            <span class="card-sub activity-kind {{ $isArtworkCustomerComment ? 'is-customer-comment' : '' }}">
-                                {{ $isArtworkCustomerComment ? 'CUSTOMER COMMENT' : ($isComment ? 'COMMENT' : 'CHANGE') }}
+                            <span class="card-sub activity-kind {{ $isArtworkCustomerComment ? 'is-customer-comment' : '' }} {{ $isHoldStarted ? 'is-order-hold' : '' }} {{ $isHoldReleased ? 'is-order-hold-released' : '' }}">
+                                {{ $isHoldReleased ? 'UNHELD' : ($isHoldStarted ? 'HOLD' : ($isArtworkCustomerComment ? 'CUSTOMER COMMENT' : ($isComment ? 'COMMENT' : 'CHANGE'))) }}
                             </span>
                         </b>
-                        @if($isArtworkCustomerComment)
+                        @if($isHoldActivity)
+                            <x-jobs.order-detail.hold-activity-content :activity="$activity" />
+                        @elseif($isArtworkCustomerComment)
                             <div class="ft-order-customer-comment-activity">
                                 <div class="ft-order-customer-comment-activity__label">Comment sent with artwork</div>
                                 <div class="ft-order-customer-comment-activity__copy"><x-ui.mention-text :text="$customerComment" /></div>
@@ -62,7 +67,9 @@
                         @else
                             <div class="wide-activity-copy {{ $isCancellation ? 'ft-rich-text-content ft-order-cancellation-activity-copy' : '' }}">@if($isArtworkRevision)<x-jobs.order-detail.revision-activity-content :activity="$activity" />@else<x-ui.mention-text :text="$activity->description" />@endif</div>
                         @endif
-                        <div class="card-sub">{{ \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event)) }}</div>
+                        @unless($isHoldActivity)
+                            <div class="card-sub">{{ \Illuminate\Support\Str::headline(str_replace(['job.','task.'], '', (string) $activity->event)) }}</div>
+                        @endunless
                     </div>
                     <time title="{{ \App\Support\UserLocalTime::format($activity->created_at, 'M j, Y g:i A') }}">{{ $activity->created_at?->diffForHumans() }}</time>
                 </div>

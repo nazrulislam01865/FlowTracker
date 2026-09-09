@@ -79,8 +79,14 @@ unset($__defined_vars, $__key, $__value); ?>
     $selectedState = $selectedPhase
         ? \App\Support\OrderDetailPresenter::phaseState($job, $selectedPhase)
         : 'locked';
-    $completedTasks = \App\Support\OrderDetailPresenter::completedCount($selectedTasks);
-    $applicableTaskCount = $selectedTasks->count();
+    $requiredSelectedTasks = $selectedTasks
+        ->filter(fn ($task) => \App\Support\OrderTaskRequirement::isRequired($task))
+        ->values();
+    $requiredCompletedTasks = \App\Support\OrderDetailPresenter::completedCount($requiredSelectedTasks);
+    $requiredTaskCount = $requiredSelectedTasks->count();
+    $visibleOptionalTaskCount = $selectedTasks
+        ->filter(fn ($task) => \App\Support\OrderTaskRequirement::isRegularOptional($task))
+        ->count();
     $stageCount = $phases->count();
     $isShipmentPhase = \App\Support\OrderShipmentPresenter::isShipmentPhase($selectedPhase, $selectedTasks);
     $shipmentPresentation = $isShipmentPhase
@@ -237,7 +243,12 @@ unset($__defined_vars, $__key, $__value); ?>
                         <div class="card-title"><?php echo e($selectedPhase?->name ?? 'Workflow'); ?> tasks</div>
                         <div class="card-sub"><?php echo e($taskPackSub); ?></div>
                     </div>
-                    <div class="completion"><?php echo e($completedTasks); ?> of <?php echo e($applicableTaskCount); ?> complete</div>
+                    <div class="completion">
+                        <?php echo e($requiredCompletedTasks); ?> of <?php echo e($requiredTaskCount); ?> required complete
+                        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($visibleOptionalTaskCount > 0): ?>
+                            <span class="ft-order-optional-count">· <?php echo e($visibleOptionalTaskCount); ?> optional</span>
+                        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                    </div>
                 </div>
 
                 <div class="task-columns ft-order-task-columns">

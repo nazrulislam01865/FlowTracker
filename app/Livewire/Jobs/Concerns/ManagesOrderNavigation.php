@@ -125,6 +125,7 @@ trait ManagesOrderNavigation
         $this->jobActivityTab = 'all';
         $this->jobActivityPage = 1;
         $this->closeOrderAttentionReason();
+        $this->closeOrderHoldModal();
         $this->closeEditOrderProductModal();
         $this->closeFinanceModals();
         $this->closeOrderWorkflowAction();
@@ -171,6 +172,7 @@ trait ManagesOrderNavigation
         $this->lastJobDocumentUploadId = null;
         $this->lastJobDocumentTaskId = null;
         $this->closeOrderAttentionReason();
+        $this->closeOrderHoldModal();
         $this->closeEditOrderProductModal();
         $this->closeFinanceModals();
         $this->closeRedoModal();
@@ -224,6 +226,7 @@ trait ManagesOrderNavigation
             $this->cancelAddOrderTask(false);
             $this->resetOverviewTaskResourceUi();
             $this->closeOrderWorkflowAction();
+            $this->closeOrderHoldModal();
         }
         if ($tab !== 'finance') $this->closeFinanceModals();
         if ($tab !== 'redo') $this->closeRedoModal();

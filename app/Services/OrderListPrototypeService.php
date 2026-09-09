@@ -400,6 +400,10 @@ class OrderListPrototypeService
             );
         }
 
+        if ((bool) ($filters['hold_on'] ?? false)) {
+            $query->whereHas('activeHold');
+        }
+
         if ($sequence > 0) {
             // The stage cards/counts are resolved from the Order's *current runtime*
             // workflow_phase_id, so the table filter must use the same source of truth.
@@ -438,6 +442,7 @@ class OrderListPrototypeService
                 'phase:id,name,short_name,sequence,color',
                 'owner:id,name,profile_image_path',
                 'orderFlag:id,name,color',
+                'activeHold:id,flow_job_id,hold_from',
                 'items' => fn ($items) => $items
                     ->select(['id','flow_job_id','supplier_id','product_name','category_name','quantity','unit_price','is_removed','sort_order'])
                     ->with('supplier:id,name'),
@@ -859,7 +864,8 @@ class OrderListPrototypeService
             'phase_name' => (string) $stage['name'],
             'phase_sequence' => $stageSequence,
             'phase_color' => (string) ($job->phase?->color ?: $stage['color']),
-            'status' => (string) ($job->status ?: 'New'),
+            'is_on_hold' => (bool) $job->activeHold,
+            'status' => $job->activeHold ? 'On Hold' : (string) ($job->status ?: 'New'),
             'flag' => (string) ($job->orderFlag?->name ?: ($job->attention_requested ? 'Needs attention' : '')),
             'owner' => (string) ($job->owner?->name ?: 'Unassigned'),
             'owner_initials' => OrderDetailPresenter::initials($job->owner?->name),

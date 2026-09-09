@@ -58,6 +58,11 @@ trait HandlesInlineEdits
             if ($status === 422) {
                 $message = trim($exception->getMessage());
 
+                if ($message === \App\Services\Orders\OrderHoldService::BLOCKED_ACTIVITY_MESSAGE
+                    && method_exists($this, 'dispatch')) {
+                    $this->dispatch('flowtrack:order-held-blocked', action: $label);
+                }
+
                 return [
                     'ok' => false,
                     'message' => $message !== '' ? $message : 'Please check the '.$label.' value and try again.',

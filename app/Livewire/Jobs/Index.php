@@ -16,6 +16,7 @@ use App\Livewire\Jobs\Concerns\ManagesOrderTasks;
 use App\Livewire\Jobs\Concerns\ManagesOrderDocuments;
 use App\Livewire\Jobs\Concerns\ManagesOrderTaskResources;
 use App\Livewire\Jobs\Concerns\ManagesOrderActivity;
+use App\Livewire\Jobs\Concerns\ManagesOrderHold;
 use App\Livewire\Jobs\Concerns\ManagesOrderRedo;
 use App\Livewire\Jobs\Concerns\ManagesDetailProgressiveLoading;
 use App\Livewire\Jobs\Concerns\BuildsOrderPageData;
@@ -52,6 +53,7 @@ class Index extends Component
     use ManagesOrderDocuments;
     use ManagesOrderTaskResources;
     use ManagesOrderActivity;
+    use ManagesOrderHold;
     use ManagesOrderRedo;
     use ManagesDetailProgressiveLoading;
     use BuildsOrderPageData;
@@ -277,6 +279,9 @@ class Index extends Component
     public int $jobActivityPage = 1;
     public bool $showOrderAttentionModal = false;
     public string $orderAttentionReason = '';
+    public bool $showOrderHoldModal = false;
+    public string $orderHoldFrom = 'client';
+    public string $orderHoldReason = '';
     public bool $showOrderCancelModal = false;
     public string $orderCancellationReason = '';
     public int $activityPerPage = 30;

@@ -48,11 +48,11 @@ class CreateOrderShippingSetupUxTest extends TestCase
 
         $this->assertStringNotContainsString('<span>Shipping method</span>', $row);
         $this->assertStringContainsString('<h2>Schedule & owner</h2>', $create);
-        $this->assertStringContainsString('<b>Expected delivery date</b>', $create);
+        $this->assertStringContainsString('<b>Hand Date</b>', $create);
         $this->assertStringContainsString('<x-jobs.create.shipping-method-picker', $create);
         $this->assertStringContainsString('Applied automatically to every shipment address.', $create);
 
-        $date = strpos($create, '<b>Expected delivery date</b>');
+        $date = strpos($create, '<b>Hand Date</b>');
         $method = strpos($create, '<x-jobs.create.shipping-method-picker', $date);
         $owner = strpos($create, 'label="Order owner *"');
         $this->assertNotFalse($date);

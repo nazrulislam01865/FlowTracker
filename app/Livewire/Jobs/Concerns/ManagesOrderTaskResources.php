@@ -30,6 +30,7 @@ trait ManagesOrderTaskResources
             ->with(['job', 'documentCategory', 'setupTemplate.documentCategory', 'documents:id,task_id,name'])
             ->where('flow_job_id', $this->selectedJobId)
             ->findOrFail($taskId);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
 
         $canCreate = auth()->user()->canModule('documents', 'create');
@@ -463,6 +464,7 @@ trait ManagesOrderTaskResources
             ->where('flow_job_id', $this->selectedJobId)
             ->findOrFail($taskId);
 
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
 
         return $task;

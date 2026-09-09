@@ -908,11 +908,24 @@
                     >
                     @error('orderWorkflowActionPayload.estimated_delivery_date')<p class="validation-error">{{ $message }}</p>@enderror
                 </label>
-            @elseif($variant === 'production_check')
-                <div class="ft-prototype-choice-grid">
-                    <button type="button" class="danger-choice" wire:click="submitOrderWorkflowAction('issue')"><span class="ft-prototype-choice-icon">!</span><strong>Report Issue</strong><small>Notify supplier and keep Production open</small></button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('confirm')"><span class="ft-prototype-choice-icon">✓</span><strong>No Issue</strong><small>Continue to Production completion</small></button>
+            @elseif($variant === 'production_monitor')
+                <div class="ft-production-monitor-modal-date-row">
+                    <label class="ft-prototype-field ft-prototype-field--top">
+                        <span>Supplier Delivery Date <b class="ft-production-monitor-required">*</b></span>
+                        <input
+                            type="date"
+                            class="ft-prototype-clickable-date"
+                            wire:model="orderWorkflowActionPayload.supplier_delivery_date"
+                            onclick="this.focus({ preventScroll: true }); if (typeof this.showPicker === 'function') { try { this.showPicker(); } catch (e) {} }"
+                        >
+                        @error('orderWorkflowActionPayload.supplier_delivery_date')<p class="validation-error">{{ $message }}</p>@enderror
+                    </label>
                 </div>
+                <label class="ft-prototype-field ft-production-monitor-modal-note">
+                    <span>Production Issue Note <em>(Optional)</em></span>
+                    <textarea wire:model="orderWorkflowActionComment" rows="4" maxlength="10000" placeholder="Add note about the production issue, resolution, or communication with supplier..."></textarea>
+                    @error('orderWorkflowActionComment')<p class="validation-error">{{ $message }}</p>@enderror
+                </label>
             @elseif($variant === 'issue_resolution')
                 <label class="ft-prototype-field"><span>Resolution</span><textarea wire:model="orderWorkflowActionComment" rows="5" placeholder="Describe the corrective action and resolution..."></textarea>@error('orderWorkflowActionComment')<p class="validation-error">{{ $message }}</p>@enderror</label>
             @elseif($variant === 'qc_check')
@@ -1159,7 +1172,7 @@
             // Once one of those choices opens a nested revision/issue dialog, the
             // normal footer must return so the user can actually submit it.
             $usesInlineWorkflowActions = $step === 'main'
-                && in_array($variant, ['client_decision','production_check','qc_check'], true);
+                && in_array($variant, ['client_decision','qc_check'], true);
             $usesShipmentFooter = $step === 'main' && $variant === 'shipment_info';
             $editingCompletedShipmentInformation = $usesShipmentFooter
                 && \App\Support\OrderDetailPresenter::isCompletedTask($task);

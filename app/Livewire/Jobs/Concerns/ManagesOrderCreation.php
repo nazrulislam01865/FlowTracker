@@ -1196,7 +1196,7 @@ trait ManagesOrderCreation
             'workflowPhaseId' => ['required','integer'],
             'ownerId' => ['required','exists:users,id'],
             'coordinatorId' => ['nullable','exists:users,id'],
-            // Expected delivery date is intentionally optional on Create Order.
+            // Hand Date is intentionally optional on Create Order.
             // The DTO already normalizes an empty value to null and the database column is nullable.
             'deliveryDate' => ['nullable','date'],
             'estimatedDeliveryDate' => ['nullable','date'],
@@ -1271,7 +1271,7 @@ trait ManagesOrderCreation
             'createShipments.*.quantity.min' => 'Quantity must be at least 1 when provided.',
             'createShipments.*.quantity.max' => 'Quantity is too large.',
             'shippingAddress.required' => 'Shipping address is required.',
-            'deliveryDate.date' => 'Expected delivery date must be a valid date.',
+            'deliveryDate.date' => 'Hand Date must be a valid date.',
             'shippingPostalCode.required' => 'Postal code is required.',
             'shippingContactName.required' => 'Contact person is required.',
             'shippingPhoneCountryCode.required' => 'Country code is required.',

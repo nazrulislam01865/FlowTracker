@@ -24,9 +24,9 @@ class RemoteAreaOrderIntegrationSourceTest extends TestCase
         $this->assertStringContainsString('@if($remoteArea)', $planning);
         $this->assertStringContainsString('Remote Area', $planning);
         $this->assertLessThan(
-            strpos($planning, 'Required delivery'),
+            strpos($planning, 'Hand Date'),
             strpos($planning, 'Remote area'),
-            'Remote Area must render before Required delivery in Planning & ownership.'
+            'Remote Area must render before Hand Date in Planning & ownership.'
         );
         $this->assertStringNotContainsString('Remote Area', $shipping);
 

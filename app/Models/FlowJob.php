@@ -7,6 +7,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\MorphMany;
 use Illuminate\Database\Eloquent\Relations\MorphOne;
 
@@ -54,6 +55,7 @@ class FlowJob extends Model
         'is_repeat_order',
         'repeat_order_number',
         'estimated_delivery_date',
+        'supplier_delivery_date',
         'production_urgency_ids',
         'shipment_method_ids',
         'shipment_urgency_ids',
@@ -82,6 +84,7 @@ class FlowJob extends Model
         return [
             'delivery_date' => 'date',
             'estimated_delivery_date' => 'date',
+            'supplier_delivery_date' => 'date',
             'received_date' => 'date',
             'needs_attention' => 'boolean',
             'attention_requested' => 'boolean',
@@ -123,6 +126,8 @@ class FlowJob extends Model
     public function documents(): HasMany { return $this->hasMany(Document::class); }
     public function items(): HasMany { return $this->hasMany(FlowJobItem::class, 'flow_job_id')->orderBy('sort_order'); }
     public function shipments(): HasMany { return $this->hasMany(OrderShipment::class, 'flow_job_id')->orderBy('sequence')->orderBy('id'); }
+    public function holds(): HasMany { return $this->hasMany(OrderHold::class, 'flow_job_id')->latest('id'); }
+    public function activeHold(): HasOne { return $this->hasOne(OrderHold::class, 'flow_job_id')->whereNull('ended_at'); }
     public function invoices(): HasMany { return $this->hasMany(Invoice::class, 'flow_job_id')->orderByDesc('issue_date')->orderByDesc('id'); }
     public function payments(): HasMany { return $this->hasMany(Payment::class, 'flow_job_id')->orderByDesc('payment_date')->orderByDesc('id'); }
     public function collection(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderCollection::class, 'flow_job_id'); }
@@ -150,6 +155,11 @@ class FlowJob extends Model
         return $this->morphMany(Activity::class, 'subject')
             ->where('event', 'job.workflow_invoice_prepared')
             ->latest('id');
+    }
+    public function latestProductionMonitorActivity(): MorphOne
+    {
+        return $this->morphOne(Activity::class, 'subject')
+            ->ofMany(['id' => 'max'], fn ($query) => $query->where('activities.event', 'job.supplier_delivery_date_set'));
     }
     public function redoRecords(): HasMany { return $this->hasMany(OrderRedo::class, 'original_order_id')->orderBy('sequence'); }
     public function redoRecord(): \Illuminate\Database\Eloquent\Relations\HasOne { return $this->hasOne(OrderRedo::class, 'redo_order_id'); }

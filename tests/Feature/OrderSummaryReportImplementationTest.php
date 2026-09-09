@@ -25,7 +25,7 @@ class OrderSummaryReportImplementationTest extends TestCase
             'Urgent or Not',
             'Quantity',
             'Material',
-            'ERP Approval Date',
+            'Artwork Approval Date',
             'Special Orders',
             'Sample/Swatch Sent Date',
             'Sample/Swatch Confirmed Date',
@@ -43,5 +43,10 @@ class OrderSummaryReportImplementationTest extends TestCase
         self::assertStringContainsString('label="Order Summary"', $sidebar);
         self::assertStringContainsString('new Xlsx($book)', $service);
         self::assertStringContainsString("setTitle('Order Summary')", $service);
+        self::assertStringContainsString("'artwork_approval' => \$this->date(\$artworkApprovalAt)", $service);
+        self::assertStringContainsString("'sample_sent' => \$this->date(\$artworkSentActivity?->created_at)", $service);
+        self::assertStringContainsString("'sample_confirmed' => \$this->date(\$clientApprovalActivity?->created_at)", $service);
+        self::assertStringContainsString("'revise_confirm' => \$this->date(\$revisionActivity?->created_at)", $service);
+        self::assertStringContainsString("'job.artwork_client_erp_uploaded'", $service);
     }
 }

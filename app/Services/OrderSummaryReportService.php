@@ -138,7 +138,7 @@ class OrderSummaryReportService
             'Urgent or Not',
             'Quantity',
             'Material',
-            'ERP Approval Date',
+            'Artwork Approval Date',
             'Special Orders',
             'Sample/Swatch Sent Date',
             'Sample/Swatch Confirmed Date',
@@ -165,7 +165,7 @@ class OrderSummaryReportService
                     $row['urgent'] === 'Y' ? 'Urgent' : 'Normal',
                     $row['quantity'],
                     $row['material'],
-                    $row['erp_approval'],
+                    $row['artwork_approval'],
                     $row['special_orders'],
                     $row['sample_sent'],
                     $row['sample_confirmed'],
@@ -392,25 +392,36 @@ class OrderSummaryReportService
             return $tasks->first(fn (Task $task) => app(OrderWorkflowActionService::class)->automationKey($task) === $key);
         };
 
-        $clientDecision = $taskByKey('ART_CLIENT_ERP_DECISION');
-        $sampleTask = $taskByKey('ART_SAMPLE_APPROVAL');
+        $artworkReview = $taskByKey('ART_INTERNAL_REVIEW');
         $activities = $order->activities;
+        $revisionActivity = $activities->firstWhere('event', 'job.artwork_revision_requested');
 
         /*
-         * The latest sample/swatch decision controls whether sample dates
-         * are allowed to appear in the report. Optional sample tasks may
-         * still have lifecycle timestamps even when the branch was skipped,
-         * so those task dates must never be used unless the latest decision
-         * explicitly says the sample is required.
+         * These report dates are lifecycle milestones from the Artwork stage,
+         * not sample-task lifecycle timestamps:
+         *
+         * - Artwork Approval Date: Internal Artwork Review completed.
+         * - Sample/Swatch Sent Date: latest artwork uploaded/sent to the client ERP.
+         * - Sample/Swatch Confirmed Date: client approved the artwork, regardless
+         *   of whether the optional sample/swatch branch is required afterwards.
+         * - Revise / Sample Confirm Date: latest artwork revision request.
+         *
+         * A revision opens a new artwork cycle. Do not leak approval/send dates
+         * from the previous artwork version into the current report row.
          */
-        $sampleDecisionActivity = $activities->first(fn ($activity) => in_array(
-            (string) $activity->event,
-            ['job.sample_required', 'job.sample_not_required'],
-            true
-        ));
-        $sampleIsRequired = (string) ($sampleDecisionActivity?->event ?? '') === 'job.sample_required';
-        $sampleRequiredActivity = $sampleIsRequired ? $sampleDecisionActivity : null;
-        $revisionActivity = $activities->firstWhere('event', 'job.artwork_revision_requested');
+        $artworkSentActivity = $activities->first(fn ($activity) =>
+            (string) $activity->event === 'job.artwork_client_erp_uploaded'
+            && (! $revisionActivity || (int) $activity->id > (int) $revisionActivity->id)
+        );
+        $clientApprovalActivity = $activities->first(fn ($activity) =>
+            in_array((string) $activity->event, ['job.sample_required', 'job.sample_not_required'], true)
+            && (! $revisionActivity || (int) $activity->id > (int) $revisionActivity->id)
+        );
+        $artworkApprovalAt = $artworkReview?->completed_at;
+        if ($revisionActivity?->created_at && $artworkApprovalAt
+            && ! $artworkApprovalAt->greaterThan($revisionActivity->created_at)) {
+            $artworkApprovalAt = null;
+        }
         $supplierReplyActivity = $activities->first(function ($activity): bool {
             $event = strtolower((string) $activity->event);
             return in_array((string) $activity->event, self::SUPPLIER_REPLY_EVENTS, true)
@@ -431,7 +442,7 @@ class OrderSummaryReportService
         if ($quantity < 1) $quantity = max(0, (int) $order->quantity);
 
         $urgent = collect($order->shipment_urgency_ids ?? [])->filter(fn ($value) => (int) $value > 0)->isNotEmpty();
-        $supplierDelivery = $order->estimated_delivery_date ?: $order->delivery_date;
+        $supplierDelivery = $order->supplier_delivery_date ?: $order->estimated_delivery_date ?: $order->delivery_date;
         $today = app(WorkspaceSettingsService::class)->localToday();
         $overdue = ! $order->completed_at && $supplierDelivery && $supplierDelivery->lt($today);
         $complete = (bool) $order->completed_at || strcasecmp(trim((string) $order->status), 'Completed') === 0;
@@ -447,19 +458,13 @@ class OrderSummaryReportService
             'urgent' => $urgent ? 'Y' : 'N',
             'quantity' => $quantity,
             'material' => $materialNames->implode(', ') ?: '—',
-            'erp_approval' => $this->date($sampleDecisionActivity?->created_at ?: $clientDecision?->completed_at),
+            'artwork_approval' => $this->date($artworkApprovalAt),
+            // Backward-compatible key for any older report caller still reading it.
+            'erp_approval' => $this->date($artworkApprovalAt),
             'special_orders' => app(RichTextService::class)->plainText((string) $order->supplier_instruction),
-
-            // Optional sample/swatch branch: keep all sample dates blank when skipped.
-            'sample_sent' => $sampleIsRequired
-                ? $this->date($sampleRequiredActivity?->created_at ?: $sampleTask?->start_date)
-                : '',
-            'sample_confirmed' => $sampleIsRequired
-                ? $this->date($sampleTask?->completed_at)
-                : '',
-            'revise_confirm' => $revisionActivity
-                ? $this->date($revisionActivity->created_at)
-                : ($sampleIsRequired ? $this->date($sampleTask?->completed_at) : ''),
+            'sample_sent' => $this->date($artworkSentActivity?->created_at),
+            'sample_confirmed' => $this->date($clientApprovalActivity?->created_at),
+            'revise_confirm' => $this->date($revisionActivity?->created_at),
             'supplier_delivery' => $this->date($supplierDelivery),
             'supplier_reply' => $this->supplierReplyText($supplierReplyActivity),
             'state' => $state,
@@ -513,6 +518,7 @@ class OrderSummaryReportService
                     $query->whereIn('event', [
                         'job.sample_required',
                         'job.sample_not_required',
+                        'job.artwork_client_erp_uploaded',
                         'job.artwork_revision_requested',
                         ...self::SUPPLIER_REPLY_EVENTS,
                     ])->orWhere('event', 'like', '%supplier%reply%');

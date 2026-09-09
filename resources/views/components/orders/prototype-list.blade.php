@@ -7,6 +7,7 @@
     'searchFilter' => '',
     'clientFilter' => '',
     'ownerFilter' => '',
+    'holdOnFilter' => false,
     'phaseFilter' => '',
     'dateFrom' => '',
     'dateTo' => '',

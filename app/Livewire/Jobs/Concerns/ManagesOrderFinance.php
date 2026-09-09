@@ -302,6 +302,7 @@ trait ManagesOrderFinance
         $user = auth()->user();
         $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
         abort_unless(app(AccessControlService::class)->canEditParentRecordModule($user, 'finance', $job), 403);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         app(VisibleOrderQuery::class)->loadTab($job, $user, 'finance');
 
         $summary = app(OrderFinanceService::class)->summary($job);

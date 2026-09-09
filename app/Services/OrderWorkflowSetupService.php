@@ -85,7 +85,7 @@ class OrderWorkflowSetupService
                         ],
                     ),
                     self::task('PROD_START', 'Start Production', 'Production', 0),
-                    self::task('PROD_ISSUE', 'Monitor / Resolve Production Issue', 'Production', 1, true, 'Production Document', false, true, 'Add supplier evidence, screenshots or issue documents when needed.'),
+                    self::task('PROD_ISSUE', 'Monitor / Resolve Production Issue', 'Production', 1, false, 'Production Document', false, true, 'Add supplier evidence, screenshots or issue documents when needed.'),
                     self::task('PROD_FINISH', 'Finish Production', 'Production', 0),
                 ],
             ],

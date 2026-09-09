@@ -79,6 +79,7 @@ trait ManagesOrderTasks
 
         $user = auth()->user();
         $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         abort_unless(app(AccessControlService::class)->canCreateJobTask($user, $job), 403);
         abort_if($job->completed_at || $job->status === 'Completed', 422, 'A completed Order cannot receive another task.');
         abort_if(in_array($job->status, JobService::INACTIVE_STATUSES, true), 422, 'An inactive Order cannot receive another task.');
@@ -131,6 +132,7 @@ trait ManagesOrderTasks
 
         $user = auth()->user();
         $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         abort_unless(app(AccessControlService::class)->canCreateJobTask($user, $job), 403);
 
         $data = $this->validate([
@@ -200,6 +202,11 @@ trait ManagesOrderTasks
             $this->syncOverviewWorkflowSelectionToCurrentPhase();
             session()->flash('success', 'Phase completed and the next configured phase is active.');
         } catch (Throwable $e) {
+            if (trim((string) $e->getMessage()) === \App\Services\Orders\OrderHoldService::BLOCKED_ACTIVITY_MESSAGE) {
+                $this->dispatch('flowtrack:order-held-blocked', action: 'Complete phase');
+                return;
+            }
+
             $this->addError('phaseCompletion', $e->getMessage());
         }
     }

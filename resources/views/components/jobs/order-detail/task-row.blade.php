@@ -1,12 +1,22 @@
 @props(['job', 'task', 'mode' => 'locked', 'displayCode' => null, 'taskStatuses' => collect(), 'context' => [], 'overviewTaskLinkFormTaskId' => null])
 @php
     $permissions = data_get($context, 'taskPermissions.'.(int) $task->id, []);
-    $canEditTask = (bool) data_get($permissions, 'edit', false);
-    $canAssignTask = (bool) data_get($permissions, 'assign', false);
-    $canDeleteTask = (bool) data_get($permissions, 'delete', false);
-    $canUploadDocument = (bool) ($context['canUploadDocument'] ?? false);
-    $canLinkDocument = (bool) ($context['canLinkDocument'] ?? false);
-    $canDeleteDocument = (bool) ($context['canDeleteDocument'] ?? false);
+    $orderOnHold = (bool) ($context['isOnHold'] ?? false);
+    $taskEditPermission = (bool) data_get($permissions, 'edit', false);
+    $taskAssignPermission = (bool) data_get($permissions, 'assign', false);
+    $taskDeletePermission = (bool) data_get($permissions, 'delete', false);
+    $documentUploadPermission = (bool) ($context['canUploadDocument'] ?? false);
+    $documentLinkPermission = (bool) ($context['canLinkDocument'] ?? false);
+    $documentDeletePermission = (bool) ($context['canDeleteDocument'] ?? false);
+    // A held Order is view-only. Keep the underlying permission values above so
+    // we can still render a clear locked action for users who would normally be
+    // able to perform the task, but never expose a mutating control while held.
+    $canEditTask = $taskEditPermission && ! $orderOnHold;
+    $canAssignTask = $taskAssignPermission && ! $orderOnHold;
+    $canDeleteTask = $taskDeletePermission && ! $orderOnHold;
+    $canUploadDocument = $documentUploadPermission && ! $orderOnHold;
+    $canLinkDocument = $documentLinkPermission && ! $orderOnHold;
+    $canDeleteDocument = $documentDeletePermission && ! $orderOnHold;
     $canExportDocument = (bool) ($context['canExportDocument'] ?? false);
     $taskDocuments = $job->documents->where('task_id', $task->id)->sortByDesc('created_at')->values();
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
@@ -17,6 +27,8 @@
     // latest marker and document actions.
     $isPurchaseOrderUploadTask = $automationKey === 'NEW_UPLOAD_PO';
     $isProductionEstimatedDeliveryTask = $automationKey === 'PROD_SET_ESTIMATED_DELIVERY';
+    $isProductionMonitorTask = $automationKey === 'PROD_ISSUE';
+    $isRegularOptionalTask = \App\Support\OrderTaskRequirement::isRegularOptional($task);
     $artworkRevisionNotes = $task->relationLoaded('artworkRevisionNotes') ? $task->artworkRevisionNotes : collect();
     $revisionReferenceDocumentIds = $artworkRevisionNotes
         ->map(function ($revisionNote) {
@@ -53,9 +65,32 @@
         ? 'Required'
         : $status;
     if ($isProductionEstimatedDeliveryTask && $mode === 'active' && ! $job->estimated_delivery_date) $statusClass = 'wait';
+
+    // A normal optional task can be actionable in parallel with the next
+    // required task. Present its untouched Not Started/Locked state as Ready
+    // once the previous required work has been completed.
+    if ($isRegularOptionalTask && $mode === 'active' && \App\Support\BoardLaneResolver::isNotStarted((string) $task->status)) {
+        $displayStatus = 'Ready';
+        $statusClass = 'active';
+    }
     $assigneeName = $task->assignee?->name ?: 'Unassigned';
     $assigneeInitials = collect(preg_split('/\s+/', trim($assigneeName)))->filter()->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->take(2)->implode('');
     $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
+    $showProductionMonitorInline = $isProductionMonitorTask
+        && $mode === 'active'
+        && $isCurrentPhase
+        && $canEditTask
+        && ! $isCancelled
+        && ! $orderOnHold;
+    $productionMonitorInitialDate = $job->supplier_delivery_date?->format('Y-m-d') ?? '';
+    $productionMonitorErrorPrefix = 'productionMonitor.'.(int) $task->id;
+    $productionMonitorSavedDetails = (array) data_get($context, 'productionMonitorDetails.'.(int) $task->id, []);
+    $showProductionMonitorSummary = $isProductionMonitorTask && $mode === 'done';
+    $dueDisplay = $task->due_date?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : 'Set due date');
+    if ($showProductionMonitorInline) {
+        $displayStatus = 'In Progress';
+        $statusClass = 'active';
+    }
     $documentCategoryName = (string) ($task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name ?: '');
     $requiresDocument = (bool) ($task->document_category_id || $task->setupTemplate?->document_category_id);
     $requiredBeforeCompletion = (bool) ($task->setupTemplate?->document_required_before_completion ?? false);
@@ -86,16 +121,27 @@
     $emailDeliveryFailed = $isTrackedEmailTask && $emailDeliveryStatus === 'failed';
     $emailDeliverySent = $isTrackedEmailTask && $emailDeliveryStatus === 'sent';
     $emailDeliveryNotSent = $isTrackedEmailTask && $emailDeliveryStatus === 'not_sent';
-    $emailCanResend = $isTrackedEmailTask
+    $emailCanResendIfUnlocked = $isTrackedEmailTask
         && $mode === 'done'
-        && $canEditTask
+        && $taskEditPermission
         && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
+    $emailCanResend = $emailCanResendIfUnlocked && ! $orderOnHold;
+    $canAddCompletedTaskDocumentsIfUnlocked = $automationKey === 'NEW_UPLOAD_PO'
+        && $taskEditPermission
+        && ($documentUploadPermission || $documentLinkPermission);
     $emailResourceLabel = $isInvoiceEmailTask ? 'invoice' : 'artwork';
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
 @endphp
-<article id="order-task-{{ $task->id }}" class="task ft-order-task-row {{ $mode }} {{ $isCancelled ? 'cancelled-task' : '' }} {{ $isProductionEstimatedDeliveryTask ? 'ft-order-task-row--estimated-delivery' : '' }}" style="{{ \App\Support\MasterColor::style($taskColor) }}border-left:4px solid var(--ft-master-color,#2563EB)" wire:key="order-task-row-{{ $task->id }}">
+<article id="order-task-{{ $task->id }}"
+    class="task ft-order-task-row {{ $mode }} {{ $isCancelled ? 'cancelled-task' : '' }} {{ $orderOnHold ? 'is-order-held' : '' }} {{ $isProductionEstimatedDeliveryTask ? 'ft-order-task-row--estimated-delivery' : '' }} {{ $showProductionMonitorInline ? 'ft-order-task-row--production-monitor' : '' }}"
+    style="{{ \App\Support\MasterColor::style($taskColor) }}border-left:4px solid var(--ft-master-color,#2563EB)"
+    wire:key="order-task-row-{{ $task->id }}"
+    @if($showProductionMonitorInline)
+        x-data="{ productionSupplierDate: @js($productionMonitorInitialDate), productionIssueNote: '', initialSupplierDate: @js($productionMonitorInitialDate) }"
+    @endif
+>
     <div class="task-icon ft-order-task-icon">{{ $mode === 'done' ? '✓' : ($mode === 'active' ? '●' : '⌁') }}</div>
     <div class="task-copy ft-order-task-copy">
         <div class="task-code">TASK {{ $displayCode ?: ($task->task_number ?: str_pad((string) $task->id, 3, '0', STR_PAD_LEFT)) }}</div>
@@ -103,6 +149,8 @@
             {{ $task->title }}
             @if($isProductionEstimatedDeliveryTask)
                 <span class="ft-order-required-task-badge">Required</span>
+            @elseif($isRegularOptionalTask)
+                <span class="ft-order-optional-task-badge">Optional</span>
             @endif
         </div>
         @if($task->description || $task->setupTemplate?->description)<div class="task-description">{{ \Illuminate\Support\Str::limit(strip_tags((string) ($task->description ?: $task->setupTemplate?->description)), 105) }}</div>@endif
@@ -147,15 +195,15 @@
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"
-        x-data="window.FlowTrack.ui.inlineEdit({ key:@js('task-'.$task->id.'-due-date'), label:'task due date', value:@js($task->due_date?->format('Y-m-d') ?? ''), display:@js($task->due_date?->format('M j, Y') ?? 'Set due date') })"
+        x-data="window.FlowTrack.ui.inlineEdit({ key:@js('task-'.$task->id.'-due-date'), label:'task due date', value:@js($task->due_date?->format('Y-m-d') ?? ''), display:@js($dueDisplay) })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
         <div class="ft-order-inline-display-row" x-show="!editing">
-            <span class="ft-order-inline-value" x-text="display">{{ $task->due_date?->format('M j, Y') ?? 'Set due date' }}</span>
-            @if($canEditTask && !$isCancelled)
+            <span class="ft-order-inline-value" x-text="display">{{ $dueDisplay }}</span>
+            @if($canEditTask && !$isCancelled && !$showProductionMonitorInline)
                 <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
             @endif
         </div>
-        @if($canEditTask && !$isCancelled)
+        @if($canEditTask && !$isCancelled && !$showProductionMonitorInline)
             <input x-ref="orderDue" x-cloak x-show="editing" x-model="draftValue" class="ft-order-inline-input" type="date"
                 x-on:keydown.escape.prevent="cancelEdit()"
                 x-on:blur="if (editing) cancelEdit()"
@@ -166,6 +214,9 @@
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status {{ $statusClass }}">{{ $displayStatus }}</span>
+        @if($orderOnHold && $mode === 'active')
+            <span class="ft-order-task-held-badge"><span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span> Order on hold</span>
+        @endif
         @if($isTrackedEmailTask && $mode === 'done')
             @if($emailDeliverySent)
                 <span class="ft-order-task-email-status is-sent" title="The latest {{ $emailResourceLabel }} email was sent successfully.">Email Sent</span>
@@ -203,8 +254,51 @@
     </div>
 
     <div class="task-actions ft-order-task-actions">
-        @if($isCancelled)
+        @if($showProductionMonitorInline)
+            <button
+                type="button"
+                class="btn small primary ft-production-monitor-save"
+                x-on:click.stop="$wire.saveProductionMonitorTask({{ $task->id }}, productionSupplierDate, productionIssueNote)"
+                wire:loading.attr="disabled"
+                wire:target="saveProductionMonitorTask"
+            >
+                <span wire:loading.remove wire:target="saveProductionMonitorTask">Save</span>
+                <span wire:loading wire:target="saveProductionMonitorTask">Saving...</span>
+            </button>
+            <button
+                type="button"
+                class="btn small ft-production-monitor-cancel"
+                x-on:click.stop="productionSupplierDate = initialSupplierDate; productionIssueNote = ''; $wire.clearProductionMonitorErrors({{ $task->id }})"
+            >Cancel</button>
+        @elseif($isCancelled)
             <button type="button" class="btn small" disabled>Blocked</button>
+        @elseif($orderOnHold)
+            @if($mode === 'active' && $isCurrentPhase && $taskEditPermission)
+                <button
+                    type="button"
+                    class="btn small ft-order-task-hold-locked-action"
+                    x-on:click.prevent.stop="showHoldBlocked(@js($workflowActionLabel))"
+                    title="Order is on hold. Release the hold before performing this task."
+                >
+                    <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                    <span>{{ $workflowActionLabel }}</span>
+                </button>
+            @elseif($mode === 'done')
+                @if($canAddCompletedTaskDocumentsIfUnlocked)
+                    <button type="button" class="btn small ft-order-task-hold-locked-action" x-on:click.prevent.stop="showHoldBlocked('Add other documents')" title="Order is on hold. Release the hold before adding documents.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Add other documents</span>
+                    </button>
+                @elseif($emailCanResendIfUnlocked)
+                    <button type="button" class="btn small ft-order-task-hold-locked-action" x-on:click.prevent.stop="showHoldBlocked('Resend')" title="Order is on hold. Release the hold before resending.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Resend</span>
+                    </button>
+                @endif
+                <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
+            @else
+                <button type="button" class="btn small" wire:click="viewTask({{ $task->id }})">View</button>
+            @endif
         @elseif($mode === 'active' && $isCurrentPhase)
             @if($canEditTask)
                 @if(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument))
@@ -230,6 +324,20 @@
             @endif
         @endif
     </div>
+
+    @if($showProductionMonitorInline)
+        <x-jobs.order-detail.production-monitor-inline
+            :task="$task"
+            :initial-date="$productionMonitorInitialDate"
+            :error-prefix="$productionMonitorErrorPrefix"
+        />
+    @elseif($showProductionMonitorSummary)
+        <x-jobs.order-detail.production-monitor-summary
+            :task="$task"
+            :details="$productionMonitorSavedDetails"
+            :can-edit="$canEditTask && ! $isCancelled"
+        />
+    @endif
 </article>
 
 @if((int) $overviewTaskLinkFormTaskId === (int) $task->id && $canEditTask)

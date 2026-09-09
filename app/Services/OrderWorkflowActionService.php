@@ -88,7 +88,7 @@ class OrderWorkflowActionService
             'ART_SAMPLE_APPROVAL' => 'Upload Sample Approval',
             'PROD_SET_ESTIMATED_DELIVERY' => 'Set date',
             'PROD_START' => 'Production Ongoing',
-            'PROD_ISSUE' => str_contains($status, 'issue') ? 'Issue Resolved' : 'Monitor Production',
+            'PROD_ISSUE' => 'Monitor Production',
             'PROD_FINISH' => 'Production Finished',
             'QC_CHECK' => 'Open QC Check',
             'QC_ISSUE' => str_contains($status, 'issue') ? 'Issue Resolved' : 'Continue',
@@ -157,20 +157,12 @@ class OrderWorkflowActionService
                 'copy' => 'Assign the estimated delivery date before Production can start.',
                 'choices' => ['confirm' => 'Save date'],
             ],
-            'PROD_ISSUE' => str_contains($status, 'issue')
-                ? [
-                    'variant' => 'issue_resolution',
-                    'issue_type' => 'Production',
-                    'title' => 'Resolve Production Issue',
-                    'copy' => 'Record the supplier/corrective resolution before Production can finish.',
-                    'choices' => ['resolve' => 'Issue Resolved'],
-                ]
-                : [
-                    'variant' => 'production_check',
-                    'title' => 'Production Check',
-                    'copy' => 'Report a production issue or confirm there is no open issue.',
-                    'choices' => ['issue' => 'Report Issue', 'confirm' => 'No Issue'],
-                ],
+            'PROD_ISSUE' => [
+                'variant' => 'production_monitor',
+                'title' => 'Monitor / Resolve Production Issue',
+                'copy' => 'Record the supplier delivery date and any production issue note before saving this task.',
+                'choices' => ['confirm' => 'Save'],
+            ],
             'QC_CHECK' => [
                 'variant' => 'qc_check',
                 'title' => 'Product Quality Check',
@@ -296,6 +288,7 @@ class OrderWorkflowActionService
             'tracking_number' => '',
             'shipment_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
             'estimated_delivery_date' => $job->estimated_delivery_date?->format('Y-m-d') ?: '',
+            'supplier_delivery_date' => $job->supplier_delivery_date?->format('Y-m-d') ?: '',
             'invoice_number' => (string) ($preparedInvoice?->invoice_number ?: data_get($invoiceActivity?->meta, 'invoice_number', '')),
             'invoice_date' => app(WorkspaceSettingsService::class)->localToday()->toDateString(),
             'invoice_amount' => $total > 0 ? number_format($total, 2, '.', '') : '0.00',
@@ -397,6 +390,7 @@ class OrderWorkflowActionService
 
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
             abort_if(strcasecmp((string) $job->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
 
             $this->validateShipmentInfo($payload);
             if ((bool) ($payload['update_saved_contact'] ?? false)) {
@@ -433,6 +427,7 @@ class OrderWorkflowActionService
 
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->firstOrFail();
             abort_if(strcasecmp((string) $job->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
 
             if ($carrier === '' || $trackingNumber === '') {
                 throw ValidationException::withMessages([
@@ -480,6 +475,7 @@ class OrderWorkflowActionService
         return DB::transaction(function () use ($task, $actor, $decision, $comment, $payload, $attachments): Task {
             $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
             abort_unless((int) $locked->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
             app(OrderTaskSequenceService::class)->assertStatusActionable($locked);
             $locked = app(TaskService::class)->claimForAction($locked, $actor, 'performed a workflow action');
@@ -603,6 +599,40 @@ class OrderWorkflowActionService
                     'event' => 'job.estimated_delivery_date_set',
                     'description' => 'Estimated delivery date set to '.$parsedDate->format('M j, Y').'.',
                     'meta' => ['estimated_delivery_date' => $estimatedDeliveryDate],
+                ]);
+
+                return $this->complete($locked, $actor);
+            }
+
+            if ($key === 'PROD_ISSUE' && $decision === 'confirm') {
+                $supplierDeliveryDate = trim((string) ($payload['supplier_delivery_date'] ?? ''));
+                if ($supplierDeliveryDate === '') {
+                    throw ValidationException::withMessages([
+                        'orderWorkflowActionPayload.supplier_delivery_date' => 'Supplier delivery date is required.',
+                    ]);
+                }
+
+                $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $supplierDeliveryDate);
+                if (! $parsedDate || $parsedDate->format('Y-m-d') !== $supplierDeliveryDate) {
+                    throw ValidationException::withMessages([
+                        'orderWorkflowActionPayload.supplier_delivery_date' => 'Enter a valid supplier delivery date.',
+                    ]);
+                }
+
+                $job->update(['supplier_delivery_date' => $supplierDeliveryDate]);
+                $plainNote = trim(app(RichTextService::class)->plainText($comment));
+                $description = 'Supplier delivery date set to '.$parsedDate->format('M j, Y').'.';
+                if ($plainNote !== '') $description .= ' Production issue note: '.$plainNote;
+
+                $job->activities()->create([
+                    'user_id' => $actor->id,
+                    'event' => 'job.supplier_delivery_date_set',
+                    'description' => $description,
+                    'meta' => [
+                        'supplier_delivery_date' => $supplierDeliveryDate,
+                        'production_issue_note' => $comment !== '' ? $comment : null,
+                        'task_id' => (int) $locked->id,
+                    ],
                 ]);
 
                 return $this->complete($locked, $actor);
@@ -881,6 +911,8 @@ class OrderWorkflowActionService
                 ->lockForUpdate()
                 ->firstOrFail();
 
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
+
             abort_unless((int) $locked->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
             app(OrderTaskSequenceService::class)->assertStatusActionable($locked);
             $locked = app(TaskService::class)->claimForAction($locked, $actor, 'completed an email handoff manually');
@@ -927,6 +959,7 @@ class OrderWorkflowActionService
 
     public function afterDocumentAdded(Task $task, User $actor): void
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
         $task->refresh()->loadMissing(['job.phase', 'setupTemplate']);
         $key = $this->automationKey($task);
         if (! in_array($key, self::DOCUMENT_ACTIONS, true)) return;

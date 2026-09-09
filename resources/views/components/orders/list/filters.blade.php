@@ -2,6 +2,7 @@
         $orderToolbarAnyFilterActive = filled($searchFilter)
             || filled($clientFilter)
             || filled($ownerFilter)
+            || $holdOnFilter
             || filled($phaseFilter)
             || filled($dateFrom)
             || filled($dateTo)
@@ -35,6 +36,10 @@
                     aria-pressed="{{ $orderToolbarAllActive ? 'true' : 'false' }}"
                 >All</button>
 
+                <label class="ft-order-filter-chip ft-order-hold-filter {{ $holdOnFilter ? 'active' : '' }}">
+                    <input type="checkbox" wire:model.live="holdOn" @checked($holdOnFilter)>
+                    <span>Hold on</span>
+                </label>
 
                 <select class="ft-order-native-filter" wire:model.live="phase" aria-label="Workflow stage filter">
                     <option value="">All stages</option>
@@ -88,12 +93,14 @@
                     to-label="To"
                 />
 
-                <button
-                    class="btn ft-order-filter-reset"
-                    type="button"
-                    wire:click="clearFilters"
-                    @disabled(! $orderToolbarAnyFilterActive)
-                ><span aria-hidden="true">×</span> Clear filter</button>
+                <x-ui.filter-reset
+                    class="chip ft-order-filter-reset ft-order-clear-filter"
+                    action="clearFilters"
+                    label="Clear"
+                    icon="×"
+                    :disabled="! $orderToolbarAnyFilterActive"
+                    aria-label="Clear active order filters"
+                />
             </div>
         </div>
 

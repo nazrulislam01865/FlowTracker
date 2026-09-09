@@ -7,6 +7,7 @@ use App\Queries\Orders\VisibleOrderQuery;
 use App\Services\AccessControlService;
 use App\Services\MentionService;
 use App\Services\NotificationService;
+use App\Services\Orders\OrderHoldService;
 use App\Services\RichTextService;
 
 /** Persist an Order comment and its existing participant/mention notifications. */
@@ -28,6 +29,7 @@ final class AddOrderComment
 
         $job = $this->orders->detail($actor, $orderId);
         abort_unless($this->access->canEditJob($actor, $job), 403);
+        app(OrderHoldService::class)->assertNotHeld($job);
         $mentionIds = $this->mentions->userIdsFromText($body);
 
         $job->activities()->create([

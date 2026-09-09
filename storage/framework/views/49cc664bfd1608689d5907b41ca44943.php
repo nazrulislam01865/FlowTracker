@@ -29,12 +29,22 @@ foreach ($attributes->all() as $__key => $__value) {
 unset($__defined_vars, $__key, $__value); ?>
 <?php
     $permissions = data_get($context, 'taskPermissions.'.(int) $task->id, []);
-    $canEditTask = (bool) data_get($permissions, 'edit', false);
-    $canAssignTask = (bool) data_get($permissions, 'assign', false);
-    $canDeleteTask = (bool) data_get($permissions, 'delete', false);
-    $canUploadDocument = (bool) ($context['canUploadDocument'] ?? false);
-    $canLinkDocument = (bool) ($context['canLinkDocument'] ?? false);
-    $canDeleteDocument = (bool) ($context['canDeleteDocument'] ?? false);
+    $orderOnHold = (bool) ($context['isOnHold'] ?? false);
+    $taskEditPermission = (bool) data_get($permissions, 'edit', false);
+    $taskAssignPermission = (bool) data_get($permissions, 'assign', false);
+    $taskDeletePermission = (bool) data_get($permissions, 'delete', false);
+    $documentUploadPermission = (bool) ($context['canUploadDocument'] ?? false);
+    $documentLinkPermission = (bool) ($context['canLinkDocument'] ?? false);
+    $documentDeletePermission = (bool) ($context['canDeleteDocument'] ?? false);
+    // A held Order is view-only. Keep the underlying permission values above so
+    // we can still render a clear locked action for users who would normally be
+    // able to perform the task, but never expose a mutating control while held.
+    $canEditTask = $taskEditPermission && ! $orderOnHold;
+    $canAssignTask = $taskAssignPermission && ! $orderOnHold;
+    $canDeleteTask = $taskDeletePermission && ! $orderOnHold;
+    $canUploadDocument = $documentUploadPermission && ! $orderOnHold;
+    $canLinkDocument = $documentLinkPermission && ! $orderOnHold;
+    $canDeleteDocument = $documentDeletePermission && ! $orderOnHold;
     $canExportDocument = (bool) ($context['canExportDocument'] ?? false);
     $taskDocuments = $job->documents->where('task_id', $task->id)->sortByDesc('created_at')->values();
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
@@ -45,6 +55,8 @@ unset($__defined_vars, $__key, $__value); ?>
     // latest marker and document actions.
     $isPurchaseOrderUploadTask = $automationKey === 'NEW_UPLOAD_PO';
     $isProductionEstimatedDeliveryTask = $automationKey === 'PROD_SET_ESTIMATED_DELIVERY';
+    $isProductionMonitorTask = $automationKey === 'PROD_ISSUE';
+    $isRegularOptionalTask = \App\Support\OrderTaskRequirement::isRegularOptional($task);
     $artworkRevisionNotes = $task->relationLoaded('artworkRevisionNotes') ? $task->artworkRevisionNotes : collect();
     $revisionReferenceDocumentIds = $artworkRevisionNotes
         ->map(function ($revisionNote) {
@@ -81,9 +93,32 @@ unset($__defined_vars, $__key, $__value); ?>
         ? 'Required'
         : $status;
     if ($isProductionEstimatedDeliveryTask && $mode === 'active' && ! $job->estimated_delivery_date) $statusClass = 'wait';
+
+    // A normal optional task can be actionable in parallel with the next
+    // required task. Present its untouched Not Started/Locked state as Ready
+    // once the previous required work has been completed.
+    if ($isRegularOptionalTask && $mode === 'active' && \App\Support\BoardLaneResolver::isNotStarted((string) $task->status)) {
+        $displayStatus = 'Ready';
+        $statusClass = 'active';
+    }
     $assigneeName = $task->assignee?->name ?: 'Unassigned';
     $assigneeInitials = collect(preg_split('/\s+/', trim($assigneeName)))->filter()->map(fn($part) => mb_strtoupper(mb_substr($part, 0, 1)))->take(2)->implode('');
     $isCancelled = strcasecmp((string) $job->status, 'Cancelled') === 0;
+    $showProductionMonitorInline = $isProductionMonitorTask
+        && $mode === 'active'
+        && $isCurrentPhase
+        && $canEditTask
+        && ! $isCancelled
+        && ! $orderOnHold;
+    $productionMonitorInitialDate = $job->supplier_delivery_date?->format('Y-m-d') ?? '';
+    $productionMonitorErrorPrefix = 'productionMonitor.'.(int) $task->id;
+    $productionMonitorSavedDetails = (array) data_get($context, 'productionMonitorDetails.'.(int) $task->id, []);
+    $showProductionMonitorSummary = $isProductionMonitorTask && $mode === 'done';
+    $dueDisplay = $task->due_date?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : 'Set due date');
+    if ($showProductionMonitorInline) {
+        $displayStatus = 'In Progress';
+        $statusClass = 'active';
+    }
     $documentCategoryName = (string) ($task->documentCategory?->name ?: $task->setupTemplate?->documentCategory?->name ?: '');
     $requiresDocument = (bool) ($task->document_category_id || $task->setupTemplate?->document_category_id);
     $requiredBeforeCompletion = (bool) ($task->setupTemplate?->document_required_before_completion ?? false);
@@ -114,16 +149,27 @@ unset($__defined_vars, $__key, $__value); ?>
     $emailDeliveryFailed = $isTrackedEmailTask && $emailDeliveryStatus === 'failed';
     $emailDeliverySent = $isTrackedEmailTask && $emailDeliveryStatus === 'sent';
     $emailDeliveryNotSent = $isTrackedEmailTask && $emailDeliveryStatus === 'not_sent';
-    $emailCanResend = $isTrackedEmailTask
+    $emailCanResendIfUnlocked = $isTrackedEmailTask
         && $mode === 'done'
-        && $canEditTask
+        && $taskEditPermission
         && (bool) ($workflowEmailStatus['resendable'] ?? ! empty($workflowEmailStatus['to_emails'] ?? []));
+    $emailCanResend = $emailCanResendIfUnlocked && ! $orderOnHold;
+    $canAddCompletedTaskDocumentsIfUnlocked = $automationKey === 'NEW_UPLOAD_PO'
+        && $taskEditPermission
+        && ($documentUploadPermission || $documentLinkPermission);
     $emailResourceLabel = $isInvoiceEmailTask ? 'invoice' : 'artwork';
     $taskColor = \App\Support\MasterColor::normalize((string) ($task->setupTemplate?->color ?? $task->template?->color ?? ''))
         ?: \App\Support\MasterColor::normalize((string) ($task->phase?->color ?? ''))
         ?: '#2563EB';
 ?>
-<article id="order-task-<?php echo e($task->id); ?>" class="task ft-order-task-row <?php echo e($mode); ?> <?php echo e($isCancelled ? 'cancelled-task' : ''); ?> <?php echo e($isProductionEstimatedDeliveryTask ? 'ft-order-task-row--estimated-delivery' : ''); ?>" style="<?php echo e(\App\Support\MasterColor::style($taskColor)); ?>border-left:4px solid var(--ft-master-color,#2563EB)" <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-row-'.e($task->id).''; ?>wire:key="order-task-row-<?php echo e($task->id); ?>">
+<article id="order-task-<?php echo e($task->id); ?>"
+    class="task ft-order-task-row <?php echo e($mode); ?> <?php echo e($isCancelled ? 'cancelled-task' : ''); ?> <?php echo e($orderOnHold ? 'is-order-held' : ''); ?> <?php echo e($isProductionEstimatedDeliveryTask ? 'ft-order-task-row--estimated-delivery' : ''); ?> <?php echo e($showProductionMonitorInline ? 'ft-order-task-row--production-monitor' : ''); ?>"
+    style="<?php echo e(\App\Support\MasterColor::style($taskColor)); ?>border-left:4px solid var(--ft-master-color,#2563EB)"
+    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-task-row-'.e($task->id).''; ?>wire:key="order-task-row-<?php echo e($task->id); ?>"
+    <?php if($showProductionMonitorInline): ?>
+        x-data="{ productionSupplierDate: <?php echo \Illuminate\Support\Js::from($productionMonitorInitialDate)->toHtml() ?>, productionIssueNote: '', initialSupplierDate: <?php echo \Illuminate\Support\Js::from($productionMonitorInitialDate)->toHtml() ?> }"
+    <?php endif; ?>
+>
     <div class="task-icon ft-order-task-icon"><?php echo e($mode === 'done' ? '✓' : ($mode === 'active' ? '●' : '⌁')); ?></div>
     <div class="task-copy ft-order-task-copy">
         <div class="task-code">TASK <?php echo e($displayCode ?: ($task->task_number ?: str_pad((string) $task->id, 3, '0', STR_PAD_LEFT))); ?></div>
@@ -132,6 +178,8 @@ unset($__defined_vars, $__key, $__value); ?>
 
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isProductionEstimatedDeliveryTask): ?>
                 <span class="ft-order-required-task-badge">Required</span>
+            <?php elseif($isRegularOptionalTask): ?>
+                <span class="ft-order-optional-task-badge">Optional</span>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($task->description || $task->setupTemplate?->description): ?><div class="task-description"><?php echo e(\Illuminate\Support\Str::limit(strip_tags((string) ($task->description ?: $task->setupTemplate?->description)), 105)); ?></div><?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
@@ -260,15 +308,15 @@ unset($__defined_vars, $__key, $__value); ?>
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"
-        x-data="window.FlowTrack.ui.inlineEdit({ key:<?php echo \Illuminate\Support\Js::from('task-'.$task->id.'-due-date')->toHtml() ?>, label:'task due date', value:<?php echo \Illuminate\Support\Js::from($task->due_date?->format('Y-m-d') ?? '')->toHtml() ?>, display:<?php echo \Illuminate\Support\Js::from($task->due_date?->format('M j, Y') ?? 'Set due date')->toHtml() ?> })"
+        x-data="window.FlowTrack.ui.inlineEdit({ key:<?php echo \Illuminate\Support\Js::from('task-'.$task->id.'-due-date')->toHtml() ?>, label:'task due date', value:<?php echo \Illuminate\Support\Js::from($task->due_date?->format('Y-m-d') ?? '')->toHtml() ?>, display:<?php echo \Illuminate\Support\Js::from($dueDisplay)->toHtml() ?> })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
         <div class="ft-order-inline-display-row" x-show="!editing">
-            <span class="ft-order-inline-value" x-text="display"><?php echo e($task->due_date?->format('M j, Y') ?? 'Set due date'); ?></span>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled): ?>
+            <span class="ft-order-inline-value" x-text="display"><?php echo e($dueDisplay); ?></span>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled && !$showProductionMonitorInline): ?>
                 <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled && !$showProductionMonitorInline): ?>
             <input x-ref="orderDue" x-cloak x-show="editing" x-model="draftValue" class="ft-order-inline-input" type="date"
                 x-on:keydown.escape.prevent="cancelEdit()"
                 x-on:blur="if (editing) cancelEdit()"
@@ -300,6 +348,9 @@ unset($__defined_vars, $__key, $__value); ?>
 
     <div class="task-state ft-order-task-state">
         <span class="task-status ft-order-task-status <?php echo e($statusClass); ?>"><?php echo e($displayStatus); ?></span>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($orderOnHold && $mode === 'active'): ?>
+            <span class="ft-order-task-held-badge"><span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span> Order on hold</span>
+        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isTrackedEmailTask && $mode === 'done'): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($emailDeliverySent): ?>
                 <span class="ft-order-task-email-status is-sent" title="The latest <?php echo e($emailResourceLabel); ?> email was sent successfully.">Email Sent</span>
@@ -340,8 +391,51 @@ unset($__defined_vars, $__key, $__value); ?>
     </div>
 
     <div class="task-actions ft-order-task-actions">
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isCancelled): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showProductionMonitorInline): ?>
+            <button
+                type="button"
+                class="btn small primary ft-production-monitor-save"
+                x-on:click.stop="$wire.saveProductionMonitorTask(<?php echo e($task->id); ?>, productionSupplierDate, productionIssueNote)"
+                wire:loading.attr="disabled"
+                wire:target="saveProductionMonitorTask"
+            >
+                <span wire:loading.remove wire:target="saveProductionMonitorTask">Save</span>
+                <span wire:loading wire:target="saveProductionMonitorTask">Saving...</span>
+            </button>
+            <button
+                type="button"
+                class="btn small ft-production-monitor-cancel"
+                x-on:click.stop="productionSupplierDate = initialSupplierDate; productionIssueNote = ''; $wire.clearProductionMonitorErrors(<?php echo e($task->id); ?>)"
+            >Cancel</button>
+        <?php elseif($isCancelled): ?>
             <button type="button" class="btn small" disabled>Blocked</button>
+        <?php elseif($orderOnHold): ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($mode === 'active' && $isCurrentPhase && $taskEditPermission): ?>
+                <button
+                    type="button"
+                    class="btn small ft-order-task-hold-locked-action"
+                    x-on:click.prevent.stop="showHoldBlocked(<?php echo \Illuminate\Support\Js::from($workflowActionLabel)->toHtml() ?>)"
+                    title="Order is on hold. Release the hold before performing this task."
+                >
+                    <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                    <span><?php echo e($workflowActionLabel); ?></span>
+                </button>
+            <?php elseif($mode === 'done'): ?>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canAddCompletedTaskDocumentsIfUnlocked): ?>
+                    <button type="button" class="btn small ft-order-task-hold-locked-action" x-on:click.prevent.stop="showHoldBlocked('Add other documents')" title="Order is on hold. Release the hold before adding documents.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Add other documents</span>
+                    </button>
+                <?php elseif($emailCanResendIfUnlocked): ?>
+                    <button type="button" class="btn small ft-order-task-hold-locked-action" x-on:click.prevent.stop="showHoldBlocked('Resend')" title="Order is on hold. Release the hold before resending.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        <span>Resend</span>
+                    </button>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
+            <?php else: ?>
+                <button type="button" class="btn small" wire:click="viewTask(<?php echo e($task->id); ?>)">View</button>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php elseif($mode === 'active' && $isCurrentPhase): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask): ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument)): ?>
@@ -367,6 +461,54 @@ unset($__defined_vars, $__key, $__value); ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
+
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showProductionMonitorInline): ?>
+        <?php if (isset($component)) { $__componentOriginalf3b9695b02449cd6764cd2e928694a00 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalf3b9695b02449cd6764cd2e928694a00 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.production-monitor-inline','data' => ['task' => $task,'initialDate' => $productionMonitorInitialDate,'errorPrefix' => $productionMonitorErrorPrefix]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.production-monitor-inline'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task),'initial-date' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productionMonitorInitialDate),'error-prefix' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productionMonitorErrorPrefix)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalf3b9695b02449cd6764cd2e928694a00)): ?>
+<?php $attributes = $__attributesOriginalf3b9695b02449cd6764cd2e928694a00; ?>
+<?php unset($__attributesOriginalf3b9695b02449cd6764cd2e928694a00); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalf3b9695b02449cd6764cd2e928694a00)): ?>
+<?php $component = $__componentOriginalf3b9695b02449cd6764cd2e928694a00; ?>
+<?php unset($__componentOriginalf3b9695b02449cd6764cd2e928694a00); ?>
+<?php endif; ?>
+    <?php elseif($showProductionMonitorSummary): ?>
+        <?php if (isset($component)) { $__componentOriginalc98b8141449a00136a08422b638062b6 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalc98b8141449a00136a08422b638062b6 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.production-monitor-summary','data' => ['task' => $task,'details' => $productionMonitorSavedDetails,'canEdit' => $canEditTask && ! $isCancelled]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.production-monitor-summary'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($task),'details' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productionMonitorSavedDetails),'can-edit' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($canEditTask && ! $isCancelled)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalc98b8141449a00136a08422b638062b6)): ?>
+<?php $attributes = $__attributesOriginalc98b8141449a00136a08422b638062b6; ?>
+<?php unset($__attributesOriginalc98b8141449a00136a08422b638062b6); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalc98b8141449a00136a08422b638062b6)): ?>
+<?php $component = $__componentOriginalc98b8141449a00136a08422b638062b6; ?>
+<?php unset($__componentOriginalc98b8141449a00136a08422b638062b6); ?>
+<?php endif; ?>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 </article>
 
 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((int) $overviewTaskLinkFormTaskId === (int) $task->id && $canEditTask): ?>

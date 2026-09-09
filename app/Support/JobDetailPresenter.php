@@ -221,19 +221,16 @@ final class JobDetailPresenter
                 $automationKey = $task ? app(\App\Services\OrderWorkflowActionService::class)->automationKey($task) : null;
                 if (in_array($automationKey, ['SHIP_LABEL', 'BILL_PREPARE'], true)) return false;
 
-                // Optional conditional tasks (for example Sample Approval) are
-                // not applicable until their branch is activated. An untouched
-                // optional task therefore cannot block normal-path phase advance.
-                $isRequiredTask = ($template?->is_required ?? true) !== false;
-                if ($isRequiredTask) return true;
+                if (! $task) return (bool) ($template?->is_required ?? true);
+                if (\App\Support\OrderTaskRequirement::isRequired($task)) return true;
 
-                $status = strtolower(trim((string) ($task?->status ?? '')));
-                $isInitial = $status === '' || in_array($status, ['not start', 'not started', 'not ready', 'locked'], true);
-                $hasStarted = ! $isInitial
-                    || (int) ($task?->progress ?? 0) > 0
-                    || (bool) ($task?->completed_at ?? false);
+                // Regular optional work is never a stage blocker, even when a
+                // user chooses to perform it. True conditional branches (Sample
+                // Approval / QC issue) can block only after their branch is
+                // explicitly activated.
+                if (\App\Support\OrderTaskRequirement::isRegularOptional($task)) return false;
 
-                return $hasStarted;
+                return \App\Support\OrderDetailPresenter::isConditionalTaskActivated($task);
             })
             ->values();
     }
@@ -242,7 +239,7 @@ final class JobDetailPresenter
     {
         $currentTasks = self::phaseTasks($job);
         $requiredOpen = $currentTasks
-            ->filter(fn (Task $task) => ($task->setupTemplate?->is_required ?? $task->template?->is_required ?? true) !== false && !$task->completed_at && $task->status !== 'Completed')
+            ->filter(fn (Task $task) => \App\Support\OrderTaskRequirement::isRequired($task) && !$task->completed_at && $task->status !== 'Completed')
             ->values();
 
         $blockers = collect();

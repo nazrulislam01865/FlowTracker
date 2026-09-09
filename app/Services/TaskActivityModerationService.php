@@ -9,6 +9,7 @@ use App\Models\Inquiry;
 use App\Models\InquiryTaskComment;
 use App\Models\Task;
 use App\Models\User;
+use App\Services\Orders\OrderHoldService;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -23,6 +24,7 @@ class TaskActivityModerationService
     public function deleteOrderTaskComment(Task $task, int $commentId, User $actor): void
     {
         $this->assertModerator($actor);
+        app(OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
 
         $recipientIds = DB::transaction(function () use ($task, $commentId, $actor): array {
             $comment = FlowTaskComment::query()
@@ -78,6 +80,7 @@ class TaskActivityModerationService
     public function deleteOrderTaskActivity(Task $task, int $activityId, User $actor): void
     {
         $this->assertModerator($actor);
+        app(OrderHoldService::class)->assertNotHeld((int) $task->flow_job_id);
 
         $recipientIds = DB::transaction(function () use ($task, $activityId, $actor): array {
             $activity = $task->activities()

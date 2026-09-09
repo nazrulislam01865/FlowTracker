@@ -1,5 +1,6 @@
 import { createAsyncState } from '../components/async-feedback.js';
 import { createInlineEdit } from '../components/inline-edit.js';
+import { createOrderHoldGuard } from '../components/order-hold-guard.js';
 import {
     createFloatingActionMenu,
     createLocalFilter,
@@ -21,6 +22,7 @@ export const installBrowserApi = () => {
     existing.ui = {
         ...(existing.ui || {}),
         inlineEdit: createInlineEdit,
+        orderHoldGuard: createOrderHoldGuard,
         asyncState: createAsyncState,
         floatingActionMenu: createFloatingActionMenu,
         remoteFilter: createRemoteFilter,

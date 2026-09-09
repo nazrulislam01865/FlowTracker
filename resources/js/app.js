@@ -7,6 +7,7 @@ import { bootLocalFileActions } from './components/local-file-actions.js';
 import { resetInlineEditState } from './components/inline-edit.js';
 import { bootMasterColors } from './components/master-colors.js';
 import { bootLivewireMentionHooks, bootMentionInputs, observeMentionInputs } from './components/mentions.js';
+import { bootOrderHoldRequestFeedback } from './components/order-hold-request-feedback.js';
 import {
     bootLivewireRichTextHooks,
     bootRichTextEditors,
@@ -31,6 +32,7 @@ const bootShared = () => {
     syncBrowserTimezone();
     bootShell();
     bootAsyncFeedback();
+    bootOrderHoldRequestFeedback();
 
     const realtime = bootRealtimeClient();
     bootNotifications(realtime);
@@ -60,6 +62,7 @@ const bootLivewire = () => {
     bootLivewireRichTextHooks();
     bootLivewireMentionHooks();
     bootAsyncFeedback();
+    bootOrderHoldRequestFeedback();
     bootMasterColors();
 
     const realtime = bootRealtimeClient();

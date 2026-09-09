@@ -59,6 +59,9 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'focusComment'=>null,
     'showOrderAttentionModal'=>false,
     'orderAttentionReason'=>'',
+    'showOrderHoldModal'=>false,
+    'orderHoldFrom'=>'client',
+    'orderHoldReason'=>'',
     'showOrderCancelModal'=>false,
     'orderCancellationReason'=>'',
     'jobDocumentUploads'=>[],
@@ -211,6 +214,9 @@ foreach (array_filter(([
     'focusComment'=>null,
     'showOrderAttentionModal'=>false,
     'orderAttentionReason'=>'',
+    'showOrderHoldModal'=>false,
+    'orderHoldFrom'=>'client',
+    'orderHoldReason'=>'',
     'showOrderCancelModal'=>false,
     'orderCancellationReason'=>'',
     'jobDocumentUploads'=>[],
@@ -303,12 +309,19 @@ foreach ($attributes->all() as $__key => $__value) {
 unset($__defined_vars, $__key, $__value); ?>
 <?php
     $manualAttention = (bool) ($job->attention_requested ?? false);
+    $orderIsOnHold = (bool) ($orderDetailContext['isOnHold'] ?? false);
 ?>
 <div
     <?php echo e($attributes->class('ft-job-detail-page ft-order-prototype-detail ft-detail-products-scope')); ?>
 
-    x-data="{ redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } }"
+    x-data="Object.assign(window.FlowTrack.ui.orderHoldGuard({ held: <?php echo \Illuminate\Support\Js::from($orderIsOnHold)->toHtml() ?> }), { redoNotice: '', redoNoticeOpen: false, showRedoNotice(message) { this.redoNotice = message; this.redoNoticeOpen = true; clearTimeout(this.__redoNoticeTimer); this.__redoNoticeTimer = setTimeout(() => this.redoNoticeOpen = false, 2600); } })"
     x-on:order-redo-notice.window="showRedoNotice($event.detail.message ?? 'Redo update saved.')"
+    x-on:flowtrack:order-held-blocked.window="showHoldBlocked($event.detail?.action ?? '')"
+    x-on:flowtrack:order-hold-state.window="held = Boolean($event.detail?.held); if (!held) closeHoldBlocked()"
+    x-on:click.capture="guardInteraction($event)"
+    x-on:focusin.capture="guardInteraction($event)"
+    x-on:change.capture="guardInteraction($event)"
+    x-on:submit.capture="guardInteraction($event)"
 >
     <?php if (isset($component)) { $__componentOriginal7d0d13f77e0bbde4ee23e564f6eba885 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal7d0d13f77e0bbde4ee23e564f6eba885 = $attributes; } ?>
@@ -519,6 +532,56 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php $component = $__componentOriginaldae41b4154cad483d147bb1f895c9b1e; ?>
 <?php unset($__componentOriginaldae41b4154cad483d147bb1f895c9b1e); ?>
 <?php endif; ?>
+
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showOrderHoldModal): ?>
+        <?php if (isset($component)) { $__componentOriginal57164632227875ad1b92e2401870c62e = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal57164632227875ad1b92e2401870c62e = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.hold-modal','data' => ['job' => $job,'holdFrom' => $orderHoldFrom,'reason' => $orderHoldReason,'mentionUsers' => $mentionUsers]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.hold-modal'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'hold-from' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderHoldFrom),'reason' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderHoldReason),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal57164632227875ad1b92e2401870c62e)): ?>
+<?php $attributes = $__attributesOriginal57164632227875ad1b92e2401870c62e; ?>
+<?php unset($__attributesOriginal57164632227875ad1b92e2401870c62e); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal57164632227875ad1b92e2401870c62e)): ?>
+<?php $component = $__componentOriginal57164632227875ad1b92e2401870c62e; ?>
+<?php unset($__componentOriginal57164632227875ad1b92e2401870c62e); ?>
+<?php endif; ?>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($orderIsOnHold): ?>
+        <?php if (isset($component)) { $__componentOriginal97584fd518cdbfb6a910276b6a92b27a = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal97584fd518cdbfb6a910276b6a92b27a = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.hold-blocked-modal','data' => ['hold' => $orderDetailContext['hold'] ?? null,'canReleaseHold' => (bool) ($orderDetailContext['canReleaseHold'] ?? false),'orderId' => $job->id,'directRelease' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.hold-blocked-modal'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['hold' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext['hold'] ?? null),'can-release-hold' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute((bool) ($orderDetailContext['canReleaseHold'] ?? false)),'order-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->id),'direct-release' => true]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal97584fd518cdbfb6a910276b6a92b27a)): ?>
+<?php $attributes = $__attributesOriginal97584fd518cdbfb6a910276b6a92b27a; ?>
+<?php unset($__attributesOriginal97584fd518cdbfb6a910276b6a92b27a); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal97584fd518cdbfb6a910276b6a92b27a)): ?>
+<?php $component = $__componentOriginal97584fd518cdbfb6a910276b6a92b27a; ?>
+<?php unset($__componentOriginal97584fd518cdbfb6a910276b6a92b27a); ?>
+<?php endif; ?>
+    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
     <div class="ft-redo-toast" x-cloak x-show="redoNoticeOpen" x-transition x-text="redoNotice" role="status" aria-live="polite"></div>
 

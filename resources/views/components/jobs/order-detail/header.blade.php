@@ -19,6 +19,7 @@
     $redoInitiated = $isRedoOrder || $redoOrderCount > 0;
 
     $canInitiateRedo = (bool) ($redoContext['canInitiate'] ?? false);
+    $isOnHold = (bool) ($context['isOnHold'] ?? false);
 @endphp
 <section class="detail-header ft-order-prototype-header">
     <div class="breadcrumbs ft-order-prototype-breadcrumb">
@@ -86,6 +87,13 @@
                     <span class="pill purple" id="stagePill" title="The last workflow stage reached before cancellation.">Last stage · {{ $stageName }}</span>
                 @else
                     <span class="pill purple" id="stagePill" title="The workflow stage containing the current required task.">{{ $stageName }}</span>
+                @endif
+
+                @if($isOnHold && !$isCancelled)
+                    <span class="pill ft-order-hold-header-pill" title="This Order is currently on hold.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        On Hold
+                    </span>
                 @endif
 
                 @if($isRedoOrder)

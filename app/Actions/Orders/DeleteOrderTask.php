@@ -5,6 +5,7 @@ namespace App\Actions\Orders;
 use App\Models\User;
 use App\Queries\Orders\VisibleOrderQuery;
 use App\Services\AccessControlService;
+use App\Services\Orders\OrderHoldService;
 use App\Services\Orders\OrderWorkflowService;
 use App\Services\TaskService;
 
@@ -27,6 +28,7 @@ final class DeleteOrderTask
             ->where('flow_job_id', $orderId)
             ->findOrFail($taskId);
         $job = $this->orders->detail($actor, $orderId);
+        app(OrderHoldService::class)->assertNotHeld($job);
         $title = (string) $task->title;
         $taskNumber = (string) ($task->task_number ?? '');
 

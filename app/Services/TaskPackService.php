@@ -29,26 +29,75 @@ class TaskPackService
 
         $workspaceId = $this->workspaceId();
         foreach (MasterDataService::TASK_PACK_MASTER_DEFAULTS as $type => $defaults) {
+            $hasActive = MasterRecord::query()
+                ->where('workspace_id', $workspaceId)
+                ->where('type', $type)
+                ->where('status', 'active')
+                ->exists();
+            if ($hasActive) continue;
+
             $hasAny = MasterRecord::withTrashed()
                 ->where('workspace_id', $workspaceId)
                 ->where('type', $type)
                 ->exists();
-            if ($hasAny) continue;
 
-            foreach ($defaults as $index => $default) {
-                MasterRecord::query()->create([
+            if (! $hasAny) {
+                // First-time setup: seed the complete default option family.
+                foreach ($defaults as $index => $default) {
+                    MasterRecord::query()->create([
+                        'workspace_id' => $workspaceId,
+                        'parent_id' => null,
+                        'type' => $type,
+                        'code' => $default['code'],
+                        'name' => $default['name'],
+                        'description' => null,
+                        'metadata' => array_merge(
+                            ['seeded_by' => 'task_pack_master_data_v1'],
+                            (array) ($default['metadata'] ?? [])
+                        ),
+                        'status' => 'active',
+                        'sort_order' => $index + 1,
+                    ]);
+                }
+
+                Cache::forget("flowtrack:master:active:{$workspaceId}:{$type}");
+                continue;
+            }
+
+            // Existing custom configuration with no active value would make
+            // every Task Pack impossible to save. Restore only the primary
+            // system fallback instead of repopulating/overriding the full list.
+            $default = $defaults[0] ?? null;
+            if (!$default) continue;
+
+            $record = MasterRecord::withTrashed()
+                ->where('workspace_id', $workspaceId)
+                ->where('type', $type)
+                ->where('code', $default['code'])
+                ->first();
+
+            $payload = [
+                'parent_id' => null,
+                'name' => $default['name'],
+                'description' => null,
+                'metadata' => array_merge(
+                    ['seeded_by' => 'task_pack_master_data_v1'],
+                    (array) ($default['metadata'] ?? [])
+                ),
+                'status' => 'active',
+                'sort_order' => 1,
+            ];
+
+            if ($record) {
+                if (method_exists($record, 'trashed') && $record->trashed()) {
+                    $record->restore();
+                }
+                $record->update($payload);
+            } else {
+                MasterRecord::query()->create($payload + [
                     'workspace_id' => $workspaceId,
-                    'parent_id' => null,
                     'type' => $type,
                     'code' => $default['code'],
-                    'name' => $default['name'],
-                    'description' => null,
-                    'metadata' => array_merge(
-                        ['seeded_by' => 'task_pack_master_data_v1'],
-                        (array) ($default['metadata'] ?? [])
-                    ),
-                    'status' => 'active',
-                    'sort_order' => $index + 1,
                 ]);
             }
 

@@ -96,7 +96,7 @@ trait ManagesOrderDetail
     #[Json]
     public function updateJobDeliveryDate(int $jobId, mixed $date): array
     {
-        return $this->persistInlineEdit('delivery date', function () use ($jobId, $date) {
+        return $this->persistInlineEdit('Hand Date', function () use ($jobId, $date) {
             app(UpdateOrderDeliveryDate::class)->handle(auth()->user(), $jobId, (string) $date);
         });
     }

@@ -47,6 +47,7 @@ unset($__defined_vars, $__key, $__value); ?>
     $redoInitiated = $isRedoOrder || $redoOrderCount > 0;
 
     $canInitiateRedo = (bool) ($redoContext['canInitiate'] ?? false);
+    $isOnHold = (bool) ($context['isOnHold'] ?? false);
 ?>
 <section class="detail-header ft-order-prototype-header">
     <div class="breadcrumbs ft-order-prototype-breadcrumb">
@@ -135,6 +136,13 @@ unset($__defined_vars, $__key, $__value); ?>
                     <span class="pill purple" id="stagePill" title="The last workflow stage reached before cancellation.">Last stage · <?php echo e($stageName); ?></span>
                 <?php else: ?>
                     <span class="pill purple" id="stagePill" title="The workflow stage containing the current required task."><?php echo e($stageName); ?></span>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isOnHold && !$isCancelled): ?>
+                    <span class="pill ft-order-hold-header-pill" title="This Order is currently on hold.">
+                        <span class="ft-order-hold-pause-icon" aria-hidden="true"><i></i><i></i></span>
+                        On Hold
+                    </span>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($isRedoOrder): ?>

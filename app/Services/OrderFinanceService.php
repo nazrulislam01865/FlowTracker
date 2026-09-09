@@ -91,6 +91,7 @@ class OrderFinanceService
         mixed $supportingDocument = null,
         bool $draft = false,
     ): Invoice {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         return DB::transaction(function () use ($job, $actor, $payload, $items, $supportingDocument, $draft): Invoice {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $lockedJob->loadMissing('client');
@@ -171,6 +172,7 @@ class OrderFinanceService
 
     public function recordPayment(FlowJob $job, User $actor, array $payload, ?UploadedFile $receipt = null): Payment
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         return DB::transaction(function () use ($job, $actor, $payload, $receipt): Payment {
             $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
             $invoice = Invoice::query()
@@ -228,6 +230,7 @@ class OrderFinanceService
 
     public function addCollectionUpdate(FlowJob $job, User $actor, array $payload, string $type = 'update'): OrderCollection
     {
+        app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
         return DB::transaction(function () use ($job, $actor, $payload, $type): OrderCollection {
             $collection = OrderCollection::query()->firstOrCreate(
                 ['flow_job_id' => $job->id],
@@ -283,6 +286,7 @@ class OrderFinanceService
 
     public function deleteSupportingDocument(Invoice $invoice): void
     {
+        if ($invoice->flow_job_id) app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld((int) $invoice->flow_job_id);
         if ($invoice->supporting_document_path) app(SecureDocumentStorage::class)->delete($invoice->supporting_document_path);
     }
 
