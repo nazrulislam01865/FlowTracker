@@ -71,7 +71,13 @@ class RichTextService
     {
         if (!$this->isRich($value)) return null;
 
-        return $this->sanitizeHtml(substr(ltrim((string) $value), strlen(self::MARKER)));
+        // Rendering is the only place where physical existence matters. Keep
+        // the stored source intact, but suppress stale image tags so the browser
+        // never requests a protected rich-text image that the server cannot find.
+        return $this->sanitizeHtml(
+            substr(ltrim((string) $value), strlen(self::MARKER)),
+            guardStoredImages: true,
+        );
     }
 
     /**
@@ -96,12 +102,16 @@ class RichTextService
                 }
 
                 $filename = $match[1];
+                $assets = app(StoredAssetUrlService::class);
+                $url = $assets->richTextImageUrl($filename);
+                $downloadUrl = $assets->richTextImageDownloadUrl($filename);
+                if (! $url || ! $downloadUrl) return null;
 
                 return [
                     'name' => $filename,
                     'extension' => strtoupper(pathinfo($filename, PATHINFO_EXTENSION) ?: 'IMG'),
-                    'url' => route('rich-text-images.show', ['filename' => $filename], false),
-                    'download_url' => route('rich-text-images.download', ['filename' => $filename], false),
+                    'url' => $url,
+                    'download_url' => $downloadUrl,
                 ];
             })
             ->filter()
@@ -159,12 +169,12 @@ class RichTextService
         return trim($this->plainText(self::MARKER.$html)) !== '';
     }
 
-    private function sanitizeHtml(string $html): string
+    private function sanitizeHtml(string $html, bool $guardStoredImages = false): string
     {
         $html = preg_replace('/<!--.*?-->/s', '', $html) ?? $html;
         $html = strip_tags($html, '<p><div><br><strong><b><em><i><u><ul><ol><li><img>');
 
-        $html = preg_replace_callback('/<img\b[^>]*>/i', function (array $match): string {
+        $html = preg_replace_callback('/<img\b[^>]*>/i', function (array $match) use ($guardStoredImages): string {
             $tag = $match[0];
             $src = '';
 
@@ -188,7 +198,11 @@ class RichTextService
                 return '';
             }
 
-            $safeUrl = route('rich-text-images.show', ['filename' => $imageMatch[1]], false);
+            $safeUrl = $guardStoredImages
+                ? app(StoredAssetUrlService::class)->richTextImageUrl($imageMatch[1])
+                : route('rich-text-images.show', ['filename' => $imageMatch[1]], false);
+
+            if (! $safeUrl) return '';
 
             return '<img src="'.e($safeUrl).'" alt="Pasted image" loading="lazy">';
         }, $html) ?? $html;

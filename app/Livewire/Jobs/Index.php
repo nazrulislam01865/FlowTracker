@@ -146,6 +146,8 @@ class Index extends Component
     public string $orderWorkflowActionStep = 'main';
     /** @var array<string,mixed> */
     public array $orderWorkflowActionPayload = [];
+    /** Expensive workflow modal email/invoice preview snapshot; prepared outside Blade. */
+    public array $orderWorkflowActionModalPreview = [];
     /** Email-handoff fallback shown only after the synchronous provider fails three times. */
     public bool $orderWorkflowEmailFallback = false;
     public string $orderWorkflowEmailFallbackMessage = '';
@@ -370,6 +372,19 @@ class Index extends Component
     public function refreshRealtime(): void
     {
         // Re-render open Job/Task details when another permitted user updates them.
+    }
+
+    #[On('order-runtime-refreshed')]
+    public function refreshOrderRuntime(int $orderId): void
+    {
+        // Workflow maintenance and task actions run inside the isolated
+        // Workflow child. Handling this event intentionally performs no extra
+        // write/query work here; Livewire rerenders the lightweight parent shell
+        // so Overall progress and Next required action reflect the saved state
+        // immediately without a browser refresh.
+        if ((int) ($this->selectedJobId ?: 0) !== $orderId) {
+            return;
+        }
     }
 
     public function render()

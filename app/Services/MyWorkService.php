@@ -1070,9 +1070,10 @@ class MyWorkService
                 ?: '#2563EB',
             'assignee' => (string) ($task->getAttribute('my_work_assignee_name') ?: 'Unassigned'),
             'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : null,
-            'assigneeAvatar' => ($task->assignee_id && $task->getAttribute('my_work_assignee_profile_image_path'))
-                ? route('profile-images.show', ['user' => $task->assignee_id, 'filename' => basename((string) $task->getAttribute('my_work_assignee_profile_image_path'))], false)
-                : null,
+            'assigneeAvatar' => app(\App\Services\StoredAssetUrlService::class)->profileImageUrl(
+                (int) ($task->assignee_id ?? 0),
+                $task->getAttribute('my_work_assignee_profile_image_path'),
+            ),
             'due' => $dueLabel,
             'dueValue' => $dueDate ?: '',
             'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',

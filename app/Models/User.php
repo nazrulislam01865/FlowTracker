@@ -161,13 +161,7 @@ class User extends Authenticatable
 
     public function profileImageUrl(): ?string
     {
-        if (! $this->id || ! $this->profile_image_path) {
-            return null;
-        }
-
-        return route('profile-images.show', [
-            'user' => $this->id,
-            'filename' => basename($this->profile_image_path),
-        ], false);
+        return app(\App\Services\StoredAssetUrlService::class)
+            ->profileImageUrl((int) $this->id, $this->profile_image_path);
     }
 }

@@ -1,4 +1,4 @@
-@props(['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'attachment' => null, 'revisionComments' => [], 'revisionAttachments' => [], 'mentionUsers' => collect(), 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0])
+@props(['job', 'task', 'config' => [], 'step' => 'main', 'payload' => [], 'modalPreview' => [], 'attachment' => null, 'revisionComments' => [], 'revisionAttachments' => [], 'mentionUsers' => collect(), 'emailFallback' => false, 'emailFallbackMessage' => '', 'emailFallbackAttempts' => 0])
 @php
     $variant = (string) ($config['variant'] ?? 'confirm');
     $title = (string) ($config['title'] ?? 'Task action');
@@ -10,10 +10,11 @@
     $artworkDocs = $latestArtworkTask
         ? $job->documents->where('task_id', $latestArtworkTask->id)->sortBy('created_at')->values()
         : collect();
-    $latestArtworkDocuments = $latestArtworkTask
-        ? ($latestArtworkTask->relationLoaded('currentArtworkDocuments')
-            ? collect($latestArtworkTask->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
-            : app(\App\Services\DocumentService::class)->currentArtworkDocuments($latestArtworkTask, $artworkDocs))
+    // Order Details/List action hosts preload the current Artwork relation before
+    // rendering this component. Keep Blade presentation-only: never fall back to
+    // DocumentService here because that can perform database work during a rerender.
+    $latestArtworkDocuments = ($latestArtworkTask && $latestArtworkTask->relationLoaded('currentArtworkDocuments'))
+        ? collect($latestArtworkTask->getRelation('currentArtworkDocuments'))->sortBy('id')->values()
         : collect();
     $latestArtwork = $latestArtworkDocuments->last();
     $currentArtworkVersions = $latestArtworkDocuments
@@ -58,15 +59,14 @@
     $clientName = (string) ($job->client?->name ?: 'Client');
     $ownerName = (string) ($job->owner?->name ?: $job->coordinator?->name ?: 'FlowTrack');
     $orderTotal = (float) $activeItems->sum(fn($item) => (float) ($item->unit_price ?? 0) * (int) ($item->quantity ?? 0));
-    $emailHandoffPreview = in_array($variant, ['purchase_order_email', 'artwork_email'], true)
-        ? app(\App\Services\Orders\OrderWorkflowEmailService::class)->preview($task, auth()->user(), $payload)
-        : [];
-    $invoiceEmailPreview = $variant === 'invoice_send'
-        ? $workflowActions->invoiceEmailPreview($task, $payload)
-        : [];
-    $workflowInvoice = $variant === 'invoice_send'
-        ? $workflowActions->preparedWorkflowInvoice($job)
-        : null;
+    // Expensive email/PDF preview preparation is owned by the Livewire action
+    // handler and never by Blade. The first modal render carries metadata only;
+    // wire:init completes the exact email body after the dialog is visible.
+    $emailHandoffPreview = (array) ($modalPreview['email_handoff_preview'] ?? []);
+    $invoiceEmailPreview = (array) ($modalPreview['invoice_email_preview'] ?? []);
+    $workflowInvoice = (array) ($modalPreview['workflow_invoice'] ?? []);
+    $emailPreviewPending = in_array($variant, ['purchase_order_email', 'artwork_email', 'invoice_send'], true)
+        && ! (bool) ($modalPreview['preview_loaded'] ?? false);
 
     // Keep all Billing preparation logic inside this single top-level PHP block.
     // Avoid nested PHP directive blocks inside the long Blade branch chain so
@@ -232,7 +232,7 @@
      Native selects/date pickers and embedded PDF viewers can finish a pointer
      interaction outside the dialog; backdrop-click dismissal made those normal
      interactions close the invoice modal unexpectedly. --}}
-<div class="ft-order-task-document-modal-backdrop" wire:key="order-workflow-action-modal-{{ $task->id }}-{{ $step }}">
+<div class="ft-order-task-document-modal-backdrop" wire:key="order-workflow-action-modal-{{ $task->id }}-{{ $step }}" @if($emailPreviewPending) wire:init="loadOrderWorkflowActionEmailPreview" @endif>
     <section
         class="ft-order-task-document-modal ft-order-workflow-action-modal {{ $isArtworkPreviewModal ? 'ft-order-workflow-action-modal--artwork-preview' : ($modalWide ? 'ft-order-workflow-action-modal--wide' : '') }} {{ $usesStableFinanceValidation ? 'ft-order-workflow-action-modal--stable-finance-validation' : '' }} {{ ($isArtworkRevisionRequest || $isArtworkCancellationRequest) ? 'ft-order-workflow-action-modal--artwork-revision-request' : '' }} {{ $isArtworkCancellationRequest ? 'ft-order-workflow-action-modal--artwork-cancellation-request' : '' }}"
         data-ft-feedback-scope="form"
@@ -691,6 +691,7 @@
                 </section>
 
                 <x-email.handoff-preview
+                    :loading="$emailPreviewPending"
                     :preview="$emailHandoffPreview"
                     :defaultSubject="'Purchase Order ready — '.$orderNumber"
                     emptyRecipientText="Enter an email address in To to see the final email details."
@@ -875,6 +876,7 @@
                     </label>
 
                     <x-email.handoff-preview
+                        :loading="$emailPreviewPending"
                         :preview="$emailHandoffPreview"
                         :defaultSubject="'Artwork ready — '.$orderNumber"
                         emptyRecipientText="Enter one or more email addresses in To."
@@ -1005,32 +1007,32 @@
                         <section
                             class="ft-invoice-send-document"
                             aria-label="Generated invoice"
-                            wire:key="invoice-send-document-{{ $task->id }}-{{ $workflowInvoice?->id ?? 0 }}"
+                            wire:key="invoice-send-document-{{ $task->id }}-{{ (int) ($workflowInvoice['id'] ?? 0) }}"
                             wire:ignore
                         >
                         <header class="ft-invoice-send-document__head">
                             <div>
                                 <small>GENERATED INVOICE</small>
-                                <strong>{{ $workflowInvoice?->invoice_number ?: ($payload['invoice_number'] ?? 'Invoice') }}</strong>
+                                <strong>{{ $workflowInvoice['invoice_number'] ?? ($payload['invoice_number'] ?? 'Invoice') }}</strong>
                                 <span>This exact PDF will be attached to the client email.</span>
                             </div>
-                            @if($workflowInvoice)
+                            @if(!empty($workflowInvoice))
                                 <div class="ft-invoice-send-document__actions">
-                                    <a href="{{ route('invoices.pdf.open', $workflowInvoice) }}" target="_blank" rel="noopener">Open invoice</a>
-                                    <a href="{{ route('invoices.pdf.download', $workflowInvoice) }}">Download PDF</a>
+                                    <a href="{{ $workflowInvoice['open_url'] ?? '#' }}" target="_blank" rel="noopener">Open invoice</a>
+                                    <a href="{{ $workflowInvoice['download_url'] ?? '#' }}">Download PDF</a>
                                 </div>
                             @endif
                         </header>
 
-                        @if($workflowInvoice)
+                        @if(!empty($workflowInvoice))
                             <div class="ft-invoice-send-document__summary">
-                                <span><b>{{ $workflowInvoice->currency }} {{ number_format((float) $workflowInvoice->total, 2) }}</b><small>Amount due</small></span>
-                                <span><b>{{ $workflowInvoice->issue_date?->format('M j, Y') ?: '—' }}</b><small>Invoice date</small></span>
-                                <span><b>{{ $workflowInvoice->due_date?->format('M j, Y') ?: '—' }}</b><small>Due date</small></span>
+                                <span><b>{{ $workflowInvoice['currency'] ?? ($payload['invoice_currency'] ?? 'USD') }} {{ number_format((float) ($workflowInvoice['total'] ?? 0), 2) }}</b><small>Amount due</small></span>
+                                <span><b>{{ $workflowInvoice['issue_date_label'] ?? '—' }}</b><small>Invoice date</small></span>
+                                <span><b>{{ $workflowInvoice['due_date_label'] ?? '—' }}</b><small>Due date</small></span>
                             </div>
                             <div class="ft-invoice-send-pdf-preview">
-                                <div class="ft-invoice-send-pdf-preview__bar"><span>PDF</span><b>{{ $workflowInvoice->pdf_name ?: $workflowInvoice->invoice_number.'.pdf' }}</b></div>
-                                <iframe title="Generated invoice PDF preview" src="{{ route('invoices.pdf.open', $workflowInvoice) }}"></iframe>
+                                <div class="ft-invoice-send-pdf-preview__bar"><span>PDF</span><b>{{ $workflowInvoice['pdf_name'] ?? (($workflowInvoice['invoice_number'] ?? 'Invoice').'.pdf') }}</b></div>
+                                <iframe title="Generated invoice PDF preview" src="{{ $workflowInvoice['open_url'] ?? '#' }}"></iframe>
                             </div>
                         @else
                             <div class="ft-order-email-preview-unavailable">The generated invoice PDF could not be found. Return to Prepare Invoice and generate it before sending.</div>
@@ -1097,7 +1099,7 @@
                             @elseif($invoiceNoSystemMatch)
                                 <p class="ft-po-mail-help ft-invoice-user-search-empty">No active system user matches “{{ $invoiceToEmail }}”. Choose a suggested user or enter a complete external email address.</p>
                             @else
-                                <p class="ft-po-mail-help">Billing contact: {{ $workflowInvoice?->billing_contact_name ?: $clientName }} · You can search active system users by name or email.</p>
+                                <p class="ft-po-mail-help">Billing contact: {{ ($workflowInvoice['billing_contact_name'] ?? '') ?: $clientName }} · You can search active system users by name or email.</p>
                             @endif
 
                             <div id="invoice-cc-fields-{{ $task->id }}" class="ft-po-mail-cc" x-cloak x-show="ccOpen">
@@ -1135,6 +1137,7 @@
                         </section>
 
                         <x-email.handoff-preview
+                            :loading="$emailPreviewPending"
                             :preview="$invoiceEmailPreview"
                             :defaultSubject="'Invoice '.($payload['invoice_number'] ?? '').' — '.$orderNumber"
                             emptyRecipientText="Enter the client billing email in To before sending this invoice."
@@ -1208,7 +1211,7 @@
                             $actionLabel = ! $emailServiceEnabled && in_array($variant, ['purchase_order_email', 'artwork_email', 'invoice_send'], true)
                                 ? 'Complete without email'
                                 : $label;
-                            $actionDisabled = $variant === 'invoice_send' && ! $workflowInvoice;
+                            $actionDisabled = $variant === 'invoice_send' && empty($workflowInvoice);
                         @endphp
                         <button type="button" class="{{ in_array($decision, ['revise','cancel_artwork','issue'], true) ? 'danger' : 'primary' }}" wire:click="submitOrderWorkflowAction('{{ $decision }}')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" @disabled($actionDisabled)>{{ $actionLabel }}</button>
                     @endforeach

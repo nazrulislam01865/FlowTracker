@@ -37,11 +37,8 @@ unset($__defined_vars, $__key, $__value); ?>
     // gives us a stable cache-busting URL whenever the photo is replaced.
     $imageUrl = $src;
 
-    if (! $imageUrl && $imagePath && $user?->id) {
-        $imageUrl = route('profile-images.show', [
-            'user' => $user->id,
-            'filename' => basename($imagePath),
-        ], false);
+    if (! $imageUrl && $user?->id) {
+        $imageUrl = $user->profileImageUrl();
     }
 
     $initials = collect(preg_split('/\s+/', trim($displayName)))

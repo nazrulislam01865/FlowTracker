@@ -206,6 +206,7 @@ class NotificationService
         ?FlowJob $job = null,
         ?Task $task = null,
         ?User $actor = null,
+        bool $invalidateRecipientCaches = true,
     ): ?FlowNotification {
         if (!$recipient->is_active) return null;
 
@@ -216,7 +217,9 @@ class NotificationService
 
             // A Task is not actionable after its parent Order has been deleted,
             // even though the child Task row itself may still be soft-delete-live.
-            $liveParentJob = $task->job()->first();
+            $liveParentJob = $task->relationLoaded('job')
+                ? $task->getRelation('job')
+                : $task->job()->first();
             if (! $liveParentJob) return null;
             $job = $liveParentJob;
         } elseif ($job) {
@@ -234,7 +237,9 @@ class NotificationService
             'message' => $message,
         ]);
 
-        $this->forgetRecipientCaches($recipient);
+        if ($invalidateRecipientCaches) {
+            $this->forgetRecipientCaches($recipient);
+        }
         $this->deliverRealtime($recipient, $notification, $job, $task);
 
         return $notification;
@@ -290,6 +295,7 @@ class NotificationService
         ?User $actor = null,
         array $extraUserIds = [],
         array $excludeUserIds = [],
+        bool $invalidateRecipientCaches = true,
     ): void {
         $excluded = array_map('intval', $excludeUserIds);
         $task->loadMissing('job.members');
@@ -304,7 +310,16 @@ class NotificationService
 
         if ($type === 'risk') $ids = $ids->merge($this->administratorIds())->unique()->values();
 
-        $this->fanOutAfterCommit($ids->all(), $title, $message, $type, $job?->id, $task->id, $actor?->id);
+        $this->fanOutAfterCommit(
+            $ids->all(),
+            $title,
+            $message,
+            $type,
+            $job?->id,
+            $task->id,
+            $actor?->id,
+            $invalidateRecipientCaches,
+        );
     }
 
     public function backfillAdministratorMentions(User $administrator): void
@@ -671,22 +686,40 @@ class NotificationService
         ?int $jobId,
         ?int $taskId,
         ?int $actorId,
+        bool $invalidateRecipientCaches = true,
     ): void {
         $ids = collect($recipientIds)->map(fn ($id) => (int) $id)->filter()->unique()->values()->all();
         if ($ids === []) return;
 
-        $this->runAfterCommit(function () use ($ids, $title, $message, $type, $jobId, $taskId, $actorId): void {
+        $this->runAfterCommit(function () use ($ids, $title, $message, $type, $jobId, $taskId, $actorId, $invalidateRecipientCaches): void {
             $job = $jobId ? FlowJob::withTrashed()->find($jobId) : null;
             $task = $taskId ? Task::withTrashed()->find($taskId) : null;
             $actor = $actorId ? User::find($actorId) : null;
             $visibleJob = $job && !$job->trashed() ? $job : null;
             $visibleTask = $task && !$task->trashed() ? $task : null;
 
+            // notifyUser() checks the live parent before creating a Task
+            // notification. Reuse the parent already loaded once for this fanout
+            // instead of re-querying flow_jobs separately for every recipient.
+            if ($visibleTask && $visibleJob) {
+                $visibleTask->setRelation('job', $visibleJob);
+            }
+
             User::query()
+                ->with('roles')
                 ->whereIn('id', $ids)
                 ->where('is_active', true)
                 ->get()
-                ->each(fn (User $recipient) => $this->notifyUser($recipient, $title, $message, $type, $visibleJob, $visibleTask, $actor));
+                ->each(fn (User $recipient) => $this->notifyUser(
+                    $recipient,
+                    $title,
+                    $message,
+                    $type,
+                    $visibleJob,
+                    $visibleTask,
+                    $actor,
+                    $invalidateRecipientCaches,
+                ));
         });
     }
 

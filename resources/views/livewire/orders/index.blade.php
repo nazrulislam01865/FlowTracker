@@ -50,6 +50,7 @@
                     :config="$listActionWorkflowModal"
                     :step="$orderWorkflowActionStep"
                     :payload="$orderWorkflowActionPayload"
+                    :modal-preview="$orderWorkflowActionModalPreview"
                     :attachment="$orderWorkflowActionAttachment"
                     :revision-comments="$orderWorkflowActionRevisionComments"
                     :revision-attachments="$orderWorkflowActionRevisionAttachments"

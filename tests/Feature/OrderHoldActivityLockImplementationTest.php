@@ -16,6 +16,7 @@ class OrderHoldActivityLockImplementationTest extends TestCase
         $guard = file_get_contents(resource_path('js/components/order-hold-guard.js'));
         $requestFeedback = file_get_contents(resource_path('js/components/order-hold-request-feedback.js'));
         $holdConcern = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderHold.php'));
+        $workflowSection = file_get_contents(app_path('Livewire/Jobs/OrderWorkflowSection.php'));
         $orderWorkflowConcern = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderWorkflow.php'));
         $taskDetail = file_get_contents(resource_path('views/components/jobs/task-detail.blade.php'));
         $taskRow = file_get_contents(resource_path('views/components/jobs/order-detail/task-row.blade.php'));
@@ -40,6 +41,11 @@ class OrderHoldActivityLockImplementationTest extends TestCase
         $this->assertStringContainsString('This activity is currently locked', $blockedModal);
         $this->assertStringContainsString('release the hold first', $blockedModal);
         $this->assertStringContainsString('flowtrack:order-hold-state', $detail);
+        $this->assertStringContainsString('$this->dispatch(\'order-hold-runtime-changed\', orderId: (int) $this->selectedJobId, held: true)', $holdConcern);
+        $this->assertStringContainsString('$this->dispatch(\'order-hold-runtime-changed\', orderId: (int) $this->selectedJobId, held: false)', $holdConcern);
+        $this->assertStringContainsString('->to(component: \\App\\Livewire\\Jobs\\OrderWorkflowSection::class)', $holdConcern);
+        $this->assertStringContainsString("#[On('order-hold-runtime-changed')]", $workflowSection);
+        $this->assertStringContainsString('public function refreshOrderHoldRuntime(int $orderId, bool $held): void', $workflowSection);
         $this->assertStringContainsString('guardInteraction($event)', $detail);
         $this->assertStringContainsString('createOrderHoldGuard', $guard);
         $this->assertStringContainsString('bootOrderHoldRequestFeedback', $requestFeedback);

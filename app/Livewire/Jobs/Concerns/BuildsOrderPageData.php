@@ -18,6 +18,7 @@ use App\Services\MasterDataService;
 use App\Services\OrderFinanceService;
 use App\Services\OrderDetailViewService;
 use App\Services\OrderRedoService;
+use App\Services\Orders\OrderWorkflowSummaryService;
 use App\Services\OrderWorkflowSetupService;
 use App\Services\TaskService;
 use App\Services\WorkspaceSettingsService;
@@ -498,67 +499,21 @@ trait BuildsOrderPageData
             }
         }
 
-        if ($this->detailTab === 'overview') {
-            // Promote any interaction-forced section into persistent readiness.
-            // This keeps the Order detail DOM stable after modals/forms close
-            // instead of swapping a real section back to a skeleton.
-            if ($this->showAddJobProductForm || $this->showEditOrderProductModal) {
-                $this->orderDetailSectionsReady['products'] = true;
-            }
-            if ($this->showOverviewTaskDocumentModal || $this->showOrderWorkflowActionModal || $this->showAddOrderTaskForm) {
-                $this->orderDetailSectionsReady['workflow'] = true;
-            }
-            if (filled($this->focusComment) || $this->jobActivityTab !== 'all' || $this->jobActivityPage > 1) {
-                $this->orderDetailSectionsReady['activity'] = true;
-            }
-        }
-
+        // Products, Workflow, Attachments and Activity are isolated Livewire
+        // children. The parent Order Details request owns only the always-visible
+        // shell and therefore never hydrates those heavy lower-section graphs.
         $orderDetailSectionsReady = $this->orderDetailSectionsReady;
 
         if ($this->detailTab === 'overview') {
-            // Keep the page shell immediately usable, but hydrate expensive
-            // lower sections only when their viewport placeholder is reached.
-            $orderQuery->loadOverviewSummary($selected, $user);
-            if ($orderDetailSectionsReady['products']) {
-                $orderQuery->loadOverviewProducts($selected, $user);
-            }
-            if ($orderDetailSectionsReady['workflow']) {
-                $orderQuery->loadOverviewWorkflow($selected, $user);
-            }
-            if ($orderDetailSectionsReady['attachments']) {
-                $orderQuery->loadOverviewDocuments($selected);
-            }
-            if ($orderDetailSectionsReady['activity']) {
-                $orderQuery->loadOverviewActivity(
-                    $selected,
-                    $this->jobActivityTab,
-                    $this->jobActivityPage,
-                    10,
-                );
-            }
-
+            // The always-visible summary is now served by a tiny per-Order read
+            // model. Do not hydrate workflow phases/current tasks on every list
+            // -> detail click. The isolated Workflow child still owns the full
+            // authoritative runtime graph and reconciliation before task actions.
             $currentWorkflowPhaseId = (int) ($selected->workflow_phase_id ?: 0);
-            $previousWorkflowPhaseId = (int) ($this->lastOverviewWorkflowPhaseId ?: 0);
-
-            // If the workflow itself advanced while the user was looking at the
-            // previously-current stage (for example Shipment -> Billing), follow
-            // the new current stage automatically. If the user intentionally
-            // opened an older historical stage, preserve that historical view.
-            if ($currentWorkflowPhaseId > 0
-                && $previousWorkflowPhaseId > 0
-                && $currentWorkflowPhaseId !== $previousWorkflowPhaseId
-                && (int) ($this->overviewPhaseId ?: 0) === $previousWorkflowPhaseId) {
-                $this->overviewPhaseId = $currentWorkflowPhaseId;
-            }
-
             if ($currentWorkflowPhaseId > 0) {
                 $this->lastOverviewWorkflowPhaseId = $currentWorkflowPhaseId;
             }
-
-            $selectedPhase = $selected->workflow?->phases?->firstWhere('id', (int) ($this->overviewPhaseId ?: 0));
-            if (!$selectedPhase || (int) $selectedPhase->sequence > (int) ($selected->phase?->sequence ?? 0)) {
-                $this->overviewPhaseId = $currentWorkflowPhaseId;
-            }
+            $this->overviewPhaseId = $currentWorkflowPhaseId ?: $this->overviewPhaseId;
         } else {
             $orderQuery->loadTab($selected, $user, $this->detailTab);
         }
@@ -579,21 +534,6 @@ trait BuildsOrderPageData
         $overviewTaskDocumentModalTask = null;
         $overviewTaskAvailableDocuments = collect();
         $overviewTaskArtworkRevision = ['active' => false, 'documents' => collect(), 'retained_documents' => collect()];
-        if ($this->detailTab === 'overview' && $this->showOverviewTaskDocumentModal && $this->overviewTaskDocumentModalTaskId) {
-            $overviewTaskDocumentModalTask = $selected->tasks->firstWhere('id', (int) $this->overviewTaskDocumentModalTaskId);
-            if ($overviewTaskDocumentModalTask
-                && app(\App\Services\OrderWorkflowActionService::class)->automationKey($overviewTaskDocumentModalTask) === 'ART_PREPARE_UPLOAD') {
-                $overviewTaskArtworkRevision = app(DocumentService::class)->pendingArtworkRevision($overviewTaskDocumentModalTask);
-            }
-            if ($overviewTaskDocumentModalTask && $this->overviewTaskDocumentSource === 'existing') {
-                $overviewTaskAvailableDocuments = app(DocumentService::class)
-                    ->query($user, ['client' => $selected->client_id])
-                    ->with(['job:id,job_number', 'task:id,title'])
-                    ->latest('id')
-                    ->limit(60)
-                    ->get();
-            }
-        }
 
         $inquiryResults = collect();
         $selectedLinkInquiry = null;
@@ -697,27 +637,18 @@ trait BuildsOrderPageData
         }
 
         $shipmentUrgencyOptions = $master->active('shipment_urgency');
-        $shipmentMethodOptions = $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow']
-            ? $master->active('shipment_method')
-            : collect();
-        $courierOptions = $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow']
-            ? $master->active('courier')
-            : collect();
+        $workflowSummary = $this->detailTab === 'overview'
+            ? app(OrderWorkflowSummaryService::class)->forViewer($selected, $user)
+            : [];
+        $shipmentMethodOptions = collect();
+        $courierOptions = collect();
 
-        // Address master data is loaded only while the Add Shipment modal or
-        // a shipment's inline editor is open. LocationMasterDataService reads
-        // the cached Country/State master tables and preserves parent-country rules.
-        $locationMaster = app(\App\Services\LocationMasterDataService::class);
-        $shipmentLocationEditorOpen = $this->showShipmentModal || filled($this->shipmentInlineEditingId);
-        $shipmentCountryOptions = $shipmentLocationEditorOpen ? $locationMaster->countries() : collect();
-        $shipmentCountry = trim((string) ($this->showShipmentModal
-            ? ($this->shipmentForm['country'] ?? '')
-            : ($this->shipmentInlineForm['country'] ?? '')));
-        $shipmentStateOptions = $shipmentLocationEditorOpen && $shipmentCountry !== ''
-            ? $locationMaster->statesForCountry($shipmentCountry)
-            : collect();
+        $shipmentCountryOptions = collect();
+        $shipmentStateOptions = collect();
 
-        $orderDetailContext = app(OrderDetailViewService::class)->build($selected, $user, $shipmentUrgencyOptions, $courierOptions);
+        $orderDetailContext = app(OrderDetailViewService::class)->buildSummary($selected, $user, $shipmentUrgencyOptions);
+        $orderDetailContext['workflowSummary'] = $workflowSummary;
+        $orderDetailContext['workflowName'] = (string) ($workflowSummary['workflow_name'] ?? 'FlowTrack Order Workflow');
         $orderDetailContext['shipmentMethods'] = $shipmentMethodOptions;
         $orderDetailContext['shipmentUrgencies'] = $shipmentUrgencyOptions;
         $orderDetailContext['shipmentCouriers'] = $courierOptions;
@@ -739,15 +670,17 @@ trait BuildsOrderPageData
             ->all();
         $orderDetailContext['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
         $orderRedoContext = $preloadedRedoContext
-            ?? app(OrderRedoService::class)->context($selected, $user);
-        $orderRedoForm = $this->redoFormState($selected);
+            ?? app(OrderRedoService::class)->summaryContext($selected, $user);
+        $orderRedoForm = ($this->showRedoModal || $this->detailTab === 'redo')
+            ? $this->redoFormState($selected)
+            : [];
 
         return [
             'selectedJob' => $selected,
             'selectedTask' => null,
-            'taskStatuses' => $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow'] ? $this->taskStatusOptions($master) : collect(),
-            'users' => $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow'] ? $this->userOptions($user) : collect(),
-            'priorities' => $this->detailTab === 'overview' && $orderDetailSectionsReady['workflow'] ? $master->active('priority') : collect(),
+            'taskStatuses' => collect(),
+            'users' => collect(),
+            'priorities' => collect(),
             'shipmentUrgencyOptions' => $shipmentUrgencyOptions,
             'orderDetailContext' => $orderDetailContext,
             'orderRedoContext' => $orderRedoContext,
@@ -762,6 +695,9 @@ trait BuildsOrderPageData
             'overviewTaskDocumentModalTask' => $overviewTaskDocumentModalTask,
             'overviewTaskAvailableDocuments' => $overviewTaskAvailableDocuments,
             'overviewTaskArtworkRevision' => $overviewTaskArtworkRevision,
+            // The always-visible Overview description editor uses mentions.
+            // Keep this lightweight directory available for design/functionality
+            // parity; Activity and Workflow maintain their own isolated copies.
             'mentionUsers' => app(\App\Services\MentionService::class)->optionsForJob($selected, $user),
             'inquiryResults' => $inquiryResults,
             'selectedLinkInquiry' => $selectedLinkInquiry,

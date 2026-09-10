@@ -570,12 +570,7 @@ class BoardTaskPackService
             'number' => (string) $task->task_number,
             'title' => (string) $task->title,
             'assignee' => (string) ($task->assignee?->name ?: 'Unassigned'),
-            'assigneeImage' => ($task->assignee?->id && $task->assignee?->profile_image_path)
-                ? route('profile-images.show', [
-                    'user' => $task->assignee->id,
-                    'filename' => basename((string) $task->assignee->profile_image_path),
-                ], false)
-                : null,
+            'assigneeImage' => $task->assignee?->profileImageUrl(),
             'isMine' => (int) ($task->assignee_id ?: 0) === (int) $user->id,
             'phase' => (string) $taskStage['short_name'],
             'phaseSequence' => (int) $taskStage['sequence'],

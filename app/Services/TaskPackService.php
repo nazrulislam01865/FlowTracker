@@ -532,7 +532,19 @@ class TaskPackService
             return $item;
         });
 
-        if ($publishOrderWorkflows) $this->publishMappedOrderWorkflows((int) $pack->id);
+        // Generated Order tasks are already synchronized selectively above.
+        // Mark only summaries that reference this Task Pack item so the next
+        // Order Details read recomputes its small next-action/progress payload.
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)
+            ->markStaleForTaskPackItem((int) $item->id);
+
+        if ($publishOrderWorkflows) {
+            // Editing an existing Task Pack item already invalidates only Orders
+            // generated from that item above. A brand-new item is structural: it
+            // has no generated Task rows yet, so mapped workflow summaries must be
+            // invalidated until the existing lazy binding sync creates that task.
+            $this->publishMappedOrderWorkflows((int) $pack->id, $id === null);
+        }
         return $item;
     }
 
@@ -712,7 +724,7 @@ class TaskPackService
             ->values();
     }
 
-    private function publishMappedOrderWorkflows(int $packId): void
+    private function publishMappedOrderWorkflows(int $packId, bool $invalidateWorkflowSummaries = true): void
     {
         $refreshed = false;
 
@@ -729,6 +741,10 @@ class TaskPackService
                 // changes are repaired lazily when an Order is opened and can be
                 // bulk-applied explicitly with flowtrack:sync-order-workflow.
                 $orderService->ensureRuntimeMirror((int) $workflowId);
+                if ($invalidateWorkflowSummaries) {
+                    app(\App\Services\Orders\OrderWorkflowSummaryService::class)
+                        ->markStaleForWorkflow((int) $workflowId);
+                }
                 $refreshed = true;
             } catch (\Throwable $exception) {
                 report($exception);

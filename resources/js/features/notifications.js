@@ -1,5 +1,6 @@
 import { BROWSER_EVENTS, CONNECTION_STATES, LIVEWIRE_EVENTS, REALTIME_EVENTS } from '../core/events.js';
 import { metaContent } from '../core/meta.js';
+import { syncPersistedCounters } from '../core/persisted-counters.js';
 import { setNotificationUnreadCount } from '../components/sidebar-counters.js';
 
 const state = {
@@ -16,31 +17,23 @@ const state = {
 const unreadFallbackIntervalMs = 60000;
 
 export const syncUnreadCount = async () => {
-    const url = metaContent('flowtrack-notification-count-url');
-    if (!url || document.hidden) return;
+    if (!metaContent('flowtrack-notification-count-url') || document.hidden) return;
 
-    try {
-        const response = await fetch(url, {
-            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest' },
-            credentials: 'same-origin',
-            cache: 'no-store',
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        setNotificationUnreadCount(data?.count ?? 0);
+    // Notification, workspace and persisted-sidebar refreshes all share the
+    // same HTTP source. The shared request layer coalesces lifecycle bursts
+    // so those consumers do not issue duplicate unread-count requests.
+    const data = await syncPersistedCounters();
+    if (!data) return;
 
-        const latestId = Number.parseInt(String(data?.latest?.id ?? 0), 10) || 0;
-        if (!state.initialNotificationSynced) {
-            state.initialNotificationSynced = true;
-            state.latestNotificationId = latestId || null;
-            return;
-        }
-        if (latestId > (state.latestNotificationId || 0)) {
-            state.latestNotificationId = latestId;
-            window.Livewire?.dispatch?.(LIVEWIRE_EVENTS.NOTIFICATION);
-        }
-    } catch (_) {
-        // Focus/reconnect/fallback timer retries.
+    const latestId = Number.parseInt(String(data?.latest?.id ?? 0), 10) || 0;
+    if (!state.initialNotificationSynced) {
+        state.initialNotificationSynced = true;
+        state.latestNotificationId = latestId || null;
+        return;
+    }
+    if (latestId > (state.latestNotificationId || 0)) {
+        state.latestNotificationId = latestId;
+        window.Livewire?.dispatch?.(LIVEWIRE_EVENTS.NOTIFICATION);
     }
 };
 

@@ -902,18 +902,23 @@ class LegacyJobService
 
 
     /**
-     * Hydrate only the small Order Overview summary graph.
+     * Fast first-paint read model for the always-visible Order Overview shell.
      *
-     * This is intentionally much smaller than loadVisibleDetailTab('overview'):
-     * the header/summary needs the published stage list plus tasks from the
-     * current stage, but it does not need products, every workflow task,
-     * attachments or activity yet.
+     * Unlike loadVisibleOverviewSummary(), this method deliberately avoids
+     * published-workflow reconciliation checks and Task Pack document metadata.
+     * The isolated Workflow component performs that maintenance before exposing
+     * task actions. The shell needs only stage labels and current-stage tasks.
      */
-    public function loadVisibleOverviewSummary(FlowJob $job, User $user): FlowJob
+    public function loadVisibleOverviewShell(FlowJob $job, User $user): FlowJob
     {
         $job->load(['workflow:id,name']);
 
         if ($job->workflow) {
+            // The summary cards use OrderDetailPresenter::currentTasks(), which
+            // validates generated tasks against the current phase Task Pack.
+            // Keep this shell lightweight, but hydrate the authoritative phase
+            // ids + task_pack_id so configured tasks are not mistaken for stale
+            // rows and filtered out of "Next required action".
             $phaseQuery = WorkflowPhase::query()
                 ->select([
                     'id', 'workflow_id', 'workflow_template_id', 'task_pack_id',
@@ -935,8 +940,79 @@ class LegacyJobService
             $job->workflow->setRelation('phases', $phases->values());
 
             $currentPhase = $phases->firstWhere('id', (int) $job->workflow_phase_id);
+            if ($currentPhase) {
+                $job->setRelation('phase', $currentPhase);
+                if ($currentPhase->task_pack_id) {
+                    // Only the current pack's ids are required by the summary.
+                    // Do not hydrate every phase/task-pack graph on first paint.
+                    $currentPhase->load(['taskPack.items:id,task_pack_id']);
+                }
+            }
+        }
+
+        $job->load([
+            'tasks' => fn ($query) => app(AccessControlService::class)
+                ->applyTaskScope($query, $user)
+                ->where('workflow_phase_id', (int) $job->workflow_phase_id)
+                ->with([
+                    'assignee:id,name,profile_image_path',
+                    'setupTemplate',
+                    'template',
+                    'documents:id,task_id',
+                    'links:id,task_id,url,created_at',
+                ]),
+        ]);
+
+        return $job;
+    }
+
+    /**
+     * Hydrate only the small Order Overview summary graph.
+     *
+     * This is intentionally much smaller than loadVisibleDetailTab('overview'):
+     * the header/summary needs the published stage list plus tasks from the
+     * current stage, but it does not need products, every workflow task,
+     * attachments or activity yet.
+     */
+    public function loadVisibleOverviewSummary(FlowJob $job, User $user): FlowJob
+    {
+        $job->load(['workflow:id,name']);
+
+        if ($job->workflow) {
+            $workflowId = (int) ($job->workflow_id ?: 0);
+            $binding = app(OrderWorkflowBindingService::class);
+
+            // loadWorkflowSection() validates the published workflow immediately
+            // before auto-advance. Reuse that request-scoped graph when present
+            // instead of issuing a second active-workflow EXISTS query plus a
+            // second phase/task-pack read. Other callers retain the previous
+            // lightweight fallback and therefore do not become more expensive.
+            $cachedPublishedPhases = $binding->cachedPublishedPhasesForRead($workflowId);
+            $published = $cachedPublishedPhases !== null
+                || (! $job->completed_at
+                    && ! in_array((string) $job->status, self::INACTIVE_STATUSES, true)
+                    && app(OrderWorkflowSetupService::class)->isActiveOrderWorkflow($workflowId));
+
+            if ($cachedPublishedPhases !== null) {
+                $phases = $cachedPublishedPhases;
+            } else {
+                $phaseQuery = WorkflowPhase::query()
+                    ->select([
+                        'id', 'workflow_id', 'workflow_template_id', 'task_pack_id',
+                        'sequence', 'name', 'short_name', 'is_active', 'color',
+                    ])
+                    ->where('is_active', true);
+
+                $phases = $published
+                    ? $phaseQuery->where('workflow_template_id', $workflowId)->orderBy('sequence')->get()
+                    : $phaseQuery->where('workflow_id', $workflowId)->orderBy('sequence')->get();
+            }
+
+            $job->workflow->setRelation('phases', $phases->values());
+
+            $currentPhase = $phases->firstWhere('id', (int) $job->workflow_phase_id);
             if ($currentPhase && $currentPhase->task_pack_id) {
-                $currentPhase->load(['taskPack.items:id,task_pack_id']);
+                $currentPhase->loadMissing(['taskPack.items:id,task_pack_id']);
             }
         }
 
@@ -1025,12 +1101,21 @@ class LegacyJobService
     /** Load the full interactive workflow/task graph only near the taskflow. */
     public function loadVisibleOverviewWorkflow(FlowJob $job, User $user): FlowJob
     {
-        if (! $job->shipments()->exists()) {
-            app(OrderShipmentService::class)->seedPrimaryShipment($job, $user);
-        }
+        $isPublishedOrderWorkflow = ! $job->completed_at
+            && ! in_array((string) $job->status, self::INACTIVE_STATUSES, true)
+            && app(OrderWorkflowSetupService::class)->isActiveOrderWorkflow((int) $job->workflow_id);
+
+        // Active Orders always replace legacy Workflow::phases with the exact
+        // published WorkflowTemplate phases below. Loading the legacy phase/task
+        // pack graph first only to overwrite it caused a second copy of the same
+        // definition queries on every Workflow render. Historical Orders keep
+        // the original relation path unchanged.
+        $workflowRelation = $isPublishedOrderWorkflow
+            ? 'workflow:id,name'
+            : 'workflow.phases.taskPack.items.documentCategory';
 
         $job->load([
-            'workflow.phases.taskPack.items.documentCategory',
+            $workflowRelation,
             'shippingSourceAddress:id,client_id,label,recipient,address_line1,suite,city,state,zip,country,is_default,sort_order',
             'shipments.shippingMethod:id,type,name,code,sort_order,status',
             'shipments.shipmentUrgency:id,type,name,code,sort_order,status',
@@ -1055,6 +1140,18 @@ class LegacyJobService
             'documents.uploader:id,name,profile_image_path',
             'documents.task:id,title',
         ]);
+
+        // The workflow render already hydrates shipments. Checking the loaded
+        // collection avoids an extra shipments EXISTS query on every normal
+        // Order. Only legacy Orders with no shipment pay for the repair/reload.
+        if ($job->shipments->isEmpty()) {
+            app(OrderShipmentService::class)->seedPrimaryShipment($job, $user);
+            $job->load([
+                'shipments.shippingMethod:id,type,name,code,sort_order,status',
+                'shipments.shipmentUrgency:id,type,name,code,sort_order,status',
+                'shipments.courier:id,type,name,code,sort_order,status',
+            ]);
+        }
 
         $this->hydratePublishedOrderWorkflow($job);
         $this->hydrateLoadedTaskLinks($job);
@@ -1091,19 +1188,13 @@ class LegacyJobService
 
         $workflowId = (int) ($job->workflow_id ?: 0);
         if ($workflowId <= 0) return;
-        if (! OrderWorkflowSetupService::orderWorkflowQuery()->whereKey($workflowId)->where('is_active', true)->exists()) return;
+        if (! app(OrderWorkflowSetupService::class)->isActiveOrderWorkflow($workflowId)) return;
 
-        $phases = WorkflowPhase::query()
-            ->where('workflow_template_id', $workflowId)
-            ->where('is_active', true)
-            ->with([
-                'taskPack.items.documentCategory',
-                'taskPack.items.defaultAssignee:id,name,profile_image_path',
-                'taskPack.items.defaultDepartment',
-            ])
-            ->orderBy('sequence')
-            ->get()
-            ->values();
+        // syncSingleActiveOrder() loads this same published graph before the
+        // initial Workflow render. OrderWorkflowBindingService is request-scoped,
+        // so that graph is reused only inside this request; later Livewire
+        // requests perform a fresh read and therefore see setup changes.
+        $phases = app(OrderWorkflowBindingService::class)->publishedPhasesForRead($workflowId);
 
         if ($phases->isEmpty()) return;
 
@@ -2774,12 +2865,14 @@ class LegacyJobService
         $job->loadMissing('workflow.phases.taskPack.items', 'tasks.setupTemplate', 'tasks.template');
         if ($job->completed_at || $job->status === 'Completed') {
             if ((int) $job->progress !== 100) $job->update(['progress' => 100]);
+            app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $job->id);
             return 100;
         }
 
         $phases = $job->workflow->phases->sortBy('sequence')->values();
         if ($phases->isEmpty()) {
             $job->update(['progress' => 0]);
+            app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $job->id);
             return 0;
         }
 
@@ -2801,21 +2894,51 @@ class LegacyJobService
 
         $progress = max(0, min(99, (int) round($score / $phases->count())));
         if ((int) $job->progress !== $progress) $job->update(['progress' => $progress]);
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $job->id);
         return $progress;
     }
 
-    public function maybeAutoAdvance(FlowJob $job, User $actor): void
+    /**
+     * Load only the runtime graph required to decide whether the current Order
+     * phase may auto-advance. The previous implementation called findVisible(),
+     * which hydrates the complete Order detail graph (all workflow tasks,
+     * documents, comments/activity relationships, products, shipments, etc.)
+     * on every Order open. Auto-advance only needs the published phase metadata,
+     * current-phase Task Pack requirements, and current-phase task evidence.
+     */
+    private function findVisibleForAutoAdvance(User $actor, int $id): FlowJob
     {
-        $job = $this->findVisible($actor, $job->id);
-        if (app(\App\Services\Orders\OrderHoldService::class)->activeHold($job)) return;
+        $job = $this->findVisibleBase($actor, $id);
+        $this->loadVisibleOverviewSummary($job, $actor);
+
+        $currentPhase = $job->workflow?->phases?->firstWhere('id', (int) $job->workflow_phase_id);
+        if ($currentPhase?->task_pack_id) {
+            // The overview summary intentionally loads only Task Pack item IDs.
+            // Blocker evaluation needs the requirement flags/category metadata,
+            // so upgrade only the current phase rather than every workflow phase.
+            $currentPhase->loadMissing(['taskPack.items.documentCategory']);
+        }
+
+        if ($job->relationLoaded('tasks') && $job->tasks->isNotEmpty()) {
+            // Document/link completion gates are evaluated only for the current
+            // phase. Loading these relations on the already-scoped task collection
+            // keeps the query set bounded and prevents presenter-side lazy loads.
+            $job->tasks->loadMissing(['documents', 'links']);
+        }
+
+        return $job;
+    }
+
+    public function maybeAutoAdvance(FlowJob $job, User $actor): FlowJob
+    {
+        $job = $this->findVisibleForAutoAdvance($actor, $job->id);
+        if (app(\App\Services\Orders\OrderHoldService::class)->activeHold($job)) return $job;
 
         // The approved Order runtime stays sequential/automatic regardless of
         // which reusable Order workflow template was selected. Inquiry and
         // other workflow types continue to respect their configured flag.
-        $isDedicatedOrderWorkflow = OrderWorkflowSetupService::orderWorkflowQuery()
-            ->whereKey((int) $job->workflow_id)
-            ->where('is_active', true)
-            ->exists();
+        $isDedicatedOrderWorkflow = app(OrderWorkflowSetupService::class)
+            ->isActiveOrderWorkflow((int) $job->workflow_id);
 
         // Orders can keep a compatibility/snapshot workflow id even though the
         // generated runtime tasks are the seven-stage prototype tasks. Detect
@@ -2827,11 +2950,13 @@ class LegacyJobService
             ->where('workflow_phase_id', $job->workflow_phase_id)
             ->contains(fn (Task $task) => filled($workflowActions->automationKey($task)));
 
-        if (!$isDedicatedOrderWorkflow && !$isPrototypeOrderRuntime && !$job->phase?->auto_advance_on_ready) return;
+        if (!$isDedicatedOrderWorkflow && !$isPrototypeOrderRuntime && !$job->phase?->auto_advance_on_ready) return $job;
 
         if (JobDetailPresenter::blockers($job)->isEmpty()) {
-            $this->completePhase($job, $actor, true);
+            return $this->completePhase($job, $actor, true);
         }
+
+        return $job;
     }
 
     public function completePhase(FlowJob $job, User $actor, bool $automatic = false): FlowJob
@@ -3095,7 +3220,10 @@ class LegacyJobService
             if (!$task->description && $template->description) $changes['description'] = $template->description;
             if ($isCurrent && !$task->start_date) $changes['start_date'] = app(WorkspaceSettingsService::class)->localToday();
             if ($changes) $task->update($changes);
-            $task = $orderTaskRules->syncTask($task->refresh());
+            // A Task Pack phase is a batch. Persist each task's own flag/status,
+            // but defer the expensive parent Order rescan until all tasks in
+            // this phase have reached their final generated state.
+            $task = $orderTaskRules->syncTask($task->refresh(), false);
 
             FlowTaskComment::firstOrCreate(['flow_task_id' => $task->id, 'body' => 'Task created from the configured phase Task Pack.'], ['user_id' => $job->coordinator_id]);
             if ($task->assignee_id) {
@@ -3109,6 +3237,13 @@ class LegacyJobService
                 });
             }
         }
+
+        // Preserve the existing phase-level ordering: parent state is synced
+        // before current-phase sequence normalization, but only once for the
+        // completed phase batch instead of once per generated task.
+        $freshJob = $job->fresh();
+        $orderTaskRules->syncJob($freshJob);
+        $this->syncAutomaticStatus($freshJob);
 
         if ($isCurrent) {
             app(OrderTaskSequenceService::class)->synchronizePhase($job->refresh(), $phase, $actor);

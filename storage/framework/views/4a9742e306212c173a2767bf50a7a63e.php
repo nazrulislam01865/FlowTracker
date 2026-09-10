@@ -328,7 +328,7 @@ unset($__defined_vars, $__key, $__value); ?>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             </b>
         </div>
-        <div class="info-row ft-order-info-row"><span>Workflow</span><b><?php echo e($job->workflow?->name ?: 'FlowTrack Order Workflow'); ?></b></div>
+        <div class="info-row ft-order-info-row"><span>Workflow</span><b><?php echo e($context['workflowName'] ?? ($job->workflow?->name ?: 'FlowTrack Order Workflow')); ?></b></div>
     </div>
 </section>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/jobs/order-detail/planning.blade.php ENDPATH**/ ?>

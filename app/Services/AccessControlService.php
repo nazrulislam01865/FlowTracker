@@ -495,6 +495,17 @@ class AccessControlService
     public function isTaskParentCreator(User $user, object $task): bool
     {
         if (empty($task->flow_job_id)) return false;
+
+        // Order-detail task actions already have the parent Order in memory.
+        // Reuse it when available instead of issuing another flow_jobs lookup;
+        // the fallback query preserves the exact behavior for every other caller.
+        if (method_exists($task, 'relationLoaded') && $task->relationLoaded('job')) {
+            $job = $task->getRelation('job');
+            if ($job && method_exists($job, 'getAttributes') && array_key_exists('created_by', $job->getAttributes())) {
+                return (int) ($job->created_by ?? 0) === (int) $user->id;
+            }
+        }
+
         return (int) \App\Models\FlowJob::query()->whereKey($task->flow_job_id)->value('created_by') === (int) $user->id;
     }
 

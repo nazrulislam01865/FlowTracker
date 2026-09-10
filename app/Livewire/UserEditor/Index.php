@@ -343,14 +343,7 @@ class Index extends Component
 
     private function profileUrl(User $target): string
     {
-        if (! $target->profile_image_path) {
-            return '';
-        }
-
-        return route('profile-images.show', [
-            'user' => $target->id,
-            'filename' => basename($target->profile_image_path),
-        ], false);
+        return (string) ($target->profileImageUrl() ?? '');
     }
 
     private function targetUser(): User

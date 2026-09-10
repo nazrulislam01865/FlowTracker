@@ -25,7 +25,15 @@
                 class="ft-order-overview-edit-button"
                 title="Edit order overview"
                 aria-label="Edit order overview"
-                x-on:click.stop="beginRichTextEdit($refs.orderOverviewDescription)"
+                x-on:click.stop="(async () => {
+                    const input = $refs.orderOverviewDescription;
+                    if (input && input.dataset.mentionUsersLoaded !== '1') {
+                        const users = await $wire.loadOrderMentionUsers({{ $job->id }});
+                        input.dataset.mentionUsers = JSON.stringify(users ?? []);
+                        input.dataset.mentionUsersLoaded = '1';
+                    }
+                    beginRichTextEdit(input);
+                })()"
             >✎</button>
         @endif
     </div>
@@ -47,7 +55,7 @@
                 x-ref="orderOverviewDescription"
                 data-rich-text
                 autocomplete="off"
-                data-mention-users="{{ $mentionUsers->toJson() }}"
+                data-mention-users="[]" data-mention-users-loaded="0"
                 placeholder="Add the order overview, requirements or instructions, or paste screenshots here..."
             >{{ $job->description ?? '' }}</textarea>
 

@@ -49,7 +49,15 @@ unset($__defined_vars, $__key, $__value); ?>
                 class="ft-order-overview-edit-button"
                 title="Edit order overview"
                 aria-label="Edit order overview"
-                x-on:click.stop="beginRichTextEdit($refs.orderOverviewDescription)"
+                x-on:click.stop="(async () => {
+                    const input = $refs.orderOverviewDescription;
+                    if (input && input.dataset.mentionUsersLoaded !== '1') {
+                        const users = await $wire.loadOrderMentionUsers(<?php echo e($job->id); ?>);
+                        input.dataset.mentionUsers = JSON.stringify(users ?? []);
+                        input.dataset.mentionUsersLoaded = '1';
+                    }
+                    beginRichTextEdit(input);
+                })()"
             >✎</button>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </div>
@@ -92,7 +100,7 @@ unset($__defined_vars, $__key, $__value); ?>
                 x-ref="orderOverviewDescription"
                 data-rich-text
                 autocomplete="off"
-                data-mention-users="<?php echo e($mentionUsers->toJson()); ?>"
+                data-mention-users="[]" data-mention-users-loaded="0"
                 placeholder="Add the order overview, requirements or instructions, or paste screenshots here..."
             ><?php echo e($job->description ?? ''); ?></textarea>
 

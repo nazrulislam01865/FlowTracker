@@ -76,6 +76,8 @@ class Index extends Component
     public string $orderWorkflowActionStep = 'main';
     /** @var array<string,mixed> */
     public array $orderWorkflowActionPayload = [];
+    /** Expensive workflow modal email/invoice preview snapshot; prepared outside Blade. */
+    public array $orderWorkflowActionModalPreview = [];
     public bool $orderWorkflowEmailFallback = false;
     public string $orderWorkflowEmailFallbackMessage = '';
     public int $orderWorkflowEmailFallbackAttempts = 0;
@@ -476,6 +478,8 @@ class Index extends Component
         $this->orderWorkflowActionRevisionAttachments = [];
         $this->orderWorkflowActionStep = 'main';
         $this->orderWorkflowActionPayload = $workflowActions->initialPayload($task, $task->job);
+        $this->orderWorkflowActionModalPreview = app(\App\Services\Orders\OrderWorkflowActionModalPreviewService::class)
+            ->snapshot($task, $this->orderWorkflowActionPayload, false);
         $this->resetOrderWorkflowEmailFallbackState();
 
         if (in_array($descriptor['key'] ?? null, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
@@ -499,9 +503,42 @@ class Index extends Component
         $this->orderWorkflowActionRevisionAttachments = [];
         $this->orderWorkflowActionStep = 'main';
         $this->orderWorkflowActionPayload = [];
+        $this->orderWorkflowActionModalPreview = [];
         $this->listActionOrderId = null;
         $this->resetOrderWorkflowEmailFallbackState();
         $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionAttachment', 'orderWorkflowActionRevisionComments', 'orderWorkflowActionRevisionAttachments', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+    }
+
+    /** Load the exact email body only after the list action modal shell is visible. */
+    public function loadOrderWorkflowActionEmailPreview(): void
+    {
+        if (! $this->showOrderWorkflowActionModal || ! $this->listActionOrderId || ! $this->orderWorkflowActionTaskId) {
+            return;
+        }
+
+        $previewService = app(\App\Services\Orders\OrderWorkflowActionModalPreviewService::class);
+        if (! $previewService->requiresEmailPreview($this->orderWorkflowActionModalPreview)) {
+            return;
+        }
+
+        $task = $this->editableListWorkflowTask(
+            (int) $this->listActionOrderId,
+            (int) $this->orderWorkflowActionTaskId,
+            ['setupTemplate', 'job.client', 'job.owner', 'job.coordinator', 'job.items'],
+        );
+
+        $this->orderWorkflowActionModalPreview = $previewService
+            ->snapshot($task, $this->orderWorkflowActionPayload, true);
+    }
+
+    /** Refresh only selection-dependent email previews, not every modal rerender. */
+    public function updatedOrderWorkflowActionPayload(mixed $value, mixed $key = null): void
+    {
+        if (! in_array((string) $key, ['to_email', 'cc_emails', 'to_emails', 'customer_comment'], true)) {
+            return;
+        }
+
+        $this->loadOrderWorkflowActionEmailPreview();
     }
 
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void

@@ -57,6 +57,7 @@ $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionModalPreview' => [],
     'orderWorkflowActionAttachment' => null,
     'orderWorkflowActionRevisionComments' => [],
     'orderWorkflowActionRevisionAttachments' => [],
@@ -145,6 +146,7 @@ foreach (array_filter(([
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionModalPreview' => [],
     'orderWorkflowActionAttachment' => null,
     'orderWorkflowActionRevisionComments' => [],
     'orderWorkflowActionRevisionAttachments' => [],
@@ -174,23 +176,23 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 <?php
-    // Presentation only: all relationships were eager-loaded in JobService.
-    $currentTasks = \App\Support\OrderDetailPresenter::currentTasks($job);
-    $nextTask = \App\Support\OrderDetailPresenter::nextTask($job);
+    // The parent shell uses the materialized workflow summary only. Full task
+    // relations are owned by the isolated Workflow child below.
+    $workflowSummary = (array) ($orderDetailContext['workflowSummary'] ?? []);
     $canEditJob = (bool) ($orderDetailContext['canEditJob'] ?? false);
     $canChangeOwner = (bool) ($orderDetailContext['canChangeOwner'] ?? false);
 ?>
 <div class="ft-order-prototype-overview">
     <?php if (isset($component)) { $__componentOriginalbdd3edd2059243a4a4f678d9dd440078 = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalbdd3edd2059243a4a4f678d9dd440078 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.summary','data' => ['job' => $job,'nextTask' => $nextTask,'currentTasks' => $currentTasks]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.summary','data' => ['job' => $job,'summary' => $workflowSummary]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.summary'); ?>
 <?php if ($component->shouldRender()): ?>
 <?php $__env->startComponent($component->resolveView(), $component->data()); ?>
 <?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
 <?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
 <?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'next-task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($nextTask),'current-tasks' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($currentTasks)]); ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'summary' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowSummary)]); ?>
 <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
 <?php echo $__env->renderComponent(); ?>
@@ -275,252 +277,113 @@ unset($__defined_vars, $__key, $__value); ?>
         </div>
     </div>
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((bool) ($detailSectionsReady['products'] ?? false)): ?>
-        <?php if (isset($component)) { $__componentOriginalecfe6bb0ec1e143001ce80be73d172d2 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalecfe6bb0ec1e143001ce80be73d172d2 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.products','data' => ['job' => $job,'context' => $orderDetailContext,'showAddJobProductForm' => $showAddJobProductForm,'jobProductSearch' => $jobProductSearch,'jobProductSearchResults' => $jobProductSearchResults,'jobProductSearchSuppliers' => $jobProductSearchSuppliers,'jobProductResultTotal' => $jobProductResultTotal,'jobProductShowAllResults' => $jobProductShowAllResults,'jobProductSelectedProduct' => $jobProductSelectedProduct,'jobProductSelectedSupplier' => $jobProductSelectedSupplier,'jobProductCategory' => $jobProductCategory,'jobProductQuantity' => $jobProductQuantity,'jobProductUnitPrice' => $jobProductUnitPrice,'jobProductSupplierId' => $jobProductSupplierId,'jobProductSupplierLabel' => $jobProductSupplierLabel,'jobProductSupplierSkipped' => $jobProductSupplierSkipped,'jobProductSupplierLocked' => $jobProductSupplierLocked,'showEditOrderProductModal' => $showEditOrderProductModal,'editOrderProductItemId' => $editOrderProductItemId,'editOrderProductName' => $editOrderProductName,'editOrderProductCode' => $editOrderProductCode,'editOrderProductCategory' => $editOrderProductCategory,'editOrderProductSearch' => $editOrderProductSearch,'editOrderProductSearchResults' => $editOrderProductSearchResults,'editOrderProductSearchSuppliers' => $editOrderProductSearchSuppliers,'editOrderProductResultTotal' => $editOrderProductResultTotal,'editOrderProductSelectedProduct' => $editOrderProductSelectedProduct,'editOrderProductSelectedSupplier' => $editOrderProductSelectedSupplier,'editOrderProductShowAllResults' => $editOrderProductShowAllResults,'editOrderProductSupplierId' => $editOrderProductSupplierId,'editOrderProductSupplierLabel' => $editOrderProductSupplierLabel,'editOrderProductQuantity' => $editOrderProductQuantity,'editOrderProductUnitPrice' => $editOrderProductUnitPrice,'editOrderProductNotes' => $editOrderProductNotes]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.products'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext),'show-add-job-product-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showAddJobProductForm),'job-product-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSearch),'job-product-search-results' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSearchResults),'job-product-search-suppliers' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSearchSuppliers),'job-product-result-total' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductResultTotal),'job-product-show-all-results' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductShowAllResults),'job-product-selected-product' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSelectedProduct),'job-product-selected-supplier' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSelectedSupplier),'job-product-category' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductCategory),'job-product-quantity' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductQuantity),'job-product-unit-price' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductUnitPrice),'job-product-supplier-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSupplierId),'job-product-supplier-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSupplierLabel),'job-product-supplier-skipped' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSupplierSkipped),'job-product-supplier-locked' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobProductSupplierLocked),'show-edit-order-product-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showEditOrderProductModal),'edit-order-product-item-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductItemId),'edit-order-product-name' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductName),'edit-order-product-code' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductCode),'edit-order-product-category' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductCategory),'edit-order-product-search' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSearch),'edit-order-product-search-results' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSearchResults),'edit-order-product-search-suppliers' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSearchSuppliers),'edit-order-product-result-total' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductResultTotal),'edit-order-product-selected-product' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSelectedProduct),'edit-order-product-selected-supplier' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSelectedSupplier),'edit-order-product-show-all-results' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductShowAllResults),'edit-order-product-supplier-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSupplierId),'edit-order-product-supplier-label' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductSupplierLabel),'edit-order-product-quantity' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductQuantity),'edit-order-product-unit-price' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductUnitPrice),'edit-order-product-notes' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($editOrderProductNotes)]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+    <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('jobs.order-products-section', ['order-id' => $job->id]);
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalecfe6bb0ec1e143001ce80be73d172d2)): ?>
-<?php $attributes = $__attributesOriginalecfe6bb0ec1e143001ce80be73d172d2; ?>
-<?php unset($__attributesOriginalecfe6bb0ec1e143001ce80be73d172d2); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalecfe6bb0ec1e143001ce80be73d172d2)): ?>
-<?php $component = $__componentOriginalecfe6bb0ec1e143001ce80be73d172d2; ?>
-<?php unset($__componentOriginalecfe6bb0ec1e143001ce80be73d172d2); ?>
-<?php endif; ?>
-    <?php else: ?>
-        <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.progressive-section-loader','data' => ['section' => 'products','method' => 'loadDetailSection','keyPrefix' => 'order-detail','contextType' => 'order','contextId' => $job->id,'rows' => 4,'message' => 'Loading order products when needed…','rootMargin' => '360px 0px']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.progressive-section-loader'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['section' => 'products','method' => 'loadDetailSection','key-prefix' => 'order-detail','context-type' => 'order','context-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->id),'rows' => 4,'message' => 'Loading order products when needed…','root-margin' => '360px 0px']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__keyOuter = $__key ?? null;
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $attributes = $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $component = $__componentOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+$__key = 'order-products-section-'.$job->id;
+$__componentSlots = [];
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((bool) ($detailSectionsReady['workflow'] ?? false)): ?>
-        <?php if (isset($component)) { $__componentOriginalacd6c8d39c322d451ed4aa64b3000636 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalacd6c8d39c322d451ed4aa64b3000636 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow','data' => ['job' => $job,'overviewPhaseId' => $overviewPhaseId,'taskStatuses' => $taskStatuses,'context' => $orderDetailContext,'overviewTaskLinkFormTaskId' => $overviewTaskLinkFormTaskId,'showShipmentModal' => $showShipmentModal,'shipmentModalTaskId' => $shipmentModalTaskId,'shipmentEditingId' => $shipmentEditingId,'shipmentModalMode' => $shipmentModalMode,'shipmentForm' => $shipmentForm,'shipmentInlineTaskId' => $shipmentInlineTaskId,'shipmentInlineEditingId' => $shipmentInlineEditingId,'shipmentInlineAddressMode' => $shipmentInlineAddressMode,'shipmentInlineForm' => $shipmentInlineForm,'showShipmentDetailsModal' => $showShipmentDetailsModal,'shipmentDetailsId' => $shipmentDetailsId]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.workflow'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'overview-phase-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewPhaseId),'task-statuses' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($taskStatuses),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext),'overview-task-link-form-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskLinkFormTaskId),'show-shipment-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showShipmentModal),'shipment-modal-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentModalTaskId),'shipment-editing-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentEditingId),'shipment-modal-mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentModalMode),'shipment-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentForm),'shipment-inline-task-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineTaskId),'shipment-inline-editing-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineEditingId),'shipment-inline-address-mode' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineAddressMode),'shipment-inline-form' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentInlineForm),'show-shipment-details-modal' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($showShipmentDetailsModal),'shipment-details-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($shipmentDetailsId)]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1456817479-0', $__key);
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalacd6c8d39c322d451ed4aa64b3000636)): ?>
-<?php $attributes = $__attributesOriginalacd6c8d39c322d451ed4aa64b3000636; ?>
-<?php unset($__attributesOriginalacd6c8d39c322d451ed4aa64b3000636); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalacd6c8d39c322d451ed4aa64b3000636)): ?>
-<?php $component = $__componentOriginalacd6c8d39c322d451ed4aa64b3000636; ?>
-<?php unset($__componentOriginalacd6c8d39c322d451ed4aa64b3000636); ?>
-<?php endif; ?>
-    <?php else: ?>
-        <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.progressive-section-loader','data' => ['section' => 'workflow','method' => 'loadDetailSection','keyPrefix' => 'order-detail','contextType' => 'order','contextId' => $job->id,'rows' => 5,'message' => 'Loading workflow and tasks when needed…','rootMargin' => '360px 0px']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.progressive-section-loader'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['section' => 'workflow','method' => 'loadDetailSection','key-prefix' => 'order-detail','context-type' => 'order','context-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->id),'rows' => 5,'message' => 'Loading workflow and tasks when needed…','root-margin' => '360px 0px']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $attributes = $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $component = $__componentOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+echo $__html;
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((bool) ($detailSectionsReady['attachments'] ?? false)): ?>
-        <?php if (isset($component)) { $__componentOriginalc381fed9822a6501599c1e870652f2cd = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginalc381fed9822a6501599c1e870652f2cd = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.attachments','data' => ['job' => $job,'context' => $orderDetailContext,'jobDocumentUploads' => $jobDocumentUploads]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.attachments'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext),'job-document-uploads' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($jobDocumentUploads)]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginalc381fed9822a6501599c1e870652f2cd)): ?>
-<?php $attributes = $__attributesOriginalc381fed9822a6501599c1e870652f2cd; ?>
-<?php unset($__attributesOriginalc381fed9822a6501599c1e870652f2cd); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginalc381fed9822a6501599c1e870652f2cd)): ?>
-<?php $component = $__componentOriginalc381fed9822a6501599c1e870652f2cd; ?>
-<?php unset($__componentOriginalc381fed9822a6501599c1e870652f2cd); ?>
-<?php endif; ?>
-    <?php else: ?>
-        <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.progressive-section-loader','data' => ['section' => 'attachments','method' => 'loadDetailSection','keyPrefix' => 'order-detail','contextType' => 'order','contextId' => $job->id,'rows' => 3,'message' => 'Loading attachments when needed…','rootMargin' => '300px 0px']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.progressive-section-loader'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['section' => 'attachments','method' => 'loadDetailSection','key-prefix' => 'order-detail','context-type' => 'order','context-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->id),'rows' => 3,'message' => 'Loading attachments when needed…','root-margin' => '300px 0px']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $attributes = $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $component = $__componentOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('jobs.order-workflow-section', ['order-id' => $job->id]);
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((bool) ($detailSectionsReady['activity'] ?? false)): ?>
-        <?php if (isset($component)) { $__componentOriginale9bd4c7bc89f1675cde7d2af9804ef4e = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginale9bd4c7bc89f1675cde7d2af9804ef4e = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.activity','data' => ['job' => $job,'mentionUsers' => $mentionUsers,'activityTab' => $activityTab,'activityPage' => $activityPage,'focusComment' => $focusComment,'canComment' => (bool) ($orderDetailContext['canComment'] ?? false)]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.activity'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'activity-tab' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityTab),'activity-page' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($activityPage),'focus-comment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($focusComment),'can-comment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute((bool) ($orderDetailContext['canComment'] ?? false))]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__keyOuter = $__key ?? null;
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginale9bd4c7bc89f1675cde7d2af9804ef4e)): ?>
-<?php $attributes = $__attributesOriginale9bd4c7bc89f1675cde7d2af9804ef4e; ?>
-<?php unset($__attributesOriginale9bd4c7bc89f1675cde7d2af9804ef4e); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginale9bd4c7bc89f1675cde7d2af9804ef4e)): ?>
-<?php $component = $__componentOriginale9bd4c7bc89f1675cde7d2af9804ef4e; ?>
-<?php unset($__componentOriginale9bd4c7bc89f1675cde7d2af9804ef4e); ?>
-<?php endif; ?>
-    <?php else: ?>
-        <?php if (isset($component)) { $__componentOriginal07ce51f35701acdfae5fc6353e53cc20 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.progressive-section-loader','data' => ['section' => 'activity','method' => 'loadDetailSection','keyPrefix' => 'order-detail','contextType' => 'order','contextId' => $job->id,'rows' => 4,'message' => 'Loading activity when needed…','rootMargin' => '300px 0px']] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('ui.progressive-section-loader'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['section' => 'activity','method' => 'loadDetailSection','key-prefix' => 'order-detail','context-type' => 'order','context-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job->id),'rows' => 4,'message' => 'Loading activity when needed…','root-margin' => '300px 0px']); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__key = 'order-workflow-section-'.$job->id;
+$__componentSlots = [];
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $attributes = $__attributesOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__attributesOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20)): ?>
-<?php $component = $__componentOriginal07ce51f35701acdfae5fc6353e53cc20; ?>
-<?php unset($__componentOriginal07ce51f35701acdfae5fc6353e53cc20); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1456817479-1', $__key);
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showOrderWorkflowActionModal && $orderWorkflowActionTaskId): ?>
-        <?php
-            $workflowActionTask = $job->tasks->firstWhere('id', (int) $orderWorkflowActionTaskId);
-            $workflowActionModal = data_get($orderDetailContext, 'taskActionModals.'.(int) $orderWorkflowActionTaskId, []);
-        ?>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($workflowActionTask): ?>
-            <?php if (isset($component)) { $__componentOriginal8e43f3521a8e6328e588de4039a01fc1 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal8e43f3521a8e6328e588de4039a01fc1 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.workflow-action-modal','data' => ['job' => $job,'task' => $workflowActionTask,'config' => $workflowActionModal,'step' => $orderWorkflowActionStep,'payload' => $orderWorkflowActionPayload,'attachment' => $orderWorkflowActionAttachment,'revisionComments' => $orderWorkflowActionRevisionComments,'revisionAttachments' => $orderWorkflowActionRevisionAttachments,'mentionUsers' => $mentionUsers,'emailFallback' => $orderWorkflowEmailFallback,'emailFallbackMessage' => $orderWorkflowEmailFallbackMessage,'emailFallbackAttempts' => $orderWorkflowEmailFallbackAttempts]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.workflow-action-modal'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionTask),'config' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($workflowActionModal),'step' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionStep),'payload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionPayload),'attachment' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionAttachment),'revision-comments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionComments),'revision-attachments' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowActionRevisionAttachments),'mention-users' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($mentionUsers),'email-fallback' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallback),'email-fallback-message' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackMessage),'email-fallback-attempts' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderWorkflowEmailFallbackAttempts)]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal8e43f3521a8e6328e588de4039a01fc1)): ?>
-<?php $attributes = $__attributesOriginal8e43f3521a8e6328e588de4039a01fc1; ?>
-<?php unset($__attributesOriginal8e43f3521a8e6328e588de4039a01fc1); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal8e43f3521a8e6328e588de4039a01fc1)): ?>
-<?php $component = $__componentOriginal8e43f3521a8e6328e588de4039a01fc1; ?>
-<?php unset($__componentOriginal8e43f3521a8e6328e588de4039a01fc1); ?>
-<?php endif; ?>
-        <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+echo $__html;
 
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask): ?>
-        <?php if (isset($component)) { $__componentOriginal75144a7262080e4edb332b7df7a76a92 = $component; } ?>
-<?php if (isset($attributes)) { $__attributesOriginal75144a7262080e4edb332b7df7a76a92 = $attributes; } ?>
-<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.document-modal','data' => ['job' => $job,'task' => $overviewTaskDocumentModalTask,'availableDocuments' => $overviewTaskAvailableDocuments,'source' => $overviewTaskDocumentSource,'upload' => $overviewTaskDocumentUpload,'revisionUpload' => $overviewTaskRevisionUpload,'stagedUploads' => $overviewTaskStagedUploads,'stagedRevisionUploads' => $overviewTaskStagedRevisionUploads,'existingDocumentId' => $overviewTaskExistingDocumentId,'artworkRevision' => $overviewTaskArtworkRevision,'revisionDocumentIds' => $overviewTaskRevisionDocumentIds,'context' => $orderDetailContext]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
-<?php $component->withName('jobs.order-detail.document-modal'); ?>
-<?php if ($component->shouldRender()): ?>
-<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
-<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
-<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
-<?php endif; ?>
-<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job),'task' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentModalTask),'available-documents' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskAvailableDocuments),'source' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentSource),'upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskDocumentUpload),'revision-upload' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskRevisionUpload),'staged-uploads' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskStagedUploads),'staged-revision-uploads' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskStagedRevisionUploads),'existing-document-id' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskExistingDocumentId),'artwork-revision' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskArtworkRevision),'revision-document-ids' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($overviewTaskRevisionDocumentIds),'context' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($orderDetailContext)]); ?>
-<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
 
-<?php echo $__env->renderComponent(); ?>
-<?php endif; ?>
-<?php if (isset($__attributesOriginal75144a7262080e4edb332b7df7a76a92)): ?>
-<?php $attributes = $__attributesOriginal75144a7262080e4edb332b7df7a76a92; ?>
-<?php unset($__attributesOriginal75144a7262080e4edb332b7df7a76a92); ?>
-<?php endif; ?>
-<?php if (isset($__componentOriginal75144a7262080e4edb332b7df7a76a92)): ?>
-<?php $component = $__componentOriginal75144a7262080e4edb332b7df7a76a92; ?>
-<?php unset($__componentOriginal75144a7262080e4edb332b7df7a76a92); ?>
-<?php endif; ?>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+    <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('jobs.order-attachments-section', ['order-id' => $job->id]);
+
+$__keyOuter = $__key ?? null;
+
+$__key = 'order-attachments-section-'.$job->id;
+$__componentSlots = [];
+
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1456817479-2', $__key);
+
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
+
+echo $__html;
+
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
+
+    <?php
+$__split = function ($name, $params = []) {
+    return [$name, $params];
+};
+[$__name, $__params] = $__split('jobs.order-activity-section', ['order-id' => $job->id,'focus-comment' => $focusComment]);
+
+$__keyOuter = $__key ?? null;
+
+$__key = 'order-activity-section-'.$job->id;
+$__componentSlots = [];
+
+$__key ??= \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::generateKey('lw-1456817479-3', $__key);
+
+$__html = app('livewire')->mount($__name, $__params, $__key, $__componentSlots);
+
+echo $__html;
+
+unset($__html);
+unset($__key);
+$__key = $__keyOuter;
+unset($__keyOuter);
+unset($__name);
+unset($__params);
+unset($__componentSlots);
+unset($__split);
+?>
 </div>
 <?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/jobs/detail-overview.blade.php ENDPATH**/ ?>

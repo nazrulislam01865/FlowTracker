@@ -15,6 +15,97 @@ use Illuminate\Support\Collection;
  */
 class OrderDetailViewService
 {
+    /**
+     * Build only the context required by the always-visible Order Details shell.
+     *
+     * Workflow task descriptors, task permissions, email delivery state,
+     * prepared invoices and production-monitor metadata intentionally stay out
+     * of this method. Those values now belong to the isolated Workflow child
+     * component, so the initial GET does not pay their CPU/hydration cost.
+     */
+    public function buildSummary(FlowJob $job, User $user, Collection $shipmentUrgencyOptions): array
+    {
+        $access = app(AccessControlService::class);
+        $canEdit = $access->canEditVisibleJob($user, $job);
+        $inactive = (bool) $job->completed_at
+            || $job->status === 'Completed'
+            || in_array((string) $job->status, JobService::INACTIVE_STATUSES, true);
+        $activeHold = $job->relationLoaded('activeHold') ? $job->activeHold : null;
+        $activeHoldSourceName = $activeHold
+            ? trim((string) ($activeHold->source_name
+                ?: ((string) $activeHold->hold_from === \App\Models\OrderHold::FROM_CLIENT
+                    ? ($job->client?->contact_name ?: $job->client?->name ?: 'Client')
+                    : ($activeHold->holder?->name ?: $activeHold->holdFromLabel()))))
+            : '';
+
+        $shipmentUrgencyName = OrderDetailPresenter::shipmentUrgencyName($job, $shipmentUrgencyOptions);
+        $masterData = app(MasterDataService::class);
+        $remoteArea = $masterData->remoteAreaForPostalCode($job->shipping_postal_code);
+
+        return [
+            'team' => $this->summaryTeam($job),
+            'canEditJob' => $canEdit,
+            'canChangeOwner' => $access->isAdministrator($user),
+            'canComment' => $canEdit,
+            'canCancel' => $canEdit && ! $inactive && (int) ($job->phase?->sequence ?? 999) <= 4,
+            'canHold' => $canEdit && ! $inactive && ! $activeHold,
+            'canReleaseHold' => $canEdit && ! $inactive && (bool) $activeHold,
+            'isOnHold' => (bool) $activeHold,
+            'hold' => $activeHold ? [
+                'id' => (int) $activeHold->id,
+                'holdFrom' => (string) $activeHold->hold_from,
+                'holdFromLabel' => $activeHold->holdFromLabel(),
+                'sourceName' => $activeHoldSourceName ?: '—',
+                'reason' => (string) $activeHold->reason,
+                'heldById' => $activeHold->held_by ? (int) $activeHold->held_by : null,
+                'heldBy' => (string) ($activeHold->holder?->name ?: 'Unknown user'),
+                'startedAt' => $activeHold->started_at,
+            ] : null,
+            'attentionLocked' => $inactive,
+            'flagged' => (bool) ($job->attention_requested ?? false),
+            'flagReason' => trim((string) ($job->attention_reason ?? '')),
+            'orderFlagLabel' => (string) ($job->orderFlag?->name ?? ''),
+            'shipmentUrgencyId' => OrderDetailPresenter::shipmentUrgencyId($job),
+            'shipmentUrgencyName' => $shipmentUrgencyName,
+            'shipmentUrgencyTone' => OrderDetailPresenter::urgencyTone($shipmentUrgencyName),
+            'remoteArea' => $remoteArea ? [
+                'id' => (int) $remoteArea->id,
+                'name' => trim((string) $remoteArea->name),
+                'postal_code' => $masterData->normalizePostalCode((string) $job->shipping_postal_code),
+                'location' => $remoteArea->remoteAreaLocationLabel(),
+                'extra_charge' => $remoteArea->remoteAreaExtraCharge(),
+            ] : null,
+            // The shell never needs task-level workflow state. Keep stable empty
+            // keys so existing Blade access remains backward-compatible.
+            'taskPermissions' => [],
+            'taskActions' => [],
+            'taskActionModals' => [],
+            'workflowEmailStatuses' => [],
+            'workflowInvoices' => [],
+            'productionMonitorDetails' => [],
+            'courierOptions' => [],
+        ];
+    }
+
+    /**
+     * Build the header team from relations already loaded by findVisibleBase().
+     * TaskService and workflow synchronization mirror task assignees into
+     * FlowJobMember, so the lightweight shell does not need to touch Task::assignee.
+     */
+    private function summaryTeam(FlowJob $job): Collection
+    {
+        $members = $job->relationLoaded('members')
+            ? $job->members->pluck('user')->filter()
+            : collect();
+
+        $base = collect([
+            $job->relationLoaded('owner') ? $job->owner : null,
+            $job->relationLoaded('coordinator') ? $job->coordinator : null,
+        ])->filter();
+
+        return $base->concat($members)->unique('id')->values();
+    }
+
     public function build(FlowJob $job, User $user, Collection $shipmentUrgencyOptions, ?Collection $courierOptions = null): array
     {
         $access = app(AccessControlService::class);

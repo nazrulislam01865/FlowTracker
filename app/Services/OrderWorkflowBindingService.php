@@ -4,7 +4,9 @@ namespace App\Services;
 
 use App\Models\FlowJob;
 use App\Models\FlowJobPhaseHistory;
+use App\Models\Department;
 use App\Models\Task;
+use App\Models\User;
 use App\Models\Workflow;
 use App\Models\WorkflowPhase;
 use App\Support\OrderStageResolver;
@@ -19,6 +21,18 @@ use Illuminate\Support\Facades\DB;
  */
 class OrderWorkflowBindingService
 {
+    /**
+     * Published workflow definitions already loaded during this Laravel request.
+     * AppServiceProvider registers this service as scoped, so these model graphs
+     * are never reused across requests and cannot hide later Workflow Setup edits.
+     *
+     * @var array<int,array{0:Workflow,1:Collection<int,WorkflowPhase>}>
+     */
+    private array $publishedWorkflowCache = [];
+
+    /** @var array<int,Collection<int,WorkflowPhase>> */
+    private array $publishedPhaseCache = [];
+
     /**
      * Capture an active Order's destination while legacy phase names still
      * exist. This is used during the one-time 5-stage -> 7-stage upgrade so
@@ -94,38 +108,227 @@ class OrderWorkflowBindingService
             ->whereNull('deleted_at')
             ->whereNull('completed_at')
             ->whereNotIn('status', JobService::INACTIVE_STATUSES)
-            ->first(['id', 'workflow_id', 'source_workflow_id']);
+            ->first([
+                'id',
+                'workflow_id',
+                'source_workflow_id',
+                'workflow_phase_id',
+                'source_workflow_phase_id',
+                'status',
+            ]);
         if (! $job) return false;
 
         $workflowId = (int) ($job->source_workflow_id ?: $job->workflow_id);
         if (! $workflowId) return false;
 
-        $workflowExists = OrderWorkflowSetupService::orderWorkflowQuery()
-            ->whereKey($workflowId)
-            ->where('is_active', true)
-            ->exists();
-        if (! $workflowExists || ! app(OrderWorkflowSetupService::class)->isReadyForOrderCreation($workflowId)) return false;
+        $setup = app(OrderWorkflowSetupService::class);
+        if (! $setup->isActiveOrderWorkflow($workflowId)) return false;
+
+        // Validate the published definition before touching the compatibility
+        // runtime mirror, matching the previous isReadyForOrderCreation() order
+        // of operations. The same loaded phase graph is then reused below.
+        $phases = $this->publishedPhasesForRead($workflowId);
+        if ($phases->isEmpty() || ! $setup->publishedPhasesAreReady($phases)) return false;
 
         [$workflow, $phases] = $this->publishedWorkflow($workflowId);
-        if ($phases->isEmpty()) return false;
+
+        // Order Details used to run the full workflow repair transaction every
+        // time an already-correct Order was viewed. That path walks every phase
+        // and generated task, performs firstOrCreate/update checks, synchronizes
+        // flags/statuses, and repairs history even when no setup change exists.
+        //
+        // Keep the repair behavior as the fallback, but first prove that the
+        // current runtime already matches the published definition. The check is
+        // deliberately strict: any missing/stale generated task, setup assignee,
+        // document requirement, phase binding, or active phase history falls
+        // through to the original syncOrder() implementation.
+        if ($this->runtimeMatchesPublishedDefinition($job, $workflow, $phases)) {
+            return false;
+        }
+
         $this->syncOrder($jobId, $workflow, $phases);
         return true;
+    }
+
+    /**
+     * Cheap, read-only fast path for an Order that already matches its
+     * published workflow. Returning false here is intentionally conservative:
+     * prepareSelectedJob() will still run the standalone artwork-evidence repair,
+     * preserving the existing historical-file self-healing behavior.
+     */
+    private function runtimeMatchesPublishedDefinition(FlowJob $job, Workflow $workflow, Collection $phases): bool
+    {
+        if ((int) $job->workflow_id !== (int) $workflow->id) return false;
+        if ((int) $job->source_workflow_id !== (int) $workflow->id) return false;
+
+        $phaseIds = $phases
+            ->pluck('id')
+            ->map(fn ($id) => (int) $id)
+            ->filter()
+            ->values();
+
+        if ($phaseIds->isEmpty()) return false;
+        if (! $phaseIds->contains((int) $job->workflow_phase_id)) return false;
+        if ((int) ($job->source_workflow_phase_id ?: 0) !== (int) $job->workflow_phase_id) return false;
+
+        $templates = $phases
+            ->flatMap(fn (WorkflowPhase $phase) => $phase->taskPack?->items?->map(
+                fn ($item) => ['phase_id' => (int) $phase->id, 'item' => $item],
+            ) ?? collect())
+            ->values();
+
+        if ($templates->isEmpty()) return false;
+
+        $expectedPairs = $templates
+            ->map(fn (array $row) => $row['phase_id'].':'.(int) $row['item']->id)
+            ->sort()
+            ->values();
+
+        $runtimeTasks = Task::query()
+            ->where('flow_job_id', $job->id)
+            ->whereNotNull('task_pack_task_id')
+            ->get([
+                'id',
+                'workflow_phase_id',
+                'task_pack_task_id',
+                'assignee_id',
+                'setup_assignee_id',
+                'document_category_id',
+                'description',
+                'start_date',
+            ]);
+
+        $actualPairs = $runtimeTasks
+            ->map(fn (Task $task) => (int) $task->workflow_phase_id.':'.(int) $task->task_pack_task_id)
+            ->sort()
+            ->values();
+
+        if ($actualPairs->all() !== $expectedPairs->all()) return false;
+
+        $templatesById = $templates->keyBy(fn (array $row) => (int) $row['item']->id);
+
+        // Task Pack department fallbacks are resolved in two bounded queries,
+        // matching LegacyJobService::syncPhaseTaskPack(). This lets the fast
+        // path detect a changed setup assignee without running the full repair.
+        $departmentCodes = $templates
+            ->map(fn (array $row) => $row['item'])
+            ->filter(fn ($item) => ! $item->defaultAssignee && $item->defaultDepartment)
+            ->pluck('defaultDepartment.code')
+            ->filter()
+            ->unique()
+            ->values();
+
+        $departmentIdsByCode = $departmentCodes->isEmpty()
+            ? collect()
+            : Department::query()->whereIn('code', $departmentCodes)->pluck('id', 'code');
+
+        $departmentIds = $departmentIdsByCode->values()->filter()->unique()->values();
+        $fallbackUsersByDepartment = $departmentIds->isEmpty()
+            ? collect()
+            : User::query()
+                ->where('is_active', true)
+                ->whereIn('department_id', $departmentIds)
+                ->orderBy('id')
+                ->get(['id', 'department_id'])
+                ->unique('department_id')
+                ->keyBy('department_id');
+
+        foreach ($runtimeTasks as $task) {
+            $templateRow = $templatesById->get((int) $task->task_pack_task_id);
+            if (! $templateRow) return false;
+
+            $template = $templateRow['item'];
+            $expectedAssigneeId = $template->defaultAssignee?->id;
+            if (! $expectedAssigneeId && $template->defaultDepartment) {
+                $departmentId = (int) ($departmentIdsByCode->get($template->defaultDepartment->code) ?: 0);
+                $expectedAssigneeId = $departmentId
+                    ? $fallbackUsersByDepartment->get($departmentId)?->id
+                    : null;
+            }
+
+            if ((int) ($task->setup_assignee_id ?: 0) !== (int) ($expectedAssigneeId ?: 0)) return false;
+            if ((int) ($task->document_category_id ?: 0) !== (int) ($template->document_category_id ?: 0)) return false;
+
+            if (blank($task->description) && filled($template->description)) return false;
+
+            // syncPhaseTaskPack() guarantees a start date for generated tasks
+            // in the active phase. A missing value means the repair still has
+            // real work to do, so do not take the fast path.
+            if ((int) $task->workflow_phase_id === (int) $job->workflow_phase_id && ! $task->start_date) return false;
+        }
+
+        return FlowJobPhaseHistory::query()
+            ->where('flow_job_id', $job->id)
+            ->where('workflow_phase_id', $job->workflow_phase_id)
+            ->whereNull('completed_at')
+            ->where('status', 'active')
+            ->exists();
+    }
+
+    /**
+     * Reuse the exact published phase graph already loaded by the binding check
+     * when Order Details renders later in the same Livewire request. On later
+     * Livewire requests the scoped service starts empty and this performs one
+     * fresh read, so Workflow/Task Pack edits remain immediately visible.
+     *
+     * @return Collection<int,WorkflowPhase>
+     */
+    public function publishedPhasesForRead(int $workflowId): Collection
+    {
+        if (isset($this->publishedWorkflowCache[$workflowId])) {
+            return $this->publishedWorkflowCache[$workflowId][1];
+        }
+
+        return $this->loadPublishedPhases($workflowId);
+    }
+
+    /**
+     * Return the published phase graph only when an earlier operation in this
+     * same Laravel request already loaded it. This lets auto-advance reuse the
+     * binding validation graph without making callers that did not run binding
+     * pay for the full seven-stage Task Pack graph.
+     *
+     * @return Collection<int,WorkflowPhase>|null
+     */
+    public function cachedPublishedPhasesForRead(int $workflowId): ?Collection
+    {
+        if (isset($this->publishedWorkflowCache[$workflowId])) {
+            return $this->publishedWorkflowCache[$workflowId][1];
+        }
+
+        return $this->publishedPhaseCache[$workflowId] ?? null;
     }
 
     /** @return array{0:Workflow,1:Collection<int,WorkflowPhase>} */
     private function publishedWorkflow(int $workflowId): array
     {
+        if (isset($this->publishedWorkflowCache[$workflowId])) {
+            return $this->publishedWorkflowCache[$workflowId];
+        }
+
         app(OrderWorkflowSetupService::class)->ensureRuntimeMirror($workflowId);
         $workflow = Workflow::query()
             ->whereKey($workflowId)
             ->where('is_snapshot', false)
             ->firstOrFail();
 
+        $phases = $this->loadPublishedPhases($workflowId);
+
+        return $this->publishedWorkflowCache[$workflowId] = [$workflow, $phases];
+    }
+
+    /** @return Collection<int,WorkflowPhase> */
+    private function loadPublishedPhases(int $workflowId): Collection
+    {
+        if (isset($this->publishedPhaseCache[$workflowId])) {
+            return $this->publishedPhaseCache[$workflowId];
+        }
+
         // IMPORTANT: read dedicated setup phases through workflow_template_id,
         // not the legacy Workflow::phases relation. Old installations can have
         // historical workflow_id rows that otherwise resurrect an old 5-stage
         // design on Order Details/Create Order.
-        $phases = WorkflowPhase::query()
+        return $this->publishedPhaseCache[$workflowId] = WorkflowPhase::query()
             ->where('workflow_template_id', $workflowId)
             ->where('is_active', true)
             ->with([
@@ -137,8 +340,6 @@ class OrderWorkflowBindingService
             ->orderBy('sequence')
             ->get()
             ->values();
-
-        return [$workflow, $phases];
     }
 
     private function syncOrder(int $jobId, Workflow $workflow, Collection $phases, ?int $targetSequenceOverride = null): void
@@ -235,6 +436,11 @@ class OrderWorkflowBindingService
                 ]);
             }
         }, 3);
+
+        // Rebinding can replace phase/task identities while preserving the
+        // workflow's business semantics. Invalidate only this Order's derived
+        // summary so the next read is rebuilt from the synchronized runtime.
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale($jobId);
     }
 
     private function targetSequence(FlowJob $job, int $stageCount): int

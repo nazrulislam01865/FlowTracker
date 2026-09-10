@@ -256,6 +256,7 @@
             :order-workflow-action-task-id="$orderWorkflowActionTaskId"
             :order-workflow-action-step="$orderWorkflowActionStep"
             :order-workflow-action-payload="$orderWorkflowActionPayload"
+            :order-workflow-action-modal-preview="$orderWorkflowActionModalPreview"
             :order-workflow-action-attachment="$orderWorkflowActionAttachment"
             :order-workflow-action-revision-comments="$orderWorkflowActionRevisionComments"
             :order-workflow-action-revision-attachments="$orderWorkflowActionRevisionAttachments"

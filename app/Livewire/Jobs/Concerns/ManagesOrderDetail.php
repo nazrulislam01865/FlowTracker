@@ -179,38 +179,18 @@ trait ManagesOrderDetail
 
     private function prepareSelectedJob(int $id): void
     {
-        // Active Orders are repaired to the dedicated seven-stage definition
-        // before stage ids are cached for the UI. This removes old 5-stage
-        // workflow snapshots immediately when an older Order is opened.
-        app(\App\Services\OrderWorkflowBindingService::class)->syncSingleActiveOrder($id);
-
-        // Artwork files can outlive a generated Task when an older workflow /
-        // Task Pack publish replaced that runtime row. Rebind those historical
-        // files to the current ART_PREPARE_UPLOAD task before detail relations
-        // are hydrated so completed Artwork stages always show their evidence.
-        app(\App\Services\OrderArtworkEvidenceService::class)->repair($id);
-
-        // Heal Orders that were left on a completed stage by an older runtime
-        // bug (notably Artwork after choosing "No" for Sample/Swatch). The
-        // backend checks real blockers before advancing, so simply opening the
-        // Order cannot skip required work.
-        $runtimeJob = FlowJob::query()->findOrFail($id);
-        app(AutoAdvanceOrder::class)->handle($runtimeJob, auth()->user());
-
-        $job = app(VisibleOrderQuery::class)->scoped(
+        // Order Details now treats the first request as a read-only shell load.
+        // Workflow reconciliation, artwork self-healing and auto-advance are
+        // performed by the isolated Workflow component immediately before that
+        // section is rendered. This removes maintenance work from the critical
+        // click -> first-paint path while preserving the same workflow safety
+        // before users can interact with workflow tasks.
+        app(VisibleOrderQuery::class)->scoped(
             auth()->user(),
             $id,
-            ['workflow.phases:id,workflow_id'],
-            ['id', 'workflow_id', 'workflow_phase_id'],
+            [],
+            ['id'],
         );
-
-        if (!$this->expandedPhaseIds) {
-            $phaseIds = $job->workflow?->phases?->pluck('id') ?? collect();
-            $this->expandedPhaseIds = $phaseIds
-                ->map(fn ($phaseId) => (int) $phaseId)
-                ->values()
-                ->all();
-        }
     }
 
     private function setDefaultDocumentTask(?FlowJob $job = null): void

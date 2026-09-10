@@ -2,6 +2,7 @@
     'preview' => [],
     'defaultSubject' => '',
     'emptyRecipientText' => 'No active team member with an email address was found.',
+    'loading' => false,
 ])
 @php
     $recipients = collect($preview['recipients'] ?? []);
@@ -81,7 +82,11 @@
         <div class="ft-order-email-preview-meta-row"><span>Attachment{{ $attachments->count() === 1 ? '' : 's' }}</span><strong>{{ $attachments->isNotEmpty() ? $attachments->implode(', ') : 'No attachment available' }}</strong></div>
     </div>
 
-    @if($html !== '')
+    @if($loading)
+        <div class="ft-order-email-preview-unavailable" wire:loading.class="is-loading" wire:target="loadOrderWorkflowActionEmailPreview">
+            Loading the exact email body preview…
+        </div>
+    @elseif($html !== '')
         <div class="ft-order-email-preview-browser">
             <div class="ft-order-email-preview-browser-bar">
                 <span></span><span></span><span></span>

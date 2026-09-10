@@ -5,6 +5,7 @@ namespace Tests\Feature;
 use Tests\TestCase;
 use Tests\Support\OrderPhase5Source;
 use App\Services\RichTextService;
+use Illuminate\Support\Facades\Storage;
 
 class RichTextImagePasteSupportTest extends TestCase
 {
@@ -100,7 +101,8 @@ class RichTextImagePasteSupportTest extends TestCase
         $richText = file_get_contents(app_path('Services/RichTextService.php'));
 
         $this->assertStringContainsString("(?:^|/)rich-text-images/", $richText);
-        $this->assertStringContainsString("\$safeUrl = route('rich-text-images.show'", $richText);
+        $this->assertStringContainsString("route('rich-text-images.show', ['filename' => \$imageMatch[1]], false)", $richText);
+        $this->assertStringContainsString('richTextImageUrl($imageMatch[1])', $richText);
         $this->assertStringNotContainsString("#^/rich-text-images/", $richText);
     }
 
@@ -125,8 +127,13 @@ class RichTextImagePasteSupportTest extends TestCase
 
     public function test_saved_rich_text_images_can_be_presented_as_compact_file_rows(): void
     {
+        Storage::fake('flowtrack_private');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.legacy_document_disks', []);
+
         $service = app(RichTextService::class);
         $filename = '123e4567-e89b-12d3-a456-426614174000.png';
+        Storage::disk('flowtrack_private')->put('rich-text-images/'.$filename, 'image-bytes');
         $stored = RichTextService::MARKER
             .'<p>Move the logo to the left.</p><img src="'.route('rich-text-images.show', ['filename' => $filename], false).'">';
 
@@ -139,6 +146,26 @@ class RichTextImagePasteSupportTest extends TestCase
         $this->assertStringContainsString('/rich-text-images/'.$filename.'/download', $images[0]['download_url']);
         $this->assertStringContainsString('Move the logo to the left.', (string) $service->withoutImages($stored));
         $this->assertStringNotContainsString('<img', (string) $service->withoutImages($stored));
+    }
+
+    public function test_missing_rich_text_images_are_suppressed_at_render_time_without_mutating_stored_source(): void
+    {
+        Storage::fake('flowtrack_private');
+        config()->set('flowtrack.document_disk', 'flowtrack_private');
+        config()->set('flowtrack.legacy_document_disks', []);
+
+        $service = app(RichTextService::class);
+        $filename = '123e4567-e89b-12d3-a456-426614174099.png';
+        $stored = RichTextService::MARKER
+            .'<p>Keep this instruction.</p><img src="'.route('rich-text-images.show', ['filename' => $filename], false).'">';
+
+        $normalized = $service->normalize($stored);
+        $rendered = $service->safeHtml($stored);
+
+        $this->assertStringContainsString($filename, (string) $normalized);
+        $this->assertStringNotContainsString($filename, (string) $rendered);
+        $this->assertStringContainsString('Keep this instruction.', (string) $rendered);
+        $this->assertSame([], $service->imageAttachments($stored));
     }
 
     public function test_artwork_revision_activity_uses_compact_image_references(): void

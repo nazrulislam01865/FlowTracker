@@ -599,13 +599,11 @@ class MasterRecord extends Model
     {
         if (! $this->id || $this->type !== 'product') return null;
 
-        $path = trim((string) data_get($this->metadata, 'product_image_path'));
-        if ($path === '') return null;
-
-        return route('master-data.product-image', [
-            'product' => $this->id,
-            'filename' => basename($path),
-        ], false);
+        return app(\App\Services\StoredAssetUrlService::class)->productImageUrl(
+            (int) $this->id,
+            (int) $this->workspace_id,
+            data_get($this->metadata, 'product_image_path'),
+        );
     }
 
     /**

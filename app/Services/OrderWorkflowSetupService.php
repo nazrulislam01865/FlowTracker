@@ -29,6 +29,9 @@ use Illuminate\Validation\ValidationException;
  */
 class OrderWorkflowSetupService
 {
+    /** @var array<int,bool> request-scoped active workflow checks */
+    private array $activeOrderWorkflowCache = [];
+
     public const WORKFLOW_NAME = 'FlowTrack Order Workflow';
     public const WORKFLOW_CODE = 'ORDER_PROCESS';
 
@@ -141,6 +144,10 @@ class OrderWorkflowSetupService
 
         WorkflowPhase::query()
             ->where('workflow_template_id', $template->id)
+            ->where(function (Builder $query) use ($workflow): void {
+                $query->whereNull('workflow_id')
+                    ->orWhere('workflow_id', '!=', $workflow->id);
+            })
             ->update(['workflow_id' => $workflow->id]);
 
         return $workflow;
@@ -163,17 +170,29 @@ class OrderWorkflowSetupService
             ->orderBy('id')
             ->first();
 
-        if (! $workflow || $workflow->phases->count() !== count(self::fixedStages())) return false;
+        if (! $workflow) return false;
 
-        foreach (self::fixedStages() as $index => $fixed) {
-            $phase = $workflow->phases->values()->get($index);
-            if (! $phase || (int) $phase->sequence !== $index + 1) return false;
-            if (strcasecmp(trim((string) $phase->name), (string) $fixed['name']) !== 0) return false;
-            if (! $phase->taskPack || $phase->taskPack->items->isEmpty()) return false;
-            if (! $this->taskPackSupportsStage($phase->taskPack, $index + 1)) return false;
+        return $this->publishedPhasesAreReady($workflow->phases);
+    }
+
+    /**
+     * Request-scoped active Order-workflow lookup. Order Details asks this same
+     * question during binding, auto-advance and read-model hydration. Keeping
+     * the answer only for the current Laravel request removes duplicate EXISTS
+     * queries without allowing setup changes to become stale across requests.
+     */
+    public function isActiveOrderWorkflow(int $workflowId): bool
+    {
+        if ($workflowId <= 0) return false;
+
+        if (array_key_exists($workflowId, $this->activeOrderWorkflowCache)) {
+            return $this->activeOrderWorkflowCache[$workflowId];
         }
 
-        return true;
+        return $this->activeOrderWorkflowCache[$workflowId] = self::orderWorkflowQuery()
+            ->whereKey($workflowId)
+            ->where('is_active', true)
+            ->exists();
     }
 
     /** Whether a template belongs to the shared Order workflow family. */
@@ -302,6 +321,27 @@ class OrderWorkflowSetupService
             if (! $phase || (int) $phase->sequence !== $index + 1) return false;
             if (strcasecmp(trim((string) $phase->name), (string) $fixed['name']) !== 0) return false;
             if (! $phase->taskPack || ! $this->taskPackSupportsStage($phase->taskPack, $index + 1)) return false;
+        }
+
+        return true;
+    }
+
+    /**
+     * Validate an already-loaded published phase graph using the same rules as
+     * isReadyForOrderCreation(). This lets the Order Details binding path reuse
+     * the phase/task-pack graph it must load anyway instead of querying it a
+     * second time solely for readiness validation.
+     */
+    public function publishedPhasesAreReady(Collection $phases): bool
+    {
+        if ($phases->count() !== count(self::fixedStages())) return false;
+
+        foreach (self::fixedStages() as $index => $fixed) {
+            $phase = $phases->values()->get($index);
+            if (! $phase || (int) $phase->sequence !== $index + 1) return false;
+            if (strcasecmp(trim((string) $phase->name), (string) $fixed['name']) !== 0) return false;
+            if (! $phase->taskPack || $phase->taskPack->items->isEmpty()) return false;
+            if (! $this->taskPackSupportsStage($phase->taskPack, $index + 1)) return false;
         }
 
         return true;

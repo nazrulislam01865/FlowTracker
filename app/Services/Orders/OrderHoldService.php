@@ -96,6 +96,10 @@ final class OrderHoldService
             );
         }
 
+        // Hold state is part of the materialized Order Details summary. This is
+        // a derived read-model update only; the OrderHold row above remains the
+        // authoritative source and all existing task guards stay unchanged.
+        app(OrderWorkflowSummaryService::class)->updateHoldState((int) $job->id, true);
         $this->forgetOperationalCaches($actor);
 
         return $hold;
@@ -148,6 +152,7 @@ final class OrderHoldService
             return $hold->load('releaser:id,name,profile_image_path');
         }, 3);
 
+        app(OrderWorkflowSummaryService::class)->updateHoldState((int) $job->id, false);
         $this->forgetOperationalCaches($actor);
 
         return $hold;

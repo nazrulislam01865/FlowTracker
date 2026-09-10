@@ -10,6 +10,9 @@ return [
     'log_all_requests' => env('PERFORMANCE_LOG_ALL_REQUESTS', false),
     'server_timing' => env('PERFORMANCE_SERVER_TIMING', false),
     'include_query_sql' => env('PERFORMANCE_INCLUDE_QUERY_SQL', false),
+    // Staging-only diagnostic: aggregates repeated SQL shapes without bindings.
+    // Keep disabled in normal production because it adds per-query bookkeeping.
+    'query_fingerprints' => env('PERFORMANCE_QUERY_FINGERPRINTS', false),
     'dashboard_cache_seconds' => (int) env('DASHBOARD_CACHE_SECONDS', 30),
     'detect_lazy_loading' => env('PERFORMANCE_DETECT_LAZY_LOADING', true),
     'budgets' => [

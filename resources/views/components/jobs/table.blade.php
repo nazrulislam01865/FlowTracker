@@ -225,9 +225,7 @@
                     $creatorName = $creator?->name ?? 'System';
                     $ownerName = $job->owner?->name ?? 'Unassigned';
                     $ownerInitials = collect(preg_split('/\\s+/', trim($ownerName)))->filter()->map(fn($part)=>mb_substr($part,0,1))->take(2)->implode('');
-                    $ownerImage = $job->owner?->profile_image_path && $job->owner?->id
-                        ? route('profile-images.show', ['user'=>$job->owner->id,'filename'=>basename($job->owner->profile_image_path)], false)
-                        : null;
+                    $ownerImage = $job->owner?->profileImageUrl();
                     $items = $job->items;
                     $productRows = $items->isNotEmpty()
                         ? $items
@@ -265,7 +263,7 @@
                             <span><span class="ft-created-name">{{ $creatorName }}</span><time class="ft-created-on">{{ $job->created_at ? \App\Support\UserLocalTime::format($job->created_at, 'M j, Y · g:i A') : '—' }}</time></span>
                         </span>
                     </div>
-                    <div class="ft-cell ft-identity" data-label="Order"><a class="ft-id" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate>{{ $job->displayOrderNumber() }}</a><span class="ft-sub">{{ $job->order_number ?: 'REF-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</span></div>
+                    <div class="ft-cell ft-identity" data-label="Order"><a class="ft-id" href="{{ route('jobs.index',['open'=>$job->id]) }}" wire:navigate.hover>{{ $job->displayOrderNumber() }}</a><span class="ft-sub">{{ $job->order_number ?: 'REF-'.str_pad((string)$job->id,5,'0',STR_PAD_LEFT) }}</span></div>
                     <div class="ft-cell ft-inquiry-cell" data-label="Inquiry">
                         @if($job->sourceInquiry)
                             @if(auth()->user()->canAccess('inquiries.view'))
@@ -332,7 +330,7 @@
                                 <a
                                     href="{{ route('jobs.index', ['open' => $job->id]) }}"
                                     role="menuitem"
-                                    wire:navigate
+                                    wire:navigate.hover
                                     x-on:click="$refs.menu.hidePopover()"
                                     aria-label="View details for {{ $job->displayOrderNumber() }}"
                                 >

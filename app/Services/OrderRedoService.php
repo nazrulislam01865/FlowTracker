@@ -31,6 +31,59 @@ class OrderRedoService
     }
 
     /**
+     * Lightweight Redo state for the always-visible Order Details shell.
+     *
+     * The previous page render loaded every Redo relationship and linked Order
+     * even when the user never opened the Redo tab. Keep only the badge/tab/
+     * banner fields here; the full context() method remains the source for the
+     * dedicated Redo surface and modal.
+     *
+     * @return array<string,mixed>
+     */
+    public function summaryContext(FlowJob $order, User $actor): array
+    {
+        $incoming = OrderRedo::query()
+            ->where('redo_order_id', $order->id)
+            ->first(['id', 'original_order_id', 'redo_order_id', 'scope', 'issue_reported_by', 'affected_quantity', 'redo_quantity', 'customer_adjustment_type', 'customer_adjustment_value', 'customer_discount_percent']);
+
+        $rootOrderId = (int) ($incoming?->original_order_id ?: $order->id);
+        $outgoingQuery = OrderRedo::query()->where('original_order_id', $rootOrderId);
+        $redoCount = (int) (clone $outgoingQuery)->count();
+        $redoOrderCount = (int) (clone $outgoingQuery)->whereNotNull('redo_order_id')->count();
+
+        $displayRecord = $incoming;
+        if (! $displayRecord && $redoCount > 0) {
+            $displayRecord = $outgoingQuery
+                ->orderByDesc('sequence')
+                ->first(['id', 'original_order_id', 'redo_order_id', 'scope', 'issue_reported_by', 'affected_quantity', 'redo_quantity', 'customer_adjustment_type', 'customer_adjustment_value', 'customer_discount_percent']);
+        }
+
+        // The banner only needs the original Order number. Load that one tiny
+        // relation when a banner is actually present instead of hydrating every
+        // linked Redo record and its phase/supplier/creator graph.
+        if ($displayRecord) {
+            $displayRecord->load('originalOrder:id,job_number');
+        }
+
+        $access = app(AccessControlService::class);
+        $canInitiate = ! $incoming
+            && $access->canEditVisibleJob($actor, $order)
+            && $access->can($actor, 'jobs', 'create');
+
+        return [
+            'canInitiate' => $canInitiate,
+            'incoming' => $incoming,
+            'records' => collect(),
+            'displayRecord' => $displayRecord,
+            'redoCount' => $redoCount,
+            'redoOrderCount' => $redoOrderCount,
+            'hasRedo' => (bool) $incoming || $redoCount > 0,
+            'isRedoOrder' => (bool) $incoming,
+            'rootOrderId' => $rootOrderId,
+        ];
+    }
+
+    /**
      * Return all presentation data needed by the Redo button, tab, banner and
      * relationship panel without mutating the Order or its workflow.
      *

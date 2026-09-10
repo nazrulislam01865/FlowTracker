@@ -70,6 +70,11 @@ final class OrderReadService
         return $this->legacy->loadVisibleDetailTab(...$arguments);
     }
 
+    public function loadVisibleOverviewShell(mixed ...$arguments): mixed
+    {
+        return $this->legacy->loadVisibleOverviewShell(...$arguments);
+    }
+
     public function loadVisibleOverviewSummary(mixed ...$arguments): mixed
     {
         return $this->legacy->loadVisibleOverviewSummary(...$arguments);

@@ -38,7 +38,8 @@ class OrderWorkflowEmailHandoffImplementationTest extends TestCase
         $this->assertStringContainsString("'artworkteam'", $service);
         $this->assertStringContainsString("'design'", $service);
         $this->assertStringContainsString("whereIn('department_id', \$departmentIds->all())", $service);
-        $this->assertStringContainsString("whereHas('roles'", $service);
+        $this->assertStringContainsString("\$method = \$departmentIds->isNotEmpty() ? 'orWhereHas' : 'whereHas';", $service);
+        $this->assertStringContainsString("\$query->{\$method}('roles'", $service);
         $this->assertStringContainsString("['artworkteam', 'artwork']", $service);
         $this->assertStringContainsString('Users & role assignments — Artwork Team users', $service);
         $this->assertStringNotContainsString('artworkPhaseAssignees($job)', $service);
@@ -66,7 +67,9 @@ class OrderWorkflowEmailHandoffImplementationTest extends TestCase
         $this->assertStringContainsString('OrderWorkflowEmailService::class)->send', $actions);
         $this->assertStringNotContainsString("['NEW_SEND_PO_ARTWORK', 'PROD_START'", $actions);
 
-        $this->assertStringContainsString('preview($task, auth()->user(), $payload)', $modal);
+        $this->assertStringNotContainsString('OrderWorkflowEmailService::class', $modal);
+        $this->assertStringContainsString('$emailHandoffPreview = (array) ($modalPreview[\'email_handoff_preview\'] ?? []);', $modal);
+        $this->assertStringContainsString('wire:init="loadOrderWorkflowActionEmailPreview"', $modal);
         $this->assertStringContainsString('<x-email.handoff-preview', $modal);
         $this->assertStringContainsString('emptyRecipientText=', $modal);
         $this->assertStringContainsString('orderWorkflowActionEmail', $modal);

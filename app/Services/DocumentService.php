@@ -15,6 +15,9 @@ use Illuminate\Validation\ValidationException;
 
 class DocumentService
 {
+    /** @var array<int,bool> */
+    private array $workflowSummaryInvalidatedOrders = [];
+
     public function query(User $user, array $filters = [], string $permissionModule = 'documents')
     {
         $query = app(AccessControlService::class)->applyDocumentScope(Document::query(), $user, $permissionModule)
@@ -809,6 +812,9 @@ class DocumentService
             $this->notifyDocumentChange($document, $actor, 'removed');
         }
         $document->delete();
+        if ($document->task_id && $document->flow_job_id) {
+            $this->invalidateOrderWorkflowSummary((int) $document->flow_job_id);
+        }
         if ($path && !Document::where('path', $path)->exists()) app(SecureDocumentStorage::class)->delete($path);
     }
 
@@ -982,6 +988,22 @@ class DocumentService
         if ($document->task) $document->setRelation('task', app(TaskService::class)->claimForAction($document->task, $user, $verb.' a document'));
         if ($document->task) $document->task->activities()->create(['user_id'=>$user->id,'event'=>'task.document_'.$verb,'description'=>'Document '.$verb.': '.$document->name,'meta'=>['document_id'=>$document->id,'name'=>$document->name]]);
         if ($document->job) $document->job->activities()->create(['user_id'=>$user->id,'event'=>'job.document_'.$verb,'description'=>'Document '.$verb.($document->task?' to '.$document->task->title:'').': '.$document->name,'meta'=>['document_id'=>$document->id,'name'=>$document->name,'task_id'=>$document->task_id]]);
+        if ($document->task_id && $document->flow_job_id) {
+            $this->invalidateOrderWorkflowSummary((int) $document->flow_job_id);
+        }
+    }
+
+    /**
+     * A task document can activate a conditional Order task. Deduplicate the
+     * tiny summary invalidation within this service instance so multi-file
+     * artwork uploads do not issue one summary UPDATE per file.
+     */
+    private function invalidateOrderWorkflowSummary(int $orderId): void
+    {
+        if ($orderId <= 0 || isset($this->workflowSummaryInvalidatedOrders[$orderId])) return;
+
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale($orderId);
+        $this->workflowSummaryInvalidatedOrders[$orderId] = true;
     }
 
     private function notifyDocumentChange(Document $document, User $actor, string $action): void

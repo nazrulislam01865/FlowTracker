@@ -54,7 +54,14 @@ trait ManagesOrderHold
 
         $this->closeOrderHoldModal();
         $this->jobActivityPage = 1;
-        $this->dispatch('flowtrack:order-hold-state', held: true);
+        // Update the page-level Alpine guard immediately, then explicitly notify
+        // the isolated Workflow child. Livewire browser events bubble upward, so
+        // a parent dispatch is not received by a nested isolated component unless
+        // it is targeted. Without this targeted refresh, the task rows keep the
+        // pre-hold controls until a full browser refresh.
+        $this->dispatch('flowtrack:order-hold-state', orderId: (int) $this->selectedJobId, held: true);
+        $this->dispatch('order-hold-runtime-changed', orderId: (int) $this->selectedJobId, held: true)
+            ->to(component: \App\Livewire\Jobs\OrderWorkflowSection::class);
         session()->flash('success', 'Order placed on hold.');
     }
 
@@ -68,7 +75,11 @@ trait ManagesOrderHold
         );
 
         $this->jobActivityPage = 1;
-        $this->dispatch('flowtrack:order-hold-state', held: false);
+        // Keep the page guard and isolated Workflow child in the same hold
+        // state without requiring a browser refresh.
+        $this->dispatch('flowtrack:order-hold-state', orderId: (int) $this->selectedJobId, held: false);
+        $this->dispatch('order-hold-runtime-changed', orderId: (int) $this->selectedJobId, held: false)
+            ->to(component: \App\Livewire\Jobs\OrderWorkflowSection::class);
         session()->flash('success', 'Order hold released.');
     }
 }

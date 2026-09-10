@@ -56,54 +56,6 @@
         return true;
     };
 
-    const setCancelledOrderCount = (count) => {
-        const value = Math.max(0, Number.parseInt(String(count ?? 0), 10) || 0);
-        const link = [...document.querySelectorAll('#sidebar .nav-btn')]
-            .find((item) => item.getAttribute('href')?.includes('/orders/cancelled'));
-        if (!link) return;
-
-        let badge = link.querySelector('.nav-badge');
-        if (value === 0) {
-            badge?.remove();
-            return;
-        }
-
-        if (!badge) {
-            badge = document.createElement('span');
-            badge.className = 'nav-badge';
-            link.appendChild(badge);
-        }
-        badge.textContent = String(value);
-    };
-
-    let lastCounterSyncAt = 0;
-    const syncPersistedCounters = async () => {
-        const now = Date.now();
-        if (now - lastCounterSyncAt < 5000) return;
-        lastCounterSyncAt = now;
-
-        const endpoint = document.querySelector('meta[name="flowtrack-notification-count-url"]')?.content;
-        if (!endpoint || document.hidden) return;
-
-        try {
-            const response = await fetch(endpoint, {
-                headers: {
-                    Accept: 'application/json',
-                    'X-Requested-With': 'XMLHttpRequest',
-                    'X-FlowTrack-Background': '1',
-                },
-                credentials: 'same-origin',
-                cache: 'no-store',
-            });
-            if (!response.ok) return;
-
-            const data = await response.json();
-            setCancelledOrderCount(data?.cancelled_order_count ?? 0);
-        } catch (_) {
-            // The existing workspace poll/realtime cycle will retry later.
-        }
-    };
-
     const sync = () => {
         const sidebar = document.getElementById('sidebar');
         if (!sidebar) return;
@@ -126,7 +78,6 @@
             group.open = active;
         });
 
-        syncPersistedCounters();
     };
 
     if (document.readyState === 'loading') {

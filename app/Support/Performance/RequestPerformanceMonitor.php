@@ -21,6 +21,7 @@ class RequestPerformanceMonitor
     private int $cacheForgets = 0;
     private int $cacheFailovers = 0;
     private array $slowQueries = [];
+    private array $queryFingerprints = [];
     private array $outgoingRequests = [];
     private array $outgoingStartedAt = [];
     private bool $sampled = false;
@@ -40,6 +41,14 @@ class RequestPerformanceMonitor
 
         $this->queryCount++;
         $this->queryTimeMs += (float) $query->time;
+
+        if (config('performance.query_fingerprints', false)) {
+            $fingerprint = preg_replace('/\s+/', ' ', trim($query->sql)) ?: trim($query->sql);
+            $row = $this->queryFingerprints[$fingerprint] ?? ['count' => 0, 'time_ms' => 0.0];
+            $row['count']++;
+            $row['time_ms'] += (float) $query->time;
+            $this->queryFingerprints[$fingerprint] = $row;
+        }
 
         $threshold = (int) config('performance.slow_query_ms', 150);
         if ($query->time < $threshold || count($this->slowQueries) >= 10) return;
@@ -161,14 +170,16 @@ class RequestPerformanceMonitor
         if (!$this->sampled || $this->startedAt <= 0) return;
 
         $durationMs = (microtime(true) - $this->startedAt) * 1000;
+        $nonDbMs = max(0.0, $durationMs - $this->queryTimeMs);
         $payload = $this->payload($request, $response->getStatusCode(), $durationMs);
 
         if (config('performance.server_timing', false)) {
             $response->headers->set('Server-Timing', sprintf(
-                'app;dur=%.2f, db;dur=%.2f;desc="%d queries"',
+                'app;dur=%.2f, db;dur=%.2f;desc="%d queries", non_db;dur=%.2f',
                 $durationMs,
                 $this->queryTimeMs,
                 $this->queryCount,
+                $nonDbMs,
             ));
         }
 
@@ -200,6 +211,7 @@ class RequestPerformanceMonitor
             'duration_ms' => round($durationMs, 2),
             'queries' => $this->queryCount,
             'query_time_ms' => round($this->queryTimeMs, 2),
+            'non_db_ms' => round(max(0.0, $durationMs - $this->queryTimeMs), 2),
             'cache_hits' => $this->cacheHits,
             'cache_misses' => $this->cacheMisses,
             'cache_writes' => $this->cacheWrites,
@@ -209,10 +221,65 @@ class RequestPerformanceMonitor
             'user_id' => $request->user()?->id,
         ];
 
+        $livewireCalls = $this->livewireCalls($request);
+        if ($livewireCalls) $payload['livewire_calls'] = $livewireCalls;
         if ($this->slowQueries) $payload['slow_queries'] = $this->slowQueries;
+        if ($this->queryFingerprints) {
+            $fingerprints = [];
+            foreach ($this->queryFingerprints as $sql => $stats) {
+                if (($stats['count'] ?? 0) < 2) continue;
+                $fingerprints[] = [
+                    'count' => (int) $stats['count'],
+                    'time_ms' => round((float) $stats['time_ms'], 2),
+                    'sql' => $sql,
+                ];
+            }
+            usort($fingerprints, static fn (array $a, array $b): int =>
+                [$b['count'], $b['time_ms']] <=> [$a['count'], $a['time_ms']]
+            );
+            if ($fingerprints) $payload['repeated_queries'] = array_slice($fingerprints, 0, 10);
+        }
         if ($this->outgoingRequests) $payload['outgoing_requests'] = $this->outgoingRequests;
 
         return $payload;
+    }
+
+    private function livewireCalls(Request $request): array
+    {
+        if (($request->route()?->getName() ?: '') !== 'default-livewire.update') return [];
+
+        $components = $request->input('components');
+        if (!is_array($components)) return [];
+
+        $calls = [];
+        foreach (array_slice($components, 0, 12) as $component) {
+            if (!is_array($component)) continue;
+
+            $componentName = 'livewire';
+            $snapshot = $component['snapshot'] ?? null;
+            if (is_string($snapshot) && $snapshot !== '') {
+                $decoded = json_decode($snapshot, true);
+                if (is_array($decoded)) $snapshot = $decoded;
+            }
+            if (is_array($snapshot)) {
+                $memoName = $snapshot['memo']['name'] ?? null;
+                if (is_string($memoName) && $memoName !== '') $componentName = $memoName;
+            }
+
+            foreach (array_slice((array) ($component['calls'] ?? []), 0, 12) as $call) {
+                if (!is_array($call)) continue;
+                $method = trim((string) ($call['method'] ?? ''));
+                if ($method === '') continue;
+
+                // Method parameters can contain user data, so only log the
+                // component and method name. That is enough to attribute slow
+                // Livewire requests without increasing log sensitivity.
+                $calls[] = $componentName.'::'.$method;
+                if (count($calls) >= 12) break 2;
+            }
+        }
+
+        return array_values(array_unique($calls));
     }
 
     private function writeRequestLog(float $durationMs, array $payload): void
@@ -242,6 +309,7 @@ class RequestPerformanceMonitor
         $this->cacheForgets = 0;
         $this->cacheFailovers = 0;
         $this->slowQueries = [];
+        $this->queryFingerprints = [];
         $this->outgoingRequests = [];
         $this->outgoingStartedAt = [];
         $this->sampled = false;

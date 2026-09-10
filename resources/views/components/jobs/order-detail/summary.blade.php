@@ -1,13 +1,13 @@
-@props(['job', 'nextTask' => null, 'currentTasks' => collect()])
+@props(['job', 'summary' => []])
 @php
-    $phases = \App\Support\OrderDetailPresenter::phases($job);
-    $stageCount = max(1, $phases->count());
-    $currentPhaseNumber = \App\Support\OrderDetailPresenter::currentPhaseNumber($job);
-    $completedTasks = \App\Support\OrderDetailPresenter::completedCount($currentTasks);
-    $applicableTasks = $currentTasks->reject(fn($task) => \App\Support\OrderDetailPresenter::isSkippedTask($task))->values();
-    $applicableCount = $applicableTasks->count();
-    $progress = max(0, min(100, (int) ($job->progress ?? 0)));
-    $nextOwner = $nextTask?->assignee?->name ?: $job->owner?->name ?: 'Unassigned';
+    $stageCount = max(1, (int) ($summary['stage_count'] ?? 1));
+    $currentPhaseNumber = max(1, (int) ($summary['current_phase_sequence'] ?? ($job->phase?->sequence ?? 1)));
+    $completedTasks = max(0, (int) ($summary['current_completed_task_count'] ?? 0));
+    $applicableCount = max(0, (int) ($summary['current_applicable_task_count'] ?? 0));
+    $progress = max(0, min(100, (int) ($summary['progress_percent'] ?? ($job->progress ?? 0))));
+    $nextTaskId = (int) ($summary['next_task_id'] ?? 0);
+    $nextTaskTitle = trim((string) ($summary['next_task_title'] ?? ''));
+    $nextOwner = trim((string) ($summary['next_task_assignee_name'] ?? '')) ?: ($job->owner?->name ?: 'Unassigned');
     $dependency = $currentPhaseNumber <= 1 ? 'No dependency' : 'Previous stage complete';
 @endphp
 <section class="summary-grid ft-order-summary-grid" aria-label="Order workflow summary">
@@ -16,7 +16,7 @@
         <div>
             <div class="summary-label">Current stage</div>
             <div class="summary-value">
-                <span>{{ $job->phase?->name ?: 'Not configured' }}</span>
+                <span>{{ $summary['current_phase_name'] ?? ($job->phase?->name ?: 'Not configured') }}</span>
                 · Stage <span>{{ $currentPhaseNumber }}</span> of {{ $stageCount }}
             </div>
             <div class="summary-sub">{{ $completedTasks }} of {{ $applicableCount }} applicable tasks complete</div>
@@ -37,10 +37,10 @@
         <div class="summary-ic">⌘</div>
         <div>
             <div class="summary-label"><span class="help" title="The next unlocked task from this Order's saved workflow setup.">Next required action</span></div>
-            <div class="summary-value">{{ $nextTask?->title ?: ($job->completed_at ? 'Order completed' : 'No action available') }}</div>
+            <div class="summary-value">{{ $nextTaskTitle !== '' ? $nextTaskTitle : ($job->completed_at ? 'Order completed' : 'No action available') }}</div>
             <div class="summary-sub"><span>{{ $nextOwner }}</span> · <span>{{ $dependency }}</span></div>
-            @if($nextTask)
-                <button type="button" class="btn primary small summary-cta" wire:click="openTask({{ (int) $nextTask->id }})">Take action</button>
+            @if($nextTaskId > 0)
+                <button type="button" class="btn primary small summary-cta" wire:click="openTask({{ $nextTaskId }})">Take action</button>
             @endif
         </div>
     </div>

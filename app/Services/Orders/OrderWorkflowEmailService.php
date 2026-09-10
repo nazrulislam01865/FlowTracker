@@ -84,7 +84,7 @@ final class OrderWorkflowEmailService
      *
      * @return array<string,mixed>
      */
-    public function preview(Task $handoffTask, ?User $actor = null, array $selection = []): array
+    public function preview(Task $handoffTask, ?User $actor = null, array $selection = [], bool $includeHtml = true): array
     {
         $key = $this->automationKey($handoffTask);
         if (! in_array($key, [self::PURCHASE_ORDER_HANDOFF, self::ARTWORK_HANDOFF], true)) {
@@ -129,13 +129,13 @@ final class OrderWorkflowEmailService
         $customerComment = $key === self::ARTWORK_HANDOFF
             ? $this->artworkCustomerComment($selection)
             : '';
-        $viewData = ($document && $actor)
+        $viewData = ($includeHtml && $document && $actor)
             ? $this->viewData($job, $key, $document, $documents, $actor, $brand, $customerComment)
             : [];
         if ($viewData !== [] && ($purchaseOrderSelection['external_to'] ?? null)) {
             $viewData['team'] = $purchaseOrderSelection['external_to']['name'];
         }
-        $previewHtml = $viewData !== []
+        $previewHtml = $includeHtml && $viewData !== []
             ? view('emails.orders.workflow-handoff', $viewData)->render()
             : '';
 

@@ -27,6 +27,38 @@ final class OrderArtworkEvidenceService
             return 0;
         }
 
+        // Most Orders are already healthy. Avoid hydrating every active task,
+        // its setup/category relations, historical tasks and artwork versions
+        // unless there is actual detached evidence to repair. These two EXISTS
+        // checks match the candidate sets used below and keep the normal Order
+        // Details read path cheap while preserving the exact repair fallback for
+        // legacy/orphaned files and links.
+        $hasDetachedDocuments = Document::query()
+            ->where('flow_job_id', $jobId)
+            ->where(function ($query) use ($jobId): void {
+                $query->whereNull('task_id')
+                    ->orWhereNotIn(
+                        'task_id',
+                        Task::query()
+                            ->select('id')
+                            ->where('flow_job_id', $jobId),
+                    );
+            })
+            ->exists();
+
+        $hasDetachedLinks = TaskLink::query()
+            ->whereIn(
+                'task_id',
+                Task::onlyTrashed()
+                    ->select('id')
+                    ->where('flow_job_id', $jobId),
+            )
+            ->exists();
+
+        if (! $hasDetachedDocuments && ! $hasDetachedLinks) {
+            return 0;
+        }
+
         $activeTasks = Task::query()
             ->where('flow_job_id', $jobId)
             ->with([

@@ -77,11 +77,7 @@ class Client extends Model
 
     public function logoUrl(): ?string
     {
-        if (! $this->id || ! $this->logo_path) return null;
-
-        return route('client-logos.show', [
-            'client' => $this->id,
-            'filename' => basename((string) $this->logo_path),
-        ], false);
+        return app(\App\Services\StoredAssetUrlService::class)
+            ->clientLogoUrl((int) $this->id, $this->logo_path);
     }
 }

@@ -12,8 +12,8 @@ final class AutoAdvanceOrder
     {
     }
 
-    public function handle(FlowJob $order, User $actor): void
+    public function handle(FlowJob $order, User $actor): FlowJob
     {
-        $this->service->maybeAutoAdvance($order, $actor);
+        return $this->service->maybeAutoAdvance($order, $actor);
     }
 }

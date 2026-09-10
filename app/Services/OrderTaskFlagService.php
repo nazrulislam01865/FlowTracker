@@ -126,13 +126,13 @@ class OrderTaskFlagService
         $orderFlagId = (int) data_get($taskFlag->metadata, 'order_flag_id', 0);
         if ($orderFlagId <= 0) return null;
 
-        return MasterRecord::query()
-            ->forWorkspace(app(MasterDataService::class)->workspaceId())
-            ->ofType('order_flag')
-            ->whereKey($orderFlagId)
-            ->where('status', 'active')
-            ->whereNull('deleted_at')
-            ->first();
+        // MasterDataService::active('order_flag') already applies workspace,
+        // type, active-status and soft-delete constraints and caches the rows.
+        // Reuse that bounded collection instead of issuing one SQL query for
+        // every task while syncJob() evaluates the current Order flag.
+        return $this->activeOrderFlags()->first(
+            fn (MasterRecord $flag): bool => (int) $flag->id === $orderFlagId
+        );
     }
 
     public function effectiveTaskFlag(Task $task): ?MasterRecord
@@ -162,7 +162,7 @@ class OrderTaskFlagService
         return $this->taskFlagForStatus((string) $task->status);
     }
 
-    public function syncTask(Task $task): Task
+    public function syncTask(Task $task, bool $syncParent = true): Task
     {
         $statusRecord = $this->statusRecord((string) $task->status, false);
         $flag = null;
@@ -202,9 +202,17 @@ class OrderTaskFlagService
         if ($dirty) $task->update($updates);
 
         $task = $task->refresh();
-        $job = $task->job()->first();
-        $this->syncJob($job);
-        if ($job) app(JobService::class)->syncAutomaticStatus($job);
+
+        // Batch workflow synchronization updates many generated tasks in one
+        // operation. Re-scanning and re-synchronizing the same parent Order
+        // after every individual task turns that batch into repeated parent-
+        // wide queries. Callers can defer this work and perform it once after
+        // the batch without changing the final persisted state.
+        if ($syncParent) {
+            $job = $task->job()->first();
+            $this->syncJob($job);
+            if ($job) app(JobService::class)->syncAutomaticStatus($job);
+        }
 
         return $task;
     }

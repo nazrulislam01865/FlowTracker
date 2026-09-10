@@ -54,6 +54,7 @@
     'orderWorkflowActionTaskId' => null,
     'orderWorkflowActionStep' => 'main',
     'orderWorkflowActionPayload' => [],
+    'orderWorkflowActionModalPreview' => [],
     'orderWorkflowActionAttachment' => null,
     'orderWorkflowActionRevisionComments' => [],
     'orderWorkflowActionRevisionAttachments' => [],
@@ -73,14 +74,14 @@
     'shipmentDetailsId' => null,
 ])
 @php
-    // Presentation only: all relationships were eager-loaded in JobService.
-    $currentTasks = \App\Support\OrderDetailPresenter::currentTasks($job);
-    $nextTask = \App\Support\OrderDetailPresenter::nextTask($job);
+    // The parent shell uses the materialized workflow summary only. Full task
+    // relations are owned by the isolated Workflow child below.
+    $workflowSummary = (array) ($orderDetailContext['workflowSummary'] ?? []);
     $canEditJob = (bool) ($orderDetailContext['canEditJob'] ?? false);
     $canChangeOwner = (bool) ($orderDetailContext['canChangeOwner'] ?? false);
 @endphp
 <div class="ft-order-prototype-overview">
-    <x-jobs.order-detail.summary :job="$job" :next-task="$nextTask" :current-tasks="$currentTasks" />
+    <x-jobs.order-detail.summary :job="$job" :summary="$workflowSummary" />
 
     <div class="overview-grid ft-order-overview-grid">
         <x-jobs.order-detail.overview-card :job="$job" :can-edit-job="$canEditJob" :mention-users="$mentionUsers" />
@@ -97,162 +98,25 @@
         </div>
     </div>
 
-    @if((bool) ($detailSectionsReady['products'] ?? false))
-        <x-jobs.order-detail.products
-            :job="$job"
-            :context="$orderDetailContext"
-            :show-add-job-product-form="$showAddJobProductForm"
-            :job-product-search="$jobProductSearch"
-            :job-product-search-results="$jobProductSearchResults"
-            :job-product-search-suppliers="$jobProductSearchSuppliers"
-            :job-product-result-total="$jobProductResultTotal"
-            :job-product-show-all-results="$jobProductShowAllResults"
-            :job-product-selected-product="$jobProductSelectedProduct"
-            :job-product-selected-supplier="$jobProductSelectedSupplier"
-            :job-product-category="$jobProductCategory"
-            :job-product-quantity="$jobProductQuantity"
-            :job-product-unit-price="$jobProductUnitPrice"
-            :job-product-supplier-id="$jobProductSupplierId"
-            :job-product-supplier-label="$jobProductSupplierLabel"
-            :job-product-supplier-skipped="$jobProductSupplierSkipped"
-            :job-product-supplier-locked="$jobProductSupplierLocked"
-            :show-edit-order-product-modal="$showEditOrderProductModal"
-            :edit-order-product-item-id="$editOrderProductItemId"
-            :edit-order-product-name="$editOrderProductName"
-            :edit-order-product-code="$editOrderProductCode"
-            :edit-order-product-category="$editOrderProductCategory"
-            :edit-order-product-search="$editOrderProductSearch"
-            :edit-order-product-search-results="$editOrderProductSearchResults"
-            :edit-order-product-search-suppliers="$editOrderProductSearchSuppliers"
-            :edit-order-product-result-total="$editOrderProductResultTotal"
-            :edit-order-product-selected-product="$editOrderProductSelectedProduct"
-            :edit-order-product-selected-supplier="$editOrderProductSelectedSupplier"
-            :edit-order-product-show-all-results="$editOrderProductShowAllResults"
-            :edit-order-product-supplier-id="$editOrderProductSupplierId"
-            :edit-order-product-supplier-label="$editOrderProductSupplierLabel"
-            :edit-order-product-quantity="$editOrderProductQuantity"
-            :edit-order-product-unit-price="$editOrderProductUnitPrice"
-            :edit-order-product-notes="$editOrderProductNotes"
-        />
-    @else
-        <x-ui.progressive-section-loader
-            section="products"
-            method="loadDetailSection"
-            key-prefix="order-detail"
-            context-type="order"
-            :context-id="$job->id"
-            :rows="4"
-            message="Loading order products when needed…"
-            root-margin="360px 0px"
-        />
-    @endif
+    <livewire:jobs.order-products-section
+        :order-id="$job->id"
+        :key="'order-products-section-'.$job->id"
+    />
 
-    @if((bool) ($detailSectionsReady['workflow'] ?? false))
-        <x-jobs.order-detail.workflow
-            :job="$job"
-            :overview-phase-id="$overviewPhaseId"
-            :task-statuses="$taskStatuses"
-            :context="$orderDetailContext"
-            :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
-            :show-shipment-modal="$showShipmentModal"
-            :shipment-modal-task-id="$shipmentModalTaskId"
-            :shipment-editing-id="$shipmentEditingId"
-            :shipment-modal-mode="$shipmentModalMode"
-            :shipment-form="$shipmentForm"
-            :shipment-inline-task-id="$shipmentInlineTaskId"
-            :shipment-inline-editing-id="$shipmentInlineEditingId"
-            :shipment-inline-address-mode="$shipmentInlineAddressMode"
-            :shipment-inline-form="$shipmentInlineForm"
-            :show-shipment-details-modal="$showShipmentDetailsModal"
-            :shipment-details-id="$shipmentDetailsId"
-        />
-    @else
-        <x-ui.progressive-section-loader
-            section="workflow"
-            method="loadDetailSection"
-            key-prefix="order-detail"
-            context-type="order"
-            :context-id="$job->id"
-            :rows="5"
-            message="Loading workflow and tasks when needed…"
-            root-margin="360px 0px"
-        />
-    @endif
 
-    @if((bool) ($detailSectionsReady['attachments'] ?? false))
-        <x-jobs.order-detail.attachments :job="$job" :context="$orderDetailContext" :job-document-uploads="$jobDocumentUploads" />
-    @else
-        <x-ui.progressive-section-loader
-            section="attachments"
-            method="loadDetailSection"
-            key-prefix="order-detail"
-            context-type="order"
-            :context-id="$job->id"
-            :rows="3"
-            message="Loading attachments when needed…"
-            root-margin="300px 0px"
-        />
-    @endif
+    <livewire:jobs.order-workflow-section
+        :order-id="$job->id"
+        :key="'order-workflow-section-'.$job->id"
+    />
 
-    @if((bool) ($detailSectionsReady['activity'] ?? false))
-        <x-jobs.order-detail.activity
-            :job="$job"
-            :mention-users="$mentionUsers"
-            :activity-tab="$activityTab"
-            :activity-page="$activityPage"
-            :focus-comment="$focusComment"
-            :can-comment="(bool) ($orderDetailContext['canComment'] ?? false)"
-        />
-    @else
-        <x-ui.progressive-section-loader
-            section="activity"
-            method="loadDetailSection"
-            key-prefix="order-detail"
-            context-type="order"
-            :context-id="$job->id"
-            :rows="4"
-            message="Loading activity when needed…"
-            root-margin="300px 0px"
-        />
-    @endif
+    <livewire:jobs.order-attachments-section
+        :order-id="$job->id"
+        :key="'order-attachments-section-'.$job->id"
+    />
 
-    @if($showOrderWorkflowActionModal && $orderWorkflowActionTaskId)
-        @php
-            $workflowActionTask = $job->tasks->firstWhere('id', (int) $orderWorkflowActionTaskId);
-            $workflowActionModal = data_get($orderDetailContext, 'taskActionModals.'.(int) $orderWorkflowActionTaskId, []);
-        @endphp
-        @if($workflowActionTask)
-            <x-jobs.order-detail.workflow-action-modal
-                :job="$job"
-                :task="$workflowActionTask"
-                :config="$workflowActionModal"
-                :step="$orderWorkflowActionStep"
-                :payload="$orderWorkflowActionPayload"
-                :attachment="$orderWorkflowActionAttachment"
-                :revision-comments="$orderWorkflowActionRevisionComments"
-                :revision-attachments="$orderWorkflowActionRevisionAttachments"
-                :mention-users="$mentionUsers"
-                :email-fallback="$orderWorkflowEmailFallback"
-                :email-fallback-message="$orderWorkflowEmailFallbackMessage"
-                :email-fallback-attempts="$orderWorkflowEmailFallbackAttempts"
-            />
-        @endif
-    @endif
-
-    @if($showOverviewTaskDocumentModal && $overviewTaskDocumentModalTask)
-        <x-jobs.order-detail.document-modal
-            :job="$job"
-            :task="$overviewTaskDocumentModalTask"
-            :available-documents="$overviewTaskAvailableDocuments"
-            :source="$overviewTaskDocumentSource"
-            :upload="$overviewTaskDocumentUpload"
-            :revision-upload="$overviewTaskRevisionUpload"
-            :staged-uploads="$overviewTaskStagedUploads"
-            :staged-revision-uploads="$overviewTaskStagedRevisionUploads"
-            :existing-document-id="$overviewTaskExistingDocumentId"
-            :artwork-revision="$overviewTaskArtworkRevision"
-            :revision-document-ids="$overviewTaskRevisionDocumentIds"
-            :context="$orderDetailContext"
-        />
-    @endif
+    <livewire:jobs.order-activity-section
+        :order-id="$job->id"
+        :focus-comment="$focusComment"
+        :key="'order-activity-section-'.$job->id"
+    />
 </div>

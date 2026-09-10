@@ -106,6 +106,8 @@ trait ManagesOrderWorkflow
         $this->orderWorkflowActionRevisionAttachments = [];
         $this->orderWorkflowActionStep = 'main';
         $this->orderWorkflowActionPayload = $workflowActions->initialPayload($task, $task->job);
+        $this->orderWorkflowActionModalPreview = app(\App\Services\Orders\OrderWorkflowActionModalPreviewService::class)
+            ->snapshot($task, $this->orderWorkflowActionPayload, false);
         $this->resetOrderWorkflowEmailFallbackState();
 
         if (in_array($descriptor['key'] ?? null, ['NEW_SEND_PO_ARTWORK', 'ART_SEND_ORDER_TEAM'], true)) {
@@ -129,8 +131,50 @@ trait ManagesOrderWorkflow
         $this->orderWorkflowActionRevisionAttachments = [];
         $this->orderWorkflowActionStep = 'main';
         $this->orderWorkflowActionPayload = [];
+        $this->orderWorkflowActionModalPreview = [];
         $this->resetOrderWorkflowEmailFallbackState();
         $this->resetValidation(['orderWorkflowActionComment', 'orderWorkflowActionAttachment', 'orderWorkflowActionRevisionComments', 'orderWorkflowActionRevisionAttachments', 'orderWorkflowActionPayload', 'orderWorkflowActionEmail']);
+    }
+
+    /**
+     * Complete the exact email body preview after the modal shell is visible.
+     * Only email/invoice workflow actions call this via wire:init.
+     */
+    public function loadOrderWorkflowActionEmailPreview(): void
+    {
+        if (! $this->showOrderWorkflowActionModal || ! $this->selectedJobId || ! $this->orderWorkflowActionTaskId) {
+            return;
+        }
+
+        $task = app(TaskService::class)->visibleQuery(auth()->user())
+            ->with(['setupTemplate', 'job.client', 'job.owner', 'job.coordinator', 'job.items'])
+            ->where('flow_job_id', (int) $this->selectedJobId)
+            ->find((int) $this->orderWorkflowActionTaskId);
+
+        if (! $task) {
+            return;
+        }
+
+        $previewService = app(\App\Services\Orders\OrderWorkflowActionModalPreviewService::class);
+        if (! $previewService->requiresEmailPreview($this->orderWorkflowActionModalPreview)) {
+            return;
+        }
+
+        $this->orderWorkflowActionModalPreview = $previewService
+            ->snapshot($task, $this->orderWorkflowActionPayload, true);
+    }
+
+    /**
+     * Preserve the existing live email preview behavior without regenerating
+     * expensive email/PDF preview data for unrelated modal field updates.
+     */
+    public function updatedOrderWorkflowActionPayload(mixed $value, mixed $key = null): void
+    {
+        if (! in_array((string) $key, ['to_email', 'cc_emails', 'to_emails', 'customer_comment'], true)) {
+            return;
+        }
+
+        $this->loadOrderWorkflowActionEmailPreview();
     }
 
     public function confirmShipmentDetailsWithoutChanges(int $taskId): void

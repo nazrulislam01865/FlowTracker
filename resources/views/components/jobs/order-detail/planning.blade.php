@@ -159,6 +159,6 @@
                 @endif
             </b>
         </div>
-        <div class="info-row ft-order-info-row"><span>Workflow</span><b>{{ $job->workflow?->name ?: 'FlowTrack Order Workflow' }}</b></div>
+        <div class="info-row ft-order-info-row"><span>Workflow</span><b>{{ $context['workflowName'] ?? ($job->workflow?->name ?: 'FlowTrack Order Workflow') }}</b></div>
     </div>
 </section>

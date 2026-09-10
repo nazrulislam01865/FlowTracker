@@ -24,7 +24,7 @@ import { syncBrowserTimezone } from './core/timezone.js';
 import { bootLivewireNotificationEvents, bootNotifications, syncUnreadCount } from './features/notifications.js';
 import { bootRealtimeTelemetry } from './features/realtime-telemetry.js';
 import { bootRouteFeatures } from './features/route-loader.js';
-import { bootWorkspaceRefresh, subscribeWorkspace } from './features/workspace-refresh.js';
+import { bootWorkspaceRefresh, subscribeWorkspace, syncWorkspaceState } from './features/workspace-refresh.js';
 
 installBrowserApi();
 
@@ -98,6 +98,7 @@ bindNavigationLifecycle({
         syncBrowserTimezone();
         bootShell();
         bootLivewire();
+        syncWorkspaceState();
         bootMentionInputs();
         observeMentionInputs();
         bootFileDropzones();

@@ -2532,9 +2532,7 @@ class LegacyInquiryService
                     'phase' => 'Inquiry',
                     'assignee' => (string) ($task->assignee?->name ?: 'Unassigned'),
                     'assigneeId' => $task->assignee_id ? (int) $task->assignee_id : null,
-                    'assigneeAvatar' => ($task->assignee?->id && $task->assignee?->profile_image_path)
-                        ? route('profile-images.show', ['user' => $task->assignee->id, 'filename' => basename($task->assignee->profile_image_path)], false)
-                        : null,
+                    'assigneeAvatar' => $task->assignee?->profileImageUrl(),
                     'due' => $due,
                     'dueValue' => $dueDate ?: '',
                     'dueDisplay' => $task->due_date?->format('M j, Y') ?? 'Set due date',

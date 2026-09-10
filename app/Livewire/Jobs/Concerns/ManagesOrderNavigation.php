@@ -186,7 +186,10 @@ trait ManagesOrderNavigation
         abort_unless($this->selectedJobId && $this->detailTab === 'overview', 422);
         $user = auth()->user();
         $job = app(VisibleOrderQuery::class)->base($user, $this->selectedJobId);
-        app(VisibleOrderQuery::class)->loadTab($job, $user, 'overview');
+        // Phase selection only needs the workflow phase list/current phase. Loading
+        // the full overview here duplicates products, documents, shipments, tasks,
+        // and activity hydration that the progressive loaders handle separately.
+        app(VisibleOrderQuery::class)->loadOverviewSummary($job, $user);
 
         $phase = $job->workflow?->phases?->firstWhere('id', $phaseId);
         abort_unless($phase, 404);

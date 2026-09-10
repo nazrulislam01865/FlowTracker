@@ -62,7 +62,10 @@ class TaskService
             ],
         );
 
-        return $task->refresh();
+        $task = $task->refresh();
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->updateNextTaskAssignee($task);
+
+        return $task;
     }
 
     /**
@@ -102,7 +105,10 @@ class TaskService
             ],
         );
 
-        return $task->refresh();
+        $task = $task->refresh();
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->updateNextTaskAssignee($task);
+
+        return $task;
     }
 
     public function visibleQuery(User $user): Builder
@@ -184,6 +190,11 @@ class TaskService
             'url' => $url,
         ]);
 
+        // Evidence can activate a conditional optional task. Invalidate only
+        // this Order's tiny workflow read model; normal workflow/task business
+        // logic remains unchanged and no full Order graph is rebuilt here.
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $task->flow_job_id);
+
         // The link is already persisted and the next render reads document
         // evidence directly from task_links. Do not run the parent Order/phase
         // lifecycle from inside this resource-save request: doing so can change
@@ -203,6 +214,8 @@ class TaskService
         $this->record($task, $actor, 'task.link_removed', 'External link removed.', [
             'task_link_id' => $linkId,
         ]);
+
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $task->flow_job_id);
     }
 
     public function updateDueDate(Task $task, ?string $dueDate, User $actor): Task
@@ -215,6 +228,75 @@ class TaskService
         $this->record($task, $actor, 'task.due_date_updated', $this->changeDescription('Due date', $old, $new));
 
         return app(OrderTaskFlagService::class)->syncTask($task->refresh());
+    }
+
+    /**
+     * Persist an explicit manual assignee change without running status/progress
+     * recalculation that cannot be affected by assignee_id.
+     *
+     * The normal audit, membership, notification and materialized next-action
+     * contracts are preserved. The caller may preload assignee + job.members so
+     * the hot Order Details inline path can complete without re-reading them.
+     */
+    public function updateAssignee(Task $task, ?User $assignee, User $actor): Task
+    {
+        abort_unless(app(AccessControlService::class)->canAssignTask($actor, $task), 403);
+        abort_if($assignee && ! $assignee->is_active, 404);
+
+        $task->loadMissing('assignee:id,name,profile_image_path');
+
+        $oldAssigneeId = $task->assignee_id ? (int) $task->assignee_id : null;
+        $newAssigneeId = $assignee?->id ? (int) $assignee->id : null;
+        $oldDisplay = (string) ($task->assignee?->name ?: 'Unassigned');
+        $newDisplay = (string) ($assignee?->name ?: 'Unassigned');
+
+        $task->update(['assignee_id' => $newAssigneeId]);
+
+        if ($newAssigneeId) {
+            $job = $task->relationLoaded('job') ? $task->getRelation('job') : null;
+            $memberAlreadyLoaded = $job
+                && $job->relationLoaded('members')
+                && $job->members->contains(fn (FlowJobMember $member) => (int) $member->user_id === $newAssigneeId);
+
+            if (! $memberAlreadyLoaded) {
+                FlowJobMember::firstOrCreate(
+                    ['flow_job_id' => $task->flow_job_id, 'user_id' => $newAssigneeId],
+                    ['access_level' => 'member', 'can_manage_tasks' => false, 'can_upload_documents' => true, 'can_view_financials' => false],
+                );
+            }
+        }
+
+        // Keep the already-loaded relation coherent for the JSON response and
+        // notification pipeline without another Task/User round trip.
+        $task->setRelation('assignee', $assignee);
+
+        // Task + Activity are both observed by WorkspaceDataObserver. Their
+        // transaction already advances the workspace data version after commit,
+        // which invalidates the versioned dashboard/report/shell cache namespace.
+        // Do not also delete 15 cache keys per notification recipient here.
+        $this->record(
+            $task,
+            $actor,
+            'task.field_updated',
+            $this->changeDescription('Assignee', $oldDisplay, $newDisplay),
+            [
+                'field' => 'assignee_id',
+                'old' => $oldDisplay,
+                'new' => $newDisplay,
+                'mention_user_ids' => [],
+                'mention_text' => null,
+                'old_assignee_id' => $oldAssigneeId,
+                'new_assignee_id' => $newAssigneeId,
+            ],
+            refreshTask: false,
+            invalidateNotificationCaches: false,
+        );
+
+        // Assignment changes cannot alter task flags, progress or stage
+        // completion. Only the cached Next Action assignee needs synchronization.
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->updateNextTaskAssignee($task);
+
+        return $task;
     }
 
     public function updateDetailField(Task $task, string $field, mixed $value, User $actor): Task
@@ -490,6 +572,7 @@ class TaskService
         $done = $task->checklistItems()->where('is_completed', true)->count();
         $progress = (int) round(($done / $total) * 100);
         $task->update(['progress' => min(99, $progress)]);
+        app(\App\Services\Orders\OrderWorkflowSummaryService::class)->markStale((int) $task->flow_job_id);
     }
 
     private function refreshJobState(Task $task, User $actor): void
@@ -506,7 +589,15 @@ class TaskService
         }
     }
 
-    private function record(Task $task, User $actor, string $event, string $description, array $meta = []): void
+    private function record(
+        Task $task,
+        User $actor,
+        string $event,
+        string $description,
+        array $meta = [],
+        bool $refreshTask = true,
+        bool $invalidateNotificationCaches = true,
+    ): void
     {
         $task->activities()->create([
             'user_id' => $actor->id,
@@ -515,7 +606,9 @@ class TaskService
             'meta' => $meta ?: null,
         ]);
 
-        $job = $task->job()->first();
+        $job = $task->relationLoaded('job')
+            ? $task->getRelation('job')
+            : $task->job()->first();
         if ($job) {
             $job->activities()->create([
                 'user_id' => $actor->id,
@@ -525,7 +618,10 @@ class TaskService
             ]);
         }
 
-        $fresh = $task->refresh();
+        $fresh = $refreshTask ? $task->refresh() : $task;
+        if ($job && ! $fresh->relationLoaded('job')) {
+            $fresh->setRelation('job', $job);
+        }
         $isAssignment = ($meta['field'] ?? null) === 'assignee_id' || isset($meta['changes']['assignee_id']);
         $type = ($fresh->needs_attention || str_contains($event, 'attention')) ? 'risk' : ($isAssignment ? 'assignment' : ($event === 'task.comment' ? 'comment' : 'update'));
         $mentionIds = collect($meta['mention_user_ids'] ?? [])
@@ -543,6 +639,7 @@ class TaskService
             $actor,
             [],
             $mentionIds,
+            $invalidateNotificationCaches,
         );
 
         if ($mentionIds) {

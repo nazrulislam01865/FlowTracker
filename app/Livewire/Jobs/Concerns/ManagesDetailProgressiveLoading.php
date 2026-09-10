@@ -57,6 +57,10 @@ trait ManagesDetailProgressiveLoading
                 return;
             }
 
+            if ($this->orderDetailSectionsReady[$section]) {
+                return;
+            }
+
             $this->orderDetailSectionsReady[$section] = true;
             return;
         }
@@ -74,6 +78,10 @@ trait ManagesDetailProgressiveLoading
             return;
         }
         if (! array_key_exists($section, $this->orderDetailSectionsReady)) {
+            return;
+        }
+
+        if ($this->orderDetailSectionsReady[$section]) {
             return;
         }
 

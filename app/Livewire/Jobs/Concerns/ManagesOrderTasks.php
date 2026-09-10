@@ -36,10 +36,17 @@ trait ManagesOrderTasks
         $updatedTask = null;
         $result = $this->persistInlineEdit('task assignee', function () use ($taskId, $assigneeId, &$assignee, &$updatedTask) {
             abort_unless($this->selectedJobId, 422);
-            $task = Task::where('flow_job_id', $this->selectedJobId)->findOrFail($taskId);
+            $actor = auth()->user();
+            $task = Task::query()
+                ->where('flow_job_id', $this->selectedJobId)
+                ->with([
+                    'assignee:id,name,profile_image_path',
+                    'job.members',
+                ])
+                ->findOrFail($taskId);
             $assigneeId = $assigneeId === '' ? null : (int) $assigneeId;
             $assignee = $assigneeId ? User::where('is_active', true)->findOrFail($assigneeId) : null;
-            $updatedTask = app(TaskService::class)->updateDetailField($task, 'assignee_id', $assigneeId, auth()->user());
+            $updatedTask = app(TaskService::class)->updateAssignee($task, $assignee, $actor);
         });
 
         if (($result['ok'] ?? false) && $updatedTask) {
@@ -165,6 +172,7 @@ trait ManagesOrderTasks
         }
 
         $this->cancelAddOrderTask();
+        $this->dispatchOrderRuntimeRefresh();
         session()->flash('success', 'Order task added.');
     }
 
@@ -200,6 +208,7 @@ trait ManagesOrderTasks
             $job = app(CompleteOrderPhase::class)->handle(app(VisibleOrderQuery::class)->detail(auth()->user(), $this->selectedJobId), auth()->user());
             $this->expandedPhaseIds = $job->phase ? [(int) $job->phase->id] : [];
             $this->syncOverviewWorkflowSelectionToCurrentPhase();
+            $this->dispatchOrderRuntimeRefresh();
             session()->flash('success', 'Phase completed and the next configured phase is active.');
         } catch (Throwable $e) {
             if (trim((string) $e->getMessage()) === \App\Services\Orders\OrderHoldService::BLOCKED_ACTIVITY_MESSAGE) {
@@ -256,6 +265,7 @@ trait ManagesOrderTasks
     {
         abort_unless($this->selectedJobId, 422);
         app(DeleteOrderTask::class)->handle(auth()->user(), $this->selectedJobId, $id);
+        $this->dispatchOrderRuntimeRefresh();
 
         if ((int) $this->selectedTaskId === $id) {
             $this->closeTask();
@@ -479,7 +489,10 @@ trait ManagesOrderTasks
     /** @return array{taskId:int, assigneeId:int|string, assigneeName:string, avatarUrl:string} */
     private function dispatchTaskAssigneeSync(Task|int $task): array
     {
-        $task = $task instanceof Task ? $task->refresh() : Task::query()->findOrFail($task);
+        // TaskService mutation methods already return the canonical saved Task.
+        // Re-query only when a caller supplies an id; otherwise keep the same
+        // request-local model and load just the relation required by the payload.
+        $task = $task instanceof Task ? $task : Task::query()->findOrFail($task);
         $task->loadMissing('assignee:id,name,profile_image_path');
 
         $payload = [
@@ -501,7 +514,21 @@ trait ManagesOrderTasks
             avatarUrl: $payload['avatarUrl'],
         );
 
+        // Workflow task actions run inside the isolated OrderWorkflowSection.
+        // The summary cards live in the parent Jobs component, so without this
+        // event their saved progress/next-action state stays stale until a full
+        // browser refresh. Reuse the existing runtime refresh contract instead
+        // of duplicating workflow/progress business logic in the UI.
+        $this->dispatchOrderRuntimeRefresh();
+
         return $payload;
+    }
+
+    private function dispatchOrderRuntimeRefresh(): void
+    {
+        if (! $this->selectedJobId) return;
+
+        $this->dispatch('order-runtime-refreshed', orderId: (int) $this->selectedJobId);
     }
 
     private function loadTaskForm(int $id): void

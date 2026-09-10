@@ -42,6 +42,11 @@ final class VisibleOrderQuery
         return $this->jobs->loadVisibleDetailTab($order, $actor, $tab);
     }
 
+    public function loadOverviewShell(FlowJob $order, User $actor): FlowJob
+    {
+        return $this->jobs->loadVisibleOverviewShell($order, $actor);
+    }
+
     public function loadOverviewSummary(FlowJob $order, User $actor): FlowJob
     {
         return $this->jobs->loadVisibleOverviewSummary($order, $actor);

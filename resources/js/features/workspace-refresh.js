@@ -1,6 +1,6 @@
 import { CONNECTION_STATES, LIVEWIRE_EVENTS, REALTIME_EVENTS } from '../core/events.js';
 import { metaContent } from '../core/meta.js';
-import { setCancelledOrderCount, setMyWorkCount, setNotificationUnreadCount } from '../components/sidebar-counters.js';
+import { syncPersistedCounters } from '../core/persisted-counters.js';
 
 const state = {
     version: null,
@@ -12,43 +12,26 @@ const state = {
     pollTimer: null,
     pollInterval: null,
     bound: false,
-    syncing: false,
     connectionBound: false,
 };
 
-const endpoint = () => metaContent('flowtrack-notification-count-url') || null;
 const workspaceChannelName = () => metaContent('flowtrack-reverb-workspace-channel') || null;
 const dispatchRefresh = () => window.Livewire?.dispatch?.(LIVEWIRE_EVENTS.WORKSPACE_REFRESH);
 
 export const syncWorkspaceState = async ({ dispatchOnVersionChange = true } = {}) => {
-    const url = endpoint();
-    if (!url || document.hidden || state.syncing) return;
-    state.syncing = true;
-    try {
-        const response = await fetch(url, {
-            headers: { Accept: 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-FlowTrack-Background': '1' },
-            credentials: 'same-origin',
-            cache: 'no-store',
-        });
-        if (!response.ok) return;
-        const data = await response.json();
-        setNotificationUnreadCount(data?.count ?? 0);
-        setMyWorkCount(data?.my_work_count ?? 0);
-        setCancelledOrderCount(data?.cancelled_order_count ?? 0);
+    if (!metaContent('flowtrack-notification-count-url') || document.hidden) return;
 
-        const nextVersion = String(data?.data_version ?? '1');
-        if (state.version === null) {
-            state.version = nextVersion;
-            return;
-        }
-        if (nextVersion !== state.version) {
-            state.version = nextVersion;
-            if (dispatchOnVersionChange) dispatchRefresh();
-        }
-    } catch (_) {
-        // Focus, reconnect, or the next polling interval retries.
-    } finally {
-        state.syncing = false;
+    const data = await syncPersistedCounters();
+    if (!data) return;
+
+    const nextVersion = String(data?.data_version ?? '1');
+    if (state.version === null) {
+        state.version = nextVersion;
+        return;
+    }
+    if (nextVersion !== state.version) {
+        state.version = nextVersion;
+        if (dispatchOnVersionChange) dispatchRefresh();
     }
 };
 

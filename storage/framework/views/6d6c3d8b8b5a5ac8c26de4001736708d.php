@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'nextTask' => null, 'currentTasks' => collect()]));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['job', 'summary' => []]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['job', 'nextTask' => null, 'currentTasks' => collect()]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['job', 'summary' => []]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -28,14 +28,14 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 <?php
-    $phases = \App\Support\OrderDetailPresenter::phases($job);
-    $stageCount = max(1, $phases->count());
-    $currentPhaseNumber = \App\Support\OrderDetailPresenter::currentPhaseNumber($job);
-    $completedTasks = \App\Support\OrderDetailPresenter::completedCount($currentTasks);
-    $applicableTasks = $currentTasks->reject(fn($task) => \App\Support\OrderDetailPresenter::isSkippedTask($task))->values();
-    $applicableCount = $applicableTasks->count();
-    $progress = max(0, min(100, (int) ($job->progress ?? 0)));
-    $nextOwner = $nextTask?->assignee?->name ?: $job->owner?->name ?: 'Unassigned';
+    $stageCount = max(1, (int) ($summary['stage_count'] ?? 1));
+    $currentPhaseNumber = max(1, (int) ($summary['current_phase_sequence'] ?? ($job->phase?->sequence ?? 1)));
+    $completedTasks = max(0, (int) ($summary['current_completed_task_count'] ?? 0));
+    $applicableCount = max(0, (int) ($summary['current_applicable_task_count'] ?? 0));
+    $progress = max(0, min(100, (int) ($summary['progress_percent'] ?? ($job->progress ?? 0))));
+    $nextTaskId = (int) ($summary['next_task_id'] ?? 0);
+    $nextTaskTitle = trim((string) ($summary['next_task_title'] ?? ''));
+    $nextOwner = trim((string) ($summary['next_task_assignee_name'] ?? '')) ?: ($job->owner?->name ?: 'Unassigned');
     $dependency = $currentPhaseNumber <= 1 ? 'No dependency' : 'Previous stage complete';
 ?>
 <section class="summary-grid ft-order-summary-grid" aria-label="Order workflow summary">
@@ -44,7 +44,7 @@ unset($__defined_vars, $__key, $__value); ?>
         <div>
             <div class="summary-label">Current stage</div>
             <div class="summary-value">
-                <span><?php echo e($job->phase?->name ?: 'Not configured'); ?></span>
+                <span><?php echo e($summary['current_phase_name'] ?? ($job->phase?->name ?: 'Not configured')); ?></span>
                 · Stage <span><?php echo e($currentPhaseNumber); ?></span> of <?php echo e($stageCount); ?>
 
             </div>
@@ -66,10 +66,10 @@ unset($__defined_vars, $__key, $__value); ?>
         <div class="summary-ic">⌘</div>
         <div>
             <div class="summary-label"><span class="help" title="The next unlocked task from this Order's saved workflow setup.">Next required action</span></div>
-            <div class="summary-value"><?php echo e($nextTask?->title ?: ($job->completed_at ? 'Order completed' : 'No action available')); ?></div>
+            <div class="summary-value"><?php echo e($nextTaskTitle !== '' ? $nextTaskTitle : ($job->completed_at ? 'Order completed' : 'No action available')); ?></div>
             <div class="summary-sub"><span><?php echo e($nextOwner); ?></span> · <span><?php echo e($dependency); ?></span></div>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($nextTask): ?>
-                <button type="button" class="btn primary small summary-cta" wire:click="openTask(<?php echo e((int) $nextTask->id); ?>)">Take action</button>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($nextTaskId > 0): ?>
+                <button type="button" class="btn primary small summary-cta" wire:click="openTask(<?php echo e($nextTaskId); ?>)">Take action</button>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
     </div>

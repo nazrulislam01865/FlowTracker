@@ -31,8 +31,8 @@ class BrandingService
                 'name' => $workspace?->name ?: 'FlowTrack',
                 'logo_path' => $workspace?->logo_path,
                 'favicon_path' => $workspace?->favicon_path,
-                'logo_url' => $this->assetUrl('logo', $workspace?->logo_path),
-                'favicon_url' => $this->assetUrl('favicon', $workspace?->favicon_path),
+                'logo_url' => $this->assetUrl((int) ($workspace?->id ?: $configuredWorkspaceId), 'logo', $workspace?->logo_path),
+                'favicon_url' => $this->assetUrl((int) ($workspace?->id ?: $configuredWorkspaceId), 'favicon', $workspace?->favicon_path),
             ];
         });
     }
@@ -65,11 +65,9 @@ class BrandingService
         return $this->removeAsset('favicon_path');
     }
 
-    public function assetUrl(string $type, ?string $path): ?string
+    public function assetUrl(int $workspaceId, string $type, ?string $path): ?string
     {
-        if (!$path) return null;
-
-        return '/branding-assets/'.$type.'/'.rawurlencode(basename($path));
+        return app(StoredAssetUrlService::class)->brandingAssetUrl($workspaceId, $type, $path);
     }
 
     private function storeAsset(string $type, string $column, UploadedFile $file): Workspace
