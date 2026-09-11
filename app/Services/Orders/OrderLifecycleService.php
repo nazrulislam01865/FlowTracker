@@ -52,6 +52,12 @@ final class OrderLifecycleService
         return $this->legacy->updateUrgencies(...$arguments);
     }
 
+    public function updateShippingSelection(mixed ...$arguments): mixed
+    {
+        $this->assertOrderActivityAllowed($arguments);
+        return $this->legacy->updateShippingSelection(...$arguments);
+    }
+
     public function updateOwner(mixed ...$arguments): mixed
     {
         $this->assertOrderActivityAllowed($arguments);

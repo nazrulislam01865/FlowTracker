@@ -115,6 +115,56 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringContainsString("CreateOrderShippingMethodPresenter::methodKind(\$method) === 'express'", $service);
     }
 
+    public function test_order_shipment_urgency_and_primary_shipping_method_stay_synchronized_both_ways(): void
+    {
+        $shipmentService = file_get_contents(app_path('Services/OrderShipmentService.php'));
+        $legacyJobService = file_get_contents(app_path('Services/LegacyJobService.php'));
+        $shipmentManager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderShipments.php'));
+        $orderManager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderDetail.php'));
+        $workflow = file_get_contents(app_path('Livewire/Jobs/OrderWorkflowSection.php'));
+        $presenter = file_get_contents(app_path('Support/CreateOrderShippingMethodPresenter.php'));
+        $viewService = file_get_contents(app_path('Services/OrderDetailViewService.php'));
+        $inline = file_get_contents(resource_path('views/components/jobs/order-detail/shipment-urgency-inline.blade.php'));
+
+        // Planning can represent the complete shipping choice, not only the
+        // Express urgency IDs. Sea/Air/Road and Express levels use one safe
+        // composite value and one selector.
+        $this->assertStringContainsString('orderShippingOptions', $presenter);
+        $this->assertStringContainsString("'road' => 'Road Freight'", $presenter);
+        $this->assertStringContainsString("return 'm:'.\$methodId.':u:'", $presenter);
+        $this->assertStringContainsString("'shipmentShippingOptions' => \$shippingOptions->all()", $viewService);
+        $this->assertStringContainsString('updateJobShippingSelection', $inline);
+        $this->assertStringContainsString('shipmentShippingValue', $inline);
+
+        // Order-level selection -> primary shipment method/service level.
+        $this->assertStringContainsString('syncPrimaryShipmentFromOrderShippingSelection', $shipmentService);
+        $this->assertStringContainsString("'shipment_method_ids' => [(int) \$method->id]", $shipmentService);
+        $this->assertStringContainsString("'shipment_urgency_ids' => \$normalizedUrgencyId ? [(int) \$normalizedUrgencyId] : []", $shipmentService);
+        $this->assertStringContainsString("'shipment_method_id' => \$method->id", $shipmentService);
+        $this->assertStringContainsString('updateShippingSelection', $legacyJobService);
+        $this->assertStringContainsString('UpdateOrderShippingSelection', $orderManager);
+
+        // Legacy urgency-only callers remain supported and still select Express.
+        $this->assertStringContainsString('syncPrimaryShipmentFromOrderUrgency', $shipmentService);
+        $this->assertStringContainsString("if (\$field === 'shipment_urgency_ids')", $legacyJobService);
+
+        // Primary shipment method -> Order-level method + urgency/default selection.
+        $this->assertStringContainsString('syncLegacyPrimaryShippingSelection', $shipmentService);
+        $this->assertStringContainsString('if ($locked->is_primary)', $shipmentService);
+        $this->assertStringContainsString("'shipment_method_ids' => \$shipment->shipment_method_id ? [(int) \$shipment->shipment_method_id] : []", $shipmentService);
+
+        // Both isolated Livewire directions refresh immediately without a browser refresh.
+        $this->assertStringContainsString("'ft-shipment-urgency-updated'", $shipmentManager);
+        $this->assertStringContainsString('selectionValue(', $shipmentManager);
+        $this->assertStringContainsString("'order-runtime-refreshed'", $shipmentManager);
+        $this->assertStringContainsString("'order-shipping-selection-updated'", $orderManager);
+        $this->assertStringContainsString("#[On('order-shipping-selection-updated')]", $workflow);
+
+        // Method/service changes must not leave a stale carrier label behind.
+        $this->assertStringContainsString('A shipping selection change invalidates any label', $shipmentService);
+        $this->assertStringContainsString('$this->reopenTrackingTask($lockedJob, $actor);', $shipmentService);
+    }
+
     public function test_tracking_uses_courier_master_data_and_shipping_method_eta_copy_is_hidden(): void
     {
         $pageData = file_get_contents(app_path('Livewire/Jobs/Concerns/BuildsOrderPageData.php'));

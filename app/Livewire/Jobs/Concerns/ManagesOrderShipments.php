@@ -10,6 +10,7 @@ use App\Services\LocationMasterDataService;
 use App\Services\OrderTaskSequenceService;
 use App\Services\OrderWorkflowActionService;
 use App\Services\TaskService;
+use App\Support\CreateOrderShippingMethodPresenter;
 use Illuminate\Validation\ValidationException;
 
 /**
@@ -379,10 +380,42 @@ trait ManagesOrderShipments
         $this->resetValidation('shipmentMethod');
 
         try {
-            app(OrderShipmentService::class)->updateShippingMethod($task, $shipment, auth()->user(), $methodId, $urgencyId);
+            $updatedShipment = app(OrderShipmentService::class)->updateShippingMethod($task, $shipment, auth()->user(), $methodId, $urgencyId);
         } catch (ValidationException $exception) {
             $this->applyShipmentValidation($exception);
             return;
+        }
+
+        if ($updatedShipment->is_primary) {
+            // The header/planning selector lives in the lightweight parent
+            // Order shell while Task 5.1 is an isolated Workflow child. Send
+            // the complete shipping selection immediately so Sea/Air/Road do
+            // not collapse to "Normal Service", then refresh the parent shell
+            // from the canonical saved Order fields.
+            $updatedShipment->loadMissing(['shippingMethod', 'shipmentUrgency']);
+            $method = $updatedShipment->shippingMethod;
+            $urgency = $updatedShipment->shipmentUrgency;
+            $methodKind = CreateOrderShippingMethodPresenter::methodKind($method);
+            $selectionName = $methodKind === 'express'
+                ? ($urgency ? CreateOrderShippingMethodPresenter::urgencyLabel($urgency) : 'Normal Service')
+                : CreateOrderShippingMethodPresenter::methodLabel($method);
+            $selectionTone = $methodKind === 'express' && $urgency
+                ? CreateOrderShippingMethodPresenter::urgencyKind($urgency)
+                : 'normal';
+            $selectionValue = CreateOrderShippingMethodPresenter::selectionValue(
+                (int) $updatedShipment->shipment_method_id,
+                $updatedShipment->shipment_urgency_id ? (int) $updatedShipment->shipment_urgency_id : null,
+            );
+
+            $this->dispatch(
+                'ft-shipment-urgency-updated',
+                jobId: (int) $updatedShipment->flow_job_id,
+                value: $selectionValue,
+                id: $selectionValue,
+                name: $selectionName,
+                tone: $selectionTone,
+            );
+            $this->dispatch('order-runtime-refreshed', orderId: (int) $updatedShipment->flow_job_id);
         }
     }
 

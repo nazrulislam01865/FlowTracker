@@ -1872,7 +1872,20 @@ class LegacyJobService
 
         abort_if(count($urgencyIds) > 1, 422, $config['label'].' accepts only one selection.');
 
-        $job->update([$field => $urgencyIds]);
+        if ($field === 'shipment_urgency_ids') {
+            // Shipment urgency is the Express service-level view of the same
+            // canonical shipping selection used by Task 5.1. Let the shipment
+            // service update both legacy Order fields and the primary row in one
+            // transaction so a failed/dispatched change can never leave them split.
+            app(OrderShipmentService::class)->syncPrimaryShipmentFromOrderUrgency(
+                $job,
+                $actor,
+                $urgencyIds[0] ?? null,
+            );
+        } else {
+            $job->update([$field => $urgencyIds]);
+        }
+
         $job->activities()->create([
             'user_id' => $actor->id,
             'event' => $config['event'],
@@ -1887,6 +1900,35 @@ class LegacyJobService
         );
 
         return $job->refresh();
+    }
+
+
+    public function updateShippingSelection(FlowJob $job, int $methodId, ?int $urgencyId, User $actor): FlowJob
+    {
+        $this->assertEditable($job, $actor);
+
+        app(OrderShipmentService::class)->syncPrimaryShipmentFromOrderShippingSelection(
+            $job,
+            $actor,
+            $methodId,
+            $urgencyId,
+        );
+
+        $job = $job->refresh();
+        $job->activities()->create([
+            'user_id' => $actor->id,
+            'event' => 'job.shipment_method_updated',
+            'description' => 'Shipment method / urgency updated',
+        ]);
+        app(NotificationService::class)->notifyJobParticipants(
+            $job,
+            'Order shipment method updated',
+            $job->displayOrderNumber().' · Shipment method / urgency updated',
+            'update',
+            $actor,
+        );
+
+        return $job;
     }
 
     public function updateOwner(FlowJob $job, ?int $ownerId, User $actor): FlowJob

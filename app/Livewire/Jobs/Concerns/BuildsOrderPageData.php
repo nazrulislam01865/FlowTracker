@@ -640,13 +640,17 @@ trait BuildsOrderPageData
         $workflowSummary = $this->detailTab === 'overview'
             ? app(OrderWorkflowSummaryService::class)->forViewer($selected, $user)
             : [];
-        $shipmentMethodOptions = collect();
+        // The Planning & ownership selector now represents the complete shipping
+        // choice (Sea/Air/Road or Express urgency), so it needs the active method
+        // list in addition to urgency master data. MasterDataService keeps this
+        // collection cached; this does not hydrate Workflow task relations.
+        $shipmentMethodOptions = $master->active('shipment_method');
         $courierOptions = collect();
 
         $shipmentCountryOptions = collect();
         $shipmentStateOptions = collect();
 
-        $orderDetailContext = app(OrderDetailViewService::class)->buildSummary($selected, $user, $shipmentUrgencyOptions);
+        $orderDetailContext = app(OrderDetailViewService::class)->buildSummary($selected, $user, $shipmentUrgencyOptions, $shipmentMethodOptions);
         $orderDetailContext['workflowSummary'] = $workflowSummary;
         $orderDetailContext['workflowName'] = (string) ($workflowSummary['workflow_name'] ?? 'FlowTrack Order Workflow');
         $orderDetailContext['shipmentMethods'] = $shipmentMethodOptions;

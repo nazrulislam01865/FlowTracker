@@ -17,7 +17,7 @@ class OrderDetailsFullIsolationPerformanceTest extends TestCase
 
         $this->assertStringContainsString('OrderWorkflowSummaryService::class)->forViewer($selected, $user)', $jobPage);
         $this->assertStringNotContainsString('$orderQuery->loadOverviewShell($selected, $user);', $jobPage);
-        $this->assertStringContainsString('->buildSummary($selected, $user, $shipmentUrgencyOptions)', $builder);
+        $this->assertStringContainsString('->buildSummary($selected, $user, $shipmentUrgencyOptions, $shipmentMethodOptions)', $builder);
         $this->assertStringContainsString('->summaryContext($selected, $user)', $builder);
 
         $prepareStart = strpos($detail, 'private function prepareSelectedJob(int $id): void');

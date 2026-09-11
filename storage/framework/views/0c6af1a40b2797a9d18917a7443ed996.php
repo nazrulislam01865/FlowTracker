@@ -41,17 +41,48 @@ foreach ($attributes->all() as $__key => $__value) {
 unset($__defined_vars, $__key, $__value); ?>
 
 <?php
-    $urgencyId = (string) ($context['shipmentUrgencyId'] ?? '');
-    $urgencyName = (string) ($context['shipmentUrgencyName'] ?? 'Normal Service');
-    $tone = (string) ($context['shipmentUrgencyTone'] ?? 'normal');
-    $options = collect($shipmentUrgencyOptions)
+    // Planning & ownership now edits the complete shipping selection, not only
+    // the Express urgency sub-field. Direct methods (Sea/Air/Road) and Express
+    // levels share one selector while persistence stays backward compatible.
+    $shippingOptions = collect($context['shipmentShippingOptions'] ?? [])
         ->map(fn ($option) => [
-            'id' => (int) data_get($option, 'id'),
-            'name' => (string) data_get($option, 'name'),
+            'value' => (string) data_get($option, 'value', ''),
+            'name' => (string) data_get($option, 'name', ''),
+            'tone' => (string) data_get($option, 'tone', 'normal'),
         ])
-        ->filter(fn ($option) => $option['id'] > 0 && $option['name'] !== '')
+        ->filter(fn ($option) => $option['value'] !== '' && $option['name'] !== '')
         ->values();
+    $usesCombinedShippingSelection = $shippingOptions->isNotEmpty();
+
+    // Backward-compatible fallback for any old partial render that does not yet
+    // provide shipmentShippingOptions in its context.
+    $legacyUrgencyId = (string) ($context['shipmentUrgencyId'] ?? '');
+    $legacyUrgencyName = (string) ($context['shipmentUrgencyName'] ?? 'Normal Service');
+    $legacyTone = (string) ($context['shipmentUrgencyTone'] ?? 'normal');
+
+    $selectionValue = $usesCombinedShippingSelection
+        ? (string) ($context['shipmentShippingValue'] ?? '')
+        : $legacyUrgencyId;
+    $selectionName = $usesCombinedShippingSelection
+        ? (string) ($context['shipmentShippingName'] ?? 'Normal Service')
+        : $legacyUrgencyName;
+    $selectionTone = $usesCombinedShippingSelection
+        ? (string) ($context['shipmentShippingTone'] ?? 'normal')
+        : $legacyTone;
+
+    $options = $usesCombinedShippingSelection
+        ? $shippingOptions
+        : collect($shipmentUrgencyOptions)
+            ->map(fn ($option) => [
+                'value' => (string) ((int) data_get($option, 'id')),
+                'name' => (string) data_get($option, 'name'),
+                'tone' => 'normal',
+            ])
+            ->filter(fn ($option) => $option['value'] !== '0' && $option['name'] !== '')
+            ->values();
+
     $keySuffix = $variant === 'header' ? 'header-shipment-urgency' : 'planning-shipment-urgency';
+    $wireSelectionKey = md5($selectionValue.'|'.$selectionName);
 ?>
 
 <div
@@ -65,45 +96,66 @@ unset($__defined_vars, $__key, $__value); ?>
     x-data="{
         ...window.FlowTrack.ui.inlineEdit({
             key: <?php echo \Illuminate\Support\Js::from('job-'.$job->id.'-'.$keySuffix)->toHtml() ?>,
-            label: 'shipment urgency',
-            value: <?php echo \Illuminate\Support\Js::from($urgencyId)->toHtml() ?>,
-            display: <?php echo \Illuminate\Support\Js::from($urgencyName)->toHtml() ?>
+            label: 'shipment method / urgency',
+            value: <?php echo \Illuminate\Support\Js::from($selectionValue)->toHtml() ?>,
+            display: <?php echo \Illuminate\Support\Js::from($selectionName)->toHtml() ?>
         }),
         options: <?php echo \Illuminate\Support\Js::from($options->all())->toHtml() ?>,
-        currentTone: <?php echo \Illuminate\Support\Js::from($tone)->toHtml() ?>,
+        combinedSelection: <?php echo \Illuminate\Support\Js::from($usesCombinedShippingSelection)->toHtml() ?>,
+        currentTone: <?php echo \Illuminate\Support\Js::from($selectionTone)->toHtml() ?>,
         toneFor(name) {
             const normalized = String(name || '').toLowerCase();
             if (normalized.includes('super')) return 'super-urgent';
             if (normalized.includes('urgent')) return 'urgent';
             return 'normal';
         },
+        optionFor(value) {
+            return this.options.find((option) => String(option.value) === String(value));
+        },
         syncUrgency(detail) {
             if (!detail || Number(detail.jobId) !== Number(<?php echo e($job->id); ?>)) return;
-            const nextId = String(detail.id || '');
-            const nextName = String(detail.name || 'Normal Service');
-            this.value = nextId;
-            this.draftValue = nextId;
+            const nextValue = String(detail.value ?? detail.id ?? '');
+            const option = this.optionFor(nextValue);
+            const nextName = String(detail.name || option?.name || 'Normal Service');
+            const nextTone = String(detail.tone || option?.tone || this.toneFor(nextName));
+            this.serverValue = nextValue;
+            this.value = nextValue;
+            this.savedValue = nextValue;
+            this.draftValue = nextValue;
             this.display = nextName;
-            this.currentTone = this.toneFor(nextName);
+            this.savedDisplay = nextName;
+            this.currentTone = nextTone;
+            this.editing = false;
         },
-        nameFor(id) {
-            const found = this.options.find((option) => String(option.id) === String(id));
+        nameFor(value) {
+            const found = this.optionFor(value);
             return found ? found.name : 'Normal Service';
         },
+        toneForValue(value) {
+            const found = this.optionFor(value);
+            return found?.tone || this.toneFor(found?.name || '');
+        },
         async saveUrgency() {
-            const nextId = String(this.draftValue || '');
-            const ok = await this.commit(
-                nextId,
-                this.nameFor(nextId),
-                () => $wire.updateJobUrgencies(<?php echo e($job->id); ?>, 'shipment', nextId ? [Number(nextId)] : [])
-            );
+            const nextValue = String(this.draftValue || '');
+            const nextName = this.nameFor(nextValue);
+            const saveAction = this.combinedSelection
+                ? () => $wire.updateJobShippingSelection(<?php echo e($job->id); ?>, nextValue)
+                : () => $wire.updateJobUrgencies(<?php echo e($job->id); ?>, 'shipment', nextValue ? [Number(nextValue)] : []);
+            const ok = await this.commit(nextValue, nextName, saveAction);
 
             if (ok) {
-                const nextName = this.nameFor(nextId);
-                this.syncUrgency({ jobId: <?php echo e($job->id); ?>, id: nextId, name: nextName });
-                window.dispatchEvent(new CustomEvent('ft-shipment-urgency-updated', {
-                    detail: { jobId: <?php echo e($job->id); ?>, id: nextId, name: nextName }
-                }));
+                const canonicalValue = String(this.lastResponse?.value ?? nextValue);
+                const canonicalName = String(this.lastResponse?.display ?? this.nameFor(canonicalValue));
+                const canonicalTone = String(this.lastResponse?.tone ?? this.toneForValue(canonicalValue));
+                const detail = {
+                    jobId: <?php echo e($job->id); ?>,
+                    value: canonicalValue,
+                    id: canonicalValue,
+                    name: canonicalName,
+                    tone: canonicalTone,
+                };
+                this.syncUrgency(detail);
+                window.dispatchEvent(new CustomEvent('ft-shipment-urgency-updated', { detail }));
                 await $wire.$refresh();
             }
         }
@@ -115,23 +167,23 @@ unset($__defined_vars, $__key, $__value); ?>
     }"
     x-on:click.outside="if (editing && status !== 'saving') cancelEdit()"
     x-on:ft-shipment-urgency-updated.window="syncUrgency($event.detail)"
-    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-'.e($job->id).'-'.e($keySuffix).'-'.e($urgencyId ?: 'normal').''; ?>wire:key="job-<?php echo e($job->id); ?>-<?php echo e($keySuffix); ?>-<?php echo e($urgencyId ?: 'normal'); ?>"
+    <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'job-'.e($job->id).'-'.e($keySuffix).'-'.e($wireSelectionKey).''; ?>wire:key="job-<?php echo e($job->id); ?>-<?php echo e($keySuffix); ?>-<?php echo e($wireSelectionKey); ?>"
 >
     <span x-show="!editing" class="ft-order-urgency-display">
         <span
             class="urgency-badge"
             :class="{ 'su': currentTone === 'super-urgent', 'u': currentTone === 'urgent', 'n': currentTone === 'normal' }"
             x-text="display"
-            title="Shipment urgency controls packing, carrier-booking, and dispatch priority."
-        ><?php echo e($urgencyName); ?></span>
+            title="Shipping method and urgency used for the primary shipment."
+        ><?php echo e($selectionName); ?></span>
 
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditJob): ?>
             <button
                 type="button"
                 class="inline-edit <?php echo e($variant === 'header' ? 'ft-order-command-icon-btn' : ''); ?>"
                 x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.urgencySelect.focus())"
-                title="Edit shipment urgency"
-                aria-label="Edit shipment urgency"
+                title="Edit shipment method / urgency"
+                aria-label="Edit shipment method / urgency"
             >✎</button>
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
     </span>
@@ -144,11 +196,13 @@ unset($__defined_vars, $__key, $__value); ?>
                 :disabled="status === 'saving'"
                 x-on:keydown.escape.prevent.stop="cancelEdit()"
                 x-on:keydown.enter.prevent.stop="saveUrgency()"
-                aria-label="Shipment urgency"
+                aria-label="Shipment method / urgency"
             >
-                <option value="">Normal Service</option>
-                <template x-for="option in options" :key="option.id">
-                    <option :value="String(option.id)" x-text="option.name"></option>
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($usesCombinedShippingSelection)): ?>
+                    <option value="">Normal Service</option>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
+                <template x-for="option in options" :key="option.value">
+                    <option :value="String(option.value)" x-text="option.name"></option>
                 </template>
             </select>
 
@@ -158,8 +212,8 @@ unset($__defined_vars, $__key, $__value); ?>
                     class="ft-order-inline-icon-action ft-order-inline-icon-action--confirm"
                     :disabled="status === 'saving'"
                     x-on:click.stop="saveUrgency()"
-                    title="Save shipment urgency"
-                    aria-label="Save shipment urgency"
+                    title="Save shipment method / urgency"
+                    aria-label="Save shipment method / urgency"
                 ><span x-show="status !== 'saving'">✓</span><span x-cloak x-show="status === 'saving'">…</span></button>
 
                 <button
@@ -167,8 +221,8 @@ unset($__defined_vars, $__key, $__value); ?>
                     class="ft-order-inline-icon-action ft-order-inline-icon-action--cancel"
                     :disabled="status === 'saving'"
                     x-on:click.stop="cancelEdit()"
-                    title="Cancel shipment urgency edit"
-                    aria-label="Cancel shipment urgency edit"
+                    title="Cancel shipment method / urgency edit"
+                    aria-label="Cancel shipment method / urgency edit"
                 >×</button>
             </span>
         </span>

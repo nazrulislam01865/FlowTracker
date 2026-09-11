@@ -6,6 +6,7 @@ use App\Models\FlowJob;
 use App\Models\User;
 use App\Support\JobDetailPresenter;
 use App\Support\OrderDetailPresenter;
+use App\Support\CreateOrderShippingMethodPresenter;
 use Illuminate\Support\Collection;
 
 /**
@@ -23,7 +24,7 @@ class OrderDetailViewService
      * of this method. Those values now belong to the isolated Workflow child
      * component, so the initial GET does not pay their CPU/hydration cost.
      */
-    public function buildSummary(FlowJob $job, User $user, Collection $shipmentUrgencyOptions): array
+    public function buildSummary(FlowJob $job, User $user, Collection $shipmentUrgencyOptions, ?Collection $shipmentMethodOptions = null): array
     {
         $access = app(AccessControlService::class);
         $canEdit = $access->canEditVisibleJob($user, $job);
@@ -39,6 +40,14 @@ class OrderDetailViewService
             : '';
 
         $shipmentUrgencyName = OrderDetailPresenter::shipmentUrgencyName($job, $shipmentUrgencyOptions);
+        $shipmentMethodOptions ??= collect();
+        $shippingState = CreateOrderShippingMethodPresenter::orderShippingState(
+            $shipmentMethodOptions,
+            $shipmentUrgencyOptions,
+            (array) ($job->shipment_method_ids ?? []),
+            (array) ($job->shipment_urgency_ids ?? []),
+        );
+        $shippingOptions = CreateOrderShippingMethodPresenter::orderShippingOptions($shipmentMethodOptions, $shipmentUrgencyOptions);
         $masterData = app(MasterDataService::class);
         $remoteArea = $masterData->remoteAreaForPostalCode($job->shipping_postal_code);
 
@@ -68,6 +77,12 @@ class OrderDetailViewService
             'shipmentUrgencyId' => OrderDetailPresenter::shipmentUrgencyId($job),
             'shipmentUrgencyName' => $shipmentUrgencyName,
             'shipmentUrgencyTone' => OrderDetailPresenter::urgencyTone($shipmentUrgencyName),
+            // Canonical combined shipping state for the header/planning inline
+            // control. Legacy urgency keys above remain for backward compatibility.
+            'shipmentShippingValue' => $shippingState['value'],
+            'shipmentShippingName' => $shippingState['name'],
+            'shipmentShippingTone' => $shippingState['tone'],
+            'shipmentShippingOptions' => $shippingOptions->all(),
             'remoteArea' => $remoteArea ? [
                 'id' => (int) $remoteArea->id,
                 'name' => trim((string) $remoteArea->name),

@@ -205,6 +205,17 @@ final class OrderWorkflowSection extends Component
         // Rerender workflow only.
     }
 
+    #[On('order-shipping-selection-updated')]
+    public function refreshShippingSelection(int $orderId): void
+    {
+        // Planning & ownership is rendered by the parent component. When that
+        // selector changes the canonical primary shipping choice, rerender this
+        // isolated Workflow child so Task 5.1 reflects it immediately.
+        if ($orderId !== $this->orderId) {
+            return;
+        }
+    }
+
     public function render()
     {
         if (! $this->ready) {

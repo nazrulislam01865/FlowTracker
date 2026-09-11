@@ -44,13 +44,7 @@ final class OrderShipmentService
         $urgencyId = $this->firstValidMasterId((array) ($job->shipment_urgency_ids ?? []), 'shipment_urgency');
 
         if (! $methodId && $urgencyId) {
-            $expressMethod = MasterRecord::query()
-                ->forWorkspace(app(MasterDataService::class)->workspaceId())
-                ->ofType('shipment_method')
-                ->active()
-                ->get()
-                ->first(fn (MasterRecord $method): bool => CreateOrderShippingMethodPresenter::methodKind($method) === 'express');
-
+            $expressMethod = $this->activeExpressMethod();
             $methodId = $expressMethod?->id ? (int) $expressMethod->id : null;
         }
 
@@ -58,6 +52,94 @@ final class OrderShipmentService
             'shipment_method_id' => $methodId,
             'shipment_urgency_id' => $this->normalizeUrgencyForMethod($methodId, $urgencyId),
         ];
+    }
+
+    /**
+     * Keep the Order-level Shipment urgency and the primary Shipment row on one
+     * canonical shipping selection. The legacy Order fields represent the
+     * default/primary shipment; additional shipment rows may still use their
+     * own methods without overwriting that Order-level choice.
+     *
+     * Choosing any Order-level urgency means Standard Express Shipping. An
+     * empty urgency is the existing virtual "Normal Service" Express option.
+     */
+    public function syncPrimaryShipmentFromOrderUrgency(FlowJob $job, User $actor, ?int $urgencyId): ?OrderShipment
+    {
+        $expressMethod = $this->activeExpressMethod();
+
+        if (! $expressMethod) {
+            throw ValidationException::withMessages([
+                'shipmentUrgencyIds' => 'Standard Express Shipping is not available in Shipment Method master data.',
+            ]);
+        }
+
+        return $this->syncPrimaryShipmentFromOrderShippingSelection(
+            $job,
+            $actor,
+            (int) $expressMethod->id,
+            $urgencyId,
+        );
+    }
+
+    /**
+     * Persist the complete Order-level shipping selection and mirror it to the
+     * primary Shipment row. This is the canonical two-way bridge between the
+     * Planning & ownership control and Task 5.1.
+     *
+     * Sea/Air/Road carry no shipment urgency. Standard Express may carry the
+     * virtual Normal level (null) or one active Urgent/Super Urgent master ID.
+     */
+    public function syncPrimaryShipmentFromOrderShippingSelection(
+        FlowJob $job,
+        User $actor,
+        int $methodId,
+        ?int $urgencyId = null,
+    ): ?OrderShipment {
+        return DB::transaction(function () use ($job, $actor, $methodId, $urgencyId): ?OrderShipment {
+            $lockedJob = FlowJob::query()->whereKey($job->id)->lockForUpdate()->firstOrFail();
+            $method = $this->validatedShippingMethod($methodId);
+            $normalizedUrgencyId = $this->validatedUrgencyId($urgencyId, $method);
+
+            $lockedJob->update([
+                'shipment_method_ids' => [(int) $method->id],
+                'shipment_urgency_ids' => $normalizedUrgencyId ? [(int) $normalizedUrgencyId] : [],
+            ]);
+
+            $primary = OrderShipment::query()
+                ->where('flow_job_id', $lockedJob->id)
+                ->orderByDesc('is_primary')
+                ->orderBy('sequence')
+                ->lockForUpdate()
+                ->first();
+
+            if (! $primary) {
+                return null;
+            }
+
+            abort_if($primary->dispatched_at, 422, 'The primary shipment method cannot be changed after dispatch.');
+
+            $changed = (int) $primary->shipment_method_id !== (int) $method->id
+                || (int) ($primary->shipment_urgency_id ?? 0) !== (int) ($normalizedUrgencyId ?? 0);
+
+            if ($changed) {
+                $hadTracking = filled($primary->tracking_number) || (bool) $primary->label_printed_at;
+                $primary->update([
+                    'shipment_method_id' => $method->id,
+                    'shipment_urgency_id' => $normalizedUrgencyId,
+                    // A shipping selection change invalidates any label that
+                    // was generated for the previous method/service level.
+                    'tracking_number' => $hadTracking ? null : $primary->tracking_number,
+                    'label_printed_at' => $hadTracking ? null : $primary->label_printed_at,
+                    'updated_by' => $actor->id,
+                ]);
+
+                if ($hadTracking) {
+                    $this->reopenTrackingTask($lockedJob, $actor);
+                }
+            }
+
+            return $primary->refresh();
+        }, 3);
     }
 
     public function seedPrimaryShipment(FlowJob $job, ?User $actor = null): OrderShipment
@@ -396,6 +478,14 @@ final class OrderShipmentService
                 }
             }
 
+            if ($locked->is_primary) {
+                // The Order-level Shipment urgency is the primary/default
+                // shipping selection. Keep it in sync when Task 5.1 changes
+                // the primary shipment directly. Air/Sea/non-express methods
+                // intentionally map back to Normal Service (empty urgency).
+                $this->syncLegacyPrimaryShippingSelection($job, $locked->refresh());
+            }
+
             $this->record($job, $actor, 'job.shipment_method_updated', 'Shipment '.$locked->sequence.' shipping method updated.', $this->auditMeta($locked->refresh()));
 
             return $locked->refresh();
@@ -584,6 +674,16 @@ final class OrderShipmentService
             ->first(fn (Task $task): bool => app(OrderWorkflowActionService::class)->automationKey($task) === $key);
     }
 
+    private function activeExpressMethod(): ?MasterRecord
+    {
+        return MasterRecord::query()
+            ->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('shipment_method')
+            ->active()
+            ->get()
+            ->first(fn (MasterRecord $method): bool => CreateOrderShippingMethodPresenter::methodKind($method) === 'express');
+    }
+
     private function validatedShippingMethod(int $methodId): MasterRecord
     {
         if ($methodId <= 0) {
@@ -742,16 +842,28 @@ final class OrderShipmentService
 
     private function syncLegacyPrimaryAddress(FlowJob $job, OrderShipment $shipment): void
     {
-        $job->update([
+        $job->update(array_merge([
             'shipping_address' => $this->legacyShippingAddressText($shipment),
             'shipping_contact_name' => $shipment->recipient,
             'shipping_phone_country_code' => $shipment->phone_country_code,
             'shipping_phone' => $shipment->phone,
             'shipping_postal_code' => $shipment->postal_code,
             'shipping_source_address_id' => $shipment->shipping_source_address_id,
+        ], $this->legacyPrimaryShippingSelection($shipment)));
+    }
+
+    private function syncLegacyPrimaryShippingSelection(FlowJob $job, OrderShipment $shipment): void
+    {
+        $job->update($this->legacyPrimaryShippingSelection($shipment));
+    }
+
+    /** @return array{shipment_method_ids:array<int,int>,shipment_urgency_ids:array<int,int>} */
+    private function legacyPrimaryShippingSelection(OrderShipment $shipment): array
+    {
+        return [
             'shipment_method_ids' => $shipment->shipment_method_id ? [(int) $shipment->shipment_method_id] : [],
             'shipment_urgency_ids' => $shipment->shipment_urgency_id ? [(int) $shipment->shipment_urgency_id] : [],
-        ]);
+        ];
     }
 
     private function legacyShippingAddressText(OrderShipment $shipment): ?string

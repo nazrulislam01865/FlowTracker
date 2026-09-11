@@ -10,11 +10,13 @@ use App\Actions\Orders\UpdateOrderPriority;
 use App\Actions\Orders\UpdateOrderShippingDetails;
 use App\Actions\Orders\UpdateOrderTextField;
 use App\Actions\Orders\UpdateOrderUrgencies;
+use App\Actions\Orders\UpdateOrderShippingSelection;
 use App\Actions\Orders\AutoAdvanceOrder;
 use App\Queries\Orders\VisibleOrderQuery;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use App\Support\CreateOrderShippingMethodPresenter;
 use Livewire\Attributes\Json;
 use Livewire\Attributes\Renderless;
 
@@ -62,6 +64,68 @@ trait ManagesOrderDetail
             $job = app(VisibleOrderQuery::class)->detail(auth()->user(), $jobId);
             app(UpdateOrderUrgencies::class)->handle($job, $config['field'], $ids, auth()->user());
         });
+    }
+
+    #[Json]
+    public function updateJobShippingSelection(int $jobId, string $selection): array
+    {
+        $parsed = CreateOrderShippingMethodPresenter::parseSelectionValue($selection);
+        $methodId = (int) ($parsed['method_id'] ?? 0);
+        $urgencyId = $parsed['urgency_id'] ?? null;
+
+        if ($methodId <= 0) {
+            return ['ok' => false, 'message' => 'Select a shipping method.'];
+        }
+
+        $saved = null;
+        $result = $this->persistInlineEdit('shipment method / urgency', function () use ($jobId, $methodId, $urgencyId, &$saved) {
+            $workspaceId = app(MasterDataService::class)->workspaceId();
+            $method = MasterRecord::query()
+                ->forWorkspace($workspaceId)
+                ->ofType('shipment_method')
+                ->active()
+                ->find($methodId);
+            abort_unless($method, 422, 'The selected shipping method is no longer available.');
+
+            if ($urgencyId) {
+                $validUrgency = MasterRecord::query()
+                    ->forWorkspace($workspaceId)
+                    ->ofType('shipment_urgency')
+                    ->active()
+                    ->whereKey((int) $urgencyId)
+                    ->exists();
+                abort_unless($validUrgency, 422, 'The selected shipment urgency is no longer available.');
+            }
+
+            $job = app(VisibleOrderQuery::class)->detail(auth()->user(), $jobId);
+            $saved = app(UpdateOrderShippingSelection::class)->handle(
+                $job,
+                $methodId,
+                $urgencyId ? (int) $urgencyId : null,
+                auth()->user(),
+            );
+        });
+
+        if ($result['ok'] ?? false) {
+            $methods = app(MasterDataService::class)->active('shipment_method');
+            $urgencies = app(MasterDataService::class)->active('shipment_urgency');
+            $state = CreateOrderShippingMethodPresenter::orderShippingState(
+                $methods,
+                $urgencies,
+                (array) ($saved?->shipment_method_ids ?? []),
+                (array) ($saved?->shipment_urgency_ids ?? []),
+            );
+            $result['value'] = $state['value'];
+            $result['display'] = $state['name'];
+            $result['tone'] = $state['tone'];
+
+            // Task 5.1 is isolated in its own Livewire component. Tell that
+            // child to rerender so a Planning-side change is visible in the
+            // Shipment stage immediately without a browser refresh.
+            $this->dispatch('order-shipping-selection-updated', orderId: $jobId);
+        }
+
+        return $result;
     }
 
     #[Json]
