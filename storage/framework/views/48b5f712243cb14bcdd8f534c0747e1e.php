@@ -267,18 +267,18 @@ unset($__defined_vars, $__key, $__value); ?>
     >
         <header class="ft-order-task-document-modal-head">
             <div><h2 id="order-workflow-action-modal-title"><?php echo e($title); ?></h2><p><?php echo e($copy); ?></p></div>
-            <button type="button" wire:click="closeOrderWorkflowAction" aria-label="Close">×</button>
+            <button type="button" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" aria-label="Close">×</button>
         </header>
 
         <div class="ft-order-task-document-modal-body ft-prototype-action-body">
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($step === 'sample'): ?>
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" wire:click="submitOrderWorkflowAction('sample_no')">
+                    <button type="button" wire:click="submitOrderWorkflowAction('sample_no')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">
                         <span class="ft-prototype-choice-icon">→</span>
                         <strong>No</strong>
                         <small>Go directly to Production</small>
                     </button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('sample_yes')">
+                    <button type="button" wire:click="submitOrderWorkflowAction('sample_yes')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">
                         <span class="ft-prototype-choice-icon">✓</span>
                         <strong>Yes</strong>
                         <small>Activate Sample Approval</small>
@@ -1131,8 +1131,8 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
             <?php elseif($variant === 'client_decision'): ?>
                 <p class="ft-prototype-modal-copy">Choose the decision received from <?php echo e($clientName); ?> for the current artwork (<?php echo e($artworkVersionLabel); ?>).</p>
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" wire:click="submitOrderWorkflowAction('revise')"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('approved')"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('approved')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
                 </div>
             <?php elseif($variant === 'estimated_delivery'): ?>
                 <div class="ft-prototype-required-date-panel">
@@ -1245,8 +1245,8 @@ if (isset($__messageOriginal)) { $message = $__messageOriginal; }
 endif;
 unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?></label>
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" class="danger-choice" wire:click="submitOrderWorkflowAction('issue')"><span class="ft-prototype-choice-icon">!</span><strong>Report Issue</strong><small>Open a supplier-resolution issue</small></button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('pass')"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
+                    <button type="button" class="danger-choice" wire:click="submitOrderWorkflowAction('issue')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">!</span><strong>Report Issue</strong><small>Open a supplier-resolution issue</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('pass')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
                 </div>
             <?php elseif($variant === 'shipment_info'): ?>
                 <?php if (isset($component)) { $__componentOriginala71941c0208bdab3d16b9d1f53b9e592 = $component; } ?>
@@ -1666,7 +1666,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
                 <button type="button" class="ft-shipment-modal-reset" wire:click="resetShipmentActionDetails">Reset changes</button>
                 <div class="ft-shipment-modal-footer__actions">
                     <div>
-                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Cancel</button>
                         <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><?php echo e($editingCompletedShipmentInformation ? 'Save changes' : 'Save & complete task'); ?></button>
                     </div>
                     <small><?php echo e($editingCompletedShipmentInformation ? 'The shipment task stays completed; only the latest shipment details are updated.' : 'Saving unlocks Add tracking number & print courier label.'); ?></small>
@@ -1675,7 +1675,7 @@ unset($__errorArgs, $__bag); ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendB
         <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if (! ($usesInlineWorkflowActions || $usesShipmentFooter || $step === 'sample')): ?>
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
-                <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                <button type="button" class="secondary" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Cancel</button>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($step === 'revision'): ?>
                     <button type="button" class="danger ft-artwork-revision-submit" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction,orderWorkflowActionRevisionAttachments"><?php echo e($automationKey === 'ART_INTERNAL_REVIEW' ? 'Submit Revision' : 'Activate Revision Task'); ?></button>
                 <?php elseif($step === 'cancel_artwork'): ?>

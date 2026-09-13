@@ -242,18 +242,18 @@
     >
         <header class="ft-order-task-document-modal-head">
             <div><h2 id="order-workflow-action-modal-title">{{ $title }}</h2><p>{{ $copy }}</p></div>
-            <button type="button" wire:click="closeOrderWorkflowAction" aria-label="Close">×</button>
+            <button type="button" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction" aria-label="Close">×</button>
         </header>
 
         <div class="ft-order-task-document-modal-body ft-prototype-action-body">
             @if($step === 'sample')
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" wire:click="submitOrderWorkflowAction('sample_no')">
+                    <button type="button" wire:click="submitOrderWorkflowAction('sample_no')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">
                         <span class="ft-prototype-choice-icon">→</span>
                         <strong>No</strong>
                         <small>Go directly to Production</small>
                     </button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('sample_yes')">
+                    <button type="button" wire:click="submitOrderWorkflowAction('sample_yes')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">
                         <span class="ft-prototype-choice-icon">✓</span>
                         <strong>Yes</strong>
                         <small>Activate Sample Approval</small>
@@ -888,8 +888,8 @@
             @elseif($variant === 'client_decision')
                 <p class="ft-prototype-modal-copy">Choose the decision received from {{ $clientName }} for the current artwork ({{ $artworkVersionLabel }}).</p>
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" wire:click="submitOrderWorkflowAction('revise')"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('approved')"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">↻</span><strong>Client Requested Revision</strong><small>Restart the artwork revision cycle</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('approved')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">✓</span><strong>Client Approved Artwork</strong><small>Continue to sample decision</small></button>
                 </div>
             @elseif($variant === 'estimated_delivery')
                 <div class="ft-prototype-required-date-panel">
@@ -939,8 +939,8 @@
                 </div>
                 <label class="ft-prototype-field"><span>QC comments</span><textarea wire:model="orderWorkflowActionPayload.qc_comments" rows="4" placeholder="Record stitching, dimensions, packaging, print registration, or other QC notes..."></textarea>@error('orderWorkflowActionPayload.qc_comments')<p class="validation-error">{{ $message }}</p>@enderror</label>
                 <div class="ft-prototype-choice-grid">
-                    <button type="button" class="danger-choice" wire:click="submitOrderWorkflowAction('issue')"><span class="ft-prototype-choice-icon">!</span><strong>Report Issue</strong><small>Open a supplier-resolution issue</small></button>
-                    <button type="button" wire:click="submitOrderWorkflowAction('pass')"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
+                    <button type="button" class="danger-choice" wire:click="submitOrderWorkflowAction('issue')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">!</span><strong>Report Issue</strong><small>Open a supplier-resolution issue</small></button>
+                    <button type="button" wire:click="submitOrderWorkflowAction('pass')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction"><span class="ft-prototype-choice-icon">✓</span><strong>QC Passed</strong><small>Continue toward Shipment</small></button>
                 </div>
             @elseif($variant === 'shipment_info')
                 <x-jobs.order-detail.shipment.update-details-form :job="$job" :payload="$payload" />
@@ -1185,7 +1185,7 @@
                 <button type="button" class="ft-shipment-modal-reset" wire:click="resetShipmentActionDetails">Reset changes</button>
                 <div class="ft-shipment-modal-footer__actions">
                     <div>
-                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                        <button type="button" class="secondary" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Cancel</button>
                         <button type="button" class="primary" wire:click="submitOrderWorkflowAction('confirm')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">{{ $editingCompletedShipmentInformation ? 'Save changes' : 'Save & complete task' }}</button>
                     </div>
                     <small>{{ $editingCompletedShipmentInformation ? 'The shipment task stays completed; only the latest shipment details are updated.' : 'Saving unlocks Add tracking number & print courier label.' }}</small>
@@ -1194,7 +1194,7 @@
         @endif
         @unless($usesInlineWorkflowActions || $usesShipmentFooter || $step === 'sample')
             <footer class="ft-order-task-document-modal-actions ft-order-workflow-action-buttons">
-                <button type="button" class="secondary" wire:click="closeOrderWorkflowAction">Cancel</button>
+                <button type="button" class="secondary" wire:click="closeOrderWorkflowAction" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction">Cancel</button>
                 @if($step === 'revision')
                     <button type="button" class="danger ft-artwork-revision-submit" wire:click="submitOrderWorkflowAction('revise')" wire:loading.attr="disabled" wire:target="submitOrderWorkflowAction,orderWorkflowActionRevisionAttachments">{{ $automationKey === 'ART_INTERNAL_REVIEW' ? 'Submit Revision' : 'Activate Revision Task' }}</button>
                 @elseif($step === 'cancel_artwork')

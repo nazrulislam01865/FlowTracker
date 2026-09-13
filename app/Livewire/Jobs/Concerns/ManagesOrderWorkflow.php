@@ -564,7 +564,15 @@ trait ManagesOrderWorkflow
 
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void
     {
-        abort_unless($this->selectedJobId && $this->orderWorkflowActionTaskId, 422);
+        // A submit can arrive after the modal has already been closed by the
+        // immediately preceding request (for example, a rapid double-click or
+        // submit/cancel race on a slow connection). There is no valid workflow
+        // action left to execute in that state, so treat the stale request as a
+        // no-op instead of turning it into a user-facing HTTP 422 page.
+        if (! $this->showOrderWorkflowActionModal || ! $this->selectedJobId || ! $this->orderWorkflowActionTaskId) {
+            return;
+        }
+
         $task = app(TaskService::class)->visibleQuery(auth()->user())
             ->with(['job.client', 'job.items', 'job.phase', 'setupTemplate'])
             ->where('flow_job_id', $this->selectedJobId)
@@ -629,6 +637,14 @@ trait ManagesOrderWorkflow
             return;
         }
         if ($key === 'ART_CLIENT_ERP_DECISION' && $this->orderWorkflowActionStep === 'sample') {
+            // Only the buttons rendered by the sample step may resolve this
+            // decision. A duplicate/stale click from the previous Approved
+            // button must not be reinterpreted as "No sample" and complete the
+            // task accidentally.
+            if (! in_array($decision, ['sample_yes', 'sample_no'], true)) {
+                return;
+            }
+
             $decision = $decision === 'sample_yes' ? 'sample' : 'confirm';
         }
 

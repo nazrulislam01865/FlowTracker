@@ -543,7 +543,12 @@ class Index extends Component
 
     public function submitOrderWorkflowAction(string $decision = 'confirm'): void
     {
-        abort_unless($this->listActionOrderId && $this->orderWorkflowActionTaskId, 422);
+        // Ignore a stale duplicate submit after the modal has already closed.
+        // This mirrors Order Details and prevents a harmless UI race from
+        // becoming a user-facing HTTP 422 response.
+        if (! $this->showOrderWorkflowActionModal || ! $this->listActionOrderId || ! $this->orderWorkflowActionTaskId) {
+            return;
+        }
 
         $task = $this->editableListWorkflowTask(
             (int) $this->listActionOrderId,
@@ -584,6 +589,10 @@ class Index extends Component
         }
 
         if ($key === 'ART_CLIENT_ERP_DECISION' && $this->orderWorkflowActionStep === 'sample') {
+            if (! in_array($decision, ['sample_yes', 'sample_no'], true)) {
+                return;
+            }
+
             $decision = $decision === 'sample_yes' ? 'sample' : 'confirm';
         }
 
