@@ -12,12 +12,12 @@ class OrdersDashboardScopedStageCountsTest extends TestCase
         $query = file_get_contents(app_path('Queries/Orders/OrderListQuery.php'));
         $service = file_get_contents(app_path('Services/OrderListPrototypeService.php'));
 
-        $this->assertStringContainsString('$this->dashboardScope === 1', $orders);
-        $this->assertStringContainsString('->dashboardScopedStages(', $orders);
-        $this->assertStringContainsString('$this->dateFrom,', $orders);
-        $this->assertStringContainsString('$this->dateTo,', $orders);
-        $this->assertStringContainsString('$this->filterId($this->client),', $orders);
-        $this->assertStringContainsString('$this->filterId($this->dashboardTeam),', $orders);
+        $this->assertStringContainsString("'dashboard_scope' => \$this->dashboardScope === 1", $orders);
+        $this->assertStringContainsString("'date_from' => \$this->dateFrom", $orders);
+        $this->assertStringContainsString("'date_to' => \$this->dateTo", $orders);
+        $this->assertStringContainsString("'client_id' => \$this->filterId(\$this->client)", $orders);
+        $this->assertStringContainsString("'dashboard_team_id' => \$this->filterId(\$this->dashboardTeam)", $orders);
+        $this->assertStringContainsString('->stagesForFilters($user, $filters)', $orders);
 
         $this->assertStringContainsString('public function dashboardScopedStages(', $query);
         $this->assertStringContainsString('public function dashboardScopedStages(', $service);

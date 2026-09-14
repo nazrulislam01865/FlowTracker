@@ -5,6 +5,7 @@
     'context' => [],
     'overviewTaskLinkFormTaskId' => null,
     'showShipmentModal' => false,
+    'showShipmentSavedAddressPicker' => false,
     'shipmentModalTaskId' => null,
     'shipmentEditingId' => null,
     'shipmentModalMode' => 'same_address',
@@ -114,6 +115,7 @@
                         :editing-id="$shipmentEditingId"
                         :mode="$shipmentModalMode"
                         :form="$shipmentForm"
+                        :show-saved-address-picker="$showShipmentSavedAddressPicker"
                     />
                 @endif
             @endif

@@ -538,7 +538,7 @@ trait ManagesInquiryCreation
         $this->showCreate = false;
         $this->selectedInquiryId = $inquiry->id;
         $this->detailTab = 'overview';
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         $this->resetCreateForm();
         if ($draft) {
             session()->flash('success', 'Inquiry draft saved.');

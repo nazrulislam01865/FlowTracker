@@ -124,7 +124,7 @@ final class OrderShipmentService
             if ($changed) {
                 $hadTracking = filled($primary->tracking_number) || (bool) $primary->label_printed_at;
                 $primary->update([
-                    'shipment_method_id' => $method->id,
+                    'shipment_method_id' => $method?->id,
                     'shipment_urgency_id' => $normalizedUrgencyId,
                     // A shipping selection change invalidates any label that
                     // was generated for the previous method/service level.
@@ -255,7 +255,7 @@ final class OrderShipmentService
                     'postal_code' => $payload['postal_code'] ?? '',
                     'country' => $payload['country'] ?? '',
                     'shipping_source_address_id' => $payload['shipping_source_address_id'] ?? null,
-                ]);
+                ], null, false);
 
                 $created->push(OrderShipment::create(array_merge([
                     'flow_job_id' => $lockedJob->id,
@@ -333,15 +333,25 @@ final class OrderShipmentService
             }
 
             $addressMode = $this->normalizeAddressMode($payload['address_mode'] ?? $job->shipment_address_mode);
-            $method = $this->validatedShippingMethod((int) ($payload['shipment_method_id'] ?? 0));
-            $urgencyId = $this->validatedUrgencyId($payload['shipment_urgency_id'] ?? null, $method);
+            $methodId = filled($payload['shipment_method_id'] ?? null)
+                ? (int) $payload['shipment_method_id']
+                : null;
+            $method = $methodId ? $this->validatedShippingMethod($methodId) : null;
+            $urgencyId = $method
+                ? $this->validatedUrgencyId($payload['shipment_urgency_id'] ?? null, $method)
+                : null;
+            if (! $method && filled($payload['shipment_urgency_id'] ?? null)) {
+                throw ValidationException::withMessages([
+                    'shipmentMethod' => 'Choose a shipping method before selecting an urgency.',
+                ]);
+            }
             $nextSequence = ((int) $shipments->max('sequence')) + 1;
 
             $values = [
                 'flow_job_id' => $job->id,
                 'sequence' => $nextSequence,
                 'is_primary' => false,
-                'shipment_method_id' => $method->id,
+                'shipment_method_id' => $method?->id,
                 'shipment_urgency_id' => $urgencyId,
                 'quantity' => $this->validatedQuantity($payload['quantity'] ?? null),
                 'package_reference' => $this->nullableString($payload['package_reference'] ?? null),
@@ -353,7 +363,11 @@ final class OrderShipmentService
                 $primary = $shipments->firstWhere('is_primary', true) ?: $shipments->first();
                 $values = array_merge($values, $this->addressFields($primary));
             } else {
-                $values = array_merge($values, $this->validatedAddressFields($payload));
+                // Shipment-stage add/edit now intentionally mirrors Create Order's
+                // compact address form. Structured location fields stay supported
+                // when supplied by a saved address, but they are no longer required
+                // simply to add another shipment address.
+                $values = array_merge($values, $this->validatedAddressFields($payload, null, false, true));
             }
 
             $shipment = OrderShipment::create($values);
@@ -378,24 +392,50 @@ final class OrderShipmentService
             $locked = OrderShipment::query()->whereKey($shipment->id)->lockForUpdate()->firstOrFail();
             abort_if($locked->dispatched_at, 422, 'A dispatched shipment can no longer be edited.');
 
-            $method = $this->validatedShippingMethod((int) ($payload['shipment_method_id'] ?? $locked->shipment_method_id));
-            $urgencyId = $this->validatedUrgencyId($payload['shipment_urgency_id'] ?? $locked->shipment_urgency_id, $method);
+            $methodId = filled($payload['shipment_method_id'] ?? $locked->shipment_method_id)
+                ? (int) ($payload['shipment_method_id'] ?? $locked->shipment_method_id)
+                : null;
+            $method = $methodId ? $this->validatedShippingMethod($methodId) : null;
+            $urgencySource = $payload['shipment_urgency_id'] ?? $locked->shipment_urgency_id;
+            $urgencyId = $method
+                ? $this->validatedUrgencyId($urgencySource, $method)
+                : null;
+            if (! $method && filled($urgencySource)) {
+                throw ValidationException::withMessages([
+                    'shipmentMethod' => 'Choose a shipping method before selecting an urgency.',
+                ]);
+            }
             $addressMode = $locked->is_primary
                 ? self::MODE_MULTIPLE_ADDRESS
                 : $this->normalizeAddressMode($payload['address_mode'] ?? $job->shipment_address_mode);
+            $shippingMethodChanged = (int) ($locked->shipment_method_id ?? 0) !== (int) ($method?->id ?? 0)
+                || (int) ($locked->shipment_urgency_id ?? 0) !== (int) ($urgencyId ?? 0);
+            $hadTrackingForPreviousMethod = $shippingMethodChanged
+                && (filled($locked->tracking_number) || (bool) $locked->label_printed_at);
 
             $updates = [
-                'shipment_method_id' => $method->id,
+                'shipment_method_id' => $method?->id,
                 'shipment_urgency_id' => $urgencyId,
                 'quantity' => array_key_exists('quantity', $payload)
                     ? $this->validatedQuantity($payload['quantity'])
                     : $locked->quantity,
                 'package_reference' => $this->nullableString($payload['package_reference'] ?? $locked->package_reference),
+                // Changing the service level invalidates carrier data that was
+                // prepared for the previous shipping method, exactly like the
+                // row-level shipping-method editor does.
+                'tracking_number' => $hadTrackingForPreviousMethod ? null : $locked->tracking_number,
+                'label_printed_at' => $hadTrackingForPreviousMethod ? null : $locked->label_printed_at,
                 'updated_by' => $actor->id,
             ];
 
             if ($locked->is_primary || $addressMode === self::MODE_MULTIPLE_ADDRESS) {
-                $updates = array_merge($updates, $this->validatedAddressFields($payload, $locked));
+                $isCompactAddressForm = (bool) ($payload['_shipment_address_form'] ?? false);
+                $updates = array_merge($updates, $this->validatedAddressFields(
+                    $payload,
+                    $locked,
+                    ! $isCompactAddressForm,
+                    $isCompactAddressForm,
+                ));
             } else {
                 $primary = OrderShipment::query()
                     ->where('flow_job_id', $job->id)
@@ -408,6 +448,9 @@ final class OrderShipmentService
 
             if ($locked->is_primary) {
                 $this->syncLegacyPrimaryAddress($job, $locked->refresh());
+                if ($shippingMethodChanged) {
+                    $this->syncLegacyPrimaryShippingSelection($job, $locked->refresh());
+                }
                 if ($job->shipment_address_mode === self::MODE_SAME_ADDRESS) {
                     OrderShipment::query()
                         ->where('flow_job_id', $job->id)
@@ -415,6 +458,10 @@ final class OrderShipmentService
                         ->whereNull('dispatched_at')
                         ->update(array_merge($this->addressFields($locked->refresh()), ['updated_by' => $actor->id, 'updated_at' => now()]));
                 }
+            }
+
+            if ($hadTrackingForPreviousMethod) {
+                $this->reopenTrackingTask($job, $actor);
             }
 
             $this->syncPlanFromShipments($job);
@@ -743,7 +790,12 @@ final class OrderShipmentService
     }
 
     /** @param array<string,mixed> $payload @return array<string,mixed> */
-    private function validatedAddressFields(array $payload, ?OrderShipment $fallback = null): array
+    private function validatedAddressFields(
+        array $payload,
+        ?OrderShipment $fallback = null,
+        bool $requireStructuredLocation = true,
+        bool $requirePhone = false,
+    ): array
     {
         $values = [
             'recipient' => trim((string) ($payload['recipient'] ?? $fallback?->recipient ?? '')),
@@ -760,12 +812,20 @@ final class OrderShipmentService
         ];
 
         $errors = [];
-        foreach ([
+        $requiredFields = [
             'recipient' => 'Contact person is required.',
             'address' => 'Address is required.',
             'postal_code' => 'Postal code is required.',
-            'country' => 'Country is required.',
-        ] as $field => $message) {
+        ];
+        if ($requirePhone) {
+            $requiredFields['phone_country_code'] = 'Phone country code is required.';
+            $requiredFields['phone'] = 'Phone number is required.';
+        }
+        if ($requireStructuredLocation) {
+            $requiredFields['country'] = 'Country is required.';
+        }
+
+        foreach ($requiredFields as $field => $message) {
             if ($values[$field] === '') $errors['shipmentForm.'.$field] = $message;
         }
         if ($errors !== []) throw ValidationException::withMessages($errors);
@@ -779,7 +839,20 @@ final class OrderShipmentService
             throw ValidationException::withMessages(['shipmentForm.address' => 'Address must be 2,000 characters or fewer.']);
         }
 
-        $this->validateLocationMasterSelection($values, $fallback);
+        if ($requirePhone && $values['phone_country_code'] !== '') {
+            $phoneCodeExists = app(MasterDataService::class)
+                ->active('phone_country_code')
+                ->contains(fn (MasterRecord $record): bool => trim((string) $record->name) === $values['phone_country_code']);
+            if (! $phoneCodeExists) {
+                throw ValidationException::withMessages([
+                    'shipmentForm.phone_country_code' => 'Choose an active phone country code from Master Data.',
+                ]);
+            }
+        }
+
+        if ($requireStructuredLocation) {
+            $this->validateLocationMasterSelection($values, $fallback);
+        }
 
         return $values;
     }

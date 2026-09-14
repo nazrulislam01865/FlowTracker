@@ -308,3 +308,77 @@
         grid-template-columns: minmax(0, 1fr);
     }
 }
+
+/* Order-list summary metrics reuse the workflow-card visual system so the
+   Created Today and Completed cards are exactly the same size as stage cards. */
+.ft-order-workflow-metric-strip {
+    display: grid;
+    grid-template-columns: repeat(7, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 12px;
+    padding: 0 18px 18px;
+    margin-top: -4px;
+}
+
+.ft-order-workflow-metric-card {
+    min-width: 0;
+    min-height: 0;
+}
+
+@media (max-width: 1240px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 0 14px 14px;
+    }
+}
+
+@media (max-width: 1180px) and (min-width: 901px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 760px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 0 10px 10px;
+    }
+}
+
+@media (max-width: 460px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+
+@container ft-order-stage-overview (max-width: 1240px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 10px;
+        padding: 0 14px 14px;
+    }
+}
+
+@container ft-order-stage-overview (max-width: 900px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+}
+
+@container ft-order-stage-overview (max-width: 620px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 8px;
+        padding: 0 10px 10px;
+    }
+}
+
+@container ft-order-stage-overview (max-width: 360px) {
+    .ft-order-workflow-metric-strip {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

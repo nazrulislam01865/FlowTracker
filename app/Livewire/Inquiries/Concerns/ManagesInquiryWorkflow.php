@@ -90,7 +90,7 @@ trait ManagesInquiryWorkflow
         app(\App\Actions\Inquiries\SaveInquiryWorkflow::class)->handle($this->selectedInquiry(), $this->managerRows, auth()->user());
         $this->showWorkflowManager = false;
         $this->managerRows = [];
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry taskflow saved.');
     }
 

@@ -6,27 +6,28 @@ use Tests\TestCase;
 
 class OrderShipmentQuantityFieldTest extends TestCase
 {
-    public function test_create_order_exposes_optional_shipment_quantity(): void
+    public function test_create_order_shipment_address_prototype_does_not_expose_quantity(): void
     {
         $row = file_get_contents(resource_path('views/components/jobs/create/shipping-row.blade.php'));
         $creation = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderCreation.php'));
         $dto = file_get_contents(app_path('DTOs/Orders/OrderCreateData.php'));
 
-        $this->assertStringContainsString('Quantity <em>Optional</em>', $row);
-        $this->assertStringContainsString('createShipments.{{ $index }}.quantity', $row);
+        $this->assertStringNotContainsString('Quantity <em>Optional</em>', $row);
+        $this->assertStringNotContainsString('createShipments.{{ $index }}.quantity', $row);
+
         $this->assertStringContainsString("'createShipments.*.quantity' => ['nullable', 'integer', 'min:1'", $creation);
         $this->assertStringContainsString("'quantity' => filled(\$row['quantity']", $dto);
     }
 
-    public function test_shipment_stage_add_edit_form_exposes_optional_quantity(): void
+    public function test_shipment_stage_compact_address_form_preserves_quantity_without_exposing_it(): void
     {
         $modal = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/add-modal.blade.php'));
         $manager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderShipments.php'));
         $plan = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/plan-table.blade.php'));
         $details = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/details-modal.blade.php'));
 
-        $this->assertStringContainsString('QUANTITY (OPTIONAL)', $modal);
-        $this->assertStringContainsString('wire:model.defer="shipmentForm.quantity"', $modal);
+        $this->assertStringNotContainsString('QUANTITY (OPTIONAL)', $modal);
+        $this->assertStringNotContainsString('wire:model.defer="shipmentForm.quantity"', $modal);
         $this->assertStringContainsString("'quantity' => null", $manager);
         $this->assertStringContainsString("'quantity' => \$shipment->quantity", $manager);
         $this->assertStringContainsString('<th>Quantity</th>', $plan);

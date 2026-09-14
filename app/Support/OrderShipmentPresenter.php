@@ -131,6 +131,8 @@ final class OrderShipmentPresenter
                 'country' => trim((string) ($shipment->country ?? '')),
                 'quantity' => $shipment->quantity !== null ? (int) $shipment->quantity : null,
                 'package_reference' => trim((string) ($shipment->package_reference ?? '')),
+                'shipment_method_id' => $shipment->shipment_method_id ? (int) $shipment->shipment_method_id : null,
+                'shipment_urgency_id' => $shipment->shipment_urgency_id ? (int) $shipment->shipment_urgency_id : null,
                 'courier_id' => $shipment->courier_id ? (int) $shipment->courier_id : null,
                 'courier_name' => trim((string) data_get($courier, 'name', '')),
                 'tracking_number' => trim((string) ($shipment->tracking_number ?? '')),
@@ -165,6 +167,8 @@ final class OrderShipmentPresenter
                 ->all(),
             'countries' => (array) data_get($context, 'shipmentCountries', []),
             'states' => (array) data_get($context, 'shipmentStates', []),
+            'phone_country_codes' => (array) data_get($context, 'shipmentPhoneCountryCodes', []),
+            'saved_shipping_addresses' => (array) data_get($context, 'shipmentSavedAddresses', []),
         ];
     }
 }

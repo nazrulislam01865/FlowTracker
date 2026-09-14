@@ -91,6 +91,52 @@ class OrderListPrototypeService
     }
 
     /**
+     * Recalculate workflow-stage cards only when a list-wide filter can change
+     * their population. The phase itself is intentionally excluded because the
+     * cards are the phase facet; keeping all seven counts visible lets users
+     * move between stages without losing the surrounding filtered context.
+     *
+     * @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}>
+     */
+    public function stagesForFilters(User $user, array $filters): Collection
+    {
+        $hasListWideFilter = filled(trim((string) ($filters['search'] ?? '')))
+            || $this->positiveInt($filters['client_id'] ?? null) !== null
+            || $this->positiveInt($filters['owner_id'] ?? null) !== null
+            || (bool) ($filters['hold_on'] ?? false)
+            || filled(trim((string) ($filters['metric'] ?? '')))
+            || filled(trim((string) ($filters['date_from'] ?? '')))
+            || filled(trim((string) ($filters['date_to'] ?? '')))
+            || (bool) ($filters['dashboard_scope'] ?? false)
+            || $this->positiveInt($filters['dashboard_team_id'] ?? null) !== null
+            || $this->positiveInt($filters['import_id'] ?? null) !== null;
+
+        if (! $hasListWideFilter) {
+            return $this->stages($user);
+        }
+
+        $countFilters = $filters;
+        $countFilters['phase_id'] = null;
+        $query = $this->buildListQuery($user, $countFilters, collect());
+
+        return $this->stageCardsFromCountQuery($query);
+    }
+
+    /**
+     * Count completed Orders inside the currently-applied list context. This is
+     * a single indexed COUNT query and does not hydrate Order rows or relations.
+     */
+    public function completedCount(User $user, array $filters, Collection $stages): int
+    {
+        $countFilters = $filters;
+        $countFilters['metric'] = 'completed';
+
+        return (int) $this->buildListQuery($user, $countFilters, $stages)
+            ->reorder()
+            ->count('flow_jobs.id');
+    }
+
+    /**
      * Dashboard workflow cards use the same canonical seven-stage contract as
      * the Orders page, but their counts must respect the dashboard's global
      * Today / 7 days / 30 days, Client and Team filters.
@@ -221,6 +267,12 @@ class OrderListPrototypeService
             $countScope($countQuery);
         }
 
+        return $this->stageCardsFromCountQuery($countQuery);
+    }
+
+    /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
+    private function stageCardsFromCountQuery(Builder $countQuery): Collection
+    {
         $rawCounts = $countQuery
             ->leftJoin('workflow_phases as order_list_count_phases', 'order_list_count_phases.id', '=', 'flow_jobs.workflow_phase_id')
             ->reorder()
@@ -348,7 +400,7 @@ class OrderListPrototypeService
         return true;
     }
 
-    public function paginate(User $user, array $filters, Collection $stages, int $perPage = 10, bool $myTasksOnly = false): LengthAwarePaginator
+    private function buildListQuery(User $user, array $filters, Collection $stages, bool $myTasksOnly = false): Builder
     {
         $stageId = (int) ($filters['phase_id'] ?? 0);
         $sequence = (int) ($stages->firstWhere('id', $stageId)['sequence'] ?? 0);
@@ -421,11 +473,18 @@ class OrderListPrototypeService
         // The supplied prototype is an operational queue. Completed Orders are
         // kept in history/detail screens rather than mixed into the seven active
         // stage cards. Dashboard links to completed-this-week remain supported.
-        if (($filters['metric'] ?? '') !== 'completedThisWeek') {
+        if (! in_array((string) ($filters['metric'] ?? ''), ['completedThisWeek', 'completed'], true)) {
             $query->whereNull('flow_jobs.completed_at');
         }
 
         $this->applyStageSpecificFilters($query, $phaseIds, $sequence, $filters);
+
+        return $query;
+    }
+
+    public function paginate(User $user, array $filters, Collection $stages, int $perPage = 10, bool $myTasksOnly = false): LengthAwarePaginator
+    {
+        $query = $this->buildListQuery($user, $filters, $stages, $myTasksOnly);
 
         return $query
             ->select([

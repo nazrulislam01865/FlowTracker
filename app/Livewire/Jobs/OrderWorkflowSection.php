@@ -10,6 +10,7 @@ use App\Livewire\Jobs\Concerns\ManagesOrderShipments;
 use App\Livewire\Jobs\Concerns\ManagesOrderTaskResources;
 use App\Livewire\Jobs\Concerns\ManagesOrderTasks;
 use App\Livewire\Jobs\Concerns\ManagesOrderWorkflow;
+use App\Models\ClientShippingAddress;
 use App\Models\FlowJob;
 use App\Models\MasterRecord;
 use App\Models\User;
@@ -258,7 +259,7 @@ final class OrderWorkflowSection extends Component
         $context['shipmentCouriers'] = $couriers;
 
         $locationMaster = app(LocationMasterDataService::class);
-        $shipmentLocationEditorOpen = $this->showShipmentModal || filled($this->shipmentInlineEditingId);
+        $shipmentLocationEditorOpen = filled($this->shipmentInlineEditingId);
         $shipmentCountryOptions = $shipmentLocationEditorOpen ? $locationMaster->countries() : collect();
         $shipmentCountry = trim((string) ($this->showShipmentModal
             ? ($this->shipmentForm['country'] ?? '')
@@ -278,6 +279,47 @@ final class OrderWorkflowSection extends Component
                 'label' => (string) $state->name,
                 'meta' => trim((string) $state->code),
             ])->values()->all();
+
+        // Add/Edit Shipment now uses the same compact address controls as Create
+        // Order. Load the searchable phone codes and saved client addresses only
+        // while that modal is open so normal workflow renders stay lightweight.
+        $context['shipmentPhoneCountryCodes'] = $this->showShipmentModal
+            ? $master->active('phone_country_code')
+                ->map(function (MasterRecord $record): array {
+                    $code = trim((string) $record->name);
+
+                    return [
+                        'id' => $code,
+                        'label' => $code,
+                        'meta' => trim((string) $record->description),
+                    ];
+                })
+                ->filter(fn (array $option): bool => $option['id'] !== '')
+                ->values()
+                ->all()
+            : [];
+        $context['shipmentSavedAddresses'] = $this->showShipmentModal && $job->client_id
+            ? ClientShippingAddress::query()
+                ->where('client_id', (int) $job->client_id)
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ClientShippingAddress $address): array => [
+                    'id' => (int) $address->id,
+                    'label' => trim((string) ($address->label ?: 'Shipping address')),
+                    'is_default' => (bool) $address->is_default,
+                    'recipient' => trim((string) $address->recipient),
+                    'address_line1' => trim((string) $address->address_line1),
+                    'suite' => trim((string) $address->suite),
+                    'city' => trim((string) $address->city),
+                    'state' => trim((string) $address->state),
+                    'zip' => trim((string) $address->zip),
+                    'country' => trim((string) $address->country),
+                ])
+                ->values()
+                ->all()
+            : [];
         $context['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
 
         $overviewTaskDocumentModalTask = null;

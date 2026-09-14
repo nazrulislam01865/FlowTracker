@@ -39,7 +39,7 @@ trait ManagesInquiryDocuments
         // complete immediately instead of opening an unnecessary modal.
         if (! $task->requires_submission || app(\App\Queries\Inquiries\InquiryWorkflowQuery::class)->taskHasSubmissionEvidence($task)) {
             app(\App\Actions\Inquiries\CompleteInquiryTask::class)->handle($task, auth()->user());
-            $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+            $this->refreshInquiryListMetrics();
             return;
         }
 
@@ -121,7 +121,7 @@ trait ManagesInquiryDocuments
         }
         $completedAfterDocument = $shouldCompleteAfterDocument && $task->completed_at !== null;
         if ($completedAfterDocument) {
-            $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+            $this->refreshInquiryListMetrics();
         }
 
         $this->showTaskDocumentModal = false;
@@ -139,7 +139,7 @@ trait ManagesInquiryDocuments
         $shouldCompleteAfterDocument = (bool) $task->requires_submission && ! $task->completed_at;
         app(\App\Actions\Inquiries\UploadInquiryDocument::class)->handle($task->inquiry, $this->taskUpload, auth()->user(), $task);
         if ($shouldCompleteAfterDocument) {
-            $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+            $this->refreshInquiryListMetrics();
         }
         $this->taskUpload = null;
     }
@@ -153,7 +153,7 @@ trait ManagesInquiryDocuments
         $shouldCompleteAfterDocument = (bool) $task->requires_submission && ! $task->completed_at;
         app(\App\Actions\Inquiries\UploadInquiryDocument::class)->handle($task->inquiry, $upload, auth()->user(), $task);
         if ($shouldCompleteAfterDocument) {
-            $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+            $this->refreshInquiryListMetrics();
         }
         unset($this->taskQuickUploads[$taskId]);
     }
@@ -310,7 +310,7 @@ trait ManagesInquiryDocuments
         $task = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->task(auth()->user(), $taskId, ['inquiry']);
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
         $reopened = app(\App\Actions\Inquiries\RemoveInquiryTaskLink::class)->handle($task, $linkId, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', $reopened
             ? 'Task link removed. The required-submission task was reopened.'
             : 'Task link removed.');
@@ -322,7 +322,7 @@ trait ManagesInquiryDocuments
         abort_unless((int) $task->inquiry_id === (int) $this->selectedInquiryId, 404);
 
         $reopened = app(\App\Actions\Inquiries\RemoveInquiryTaskDocument::class)->handle($task, $documentId, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', $reopened
             ? 'Task attachment removed. The required-file task was reopened.'
             : 'Task attachment removed.');

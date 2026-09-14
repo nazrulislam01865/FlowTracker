@@ -66,6 +66,17 @@ final class OrderListQuery
     }
 
     /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
+    public function stagesForFilters(User $actor, array $filters): Collection
+    {
+        return $this->prototype->stagesForFilters($actor, $filters);
+    }
+
+    public function completedCount(User $actor, array $filters, Collection $stages): int
+    {
+        return $this->prototype->completedCount($actor, $filters, $stages);
+    }
+
+    /** @return Collection<int,array{id:int,name:string,short_name:string,sequence:int,color:string,count:int}> */
     public function dashboardStages(User $actor, int $clientId, int $departmentId, int $rangeDays): Collection
     {
         return $this->prototype->dashboardStages($actor, $clientId, $departmentId, $rangeDays);

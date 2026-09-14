@@ -28,7 +28,7 @@
                 </label>
             </div>
 
-            <div class="ft-order-filter-controls-row" aria-label="Order filters">
+            <div class="ft-order-filter-controls-row ft-order-filter-main-row" aria-label="Order filters">
                 <button
                     type="button"
                     class="ft-order-filter-chip <?php echo e($orderToolbarAllActive ? 'active' : ''); ?>"

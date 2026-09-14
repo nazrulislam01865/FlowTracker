@@ -6,18 +6,29 @@ use Tests\TestCase;
 
 class CreateOrderShipmentValidationAlignmentTest extends TestCase
 {
-    public function test_location_fields_reserve_a_stable_validation_row(): void
+    public function test_prototype_required_fields_keep_inline_validation_bindings(): void
     {
         $row = file_get_contents(resource_path('views/components/jobs/create/shipping-row.blade.php'));
-        $css = file_get_contents(resource_path('css/modules/orders/create-shipping-setup.css'));
 
-        $this->assertSame(4, substr_count($row, 'ft-create-shipment-validation-slot'));
-        $this->assertStringContainsString('createShipments.$index.country', $row);
-        $this->assertStringContainsString('createShipments.$index.state', $row);
-        $this->assertStringContainsString('createShipments.$index.city', $row);
+        $this->assertStringContainsString('createShipments.$index.contact_name', $row);
+        $this->assertStringContainsString('createShipments.$index.phone_country_code', $row);
+        $this->assertStringContainsString('createShipments.$index.phone', $row);
+        $this->assertStringContainsString('createShipments.$index.address', $row);
         $this->assertStringContainsString('createShipments.$index.postal_code', $row);
-        $this->assertStringContainsString('.ft-create-shipment-location-grid .ft-create-shipment-validation-slot', $css);
-        $this->assertStringContainsString('min-height:16px;', $css);
-        $this->assertStringContainsString('.ft-create-shipment-validation-slot:empty', $css);
+        $this->assertStringNotContainsString('createShipments.$index.country', $row);
+        $this->assertStringNotContainsString('createShipments.$index.state', $row);
+        $this->assertStringNotContainsString('createShipments.$index.city', $row);
+    }
+
+    public function test_hidden_structured_location_is_optional_during_create_order(): void
+    {
+        $creation = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderCreation.php'));
+        $shipments = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesCreateOrderShipments.php'));
+        $service = file_get_contents(app_path('Services/OrderShipmentService.php'));
+
+        $this->assertStringContainsString("'createShipments.*.country' => ['nullable', 'string', 'max:120']", $creation);
+        $this->assertStringContainsString("'country' => ''", $shipments);
+        $this->assertStringContainsString('], null, false);', $service);
+        $this->assertStringNotContainsString('validateCreateShipmentLocations((array)', $creation);
     }
 }

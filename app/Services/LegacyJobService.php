@@ -159,7 +159,7 @@ class LegacyJobService
         $search = trim($search);
         [$dateFromUtc, $dateToUtc] = app(WorkspaceSettingsService::class)->localDateRangeUtcBounds($dateFrom, $dateTo);
         $searchLength = mb_strlen($search);
-        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
+        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
             $metricFilter = '';
         }
 
@@ -338,6 +338,7 @@ class LegacyJobService
             'notStarted' => (int) $this->applyNotStartedOrderScope(clone $base)->count(),
             'inProgress' => (int) $this->applyInProgressOrderScope(clone $base)->count(),
             'dueThisWeek' => (int) $this->applyDueThisWeekOrderScope(clone $base)->count(),
+            'completed' => (int) $this->applyCompletedOrderScope(clone $base)->count(),
             'completedThisWeek' => (int) $this->applyCompletedThisWeekOrderScope(clone $base)->count(),
             'attention' => (int) $this->applyNeedsAttentionOrderScope(clone $base)->count(),
         ];
@@ -350,6 +351,7 @@ class LegacyJobService
             'notStarted' => $this->applyNotStartedOrderScope($query),
             'inProgress' => $this->applyInProgressOrderScope($query),
             'dueThisWeek' => $this->applyDueThisWeekOrderScope($query),
+            'completed' => $this->applyCompletedOrderScope($query),
             'completedThisWeek' => $this->applyCompletedThisWeekOrderScope($query),
             'attention' => $this->applyNeedsAttentionOrderScope($query),
             'dashboardActive' => $this->applyDashboardActiveOrderScope($query),
@@ -440,6 +442,12 @@ class LegacyJobService
         return $this->applyOperationalOrderScope($query)
             ->whereNotNull('flow_jobs.completed_at')
             ->whereBetween('flow_jobs.completed_at', [$weekStartUtc, $weekEndUtc]);
+    }
+
+    private function applyCompletedOrderScope(Builder $query): Builder
+    {
+        return $this->applyOperationalOrderScope($query)
+            ->whereNotNull('flow_jobs.completed_at');
     }
 
     private function applyNeedsAttentionOrderScope(Builder $query): Builder

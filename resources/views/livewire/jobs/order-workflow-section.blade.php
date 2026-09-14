@@ -21,6 +21,7 @@
             :context="$context"
             :overview-task-link-form-task-id="$overviewTaskLinkFormTaskId"
             :show-shipment-modal="$showShipmentModal"
+            :show-shipment-saved-address-picker="$showShipmentSavedAddressPicker"
             :shipment-modal-task-id="$shipmentModalTaskId"
             :shipment-editing-id="$shipmentEditingId"
             :shipment-modal-mode="$shipmentModalMode"

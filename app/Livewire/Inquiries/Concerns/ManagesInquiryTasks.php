@@ -21,7 +21,7 @@ trait ManagesInquiryTasks
         $updatedInquiry = $saved->inquiry()->first(['id', 'status', 'started_at']);
         $inquiryStatus = (string) $updatedInquiry->status;
         $localizedStart = \App\Support\UserLocalTime::localize($updatedInquiry->started_at);
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
 
         // Attention is driven by the Inquiry Task Status configuration in Master Data.
         // Changing to a flagged status (for example Waiting) should only surface the
@@ -84,7 +84,7 @@ trait ManagesInquiryTasks
 
         app(\App\Actions\Inquiries\SetInquiryTaskAttention::class)->handle($task, $this->taskAttentionReason, auth()->user());
         $this->closeTaskAttentionReason();
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Attention reason saved and added to comments.');
     }
 
@@ -120,7 +120,7 @@ trait ManagesInquiryTasks
         $task = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->task(auth()->user(), $taskId);
         app(\App\Actions\Inquiries\CompleteInquiryTask::class)->handle($task, auth()->user());
         $this->selectedTaskId = null;
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry task completed.');
     }
 
@@ -162,7 +162,7 @@ trait ManagesInquiryTasks
         app(\App\Actions\Inquiries\CompleteInquiryTask::class)->handle($task, auth()->user());
         $this->selectedTaskId = null;
         $this->taskUpload = null;
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry task completed.');
     }
 
@@ -262,7 +262,7 @@ trait ManagesInquiryTasks
         ], auth()->user());
 
         $this->cancelAddTask();
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry task added.');
     }
 

@@ -2,6 +2,7 @@
 
 namespace App\Livewire\Jobs\Concerns;
 
+use App\Models\ClientShippingAddress;
 use App\Models\OrderShipment;
 use App\Models\Task;
 use App\Services\AccessControlService;
@@ -20,6 +21,7 @@ use Illuminate\Validation\ValidationException;
 trait ManagesOrderShipments
 {
     public bool $showShipmentModal = false;
+    public bool $showShipmentSavedAddressPicker = false;
     public ?int $shipmentModalTaskId = null;
     public ?int $shipmentEditingId = null;
     public string $shipmentModalMode = OrderShipmentService::MODE_SAME_ADDRESS;
@@ -65,12 +67,17 @@ trait ManagesOrderShipments
             : $primary?->shipment_urgency_id;
         $this->shipmentModalTaskId = $task->id;
         $this->shipmentEditingId = null;
-        $this->shipmentModalMode = $addressMode === OrderShipmentService::MODE_MULTIPLE_ADDRESS
-            ? OrderShipmentService::MODE_MULTIPLE_ADDRESS
-            : (string) ($job->shipment_address_mode ?: OrderShipmentService::MODE_SAME_ADDRESS);
+        // New Shipment-stage rows follow the same product rule as Create Order:
+        // Add shipment means another independently editable delivery address.
+        // Keep an explicit same_address argument working for legacy callers only.
+        $this->shipmentModalMode = $addressMode === OrderShipmentService::MODE_SAME_ADDRESS
+            ? OrderShipmentService::MODE_SAME_ADDRESS
+            : OrderShipmentService::MODE_MULTIPLE_ADDRESS;
         $this->shipmentForm = [
             'recipient' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS ? (string) ($primary?->recipient ?? '') : '',
-            'phone_country_code' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS ? (string) ($primary?->phone_country_code ?? '') : '',
+            'phone_country_code' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS
+                ? (filled($primary?->phone_country_code) ? (string) $primary?->phone_country_code : $this->defaultShipmentPhoneCountryCode())
+                : $this->defaultShipmentPhoneCountryCode(),
             'phone' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS ? (string) ($primary?->phone ?? '') : '',
             'address' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS ? (string) ($primary?->address ?? '') : '',
             'city' => $this->shipmentModalMode === OrderShipmentService::MODE_SAME_ADDRESS ? (string) ($primary?->city ?? '') : '',
@@ -83,6 +90,7 @@ trait ManagesOrderShipments
             'quantity' => null,
             'package_reference' => '',
         ];
+        $this->showShipmentSavedAddressPicker = false;
         $this->resetShipmentPrototypeErrors();
         $this->showShipmentModal = true;
     }
@@ -114,7 +122,9 @@ trait ManagesOrderShipments
                 : OrderShipmentService::MODE_MULTIPLE_ADDRESS);
         $this->shipmentForm = [
             'recipient' => (string) ($shipment->recipient ?? ''),
-            'phone_country_code' => (string) ($shipment->phone_country_code ?? ''),
+            'phone_country_code' => filled($shipment->phone_country_code)
+                ? (string) $shipment->phone_country_code
+                : $this->defaultShipmentPhoneCountryCode(),
             'phone' => (string) ($shipment->phone ?? ''),
             'address' => (string) ($shipment->address ?? ''),
             'city' => (string) ($shipment->city ?? ''),
@@ -127,6 +137,7 @@ trait ManagesOrderShipments
             'quantity' => $shipment->quantity !== null ? (int) $shipment->quantity : null,
             'package_reference' => (string) ($shipment->package_reference ?? ''),
         ];
+        $this->showShipmentSavedAddressPicker = false;
         $this->resetShipmentPrototypeErrors();
         $this->showShipmentModal = true;
     }
@@ -140,6 +151,7 @@ trait ManagesOrderShipments
         // Inline editing and the Add Shipment modal intentionally never compete
         // for the same temporary form state.
         $this->showShipmentModal = false;
+        $this->showShipmentSavedAddressPicker = false;
         $this->shipmentModalTaskId = null;
         $this->shipmentEditingId = null;
         $this->shipmentModalMode = OrderShipmentService::MODE_SAME_ADDRESS;
@@ -269,6 +281,7 @@ trait ManagesOrderShipments
             ? OrderShipmentService::MODE_MULTIPLE_ADDRESS
             : OrderShipmentService::MODE_SAME_ADDRESS;
         $this->shipmentModalMode = $mode;
+        $this->showShipmentSavedAddressPicker = false;
 
         if (! $this->shipmentModalTaskId) return;
 
@@ -291,14 +304,71 @@ trait ManagesOrderShipments
                 $this->shipmentForm[$field] = $editing->{$field};
             }
         } else {
-            foreach (['recipient', 'phone_country_code', 'phone', 'address', 'city', 'state', 'postal_code'] as $field) {
+            foreach (['recipient', 'phone', 'address', 'city', 'state', 'postal_code'] as $field) {
                 $this->shipmentForm[$field] = '';
             }
+            $this->shipmentForm['phone_country_code'] = $this->defaultShipmentPhoneCountryCode();
             $this->shipmentForm['country'] = $this->defaultShipmentCountry();
             $this->shipmentForm['shipping_source_address_id'] = null;
         }
 
         $this->resetShipmentPrototypeErrors();
+    }
+
+    public function openShipmentSavedAddressPicker(): void
+    {
+        abort_unless($this->showShipmentModal && $this->shipmentModalTaskId, 422, 'Open a shipment first.');
+        $task = $this->shipmentPrototypeTask((int) $this->shipmentModalTaskId, 'SHIP_CONFIRM_INFO');
+        abort_unless($task->job?->client_id, 422, 'This Order does not have a client with saved shipping addresses.');
+
+        $this->showShipmentSavedAddressPicker = true;
+        $this->resetValidation([
+            'shipmentForm.recipient',
+            'shipmentForm.address',
+            'shipmentForm.postal_code',
+        ]);
+    }
+
+    public function closeShipmentSavedAddressPicker(): void
+    {
+        $this->showShipmentSavedAddressPicker = false;
+    }
+
+    public function applyShipmentSavedAddress(int $addressId): void
+    {
+        abort_unless($this->showShipmentModal && $this->shipmentModalTaskId, 422, 'Open a shipment first.');
+        $task = $this->shipmentPrototypeTask((int) $this->shipmentModalTaskId, 'SHIP_CONFIRM_INFO');
+        $clientId = (int) ($task->job?->client_id ?? 0);
+        abort_unless($clientId > 0, 422, 'This Order does not have a client with saved shipping addresses.');
+
+        $address = ClientShippingAddress::query()
+            ->where('client_id', $clientId)
+            ->findOrFail($addressId);
+
+        $street = collect([$address->address_line1, $address->suite])
+            ->filter(fn ($part) => filled($part))
+            ->map(fn ($part) => trim((string) $part))
+            ->implode(', ');
+
+        if (filled($address->recipient)) {
+            $this->shipmentForm['recipient'] = trim((string) $address->recipient);
+        }
+        $this->shipmentForm['address'] = $street;
+        $this->shipmentForm['city'] = trim((string) $address->city);
+        $this->shipmentForm['state'] = trim((string) $address->state);
+        $this->shipmentForm['postal_code'] = trim((string) $address->zip);
+        $this->shipmentForm['country'] = trim((string) $address->country);
+        $this->shipmentForm['shipping_source_address_id'] = (int) $address->id;
+        $this->shipmentModalMode = OrderShipmentService::MODE_MULTIPLE_ADDRESS;
+        $this->showShipmentSavedAddressPicker = false;
+
+        $this->resetValidation([
+            'shipmentForm.recipient',
+            'shipmentForm.address',
+            'shipmentForm.postal_code',
+            'shipmentForm.country',
+            'shipmentForm.state',
+        ]);
     }
 
     public function selectShipmentModalMethod(int $methodId, ?int $urgencyId = null): void
@@ -327,21 +397,33 @@ trait ManagesOrderShipments
     {
         abort_unless($this->shipmentModalTaskId, 422);
         $task = $this->shipmentPrototypeTask((int) $this->shipmentModalTaskId, 'SHIP_CONFIRM_INFO');
-        $payload = array_merge($this->shipmentForm, ['address_mode' => $this->shipmentModalMode]);
+        $payload = array_merge($this->shipmentForm, [
+            'address_mode' => $this->shipmentModalMode,
+            '_shipment_address_form' => true,
+        ]);
         $this->resetShipmentPrototypeErrors();
+
+        if (! filled($payload['shipment_method_id'] ?? null)) {
+            $this->addError('shipmentMethod', 'Choose a shipping method.');
+            return;
+        }
 
         try {
             if ($this->shipmentEditingId) {
                 $shipment = $this->shipmentForTask($task, (int) $this->shipmentEditingId);
-                app(OrderShipmentService::class)->updateShipment($task, $shipment, auth()->user(), $payload);
+                $savedShipment = app(OrderShipmentService::class)->updateShipment($task, $shipment, auth()->user(), $payload);
                 $message = 'Shipment updated.';
             } else {
-                app(OrderShipmentService::class)->addShipment($task, auth()->user(), $payload);
+                $savedShipment = app(OrderShipmentService::class)->addShipment($task, auth()->user(), $payload);
                 $message = 'Shipment added.';
             }
         } catch (ValidationException $exception) {
             $this->applyShipmentValidation($exception);
             return;
+        }
+
+        if ($savedShipment->is_primary) {
+            $this->dispatchPrimaryShipmentShippingSelection($savedShipment);
         }
 
         $this->closeShipmentModal();
@@ -351,6 +433,7 @@ trait ManagesOrderShipments
     public function closeShipmentModal(): void
     {
         $this->showShipmentModal = false;
+        $this->showShipmentSavedAddressPicker = false;
         $this->shipmentModalTaskId = null;
         $this->shipmentEditingId = null;
         $this->shipmentModalMode = OrderShipmentService::MODE_SAME_ADDRESS;
@@ -387,36 +470,43 @@ trait ManagesOrderShipments
         }
 
         if ($updatedShipment->is_primary) {
-            // The header/planning selector lives in the lightweight parent
-            // Order shell while Task 5.1 is an isolated Workflow child. Send
-            // the complete shipping selection immediately so Sea/Air/Road do
-            // not collapse to "Normal Service", then refresh the parent shell
-            // from the canonical saved Order fields.
-            $updatedShipment->loadMissing(['shippingMethod', 'shipmentUrgency']);
-            $method = $updatedShipment->shippingMethod;
-            $urgency = $updatedShipment->shipmentUrgency;
-            $methodKind = CreateOrderShippingMethodPresenter::methodKind($method);
-            $selectionName = $methodKind === 'express'
-                ? ($urgency ? CreateOrderShippingMethodPresenter::urgencyLabel($urgency) : 'Normal Service')
-                : CreateOrderShippingMethodPresenter::methodLabel($method);
-            $selectionTone = $methodKind === 'express' && $urgency
-                ? CreateOrderShippingMethodPresenter::urgencyKind($urgency)
-                : 'normal';
-            $selectionValue = CreateOrderShippingMethodPresenter::selectionValue(
-                (int) $updatedShipment->shipment_method_id,
-                $updatedShipment->shipment_urgency_id ? (int) $updatedShipment->shipment_urgency_id : null,
-            );
-
-            $this->dispatch(
-                'ft-shipment-urgency-updated',
-                jobId: (int) $updatedShipment->flow_job_id,
-                value: $selectionValue,
-                id: $selectionValue,
-                name: $selectionName,
-                tone: $selectionTone,
-            );
-            $this->dispatch('order-runtime-refreshed', orderId: (int) $updatedShipment->flow_job_id);
+            $this->dispatchPrimaryShipmentShippingSelection($updatedShipment);
         }
+    }
+
+    private function dispatchPrimaryShipmentShippingSelection(OrderShipment $shipment): void
+    {
+        if (! $shipment->is_primary || ! $shipment->shipment_method_id) {
+            return;
+        }
+
+        // The header/planning selector lives in the lightweight parent Order
+        // shell while Task 5.1 is an isolated Workflow child. Keep it in sync
+        // whether the method changes inline or inside Add/Edit Shipment.
+        $shipment->loadMissing(['shippingMethod', 'shipmentUrgency']);
+        $method = $shipment->shippingMethod;
+        $urgency = $shipment->shipmentUrgency;
+        $methodKind = CreateOrderShippingMethodPresenter::methodKind($method);
+        $selectionName = $methodKind === 'express'
+            ? ($urgency ? CreateOrderShippingMethodPresenter::urgencyLabel($urgency) : 'Normal Service')
+            : CreateOrderShippingMethodPresenter::methodLabel($method);
+        $selectionTone = $methodKind === 'express' && $urgency
+            ? CreateOrderShippingMethodPresenter::urgencyKind($urgency)
+            : 'normal';
+        $selectionValue = CreateOrderShippingMethodPresenter::selectionValue(
+            (int) $shipment->shipment_method_id,
+            $shipment->shipment_urgency_id ? (int) $shipment->shipment_urgency_id : null,
+        );
+
+        $this->dispatch(
+            'ft-shipment-urgency-updated',
+            jobId: (int) $shipment->flow_job_id,
+            value: $selectionValue,
+            id: $selectionValue,
+            name: $selectionName,
+            tone: $selectionTone,
+        );
+        $this->dispatch('order-runtime-refreshed', orderId: (int) $shipment->flow_job_id);
     }
 
     public function saveOrderShipmentTracking(int $taskId, int $shipmentId, int $courierId, string $trackingNumber): void
@@ -470,6 +560,7 @@ trait ManagesOrderShipments
     private function resetShipmentPrototypeUi(): void
     {
         $this->showShipmentModal = false;
+        $this->showShipmentSavedAddressPicker = false;
         $this->shipmentModalTaskId = null;
         $this->shipmentEditingId = null;
         $this->shipmentModalMode = OrderShipmentService::MODE_SAME_ADDRESS;
@@ -563,6 +654,15 @@ trait ManagesOrderShipments
                 $this->addError($inlineField, $message);
             }
         }
+    }
+
+    private function defaultShipmentPhoneCountryCode(): string
+    {
+        $codes = app(\App\Services\MasterDataService::class)->active('phone_country_code');
+        $preferred = $codes->first(fn ($record): bool => trim((string) $record->name) === '+1');
+        $first = $preferred ?: $codes->first();
+
+        return trim((string) ($first?->name ?? '+1')) ?: '+1';
     }
 
     private function defaultShipmentCountry(): string

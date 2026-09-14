@@ -16,18 +16,14 @@
     $addressKeys = $rows->map(function ($shipment) {
         $parts = collect([
             data_get($shipment, 'address'),
+            data_get($shipment, 'postal_code'),
             data_get($shipment, 'city'),
             data_get($shipment, 'state'),
-            data_get($shipment, 'postal_code'),
             data_get($shipment, 'country'),
         ])->map(fn ($value) => trim((string) $value));
 
-        $hasEnteredAddress = collect([
-            data_get($shipment, 'address'),
-            data_get($shipment, 'city'),
-            data_get($shipment, 'state'),
-            data_get($shipment, 'postal_code'),
-        ])->contains(fn ($value) => trim((string) $value) !== '');
+        $hasEnteredAddress = trim((string) data_get($shipment, 'address')) !== ''
+            || trim((string) data_get($shipment, 'postal_code')) !== '';
 
         return $hasEnteredAddress ? mb_strtolower($parts->implode('|')) : null;
     })->filter()->unique();
@@ -36,60 +32,47 @@
     $targetIndex = $savedShippingAddressShipmentIndex ?? 0;
     $targetSourceAddressId = data_get($rows->get($targetIndex, []), 'shipping_source_address_id');
 
-    $modeNote = match ($mode) {
-        \App\Services\OrderShipmentService::MODE_SAME_ADDRESS => 'Shipment 1 delivery details are reused by every shipment.',
-        \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS => 'Each shipment has its own delivery address.',
-        default => 'Each shipment can keep or change the delivery address.',
-    };
+    $isMultipleAddressMode = $mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS;
+    $modeNote = $isMultipleAddressMode
+        ? 'Each shipment keeps its own delivery address.'
+        : 'One shipment address is configured for this Order.';
 @endphp
 
 <section class="ft-create-section ft-create-shipping-setup" wire:key="create-order-shipping-setup">
     <div class="ft-create-shipping-setup-heading">
         <div class="ft-create-section-title">
             <span>2</span>
-            <h2>Shipping setup</h2>
+            <h2>Shipment address</h2>
         </div>
         <p>Configure one or more shipment addresses. Shipping method is selected in Schedule &amp; owner and applied to every shipment.</p>
     </div>
 
-    <div class="ft-create-shipping-modes" role="radiogroup" aria-label="Shipping setup mode">
-        <label class="ft-create-shipping-mode {{ $mode === 'multiple_shipments' ? 'is-selected' : '' }}">
+    <div class="ft-create-shipping-modes" role="radiogroup" aria-label="Shipment address mode">
+        <label class="ft-create-shipping-mode {{ ! $isMultipleAddressMode ? 'is-selected' : '' }}">
             <input
                 type="radio"
                 name="create-shipment-mode"
                 value="multiple_shipments"
-                @checked($mode === 'multiple_shipments')
+                @checked(! $isMultipleAddressMode)
                 wire:click="setCreateShipmentMode('multiple_shipments')"
             >
             <span class="ft-create-shipping-mode-copy">
-                <strong>Allow multiple shipments</strong>
+                <strong>Address</strong>
                 <small>Start from the first address and change any shipment if needed.</small>
             </span>
         </label>
-        <label class="ft-create-shipping-mode {{ $mode === \App\Services\OrderShipmentService::MODE_SAME_ADDRESS ? 'is-selected' : '' }}">
-            <input
-                type="radio"
-                name="create-shipment-mode"
-                value="same_address"
-                @checked($mode === \App\Services\OrderShipmentService::MODE_SAME_ADDRESS)
-                wire:click="setCreateShipmentMode('same_address')"
-            >
-            <span class="ft-create-shipping-mode-copy">
-                <strong>Same address multiple shipment</strong>
-                <small>Enter the delivery details once and reuse them for every shipment.</small>
-            </span>
-        </label>
-        <label class="ft-create-shipping-mode {{ $mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS ? 'is-selected' : '' }}">
+
+        <label class="ft-create-shipping-mode {{ $isMultipleAddressMode ? 'is-selected' : '' }}">
             <input
                 type="radio"
                 name="create-shipment-mode"
                 value="multiple_address"
-                @checked($mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS)
+                @checked($isMultipleAddressMode)
                 wire:click="setCreateShipmentMode('multiple_address')"
             >
             <span class="ft-create-shipping-mode-copy">
-                <strong>Multiple address multiple shipment</strong>
-                <small>Set a separate delivery address for each shipment.</small>
+                <strong>Multiple address</strong>
+                <small>Configure a separate delivery address for each shipment.</small>
             </span>
         </label>
     </div>
@@ -98,9 +81,10 @@
     <div class="ft-create-shipping-summary">
         <div>
             <span class="ft-create-shipping-summary-item">
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5 7.5h10M6.5 4.5h7l1.5 3v7.5H5V7.5l1.5-3Z"/><path d="M7 15v1.5M13 15v1.5"/></svg>
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M3.5 5.5h9.3v8.2H3.5z"/><path d="M12.8 8h2.2l1.8 2v3.7h-4z"/><circle cx="6" cy="15" r="1.2"/><circle cx="14.8" cy="15" r="1.2"/></svg>
                 <strong>{{ $shipmentCount }}</strong> {{ \Illuminate\Support\Str::plural('shipment', $shipmentCount) }} configured
             </span>
+            <span class="ft-create-shipping-summary-divider" aria-hidden="true"></span>
             <span class="ft-create-shipping-summary-item">
                 <i></i><strong>{{ $deliveryAddressCount }}</strong> {{ \Illuminate\Support\Str::plural('delivery address', $deliveryAddressCount) }} entered
             </span>
@@ -127,7 +111,9 @@
                 />
             @endforeach
         </div>
+    </div>
 
+    @if($isMultipleAddressMode)
         <div class="ft-create-shipment-add-row">
             <button
                 type="button"
@@ -139,15 +125,9 @@
             >
                 <span aria-hidden="true">+</span> Add shipment
             </button>
-            @if($mode === \App\Services\OrderShipmentService::MODE_SAME_ADDRESS)
-                <span class="ft-create-shipment-add-help">New shipments automatically use Shipment 1 contact and address.</span>
-            @elseif($mode === \App\Services\OrderShipmentService::MODE_MULTIPLE_ADDRESS)
-                <span class="ft-create-shipment-add-help">Each new shipment starts with a blank delivery address.</span>
-            @else
-                <span class="ft-create-shipment-add-help">Add another package and adjust its delivery address or package details as needed.</span>
-            @endif
+            <span class="ft-create-shipment-add-help">Add another package and configure its delivery address.</span>
         </div>
-    </div>
+    @endif
 
     @error('createShipments')<small class="validation-error ft-create-shipping-table-error">{{ $message }}</small>@enderror
 
@@ -189,10 +169,9 @@
                             <span>{{ collect([$savedAddress->city, $savedAddress->state, $savedAddress->zip])->filter()->implode(', ') }}</span>
                             <span>{{ $savedAddress->country }}</span>
                         </span>
-                        <span class="ft-order-saved-address-use">Use address</span>
                     </button>
                 @empty
-                    <div class="ft-order-saved-address-empty">No saved shipping addresses are available for this client.</div>
+                    <div class="ft-empty-state">No saved shipping addresses are available for this client.</div>
                 @endforelse
             </div>
         </section>

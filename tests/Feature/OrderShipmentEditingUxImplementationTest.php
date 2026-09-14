@@ -10,7 +10,7 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
     {
         $plan = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/plan-table.blade.php'));
 
-        $this->assertStringContainsString('Edit each shipment individually.', $plan);
+        $this->assertStringContainsString('Use Edit for the delivery address.', $plan);
         $this->assertStringContainsString('openEditShipment', $plan);
         $this->assertStringContainsString('openAddShipment', $plan);
         $this->assertStringContainsString('No changes — continue', $plan);
@@ -65,22 +65,36 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringContainsString('overflow-y: auto;', $css);
     }
 
-    public function test_shipment_address_uses_reusable_country_and_state_master_data(): void
+    public function test_shipment_stage_modal_matches_create_order_compact_address_fields(): void
     {
         $modal = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/add-modal.blade.php'));
-        $pageData = file_get_contents(app_path('Livewire/Jobs/Concerns/BuildsOrderPageData.php'));
-        $locations = file_get_contents(app_path('Services/LocationMasterDataService.php'));
-        $shipmentService = file_get_contents(app_path('Services/OrderShipmentService.php'));
+        $manager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderShipments.php'));
+        $workflow = file_get_contents(app_path('Livewire/Jobs/OrderWorkflowSection.php'));
+        $presenter = file_get_contents(app_path('Support/OrderShipmentPresenter.php'));
 
-        $this->assertStringContainsString('property="shipmentForm.country"', $modal);
-        $this->assertStringContainsString('property="shipmentForm.state"', $modal);
-        $this->assertStringContainsString(':fixed-menu="true"', $modal);
-        $this->assertStringContainsString('Same as Shipment 1', $modal);
-        $this->assertStringContainsString('Different address', $modal);
-        $this->assertStringContainsString('LocationMasterDataService::class', $pageData);
-        $this->assertStringContainsString("active('country')", $locations);
-        $this->assertStringContainsString("active('state')", $locations);
-        $this->assertStringContainsString('stateBelongsToCountry', $shipmentService);
+        $this->assertStringContainsString('ft-form-standard ft-form-standard--order', $modal);
+        $this->assertStringContainsString('property="shipmentForm.phone_country_code"', $modal);
+        $this->assertStringContainsString('search-placeholder="Search code or country…"', $modal);
+        $this->assertStringContainsString('wire:model.blur="shipmentForm.recipient"', $modal);
+        $this->assertStringContainsString('wire:model.blur="shipmentForm.phone"', $modal);
+        $this->assertStringContainsString('wire:model.blur="shipmentForm.address"', $modal);
+        $this->assertStringContainsString('wire:model.blur="shipmentForm.postal_code"', $modal);
+        $this->assertStringContainsString('Use saved address', $modal);
+        $this->assertStringNotContainsString('shipmentForm.country', $modal);
+        $this->assertStringNotContainsString('shipmentForm.state', $modal);
+        $this->assertStringNotContainsString('shipmentForm.city', $modal);
+        $this->assertStringNotContainsString('QUANTITY (OPTIONAL)', $modal);
+        $this->assertStringNotContainsString('PACKAGE / REFERENCE (OPTIONAL)', $modal);
+        $this->assertStringContainsString('Shipping method', $modal);
+        $this->assertStringContainsString('mode="modal"', $modal);
+        $this->assertStringContainsString(':selected="$selectedShipmentMethod"', $modal);
+        $this->assertStringContainsString("@error('shipmentMethod')", $modal);
+
+        $this->assertStringContainsString('openShipmentSavedAddressPicker', $manager);
+        $this->assertStringContainsString('applyShipmentSavedAddress', $manager);
+        $this->assertStringContainsString("active('phone_country_code')", $workflow);
+        $this->assertStringContainsString("'phone_country_codes'", $presenter);
+        $this->assertStringContainsString("'saved_shipping_addresses'", $presenter);
     }
 
     public function test_multiple_shipment_flags_are_derived_from_actual_shipment_rows(): void
@@ -92,27 +106,31 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringNotContainsString('Enable Allow multiple shipments before adding another shipment.', $service);
     }
 
-    public function test_shipment_modal_marks_only_required_fields_and_defaults_primary_shipping_from_order(): void
+    public function test_shipment_modal_required_fields_match_create_order_and_hidden_shipping_data_is_preserved(): void
     {
         $modal = file_get_contents(resource_path('views/components/jobs/order-detail/shipment/add-modal.blade.php'));
         $css = file_get_contents(resource_path('css/modules/orders/detail/shipment-modal.css'));
         $manager = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderShipments.php'));
         $service = file_get_contents(app_path('Services/OrderShipmentService.php'));
 
-        foreach (['CONTACT PERSON', 'SHIPPING ADDRESS', 'COUNTRY', 'CITY', 'POSTAL CODE', 'SHIPPING METHOD'] as $label) {
-            $this->assertMatchesRegularExpression('/'.preg_quote($label, '/').'.*ft-ms-required/s', $modal);
+        foreach (['Contact person', 'Phone', 'Shipping address', 'Postal code', 'Shipping method'] as $label) {
+            $this->assertMatchesRegularExpression('/'.preg_quote($label, '/').'.*ft-order-required-star/s', $modal);
         }
-        $this->assertStringContainsString("STATE @if(\$currentCountry !== '' && \$states->isNotEmpty())<b class=\"ft-ms-required\"", $modal);
-        $this->assertStringContainsString('<span>PHONE</span>', $modal);
-        $this->assertStringContainsString('<span>QUANTITY (OPTIONAL)</span>', $modal);
-        $this->assertStringContainsString('<span>PACKAGE / REFERENCE (OPTIONAL)</span>', $modal);
-        $this->assertStringContainsString('.ft-ms-required', $css);
-        $this->assertStringContainsString('color: #dc2626;', $css);
+        $this->assertStringContainsString('var(--ft-form-label-color)', $css);
+        $this->assertStringContainsString('var(--ft-form-control-height)', $css);
 
-        $this->assertStringContainsString('orderDefaultShippingSelection', $manager);
-        $this->assertStringContainsString('$useOrderShippingDefault = (bool) $shipment->is_primary || ! $shipment->shipment_method_id;', $manager);
-        $this->assertStringContainsString('if (! $methodId && $urgencyId)', $service);
-        $this->assertStringContainsString("CreateOrderShippingMethodPresenter::methodKind(\$method) === 'express'", $service);
+        // The compact modal no longer duplicates fields managed elsewhere, but
+        // their persisted values remain in the form state and service payload.
+        $this->assertStringNotContainsString('SHIPMENT NO.', $modal);
+        $this->assertStringNotContainsString('QUANTITY (OPTIONAL)', $modal);
+        $this->assertStringNotContainsString('PACKAGE / REFERENCE (OPTIONAL)', $modal);
+        $this->assertStringContainsString('Shipping method', $modal);
+        $this->assertStringContainsString("addError('shipmentMethod', 'Choose a shipping method.')", $manager);
+        $this->assertStringContainsString("'shipment_method_id' => \$defaultMethodId", $manager);
+        $this->assertStringContainsString("'quantity' => \$shipment->quantity", $manager);
+        $this->assertStringContainsString("'_shipment_address_form' => true", $manager);
+        $this->assertStringContainsString('validatedAddressFields($payload, null, false, true)', $service);
+        $this->assertStringContainsString('Choose an active phone country code from Master Data.', $service);
     }
 
     public function test_order_shipment_urgency_and_primary_shipping_method_stay_synchronized_both_ways(): void
@@ -152,6 +170,9 @@ class OrderShipmentEditingUxImplementationTest extends TestCase
         $this->assertStringContainsString('syncLegacyPrimaryShippingSelection', $shipmentService);
         $this->assertStringContainsString('if ($locked->is_primary)', $shipmentService);
         $this->assertStringContainsString("'shipment_method_ids' => \$shipment->shipment_method_id ? [(int) \$shipment->shipment_method_id] : []", $shipmentService);
+        $this->assertStringContainsString('$shippingMethodChanged =', $shipmentService);
+        $this->assertStringContainsString('syncLegacyPrimaryShippingSelection($job, $locked->refresh())', $shipmentService);
+        $this->assertStringContainsString('$hadTrackingForPreviousMethod', $shipmentService);
 
         // Both isolated Livewire directions refresh immediately without a browser refresh.
         $this->assertStringContainsString("'ft-shipment-urgency-updated'", $shipmentManager);

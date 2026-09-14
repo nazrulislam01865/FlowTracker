@@ -2,6 +2,7 @@
     'jobs',
     'rows' => [],
     'stages' => collect(),
+    'metrics' => [],
     'selectedStage' => null,
     'stageQuickFilters' => ['all' => 'All'],
     'searchFilter' => '',

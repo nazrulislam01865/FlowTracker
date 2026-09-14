@@ -226,7 +226,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString('private function applyUnfinishedListScope(Builder $query): Builder', $service);
         $this->assertStringContainsString("->whereDoesntHave('tasks')", $service);
         $this->assertStringContainsString("->orWhereHas('tasks', fn (Builder \$task) => \$task->whereNull('completed_at'))", $service);
-        $this->assertStringContainsString("\$hideCompleted && \$metricFilter !== 'completedThisWeek'", $service);
+        $this->assertStringContainsString("\$hideCompleted && !in_array(\$metricFilter, ['completed', 'completedThisWeek'], true)", $service);
         $this->assertStringContainsString('public bool $hideCompleted = false;', $component);
         $this->assertStringContainsString('public function updatedHideCompleted(): void', $component);
         $this->assertStringContainsString('wire:model.live="pendingHideCompleted"', $view);
@@ -327,7 +327,7 @@ class InquiryPrototypeImplementationTest extends TestCase
         $this->assertStringContainsString("'completed_at' => null", $service);
         $this->assertStringContainsString('final required file/link evidence was removed', $service);
         $this->assertStringContainsString('$this->syncAutomaticStatus($lockedTask->inquiry, $actor);', $service);
-        $this->assertStringContainsString('$this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());', $component);
+        $this->assertStringContainsString('$this->refreshInquiryListMetrics();', $component);
         $this->assertStringContainsString('public function taskHasSubmissionEvidence(InquiryTask $task): bool', $service);
         $this->assertStringContainsString('$task->documents()->exists() || $task->links()->exists()', $service);
         $this->assertStringContainsString('Required file or link', $taskflow);

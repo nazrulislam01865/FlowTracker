@@ -301,7 +301,7 @@ class LegacyInquiryService
             (string) ($filters['date_to'] ?? ''),
         );
 
-        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
+        if (!in_array($metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
             $metricFilter = '';
         }
 
@@ -315,7 +315,7 @@ class LegacyInquiryService
             // though every active Inquiry task is complete. Filter by both the
             // Inquiry lifecycle fields and the actual taskflow so Hide completed
             // always matches the Completed row the user sees in listRows().
-            ->when($hideCompleted && $metricFilter !== 'completedThisWeek', fn (Builder $q) => $this->applyUnfinishedListScope($q))
+            ->when($hideCompleted && !in_array($metricFilter, ['completed', 'completedThisWeek'], true), fn (Builder $q) => $this->applyUnfinishedListScope($q))
             ->when($metricFilter !== '', fn (Builder $q) => $this->applyMetricListScope($q, $metricFilter, $user))
             ->when($status !== '', fn (Builder $q) => $this->applyTaskStatusListScope($q, $status))
             ->when($quick === 'attention', fn (Builder $q) => $this->applyAttentionNeededListScope($q, $user))
@@ -405,6 +405,7 @@ class LegacyInquiryService
             'notStarted' => $this->applyNotStartedListScope($query),
             'inProgress' => $this->applyInProgressListScope($query),
             'dueThisWeek' => $this->applyDueThisWeekListScope($query),
+            'completed' => $this->applyCompletedListScope($query),
             'completedThisWeek' => $this->applyCompletedThisWeekListScope($query),
             'attention' => $this->applyAttentionNeededListScope($query, $user),
             'dashboardOpen' => $this->applyDashboardOpenInquiryScope($query),
@@ -696,17 +697,57 @@ class LegacyInquiryService
         })->values();
     }
 
-    public function metrics(User $user): array
+    public function metrics(User $user, array $filters = []): array
     {
-        $base = $this->visibleQuery($user);
+        $filters['metric_filter'] = '';
+        $base = $this->listQuery($user, $filters);
+        $settings = app(WorkspaceSettingsService::class);
+        $today = $settings->localToday();
+        [$weekStartUtc, $weekEndUtc] = $settings->localWeekUtcBounds();
+        $weekStart = $today->startOfWeek()->toDateString();
+        $weekEnd = $today->endOfWeek()->toDateString();
+        $todayDate = $today->toDateString();
+        $todayStartUtc = $today->utc();
+        $todayEndUtc = $today->endOfDay()->utc();
+
+        $status = "LOWER(TRIM(COALESCE(inquiries.status, '')))";
+        $taskExists = "EXISTS (SELECT 1 FROM inquiry_tasks metric_tasks WHERE metric_tasks.inquiry_id = inquiries.id AND metric_tasks.deleted_at IS NULL)";
+        $incompleteTaskExists = "EXISTS (SELECT 1 FROM inquiry_tasks metric_open_tasks WHERE metric_open_tasks.inquiry_id = inquiries.id AND metric_open_tasks.deleted_at IS NULL AND metric_open_tasks.completed_at IS NULL)";
+        $progressedTaskExists = "EXISTS (SELECT 1 FROM inquiry_tasks metric_progress_tasks WHERE metric_progress_tasks.inquiry_id = inquiries.id AND metric_progress_tasks.deleted_at IS NULL AND (metric_progress_tasks.started_at IS NOT NULL OR metric_progress_tasks.completed_at IS NOT NULL))";
+        $unfinished = "inquiries.completed_at IS NULL AND inquiries.result IS NULL AND {$status} NOT IN ('completed', 'converted', 'closed', 'dead') AND ((NOT {$taskExists}) OR {$incompleteTaskExists})";
+        $completed = "inquiries.result IS NULL AND {$status} != 'draft' AND {$taskExists} AND NOT {$incompleteTaskExists}";
+        $attentionTaskExists = "EXISTS (SELECT 1 FROM inquiry_tasks metric_attention_tasks WHERE metric_attention_tasks.inquiry_id = inquiries.id AND metric_attention_tasks.deleted_at IS NULL AND metric_attention_tasks.completed_at IS NULL AND (metric_attention_tasks.needs_attention = 1 OR metric_attention_tasks.assignee_id IS NULL OR DATE(metric_attention_tasks.due_date) < ? OR LOWER(TRIM(COALESCE(metric_attention_tasks.status, ''))) LIKE '%blocked%' OR LOWER(TRIM(COALESCE(metric_attention_tasks.status, ''))) LIKE '%revision%' OR LOWER(TRIM(COALESCE(metric_attention_tasks.status, ''))) LIKE '%overdue%' OR LOWER(TRIM(COALESCE(metric_attention_tasks.status, ''))) LIKE '%delayed%' OR LOWER(TRIM(COALESCE(metric_attention_tasks.status, ''))) LIKE '%attention%'))";
+
+        $row = (clone $base)
+            ->reorder()
+            ->selectRaw(
+                "COALESCE(SUM(CASE WHEN inquiries.created_at BETWEEN ? AND ? THEN 1 ELSE 0 END), 0) AS created_today,
+                 COALESCE(SUM(CASE WHEN {$unfinished} AND {$status} != 'draft' AND NOT {$progressedTaskExists} THEN 1 ELSE 0 END), 0) AS not_started,
+                 COALESCE(SUM(CASE WHEN {$unfinished} AND {$status} != 'draft' AND {$progressedTaskExists} THEN 1 ELSE 0 END), 0) AS in_progress,
+                 COALESCE(SUM(CASE WHEN {$unfinished} AND {$status} != 'draft' AND inquiries.required_delivery_date BETWEEN ? AND ? THEN 1 ELSE 0 END), 0) AS due_this_week,
+                 COALESCE(SUM(CASE WHEN {$completed} THEN 1 ELSE 0 END), 0) AS completed,
+                 COALESCE(SUM(CASE WHEN {$status} != 'draft' AND inquiries.completed_at IS NOT NULL AND inquiries.completed_at BETWEEN ? AND ? THEN 1 ELSE 0 END), 0) AS completed_this_week,
+                 COALESCE(SUM(CASE WHEN {$unfinished} AND {$status} != 'draft' AND (inquiries.needs_attention = 1 OR {$attentionTaskExists}) THEN 1 ELSE 0 END), 0) AS attention",
+                [
+                    $todayStartUtc,
+                    $todayEndUtc,
+                    $weekStart,
+                    $weekEnd,
+                    $weekStartUtc,
+                    $weekEndUtc,
+                    $todayDate,
+                ],
+            )
+            ->first();
 
         return [
-            'createdToday' => (int) $this->applyCreatedTodayListScope(clone $base)->count(),
-            'notStarted' => (int) $this->applyNotStartedListScope(clone $base)->count(),
-            'inProgress' => (int) $this->applyInProgressListScope(clone $base)->count(),
-            'dueThisWeek' => (int) $this->applyDueThisWeekListScope(clone $base)->count(),
-            'completedThisWeek' => (int) $this->applyCompletedThisWeekListScope(clone $base)->count(),
-            'attention' => (int) $this->applyAttentionNeededListScope(clone $base, $user)->count(),
+            'createdToday' => (int) ($row?->created_today ?? 0),
+            'notStarted' => (int) ($row?->not_started ?? 0),
+            'inProgress' => (int) ($row?->in_progress ?? 0),
+            'dueThisWeek' => (int) ($row?->due_this_week ?? 0),
+            'completed' => (int) ($row?->completed ?? 0),
+            'completedThisWeek' => (int) ($row?->completed_this_week ?? 0),
+            'attention' => (int) ($row?->attention ?? 0),
         ];
     }
 

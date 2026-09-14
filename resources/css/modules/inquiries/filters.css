@@ -282,3 +282,239 @@
         flex: 0 1 72px;
     }
 }
+
+/* 2026-09-14: Inquiry list summary + filter usability pass.
+   Keep the summary cards dense on desktop and make the Inquiry filter toolbar
+   one structured grid. Metric-only actions (Created Today / Completed) live in
+   the cards above, so the toolbar only contains controls that add new value. */
+.ft-inquiry-prototype .ft-inquiry-summary-grid {
+    --ft-summary-columns: 6;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .inquiry-filter-controls {
+    display: block;
+    width: 100%;
+    min-width: 0;
+    max-width: 100%;
+    flex: 1 1 100%;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-grid {
+    display: grid;
+    grid-template-columns:
+        minmax(205px, .9fr)
+        minmax(165px, .7fr)
+        minmax(220px, 1.05fr)
+        minmax(330px, 1.35fr)
+        minmax(145px, .65fr)
+        minmax(174px, auto);
+    width: 100%;
+    min-width: 0;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border: 1px solid #e3eaf3;
+    border-radius: 12px;
+    background: #fbfcfe;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field {
+    min-width: 0;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--quick {
+    display: grid;
+    grid-template-columns: minmax(72px, .72fr) minmax(118px, 1.28fr);
+    min-width: 0;
+    gap: 6px;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--quick > .chip {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 44px;
+    min-height: 44px;
+    padding: 0 10px;
+    border-radius: 9px;
+    line-height: 1.15;
+    white-space: nowrap;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--status,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--client,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--status > *,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--client > * {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field .ft-search-select__trigger {
+    width: 100%;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 9px;
+    padding-inline: 12px;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates,
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates > .ft-inquiry-date-range {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates > .ft-inquiry-date-range {
+    display: block;
+    padding: 0;
+    border: 0;
+    background: transparent;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-fields {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 8px;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-field {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    min-width: 0;
+    align-items: center;
+    gap: 6px;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-field > span {
+    color: var(--ft-text-secondary);
+    font-size: var(--ft-font-size-xs);
+    font-weight: var(--ft-font-weight-semibold);
+    white-space: nowrap;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-field input {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    min-height: 44px;
+    border-radius: 9px;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-hide-completed {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 44px;
+    min-height: 44px;
+    justify-content: center;
+    padding: 0 10px;
+    border-radius: 9px;
+    white-space: nowrap;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+    display: grid;
+    grid-template-columns: minmax(94px, 1fr) minmax(70px, auto);
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    gap: 6px;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions .ft-inquiry-filter-action {
+    width: 100%;
+    min-width: 0;
+    max-width: none;
+    height: 44px;
+    min-height: 44px;
+    margin: 0;
+    padding: 0 10px;
+    border-radius: 9px;
+    box-sizing: border-box;
+}
+
+.ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions .ft-inquiry-clear-filter {
+    flex: none;
+}
+
+@media (max-width: 1480px) {
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-grid {
+        grid-template-columns: minmax(195px, .9fr) minmax(165px, .72fr) minmax(210px, 1fr) minmax(300px, 1.3fr);
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-hide-completed {
+        grid-column: 1 / 2;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        grid-column: 2 / 5;
+        width: min(280px, 100%);
+        justify-self: end;
+    }
+}
+
+@media (max-width: 1180px) {
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 9px;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--quick,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--status,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--client,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-hide-completed {
+        grid-column: auto;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        grid-column: 1 / -1;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        width: min(320px, 100%);
+        justify-self: end;
+    }
+}
+
+@media (max-width: 760px) {
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-grid {
+        grid-template-columns: minmax(0, 1fr);
+        padding: 8px;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--quick,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--status,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-field--client,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-hide-completed,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        grid-column: 1 / -1;
+        width: 100%;
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        justify-self: stretch;
+    }
+}
+
+@media (max-width: 520px) {
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--quick,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-fields,
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-actions {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .ft-inquiry-prototype .inquiry-list-v2 .ft-inquiry-filter-group--dates .ft-date-range-field {
+        grid-template-columns: 38px minmax(0, 1fr);
+    }
+}

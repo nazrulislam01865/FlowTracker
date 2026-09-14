@@ -110,8 +110,16 @@ trait BuildsOrderPageData
                     ->all(),
             ]);
         $createShipmentPhoneCodes = $master->active('phone_country_code')
-            ->map(fn (MasterRecord $record) => (string) $record->name)
-            ->filter()
+            ->map(function (MasterRecord $record): array {
+                $code = trim((string) $record->name);
+
+                return [
+                    'id' => $code,
+                    'label' => $code,
+                    'meta' => trim((string) $record->description),
+                ];
+            })
+            ->filter(fn (array $option): bool => $option['id'] !== '')
             ->values();
 
         $access = app(AccessControlService::class);
@@ -672,6 +680,43 @@ trait BuildsOrderPageData
             ])
             ->values()
             ->all();
+        $orderDetailContext['shipmentPhoneCountryCodes'] = $this->showShipmentModal
+            ? $master->active('phone_country_code')
+                ->map(function (MasterRecord $record): array {
+                    $code = trim((string) $record->name);
+
+                    return [
+                        'id' => $code,
+                        'label' => $code,
+                        'meta' => trim((string) $record->description),
+                    ];
+                })
+                ->filter(fn (array $option): bool => $option['id'] !== '')
+                ->values()
+                ->all()
+            : [];
+        $orderDetailContext['shipmentSavedAddresses'] = $this->showShipmentModal && $selected->client_id
+            ? ClientShippingAddress::query()
+                ->where('client_id', (int) $selected->client_id)
+                ->orderByDesc('is_default')
+                ->orderBy('sort_order')
+                ->orderBy('id')
+                ->get()
+                ->map(fn (ClientShippingAddress $address): array => [
+                    'id' => (int) $address->id,
+                    'label' => trim((string) ($address->label ?: 'Shipping address')),
+                    'is_default' => (bool) $address->is_default,
+                    'recipient' => trim((string) $address->recipient),
+                    'address_line1' => trim((string) $address->address_line1),
+                    'suite' => trim((string) $address->suite),
+                    'city' => trim((string) $address->city),
+                    'state' => trim((string) $address->state),
+                    'zip' => trim((string) $address->zip),
+                    'country' => trim((string) $address->country),
+                ])
+                ->values()
+                ->all()
+            : [];
         $orderDetailContext['workflowEmailResendFeedback'] = $this->orderWorkflowEmailResendFeedback;
         $orderRedoContext = $preloadedRedoContext
             ?? app(OrderRedoService::class)->summaryContext($selected, $user);

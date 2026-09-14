@@ -70,7 +70,7 @@ class Index extends Component
     public string $pendingDateTo = '';
     public bool $pendingHideCompleted = false;
 
-    public array $metrics = ['createdToday' => 0, 'notStarted' => 0, 'inProgress' => 0, 'dueThisWeek' => 0, 'completedThisWeek' => 0, 'attention' => 0];
+    public array $metrics = ['createdToday' => 0, 'notStarted' => 0, 'inProgress' => 0, 'dueThisWeek' => 0, 'completed' => 0, 'completedThisWeek' => 0, 'attention' => 0];
 
     public bool $showCreate = false;
     public ?int $selectedInquiryId = null;
@@ -224,7 +224,7 @@ class Index extends Component
     {
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
         $this->metricFilter = trim((string) request('metric', $this->metricFilter));
-        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
+        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention', 'dashboardOpen'], true)) {
             $this->metricFilter = '';
         }
         $this->resetCreateCollections();
@@ -255,19 +255,19 @@ class Index extends Component
 
         // List metrics are not needed while creating or viewing one Inquiry.
         // Avoid running the aggregate query on those routes.
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
     }
 
     #[On('flowtrack-notification')]
     public function refreshRealtime(): void
     {
-        if (!$this->showCreate && !$this->selectedInquiryId) $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        if (!$this->showCreate && !$this->selectedInquiryId) $this->refreshInquiryListMetrics();
     }
 
     protected function prepareForWorkspaceRefresh(): void
     {
         if (! $this->showCreate && ! $this->selectedInquiryId) {
-            $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+            $this->refreshInquiryListMetrics();
         }
     }
 

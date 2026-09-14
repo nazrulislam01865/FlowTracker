@@ -209,7 +209,7 @@ trait ManagesInquiryDetail
 
         app(\App\Actions\Inquiries\SetInquiryAttention::class)->handle($this->selectedInquiry(), $this->inquiryAttentionReason, auth()->user());
         $this->closeInquiryAttentionReason();
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryActivityPage');
         session()->flash('success', 'Attention request saved and added to comments.');
     }
@@ -218,7 +218,7 @@ trait ManagesInquiryDetail
     {
         app(\App\Actions\Inquiries\ClearInquiryAttention::class)->handle($this->selectedInquiry(), auth()->user());
         $this->closeInquiryAttentionReason();
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryActivityPage');
     }
 

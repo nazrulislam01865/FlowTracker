@@ -5,7 +5,6 @@ namespace App\Livewire\Jobs\Concerns;
 use App\Models\ClientShippingAddress;
 use App\Models\MasterRecord;
 use App\Services\ClientService;
-use App\Services\LocationMasterDataService;
 use App\Services\MasterDataService;
 use App\Services\OrderShipmentService;
 use App\Support\CreateOrderShippingMethodPresenter;
@@ -32,7 +31,16 @@ trait ManagesCreateOrderShipments
         $this->createShipmentMode = $mode;
         $this->ensureCreateShipmentRows();
 
-        if ($mode === self::CREATE_SHIPMENT_MODE_SAME_ADDRESS) {
+        // The Create Order UI now has two clear choices:
+        // - Address: one shipment address only.
+        // - Multiple address: one independently editable address per shipment.
+        // Keep the legacy same-address mode accepted for already-open browser
+        // snapshots, but never retain hidden extra rows when the user returns to
+        // the single Address option.
+        if ($mode === self::CREATE_SHIPMENT_MODE_MULTIPLE) {
+            $this->createShipments = [array_values($this->createShipments)[0]];
+            $this->syncLegacyCreateShippingFields();
+        } elseif ($mode === self::CREATE_SHIPMENT_MODE_SAME_ADDRESS) {
             $this->syncCreateShipmentAddressesToPrimary();
         }
 
@@ -43,15 +51,17 @@ trait ManagesCreateOrderShipments
     {
         abort_unless($this->showCreate && auth()->user()->canModule('jobs', 'create'), 403);
         $this->ensureCreateShipmentRows();
+        abort_unless(
+            $this->createShipmentMode === self::CREATE_SHIPMENT_MODE_MULTIPLE_ADDRESS,
+            422,
+            'Select Multiple address before adding another shipment.'
+        );
         abort_if(count($this->createShipments) >= self::CREATE_SHIPMENT_LIMIT, 422, 'You can configure up to '.self::CREATE_SHIPMENT_LIMIT.' shipments while creating an Order.');
 
-        $primary = $this->createShipments[0] ?? $this->newCreateShipmentRow();
-        $copyPrimaryAddress = in_array($this->createShipmentMode, [
-            self::CREATE_SHIPMENT_MODE_MULTIPLE,
-            self::CREATE_SHIPMENT_MODE_SAME_ADDRESS,
-        ], true);
-
-        $this->createShipments[] = $this->newCreateShipmentRow($copyPrimaryAddress ? $primary : null);
+        // Multiple-address rows are intentionally independent. Do not clone the
+        // primary delivery address into a new row; the user can fill it or pick
+        // another saved address explicitly.
+        $this->createShipments[] = $this->newCreateShipmentRow();
         $this->resetValidation('createShipments');
     }
 
@@ -182,11 +192,6 @@ trait ManagesCreateOrderShipments
             ->exists();
         abort_unless($clientAvailable, 403);
 
-        if (!ClientShippingAddress::query()->where('client_id', $this->clientId)->exists()) {
-            $this->addError("createShipments.$index.address", 'The selected client does not have a saved shipping address yet.');
-            return;
-        }
-
         $this->savedShippingAddressShipmentIndex = $index;
         $this->showSavedShippingAddressPicker = true;
         $this->resetValidation("createShipments.$index.address");
@@ -259,8 +264,6 @@ trait ManagesCreateOrderShipments
      */
     private function newCreateShipmentRow(?array $source = null, bool $copyAddress = true): array
     {
-        $locations = app(LocationMasterDataService::class);
-        $defaultCountry = $locations->defaultCountryName();
         $source ??= [];
 
         $selectedMethodId = collect($this->shipmentMethodIds)
@@ -278,7 +281,11 @@ trait ManagesCreateOrderShipments
             'city' => '',
             'state' => '',
             'postal_code' => '',
-            'country' => $defaultCountry,
+            // The approved Create Order prototype captures the delivery address
+            // as one free-text field plus postal code. Structured location data
+            // is populated only when a saved address supplies it and can still
+            // be completed later in the Shipment stage.
+            'country' => '',
             'shipping_source_address_id' => null,
             'shipment_method_id' => $selectedMethodId ?: null,
             'shipment_urgency_id' => $selectedMethodId && $selectedUrgencyId ? $selectedUrgencyId : null,
@@ -303,7 +310,12 @@ trait ManagesCreateOrderShipments
     {
         $this->ensureCreateShipmentRows();
 
-        if ($this->createShipmentMode === self::CREATE_SHIPMENT_MODE_SAME_ADDRESS) {
+        if ($this->createShipmentMode === self::CREATE_SHIPMENT_MODE_MULTIPLE) {
+            // Address mode is a single-address Create Order. Normalize here as a
+            // final server-side guard so hidden/stale browser state can never
+            // create extra shipment rows accidentally.
+            $this->createShipments = [array_values($this->createShipments)[0]];
+        } elseif ($this->createShipmentMode === self::CREATE_SHIPMENT_MODE_SAME_ADDRESS) {
             $this->syncCreateShipmentAddressesToPrimary();
         }
 
@@ -341,40 +353,6 @@ trait ManagesCreateOrderShipments
         }
 
         $this->syncLegacyCreateShippingFields();
-    }
-
-    /** @param array<int,array<string,mixed>> $shipments */
-    private function validateCreateShipmentLocations(array $shipments): bool
-    {
-        $locations = app(LocationMasterDataService::class);
-        $valid = true;
-
-        foreach ($shipments as $index => $shipment) {
-            $country = trim((string) ($shipment['country'] ?? ''));
-            $state = trim((string) ($shipment['state'] ?? ''));
-
-            if (!$locations->countryExists($country)) {
-                $this->addError("createShipments.$index.country", 'Select an active country from Country master data.');
-                $valid = false;
-                continue;
-            }
-
-            $states = $locations->statesForCountry($country);
-            if ($states->isEmpty()) continue;
-
-            if ($state === '') {
-                $this->addError("createShipments.$index.state", 'Please select a state.');
-                $valid = false;
-                continue;
-            }
-
-            if (!$locations->stateBelongsToCountry($country, $state)) {
-                $this->addError("createShipments.$index.state", 'Please select a valid state.');
-                $valid = false;
-            }
-        }
-
-        return $valid;
     }
 
     private function syncCreateShipmentAddressesToPrimary(): void

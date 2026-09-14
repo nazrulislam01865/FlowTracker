@@ -21,7 +21,7 @@
         <div class="ft-ms-plan-summary__copy">
             <span class="ft-ms-plan-summary__count">{{ $shipmentCount }} {{ \Illuminate\Support\Str::plural('shipment', $shipmentCount) }}</span>
             <span class="ft-ms-plan-summary__mode">{{ $planLabel }}</span>
-            <span class="ft-ms-plan-summary__hint">Shipping method can be changed directly. Use Edit for the remaining shipment details.</span>
+            <span class="ft-ms-plan-summary__hint">Shipping method can be changed directly. Use Edit for the delivery address.</span>
         </div>
 
         @if($canEditPlan)
@@ -152,7 +152,7 @@
             @else
                 <div>
                     <strong>Are the shipment details correct?</strong>
-                    <p>Change the shipping method directly, or use Edit for other shipment details.</p>
+                    <p>Change the shipping method directly, or use Edit for the delivery address.</p>
                 </div>
                 <div class="ft-ms-review-panel__actions">
                     <button

@@ -3,6 +3,7 @@
         :jobs="$jobs"
         :rows="$orderRows"
         :stages="$orderStages"
+        :metrics="$orderMetrics"
         :selected-stage="$selectedStage"
         :stage-quick-filters="$stageQuickFilters"
         :search-filter="$search"

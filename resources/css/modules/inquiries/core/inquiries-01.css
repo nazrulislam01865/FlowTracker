@@ -289,6 +289,10 @@
     margin-bottom: 12px
 }
 
+.ft-inquiry-prototype .ft-inquiry-summary-grid {
+    --ft-summary-columns: 4;
+}
+
 .ft-inquiry-prototype .metric {
     display: flex;
     align-items: center;

@@ -19,7 +19,7 @@ trait ManagesInquiryFinalDecision
     {
         $inquiry = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->find(auth()->user(), $inquiryId);
         $job = app(\App\Actions\Inquiries\ConvertInquiryToOrder::class)->handle($inquiry, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', $job->displayOrderNumber().' created from Inquiry.');
     }
 
@@ -30,14 +30,14 @@ trait ManagesInquiryFinalDecision
 
         $inquiry = app(\App\Queries\Inquiries\InquiryDetailQuery::class)->find(auth()->user(), $inquiryId);
         app(\App\Actions\Inquiries\MarkInquiryDead::class)->handle($inquiry, $reason, null, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry closed.');
     }
 
     public function convertToOrder(): void
     {
         $job = app(\App\Actions\Inquiries\ConvertInquiryToOrder::class)->handle($this->selectedInquiry(), auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', $job->displayOrderNumber().' created from Inquiry.');
     }
 
@@ -48,7 +48,7 @@ trait ManagesInquiryFinalDecision
             'deadNote' => ['nullable', 'string', 'max:2000'],
         ]);
         app(\App\Actions\Inquiries\MarkInquiryDead::class)->handle($this->selectedInquiry(), $this->deadReason, $this->deadNote, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         session()->flash('success', 'Inquiry closed.');
     }
 }

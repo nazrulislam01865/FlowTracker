@@ -6,7 +6,7 @@ use Tests\TestCase;
 
 class OrderShipmentCityOptionalTest extends TestCase
 {
-    public function test_city_is_optional_on_create_order_and_shipment_stage(): void
+    public function test_structured_city_remains_optional_but_is_not_exposed_in_compact_address_forms(): void
     {
         $creation = file_get_contents(app_path('Livewire/Jobs/Concerns/ManagesOrderCreation.php'));
         $shipmentService = file_get_contents(app_path('Services/OrderShipmentService.php'));
@@ -15,10 +15,10 @@ class OrderShipmentCityOptionalTest extends TestCase
 
         $this->assertStringContainsString("'createShipments.*.city' => ['nullable', 'string', 'max:120']", $creation);
         $this->assertStringNotContainsString("'createShipments.*.city.required'", $creation);
-        $this->assertStringContainsString('City <em>Optional</em>', $createRow);
+        $this->assertStringNotContainsString('createShipments.{{ $index }}.city', $createRow);
 
         $this->assertStringNotContainsString("'city' => 'City is required.'", $shipmentService);
-        $this->assertStringContainsString('CITY <small class="ft-ms-field-hint">Optional</small>', $shipmentModal);
-        $this->assertStringNotContainsString('wire:model.defer="shipmentForm.city" maxlength="120" placeholder="e.g. Miami" aria-required="true"', $shipmentModal);
+        $this->assertStringNotContainsString('shipmentForm.city', $shipmentModal);
+        $this->assertStringContainsString('validatedAddressFields($payload, null, false, true)', $shipmentService);
     }
 }

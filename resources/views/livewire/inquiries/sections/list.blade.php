@@ -14,12 +14,12 @@
                 </div>
             </div>
 
-            <div class="metrics ft-summary-card-grid" aria-label="Inquiry summary filters">
+            <div class="metrics ft-summary-card-grid ft-inquiry-summary-grid" aria-label="Inquiry summary filters">
                 <x-ui.summary-card label="Created Today" :value="$metrics['createdToday'] ?? 0" icon="created" tone="blue" caption="New inquiries received" :active="$metricFilter === 'createdToday'" wire:click="setMetricFilter('createdToday')" aria-pressed="{{ $metricFilter === 'createdToday' ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="Not Started" :value="$metrics['notStarted'] ?? 0" icon="not-started" tone="slate" caption="Waiting for first action" :active="$metricFilter === 'notStarted'" wire:click="setMetricFilter('notStarted')" aria-pressed="{{ $metricFilter === 'notStarted' ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="In Progress" :value="$metrics['inProgress'] ?? 0" icon="in-progress" tone="blue" caption="Work currently underway" :active="$metricFilter === 'inProgress'" wire:click="setMetricFilter('inProgress')" aria-pressed="{{ $metricFilter === 'inProgress' ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="Due This Week" :value="$metrics['dueThisWeek'] ?? 0" icon="due-week" tone="amber" caption="Required date this week" :active="$metricFilter === 'dueThisWeek'" wire:click="setMetricFilter('dueThisWeek')" aria-pressed="{{ $metricFilter === 'dueThisWeek' ? 'true' : 'false' }}" />
-                <x-ui.summary-card label="Completed This Week" :value="$metrics['completedThisWeek'] ?? 0" icon="completed" tone="green" caption="Finished this week" :active="$metricFilter === 'completedThisWeek'" wire:click="setMetricFilter('completedThisWeek')" aria-pressed="{{ $metricFilter === 'completedThisWeek' ? 'true' : 'false' }}" />
+                <x-ui.summary-card label="Completed" :value="$metrics['completed'] ?? 0" icon="completed" tone="green" caption="All completed inquiries" :active="$metricFilter === 'completed'" wire:click="setMetricFilter('completed')" aria-pressed="{{ $metricFilter === 'completed' ? 'true' : 'false' }}" />
                 <x-ui.summary-card label="Needs Attention" :value="$metrics['attention'] ?? 0" icon="attention" tone="red" caption="Blocked, overdue or unassigned" :active="$metricFilter === 'attention'" wire:click="setMetricFilter('attention')" aria-pressed="{{ $metricFilter === 'attention' ? 'true' : 'false' }}" />
             </div>
 
@@ -35,69 +35,84 @@
                         :hide-label="true"
                     />
                     <x-ui.filter-bar class="filters inquiry-filter-controls" label="Inquiry filters">
-                        <x-ui.filter-chip class="chip" :active="$metricFilter === '' && $inquiryToolbarIsClear" wire:click="setQuick('all')">All</x-ui.filter-chip>
-                        <x-ui.filter-chip class="chip ft-inquiry-attention-filter" :active="$quick === 'attention'" wire:click="setQuick('attention')">
-                            <span aria-hidden="true">⚠</span> Attention needed
-                        </x-ui.filter-chip>
-                        <x-ui.search-select
-                            class="ft-inquiry-status-filter"
-                            label="Task status"
-                            property="pendingListStatus"
-                            :value="$pendingListStatus"
-                            placeholder="All task statuses"
-                            :options="collect($listStatusOptions)->map(fn ($statusOption) => ['id' => $statusOption, 'label' => $statusOption])"
-                            :hide-label="true"
-                            :fixed-menu="true"
-                            :menu-width="220"
-                        />
-                        <x-ui.search-select
-                            class="ft-inquiry-list-client-filter"
-                            label="Client"
-                            property="pendingListClient"
-                            type="clients"
-                            context="inquiries"
-                            action="setInquiryPendingListFilter"
-                            :value="$pendingListClient"
-                            placeholder="All clients"
-                            :selected-label="$pendingListClientLabel ?: null"
-                            :initial-options="$listClientFilterOptions"
-                            :menu-width="300"
-                            :fixed-menu="true"
-                            wire:key="inquiry-list-client-filter-{{ $pendingListClient ?: 'all' }}-{{ substr(md5($pendingListClientLabel ?: 'all'), 0, 8) }}"
-                        />
-                        <label class="completed-toggle {{ $pendingHideCompleted ? 'active' : '' }}">
-                            <input type="checkbox" wire:model.live="pendingHideCompleted" aria-label="Hide completed inquiries">
-                            <span class="completed-check" aria-hidden="true">✓</span>
-                            <span>Hide completed</span>
-                        </label>
-                        <x-ui.date-range
-                            class="ft-inquiry-date-range"
-                            from-property="pendingDateFrom"
-                            to-property="pendingDateTo"
-                            :from-value="$pendingDateFrom"
-                            :to-value="$pendingDateTo"
-                            label="Created date"
-                            from-label="From"
-                            to-label="To"
-                        />
-                        <div class="ft-inquiry-filter-actions" aria-label="Inquiry filter actions">
-                            <button
-                                type="button"
-                                class="ft-inquiry-filter-action ft-inquiry-apply-filter"
-                                wire:click="applyFilters"
-                                wire:loading.attr="disabled"
-                                wire:target="applyFilters"
-                                @disabled(! $inquiryFilterDraftDirty)
-                                aria-label="Apply inquiry filter"
-                            >Apply filter</button>
-                            <x-ui.filter-reset
-                                class="chip ft-inquiry-filter-action ft-inquiry-clear-filter"
-                                action="clearFilters"
-                                label="Clear"
-                                icon="×"
-                                :disabled="! $inquiryAnyFilterActive"
-                                aria-label="Clear active inquiry filter"
-                            />
+                        <div class="ft-inquiry-filter-grid">
+                            <div class="ft-inquiry-filter-group ft-inquiry-filter-group--quick" role="group" aria-label="Inquiry view">
+                                <x-ui.filter-chip class="chip" :active="$metricFilter === '' && $inquiryToolbarIsClear" wire:click="setQuick('all')">All</x-ui.filter-chip>
+                                <x-ui.filter-chip class="chip ft-inquiry-attention-filter" :active="$quick === 'attention'" wire:click="setQuick('attention')">
+                                    <span aria-hidden="true">⚠</span> Attention needed
+                                </x-ui.filter-chip>
+                            </div>
+
+                            <div class="ft-inquiry-filter-field ft-inquiry-filter-field--status">
+                                <x-ui.search-select
+                                    class="ft-inquiry-status-filter"
+                                    label="Task status"
+                                    property="pendingListStatus"
+                                    :value="$pendingListStatus"
+                                    placeholder="All task statuses"
+                                    :options="collect($listStatusOptions)->map(fn ($statusOption) => ['id' => $statusOption, 'label' => $statusOption])"
+                                    :hide-label="true"
+                                    :fixed-menu="true"
+                                    :menu-width="220"
+                                />
+                            </div>
+
+                            <div class="ft-inquiry-filter-field ft-inquiry-filter-field--client">
+                                <x-ui.search-select
+                                    class="ft-inquiry-list-client-filter"
+                                    label="Client"
+                                    property="pendingListClient"
+                                    type="clients"
+                                    context="inquiries"
+                                    action="setInquiryPendingListFilter"
+                                    :value="$pendingListClient"
+                                    placeholder="All clients"
+                                    :selected-label="$pendingListClientLabel ?: null"
+                                    :initial-options="$listClientFilterOptions"
+                                    :menu-width="300"
+                                    :fixed-menu="true"
+                                    wire:key="inquiry-list-client-filter-{{ $pendingListClient ?: 'all' }}-{{ substr(md5($pendingListClientLabel ?: 'all'), 0, 8) }}"
+                                />
+                            </div>
+
+                            <div class="ft-inquiry-filter-group ft-inquiry-filter-group--dates" role="group" aria-label="Created date filter">
+                                <x-ui.date-range
+                                    class="ft-inquiry-date-range"
+                                    from-property="pendingDateFrom"
+                                    to-property="pendingDateTo"
+                                    :from-value="$pendingDateFrom"
+                                    :to-value="$pendingDateTo"
+                                    label="Created date"
+                                    from-label="From"
+                                    to-label="To"
+                                />
+                            </div>
+
+                            <label class="completed-toggle ft-inquiry-hide-completed {{ $pendingHideCompleted ? 'active' : '' }}">
+                                <input type="checkbox" wire:model.live="pendingHideCompleted" aria-label="Hide completed inquiries">
+                                <span class="completed-check" aria-hidden="true">✓</span>
+                                <span>Hide completed</span>
+                            </label>
+
+                            <div class="ft-inquiry-filter-actions ft-inquiry-filter-group ft-inquiry-filter-group--actions" aria-label="Inquiry filter actions">
+                                <button
+                                    type="button"
+                                    class="ft-inquiry-filter-action ft-inquiry-apply-filter"
+                                    wire:click="applyFilters"
+                                    wire:loading.attr="disabled"
+                                    wire:target="applyFilters"
+                                    @disabled(! $inquiryFilterDraftDirty)
+                                    aria-label="Apply inquiry filter"
+                                >Apply filter</button>
+                                <x-ui.filter-reset
+                                    class="chip ft-inquiry-filter-action ft-inquiry-clear-filter"
+                                    action="clearFilters"
+                                    label="Clear"
+                                    icon="×"
+                                    :disabled="! $inquiryAnyFilterActive"
+                                    aria-label="Clear active inquiry filter"
+                                />
+                            </div>
                         </div>
                     </x-ui.filter-bar>
                 </div>

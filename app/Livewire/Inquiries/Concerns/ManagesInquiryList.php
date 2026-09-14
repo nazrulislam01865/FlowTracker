@@ -20,6 +20,7 @@ trait ManagesInquiryList
         }
 
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -32,6 +33,7 @@ trait ManagesInquiryList
         }
 
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -51,6 +53,7 @@ trait ManagesInquiryList
         }
 
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -60,6 +63,7 @@ trait ManagesInquiryList
         $this->clearListFiltersExcept('dateRange');
         $this->normalizeDateRange('from');
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -69,6 +73,7 @@ trait ManagesInquiryList
         $this->clearListFiltersExcept('dateRange');
         $this->normalizeDateRange('to');
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -83,6 +88,7 @@ trait ManagesInquiryList
             $this->listClientLabel = '';
             $this->clearMetricFilter();
             $this->syncPendingFiltersFromApplied();
+            $this->refreshInquiryListMetrics();
             $this->resetPage('inquiryPage');
             return;
         }
@@ -99,6 +105,7 @@ trait ManagesInquiryList
         $this->listClient = (string) $id;
         $this->listClientLabel = (string) ($selected['label'] ?? '');
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -111,6 +118,7 @@ trait ManagesInquiryList
         }
 
         $this->syncPendingFiltersFromApplied();
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -213,6 +221,7 @@ trait ManagesInquiryList
         $this->dateFrom = $this->pendingDateFrom;
         $this->dateTo = $this->pendingDateTo;
 
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
@@ -232,20 +241,16 @@ trait ManagesInquiryList
             $this->quick = $quick;
         }
 
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
     }
 
     public function setMetricFilter(string $metric): void
     {
-        abort_unless(in_array($metric, ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true), 422);
+        abort_unless(in_array($metric, ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention'], true), 422);
         abort_unless(auth()->user()->canModule('inquiries', 'view'), 403);
 
         $nextMetric = $this->metricFilter === $metric ? '' : $metric;
-
-        // Summary cards are also exclusive filters. Selecting one clears the
-        // search and every toolbar filter so the card count always matches.
-        $this->clearToolbarFilters();
-        $this->clearPendingToolbarFilters();
         $this->metricFilter = $nextMetric;
         $this->resetPage('inquiryPage');
     }
@@ -257,7 +262,28 @@ trait ManagesInquiryList
         $this->clearToolbarFilters();
         $this->clearPendingToolbarFilters();
         $this->metricFilter = '';
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
+    }
+
+    private function currentInquiryListFilters(): array
+    {
+        return [
+            'search' => $this->search,
+            'quick' => $this->quick,
+            'metric_filter' => $this->metricFilter,
+            'client_id' => $this->listClient !== '' ? (int) $this->listClient : null,
+            'status' => $this->listStatus,
+            'hide_completed' => $this->hideCompleted,
+            'date_from' => $this->dateFrom,
+            'date_to' => $this->dateTo,
+        ];
+    }
+
+    private function refreshInquiryListMetrics(): void
+    {
+        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)
+            ->metrics(auth()->user(), $this->currentInquiryListFilters());
     }
 
     private function clearMetricFilter(): void
@@ -391,7 +417,7 @@ trait ManagesInquiryList
         $number = (string) $inquiry->inquiry_number;
 
         app(\App\Actions\Inquiries\DeleteInquiry::class)->handle($inquiry, auth()->user());
-        $this->metrics = app(\App\Queries\Inquiries\InquiryListQuery::class)->metrics(auth()->user());
+        $this->refreshInquiryListMetrics();
         $this->resetPage('inquiryPage');
 
         session()->flash('success', $number.' deleted successfully.');

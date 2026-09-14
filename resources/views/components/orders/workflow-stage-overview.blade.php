@@ -142,4 +142,10 @@
             @endif
         @endforeach
     </div>
+
+    @isset($summaryCards)
+        <div class="ft-order-workflow-metric-strip" aria-label="Order summary filters">
+            {{ $summaryCards }}
+        </div>
+    @endisset
 </section>

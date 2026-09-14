@@ -105,7 +105,7 @@ class Index extends Component
         $this->owner = $this->numericFilterFromRequest('owner');
         $this->holdOn = (int) request('hold_on', 0) === 1;
         $this->metricFilter = trim((string) request('metric', $this->metricFilter));
-        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
+        if (! in_array($this->metricFilter, ['', 'createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention', 'dashboardActive', 'dashboardAttention', 'dashboardOverdueTasks'], true)) {
             $this->metricFilter = '';
         }
         $this->dateFrom = $this->normalizeDateFilter((string) request('date_from', ''));
@@ -260,16 +260,11 @@ class Index extends Component
 
     public function setMetricFilter(string $metric): void
     {
-        if (! in_array($metric, ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completedThisWeek', 'attention'], true)) {
+        if (! in_array($metric, ['createdToday', 'notStarted', 'inProgress', 'dueThisWeek', 'completed', 'completedThisWeek', 'attention'], true)) {
             return;
         }
 
         $nextMetric = $this->metricFilter === $metric ? '' : $metric;
-
-        // Summary cards and toolbar filters are mutually exclusive. Selecting
-        // a card clears the search/dropdowns so only one Order list filter is
-        // active and the visible rows always correspond to the selected card.
-        $this->clearToolbarFilters();
         $this->metricFilter = $nextMetric;
         $this->resetOrderSelection();
         $this->resetPage();
@@ -1196,18 +1191,8 @@ class Index extends Component
         $user = auth()->user();
         $options = app(FilterOptionService::class);
         $list = app(OrderListQuery::class);
-        $stages = $this->dashboardScope === 1
-            ? $list->dashboardScopedStages(
-                $user,
-                $this->dateFrom,
-                $this->dateTo,
-                $this->filterId($this->client),
-                $this->filterId($this->dashboardTeam),
-            )
-            : $list->stages($user);
         $urgencies = $list->urgencyOptions();
-
-        $jobs = $list->paginate($user, [
+        $filters = [
             'search' => $this->search,
             'client_id' => $this->filterId($this->client),
             'phase_id' => $this->filterId($this->phase),
@@ -1225,7 +1210,12 @@ class Index extends Component
             'stage_urgency_id' => $this->filterId($this->stageUrgency),
             'stage_carrier' => $this->stageCarrier,
             'stage_client_id' => $this->filterId($this->stageClient),
-        ], $stages, $this->perPage);
+        ];
+        $stages = $list->stagesForFilters($user, $filters);
+        $jobs = $list->paginate($user, $filters, $stages, $this->perPage);
+        $metrics = [
+            'completed' => $list->completedCount($user, $filters, $stages),
+        ];
 
         $selectedStage = $this->phase !== '' ? $stages->firstWhere('id', (int) $this->phase) : null;
         $stageSequence = (int) data_get($selectedStage, 'sequence', 0);
@@ -1288,6 +1278,7 @@ class Index extends Component
             'jobs' => $jobs,
             'orderRows' => $list->rows($jobs, $urgencies),
             'orderStages' => $stages,
+            'orderMetrics' => $metrics,
             'selectedStage' => $selectedStage,
             'stageQuickFilters' => OrderListPrototypeService::QUICK_FILTERS[$stageSequence] ?? ['all' => 'All'],
             // Priority 7: remote Orders filters fetch their recent/search

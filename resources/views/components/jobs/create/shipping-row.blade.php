@@ -12,27 +12,15 @@
 
 @php
     $shipmentNumber = (int) $index + 1;
-    $country = trim((string) ($shipment['country'] ?? ''));
-    $states = collect($statesByCountry)->get($country, []);
-    $states = collect($states)->values();
     $sameAddressLocked = $mode === \App\Services\OrderShipmentService::MODE_SAME_ADDRESS && (int) $index > 0;
-    $packagePlaceholder = trim((string) $referenceNumber) !== ''
-        ? trim((string) $referenceNumber).' | Box '.$shipmentNumber.' of '.$shipmentCount
-        : 'e.g. Box '.$shipmentNumber;
 
     $sharedContact = collect([
         trim((string) ($shipment['contact_name'] ?? '')),
         trim((string) ($shipment['phone_country_code'] ?? '')).' '.trim((string) ($shipment['phone'] ?? '')),
     ])->map(fn ($value) => trim((string) $value))->filter()->implode(' · ');
-    $sharedLocality = collect([
-        trim((string) ($shipment['city'] ?? '')),
-        trim((string) ($shipment['state'] ?? '')),
-        trim((string) ($shipment['postal_code'] ?? '')),
-    ])->filter()->implode(', ');
     $sharedAddress = collect([
         trim((string) ($shipment['address'] ?? '')),
-        $sharedLocality,
-        $country,
+        trim((string) ($shipment['postal_code'] ?? '')),
     ])->filter()->implode(' · ');
 @endphp
 
@@ -49,21 +37,28 @@
             </div>
         </div>
 
-        @if((int) $index > 0)
+        <div class="ft-create-shipment-card-actions">
+            @if((int) $index === 0)
+                <span class="ft-create-shipment-primary-badge">Primary</span>
+            @endif
             <button
                 type="button"
-                class="ft-create-shipment-remove"
-                wire:click="removeCreateShipment({{ $index }})"
-                wire:loading.attr="disabled"
-                wire:target="removeCreateShipment"
-                aria-label="Remove shipment {{ $shipmentNumber }}"
+                class="ft-create-shipment-remove {{ (int) $index === 0 ? 'is-disabled' : '' }}"
+                @if((int) $index > 0)
+                    wire:click="removeCreateShipment({{ $index }})"
+                    wire:loading.attr="disabled"
+                    wire:target="removeCreateShipment"
+                @else
+                    disabled
+                @endif
+                aria-label="{{ (int) $index === 0 ? 'Primary shipment cannot be removed' : 'Remove shipment '.$shipmentNumber }}"
+                title="{{ (int) $index === 0 ? 'Primary shipment cannot be removed' : 'Remove shipment' }}"
             >
-                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true">
+                <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.7" aria-hidden="true">
                     <path d="M4.5 6h11M8 3.5h4M6.5 6l.6 10h5.8l.6-10M8.5 8.5v5M11.5 8.5v5"/>
                 </svg>
-                Remove shipment
             </button>
-        @endif
+        </div>
     </header>
 
     @if($sameAddressLocked)
@@ -78,123 +73,78 @@
             </span>
         </div>
     @else
-        <div class="ft-create-shipment-primary-grid">
-            <label class="ft-create-shipment-field">
-                <span>Contact person <b class="ft-order-required-star" aria-hidden="true">*</b></span>
-                <input
-                    type="text"
-                    wire:model.blur="createShipments.{{ $index }}.contact_name"
-                    maxlength="255"
-                    autocomplete="name"
-                    placeholder="e.g. John Smith"
-                >
-                @error("createShipments.$index.contact_name")<small class="validation-error">{{ $message }}</small>@enderror
-            </label>
+        <div class="ft-create-shipment-body">
+            <div class="ft-create-shipment-primary-grid">
+                <label class="ft-create-field ft-create-shipment-field">
+                    <b>Contact person <span class="ft-order-required-star" aria-hidden="true">*</span></b>
+                    <input
+                        type="text"
+                        wire:model.blur="createShipments.{{ $index }}.contact_name"
+                        maxlength="255"
+                        autocomplete="name"
+                        placeholder="e.g. John Smith"
+                    >
+                    @error("createShipments.$index.contact_name")<small class="validation-error">{{ $message }}</small>@enderror
+                </label>
 
-            <div class="ft-create-shipment-field">
-                <span>Phone <b class="ft-order-required-star" aria-hidden="true">*</b></span>
-                <div class="ft-create-shipment-phone-row">
-                    <div class="ft-create-shipment-phone-control ft-create-shipment-phone-code">
-                        <select
-                            wire:model.live="createShipments.{{ $index }}.phone_country_code"
-                            aria-label="Phone country code for shipment {{ $shipmentNumber }}"
-                        >
-                            @foreach($phoneCodes as $phoneCode)
-                                <option value="{{ $phoneCode }}">{{ $phoneCode }}</option>
-                            @endforeach
-                        </select>
-                        @error("createShipments.$index.phone_country_code")<small class="validation-error">{{ $message }}</small>@enderror
-                    </div>
-                    <div class="ft-create-shipment-phone-control ft-create-shipment-phone-number">
-                        <input
-                            type="text"
-                            wire:model.blur="createShipments.{{ $index }}.phone"
-                            maxlength="60"
-                            inputmode="tel"
-                            autocomplete="tel"
-                            placeholder="e.g. 555-123-4567"
-                            aria-label="Phone for shipment {{ $shipmentNumber }}"
-                        >
-                        @error("createShipments.$index.phone")<small class="validation-error">{{ $message }}</small>@enderror
+                <div class="ft-create-field ft-create-shipment-field">
+                    <b>Phone <span class="ft-order-required-star" aria-hidden="true">*</span></b>
+                    <div class="ft-create-shipment-phone-row">
+                        <div class="ft-create-shipment-phone-control ft-create-shipment-phone-code">
+                            <x-ui.search-select
+                                class="ft-create-shipment-phone-code-select"
+                                label="Phone country code for shipment {{ $shipmentNumber }}"
+                                property="createShipments.{{ $index }}.phone_country_code"
+                                :value="$shipment['phone_country_code'] ?? ''"
+                                :options="$phoneCodes"
+                                placeholder="+Code"
+                                :selected-label="($shipment['phone_country_code'] ?? '') ?: null"
+                                :clearable="false"
+                                :hide-label="true"
+                                :fixed-menu="true"
+                                :menu-width="300"
+                                search-placeholder="Search code or country…"
+                                wire:key="create-shipment-phone-code-{{ $index }}-{{ $shipment['phone_country_code'] ?? 'none' }}"
+                            />
+                            @error("createShipments.$index.phone_country_code")<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
+                        <div class="ft-create-shipment-phone-control ft-create-shipment-phone-number">
+                            <input
+                                type="text"
+                                wire:model.blur="createShipments.{{ $index }}.phone"
+                                maxlength="60"
+                                inputmode="tel"
+                                autocomplete="tel"
+                                placeholder="e.g. 555-123-4567"
+                                aria-label="Phone for shipment {{ $shipmentNumber }}"
+                            >
+                            @error("createShipments.$index.phone")<small class="validation-error">{{ $message }}</small>@enderror
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
 
-        <div class="ft-create-shipment-address-block">
-            <div class="ft-create-shipment-address-toolbar">
-                <span>Shipping address <b class="ft-order-required-star" aria-hidden="true">*</b></span>
-                @if($hasSavedAddresses)
-                    <button type="button" wire:click="openSavedShippingAddressPickerForShipment({{ $index }})">
+            <div class="ft-create-shipment-address-block">
+                <div class="ft-create-field ft-create-shipment-field ft-create-shipment-address-field">
+                    <b>Shipping address <span class="ft-order-required-star" aria-hidden="true">*</span></b>
+                    <button type="button" class="ft-create-shipment-saved-address" wire:click="openSavedShippingAddressPickerForShipment({{ $index }})">
                         <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><path d="M5.5 3.5h9v13l-4.5-2.6-4.5 2.6v-13Z"/></svg>
                         Use saved address
                     </button>
-                @endif
-            </div>
-
-            <label class="ft-create-shipment-field ft-create-shipment-address-line">
-                <span class="sr-only">Shipping address</span>
-                <input
-                    type="text"
-                    wire:model.blur="createShipments.{{ $index }}.address"
-                    maxlength="2000"
-                    autocomplete="street-address"
-                    placeholder="Street address, suite, building, etc."
-                >
-                @error("createShipments.$index.address")<small class="validation-error">{{ $message }}</small>@enderror
-            </label>
-
-            <div class="ft-create-shipment-location-grid">
-                <div class="ft-create-shipment-field">
-                    <span>Country <b class="ft-order-required-star" aria-hidden="true">*</b></span>
-                    <x-ui.select-filter
-                        label="Country"
-                        :property="'createShipments.'.$index.'.country'"
-                        :value="$country"
-                        placeholder="Select country"
-                        :options="$countries"
-                        :disabled="collect($countries)->isEmpty()"
-                        search-placeholder="Search country…"
-                        :menu-width="320"
-                        :fixed-menu="true"
-                        :hide-label="true"
-                        class="ft-create-shipment-select"
-                    />
-                    <small class="validation-error ft-create-shipment-validation-slot">@error("createShipments.$index.country"){{ $message }}@enderror</small>
-                </div>
-
-                <div class="ft-create-shipment-field">
-                    <span>State @if($states->isNotEmpty())<b class="ft-order-required-star" aria-hidden="true">*</b>@endif</span>
-                    <x-ui.select-filter
-                        label="State"
-                        :property="'createShipments.'.$index.'.state'"
-                        :value="$shipment['state'] ?? ''"
-                        :placeholder="$country === '' ? 'Select country first' : ($states->isEmpty() ? 'No states configured' : 'Select state')"
-                        :options="$states"
-                        :disabled="$country === '' || $states->isEmpty()"
-                        search-placeholder="Search state…"
-                        :menu-width="300"
-                        :fixed-menu="true"
-                        :hide-label="true"
-                        class="ft-create-shipment-select"
-                    />
-                    <small class="validation-error ft-create-shipment-validation-slot">@error("createShipments.$index.state"){{ $message }}@enderror</small>
-                </div>
-
-                <label class="ft-create-shipment-field">
-                    <span>City <em>Optional</em></span>
                     <input
+                        class="ft-create-shipment-address-input"
                         type="text"
-                        wire:model.blur="createShipments.{{ $index }}.city"
-                        maxlength="120"
-                        autocomplete="address-level2"
-                        placeholder="e.g. Miami"
+                        wire:model.blur="createShipments.{{ $index }}.address"
+                        maxlength="2000"
+                        autocomplete="street-address"
+                        placeholder="Street address, suite, building, etc."
+                        aria-label="Shipping address for shipment {{ $shipmentNumber }}"
                     >
-                    <small class="validation-error ft-create-shipment-validation-slot">@error("createShipments.$index.city"){{ $message }}@enderror</small>
-                </label>
+                    @error("createShipments.$index.address")<small class="validation-error ft-create-shipment-address-error">{{ $message }}</small>@enderror
+                </div>
 
-                <label class="ft-create-shipment-field">
-                    <span>Postal code <b class="ft-order-required-star" aria-hidden="true">*</b></span>
+                <label class="ft-create-field ft-create-shipment-field ft-create-shipment-postal-field">
+                    <b>Postal code <span class="ft-order-required-star" aria-hidden="true">*</span></b>
                     <input
                         type="text"
                         wire:model.blur="createShipments.{{ $index }}.postal_code"
@@ -202,43 +152,9 @@
                         autocomplete="postal-code"
                         placeholder="e.g. 27510-2461"
                     >
-                    <small class="validation-error ft-create-shipment-validation-slot">@error("createShipments.$index.postal_code"){{ $message }}@enderror</small>
+                    @error("createShipments.$index.postal_code")<small class="validation-error">{{ $message }}</small>@enderror
                 </label>
             </div>
         </div>
     @endif
-
-    <div class="ft-create-shipment-service-grid">
-        <label class="ft-create-shipment-field ft-create-shipment-number-field">
-            <span>Shipment no.</span>
-            <input type="text" value="{{ $shipmentNumber }}" readonly tabindex="-1" aria-label="Shipment number {{ $shipmentNumber }}">
-        </label>
-
-        <label class="ft-create-shipment-field ft-create-shipment-quantity">
-            <span>Quantity <em>Optional</em></span>
-            <input
-                type="number"
-                wire:model.defer="createShipments.{{ $index }}.quantity"
-                min="1"
-                max="2147483647"
-                step="1"
-                inputmode="numeric"
-                placeholder="e.g. 100"
-                aria-label="Quantity for shipment {{ $shipmentNumber }}"
-            >
-            @error("createShipments.$index.quantity")<small class="validation-error">{{ $message }}</small>@enderror
-        </label>
-
-        <label class="ft-create-shipment-field ft-create-shipment-reference">
-            <span>Package / reference <em>Optional</em></span>
-            <input
-                type="text"
-                wire:model.defer="createShipments.{{ $index }}.package_reference"
-                maxlength="255"
-                placeholder="{{ $packagePlaceholder }}"
-            >
-            @error("createShipments.$index.package_reference")<small class="validation-error">{{ $message }}</small>@enderror
-        </label>
-
-    </div>
 </article>

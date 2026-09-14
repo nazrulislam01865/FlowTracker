@@ -4319,9 +4319,9 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     }
 }
 
-/* CHANGE 2026-08-27: Order list toolbar now follows the Inquiry filter layout:
-   one full-width search row, then one compact filter row. Stage-specific
-   controls remain below this panel exactly as before. */
+/* Order list toolbar: full-width search followed by one compact filter row.
+   Created Today and Completed are intentionally available from the summary cards,
+   so the toolbar keeps only the operational filters. */
 .ft-order-list-v5 .orders-table-card > .ft-order-filter-layout {
     display: block;
     padding: 12px 14px;
@@ -4352,16 +4352,17 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     font-size: .6875rem;
 }
 
-.ft-order-list-v5 .ft-order-filter-controls-row {
+.ft-order-list-v5 .ft-order-filter-controls-row,
+.ft-order-list-v5 .ft-order-filter-main-row {
     display: grid;
     grid-template-columns:
-        minmax(90px, .55fr)
-        minmax(115px, .65fr)
-        minmax(180px, 1fr)
-        minmax(180px, 1fr)
-        minmax(190px, 1.05fr)
-        minmax(360px, 1.5fr)
-        72px;
+        minmax(86px, .45fr)
+        minmax(115px, .6fr)
+        minmax(170px, .9fr)
+        minmax(190px, 1.15fr)
+        minmax(190px, 1.15fr)
+        minmax(360px, 1.75fr)
+        82px;
     gap: 8px;
     align-items: stretch;
     width: 100%;
@@ -4421,17 +4422,6 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     border-color: #f0a65a;
     background: #fff5e9;
     color: #b75a00;
-}
-
-.ft-order-list-v5 .ft-order-attention-filter > span {
-    color: #d97706;
-    font-size: .75rem;
-}
-
-.ft-order-list-v5 .ft-order-attention-filter.attention-active {
-    border-color: #f2c57c;
-    background: #fff8ec;
-    color: #9a6208;
 }
 
 .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-native-filter {
@@ -4500,9 +4490,9 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
     justify-content: center;
     justify-self: end;
     gap: 4px;
-    width: 72px !important;
-    min-width: 72px !important;
-    max-width: 72px !important;
+    width: 82px !important;
+    min-width: 82px !important;
+    max-width: 82px !important;
     padding: 0 8px;
     white-space: nowrap;
     box-sizing: border-box;
@@ -4525,31 +4515,40 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
 }
 
 @media (max-width: 1500px) {
-    .ft-order-list-v5 .ft-order-filter-controls-row {
+    .ft-order-list-v5 .ft-order-filter-main-row {
         grid-template-columns: repeat(4, minmax(0, 1fr));
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range {
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-list-date-range {
         grid-column: span 2;
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
-        grid-column: auto;
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-filter-reset {
         justify-self: end;
     }
 }
 
+@media (max-width: 1180px) {
+    .ft-order-list-v5 .ft-order-filter-main-row {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-list-date-range {
+        grid-column: span 2;
+    }
+}
+
 @media (max-width: 980px) {
-    .ft-order-list-v5 .ft-order-filter-controls-row {
+    .ft-order-list-v5 .ft-order-filter-main-row {
         grid-template-columns: repeat(2, minmax(0, 1fr));
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range {
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-list-date-range,
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-filter-reset {
         grid-column: 1 / -1;
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
-        grid-column: 1 / -1;
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-filter-reset {
         justify-self: stretch;
         width: 100% !important;
         min-width: 0 !important;
@@ -4562,16 +4561,16 @@ body:has(.ft-order-list-v5) .ft-shell-order-export:hover {
         padding: 10px;
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row {
+    .ft-order-list-v5 .ft-order-filter-main-row {
         grid-template-columns: 1fr;
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range,
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-filter-reset {
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-list-date-range,
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-filter-reset {
         grid-column: 1;
     }
 
-    .ft-order-list-v5 .ft-order-filter-controls-row .ft-order-list-date-range .ft-date-range-fields {
+    .ft-order-list-v5 .ft-order-filter-main-row .ft-order-list-date-range .ft-date-range-fields {
         grid-template-columns: 1fr !important;
     }
 }

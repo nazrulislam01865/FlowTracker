@@ -1134,16 +1134,11 @@ trait ManagesOrderCreation
             'createShipments.*.city' => ['nullable', 'string', 'max:120'],
             'createShipments.*.state' => ['nullable', 'string', 'max:120'],
             'createShipments.*.postal_code' => ['required', 'string', 'max:30'],
-            'createShipments.*.country' => [
-                'required',
-                'string',
-                'max:120',
-                Rule::exists('master_records', 'name')->where(fn ($query) => $query
-                    ->where('workspace_id', app(MasterDataService::class)->workspaceId())
-                    ->where('type', 'country')
-                    ->where('status', 'active')
-                    ->whereNull('deleted_at')),
-            ],
+            // Country/State are intentionally not shown in the approved compact
+            // Shipment address prototype. Saved addresses may still populate
+            // these optional metadata fields, but manual Create Order entry must
+            // not fail validation for controls the user cannot see.
+            'createShipments.*.country' => ['nullable', 'string', 'max:120'],
             'createShipments.*.shipping_source_address_id' => [
                 'nullable',
                 'integer',
@@ -1263,8 +1258,6 @@ trait ManagesOrderCreation
             'createShipments.*.phone.regex' => 'Enter a valid shipping contact phone number.',
             'createShipments.*.address.required' => 'Street address is required.',
             'createShipments.*.postal_code.required' => 'Postal code is required.',
-            'createShipments.*.country.required' => 'Country is required.',
-            'createShipments.*.country.exists' => 'Choose an active country from Country master data.',
             'shipmentMethodIds.required' => 'Select a shipping method.',
             'shipmentMethodIds.size' => 'Select one shipping method.',
             'createShipments.*.quantity.integer' => 'Quantity must be a whole number.',
@@ -1281,8 +1274,6 @@ trait ManagesOrderCreation
             'shippingPhone.regex' => 'Enter a valid shipping contact phone number.',
             'purchaseOrderUpload.max' => 'The Purchase Order is too large. Maximum file size is 20 MB.',
         ]);
-
-        if (!$this->validateCreateShipmentLocations((array) ($data['createShipments'] ?? []))) return;
 
         if ($this->purchaseOrderUpload || count($this->jobAttachments) > 0) {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
