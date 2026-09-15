@@ -42,6 +42,23 @@ class ProductionMonitorInlineTaskImplementationTest extends TestCase
         self::assertStringContainsString("'supplier_delivery_date'", $model);
         self::assertStringContainsString('.ft-production-monitor-inline', $css);
     }
+
+    public function test_production_monitor_has_no_required_fields(): void
+    {
+        $root = dirname(__DIR__, 2);
+        $inline = file_get_contents($root.'/resources/views/components/jobs/order-detail/production-monitor-inline.blade.php');
+        $modal = file_get_contents($root.'/resources/views/components/jobs/order-detail/workflow-action-modal.blade.php');
+        $workflow = file_get_contents($root.'/app/Services/OrderWorkflowActionService.php');
+        $livewire = file_get_contents($root.'/app/Livewire/Jobs/Concerns/ManagesOrderWorkflow.php');
+
+        self::assertStringContainsString('Supplier Delivery Date <em>(Optional)</em>', $inline);
+        self::assertStringContainsString('Supplier Delivery Date <em>(Optional)</em>', $modal);
+        self::assertStringNotContainsString('Supplier Delivery Date <b class="ft-production-monitor-required"', $inline);
+        self::assertStringNotContainsString('Supplier Delivery Date <b class="ft-production-monitor-required"', $modal);
+        self::assertStringNotContainsString('Supplier delivery date is required.', $workflow);
+        self::assertStringNotContainsString('Supplier delivery date is missing. Set the date before editing the production issue note.', $livewire);
+    }
+
     public function test_completed_production_monitor_keeps_saved_date_and_note_visible(): void
     {
         $root = dirname(__DIR__, 2);

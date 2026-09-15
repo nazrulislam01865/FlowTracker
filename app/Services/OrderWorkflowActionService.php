@@ -606,30 +606,30 @@ class OrderWorkflowActionService
 
             if ($key === 'PROD_ISSUE' && $decision === 'confirm') {
                 $supplierDeliveryDate = trim((string) ($payload['supplier_delivery_date'] ?? ''));
-                if ($supplierDeliveryDate === '') {
-                    throw ValidationException::withMessages([
-                        'orderWorkflowActionPayload.supplier_delivery_date' => 'Supplier delivery date is required.',
-                    ]);
+                $parsedDate = null;
+                if ($supplierDeliveryDate !== '') {
+                    $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $supplierDeliveryDate);
+                    if (! $parsedDate || $parsedDate->format('Y-m-d') !== $supplierDeliveryDate) {
+                        throw ValidationException::withMessages([
+                            'orderWorkflowActionPayload.supplier_delivery_date' => 'Enter a valid supplier delivery date.',
+                        ]);
+                    }
+
+                    $job->update(['supplier_delivery_date' => $supplierDeliveryDate]);
                 }
 
-                $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $supplierDeliveryDate);
-                if (! $parsedDate || $parsedDate->format('Y-m-d') !== $supplierDeliveryDate) {
-                    throw ValidationException::withMessages([
-                        'orderWorkflowActionPayload.supplier_delivery_date' => 'Enter a valid supplier delivery date.',
-                    ]);
-                }
-
-                $job->update(['supplier_delivery_date' => $supplierDeliveryDate]);
                 $plainNote = trim(app(RichTextService::class)->plainText($comment));
-                $description = 'Supplier delivery date set to '.$parsedDate->format('M j, Y').'.';
-                if ($plainNote !== '') $description .= ' Production issue note: '.$plainNote;
+                $description = $parsedDate
+                    ? 'Supplier delivery date set to '.$parsedDate->format('M j, Y').'.'
+                    : ($plainNote !== '' ? 'Production issue note saved.' : 'Production monitoring task completed.');
+                if ($parsedDate && $plainNote !== '') $description .= ' Production issue note: '.$plainNote;
 
                 $job->activities()->create([
                     'user_id' => $actor->id,
                     'event' => 'job.supplier_delivery_date_set',
                     'description' => $description,
                     'meta' => [
-                        'supplier_delivery_date' => $supplierDeliveryDate,
+                        'supplier_delivery_date' => $supplierDeliveryDate !== '' ? $supplierDeliveryDate : null,
                         'production_issue_note' => $comment !== '' ? $comment : null,
                         'task_id' => (int) $locked->id,
                     ],

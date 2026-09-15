@@ -395,7 +395,7 @@ trait ManagesOrderWorkflow
 
         $this->dispatchTaskAssigneeSync($task->id);
         $this->syncOverviewWorkflowSelectionToCurrentPhase();
-        session()->flash('success', 'Supplier delivery date saved and Production task completed.');
+        session()->flash('success', 'Production task completed.');
     }
 
     public function clearProductionMonitorErrors(int $taskId): void
@@ -420,27 +420,30 @@ trait ManagesOrderWorkflow
 
             validator(
                 ['supplier_delivery_date' => $date],
-                ['supplier_delivery_date' => ['required', 'date_format:Y-m-d']],
+                ['supplier_delivery_date' => ['nullable', 'date_format:Y-m-d']],
                 [],
                 ['supplier_delivery_date' => 'supplier delivery date'],
             )->validate();
 
-            $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-            if (! $parsedDate || $parsedDate->format('Y-m-d') !== $date) {
-                throw ValidationException::withMessages([
-                    'supplier_delivery_date' => 'Enter a valid supplier delivery date.',
-                ]);
+            $parsedDate = null;
+            if ($date !== '') {
+                $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
+                if (! $parsedDate || $parsedDate->format('Y-m-d') !== $date) {
+                    throw ValidationException::withMessages([
+                        'supplier_delivery_date' => 'Enter a valid supplier delivery date.',
+                    ]);
+                }
             }
 
             $job = $task->job;
             $currentDetails = $this->productionMonitorSavedDetailsForTask($job, (int) $task->id);
             $note = (string) ($currentDetails['production_issue_note'] ?? '');
 
-            $job->update(['supplier_delivery_date' => $date]);
+            $job->update(['supplier_delivery_date' => $date !== '' ? $date : null]);
             $this->recordCompletedProductionMonitorEdit($task, $date, $note, 'supplier_delivery_date');
 
             $savedValue = $date;
-            $savedDisplay = $parsedDate->format('d/m/Y');
+            $savedDisplay = $parsedDate?->format('d/m/Y') ?? '—';
         });
 
         if (($result['ok'] ?? false) === true) {
@@ -473,13 +476,6 @@ trait ManagesOrderWorkflow
             $date = trim((string) ($currentDetails['supplier_delivery_date'] ?? ''));
             if ($date === '' && $job->supplier_delivery_date) {
                 $date = $job->supplier_delivery_date->format('Y-m-d');
-            }
-
-            $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $date);
-            if (! $parsedDate || $parsedDate->format('Y-m-d') !== $date) {
-                throw ValidationException::withMessages([
-                    'production_issue_note' => 'Supplier delivery date is missing. Set the date before editing the production issue note.',
-                ]);
             }
 
             $this->recordCompletedProductionMonitorEdit($task, $date, $note, 'production_issue_note');
@@ -545,7 +541,9 @@ trait ManagesOrderWorkflow
     {
         $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $supplierDeliveryDate);
         $description = $changedField === 'supplier_delivery_date'
-            ? 'Supplier delivery date updated to '.($parsedDate?->format('M j, Y') ?: $supplierDeliveryDate).'.'
+            ? ($supplierDeliveryDate !== ''
+                ? 'Supplier delivery date updated to '.($parsedDate?->format('M j, Y') ?: $supplierDeliveryDate).'.'
+                : 'Supplier delivery date cleared.')
             : ($productionIssueNote !== '' ? 'Production issue note updated.' : 'Production issue note cleared.');
 
         $task->job->activities()->create([

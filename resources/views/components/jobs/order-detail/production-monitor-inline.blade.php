@@ -7,7 +7,7 @@
 <div class="ft-production-monitor-inline" aria-label="Monitor or resolve production issue details">
     <div class="ft-production-monitor-date-row">
         <div class="ft-production-monitor-date-label">
-            Supplier Delivery Date <b class="ft-production-monitor-required" aria-hidden="true">*</b>
+            Supplier Delivery Date <em>(Optional)</em>
         </div>
 
         <div class="ft-production-monitor-date-control">

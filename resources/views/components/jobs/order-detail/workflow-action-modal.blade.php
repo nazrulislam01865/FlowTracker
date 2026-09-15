@@ -913,7 +913,7 @@
             @elseif($variant === 'production_monitor')
                 <div class="ft-production-monitor-modal-date-row">
                     <label class="ft-prototype-field ft-prototype-field--top">
-                        <span>Supplier Delivery Date <b class="ft-production-monitor-required">*</b></span>
+                        <span>Supplier Delivery Date <em>(Optional)</em></span>
                         <input
                             type="date"
                             class="ft-prototype-clickable-date"
