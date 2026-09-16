@@ -315,6 +315,9 @@ unset($__defined_vars, $__key, $__value); ?>
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"
+        <?php if($isProductionEstimatedDeliveryTask): ?>
+            <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-estimated-delivery-editor-'.e($task->id).'-'.e($displayDueDate?->format('Ymd') ?? 'unset').''; ?>wire:key="order-estimated-delivery-editor-<?php echo e($task->id); ?>-<?php echo e($displayDueDate?->format('Ymd') ?? 'unset'); ?>"
+        <?php endif; ?>
         x-data="window.FlowTrack.ui.inlineEdit({ key:<?php echo \Illuminate\Support\Js::from($dueEditorKey)->toHtml() ?>, label:<?php echo \Illuminate\Support\Js::from($dueEditorLabel)->toHtml() ?>, value:<?php echo \Illuminate\Support\Js::from($displayDueDate?->format('Y-m-d') ?? '')->toHtml() ?>, display:<?php echo \Illuminate\Support\Js::from($dueDisplay)->toHtml() ?> })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
         <div class="ft-order-inline-display-row" x-show="!editing">
