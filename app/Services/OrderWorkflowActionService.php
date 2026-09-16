@@ -465,6 +465,58 @@ class OrderWorkflowActionService
     }
 
     /**
+     * Edit the canonical estimated delivery date after its Production task has
+     * completed. Keep the task SLA due date independent from the Order's
+     * estimated delivery date so overdue/task timing reports are not changed.
+     */
+    public function updateCompletedEstimatedDeliveryDate(Task $task, User $actor, string $estimatedDeliveryDate): Task
+    {
+        $estimatedDeliveryDate = trim($estimatedDeliveryDate);
+
+        return DB::transaction(function () use ($task, $actor, $estimatedDeliveryDate): Task {
+            $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
+            abort_unless($this->automationKey($locked) === 'PROD_SET_ESTIMATED_DELIVERY', 422, 'This task does not manage the estimated delivery date.');
+            abort_unless((bool) $locked->completed_at || strcasecmp(trim((string) $locked->status), 'Completed') === 0, 422, 'Complete the estimated delivery date task before editing it.');
+
+            $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->firstOrFail();
+            abort_if(strcasecmp((string) $job->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
+            app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
+
+            if ($estimatedDeliveryDate === '') {
+                throw ValidationException::withMessages([
+                    'estimated_delivery_date' => 'Estimated delivery date is required.',
+                ]);
+            }
+
+            $parsedDate = \DateTimeImmutable::createFromFormat('!Y-m-d', $estimatedDeliveryDate);
+            if (! $parsedDate || $parsedDate->format('Y-m-d') !== $estimatedDeliveryDate) {
+                throw ValidationException::withMessages([
+                    'estimated_delivery_date' => 'Enter a valid estimated delivery date.',
+                ]);
+            }
+
+            $currentDate = $job->estimated_delivery_date?->format('Y-m-d');
+            if ($currentDate === $estimatedDeliveryDate) {
+                return $locked->refresh();
+            }
+
+            $job->update(['estimated_delivery_date' => $estimatedDeliveryDate]);
+            $job->activities()->create([
+                'user_id' => $actor->id,
+                'event' => 'job.estimated_delivery_date_set',
+                'description' => 'Estimated delivery date updated to '.$parsedDate->format('M j, Y').' after task completion.',
+                'meta' => [
+                    'estimated_delivery_date' => $estimatedDeliveryDate,
+                    'task_id' => (int) $locked->id,
+                    'edited_after_completion' => true,
+                ],
+            ]);
+
+            return $locked->refresh();
+        }, 3);
+    }
+
+    /**
      * Apply a task action. All task completion goes through TaskService so the
      * normal sequencing, progress, audit and automatic stage advance hooks run.
      *

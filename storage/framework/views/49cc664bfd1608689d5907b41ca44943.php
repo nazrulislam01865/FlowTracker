@@ -114,7 +114,14 @@ unset($__defined_vars, $__key, $__value); ?>
     $productionMonitorErrorPrefix = 'productionMonitor.'.(int) $task->id;
     $productionMonitorSavedDetails = (array) data_get($context, 'productionMonitorDetails.'.(int) $task->id, []);
     $showProductionMonitorSummary = $isProductionMonitorTask && $mode === 'done';
-    $dueDisplay = $task->due_date?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : 'Set due date');
+    $displayDueDate = $isProductionEstimatedDeliveryTask ? $job->estimated_delivery_date : $task->due_date;
+    $dueDisplay = $displayDueDate?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : ($isProductionEstimatedDeliveryTask ? 'Set date' : 'Set due date'));
+    $canInlineEditDueDate = $canEditTask
+        && ! $isCancelled
+        && ! $showProductionMonitorInline
+        && (! $isProductionEstimatedDeliveryTask || $mode === 'done');
+    $dueEditorKey = $isProductionEstimatedDeliveryTask ? 'job-'.$job->id.'-estimated-delivery-date' : 'task-'.$task->id.'-due-date';
+    $dueEditorLabel = $isProductionEstimatedDeliveryTask ? 'estimated delivery date' : 'task due date';
     if ($showProductionMonitorInline) {
         $displayStatus = 'In Progress';
         $statusClass = 'active';
@@ -308,19 +315,26 @@ unset($__defined_vars, $__key, $__value); ?>
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"
-        x-data="window.FlowTrack.ui.inlineEdit({ key:<?php echo \Illuminate\Support\Js::from('task-'.$task->id.'-due-date')->toHtml() ?>, label:'task due date', value:<?php echo \Illuminate\Support\Js::from($task->due_date?->format('Y-m-d') ?? '')->toHtml() ?>, display:<?php echo \Illuminate\Support\Js::from($dueDisplay)->toHtml() ?> })"
+        <?php if($isProductionEstimatedDeliveryTask): ?>
+            <?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::$currentLoop['key'] = 'order-estimated-delivery-editor-'.e($task->id).'-'.e($displayDueDate?->format('Ymd') ?? 'unset').''; ?>wire:key="order-estimated-delivery-editor-<?php echo e($task->id); ?>-<?php echo e($displayDueDate?->format('Ymd') ?? 'unset'); ?>"
+        <?php endif; ?>
+        x-data="window.FlowTrack.ui.inlineEdit({ key:<?php echo \Illuminate\Support\Js::from($dueEditorKey)->toHtml() ?>, label:<?php echo \Illuminate\Support\Js::from($dueEditorLabel)->toHtml() ?>, value:<?php echo \Illuminate\Support\Js::from($displayDueDate?->format('Y-m-d') ?? '')->toHtml() ?>, display:<?php echo \Illuminate\Support\Js::from($dueDisplay)->toHtml() ?> })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
         <div class="ft-order-inline-display-row" x-show="!editing">
             <span class="ft-order-inline-value" x-text="display"><?php echo e($dueDisplay); ?></span>
-            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled && !$showProductionMonitorInline): ?>
-                <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canInlineEditDueDate): ?>
+                <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="<?php echo e($isProductionEstimatedDeliveryTask ? 'Edit estimated delivery date' : 'Edit due date'); ?>" aria-label="<?php echo e($isProductionEstimatedDeliveryTask ? 'Edit estimated delivery date' : 'Edit task due date'); ?>" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         </div>
-        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask && !$isCancelled && !$showProductionMonitorInline): ?>
+        <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canInlineEditDueDate): ?>
             <input x-ref="orderDue" x-cloak x-show="editing" x-model="draftValue" class="ft-order-inline-input" type="date"
                 x-on:keydown.escape.prevent="cancelEdit()"
                 x-on:blur="if (editing) cancelEdit()"
-                x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob(<?php echo e($task->id); ?>, draftValue))">
+                <?php if($isProductionEstimatedDeliveryTask): ?>
+                    x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateEstimatedDeliveryDateFromJob(<?php echo e($task->id); ?>, draftValue))"
+                <?php else: ?>
+                    x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob(<?php echo e($task->id); ?>, draftValue))"
+                <?php endif; ?>>
             <?php if (isset($component)) { $__componentOriginal610752b6d86af46dc7d5e0c5ff95106c = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginal610752b6d86af46dc7d5e0c5ff95106c = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.ui.inline-save-state','data' => ['compact' => true]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

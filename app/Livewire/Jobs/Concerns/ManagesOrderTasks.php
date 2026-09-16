@@ -75,6 +75,38 @@ trait ManagesOrderTasks
         return $result;
     }
 
+    #[Json]
+    public function updateEstimatedDeliveryDateFromJob(int $taskId, mixed $date): array
+    {
+        $savedValue = '';
+        $savedDisplay = '';
+
+        $result = $this->persistInlineEdit('estimated delivery date', function () use ($taskId, $date, &$savedValue, &$savedDisplay) {
+            abort_unless($this->selectedJobId, 422);
+
+            $task = app(TaskService::class)->visibleQuery(auth()->user())
+                ->with(['job', 'setupTemplate'])
+                ->where('flow_job_id', $this->selectedJobId)
+                ->findOrFail($taskId);
+            abort_unless(app(AccessControlService::class)->canEditTask(auth()->user(), $task), 403);
+
+            $date = trim((string) $date);
+            app(\App\Services\OrderWorkflowActionService::class)
+                ->updateCompletedEstimatedDeliveryDate($task, auth()->user(), $date);
+
+            $job = FlowJob::query()->findOrFail($task->flow_job_id);
+            $savedValue = $job->estimated_delivery_date?->format('Y-m-d') ?? '';
+            $savedDisplay = $job->estimated_delivery_date?->format('M j, Y') ?? 'Set date';
+        });
+
+        if (($result['ok'] ?? false) === true) {
+            $result['value'] = $savedValue;
+            $result['display'] = $savedDisplay;
+        }
+
+        return $result;
+    }
+
     /**
      * Livewire hook for the file button shown on each Order Overview task row.
      * Each task owns its temporary upload slot so several rows can be used

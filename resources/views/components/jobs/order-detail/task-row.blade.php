@@ -86,7 +86,14 @@
     $productionMonitorErrorPrefix = 'productionMonitor.'.(int) $task->id;
     $productionMonitorSavedDetails = (array) data_get($context, 'productionMonitorDetails.'.(int) $task->id, []);
     $showProductionMonitorSummary = $isProductionMonitorTask && $mode === 'done';
-    $dueDisplay = $task->due_date?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : 'Set due date');
+    $displayDueDate = $isProductionEstimatedDeliveryTask ? $job->estimated_delivery_date : $task->due_date;
+    $dueDisplay = $displayDueDate?->format('M j, Y') ?? ($isProductionMonitorTask ? '-' : ($isProductionEstimatedDeliveryTask ? 'Set date' : 'Set due date'));
+    $canInlineEditDueDate = $canEditTask
+        && ! $isCancelled
+        && ! $showProductionMonitorInline
+        && (! $isProductionEstimatedDeliveryTask || $mode === 'done');
+    $dueEditorKey = $isProductionEstimatedDeliveryTask ? 'job-'.$job->id.'-estimated-delivery-date' : 'task-'.$task->id.'-due-date';
+    $dueEditorLabel = $isProductionEstimatedDeliveryTask ? 'estimated delivery date' : 'task due date';
     if ($showProductionMonitorInline) {
         $displayStatus = 'In Progress';
         $statusClass = 'active';
@@ -195,19 +202,26 @@
     </div>
 
     <div class="date ft-order-task-due ft-inline-edit-shell"
-        x-data="window.FlowTrack.ui.inlineEdit({ key:@js('task-'.$task->id.'-due-date'), label:'task due date', value:@js($task->due_date?->format('Y-m-d') ?? ''), display:@js($dueDisplay) })"
+        @if($isProductionEstimatedDeliveryTask)
+            wire:key="order-estimated-delivery-editor-{{ $task->id }}-{{ $displayDueDate?->format('Ymd') ?? 'unset' }}"
+        @endif
+        x-data="window.FlowTrack.ui.inlineEdit({ key:@js($dueEditorKey), label:@js($dueEditorLabel), value:@js($displayDueDate?->format('Y-m-d') ?? ''), display:@js($dueDisplay) })"
         :class="{ 'is-inline-saving': status === 'saving', 'is-inline-error': status === 'error' }">
         <div class="ft-order-inline-display-row" x-show="!editing">
             <span class="ft-order-inline-value" x-text="display">{{ $dueDisplay }}</span>
-            @if($canEditTask && !$isCancelled && !$showProductionMonitorInline)
-                <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="Edit due date" aria-label="Edit task due date" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
+            @if($canInlineEditDueDate)
+                <button :disabled="status === 'saving'" type="button" class="ft-inline-edit-button ft-order-inline-edit-button" title="{{ $isProductionEstimatedDeliveryTask ? 'Edit estimated delivery date' : 'Edit due date' }}" aria-label="{{ $isProductionEstimatedDeliveryTask ? 'Edit estimated delivery date' : 'Edit task due date' }}" x-on:click.stop="if (beginEdit()) $nextTick(() => $refs.orderDue.showPicker ? $refs.orderDue.showPicker() : $refs.orderDue.focus())">✎</button>
             @endif
         </div>
-        @if($canEditTask && !$isCancelled && !$showProductionMonitorInline)
+        @if($canInlineEditDueDate)
             <input x-ref="orderDue" x-cloak x-show="editing" x-model="draftValue" class="ft-order-inline-input" type="date"
                 x-on:keydown.escape.prevent="cancelEdit()"
                 x-on:blur="if (editing) cancelEdit()"
-                x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob({{ $task->id }}, draftValue))">
+                @if($isProductionEstimatedDeliveryTask)
+                    x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateEstimatedDeliveryDateFromJob({{ $task->id }}, draftValue))"
+                @else
+                    x-on:change="commit($event.target.value, formatDate($event.target.value), () => $wire.updateTaskDueDateFromJob({{ $task->id }}, draftValue))"
+                @endif>
             <x-ui.inline-save-state compact />
         @endif
     </div>
