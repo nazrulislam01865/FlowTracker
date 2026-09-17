@@ -316,9 +316,9 @@
         @elseif($mode === 'active' && $isCurrentPhase)
             @if($canEditTask)
                 @if(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument))
-                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>
+                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>
                 @else
-                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>
+                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction({{ $task->id }})" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction({{ $task->id }})">{{ $workflowActionLabel }}</button>
                 @endif
             @endif
         @elseif($mode === 'done')

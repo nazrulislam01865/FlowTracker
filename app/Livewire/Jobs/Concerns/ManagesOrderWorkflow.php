@@ -65,6 +65,18 @@ trait ManagesOrderWorkflow
         $key = $workflowActions->automationKey($task);
         $editingCompletedShipmentInformation = $key === 'SHIP_CONFIRM_INFO'
             && \App\Support\OrderDetailPresenter::isCompletedTask($task);
+
+        // A slow Livewire request can be followed by a duplicate click from the
+        // old DOM after the first request has already completed this task. When
+        // that completion also advanced the Order to the next stage, running the
+        // stale request through the normal sequencing guard would incorrectly
+        // surface "This task is locked until its workflow stage is active."
+        // Treat an already-completed action as an idempotent replay and simply
+        // resync the component to the authoritative current phase.
+        if (! $editingCompletedShipmentInformation && $this->ignoreCompletedWorkflowReplay($task)) {
+            return;
+        }
+
         if ($editingCompletedShipmentInformation) {
             abort_if(strcasecmp((string) $task->job?->status, 'Cancelled') === 0, 422, 'Cancelled Orders cannot be edited.');
         } else {
@@ -889,6 +901,22 @@ trait ManagesOrderWorkflow
     private function refreshShipmentWorkflowSelection(): void
     {
         $this->syncOverviewWorkflowSelectionToCurrentPhase();
+    }
+
+    /**
+     * Ignore a replay of an Order workflow action that another request already
+     * completed. The task completion is the proof that the original action was
+     * applied; no sequencing rule is relaxed for incomplete/historical tasks.
+     */
+    private function ignoreCompletedWorkflowReplay(Task $task): bool
+    {
+        if (! \App\Support\OrderDetailPresenter::isCompletedTask($task)) {
+            return false;
+        }
+
+        $this->syncOverviewWorkflowSelectionToCurrentPhase();
+
+        return true;
     }
 
     public function resendCompletedArtworkEmail(int $taskId): void

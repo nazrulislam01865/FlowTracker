@@ -527,6 +527,16 @@ class OrderWorkflowActionService
         return DB::transaction(function () use ($task, $actor, $decision, $comment, $payload, $attachments): Task {
             $locked = Task::query()->whereKey($task->id)->lockForUpdate()->with(['job.phase', 'setupTemplate'])->firstOrFail();
             $job = FlowJob::query()->whereKey($locked->flow_job_id)->lockForUpdate()->with(['client', 'items'])->firstOrFail();
+
+            // Workflow actions are allowed to be retried safely. A duplicate
+            // Livewire request can arrive after the first request completed the
+            // task (and may already have advanced the Order to the next stage).
+            // Returning the completed task here prevents duplicate side effects
+            // and avoids turning a successful stage transition into a stale 422.
+            if ($this->isCompletedWorkflowTask($locked)) {
+                return $locked->refresh();
+            }
+
             app(\App\Services\Orders\OrderHoldService::class)->assertNotHeld($job);
             abort_unless((int) $locked->workflow_phase_id === (int) $job->workflow_phase_id, 422, 'This task is locked until its workflow stage is active.');
             app(OrderTaskSequenceService::class)->assertStatusActionable($locked);
@@ -1041,6 +1051,12 @@ class OrderWorkflowActionService
     private function complete(Task $task, User $actor): Task
     {
         return app(TaskService::class)->moveStatus($task, app(OrderTaskFlagService::class)->completedStatus(), $actor);
+    }
+
+    private function isCompletedWorkflowTask(Task $task): bool
+    {
+        return (bool) $task->completed_at
+            || strcasecmp(trim((string) $task->status), 'Completed') === 0;
     }
 
     /**

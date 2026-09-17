@@ -453,9 +453,9 @@ unset($__defined_vars, $__key, $__value); ?>
         <?php elseif($mode === 'active' && $isCurrentPhase): ?>
             <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($canEditTask): ?>
                 <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(($workflowActionType === 'document' || ($requiresDocument && $requiredBeforeCompletion && $taskDocuments->isEmpty() && $taskLinks->isEmpty())) && ($canUploadDocument || $canLinkDocument)): ?>
-                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction(<?php echo e($task->id); ?>)"><?php echo e($workflowActionLabel); ?></button>
+                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction(<?php echo e($task->id); ?>)"><?php echo e($workflowActionLabel); ?></button>
                 <?php else: ?>
-                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction(<?php echo e($task->id); ?>)"><?php echo e($workflowActionLabel); ?></button>
+                    <button type="button" class="btn small primary" wire:click="openOrderWorkflowAction(<?php echo e($task->id); ?>)" wire:loading.attr="disabled" wire:target="openOrderWorkflowAction(<?php echo e($task->id); ?>)"><?php echo e($workflowActionLabel); ?></button>
                 <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
         <?php elseif($mode === 'done'): ?>
