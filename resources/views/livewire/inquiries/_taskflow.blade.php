@@ -17,7 +17,8 @@
                 // Editing a task and assigning a task are independent matrix permissions.
                 $canEditTaskFields = $canChangeStatusThisTask;
                 $canAssignThisTask = !$inquiry->result && $taskAccess->canAssignInquiryTask(auth()->user(), $task);
-                $canAttachFileThisTask = !$inquiry->result && $canChangeStatusThisTask && $canCreateDocuments;
+                $taskDocumentLimitReached = (int) $task->documents_count >= \App\Models\InquiryTask::MAX_DOCUMENTS;
+                $canAttachFileThisTask = !$inquiry->result && $canChangeStatusThisTask && $canCreateDocuments && !$taskDocumentLimitReached;
                 $canDeleteTaskDocuments = !$inquiry->result && $canChangeStatusThisTask && $canDeleteDocuments;
                 $canAttachThisTask = $canAttachFileThisTask; // legacy alias used by the modal/resource block.
                 $canEditThisTask = $state !== 'done' && $canChangeStatusThisTask;

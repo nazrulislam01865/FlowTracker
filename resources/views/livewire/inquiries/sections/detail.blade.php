@@ -407,22 +407,17 @@
                 @php
                     $completeAfterTaskDocument = (bool) $taskDocumentModalTask->requires_submission
                         && ! $taskDocumentModalTask->completed_at;
-                    $taskDocumentUploadName = $taskDocumentUpload?->getClientOriginalName();
-                    $taskDocumentUploadType = $taskDocumentUploadName
-                        ? (strtoupper((string) pathinfo($taskDocumentUploadName, PATHINFO_EXTENSION)) ?: 'FILE')
-                        : null;
-                    $taskDocumentUploadSize = $taskDocumentUpload
-                        ? ($taskDocumentUpload->getSize() >= 1048576
-                            ? number_format($taskDocumentUpload->getSize() / 1048576, 1).' MB'
-                            : number_format(max(1, (int) ceil($taskDocumentUpload->getSize() / 1024))).' KB')
-                        : null;
+                    $taskDocumentMax = \App\Models\InquiryTask::MAX_DOCUMENTS;
+                    $taskDocumentExistingCount = (int) ($taskDocumentModalTask->documents_count ?? 0);
+                    $taskDocumentSelectedCount = count($taskDocumentUploads);
+                    $taskDocumentRemainingSlots = max(0, $taskDocumentMax - $taskDocumentExistingCount - $taskDocumentSelectedCount);
                 @endphp
                 <div class="ft-inquiry-task-document-modal-backdrop" wire:key="inquiry-task-document-modal" wire:click.self="closeTaskDocumentModal">
                     <section class="ft-inquiry-task-document-modal" data-ft-feedback-scope="form" role="dialog" aria-modal="true" aria-labelledby="task-document-modal-title">
                         <header class="ft-inquiry-task-document-modal-head">
                             <div>
                                 <h2 id="task-document-modal-title">{{ $completeAfterTaskDocument ? 'Required file needed to complete task' : 'Add new document to task' }}</h2>
-                                <p>{{ $completeAfterTaskDocument ? 'Add the required file now. The task will be completed automatically after the document is saved.' : 'Upload a new file to this task.' }}</p>
+                                <p>{{ $completeAfterTaskDocument ? 'Add the required file or files now. The task will be completed automatically after all selected documents are saved.' : 'Upload up to '.$taskDocumentMax.' documents to this task.' }}</p>
                             </div>
                             <button type="button" class="ft-inquiry-task-document-modal-close" wire:click="closeTaskDocumentModal" aria-label="Close">×</button>
                         </header>
@@ -456,37 +451,67 @@
                                     x-on:livewire-upload-error="uploading = false; progress = 0"
                                     x-on:livewire-upload-cancel="uploading = false; progress = 0"
                                 >
-                                    @if($taskDocumentUpload)
-                                        <div class="ft-inquiry-attachment-selected-count">1 file selected</div>
-                                        <div class="ft-inquiry-attachment-selected-file">
-                                            <span class="ft-inquiry-attachment-selected-check" aria-hidden="true">✓</span>
-                                            <span class="ft-inquiry-attachment-selected-copy">
-                                                <strong title="{{ $taskDocumentUploadName }}">{{ $taskDocumentUploadName }}</strong>
-                                                <small>{{ $taskDocumentUploadType }} · {{ $taskDocumentUploadSize }} · Ready to upload</small>
-                                            </span>
-                                            <button type="button" wire:click="$set('taskDocumentUpload', null)" wire:loading.attr="disabled" wire:target="taskDocumentUpload">Remove</button>
+                                    @if($taskDocumentSelectedCount > 0)
+                                        <div class="ft-inquiry-attachment-selected-count">
+                                            {{ $taskDocumentSelectedCount }} file{{ $taskDocumentSelectedCount === 1 ? '' : 's' }} selected
+                                            @if($taskDocumentExistingCount > 0)
+                                                · {{ $taskDocumentExistingCount }} already attached
+                                            @endif
+                                        </div>
+                                        <div class="ft-inquiry-attachment-selected-files">
+                                            @foreach($taskDocumentUploads as $uploadIndex => $taskDocumentUpload)
+                                                @php
+                                                    $taskDocumentUploadName = $taskDocumentUpload?->getClientOriginalName() ?: 'Selected file';
+                                                    $taskDocumentUploadType = strtoupper((string) pathinfo($taskDocumentUploadName, PATHINFO_EXTENSION)) ?: 'FILE';
+                                                    $taskDocumentUploadSize = $taskDocumentUpload
+                                                        ? ($taskDocumentUpload->getSize() >= 1048576
+                                                            ? number_format($taskDocumentUpload->getSize() / 1048576, 1).' MB'
+                                                            : number_format(max(1, (int) ceil($taskDocumentUpload->getSize() / 1024))).' KB')
+                                                        : 'Selected file';
+                                                @endphp
+                                                <div class="ft-inquiry-attachment-selected-file" wire:key="task-document-upload-{{ $uploadIndex }}-{{ md5($taskDocumentUploadName) }}">
+                                                    <span class="ft-inquiry-attachment-selected-check" aria-hidden="true">✓</span>
+                                                    <span class="ft-inquiry-attachment-selected-copy">
+                                                        <strong title="{{ $taskDocumentUploadName }}">{{ $taskDocumentUploadName }}</strong>
+                                                        <small>{{ $taskDocumentUploadType }} · {{ $taskDocumentUploadSize }} · Ready to upload</small>
+                                                    </span>
+                                                    <button type="button" wire:click="removeTaskDocumentUpload({{ $uploadIndex }})" wire:loading.attr="disabled" wire:target="removeTaskDocumentUpload({{ $uploadIndex }})">Remove</button>
+                                                </div>
+                                            @endforeach
                                         </div>
                                     @else
-                                        <div class="ft-inquiry-attachment-field-label">File attachment</div>
+                                        <div class="ft-inquiry-attachment-field-label">
+                                            File attachment
+                                            @if($taskDocumentExistingCount > 0)
+                                                · {{ $taskDocumentExistingCount }}/{{ $taskDocumentMax }} already attached
+                                            @endif
+                                        </div>
                                     @endif
 
-                                    <label class="ft-inquiry-task-document-dropzone ft-inquiry-attachment-dropzone {{ $taskDocumentUpload ? 'is-compact' : '' }}">
-                                        <input type="file" wire:model="taskDocumentUpload" accept="{{ \App\Support\AttachmentUpload::accept() }}" aria-label="{{ $taskDocumentUpload ? 'Add another file' : 'Choose a file to upload' }}">
-                                        <svg class="ft-inquiry-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
-                                        @if($taskDocumentUpload)
-                                            <strong>Add another file</strong>
-                                            <b>Drag &amp; drop or <span>browse</span></b>
-                                        @else
-                                            <strong>Drag &amp; drop a file here</strong>
-                                            <b>or choose from your computer</b>
-                                            <span class="ft-inquiry-attachment-browse">Browse files</span>
-                                        @endif
-                                        <small>{{ \App\Support\AttachmentUpload::helperText(20) }}</small>
-                                    </label>
+                                    @if($taskDocumentRemainingSlots > 0)
+                                        <label class="ft-inquiry-task-document-dropzone ft-inquiry-attachment-dropzone {{ $taskDocumentSelectedCount > 0 ? 'is-compact' : '' }}">
+                                            <input type="file" multiple wire:model="taskDocumentUploads" accept="{{ \App\Support\AttachmentUpload::accept() }}" aria-label="{{ $taskDocumentSelectedCount > 0 ? 'Add more files' : 'Choose files to upload' }}">
+                                            <svg class="ft-inquiry-attachment-upload-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M16 16l-4-4-4 4M12 12v9M20.4 17.5A5 5 0 0 0 18 8.2 7 7 0 0 0 4.3 10.8 4.5 4.5 0 0 0 5.5 19H7"/></svg>
+                                            @if($taskDocumentSelectedCount > 0)
+                                                <strong>Add more files</strong>
+                                                <b>Drag &amp; drop or <span>browse</span></b>
+                                            @else
+                                                <strong>Drag &amp; drop files here</strong>
+                                                <b>or choose from your computer</b>
+                                                <span class="ft-inquiry-attachment-browse">Browse files</span>
+                                            @endif
+                                            <small>{{ \App\Support\AttachmentUpload::helperText(20) }} · {{ $taskDocumentRemainingSlots }} more allowed · {{ $taskDocumentMax }} maximum per task</small>
+                                        </label>
+                                    @else
+                                        <div class="ft-inquiry-task-document-limit-reached" role="status">
+                                            <strong>{{ $taskDocumentMax }}-document limit reached</strong>
+                                            <span>Remove a selected or existing task document before adding another file.</span>
+                                        </div>
+                                    @endif
 
                                     <div class="ft-inquiry-task-document-upload-progress" x-cloak x-show="uploading" x-transition.opacity.duration.120ms>
                                         <div class="ft-inquiry-upload-progress-meta">
-                                            <span>Uploading file...</span>
+                                            <span>Uploading file{{ $taskDocumentSelectedCount > 1 ? 's' : '' }}...</span>
                                             <b x-text="`${progress}%`">0%</b>
                                         </div>
                                         <div class="ft-inquiry-upload-progress-track" role="progressbar" aria-label="File upload progress" aria-valuemin="0" aria-valuemax="100" x-bind:aria-valuenow="progress">
@@ -494,30 +519,31 @@
                                         </div>
                                     </div>
 
-                                    @error('taskDocumentUpload')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
+                                    @error('taskDocumentUploads')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
+                                    @error('taskDocumentUploads.*')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
                                 </div>
                             @endif
 
                             <label class="ft-inquiry-task-document-note">
-                                <span>Document note (optional)</span>
-                                <input type="text" wire:model="taskDocumentNote" placeholder="Add a short note about this document...">
+                                <span>Document note (optional){{ $taskDocumentSelectedCount > 1 ? ' · applies to all selected files' : '' }}</span>
+                                <input type="text" wire:model="taskDocumentNote" placeholder="Add a short note about {{ $taskDocumentSelectedCount > 1 ? 'these documents' : 'this document' }}...">
                             </label>
                             @error('taskDocumentNote')<p class="ft-inquiry-task-document-error">{{ $message }}</p>@enderror
 
                             <div class="ft-inquiry-task-document-info">
                                 <span>ⓘ</span>
                                 <p>
-                                    This document will appear directly under <strong>{{ $taskDocumentModalTask->title }}</strong>.
-                                    @if($completeAfterTaskDocument) Saving it will also mark the task as Completed. @elseif($taskDocumentModalTask->completed_at) Adding a document will not reopen or change the completed task. @endif
+                                    {{ $taskDocumentSelectedCount === 1 ? 'This document' : 'These documents' }} will appear directly under <strong>{{ $taskDocumentModalTask->title }}</strong>.
+                                    @if($completeAfterTaskDocument) Saving the complete selected batch will also mark the task as Completed. @elseif($taskDocumentModalTask->completed_at) Adding documents will not reopen or change the completed task. @endif
                                 </p>
                             </div>
                         </div>
 
                         <footer class="ft-inquiry-task-document-modal-actions">
                             <button type="button" class="secondary" wire:click="closeTaskDocumentModal">Cancel</button>
-                            <button type="button" class="primary" wire:click="saveTaskDocument" wire:loading.attr="disabled" wire:target="saveTaskDocument,taskDocumentUpload"
-                                @disabled(!$taskDocumentUpload)>
-                                <span wire:loading.remove wire:target="saveTaskDocument">{{ $taskDocumentUpload ? 'Add 1 document' : 'Add document' }}</span>
+                            <button type="button" class="primary" wire:click="saveTaskDocument" wire:loading.attr="disabled" wire:target="saveTaskDocument,taskDocumentUploads"
+                                @disabled($taskDocumentSelectedCount === 0)>
+                                <span wire:loading.remove wire:target="saveTaskDocument">{{ $taskDocumentSelectedCount > 0 ? 'Add '.$taskDocumentSelectedCount.' document'.($taskDocumentSelectedCount === 1 ? '' : 's') : 'Add document' }}</span>
                                 <span wire:loading wire:target="saveTaskDocument">{{ $completeAfterTaskDocument ? 'Adding & completing...' : 'Adding...' }}</span>
                             </button>
                         </footer>

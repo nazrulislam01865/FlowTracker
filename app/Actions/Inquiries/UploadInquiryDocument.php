@@ -15,8 +15,14 @@ final class UploadInquiryDocument
     {
     }
 
-    public function handle(Inquiry $inquiry, UploadedFile $file, User $actor, ?InquiryTask $task = null, ?string $note = null): InquiryDocument
-    {
-        return $this->inquiries->upload($inquiry, $file, $actor, $task, $note);
+    public function handle(
+        Inquiry $inquiry,
+        UploadedFile $file,
+        User $actor,
+        ?InquiryTask $task = null,
+        ?string $note = null,
+        bool $completeRequiredTask = true,
+    ): InquiryDocument {
+        return $this->inquiries->upload($inquiry, $file, $actor, $task, $note, $completeRequiredTask);
     }
 }

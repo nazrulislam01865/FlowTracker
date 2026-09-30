@@ -3,6 +3,7 @@
 namespace App\Livewire\Inquiries\Concerns;
 
 use App\Models\Inquiry;
+use App\Models\InquiryTask;
 use App\Models\Document;
 use App\Services\AccessControlService;
 use App\Support\AttachmentUpload;
@@ -19,6 +20,11 @@ trait ManagesInquiryDocuments
         abort_if($task->inquiry->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
         $canCreateDocument = auth()->user()->canModule('documents', 'create');
         abort_unless($canCreateDocument, 403, 'Your role cannot upload documents.');
+        abort_if(
+            $task->documents()->count() >= InquiryTask::MAX_DOCUMENTS,
+            422,
+            'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task.'
+        );
 
         $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
@@ -58,7 +64,8 @@ trait ManagesInquiryDocuments
         $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
         $this->resetValidation([
-            'taskDocumentUpload',
+            'taskDocumentUploads',
+            'taskDocumentUploads.*',
             'taskExistingDocumentId',
             'taskDocumentNote',
         ]);
@@ -74,9 +81,46 @@ trait ManagesInquiryDocuments
         }
 
         $this->taskDocumentSource = $source;
-        $this->taskDocumentUpload = null;
+        $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
-        $this->resetValidation(['taskDocumentUpload', 'taskExistingDocumentId']);
+        $this->resetValidation([
+            'taskDocumentUploads',
+            'taskDocumentUploads.*',
+            'taskExistingDocumentId',
+        ]);
+    }
+
+    public function updatedTaskDocumentUploads(): void
+    {
+        if (! $this->taskDocumentModalTaskId || $this->taskDocumentUploads === []) {
+            return;
+        }
+
+        $task = app(\App\Queries\Inquiries\InquiryDetailQuery::class)
+            ->task(auth()->user(), (int) $this->taskDocumentModalTaskId);
+        $remaining = max(0, InquiryTask::MAX_DOCUMENTS - $task->documents()->count());
+
+        $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*']);
+        if (count($this->taskDocumentUploads) <= $remaining) {
+            return;
+        }
+
+        $this->taskDocumentUploads = array_values(array_slice($this->taskDocumentUploads, 0, $remaining));
+        $message = $remaining > 0
+            ? 'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task. Only the first '.$remaining.' available slot'.($remaining === 1 ? '' : 's').' were kept.'
+            : 'This Inquiry task already has the maximum of '.InquiryTask::MAX_DOCUMENTS.' documents.';
+        $this->addError('taskDocumentUploads', $message);
+    }
+
+    public function removeTaskDocumentUpload(int $index): void
+    {
+        if (! array_key_exists($index, $this->taskDocumentUploads)) {
+            return;
+        }
+
+        unset($this->taskDocumentUploads[$index]);
+        $this->taskDocumentUploads = array_values($this->taskDocumentUploads);
+        $this->resetValidation(['taskDocumentUploads', 'taskDocumentUploads.*']);
     }
 
     public function saveTaskDocument(): void
@@ -96,27 +140,71 @@ trait ManagesInquiryDocuments
         $note = trim($this->taskDocumentNote);
         $note = $note !== '' ? $note : null;
         $shouldCompleteAfterDocument = (bool) $task->requires_submission && ! $task->completed_at;
+        $documentsAdded = 0;
 
         if ($this->taskDocumentSource === 'upload') {
             abort_unless(auth()->user()->canModule('documents', 'create'), 403);
+
+            $existingCount = $task->documents()->count();
+            $remaining = InquiryTask::MAX_DOCUMENTS - $existingCount;
+            if ($remaining <= 0) {
+                $this->addError('taskDocumentUploads', 'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task.');
+                return;
+            }
+
             $this->validate([
-                'taskDocumentUpload' => AttachmentUpload::requiredRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+                'taskDocumentUploads' => ['required', 'array', 'min:1', 'max:'.$remaining],
+                'taskDocumentUploads.*' => AttachmentUpload::itemRules(AttachmentUpload::DOCUMENTS_WITH_AI, 20480),
+            ], [
+                'taskDocumentUploads.required' => 'Choose at least one file to upload.',
+                'taskDocumentUploads.max' => 'You can add only '.$remaining.' more document'.($remaining === 1 ? '' : 's').' to this task ('.InquiryTask::MAX_DOCUMENTS.' maximum).',
+                'taskDocumentUploads.*.max' => 'Each file must be 20 MB or smaller.',
             ]);
-            app(\App\Actions\Inquiries\UploadInquiryDocument::class)->handle($task->inquiry, $this->taskDocumentUpload, auth()->user(), $task, $note);
+
+            $uploads = array_values($this->taskDocumentUploads);
+            foreach ($uploads as $index => $upload) {
+                try {
+                    app(\App\Actions\Inquiries\UploadInquiryDocument::class)->handle(
+                        $task->inquiry,
+                        $upload,
+                        auth()->user(),
+                        $task,
+                        $note,
+                        false,
+                    );
+                    $documentsAdded++;
+                } catch (Throwable $exception) {
+                    report($exception);
+                    // Keep only the files that still need to be retried. Any files
+                    // stored before the failure remain attached, while the task
+                    // stays open until the full selected batch succeeds.
+                    $this->taskDocumentUploads = array_values(array_slice($uploads, $index));
+                    $message = $documentsAdded > 0
+                        ? $documentsAdded.' document'.($documentsAdded === 1 ? '' : 's').' uploaded, but the next file could not be stored. Retry the remaining files.'
+                        : 'FlowTrack could not store the selected task documents. Please try again.';
+                    $this->addError('taskDocumentUploads', $message);
+                    return;
+                }
+            }
         } else {
             abort_unless(auth()->user()->canModule('documents', 'link'), 403);
+            if ($task->documents()->count() >= InquiryTask::MAX_DOCUMENTS) {
+                $this->addError('taskExistingDocumentId', 'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task.');
+                return;
+            }
             $this->validate(['taskExistingDocumentId' => ['required', 'integer', 'exists:documents,id']]);
             $source = app(AccessControlService::class)
                 ->applyDocumentScope(Document::query()->whereKey((int) $this->taskExistingDocumentId), auth()->user())
                 ->firstOrFail();
             app(\App\Actions\Inquiries\LinkExistingInquiryTaskDocument::class)->handle($task, $source, auth()->user(), $note);
+            $documentsAdded = 1;
         }
 
         $task = $task->fresh();
         if ($shouldCompleteAfterDocument && ! $task->completed_at) {
-            // UploadInquiryDocument completes required-document tasks centrally.
-            // Keep this fallback for the legacy existing-document source so both
-            // ways of supplying a required document follow the same rule.
+            // Complete only after the full batch has been stored. This avoids a
+            // required-document task becoming Completed after the first file of
+            // a multi-file selection when a later file fails.
             $task = app(\App\Actions\Inquiries\CompleteInquiryTask::class)->handle($task, auth()->user());
         }
         $completedAfterDocument = $shouldCompleteAfterDocument && $task->completed_at !== null;
@@ -127,9 +215,11 @@ trait ManagesInquiryDocuments
         $this->showTaskDocumentModal = false;
         $this->pendingCompletionTaskId = null;
         $this->resetTaskDocumentModal();
+
+        $documentLabel = $documentsAdded === 1 ? 'Document' : $documentsAdded.' documents';
         session()->flash('success', $completedAfterDocument
-            ? 'Document added and '.$task->title.' completed.'
-            : 'Document added to '.$task->title.'.');
+            ? $documentLabel.' added and '.$task->title.' completed.'
+            : $documentLabel.' added to '.$task->title.'.');
     }
 
     public function uploadTaskFile(): void
@@ -332,7 +422,7 @@ trait ManagesInquiryDocuments
     {
         $this->taskDocumentModalTaskId = null;
         $this->taskDocumentSource = 'upload';
-        $this->taskDocumentUpload = null;
+        $this->taskDocumentUploads = [];
         $this->taskExistingDocumentId = null;
         $this->taskDocumentNote = '';
     }

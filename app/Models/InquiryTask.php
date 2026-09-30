@@ -13,6 +13,8 @@ class InquiryTask extends Model
 {
     use SoftDeletes, TracksTaskAssigneePerformance;
 
+    public const MAX_DOCUMENTS = 10;
+
     protected $fillable = [
         'inquiry_id',
         'source_task_pack_item_id',

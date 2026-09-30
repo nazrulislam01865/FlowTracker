@@ -183,7 +183,7 @@ class Index extends Component
     public ?int $taskDocumentModalTaskId = null;
     public ?int $pendingCompletionTaskId = null;
     public string $taskDocumentSource = 'upload';
-    public $taskDocumentUpload = null;
+    public array $taskDocumentUploads = [];
     public ?int $taskExistingDocumentId = null;
     public string $taskDocumentNote = '';
     public ?int $taskLinkFormTaskId = null;

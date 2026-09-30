@@ -2509,6 +2509,14 @@
     color: var(--ft-theme-primary)
 }
 
+.ft-inquiry-prototype .ft-inquiry-attachment-selected-files {
+    display: grid;
+    gap: 8px;
+    max-height: 292px;
+    overflow-y: auto;
+    padding-right: 3px;
+}
+
 .ft-inquiry-prototype .ft-inquiry-attachment-selected-file {
     display: grid;
     grid-template-columns: 36px minmax(0, 1fr) auto;
@@ -2581,6 +2589,22 @@
 .ft-inquiry-prototype .ft-inquiry-attachment-dropzone.is-compact {
     min-height: 120px;
     padding: 13px 20px
+}
+
+.ft-inquiry-prototype .ft-inquiry-task-document-limit-reached {
+    display: grid;
+    gap: 4px;
+    padding: 14px 16px;
+    border: 1px dashed var(--ft-theme-primary-200);
+    border-radius: 8px;
+    background: var(--ft-theme-surface-subtle);
+    color: #65768c;
+    font-size: .6875rem
+}
+
+.ft-inquiry-prototype .ft-inquiry-task-document-limit-reached strong {
+    color: #17263c;
+    font-size: .75rem
 }
 
 .ft-inquiry-prototype .ft-inquiry-attachment-upload-icon {

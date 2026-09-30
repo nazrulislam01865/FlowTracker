@@ -1936,17 +1936,29 @@ class LegacyInquiryService
         });
     }
 
-    public function upload(Inquiry $inquiry, UploadedFile $file, User $actor, ?InquiryTask $task = null, ?string $note = null): InquiryDocument
-    {
+    public function upload(
+        Inquiry $inquiry,
+        UploadedFile $file,
+        User $actor,
+        ?InquiryTask $task = null,
+        ?string $note = null,
+        bool $completeRequiredTask = true,
+    ): InquiryDocument {
         abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'create'), 403);
         abort_unless($this->canEdit($actor, $inquiry) || ($task && $this->canEditTask($actor, $task)), 403);
         if ($task) {
             abort_unless((int) $task->inquiry_id === (int) $inquiry->id, 422);
             abort_if($task->inquiry?->result, 422, 'Tasks on a closed Inquiry cannot receive documents.');
+            abort_if(
+                $task->documents()->count() >= InquiryTask::MAX_DOCUMENTS,
+                422,
+                'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task.'
+            );
             $task = $this->claimTaskForAction($task, $actor, 'uploaded a task document');
             // Documents added to an already-completed task remain evidence only.
-            // An open task that explicitly requires a submission is completed
-            // after its upload succeeds, below.
+            // Batch uploads may defer completion until every selected document
+            // has been stored successfully, preventing partial batches from
+            // completing a required-document task after only the first file.
         }
 
         $stored = app(SecureDocumentStorage::class)->store($file, 'flowtrack/inquiries/'.$inquiry->id);
@@ -1971,7 +1983,8 @@ class LegacyInquiryService
             ['inquiry_task_id' => $task?->id, 'inquiry_document_id' => $document->id],
         );
 
-        if ($task
+        if ($completeRequiredTask
+            && $task
             && (bool) $task->requires_submission
             && ! $task->completed_at) {
             // The document record now satisfies the service-level completion
@@ -2016,6 +2029,12 @@ class LegacyInquiryService
         abort_unless(app(AccessControlService::class)->can($actor, 'documents', 'link'), 403);
         app(AccessControlService::class)->applyDocumentScope(Document::query()->whereKey($source->id), $actor)->firstOrFail();
         abort_unless((int) ($source->client_id ?? 0) === (int) $task->inquiry->client_id, 403, 'The selected document does not belong to this client.');
+
+        abort_if(
+            $task->documents()->count() >= InquiryTask::MAX_DOCUMENTS,
+            422,
+            'A maximum of '.InquiryTask::MAX_DOCUMENTS.' documents can be attached to one Inquiry task.'
+        );
 
         $task = $this->claimTaskForAction($task, $actor, 'linked a task document');
 
