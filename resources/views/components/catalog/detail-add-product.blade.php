@@ -40,7 +40,7 @@
     $selectedName = (string) ($selectedProduct?->name ?? 'Product');
     $selectedSupplierName = $supplierRequired
         ? trim((string) $supplierLabel)
-        : trim((string) ($selectedSupplier?->name ?? ''));
+        : trim((string) ($selectedSupplier?->supplierShortCode() ?? ''));
     $selectedSupplierExists = filled($selectedSupplierName) || filled($supplierValue);
     $supplierSkipped = (bool) $supplierSkipped;
     $supplierResolved = $selectedSupplierExists || $supplierSkipped;
@@ -98,7 +98,7 @@
                         $isSelected = (int) ($selectedProduct?->id ?? 0) === (int) $product->id;
                         $resultSupplier = $searchSuppliers->get((int) $product->id);
                         $supplierWords = preg_split('/\s+/', trim((string) ($resultSupplier?->name ?? ''))) ?: [];
-                        $supplierInitials = strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
+                        $supplierInitials = $resultSupplier?->supplierShortCode() ?: strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
                         $previewPrice = $product->productPriceForQuantity(1000);
                         $leadDays = (int) (data_get($product->metadata, 'lead_time_days') ?: data_get($product->metadata, 'supplier_lead_time_days') ?: 0);
                         $isPreferred = (bool) (data_get($product->metadata, 'supplier_preferred') ?: data_get($product->metadata, 'preferred_supplier'));
@@ -120,7 +120,7 @@
                             <small class="ft-order-product-result-supplier">
                                 @if($resultSupplier)
                                     <b class="ft-order-product-result-supplier-badge">{{ $supplierInitials ?: 'S' }}</b>
-                                    <strong>{{ $resultSupplier->name }}</strong>
+                                    <strong>{{ $resultSupplier->supplierShortCode() }}</strong>
                                     <span>Default</span>
                                     @if($leadDays > 0)<i>&middot;</i><span>{{ number_format($leadDays) }} days</span>@endif
                                     @if($isPreferred)<i>&middot;</i><span>Preferred</span>@endif

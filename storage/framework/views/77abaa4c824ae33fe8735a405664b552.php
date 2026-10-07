@@ -99,6 +99,18 @@ unset($__defined_vars, $__key, $__value); ?>
         ? \App\Support\OrderDetailPresenter::archivedArtworkDocuments($job, $selectedTasks)
         : collect();
 
+    // The generated Artwork Tracking PDF is already loaded with the workflow's
+    // document collection. Reuse it here so Production gets the approved
+    // reference without another query or a duplicate document record.
+    $isProductionPhase = $selectedPhase
+        && strcasecmp(trim((string) $selectedPhase->name), 'Production') === 0;
+    $productionArtworkPdf = $isProductionPhase && $job->relationLoaded('documents')
+        ? $job->documents
+            ->where('category', \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF)
+            ->sortByDesc('id')
+            ->first()
+        : null;
+
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
         'active' => 'Complete the active task to continue the workflow',
@@ -256,6 +268,31 @@ unset($__defined_vars, $__key, $__value); ?>
                 <div class="task-columns ft-order-task-columns">
                     <span></span><span>Task</span><span>Assignee</span><span>Due date</span><span>Status / files</span><span>Action</span>
                 </div>
+
+                <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if($productionArtworkPdf): ?>
+                    <?php if (isset($component)) { $__componentOriginal673ce8542a3288cc52813eb610794348 = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginal673ce8542a3288cc52813eb610794348 = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.production-artwork-pdf','data' => ['document' => $productionArtworkPdf,'canExport' => (bool) ($context['canExportDocument'] ?? false)]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.production-artwork-pdf'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['document' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($productionArtworkPdf),'can-export' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute((bool) ($context['canExportDocument'] ?? false))]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginal673ce8542a3288cc52813eb610794348)): ?>
+<?php $attributes = $__attributesOriginal673ce8542a3288cc52813eb610794348; ?>
+<?php unset($__attributesOriginal673ce8542a3288cc52813eb610794348); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginal673ce8542a3288cc52813eb610794348)): ?>
+<?php $component = $__componentOriginal673ce8542a3288cc52813eb610794348; ?>
+<?php unset($__componentOriginal673ce8542a3288cc52813eb610794348); ?>
+<?php endif; ?>
+                <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
 
                 <div>
                     <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::openLoop(); ?><?php endif; ?><?php $__empty_1 = true; $__currentLoopData = $selectedTasks; $__env->addLoop($__currentLoopData); foreach($__currentLoopData as $index => $task): $__env->incrementLoopIndices(); $loop = $__env->getLastLoop(); $__empty_1 = false; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::startLoopIteration(); ?><?php endif; ?>

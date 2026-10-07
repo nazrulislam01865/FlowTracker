@@ -185,7 +185,7 @@ class FilterOptionService
             'document-category-records' => $this->masterRecordOptions('document_category', $search, $limit, $offset),
             'department-records' => $this->masterRecordOptions('department', $search, $limit, $offset),
             'departments' => $this->departments($user, $context, $search, $limit, $offset),
-            'suppliers' => $this->masterRecordOptions('supplier', $search, $limit, $offset),
+            'suppliers' => $this->supplierOptions($context, $search, $limit, $offset),
             'countries' => $this->countries($user, $context, $search, $limit, $offset),
             'phone-country-codes' => $this->phoneCountryCodes($search, $limit, $offset),
             'job-statuses' => $this->jobStatuses($user, $search, $limit, $offset),
@@ -214,7 +214,7 @@ class FilterOptionService
             'document-category-records' => $this->masterRecordById('document_category', $selectedId),
             'department-records' => $this->masterRecordById('department', $selectedId),
             'departments' => $this->departmentById($user, $context, $selectedId),
-            'suppliers' => $this->masterRecordById('supplier', $selectedId),
+            'suppliers' => $this->supplierById($context, $selectedId),
             'countries' => $this->countryByName($user, $context, (string) $selectedId),
             'phone-country-codes' => $this->phoneCountryCodeByValue((string) $selectedId),
             'job-statuses' => $this->jobStatusByName($user, (string) $selectedId),
@@ -827,6 +827,61 @@ class FilterOptionService
                 'label' => (string) $record->name,
                 'meta' => '',
             ]);
+    }
+
+    private function supplierOptions(string $context, string $search, int $limit, int $offset = 0): Collection
+    {
+        $showShortCode = $this->supplierShortCodeContext($context);
+
+        return MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType('supplier')
+            ->active()
+            ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
+                ->whereLike('name', $search.'%')
+                ->orWhereLike('code', $search.'%')))
+            ->orderBy('sort_order')
+            ->orderBy('name')
+            ->offset($offset)
+            ->limit($limit)
+            ->get(['id', 'name', 'code', 'metadata', 'type'])
+            ->map(fn (MasterRecord $record) => [
+                'id' => (string) $record->id,
+                'label' => $showShortCode ? $record->supplierShortCode() : (string) $record->name,
+                'meta' => $showShortCode ? (string) $record->name : '',
+            ]);
+    }
+
+    private function supplierById(string $context, int|string $id): ?array
+    {
+        if (!is_numeric($id)) return null;
+
+        $record = MasterRecord::query()
+            ->forWorkspace(app(SetupContext::class)->workspaceId())
+            ->ofType('supplier')
+            ->active()
+            ->find((int) $id, ['id', 'name', 'code', 'metadata', 'type']);
+
+        if (! $record) return null;
+
+        $showShortCode = $this->supplierShortCodeContext($context);
+
+        return [
+            'id' => (string) $record->id,
+            'label' => $showShortCode ? $record->supplierShortCode() : (string) $record->name,
+            'meta' => $showShortCode ? (string) $record->name : '',
+        ];
+    }
+
+    private function supplierShortCodeContext(string $context): bool
+    {
+        return in_array($context, [
+            'create-job',
+            'create-inquiry',
+            'job-detail',
+            'order-detail-product-edit',
+            'master-product',
+        ], true);
     }
 
     private function masterRecordOptions(string $type, string $search, int $limit, int $offset = 0): Collection

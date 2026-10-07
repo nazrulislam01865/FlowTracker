@@ -429,9 +429,20 @@ class OrderSummaryReportService
         });
 
         $activeItems = $order->items->where('is_removed', false)->values();
-        $supplierNames = $activeItems->pluck('supplier.name')->filter()->unique()->values();
-        if ($supplierNames->isEmpty() && filled($order->supplier?->name)) {
-            $supplierNames = collect([(string) $order->supplier->name]);
+        $supplierCodes = $activeItems
+            ->map(function ($item): string {
+                $supplier = $item->supplier;
+                if (! $supplier) return '';
+
+                return $supplier->supplierShortCode() ?: trim((string) $supplier->name);
+            })
+            ->filter()
+            ->unique()
+            ->values();
+        if ($supplierCodes->isEmpty() && $order->supplier) {
+            $fallbackSupplier = $order->supplier;
+            $fallbackLabel = $fallbackSupplier->supplierShortCode() ?: trim((string) $fallbackSupplier->name);
+            if ($fallbackLabel !== '') $supplierCodes = collect([$fallbackLabel]);
         }
         $materialNames = $activeItems->pluck('product_name')->filter()->unique()->values();
         if ($materialNames->isEmpty() && filled($order->product)) {
@@ -451,7 +462,7 @@ class OrderSummaryReportService
 
         return [
             'id' => (int) $order->id,
-            'supplier' => $supplierNames->implode(', ') ?: '—',
+            'supplier' => $supplierCodes->implode(', ') ?: '—',
             'warehouse' => trim((string) $order->warehouse) ?: '—',
             'order' => trim((string) $order->order_number) ?: $order->displayOrderNumber(),
             'received' => $this->date($order->received_date ?: $order->created_at),
@@ -503,10 +514,10 @@ class OrderSummaryReportService
     private function relations(): array
     {
         return [
-            'supplier:id,name',
+            'supplier:id,name,code,metadata',
             'items' => fn ($items) => $items
                 ->select(['id', 'flow_job_id', 'supplier_id', 'product_name', 'category_name', 'quantity', 'is_removed', 'sort_order'])
-                ->with('supplier:id,name')
+                ->with('supplier:id,name,code,metadata')
                 ->orderBy('sort_order')
                 ->orderBy('id'),
             'tasks' => fn ($tasks) => $tasks

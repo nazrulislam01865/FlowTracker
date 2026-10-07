@@ -21,7 +21,7 @@
             wire:model.live="rfqSelectedSupplierIds"
             value="{{ $supplierId }}"
             @disabled(! ($row['selectable'] ?? false))
-            aria-label="Select {{ $row['supplier_name'] ?? 'supplier' }}"
+            aria-label="Select {{ $row['supplier_short_code'] ?? ($row['supplier_name'] ?? 'supplier') }}"
             @checked($checked)
         >
     </td>
@@ -29,7 +29,7 @@
     <td data-label="Supplier">
         <div class="ft-rfq-management-supplier">
             <span class="ft-rfq-management-avatar">{{ $row['initials'] ?? '—' }}</span>
-            <strong title="{{ $row['supplier_name'] ?? 'Supplier' }}">{{ $row['supplier_name'] ?? 'Supplier' }}</strong>
+            <strong title="{{ $row['supplier_name'] ?? 'Supplier' }}">{{ $row['supplier_short_code'] ?? ($row['supplier_name'] ?? 'Supplier') }}</strong>
         </div>
     </td>
 

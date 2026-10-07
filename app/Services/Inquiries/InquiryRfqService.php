@@ -256,6 +256,7 @@ final class InquiryRfqService
                 return [
                     'id' => (int) $supplier->id,
                     'name' => (string) $supplier->name,
+                    'short_code' => $supplier->supplierShortCode(),
                     'email' => $email,
                     'product_names' => $productNames->all(),
                     'product_count' => $productNames->count(),
@@ -471,6 +472,7 @@ final class InquiryRfqService
                 return [
                     'id' => (int) $supplier->id,
                     'name' => (string) $supplier->name,
+                    'short_code' => $supplier->supplierShortCode(),
                     'email' => $email,
                     'contact' => $contact,
                     'category' => $categories !== '' ? $categories : 'General supplier',

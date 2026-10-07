@@ -32,6 +32,10 @@
                         <input type="text" value="{{ $supplier->code }}" disabled readonly>
                     </x-suppliers.field>
 
+                    <x-suppliers.field label="Supplier short code" error="supplierEditShortCode">
+                        <input wire:model.blur="supplierEditShortCode" type="text" maxlength="40" placeholder="e.g. MR" autocomplete="off">
+                    </x-suppliers.field>
+
                     <x-suppliers.field label="Status" error="supplierEditStatus">
                         <select wire:model="supplierEditStatus">
                             <option value="active">Active</option>

@@ -5,6 +5,7 @@ namespace App\Livewire\MasterData\Concerns;
 use App\Actions\MasterData\SaveMasterRecordAction;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use App\Support\SupplierShortCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -16,6 +17,7 @@ trait ManagesSupplierCreation
     public string $supplierContactPerson = '';
     public string $supplierEmail = '';
     public string $supplierPhone = '';
+    public string $supplierShortCode = '';
     public string $supplierCodeDraft = '';
     /** @var array<int,string> */
     public array $supplierProductCodes = [];
@@ -40,6 +42,7 @@ trait ManagesSupplierCreation
         $this->supplierContactPerson = '';
         $this->supplierEmail = '';
         $this->supplierPhone = '';
+        $this->supplierShortCode = '';
         $this->supplierCodeDraft = '';
         $this->supplierProductCodes = [];
         $this->resetValidation();
@@ -96,6 +99,7 @@ trait ManagesSupplierCreation
             'supplierContactPerson' => ['nullable', 'string', 'max:255'],
             'supplierEmail' => ['nullable', 'email:rfc', 'max:255'],
             'supplierPhone' => ['nullable', 'string', 'max:80'],
+            'supplierShortCode' => ['nullable', 'string', 'max:40'],
             'status' => ['required', Rule::in(['active', 'inactive'])],
             'supplierProductCodes' => ['array', 'max:250'],
             'supplierProductCodes.*' => ['string', 'max:80'],
@@ -131,6 +135,7 @@ trait ManagesSupplierCreation
                     'contact_person' => trim((string) $data['supplierContactPerson']),
                     'email' => trim((string) $data['supplierEmail']),
                     'phone' => trim((string) $data['supplierPhone']),
+                    'short_code' => SupplierShortCode::resolve((string) $data['supplierShortCode'], (string) $data['name']),
                 ], fn ($value) => $value !== ''),
             ]);
 

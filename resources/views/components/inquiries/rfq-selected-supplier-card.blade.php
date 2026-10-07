@@ -8,9 +8,11 @@
     $email = trim((string) data_get($supplier, 'email'));
     $contact = trim((string) data_get($supplier, 'contact'));
     $code = trim((string) data_get($supplier, 'code'));
+    $shortCode = trim((string) data_get($supplier, 'short_code')) ?: $name;
     $parts = preg_split('/\s+/u', $name) ?: [];
     $initials = strtoupper(mb_substr(implode('', array_map(fn ($part) => mb_substr($part, 0, 1), $parts)), 0, 2)) ?: 'S';
     $secondary = collect([
+        $shortCode !== $name ? $name : null,
         $contact !== '' ? $contact : null,
         $email !== '' ? $email : 'No email configured',
         $code !== '' ? 'Code '.$code : null,
@@ -21,7 +23,7 @@
     <span class="ft-create-rfq-selected-avatar" aria-hidden="true">{{ $initials }}</span>
 
     <span class="ft-create-rfq-selected-copy">
-        <strong title="{{ $name }}">{{ $name }}</strong>
+        <strong title="{{ $name }}">{{ $shortCode }}</strong>
         <small title="{{ $secondary }}">{{ $secondary }}</small>
     </span>
 

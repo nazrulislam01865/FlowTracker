@@ -119,7 +119,7 @@
                         <span class="ft-ipr-product-result-copy">
                             <strong>{{ $product->name }}</strong>
                             <small>Product code {{ $displayCode ?: '—' }} @if($referenceCode)<i>&middot;</i> Ref {{ $referenceCode }}@endif</small>
-                            <span>{{ $resultSupplier?->name ?: 'No default supplier' }}</span>
+                            <span>{{ $resultSupplier?->supplierShortCode() ?: 'No default supplier' }}</span>
                         </span>
                         <button type="button" class="{{ in_array((int) $product->id, $selectedIds, true) ? 'is-selected' : '' }}" wire:click="selectCreateProduct({{ $product->id }})">
                             {{ in_array((int) $product->id, $selectedIds, true) ? 'Selected' : 'Select' }}

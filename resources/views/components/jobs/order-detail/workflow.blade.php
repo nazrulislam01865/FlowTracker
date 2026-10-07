@@ -53,6 +53,18 @@
         ? \App\Support\OrderDetailPresenter::archivedArtworkDocuments($job, $selectedTasks)
         : collect();
 
+    // The generated Artwork Tracking PDF is already loaded with the workflow's
+    // document collection. Reuse it here so Production gets the approved
+    // reference without another query or a duplicate document record.
+    $isProductionPhase = $selectedPhase
+        && strcasecmp(trim((string) $selectedPhase->name), 'Production') === 0;
+    $productionArtworkPdf = $isProductionPhase && $job->relationLoaded('documents')
+        ? $job->documents
+            ->where('category', \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF)
+            ->sortByDesc('id')
+            ->first()
+        : null;
+
     $taskPackSub = match ($selectedState) {
         'completed' => 'This stage is complete',
         'active' => 'Complete the active task to continue the workflow',
@@ -147,6 +159,13 @@
                 <div class="task-columns ft-order-task-columns">
                     <span></span><span>Task</span><span>Assignee</span><span>Due date</span><span>Status / files</span><span>Action</span>
                 </div>
+
+                @if($productionArtworkPdf)
+                    <x-jobs.order-detail.production-artwork-pdf
+                        :document="$productionArtworkPdf"
+                        :can-export="(bool) ($context['canExportDocument'] ?? false)"
+                    />
+                @endif
 
                 <div>
                     @forelse($selectedTasks as $index => $task)

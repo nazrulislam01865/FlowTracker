@@ -155,7 +155,7 @@ trait ManagesInquiryCreateRfq
         $this->syncLegacyCreateRfqState();
         $this->resetValidation("createProductRfqRows.$index.supplier_ids");
 
-        return ['id' => (string) $supplier->id, 'label' => (string) $supplier->name];
+        return ['id' => (string) $supplier->id, 'label' => $supplier->supplierShortCode()];
     }
 
     public function removeCreateProductRfqSupplier(int $index, int $supplierId): void

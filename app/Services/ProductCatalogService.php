@@ -135,7 +135,7 @@ class ProductCatalogService
             ->forWorkspace($this->workspaceId())
             ->ofType('supplier')
             ->active()
-            ->find($supplierId, ['id', 'name', 'code', 'status']);
+            ->find($supplierId, ['id', 'name', 'code', 'metadata', 'status']);
     }
 
     /**
@@ -195,7 +195,7 @@ class ProductCatalogService
             ->ofType('supplier')
             ->active()
             ->whereIn('id', $supplierIds->all())
-            ->get(['id', 'name', 'code', 'metadata', 'status'])
+            ->get(['id', 'name', 'code', 'metadata', 'type', 'status'])
             ->keyBy(fn (MasterRecord $supplier): int => (int) $supplier->id);
 
         return $products->mapWithKeys(function (MasterRecord $product) use ($supplierIdsByProduct, $suppliers): array {
@@ -232,7 +232,7 @@ class ProductCatalogService
             ->ofType('supplier')
             ->active()
             ->whereIn('id', $productSupplierIds->values()->unique()->all())
-            ->get(['id', 'name', 'code', 'status'])
+            ->get(['id', 'name', 'code', 'metadata', 'type', 'status'])
             ->keyBy('id');
 
         return $productSupplierIds
@@ -259,7 +259,7 @@ class ProductCatalogService
             ->ofType('supplier')
             ->active()
             ->whereIn('id', $productSupplierIds->values()->unique()->all())
-            ->get(['id', 'name', 'code', 'status'])
+            ->get(['id', 'name', 'code', 'metadata', 'type', 'status'])
             ->keyBy('id');
 
         return $productSupplierIds

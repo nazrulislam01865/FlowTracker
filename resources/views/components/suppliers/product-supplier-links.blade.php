@@ -9,7 +9,7 @@
 <div class="ft-product-supplier-links">
     @if($primary)
         <span class="ft-product-supplier-primary" title="{{ $primary->name }}{{ $default && (int)$primary->id === $defaultId ? ' · Default supplier' : '' }}">
-            <b>{{ $primary->name }}</b>
+            <b>{{ $primary->supplierShortCode() }}</b>
             @if($default && (int)$primary->id === $defaultId)<small>Default</small>@endif
         </span>
         @if($extra > 0)<span class="ft-product-supplier-more">+{{ $extra }} more</span>@endif

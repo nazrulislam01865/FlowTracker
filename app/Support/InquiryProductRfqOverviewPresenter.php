@@ -95,6 +95,7 @@ final class InquiryProductRfqOverviewPresenter
                 'suppliers' => $suppliers->map(fn (MasterRecord $supplier): array => [
                     'id' => (int) $supplier->id,
                     'name' => (string) $supplier->name,
+                    'short_code' => $supplier->supplierShortCode(),
                     'code' => trim((string) $supplier->code),
                     'initials' => self::initials((string) $supplier->name),
                 ])->values(),

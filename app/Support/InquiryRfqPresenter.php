@@ -57,6 +57,7 @@ final class InquiryRfqPresenter
 
                 $haystack = mb_strtolower(implode(' ', [
                     (string) $row['supplier_name'],
+                    (string) ($row['supplier_short_code'] ?? ''),
                     (string) $row['email'],
                     (string) $row['email_status_label'],
                     (string) $row['rfq_status_label'],
@@ -163,6 +164,7 @@ final class InquiryRfqPresenter
             'supplier_id' => (int) ($supplier['id'] ?? 0),
             'invitation_id' => null,
             'supplier_name' => (string) ($supplier['name'] ?? 'Supplier'),
+            'supplier_short_code' => (string) ($supplier['short_code'] ?? ($supplier['name'] ?? 'Supplier')),
             'initials' => self::initials((string) ($supplier['name'] ?? 'Supplier')),
             'email' => $email,
             'email_ready' => $emailReady,
@@ -239,6 +241,7 @@ final class InquiryRfqPresenter
             'supplier_id' => (int) $invitation->supplier_id,
             'invitation_id' => (int) $invitation->id,
             'supplier_name' => (string) ($invitation->supplier?->name ?: 'Supplier'),
+            'supplier_short_code' => $invitation->supplier?->supplierShortCode() ?: 'Supplier',
             'initials' => self::initials((string) ($invitation->supplier?->name ?: 'Supplier')),
             'email' => $email,
             'email_ready' => $emailReady,

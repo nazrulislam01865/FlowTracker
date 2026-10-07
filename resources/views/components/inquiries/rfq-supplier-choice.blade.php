@@ -14,6 +14,7 @@
     $emailReady = (bool) ($supplier['email_ready'] ?? filter_var((string) ($supplier['email'] ?? ''), FILTER_VALIDATE_EMAIL));
     $unavailableReason = trim((string) ($supplier['unavailable_reason'] ?? ''));
     $email = trim((string) ($supplier['email'] ?? ''));
+    $shortCode = trim((string) ($supplier['short_code'] ?? '')) ?: (string) ($supplier['name'] ?? 'Supplier');
 @endphp
 
 <label {{ $attributes->class(['ft-create-rfq-supplier', 'is-selected' => $selected, 'is-unavailable' => ! $invitable]) }} @if(! $invitable) aria-disabled="true" @endif>
@@ -21,7 +22,7 @@
         type="checkbox"
         value="{{ $supplierId }}"
         wire:model.live="{{ $model }}"
-        aria-label="Select {{ $supplier['name'] }} for RFQ"
+        aria-label="Select {{ $shortCode }} for RFQ"
         @disabled(! $invitable)
     >
     <span class="ft-create-rfq-check" aria-hidden="true">
@@ -29,8 +30,8 @@
     </span>
     <span class="ft-create-rfq-avatar">{{ $initials }}</span>
     <span class="ft-create-rfq-supplier-copy">
-        <strong>{{ $supplier['name'] }}</strong>
-        <small>{{ $supplier['category'] }} · {{ $email !== '' ? $email : 'No email configured' }}</small>
+        <strong>{{ $shortCode }}</strong>
+        <small>{{ $supplier['name'] }} · {{ $supplier['category'] }} · {{ $email !== '' ? $email : 'No email configured' }}</small>
     </span>
     @if(! $invitable && $unavailableReason !== '')
         <span class="ft-create-rfq-badge is-blue">{{ $unavailableReason }}</span>

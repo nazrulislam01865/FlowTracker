@@ -94,6 +94,7 @@
                 :context="$orderDetailContext"
                 :remote-area="$orderDetailContext['remoteArea'] ?? null"
             />
+            <x-jobs.order-detail.tracking :job="$job" />
             <x-jobs.order-detail.shipping :job="$job" :can-edit-job="$canEditJob" />
         </div>
     </div>

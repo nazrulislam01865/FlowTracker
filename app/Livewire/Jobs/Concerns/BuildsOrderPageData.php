@@ -235,11 +235,11 @@ trait BuildsOrderPageData
                 ->active()
                 ->orderBy('sort_order')
                 ->orderBy('name')
-                ->get(['id', 'name', 'code'])
+                ->get(['id', 'name', 'code', 'metadata', 'type'])
                 ->map(fn (MasterRecord $supplier) => [
                     'id' => (string) $supplier->id,
-                    'label' => (string) $supplier->name,
-                    'meta' => trim((string) $supplier->code),
+                    'label' => $supplier->supplierShortCode(),
+                    'meta' => (string) $supplier->name,
                 ])
                 ->values();
             $code = trim($this->newProductCode);

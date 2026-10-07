@@ -5,6 +5,7 @@ namespace App\Livewire\MasterData\Concerns;
 use App\Actions\MasterData\SaveMasterRecordAction;
 use App\Models\MasterRecord;
 use App\Services\MasterDataService;
+use App\Support\SupplierShortCode;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
@@ -22,6 +23,7 @@ trait ManagesSupplierDetails
     public string $supplierEditContactPerson = '';
     public string $supplierEditEmail = '';
     public string $supplierEditPhone = '';
+    public string $supplierEditShortCode = '';
     public string $supplierEditStatus = 'active';
 
     public function mountSupplierDetails(): void
@@ -110,6 +112,7 @@ trait ManagesSupplierDetails
             'supplierEditContactPerson' => ['nullable', 'string', 'max:255'],
             'supplierEditEmail' => ['nullable', 'email:rfc', 'max:255'],
             'supplierEditPhone' => ['nullable', 'string', 'max:80'],
+            'supplierEditShortCode' => ['nullable', 'string', 'max:40'],
             'supplierEditStatus' => ['required', Rule::in(['active', 'inactive'])],
         ], [
             'name.required' => 'Supplier name is required.',
@@ -129,6 +132,13 @@ trait ManagesSupplierDetails
                 $metadata[$key] = $value;
             }
         }
+
+        $metadata['short_code'] = SupplierShortCode::resolve(
+            (string) $data['supplierEditShortCode'],
+            (string) $data['name'],
+            (int) $supplier->id,
+        );
+        unset($metadata['short_code_source']);
 
         $supplier = app(SaveMasterRecordAction::class)->execute('supplier', [
             'code' => trim((string) $supplier->code) !== ''
@@ -166,6 +176,7 @@ trait ManagesSupplierDetails
         $this->supplierEditContactPerson = trim((string) data_get($supplier->metadata, 'contact_person'));
         $this->supplierEditEmail = trim((string) data_get($supplier->metadata, 'email'));
         $this->supplierEditPhone = trim((string) data_get($supplier->metadata, 'phone'));
+        $this->supplierEditShortCode = $supplier->supplierShortCode();
         $this->supplierEditStatus = $supplier->status === 'inactive' ? 'inactive' : 'active';
         $this->resetValidation();
     }

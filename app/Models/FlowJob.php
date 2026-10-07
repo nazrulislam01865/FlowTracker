@@ -77,11 +77,40 @@ class FlowJob extends Model
         'shipping_phone',
         'shipping_postal_code',
         'shipping_source_address_id',
+        'tracking_token',
+        'tracking_token_created_at',
     ];
+
+    protected static function booted(): void
+    {
+        static::creating(function (FlowJob $job) {
+            if (empty($job->tracking_token)) {
+                $job->tracking_token = \Illuminate\Support\Str::random(32);
+                $job->tracking_token_created_at = now();
+            }
+        });
+    }
+
+    public function ensureTrackingToken(): string
+    {
+        if (empty($this->tracking_token)) {
+            $this->tracking_token = \Illuminate\Support\Str::random(32);
+            $this->tracking_token_created_at = now();
+            $this->saveQuietly();
+        }
+
+        return $this->tracking_token;
+    }
+
+    public function trackingUrl(): string
+    {
+        return url('/track/' . $this->ensureTrackingToken());
+    }
 
     protected function casts(): array
     {
         return [
+            'tracking_token_created_at' => 'datetime',
             'delivery_date' => 'date',
             'estimated_delivery_date' => 'date',
             'supplier_delivery_date' => 'date',
@@ -124,6 +153,7 @@ class FlowJob extends Model
     public function tasks(): HasMany { return $this->hasMany(Task::class); }
     public function flaggedTasks(): HasMany { return $this->hasMany(Task::class)->whereNotNull('order_task_flag_id')->whereNull('completed_at')->orderBy('id'); }
     public function documents(): HasMany { return $this->hasMany(Document::class); }
+    public function artworkTrackingPdf(): HasOne { return $this->hasOne(Document::class)->where('category', Document::CATEGORY_ARTWORK_TRACKING_PDF)->latestOfMany(); }
     public function items(): HasMany { return $this->hasMany(FlowJobItem::class, 'flow_job_id')->orderBy('sort_order'); }
     public function shipments(): HasMany { return $this->hasMany(OrderShipment::class, 'flow_job_id')->orderBy('sequence')->orderBy('id'); }
     public function holds(): HasMany { return $this->hasMany(OrderHold::class, 'flow_job_id')->latest('id'); }
@@ -215,4 +245,19 @@ class FlowJob extends Model
             ? 'ORDER-'.substr($number, 4)
             : $number;
     }
+
+    /**
+     * Resolve the client-facing reference number (e.g. NP-2026-0148),
+     * stored in order_number or inherited from sourceInquiry.
+     */
+    public function getReferenceNumberAttribute(): ?string
+    {
+        if (!empty($this->attributes['order_number']) && $this->attributes['order_number'] !== ($this->attributes['job_number'] ?? null)) {
+            return (string) $this->attributes['order_number'];
+        }
+
+        return $this->sourceInquiry?->reference_number
+            ?? ($this->attributes['order_number'] ?? ($this->attributes['job_number'] ?? null));
+    }
+
 }

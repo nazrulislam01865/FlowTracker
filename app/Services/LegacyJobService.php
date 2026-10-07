@@ -518,6 +518,20 @@ class LegacyJobService
                 'cancelledBy:id,name,profile_image_path',
                 'activeHold.holder:id,name,profile_image_path',
                 'members.user:id,name,profile_image_path',
+                'artworkTrackingPdf' => static function ($query): void {
+                    $query->select([
+                        'documents.id',
+                        'documents.flow_job_id',
+                        'documents.task_id',
+                        'documents.category',
+                        'documents.name',
+                        'documents.path',
+                        'documents.mime_type',
+                        'documents.size',
+                        'documents.version',
+                        'documents.is_final',
+                    ]);
+                },
             ])
             ->withCount(['documents', 'linkedInquiries'])
             ->findOrFail($id);
@@ -771,7 +785,7 @@ class LegacyJobService
             if (app(AccessControlService::class)->can($user, 'catalog_products', 'view')) {
                 $relations[] = 'items.updatedBy:id,name,profile_image_path';
                 $relations[] = 'items.removedBy:id,name,profile_image_path';
-                $relations[] = 'items.supplier:id,name,code,type,status';
+                $relations[] = 'items.supplier:id,name,code,metadata,type,status';
                 $relations[] = 'items.catalogProduct:id,name,code,parent_id,type,status,metadata';
                 $relations[] = 'items.catalogProduct.parent:id,name,code,type,status,metadata';
             }
@@ -1051,7 +1065,7 @@ class LegacyJobService
         $job->load([
             'items.updatedBy:id,name,profile_image_path',
             'items.removedBy:id,name,profile_image_path',
-            'items.supplier:id,name,code,type,status',
+            'items.supplier:id,name,code,metadata,type,status',
             'items.catalogProduct:id,name,code,parent_id,type,status,metadata',
             'items.catalogProduct.parent:id,name,code,type,status,metadata',
         ]);

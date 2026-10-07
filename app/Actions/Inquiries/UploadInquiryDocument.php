@@ -23,6 +23,10 @@ final class UploadInquiryDocument
         ?string $note = null,
         bool $completeRequiredTask = true,
     ): InquiryDocument {
-        return $this->inquiries->upload($inquiry, $file, $actor, $task, $note, $completeRequiredTask);
+        if ($completeRequiredTask) {
+            return $this->inquiries->upload($inquiry, $file, $actor, $task, $note);
+        }
+
+        return $this->inquiries->upload($inquiry, $file, $actor, $task, $note, false);
     }
 }

@@ -270,6 +270,7 @@ final class InquiryRfqProductWorkspacePresenter
             'supplier_id' => (int) $supplier->id,
             'invitation_id' => $invitation ? (int) $invitation->id : null,
             'supplier_name' => (string) $supplier->name,
+            'supplier_short_code' => $supplier->supplierShortCode(),
             'supplier_code' => trim((string) $supplier->code),
             'email' => $email,
             'status_key' => $statusKey,
@@ -282,6 +283,7 @@ final class InquiryRfqProductWorkspacePresenter
             'selectable' => ! $closed && $emailReady && $emailEnabled && $statusKey !== 'queued',
             'search_haystack' => self::normalise(implode(' ', [
                 (string) $supplier->name,
+                $supplier->supplierShortCode(),
                 (string) $supplier->code,
                 $email,
                 $statusLabel,

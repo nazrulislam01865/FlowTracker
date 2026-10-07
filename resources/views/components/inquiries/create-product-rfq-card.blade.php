@@ -93,6 +93,8 @@
                     @forelse($rfqSuppliers as $supplier)
                         @php
                             $supplierName = (string) data_get($supplier, 'name', 'Supplier');
+                            $supplierShortCode = trim((string) data_get($supplier, 'short_code', ''));
+                            $supplierLabel = $supplierShortCode !== '' ? $supplierShortCode : $supplierName;
                             $supplierEmail = trim((string) data_get($supplier, 'email', ''));
                             $words = preg_split('/\s+/u', trim($supplierName)) ?: [];
                             $initials = strtoupper(mb_substr(implode('', array_map(fn ($word) => mb_substr($word, 0, 1), $words)), 0, 2)) ?: 'S';
@@ -101,7 +103,7 @@
                         <div class="ft-ipr-supplier-row" wire:key="create-product-rfq-selected-{{ $index }}-{{ (int) data_get($supplier, 'id') }}">
                             <span class="ft-ipr-supplier-avatar">{{ $initials }}</span>
                             <span class="ft-ipr-supplier-copy">
-                                <strong>{{ $supplierName }}</strong>
+                                <strong>{{ $supplierLabel }}</strong>
                                 <small>{{ $supplierEmail !== '' ? $supplierEmail : 'No email configured' }}</small>
                             </span>
                             <span class="ft-ipr-email-badge {{ $emailReady ? '' : 'is-muted' }}">{{ $emailReady ? 'Email ready' : 'No email' }}</span>

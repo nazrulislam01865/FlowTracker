@@ -6,7 +6,7 @@
 ])
 
 @php
-    $supplierName = trim((string) ($supplier?->name ?? $name ?? ''));
+    $supplierName = $supplier ? $supplier->supplierShortCode() : trim((string) ($name ?? ''));
     $initials = $supplierName !== ''
         ? collect(preg_split('/\s+/', $supplierName) ?: [])
             ->filter()

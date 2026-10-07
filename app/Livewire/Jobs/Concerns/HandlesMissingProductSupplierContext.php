@@ -89,9 +89,9 @@ trait HandlesMissingProductSupplierContext
             ->forWorkspace(app(MasterDataService::class)->workspaceId())
             ->ofType('supplier')
             ->active()
-            ->findOrFail($supplierId, ['id', 'name']);
+            ->findOrFail($supplierId, ['id', 'name', 'metadata', 'type']);
         $this->jobProductSupplierId = (int) $supplier->id;
-        $this->jobProductSupplierLabel = (string) $supplier->name;
+        $this->jobProductSupplierLabel = $supplier->supplierShortCode();
         $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
         $this->resetValidation('jobProductSupplierId');
@@ -148,7 +148,7 @@ trait HandlesMissingProductSupplierContext
 
         if ($linkedSupplier) {
             $this->jobProductSupplierId = (int) $linkedSupplier->id;
-            $this->jobProductSupplierLabel = (string) $linkedSupplier->name;
+            $this->jobProductSupplierLabel = $linkedSupplier->supplierShortCode();
             $this->jobProductSupplierSkipped = false;
             $this->resetValidation('jobProductSupplierId');
             return;

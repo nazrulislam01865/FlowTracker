@@ -18,6 +18,10 @@
                         <input wire:model.blur="name" type="text" placeholder="e.g. Guangzhou Apex Sports" autocomplete="organization">
                     </x-suppliers.field>
 
+                    <x-suppliers.field label="Supplier short code" error="supplierShortCode">
+                        <input wire:model.blur="supplierShortCode" type="text" maxlength="40" placeholder="e.g. MR" autocomplete="off">
+                    </x-suppliers.field>
+
                     <x-suppliers.field label="Contact person" error="supplierContactPerson">
                         <input wire:model.blur="supplierContactPerson" type="text" placeholder="Full name" autocomplete="name">
                     </x-suppliers.field>

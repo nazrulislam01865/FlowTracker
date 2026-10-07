@@ -116,7 +116,7 @@ trait ManagesCreateOrderProducts
             ->forWorkspace(app(MasterDataService::class)->workspaceId())
             ->ofType('supplier')
             ->active()
-            ->findOrFail($supplierId, ['id', 'name', 'code', 'status']);
+            ->findOrFail($supplierId, ['id', 'name', 'code', 'metadata', 'status']);
 
         $productId = (int) ($this->jobItems[$index]['product_id'] ?? 0);
         abort_unless($productId > 0, 422, 'That product row is no longer available.');
@@ -130,7 +130,9 @@ trait ManagesCreateOrderProducts
         $this->resetValidation("jobItems.$index.supplier_id");
         $this->dispatch('create-order-product-supplier-selected');
 
-        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => (string) $supplier->name];
+        $label = $supplier->supplierShortCode() ?: (string) $supplier->name;
+
+        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => $label];
     }
 
     private function appendCreateOrderProduct(MasterRecord $product, ?int $supplierId): void

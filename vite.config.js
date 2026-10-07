@@ -21,6 +21,8 @@ export default defineConfig({
                 'resources/css/modules/clients/filters.css',
                 'resources/theme/flowtrack/core.css',
                 'resources/theme/flowtrack/theme.css',
+                'resources/css/tracking.css',
+                'resources/js/order-tracking.js',
                 'resources/js/app.js',
             ],
             refresh: true,

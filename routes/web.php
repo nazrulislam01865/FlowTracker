@@ -37,6 +37,8 @@ use App\Http\Controllers\Rfq\PublicInquiryRfqController;
 use App\Http\Controllers\WorkflowSetupController;
 use App\Http\Controllers\TaskPackSetupController;
 use App\Http\Controllers\TeamPerformanceReportController;
+use App\Http\Controllers\OrderTrackingController;
+use App\Http\Controllers\OrderQrCodeController;
 use App\Http\Controllers\UserCreateController;
 use App\Http\Controllers\UserEditController;
 use App\Models\Document;
@@ -99,11 +101,25 @@ Route::middleware('guest')->group(function () {
     Route::post('/login', [AuthController::class, 'store'])->name('login.store');
 });
 
+Route::prefix('track')->middleware('web')->group(function () {
+    Route::get('/', [OrderTrackingController::class, 'index'])
+        ->middleware('throttle:60,1')
+        ->name('order.track');
+    Route::post('/lookup', [OrderTrackingController::class, 'lookup'])
+        ->middleware('throttle:12,1')
+        ->name('order.track.lookup');
+    Route::get('/{token}', [OrderTrackingController::class, 'show'])
+        ->middleware('throttle:60,1')
+        ->where('token', '[A-Za-z0-9]{32,64}')
+        ->name('order.track.show');
+});
+
 Route::get('/session/status', function () {
     return response()->json(['ok' => true, 'user_id' => auth()->id()]);
 })->middleware('auth')->name('session.status');
 
 Route::middleware('auth')->group(function () {
+    Route::get('/orders/{job}/qr-code/download', [OrderQrCodeController::class, 'download'])->name('orders.qr.download');
     Route::post('/session/timezone', function (\Illuminate\Http\Request $request) {
         $data = $request->validate([
             'timezone' => ['required', 'string', 'max:120'],

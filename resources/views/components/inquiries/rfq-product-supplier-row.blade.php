@@ -22,11 +22,11 @@
             value="{{ $selectionKey }}"
             @disabled(! ($row['selectable'] ?? false))
             @checked($checked)
-            aria-label="Select {{ $row['supplier_name'] ?? 'supplier' }} for this product"
+            aria-label="Select {{ $row['supplier_short_code'] ?? ($row['supplier_name'] ?? 'supplier') }} for this product"
         >
     </td>
     <td data-label="Supplier">
-        <strong class="ft-rfq-px-supplier-name">{{ $row['supplier_name'] ?? 'Supplier' }}</strong>
+        <strong class="ft-rfq-px-supplier-name" title="{{ $row['supplier_name'] ?? 'Supplier' }}">{{ $row['supplier_short_code'] ?? ($row['supplier_name'] ?? 'Supplier') }}</strong>
     </td>
     <td data-label="Email">
         <span class="ft-rfq-px-email {{ $email === '' ? 'is-missing' : '' }}">{{ $email !== '' ? $email : 'No email configured' }}</span>

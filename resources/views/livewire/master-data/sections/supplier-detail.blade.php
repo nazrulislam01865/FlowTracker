@@ -9,6 +9,7 @@
     $contactPerson = trim((string) data_get($supplier?->metadata, 'contact_person'));
     $email = trim((string) data_get($supplier?->metadata, 'email'));
     $phone = trim((string) data_get($supplier?->metadata, 'phone'));
+    $shortCode = $supplier?->supplierShortCode() ?? '';
     $createdAt = $supplier?->created_at?->copy()->timezone($displayTimezone);
     $updatedAt = $supplier?->updated_at?->copy()->timezone($displayTimezone);
 @endphp
@@ -72,6 +73,10 @@
                 <div class="ft-supplier-detail-field">
                     <span>Reference code</span>
                     <strong>{{ $supplier->code ?: '—' }}</strong>
+                </div>
+                <div class="ft-supplier-detail-field">
+                    <span>Short code</span>
+                    <strong>{{ $shortCode !== '' ? $shortCode : '—' }}</strong>
                 </div>
                 <div class="ft-supplier-detail-field">
                     <span>Contact person</span>

@@ -39,7 +39,7 @@ foreach ($attributes->all() as $__key => $__value) {
 unset($__defined_vars, $__key, $__value); ?>
 
 <?php
-    $supplierName = trim((string) ($supplier?->name ?? $name ?? ''));
+    $supplierName = $supplier ? $supplier->supplierShortCode() : trim((string) ($name ?? ''));
     $initials = $supplierName !== ''
         ? collect(preg_split('/\s+/', $supplierName) ?: [])
             ->filter()

@@ -45,7 +45,7 @@ trait ManagesOrderProducts
 
         $item = FlowJobItem::query()
             ->where('flow_job_id', $job->id)
-            ->with(['supplier:id,name,code,type,status'])
+            ->with(['supplier:id,name,code,metadata,type,status'])
             ->findOrFail($itemId);
         abort_if((bool) ($item->is_removed ?? false), 422, 'Restore this product before editing it.');
 
@@ -81,7 +81,7 @@ trait ManagesOrderProducts
             ? $this->orderEditProductCategory($product)
             : (string) ($item->category_name ?? '');
         $this->editOrderProductSupplierId = $selectedSupplier ? (int) $selectedSupplier->id : null;
-        $this->editOrderProductSupplierLabel = (string) ($selectedSupplier?->name ?: '');
+        $this->editOrderProductSupplierLabel = $selectedSupplier?->supplierShortCode() ?: '';
         $this->editOrderProductQuantity = (string) $quantity;
         $this->editOrderProductUnitPrice = number_format(
             $basePrice !== null ? (float) $basePrice : (float) ($item->unit_price ?? 0),
@@ -181,7 +181,7 @@ trait ManagesOrderProducts
         $this->editOrderProductCode = (string) $product->productDisplayCode();
         $this->editOrderProductCategory = $this->orderEditProductCategory($product);
         $this->editOrderProductSupplierId = $supplier ? (int) $supplier->id : null;
-        $this->editOrderProductSupplierLabel = (string) ($supplier?->name ?: '');
+        $this->editOrderProductSupplierLabel = $supplier?->supplierShortCode() ?: '';
         $this->editOrderProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -231,11 +231,11 @@ trait ManagesOrderProducts
             ->findOrFail($supplierId);
 
         $this->editOrderProductSupplierId = (int) $supplier->id;
-        $this->editOrderProductSupplierLabel = (string) $supplier->name;
+        $this->editOrderProductSupplierLabel = $supplier->supplierShortCode();
         $this->resetValidation('editOrderProductSupplierId');
         $this->dispatch('detail-product-edit-supplier-selected');
 
-        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => (string) $supplier->name];
+        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => $supplier->supplierShortCode()];
     }
 
     public function saveEditOrderProductModal(): void
@@ -433,7 +433,7 @@ trait ManagesOrderProducts
         $this->jobProductQuantity = (string) $defaultQuantity;
         $this->jobProductUnitPrice = $basePrice !== null ? number_format((float) $basePrice, 2, '.', '') : '0.00';
         $this->jobProductSupplierId = $linkedSupplier ? (int) $linkedSupplier->id : null;
-        $this->jobProductSupplierLabel = $linkedSupplier ? (string) $linkedSupplier->name : '';
+        $this->jobProductSupplierLabel = $linkedSupplier?->supplierShortCode() ?: '';
         $this->jobProductSupplierSkipped = false;
         // Match Create Order: a linked supplier is the default for this row,
         // but the user may change the supplier for this Order only.
@@ -474,13 +474,13 @@ trait ManagesOrderProducts
             ->findOrFail($supplierId);
 
         $this->jobProductSupplierId = (int) $supplier->id;
-        $this->jobProductSupplierLabel = (string) $supplier->name;
+        $this->jobProductSupplierLabel = $supplier->supplierShortCode();
         $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
         $this->resetValidation('jobProductSupplierId');
         $this->dispatch('create-order-product-supplier-selected');
 
-        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => (string) $supplier->name];
+        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => $supplier->supplierShortCode()];
     }
 
     public function updatedJobProductQuantity(): void

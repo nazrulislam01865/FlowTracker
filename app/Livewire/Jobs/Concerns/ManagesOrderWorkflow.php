@@ -811,6 +811,10 @@ trait ManagesOrderWorkflow
 
         $this->dispatchTaskAssigneeSync($task->id);
 
+        if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
+            $this->dispatch('order-runtime-refreshed', orderId: (int) $task->flow_job_id);
+        }
+
         $invoiceDeliveryStatus = $key === 'BILL_SEND'
             ? strtolower(trim((string) data_get(
                 app(OrderInvoiceWorkflowEmailService::class)->deliveryStatus($task),
@@ -821,7 +825,9 @@ trait ManagesOrderWorkflow
 
         $successMessage = $key === 'ART_INTERNAL_REVIEW' && $decision === 'cancel_artwork'
             ? 'Selected artwork cancelled. Any selected products were removed from the active Order.'
-            : match ($key) {
+            : ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm'
+                ? 'Artwork confirmed. The tracking QR and confirmed artwork PDF were generated.'
+                : match ($key) {
                 'NEW_SEND_PO_ARTWORK' => 'Purchase Order emailed to the Artwork Team.',
                 'ART_SEND_ORDER_TEAM' => 'Artwork emailed to the Order Team.',
                 'BILL_PREPARE' => 'Invoice generated and ready to send.',
@@ -831,7 +837,7 @@ trait ManagesOrderWorkflow
                     default => 'Invoice emailed to the client.',
                 },
                 default => 'Order workflow updated.',
-            };
+            });
 
         $this->closeOrderWorkflowAction();
         $this->syncOverviewWorkflowSelectionToCurrentPhase();

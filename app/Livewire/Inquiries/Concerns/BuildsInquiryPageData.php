@@ -84,6 +84,7 @@ trait BuildsInquiryPageData
                         'id' => (int) $supplier->id,
                         'name' => (string) $supplier->name,
                         'code' => trim((string) $supplier->code),
+                        'short_code' => $supplier->supplierShortCode(),
                         'email' => $email,
                         'contact' => trim((string) data_get($supplier->metadata, 'contact_person')),
                         'email_ready' => filter_var($email, FILTER_VALIDATE_EMAIL) !== false,
@@ -95,6 +96,7 @@ trait BuildsInquiryPageData
                 'id' => (int) $supplier->id,
                 'name' => (string) $supplier->name,
                 'code' => trim((string) $supplier->code),
+                'short_code' => $supplier->supplierShortCode(),
                 'email' => trim((string) data_get($supplier->metadata, 'email')),
                 'contact' => trim((string) data_get($supplier->metadata, 'contact_person')),
             ];

@@ -40,7 +40,7 @@
                 @foreach($visibleSuppliers as $supplier)
                     <span class="ft-inquiry-prq-supplier" title="{{ $supplier['name'] ?? 'Supplier' }}">
                         <span class="ft-inquiry-prq-supplier__avatar">{{ $supplier['initials'] ?? '—' }}</span>
-                        <span>{{ $supplier['name'] ?? 'Supplier' }}</span>
+                        <span>{{ $supplier['short_code'] ?? ($supplier['name'] ?? 'Supplier') }}</span>
                     </span>
                 @endforeach
                 <span class="ft-inquiry-prq-supplier-count">{{ $supplierCount }} {{ \Illuminate\Support\Str::plural('supplier', $supplierCount) }}</span>

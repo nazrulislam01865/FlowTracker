@@ -561,6 +561,13 @@ class OrderWorkflowActionService
                 return $locked->refresh();
             }
 
+            if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
+                $completed = $this->complete($locked, $actor);
+                app(ArtworkTrackingPdfService::class)->generate($job->refresh(), $locked->refresh(), $actor);
+
+                return $completed->refresh();
+            }
+
             if ($key === 'ART_CLIENT_ERP_DECISION' && $decision === 'erp_uploaded') {
                 $reference = trim((string) ($payload['erp_reference'] ?? ''));
                 $locked->update(['status' => 'Waiting for Client', 'completed_at' => null, 'progress' => 60]);

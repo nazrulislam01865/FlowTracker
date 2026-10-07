@@ -54,7 +54,7 @@
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h10v10H4zM14 10h3l3 3v4h-6z"/><circle cx="8" cy="18" r="1.5"/><circle cx="17" cy="18" r="1.5"/></svg>
                     </span>
                     <span class="ft-order-product-supplier-copy">
-                        <strong>{{ $supplier->name }}</strong>
+                        <strong>{{ $supplier->supplierShortCode() }}</strong>
                         <small>From product</small>
                     </span>
                 </div>

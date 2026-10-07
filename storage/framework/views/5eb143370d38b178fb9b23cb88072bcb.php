@@ -252,6 +252,28 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php $component = $__componentOriginal89b3f0d2b6e3055ded0e4d12dece9e5b; ?>
 <?php unset($__componentOriginal89b3f0d2b6e3055ded0e4d12dece9e5b); ?>
 <?php endif; ?>
+            <?php if (isset($component)) { $__componentOriginalfe0e750cd3c9d37c753b30b141212e7a = $component; } ?>
+<?php if (isset($attributes)) { $__attributesOriginalfe0e750cd3c9d37c753b30b141212e7a = $attributes; } ?>
+<?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.tracking','data' => ['job' => $job]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
+<?php $component->withName('jobs.order-detail.tracking'); ?>
+<?php if ($component->shouldRender()): ?>
+<?php $__env->startComponent($component->resolveView(), $component->data()); ?>
+<?php if (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag): ?>
+<?php $attributes = $attributes->except(\Illuminate\View\AnonymousComponent::ignoredParameterNames()); ?>
+<?php endif; ?>
+<?php $component->withAttributes(['job' => \Illuminate\View\Compilers\BladeCompiler::sanitizeComponentAttribute($job)]); ?>
+<?php \Livewire\Features\SupportCompiledWireKeys\SupportCompiledWireKeys::processComponentKey($component); ?>
+
+<?php echo $__env->renderComponent(); ?>
+<?php endif; ?>
+<?php if (isset($__attributesOriginalfe0e750cd3c9d37c753b30b141212e7a)): ?>
+<?php $attributes = $__attributesOriginalfe0e750cd3c9d37c753b30b141212e7a; ?>
+<?php unset($__attributesOriginalfe0e750cd3c9d37c753b30b141212e7a); ?>
+<?php endif; ?>
+<?php if (isset($__componentOriginalfe0e750cd3c9d37c753b30b141212e7a)): ?>
+<?php $component = $__componentOriginalfe0e750cd3c9d37c753b30b141212e7a; ?>
+<?php unset($__componentOriginalfe0e750cd3c9d37c753b30b141212e7a); ?>
+<?php endif; ?>
             <?php if (isset($component)) { $__componentOriginalc103ef29f7e23a0c1f8ee41b24bf49db = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalc103ef29f7e23a0c1f8ee41b24bf49db = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipping','data' => ['job' => $job,'canEditJob' => $canEditJob]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

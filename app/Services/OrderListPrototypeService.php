@@ -504,7 +504,7 @@ class OrderListPrototypeService
                 'activeHold:id,flow_job_id,hold_from',
                 'items' => fn ($items) => $items
                     ->select(['id','flow_job_id','supplier_id','product_name','category_name','quantity','unit_price','is_removed','sort_order'])
-                    ->with('supplier:id,name'),
+                    ->with('supplier:id,name,metadata,type'),
                 'tasks' => fn ($tasks) => $tasks
                     ->select(['id','flow_job_id','workflow_phase_id','assignee_id','task_pack_task_id','title','status','progress','due_date','completed_at'])
                     ->with([
@@ -814,7 +814,7 @@ class OrderListPrototypeService
     {
         $items = $job->items->filter(fn ($item) => ! (bool) $item->is_removed)->values();
         $productNames = $items->pluck('product_name')->filter()->values();
-        $suppliers = $items->map(fn ($item) => (string) ($item->supplier?->name ?: 'Not linked'))->filter()->unique()->values();
+        $suppliers = $items->map(fn ($item) => (string) ($item->supplier?->supplierShortCode() ?: 'Not linked'))->filter()->unique()->values();
         $totalUnits = (int) $items->sum(fn ($item) => (int) ($item->quantity ?? 0));
         $phaseId = (int) ($job->workflow_phase_id ?: 0);
         $phaseTasks = $job->tasks->filter(fn (Task $task) => (int) $task->workflow_phase_id === $phaseId)->values();

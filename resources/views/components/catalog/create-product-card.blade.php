@@ -22,6 +22,8 @@
     $productError = $errors->first("{$rowsProperty}.{$index}.product");
     $isOrder = $context === 'order';
     $priceFromProductTable = in_array($context, ['order', 'inquiry'], true);
+    $supplierShortCode = trim((string) ($supplier?->supplierShortCode() ?? ''));
+    $supplierLabel = $supplierShortCode !== '' ? $supplierShortCode : trim((string) ($supplier?->name ?? ''));
 @endphp
 
 <article class="ft-order-selected-product-card ft-create-product-card ft-product-quantity-selected-row" wire:key="{{ $rowKeyPrefix }}-{{ $item['product_id'] ?? $index }}-{{ $index }}">
@@ -49,10 +51,10 @@
     <div class="ft-pq-selected-field ft-pq-selected-supplier" x-data="{ changingSupplier: false }" x-on:create-order-product-supplier-selected.window="changingSupplier = false">
         <span>Supplier for this order</span>
         @if($isOrder && !$supplierRequired)
-            <div class="ft-pq-supplier-box"><strong>{{ $supplier?->name ?: 'No supplier selected' }}</strong></div>
+            <div class="ft-pq-supplier-box"><strong>{{ $supplier ? ($supplierLabel ?: '—') : 'No supplier selected' }}</strong></div>
         @elseif($isOrder)
             <div x-show="!changingSupplier" class="ft-pq-supplier-box {{ !$supplier ? 'is-missing' : '' }}">
-                <strong>{{ $supplier?->name ?: ($supplierSkipped ? 'Supplier skipped for now' : 'No default supplier linked') }}</strong>
+                <strong>{{ $supplier ? ($supplierLabel ?: '—') : ($supplierSkipped ? 'Supplier skipped for now' : 'No default supplier linked') }}</strong>
                 @if($supplier)<i>&middot;</i><b>Default</b>@endif
                 <button type="button" x-on:click="changingSupplier = true">Change</button>
             </div>
@@ -63,7 +65,7 @@
                     context="create-job"
                     property="create-order-item-supplier:{{ $index }}"
                     :value="$supplier?->id"
-                    :selected-label="$supplier?->name"
+                    :selected-label="$supplierLabel !== '' ? $supplierLabel : null"
                     placeholder="Select supplier"
                     search-placeholder="Search supplier"
                     :clearable="false"
@@ -76,7 +78,7 @@
             </div>
         @else
             <div class="ft-pq-supplier-box {{ !$supplier ? 'is-missing' : '' }}">
-                <strong>{{ $supplier?->name ?: 'No default supplier linked' }}</strong>
+                <strong>{{ $supplier ? ($supplierLabel ?: '—') : 'No default supplier linked' }}</strong>
                 @if($supplier)<i>&middot;</i><b>Default</b>@endif
             </div>
         @endif

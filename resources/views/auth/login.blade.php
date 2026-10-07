@@ -118,6 +118,21 @@
             </label>
 
             <button class="primary" type="submit">Sign in</button>
+
+            <hr class="login-tracking-divider">
+
+            <div class="login-tracking-prompt">
+                <span class="login-tracking-prompt-label">Just checking an order?</span>
+                <a href="{{ route('order.track') }}" class="login-tracking-link">
+                    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"></path>
+                        <polyline points="3.27 6.96 12 12.01 20.73 6.96"></polyline>
+                        <line x1="12" y1="22.08" x2="12" y2="12"></line>
+                    </svg>
+                    <span>Track your order &rarr;</span>
+                </a>
+                <p class="login-tracking-subtext">Use your order or reference number and email. No sign-in needed.</p>
+            </div>
         </form>
     </section>
 </div>

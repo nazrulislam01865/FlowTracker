@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Support\SupplierShortCode;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -51,6 +52,24 @@ class MasterRecord extends Model
     }
 
     public function getIsActiveAttribute(): bool { return $this->status === 'active'; }
+
+    /**
+     * User-facing short code for Supplier master records (for example, MR).
+     * The generic code column remains FlowTrack's internal/reference code.
+     */
+    public function supplierShortCode(): string
+    {
+        // Supplier relations are intentionally partial-selected in several
+        // high-traffic product screens. Only reject the call when `type` was
+        // actually loaded and proves this is not a supplier record.
+        if ($this->getAttribute('type') !== null && $this->type !== 'supplier') return '';
+
+        return SupplierShortCode::resolve(
+            (string) data_get($this->metadata, 'short_code'),
+            (string) $this->name,
+            (int) $this->id,
+        );
+    }
 
 
 

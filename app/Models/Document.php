@@ -7,6 +7,8 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class Document extends Model
 {
+    public const CATEGORY_ARTWORK_TRACKING_PDF = 'Artwork Tracking PDF';
+
     protected $fillable = [
         'document_number',
         'flow_job_id',

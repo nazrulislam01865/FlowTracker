@@ -100,14 +100,14 @@ trait ManagesMissingProductSupplier
             ->forWorkspace(app(MasterDataService::class)->workspaceId())
             ->ofType('supplier')
             ->active()
-            ->findOrFail($supplierId, ['id', 'name', 'code', 'status']);
+            ->findOrFail($supplierId, ['id', 'name', 'code', 'metadata', 'type', 'status']);
 
         $this->missingProductExistingSupplierId = (int) $supplier->id;
-        $this->missingProductExistingSupplierLabel = (string) $supplier->name;
+        $this->missingProductExistingSupplierLabel = $supplier->supplierShortCode();
         $this->missingProductSupplierChoice = 'existing';
         $this->resetValidation('missingProductExistingSupplierId');
 
-        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => (string) $supplier->name];
+        return ['ok' => true, 'value' => (string) $supplier->id, 'label' => $supplier->supplierShortCode()];
     }
 
     public function resolveMissingProductSupplier(): void
