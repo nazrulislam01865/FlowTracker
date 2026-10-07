@@ -94,7 +94,9 @@
                 :context="$orderDetailContext"
                 :remote-area="$orderDetailContext['remoteArea'] ?? null"
             />
-            <x-jobs.order-detail.tracking :job="$job" />
+            @if((bool) config('flowtrack.order_tracking_enabled', false))
+                <x-jobs.order-detail.tracking :job="$job" />
+            @endif
             <x-jobs.order-detail.shipping :job="$job" :can-edit-job="$canEditJob" />
         </div>
     </div>

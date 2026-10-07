@@ -58,7 +58,9 @@
     // reference without another query or a duplicate document record.
     $isProductionPhase = $selectedPhase
         && strcasecmp(trim((string) $selectedPhase->name), 'Production') === 0;
-    $productionArtworkPdf = $isProductionPhase && $job->relationLoaded('documents')
+    $productionArtworkPdf = (bool) config('flowtrack.order_tracking_enabled', false)
+        && $isProductionPhase
+        && $job->relationLoaded('documents')
         ? $job->documents
             ->where('category', \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF)
             ->sortByDesc('id')

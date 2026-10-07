@@ -18,7 +18,13 @@
     $canLinkDocument = $documentLinkPermission && ! $orderOnHold;
     $canDeleteDocument = $documentDeletePermission && ! $orderOnHold;
     $canExportDocument = (bool) ($context['canExportDocument'] ?? false);
-    $taskDocuments = $job->documents->where('task_id', $task->id)->sortByDesc('created_at')->values();
+    $taskDocuments = $job->documents->where('task_id', $task->id);
+    if (! (bool) config('flowtrack.order_tracking_enabled', false)) {
+        $taskDocuments = $taskDocuments->reject(
+            fn ($document) => $document->category === \App\Models\Document::CATEGORY_ARTWORK_TRACKING_PDF
+        );
+    }
+    $taskDocuments = $taskDocuments->sortByDesc('created_at')->values();
     $taskLinks = \App\Support\JobDetailPresenter::taskLinks($job, $task);
     $automationKey = app(\App\Services\OrderWorkflowActionService::class)->automationKey($task);
     $isArtworkUploadTask = $automationKey === 'ART_PREPARE_UPLOAD';

@@ -518,21 +518,25 @@ class LegacyJobService
                 'cancelledBy:id,name,profile_image_path',
                 'activeHold.holder:id,name,profile_image_path',
                 'members.user:id,name,profile_image_path',
-                'artworkTrackingPdf' => static function ($query): void {
-                    $query->select([
-                        'documents.id',
-                        'documents.flow_job_id',
-                        'documents.task_id',
-                        'documents.category',
-                        'documents.name',
-                        'documents.path',
-                        'documents.mime_type',
-                        'documents.size',
-                        'documents.version',
-                        'documents.is_final',
-                    ]);
-                },
             ])
+            ->when((bool) config('flowtrack.order_tracking_enabled', false), function ($query): void {
+                $query->with([
+                    'artworkTrackingPdf' => static function ($relation): void {
+                        $relation->select([
+                            'documents.id',
+                            'documents.flow_job_id',
+                            'documents.task_id',
+                            'documents.category',
+                            'documents.name',
+                            'documents.path',
+                            'documents.mime_type',
+                            'documents.size',
+                            'documents.version',
+                            'documents.is_final',
+                        ]);
+                    },
+                ]);
+            })
             ->withCount(['documents', 'linkedInquiries'])
             ->findOrFail($id);
     }

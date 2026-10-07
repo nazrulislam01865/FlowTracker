@@ -1,6 +1,9 @@
 <?php
 
 return [
+    // Temporary release gate for the public Order Tracking / QR feature.
+    // Keep false while the feature is under review; set the env value to true to restore it.
+    'order_tracking_enabled' => env('FLOWTRACK_ORDER_TRACKING_ENABLED', false),
     'workspace_id' => (int) env('FLOWTRACK_WORKSPACE_ID', 1),
     'document_disk' => env('FLOWTRACK_DOCUMENT_DISK', 'flowtrack_private'),
     'quarantine_disk' => env('FLOWTRACK_QUARANTINE_DISK', 'flowtrack_quarantine'),

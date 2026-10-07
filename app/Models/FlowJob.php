@@ -84,6 +84,10 @@ class FlowJob extends Model
     protected static function booted(): void
     {
         static::creating(function (FlowJob $job) {
+            if (! (bool) config('flowtrack.order_tracking_enabled', false)) {
+                return;
+            }
+
             if (empty($job->tracking_token)) {
                 $job->tracking_token = \Illuminate\Support\Str::random(32);
                 $job->tracking_token_created_at = now();

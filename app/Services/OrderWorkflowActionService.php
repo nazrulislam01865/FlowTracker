@@ -563,7 +563,9 @@ class OrderWorkflowActionService
 
             if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
                 $completed = $this->complete($locked, $actor);
-                app(ArtworkTrackingPdfService::class)->generate($job->refresh(), $locked->refresh(), $actor);
+                if ((bool) config('flowtrack.order_tracking_enabled', false)) {
+                    app(ArtworkTrackingPdfService::class)->generate($job->refresh(), $locked->refresh(), $actor);
+                }
 
                 return $completed->refresh();
             }
