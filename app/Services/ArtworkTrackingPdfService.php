@@ -46,7 +46,7 @@ final class ArtworkTrackingPdfService
 
         $job->ensureTrackingToken();
         $trackingUrl = $job->trackingUrl();
-        $pdf = $this->render($job, $artwork, $trackingUrl, $artworkVersion, $actor);
+        $pdf = $this->render($artwork, $trackingUrl);
 
         $orderNumber = $job->job_number ?: $job->order_number ?: 'ORDER-'.$job->id;
         $safeOrder = preg_replace('/[^A-Za-z0-9._-]+/', '-', $orderNumber) ?: 'order-'.$job->id;
@@ -87,7 +87,7 @@ final class ArtworkTrackingPdfService
     }
 
     /** @param Collection<int,Document> $artwork */
-    private function render(FlowJob $job, Collection $artwork, string $trackingUrl, int $artworkVersion, User $actor): string
+    private function render(Collection $artwork, string $trackingUrl): string
     {
         $doc = new SimplePdfDocument();
         $navy = [0.055, 0.145, 0.285];
@@ -95,64 +95,26 @@ final class ArtworkTrackingPdfService
         $text = [0.08, 0.14, 0.24];
         $muted = [0.38, 0.44, 0.54];
         $border = [0.84, 0.88, 0.93];
-        $soft = [0.965, 0.98, 0.985];
-
-        $orderNumber = $job->displayOrderNumber() ?: ($job->job_number ?: $job->order_number ?: 'ORDER-'.$job->id);
-        $reference = trim((string) ($job->reference_number ?? '')) ?: ($job->job_number ?: $job->order_number ?: '-');
         $companyHeader = $this->companyHeader();
 
-        $this->renderCompanyHeader($doc, $companyHeader, $navy, $text, $muted, $border);
-
-        $doc->text(42, 728, 'CONFIRMED ARTWORK', 22, true, $navy);
-        $doc->text(42, 705, 'Order tracking document', 11, false, $muted);
-        $doc->fillRect(42, 685, 511, 3, $green);
-
-        $doc->text(42, 652, 'Order number', 8, true, $muted);
-        $doc->text(42, 634, $this->plain($orderNumber), 13, true, $text);
-        $doc->text(42, 603, 'Reference', 8, true, $muted);
-        $doc->text(42, 585, $this->plain($reference), 10, false, $text);
-        $doc->text(42, 554, 'Artwork version', 8, true, $muted);
-        $doc->text(42, 536, 'V'.$artworkVersion, 10, true, $text);
-        $doc->text(42, 505, 'Confirmed by', 8, true, $muted);
-        $doc->text(42, 487, $this->plain((string) $actor->name), 10, false, $text);
-        $doc->text(42, 456, 'Confirmed at', 8, true, $muted);
-        $doc->text(42, 438, now()->format('M j, Y g:i A'), 10, false, $text);
-
-        $qrX = 344.0;
-        $qrY = 458.0;
-        $qrSize = 185.0;
-        $doc->fillRect($qrX - 12, $qrY - 12, $qrSize + 24, $qrSize + 24, [1, 1, 1]);
-        $doc->rect($qrX - 12, $qrY - 12, $qrSize + 24, $qrSize + 24, 0.8, $border);
-        $this->drawQr($doc, $trackingUrl, $qrX, $qrY, $qrSize);
-        $doc->textCentered($qrX + ($qrSize / 2), 425, 'Scan to view the current order status', 9, true, $green);
-
-        $doc->fillRect(42, 352, 511, 58, $soft);
-        $doc->rect(42, 352, 511, 58, 0.7, $border);
-        $doc->text(56, 390, 'ORDER TRACKING', 8, true, $green);
-        $doc->wrappedText(
-            56,
-            373,
-            'The QR code opens the live Order Tracking page. The status shown there is read from the current FlowTrack order, so it continues to update after this PDF is generated.',
-            482,
-            9,
-            12,
-            false,
-            $text,
-            3,
-        );
-
-        $doc->text(42, 318, 'CONFIRMED ARTWORK FILES', 9, true, $navy);
-        $y = 297.0;
         foreach ($artwork as $index => $artworkDocument) {
-            $label = ($index + 1).'. '.$this->plain((string) $artworkDocument->name);
-            $doc->text(50, $y, $label, 9, false, $text);
-            $y -= 16;
-            if ($y < 80) break;
-        }
+            if ($index > 0) {
+                $doc->newPage();
+            }
 
-        foreach ($artwork as $index => $artworkDocument) {
-            $doc->newPage();
-            $this->renderArtworkPage($doc, $artworkDocument, $index + 1, $artwork->count(), $orderNumber, $companyHeader, $border, $navy, $text, $muted);
+            $this->renderArtworkPage(
+                $doc,
+                $artworkDocument,
+                $trackingUrl,
+                $index + 1,
+                $artwork->count(),
+                $companyHeader,
+                $border,
+                $navy,
+                $green,
+                $text,
+                $muted,
+            );
         }
 
         return $doc->output();
@@ -184,46 +146,76 @@ final class ArtworkTrackingPdfService
     private function renderArtworkPage(
         SimplePdfDocument $doc,
         Document $artwork,
+        string $trackingUrl,
         int $position,
         int $total,
-        string $orderNumber,
         array $companyHeader,
         array $border,
         array $navy,
+        array $green,
         array $text,
         array $muted,
     ): void {
         $this->renderCompanyHeader($doc, $companyHeader, $navy, $text, $muted, $border);
 
-        $doc->text(42, 728, 'CONFIRMED ARTWORK', 18, true, $navy);
-        $doc->textRight(553, 729, $position.' / '.$total, 9, true, $muted);
-        $doc->text(42, 704, $this->plain($orderNumber), 9, false, $muted);
-        $doc->line(42, 688, 553, 688, 0.8, $border);
+        // Keep the document identification compact so the confirmed artwork
+        // remains the focus of the page.
+        $doc->text(42, 735, 'CONFIRMED ARTWORK', 17, true, $navy);
+        if ($total > 1) {
+            $doc->text(42, 716, 'Artwork '.$position.' of '.$total, 7.5, false, $muted);
+        }
+        $doc->line(42, 706, 452, 706, 2.2, $green);
 
-        $doc->text(42, 663, $this->plain((string) $artwork->name), 11, true, $text);
-        $doc->text(42, 645, 'Artwork V'.max(1, (int) $artwork->version).'  |  '.$this->plain((string) ($artwork->mime_type ?: 'file')), 8, false, $muted);
+        // The tracking QR intentionally stays small and shares the same page
+        // with the artwork. The URL itself remains live and reflects the
+        // current order status whenever it is scanned.
+        $qrSize = 68.0;
+        $qrX = 476.0;
+        $qrY = 666.0;
+        $doc->fillRect($qrX - 5, $qrY - 5, $qrSize + 10, $qrSize + 10, [1, 1, 1]);
+        $doc->rect($qrX - 5, $qrY - 5, $qrSize + 10, $qrSize + 10, 0.6, $border);
+        $this->drawQr($doc, $trackingUrl, $qrX, $qrY, $qrSize);
+        $doc->textCentered($qrX + ($qrSize / 2), 650, 'Scan for live order status', 6.8, true, $green);
 
         $preview = $this->previewPath($artwork);
         try {
+            $frameX = 42.0;
+            $frameY = 66.0;
+            $frameWidth = 511.0;
+            $frameHeight = 566.0;
+            $padding = 12.0;
+            $doc->rect($frameX, $frameY, $frameWidth, $frameHeight, 0.7, $border);
+
             if ($preview !== null && ($dimensions = @getimagesize($preview))) {
-                $maxWidth = 511.0;
-                $maxHeight = 548.0;
-                $scale = min($maxWidth / max(1, (int) $dimensions[0]), $maxHeight / max(1, (int) $dimensions[1]));
+                $maxWidth = $frameWidth - ($padding * 2);
+                $maxHeight = $frameHeight - ($padding * 2);
+                $scale = min(
+                    $maxWidth / max(1, (int) $dimensions[0]),
+                    $maxHeight / max(1, (int) $dimensions[1]),
+                );
                 $width = max(1.0, (int) $dimensions[0] * $scale);
                 $height = max(1.0, (int) $dimensions[1] * $scale);
-                $x = 42 + (($maxWidth - $width) / 2);
-                $y = 70 + (($maxHeight - $height) / 2);
-                $doc->rect(42, 70, $maxWidth, $maxHeight, 0.7, $border);
+                $x = $frameX + (($frameWidth - $width) / 2);
+                $y = $frameY + (($frameHeight - $height) / 2);
+
                 if ($doc->image($preview, $x, $y, $width, $height)) {
                     return;
                 }
             }
 
-            $doc->rect(42, 120, 511, 470, 0.7, $border);
-            $doc->textCentered(297.5, 390, 'Confirmed artwork file', 15, true, $navy);
-            $doc->wrappedText(92, 360, $this->plain((string) $artwork->name), 411, 11, 15, false, $text, 4);
-            $doc->textCentered(297.5, 290, 'A visual preview is unavailable for this file format.', 9, false, $muted);
-            $doc->textCentered(297.5, 273, 'The file remains the confirmed artwork stored with this order.', 9, false, $muted);
+            $doc->textCentered(297.5, 380, 'Confirmed artwork', 14, true, $navy);
+            $doc->wrappedText(
+                92,
+                352,
+                $this->plain((string) $artwork->name),
+                411,
+                10,
+                14,
+                false,
+                $text,
+                4,
+            );
+            $doc->textCentered(297.5, 300, 'Preview unavailable for this file format.', 8.5, false, $muted);
         } finally {
             if ($preview !== null && str_starts_with($preview, sys_get_temp_dir().DIRECTORY_SEPARATOR.'flowtrack-artwork-')) {
                 @unlink($preview);
@@ -266,38 +258,39 @@ final class ArtworkTrackingPdfService
         array $muted,
         array $border,
     ): void {
-        $logoDrawn = $this->drawLogo($doc, $company['logo_path'], 42, 774, 92, 34);
-        $textX = $logoDrawn ? 148.0 : 42.0;
-        $leftWidth = $logoDrawn ? 238.0 : 344.0;
+        $logoDrawn = $this->drawLogo($doc, $company['logo_path'], 42, 790, 118, 28);
 
-        $doc->wrappedText($textX, 806, $this->plain($company['name']), $leftWidth, 10.5, 12, true, $navy, 1);
-
-        $legalName = $this->plain($company['legal_name']);
-        if ($legalName !== '' && $legalName !== $this->plain($company['name'])) {
-            $doc->wrappedText($textX, 791, $legalName, $leftWidth, 7.2, 9, false, $muted, 1);
-        }
-
-        if ($company['address'] !== '') {
-            $doc->wrappedText($textX, 778, $this->plain($company['address']), $leftWidth, 7.2, 9, false, $muted, 2);
+        // Do not repeat the company name when the configured logo is present.
+        // If no logo is available, the trading/legal name is the compact
+        // fallback so the generated document still identifies the company.
+        if (! $logoDrawn) {
+            $doc->wrappedText(42, 808, $this->plain($company['name']), 210, 10.5, 12, true, $navy, 1);
         }
 
         $rightLines = [];
-        if ($company['email'] !== '') $rightLines[] = $this->plain($company['email']);
-        if ($company['phone'] !== '') $rightLines[] = $this->plain($company['phone']);
-        if ($company['website'] !== '') $rightLines[] = $this->plain($company['website']);
+        if ($company['address'] !== '') {
+            $rightLines[] = $this->plain($company['address']);
+        }
 
-        $registration = [];
-        if ($company['registration'] !== '') $registration[] = 'Reg: '.$this->plain($company['registration']);
-        if ($company['tax'] !== '') $registration[] = 'Tax: '.$this->plain($company['tax']);
-        if ($registration !== []) $rightLines[] = implode('  |  ', $registration);
+        $contact = array_values(array_filter([
+            $company['phone'] !== '' ? $this->plain($company['phone']) : null,
+            $company['email'] !== '' ? $this->plain($company['email']) : null,
+        ]));
+        if ($contact !== []) {
+            $rightLines[] = implode('  |  ', $contact);
+        }
 
-        $rightY = 806.0;
-        foreach (array_slice($rightLines, 0, 4) as $line) {
-            $doc->textRight(553, $rightY, $this->compact($line, 44), 7.2, false, $text);
+        if ($company['website'] !== '') {
+            $rightLines[] = $this->plain($company['website']);
+        }
+
+        $rightY = 807.0;
+        foreach (array_slice($rightLines, 0, 3) as $line) {
+            $doc->textRight(553, $rightY, $this->compact($line, 58), 7.2, false, $text);
             $rightY -= 11;
         }
 
-        $doc->line(42, 754, 553, 754, 0.7, $border);
+        $doc->line(42, 772, 553, 772, 0.7, $border);
     }
 
     private function brandingLogoPath(array $branding): ?string
