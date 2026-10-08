@@ -252,7 +252,8 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php $component = $__componentOriginal89b3f0d2b6e3055ded0e4d12dece9e5b; ?>
 <?php unset($__componentOriginal89b3f0d2b6e3055ded0e4d12dece9e5b); ?>
 <?php endif; ?>
-            <?php if (isset($component)) { $__componentOriginalfe0e750cd3c9d37c753b30b141212e7a = $component; } ?>
+            <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if((bool) config('flowtrack.order_tracking_enabled', false)): ?>
+                <?php if (isset($component)) { $__componentOriginalfe0e750cd3c9d37c753b30b141212e7a = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalfe0e750cd3c9d37c753b30b141212e7a = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.tracking','data' => ['job' => $job]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>
 <?php $component->withName('jobs.order-detail.tracking'); ?>
@@ -274,6 +275,7 @@ unset($__defined_vars, $__key, $__value); ?>
 <?php $component = $__componentOriginalfe0e750cd3c9d37c753b30b141212e7a; ?>
 <?php unset($__componentOriginalfe0e750cd3c9d37c753b30b141212e7a); ?>
 <?php endif; ?>
+            <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
             <?php if (isset($component)) { $__componentOriginalc103ef29f7e23a0c1f8ee41b24bf49db = $component; } ?>
 <?php if (isset($attributes)) { $__attributesOriginalc103ef29f7e23a0c1f8ee41b24bf49db = $attributes; } ?>
 <?php $component = Illuminate\View\AnonymousComponent::resolve(['view' => 'components.jobs.order-detail.shipping','data' => ['job' => $job,'canEditJob' => $canEditJob]] + (isset($attributes) && $attributes instanceof Illuminate\View\ComponentAttributeBag ? $attributes->all() : [])); ?>

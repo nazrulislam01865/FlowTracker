@@ -1034,21 +1034,10 @@ trait ManagesOrderCreation
 
         $catalog = app(\App\Services\ProductCatalogService::class);
         $products = $catalog->selectedProducts(collect($this->jobItems)->pluck('product_id'));
-        $defaultSuppliers = $catalog->suppliersForProducts($products);
-        $overrideIds = collect($this->createOrderSupplierOverrides)
-            ->map(fn ($id) => (int) $id)
-            ->filter(fn (int $id) => $id > 0)
-            ->unique()
-            ->values();
-        $overrideSuppliers = $overrideIds->isEmpty()
-            ? collect()
-            : MasterRecord::query()
-                ->forWorkspace(app(MasterDataService::class)->workspaceId())
-                ->ofType('supplier')
-                ->active()
-                ->whereIn('id', $overrideIds->all())
-                ->get(['id', 'name', 'code', 'status'])
-                ->keyBy('id');
+        // No extra linkage lookup for the normal default-supplier path.
+        $hasOverrides = collect($this->createOrderSupplierOverrides)->contains(fn ($id): bool => (int) $id > 0);
+        $linkedSuppliers = $hasOverrides ? $catalog->allSuppliersForProducts($products) : collect();
+        $defaultSuppliers = $hasOverrides ? collect() : $catalog->suppliersForProducts($products);
         $missingSupplier = false;
 
         foreach ($this->jobItems as $index => $row) {
@@ -1057,8 +1046,15 @@ trait ManagesOrderCreation
             if (!$product) continue;
 
             $overrideId = (int) ($this->createOrderSupplierOverrides[$productId] ?? 0);
-            $overrideSupplier = $overrideId > 0 ? $overrideSuppliers->get($overrideId) : null;
-            $supplier = $overrideSupplier ?: $defaultSuppliers->get($productId);
+            $availableSuppliers = $linkedSuppliers->get($productId, collect());
+            $overrideSupplier = $overrideId > 0
+                ? $availableSuppliers->first(fn (MasterRecord $linked): bool => (int) $linked->id === $overrideId)
+                : null;
+            $defaultId = (int) ($product->productSupplierId() ?? 0);
+            $defaultSupplier = $hasOverrides
+                ? $availableSuppliers->first(fn (MasterRecord $linked): bool => (int) $linked->id === $defaultId)
+                : $defaultSuppliers->get($productId);
+            $supplier = $overrideSupplier ?: $defaultSupplier;
             $this->jobItems[$index]['supplier_id'] = $supplier?->id;
 
             if ($supplier) {

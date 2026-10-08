@@ -17,12 +17,50 @@
         class="section-card ft-order-section-card ft-order-tracking-card"
         x-data="{
             copiedLink: false,
-            copyTrackingLink() {
+            copyFailed: false,
+            async copyTrackingLink() {
                 const text = @js($trackingUrl);
-                navigator.clipboard.writeText(text).then(() => {
-                    this.copiedLink = true;
-                    setTimeout(() => this.copiedLink = false, 1800);
-                });
+                let copied = false;
+
+                if (navigator.clipboard?.writeText) {
+                    try {
+                        await navigator.clipboard.writeText(text);
+                        copied = true;
+                    } catch (_) {
+                        // Clipboard permissions can be denied even on HTTPS.
+                    }
+                }
+
+                if (!copied) {
+                    // HTTP cloud hosts do not expose the modern Clipboard API.
+                    const input = document.createElement('textarea');
+                    input.value = text;
+                    input.readOnly = true;
+                    input.style.position = 'fixed';
+                    input.style.left = '-9999px';
+                    const previousFocus = document.activeElement;
+                    document.body.appendChild(input);
+                    input.focus();
+                    input.select();
+                    try {
+                        copied = document.execCommand('copy');
+                    } catch (_) {
+                        copied = false;
+                    } finally {
+                        input.remove();
+                        previousFocus?.focus?.();
+                    }
+                }
+
+                this.copiedLink = copied;
+                this.copyFailed = !copied;
+                if (!copied) {
+                    window.prompt('Copy tracking link:', text);
+                }
+                setTimeout(() => {
+                    this.copiedLink = false;
+                    this.copyFailed = false;
+                }, 1800);
             }
         }"
     >
@@ -31,7 +69,7 @@
                 <span class="ft-order-tracking-heading-icon" aria-hidden="true">
                     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"></rect><rect x="14" y="3" width="7" height="7" rx="1"></rect><rect x="3" y="14" width="7" height="7" rx="1"></rect><path d="M14 14h3v3h-3zM19 14h2v2M19 19h2v2M14 19h2v2"></path></svg>
                 </span>
-                <div>
+                <div class="ft-order-tracking-heading-text">
                     <h2>Order tracking</h2>
                     <p>Live tracking QR and confirmed artwork</p>
                 </div>
@@ -77,7 +115,7 @@
 
             <button type="button" class="ft-btn-tracking-link" x-on:click="copyTrackingLink()">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="9" y="9" width="13" height="13" rx="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
-                <span x-text="copiedLink ? 'Link copied' : 'Copy tracking link'">Copy tracking link</span>
+                <span aria-live="polite" x-text="copiedLink ? 'Link copied' : (copyFailed ? 'Copy manually' : 'Copy tracking link')">Copy tracking link</span>
             </button>
         </div>
     </section>
@@ -88,19 +126,25 @@
             border: 1px solid #dbe5ee;
             border-radius: 14px;
             overflow: hidden;
+            container-type: inline-size;
         }
         .ft-order-tracking-card .ft-order-tracking-head {
-            display: flex;
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) max-content;
             align-items: center;
-            justify-content: space-between;
-            gap: 12px;
+            gap: 12px 18px;
+            margin-bottom: 0;
             padding-bottom: 13px;
         }
         .ft-order-tracking-heading {
             min-width: 0;
             display: flex;
             align-items: center;
-            gap: 10px;
+            gap: 12px;
+        }
+        .ft-order-tracking-heading-text {
+            min-width: 0;
+            flex: 1 1 auto;
         }
         .ft-order-tracking-heading-icon {
             flex: 0 0 34px;
@@ -113,7 +157,10 @@
             background: #eaf8f5;
             color: #008a73;
         }
-        .ft-order-tracking-heading h2 { margin: 0; }
+        .ft-order-tracking-heading h2 {
+            margin: 0;
+            line-height: 1.25;
+        }
         .ft-order-tracking-heading p {
             margin: 2px 0 0;
             color: #718096;
@@ -121,7 +168,7 @@
             line-height: 1.35;
         }
         .ft-tracking-ready-badge {
-            flex: 0 0 auto;
+            justify-self: end;
             display: inline-flex;
             align-items: center;
             gap: 5px;
@@ -249,8 +296,20 @@
         .ft-btn-tracking-primary:hover { background: #007a66; }
         .ft-btn-tracking-secondary:hover { border-color: #94a3b8; background: #f8fafc; }
         .ft-btn-tracking-link:hover { background: #f0fdfa; }
+        @container (max-width: 700px) {
+            .ft-order-tracking-card .ft-order-tracking-head {
+                grid-template-columns: minmax(0, 1fr);
+                gap: 10px;
+            }
+            .ft-order-tracking-card .ft-tracking-ready-badge {
+                justify-self: start;
+                margin-left: 46px;
+            }
+        }
+        @container (max-width: 340px) {
+            .ft-order-tracking-card .ft-tracking-ready-badge { margin-left: 0; }
+        }
         @media (max-width: 520px) {
-            .ft-order-tracking-card .ft-order-tracking-head { align-items: flex-start; flex-direction: column; }
             .ft-order-tracking-content { grid-template-columns: 1fr; }
             .ft-qr-box { margin: 0 auto; }
             .ft-tracking-meta > div { grid-template-columns: 82px minmax(0, 1fr); }

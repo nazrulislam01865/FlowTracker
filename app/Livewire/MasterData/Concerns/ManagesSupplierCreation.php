@@ -140,48 +140,7 @@ trait ManagesSupplierCreation
             ]);
 
             $productIds = $codeRows->where('valid', true)->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->unique();
-            if ($productIds->isNotEmpty()) {
-                $pivotRows = [];
-                MasterRecord::query()
-                    ->forWorkspace($workspaceId)
-                    ->ofType('product')
-                    ->whereIn('id', $productIds->all())
-                    ->get(['id', 'metadata'])
-                    ->each(function (MasterRecord $product) use ($supplier, $workspaceId, &$pivotRows): void {
-                        $metadata = (array) ($product->metadata ?? []);
-                        $supplierIds = collect($product->productSupplierIds())
-                            ->push((int) $supplier->id)
-                            ->map(fn ($id) => (int) $id)
-                            ->filter(fn (int $id) => $id > 0)
-                            ->unique()
-                            ->values();
-
-                        // Keep the existing default supplier. The newly-created supplier
-                        // becomes default only when the product did not have one.
-                        if (! $product->productSupplierId()) {
-                            $metadata['supplier_id'] = (int) $supplier->id;
-                            unset($metadata['default_supplier_id']);
-                        }
-
-                        $metadata['supplier_ids'] = $supplierIds->all();
-                        $product->metadata = $metadata;
-                        $product->save();
-
-                        if (Schema::hasTable('product_supplier_links')) {
-                            $pivotRows[] = [
-                                'workspace_id' => $workspaceId,
-                                'product_id' => (int) $product->id,
-                                'supplier_id' => (int) $supplier->id,
-                                'created_at' => now(),
-                                'updated_at' => now(),
-                            ];
-                        }
-                    });
-
-                if ($pivotRows !== []) {
-                    DB::table('product_supplier_links')->insertOrIgnore($pivotRows);
-                }
-            }
+            $this->linkProductsToSupplier($workspaceId, $supplier, $productIds->all());
 
             return $supplier;
         });
@@ -191,13 +150,53 @@ trait ManagesSupplierCreation
         $this->redirectRoute('master-data', ['group' => 'supplier'], navigate: true);
     }
 
+
+    /** Link the selected products without changing their existing supplier assignments. */
+    protected function linkProductsToSupplier(int $workspaceId, MasterRecord $supplier, array $productIds): void
+    {
+        if ($productIds === []) return;
+
+        $pivotRows = [];
+        $hasLinksTable = Schema::hasTable('product_supplier_links');
+        MasterRecord::query()
+            ->forWorkspace($workspaceId)
+            ->ofType('product')
+            ->whereIn('id', $productIds)
+            ->get(['id', 'metadata'])
+            ->each(function (MasterRecord $product) use ($supplier, $workspaceId, $hasLinksTable, &$pivotRows): void {
+                $metadata = (array) ($product->metadata ?? []);
+                $supplierIds = collect($product->productSupplierIds())
+                    ->push((int) $supplier->id)->map(fn ($id) => (int) $id)
+                    ->filter()->unique()->values();
+                if (! $product->productSupplierId()) {
+                    $metadata['supplier_id'] = (int) $supplier->id;
+                    unset($metadata['default_supplier_id']);
+                }
+                $metadata['supplier_ids'] = $supplierIds->all();
+                $product->metadata = $metadata;
+                $product->save();
+
+                if ($hasLinksTable) {
+                    $pivotRows[] = [
+                        'workspace_id' => $workspaceId,
+                        'product_id' => (int) $product->id,
+                        'supplier_id' => (int) $supplier->id,
+                        'created_at' => now(),
+                        'updated_at' => now(),
+                    ];
+                }
+            });
+
+        if ($pivotRows !== []) DB::table('product_supplier_links')->insertOrIgnore($pivotRows);
+    }
+
     /**
      * @return Collection<int,array{code:string,valid:bool,product_id:?int,name:string,category:string,has_supplier:bool}>
      */
-    protected function supplierCreateCodeRows(?int $workspaceId = null): Collection
+    protected function supplierCreateCodeRows(?int $workspaceId = null, ?array $productCodes = null): Collection
     {
         $workspaceId ??= app(MasterDataService::class)->workspaceId();
-        $codes = collect($this->supplierProductCodes)
+        $codes = collect($productCodes ?? $this->supplierProductCodes)
             ->map(fn ($code) => strtoupper(trim((string) $code)))
             ->filter()
             ->unique()

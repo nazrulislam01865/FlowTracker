@@ -10,6 +10,7 @@
     'clientAvailabilityMode' => 'all',
     'clientIds' => [],
     'productSupplierId' => null,
+    'productSupplierIds' => [],
     'certificateUpload' => null,
     'templateUpload' => null,
     'removeCertificate' => false,
@@ -46,7 +47,7 @@
 <div class="ft-product-page ft-product-form-page ft-form-standard ft-form-standard--product" data-ft-feedback-scope="form" x-data="{dragging:false}">
     <div class="ft-product-page-breadcrumb"><button type="button" wire:click="close">Products</button><span>/</span><strong>{{ $isEdit ? 'Edit product' : 'Create product' }}</strong></div>
     <header class="ft-product-form-header">
-        <div><h1>{{ $isEdit ? 'Edit product' : 'Create product' }}</h1><p>{{ $isEdit ? 'Update the product information, default supplier, availability and supporting documents.' : 'Add a product and link its category, default supplier, image and supporting documents.' }}</p></div>
+        <div><h1>{{ $isEdit ? 'Edit product' : 'Create product' }}</h1><p>{{ $isEdit ? 'Update the product information, linked suppliers, availability and supporting documents.' : 'Add a product and link its category, suppliers, image and supporting documents.' }}</p></div>
         @if($isEdit)
             <div class="ft-product-form-top-actions"><button type="button" class="ft-product-page-btn is-secondary" wire:click="close">Cancel</button><button type="button" class="ft-product-page-btn is-primary" wire:click="save" wire:loading.attr="disabled" wire:target="save,productImage,productCertificateUpload,productTemplateUpload">Save changes</button></div>
         @endif
@@ -76,8 +77,24 @@
                             :menu-width="360"
                             search-placeholder="Search supplier…"
                         />
-                        <small class="ft-product-help">When set, Create Order automatically uses this supplier for the product.</small>
+                        <small class="ft-product-help">Create Order uses this supplier by default; choosing it also links it to the product.</small>
                         @error('productSupplierId')<b class="validation-error">{{ $message }}</b>@enderror
+                    </div>
+                    <div class="ft-product-search-select-wrap ft-product-linked-suppliers">
+                        <x-ui.multi-select
+                            label="Linked suppliers"
+                            property="productSupplierIds"
+                            type="suppliers"
+                            context="master-product"
+                            :values="$productSupplierIds"
+                            placeholder="Search and select suppliers"
+                            :fixed-menu="true"
+                            :menu-width="380"
+                            :max-selected="100"
+                        />
+                        <small class="ft-product-help">A product can belong to multiple suppliers. Only these suppliers will be available when changing its supplier in Create Order. Remove a supplier here to unlink it; clear the default first if necessary.</small>
+                        @error('productSupplierIds')<b class="validation-error">{{ $message }}</b>@enderror
+                        @error('productSupplierIds.*')<b class="validation-error">{{ $message }}</b>@enderror
                     </div>
                     <label class="ft-product-field ft-product-size-field"><span>Product size</span><textarea wire:model.blur="productSize" rows="4" placeholder='Add size/specification details. Use a new line for each item, e.g. width, finished length, material, capacity or dimensions.'></textarea><small>Enter multiple size/specification details on separate lines so the information stays easy to read.</small>@error('productSize')<b class="validation-error">{{ $message }}</b>@enderror</label>
                     <div class="ft-product-client-scope">

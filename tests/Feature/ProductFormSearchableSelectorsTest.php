@@ -14,12 +14,13 @@ class ProductFormSearchableSelectorsTest extends TestCase
         $component = \Tests\Support\AdministrationPhase7Source::masterData();
 
         $this->assertSame(4, substr_count($form, '<x-ui.search-select'));
-        $this->assertSame(1, substr_count($form, '<x-ui.multi-select'));
+        $this->assertSame(2, substr_count($form, '<x-ui.multi-select'));
         $this->assertSame(2, substr_count($creator, '<x-ui.search-select'));
         $this->assertStringNotContainsString('<select', $form);
         $this->assertStringNotContainsString('<select', $creator);
         $this->assertStringContainsString('placeholder="Search and select clients"', $form);
         $this->assertStringContainsString('property="productSupplierId"', $form);
+        $this->assertStringContainsString('property="productSupplierIds"', $form);
         $this->assertStringContainsString('type="suppliers"', $form);
         $this->assertStringContainsString('Preview', $upload);
         $this->assertStringContainsString('removeCurrentAction', $upload);

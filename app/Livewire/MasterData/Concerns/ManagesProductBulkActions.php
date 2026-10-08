@@ -104,10 +104,10 @@ trait ManagesProductBulkActions
         $this->bulkProductMainCategory = '';
         $this->bulkProductCategoryId = null;
         $this->bulkProductSubcategory = '';
-        $this->bulkProductSupplierId = null;
+        $this->bulkProductSupplierIds = [];
         $this->resetValidation([
             'bulkProductClientMode', 'bulkProductClientIds', 'bulkProductMainCategory',
-            'bulkProductCategoryId', 'bulkProductSubcategory', 'bulkProductSupplierId',
+            'bulkProductCategoryId', 'bulkProductSubcategory', 'bulkProductSupplierIds',
         ]);
     }
 

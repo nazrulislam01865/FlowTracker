@@ -717,6 +717,16 @@ class Index extends Component
             default => 'Order workflow updated.',
         };
 
+        if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
+            try {
+                $warning = app(\App\Services\Reminders\SupplierArtworkReminderService::class)
+                    ->missingSupplierEmailWarning(app(\App\Services\SetupContext::class)->workspaceId(), (int) $task->flow_job_id);
+                if ($warning) $successMessage .= ' '.$warning;
+            } catch (\Throwable $exception) {
+                report($exception); // Email-status feedback cannot undo the completed workflow.
+            }
+        }
+
         $this->closeOrderWorkflowAction();
         session()->flash('success', $successMessage);
     }

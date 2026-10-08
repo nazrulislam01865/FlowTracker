@@ -839,6 +839,17 @@ trait ManagesOrderWorkflow
                 default => 'Order workflow updated.',
             });
 
+        // A missing supplier email must never interrupt the completed artwork workflow.
+        if ($key === 'ART_INTERNAL_REVIEW' && $decision === 'confirm') {
+            try {
+                $warning = app(\App\Services\Reminders\SupplierArtworkReminderService::class)
+                    ->missingSupplierEmailWarning(app(\App\Services\SetupContext::class)->workspaceId(), (int) $task->flow_job_id);
+                if ($warning) $successMessage .= ' '.$warning;
+            } catch (\Throwable $exception) {
+                report($exception); // Reminder feedback must not roll back artwork confirmation.
+            }
+        }
+
         $this->closeOrderWorkflowAction();
         $this->syncOverviewWorkflowSelectionToCurrentPhase();
         session()->flash('success', $successMessage);

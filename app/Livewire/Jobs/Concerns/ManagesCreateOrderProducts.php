@@ -112,14 +112,15 @@ trait ManagesCreateOrderProducts
         $supplierId = filled($supplierId) ? (int) $supplierId : 0;
         abort_unless($supplierId > 0, 422, 'Select a supplier.');
 
-        $supplier = MasterRecord::query()
-            ->forWorkspace(app(MasterDataService::class)->workspaceId())
-            ->ofType('supplier')
-            ->active()
-            ->findOrFail($supplierId, ['id', 'name', 'code', 'metadata', 'status']);
-
         $productId = (int) ($this->jobItems[$index]['product_id'] ?? 0);
         abort_unless($productId > 0, 422, 'That product row is no longer available.');
+
+        $catalog = app(\App\Services\ProductCatalogService::class);
+        $product = $catalog->findActiveProductOrFail($productId);
+        $supplier = $catalog->allSuppliersForProducts(collect([$product]))
+            ->get($productId, collect())
+            ->first(fn (MasterRecord $linked): bool => (int) $linked->id === $supplierId);
+        abort_unless($supplier, 422, 'Select a supplier linked to this product.');
 
         $this->jobItems[$index]['supplier_id'] = (int) $supplier->id;
         $this->createOrderSupplierOverrides[$productId] = (int) $supplier->id;

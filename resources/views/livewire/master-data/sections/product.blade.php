@@ -19,6 +19,7 @@
                 :client-availability-mode="$productClientAvailabilityMode"
                 :client-ids="$productClientIds"
                 :product-supplier-id="$productSupplierId"
+                :product-supplier-ids="$productSupplierIds"
                 :certificate-upload="$productCertificateUpload"
                 :template-upload="$productTemplateUpload"
                 :remove-certificate="$removeProductCertificate"
@@ -327,7 +328,7 @@
                     <x-suppliers.assign-products-modal
                         :suppliers="$bulkProductSupplierOptions"
                         :product-counts="$bulkProductSupplierProductCounts"
-                        :selected-supplier-id="$bulkProductSupplierId"
+                        :selected-supplier-ids="$bulkProductSupplierIds"
                         :selection-count="$productSelectionCount"
                     />
                 @elseif($bulkProductPanel === 'clients')

@@ -97,6 +97,7 @@ trait ManagesSupplierDetails
         $workspaceId = app(MasterDataService::class)->workspaceId();
         $supplier = $this->supplierRecord($this->supplierEditId);
 
+        $this->commitSupplierProductCodes();
         $data = $this->validate([
             'name' => [
                 'required',
@@ -114,11 +115,21 @@ trait ManagesSupplierDetails
             'supplierEditPhone' => ['nullable', 'string', 'max:80'],
             'supplierEditShortCode' => ['nullable', 'string', 'max:40'],
             'supplierEditStatus' => ['required', Rule::in(['active', 'inactive'])],
+            'supplierProductCodes' => ['array', 'max:250'],
+            'supplierProductCodes.*' => ['string', 'max:80'],
         ], [
             'name.required' => 'Supplier name is required.',
             'name.unique' => 'A supplier with this name already exists.',
             'supplierEditEmail.email' => 'Enter a valid email address.',
         ]);
+
+        abort_if($this->supplierProductCodes !== [] && ! auth()->user()?->canModule('catalog_products', 'edit'), 403);
+        $codeRows = $this->supplierCreateCodeRows($workspaceId);
+        $invalid = $codeRows->firstWhere('valid', false);
+        if ($invalid) {
+            $this->addError('supplierProductCodes', 'Correct or remove unknown product code: '.$invalid['code']);
+            return;
+        }
 
         $metadata = (array) ($supplier->metadata ?? []);
         foreach ([
@@ -140,18 +151,23 @@ trait ManagesSupplierDetails
         );
         unset($metadata['short_code_source']);
 
-        $supplier = app(SaveMasterRecordAction::class)->execute('supplier', [
-            'code' => trim((string) $supplier->code) !== ''
-                ? $supplier->code
-                : app(MasterDataService::class)->nextCode('supplier'),
-            'name' => trim((string) $data['name']),
-            'description' => $supplier->description,
-            'color' => null,
-            'parent_id' => null,
-            'status' => (string) $data['supplierEditStatus'],
-            'sort_order' => (int) $supplier->sort_order,
-            'metadata' => $metadata,
-        ], (int) $supplier->id);
+        $supplier = DB::transaction(function () use ($supplier, $data, $metadata, $workspaceId, $codeRows): MasterRecord {
+            $updated = app(SaveMasterRecordAction::class)->execute('supplier', [
+                'code' => trim((string) $supplier->code) !== ''
+                    ? $supplier->code
+                    : app(MasterDataService::class)->nextCode('supplier'),
+                'name' => trim((string) $data['name']),
+                'description' => $supplier->description,
+                'color' => null,
+                'parent_id' => null,
+                'status' => (string) $data['supplierEditStatus'],
+                'sort_order' => (int) $supplier->sort_order,
+                'metadata' => $metadata,
+            ], (int) $supplier->id);
+            $this->linkProductsToSupplier($workspaceId, $updated, $codeRows->where('valid', true)
+                ->pluck('product_id')->filter()->map(fn ($id) => (int) $id)->unique()->all());
+            return $updated;
+        });
 
         session()->flash('success', $supplier->name.' updated successfully.');
         $this->redirectRoute('master-data', [
@@ -178,6 +194,8 @@ trait ManagesSupplierDetails
         $this->supplierEditPhone = trim((string) data_get($supplier->metadata, 'phone'));
         $this->supplierEditShortCode = $supplier->supplierShortCode();
         $this->supplierEditStatus = $supplier->status === 'inactive' ? 'inactive' : 'active';
+        $this->supplierProductCodes = [];
+        $this->supplierCodeDraft = '';
         $this->resetValidation();
     }
 

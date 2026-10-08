@@ -1059,7 +1059,18 @@ class OrderWorkflowActionService
 
     private function complete(Task $task, User $actor): Task
     {
-        return app(TaskService::class)->moveStatus($task, app(OrderTaskFlagService::class)->completedStatus(), $actor);
+        $alreadyCompleted = (bool) $task->completed_at;
+        $key = $this->automationKey($task);
+        $completed = app(TaskService::class)->moveStatus($task, app(OrderTaskFlagService::class)->completedStatus(), $actor);
+        if (! $alreadyCompleted && $completed->completed_at && $key) {
+            // Optional notifications must never undo a successfully completed order action.
+            try {
+                app(\App\Services\Reminders\SupplierArtworkReminderService::class)->queueForCompletion($completed, $key);
+            } catch (\Throwable $exception) {
+                report($exception);
+            }
+        }
+        return $completed;
     }
 
     private function isCompletedWorkflowTask(Task $task): bool

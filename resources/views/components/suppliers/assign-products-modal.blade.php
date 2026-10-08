@@ -1,11 +1,12 @@
-@props(['suppliers' => collect(), 'productCounts' => collect(), 'selectedSupplierId' => null, 'selectionCount' => 0])
+@props(['suppliers' => collect(), 'productCounts' => collect(), 'selectedSupplierIds' => [], 'selectionCount' => 0])
 <x-catalog.bulk-modal
-    title="Assign supplier"
-    :subtitle="'Choose one supplier for '.number_format($selectionCount).' selected '.\Illuminate\Support\Str::plural('product', $selectionCount).'. Existing supplier links will be kept.'"
-    save-label="Assign supplier"
+    title="Assign suppliers"
+    :subtitle="'Choose suppliers for '.number_format($selectionCount).' selected '.\Illuminate\Support\Str::plural('product', $selectionCount).'. Existing supplier links will be kept.'"
+    save-label="Assign suppliers"
     save-action="applyBulkProductSupplier"
 >
     <div class="ft-supplier-assign-picker" x-data="{ q: '' }">
+        <small>Select multiple suppliers; click again to deselect.</small>
         <label class="ft-supplier-assign-search">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
             <input type="search" x-model="q" placeholder="Search suppliers" autocomplete="off" aria-label="Search suppliers">
@@ -14,7 +15,7 @@
         <div class="ft-supplier-assign-options">
             @forelse($suppliers as $supplier)
                 @php
-                    $selected = (int) $selectedSupplierId === (int) $supplier->id;
+                    $selected = in_array((int) $supplier->id, array_map('intval', $selectedSupplierIds), true);
                     $name = trim((string) $supplier->name);
                     $initials = collect(preg_split('/\s+/', $name) ?: [])->filter()->take(2)->map(fn ($part) => mb_strtoupper(mb_substr($part, 0, 1)))->implode('');
                     $contact = trim((string) data_get($supplier->metadata, 'contact_person'));
@@ -41,6 +42,7 @@
             @endforelse
         </div>
     </div>
-    <div class="ft-supplier-assign-note">This adds the supplier to each selected product. Existing supplier links and each product's current default supplier are preserved.</div>
-    @error('bulkProductSupplierId')<b class="validation-error">{{ $message }}</b>@enderror
+    <div class="ft-supplier-assign-note">This links all chosen suppliers to each selected product. Existing supplier links and each product's current default supplier are preserved.</div>
+    @error('bulkProductSupplierIds')<b class="validation-error">{{ $message }}</b>@enderror
+    @error('bulkProductSupplierIds.*')<b class="validation-error">{{ $message }}</b>@enderror
 </x-catalog.bulk-modal>

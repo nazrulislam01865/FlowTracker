@@ -757,7 +757,7 @@ trait BuildsMasterDataPageData
             $supplierDetailProducts = $this->supplierDetailProducts($workspaceId, $supplierDetail);
         }
 
-        $supplierCreateCodeRows = $this->group === 'supplier' && $this->supplierCreateMode
+        $supplierCreateCodeRows = $this->group === 'supplier' && ($this->supplierCreateMode || $this->supplierEditId)
             ? $this->supplierCreateCodeRows($workspaceId)
             : collect();
         $supplierCreateExamples = $this->group === 'supplier' && $this->supplierCreateMode

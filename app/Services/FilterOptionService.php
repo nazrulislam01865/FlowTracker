@@ -83,6 +83,47 @@ class FilterOptionService
         $page = max(1, min(10000, $page));
         $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
         $search = trim($search);
+
+        // This specific Create Order picker must never fall back to the whole
+        // Supplier directory. Resolve its small linked list only when opened.
+        if ($type === 'suppliers' && $context === 'create-order-product-supplier') {
+            abort_unless($user->canModule('jobs', 'create') && $user->canModule('catalog_products', 'view'), 403);
+            $productId = (int) ($constraints['product_id'] ?? 0);
+            abort_unless($productId > 0, 422, 'Select a product first.');
+
+            $catalog = app(ProductCatalogService::class);
+            $product = $catalog->findActiveProductOrFail($productId);
+            $linked = $catalog->allSuppliersForProducts(collect([$product]))->get($productId, collect());
+            $options = $linked->map(fn (MasterRecord $supplier): array => [
+                'id' => (string) $supplier->id,
+                'label' => $supplier->supplierShortCode() ?: (string) $supplier->name,
+                'meta' => (string) $supplier->name,
+            ])->values();
+            $selectedItems = $options->filter(fn (array $option): bool => in_array($option['id'], array_map('strval', $selectedIds), true))->values();
+
+            if ($search !== '' && mb_strlen($search) < self::MIN_SEARCH_LENGTH) {
+                $options = collect();
+            } elseif ($search !== '') {
+                $options = $options->filter(fn (array $option): bool =>
+                    mb_stripos($option['label'], $search) !== false
+                    || mb_stripos($option['meta'], $search) !== false
+                )->values();
+            }
+
+            $offset = ($page - 1) * $perPage;
+            $hasMore = $options->count() > $offset + $perPage;
+
+            return new FilterOptionPage(
+                items: $options->slice($offset, $perPage)->values(),
+                selectedItems: $selectedItems,
+                page: $page,
+                perPage: $perPage,
+                hasMore: $hasMore,
+                nextPage: $hasMore ? $page + 1 : null,
+                minSearchLength: self::MIN_SEARCH_LENGTH,
+            );
+        }
+
         $selectedItems = $this->selectedOptions($user, $type, $context, $selectedIds, $constraints);
 
         // An incomplete search must never fall back to unrelated "recent"
@@ -145,6 +186,21 @@ class FilterOptionService
         // existing single-row resolver semantics.
         if ($type === 'inquiries' && $context === 'create-job') {
             return $this->inquiriesByIds($user, $context, $selectedIds->all());
+        }
+        if ($type === 'suppliers' && $context === 'master-product' && $selectedIds->isNotEmpty()) {
+            $rows = MasterRecord::query()
+                ->forWorkspace(app(SetupContext::class)->workspaceId())
+                ->ofType('supplier')->active()->whereIn('id', $selectedIds->all())
+                ->get(['id', 'name', 'code', 'metadata', 'type'])->keyBy('id');
+
+            return $selectedIds->map(function ($id) use ($rows): ?array {
+                $supplier = $rows->get((int) $id);
+                return $supplier ? [
+                    'id' => (string) $supplier->id,
+                    'label' => $supplier->supplierShortCode(),
+                    'meta' => (string) $supplier->name,
+                ] : null;
+            })->filter()->values();
         }
 
         return $selectedIds

@@ -15,7 +15,7 @@
     <header class="ft-supplier-create-head ft-supplier-edit-head">
         <div>
             <h1>Edit supplier</h1>
-            <p>Update supplier contact information and availability without changing existing product links.</p>
+            <p>Update supplier details and link additional products without replacing existing assignments.</p>
         </div>
         <x-suppliers.status-badge :status="$supplierEditStatus" />
     </header>
@@ -60,7 +60,7 @@
             <x-suppliers.form-card
                 title="Assigned products"
                 :badge="number_format($products->count()).' linked'"
-                copy="Product relationships are managed from the Product catalogue so supplier editing never removes an existing link accidentally."
+                copy="See current assignments and add more product codes below. Existing supplier links remain unchanged."
             >
                 @if($products->isEmpty())
                     <div class="ft-supplier-edit-products-empty">No products are currently assigned to this supplier.</div>
@@ -76,6 +76,28 @@
                             <span class="ft-supplier-edit-product-more">+{{ $products->count() - 12 }} more</span>
                         @endif
                     </div>
+                @endif
+
+                @if(auth()->user()->canModule('catalog_products', 'edit'))
+                    <x-suppliers.field label="Link more products by code" error="supplierProductCodes" wide>
+                        <div class="ft-supplier-codebox" x-data x-on:click="$refs.productCodeInput.focus()">
+                            @foreach($supplierCreateCodeRows as $row)
+                                <button type="button" class="ft-supplier-code-token {{ $row['valid'] ? '' : 'is-invalid' }}"
+                                    wire:click.stop="removeSupplierProductCode('{{ $row['code'] }}')" title="Remove {{ $row['code'] }}">
+                                    <span>{{ $row['code'] }}</span>
+                                    @if(!$row['valid'])<small>not found</small>@endif
+                                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="m7 7 10 10M17 7 7 17"/></svg>
+                                </button>
+                            @endforeach
+                            <input x-ref="productCodeInput" wire:model="supplierCodeDraft"
+                                wire:keydown.enter.prevent="commitSupplierProductCodes"
+                                wire:keydown.tab="commitSupplierProductCodes"
+                                wire:blur="commitSupplierProductCodes"
+                                x-on:paste="setTimeout(() => $wire.commitSupplierProductCodes($refs.productCodeInput.value), 0)"
+                                type="text" placeholder="PRD-000123, PRD-000456" aria-label="Add product codes" autocomplete="off">
+                        </div>
+                        <small>Enter one or more product codes. Existing product–supplier links remain in place.</small>
+                    </x-suppliers.field>
                 @endif
 
                 @if(auth()->user()->canModule('catalog_products', 'view'))

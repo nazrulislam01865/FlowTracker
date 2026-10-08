@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\AdministrationController;
+use App\Http\Controllers\SupplierArtworkReminderController;
 use App\Http\Controllers\Auth\AuthController;
 use App\Http\Controllers\ArtworkChunkUploadController;
 use App\Http\Controllers\BoardController;
@@ -119,6 +120,16 @@ if ((bool) config('flowtrack.order_tracking_enabled', false)) {
 Route::get('/session/status', function () {
     return response()->json(['ok' => true, 'user_id' => auth()->id()]);
 })->middleware('auth')->name('session.status');
+
+Route::middleware(['auth', 'super.admin'])->prefix('administration/reminders/supplier-artwork')->name('supplier-reminder.')->group(function () {
+    Route::get('/', [SupplierArtworkReminderController::class, 'index'])->name('index');
+    Route::post('/create', [SupplierArtworkReminderController::class, 'create'])->name('create');
+    Route::post('/save', [SupplierArtworkReminderController::class, 'save'])->name('save');
+    Route::post('/pause', [SupplierArtworkReminderController::class, 'pause'])->name('pause');
+    Route::post('/preview', [SupplierArtworkReminderController::class, 'preview'])->name('preview');
+    Route::post('/test', [SupplierArtworkReminderController::class, 'test'])->middleware('throttle:3,1')->name('test');
+    Route::get('/history', [SupplierArtworkReminderController::class, 'history'])->name('history');
+});
 
 Route::middleware('auth')->group(function () {
     if ((bool) config('flowtrack.order_tracking_enabled', false)) {

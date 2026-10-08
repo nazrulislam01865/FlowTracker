@@ -12,6 +12,7 @@ use App\Services\ProductPriceTableParser;
 use App\Services\ProductCategoryDeletionService;
 use App\Support\MasterColor;
 use App\Support\AttachmentUpload;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
@@ -47,6 +48,7 @@ trait ManagesMasterEditor
         $this->productCategorySearch = '';
         $this->newProductCategoryName = '';
         $this->productSupplierId = null;
+        $this->productSupplierIds = [];
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
         $this->productOptions = [];
@@ -81,6 +83,17 @@ trait ManagesMasterEditor
             $this->description = (string) $r->description;
             $this->productReferenceCode = $r->productReferenceCode();
             $this->productSupplierId = $r->productSupplierId();
+            if ($this->group === 'product') {
+                $linkedIds = collect($r->productSupplierIds());
+                if (Schema::hasTable('product_supplier_links')) {
+                    $linkedIds = $linkedIds->merge(DB::table('product_supplier_links')
+                        ->where('workspace_id', $service->workspaceId())
+                        ->where('product_id', $r->id)
+                        ->pluck('supplier_id'));
+                }
+                $this->productSupplierIds = $linkedIds->map(fn ($id) => (int) $id)
+                    ->filter()->unique()->values()->all();
+            }
             $this->productFormMainCategory = $r->productMainCategory();
             $this->productSize = $r->productSize();
             $this->productPriceTable = trim((string) data_get($r->metadata, 'price_table_raw'));
@@ -210,6 +223,7 @@ Remote Area charge	".$remoteRow;
         if ($this->group === 'product') {
             $this->productReferenceCode = '';
             $this->productSupplierId = null;
+            $this->productSupplierIds = [];
             $this->productFormMainCategory = '';
             $this->productSize = '';
             $this->productPriceTable = '';
@@ -325,6 +339,15 @@ Remote Area charge	".$remoteRow;
             'productSupplierId' => $this->group === 'product' ? [
                 'nullable',
                 'integer',
+                Rule::exists('master_records', 'id')->where(fn ($q) => $q
+                    ->where('workspace_id', $workspaceId)
+                    ->where('type', 'supplier')
+                    ->where('status', 'active')
+                    ->whereNull('deleted_at')),
+            ] : ['nullable'],
+            'productSupplierIds' => $this->group === 'product' ? ['array', 'max:100'] : ['array'],
+            'productSupplierIds.*' => $this->group === 'product' ? [
+                'required', 'integer', 'distinct',
                 Rule::exists('master_records', 'id')->where(fn ($q) => $q
                     ->where('workspace_id', $workspaceId)
                     ->where('type', 'supplier')
@@ -550,21 +573,18 @@ Remote Area charge	".$remoteRow;
         if ($this->group === 'product') {
             $metadata ??= [];
             $metadata['reference_code'] = trim((string) $data['productReferenceCode']);
+            $linkedSupplierIds = collect($data['productSupplierIds'] ?? [])
+                ->map(fn ($id) => (int) $id)->filter()->unique();
             if (filled($data['productSupplierId'] ?? null)) {
                 $defaultSupplierId = (int) $data['productSupplierId'];
                 $metadata['supplier_id'] = $defaultSupplierId;
                 unset($metadata['default_supplier_id']);
-                $metadata['supplier_ids'] = collect((array) ($metadata['supplier_ids'] ?? []))
-                    ->map(fn ($id) => (int) $id)
-                    ->filter(fn (int $id) => $id > 0)
-                    ->prepend($defaultSupplierId)
-                    ->unique()
-                    ->values()
-                    ->all();
+                // Choosing the default supplier also links it to this product.
+                $linkedSupplierIds->push($defaultSupplierId);
             } else {
-                // Clearing the default supplier must not destroy other supplier links.
                 unset($metadata['supplier_id'], $metadata['default_supplier_id']);
             }
+            $metadata['supplier_ids'] = $linkedSupplierIds->unique()->values()->all();
             $metadata['main_category'] = trim((string) $data['productFormMainCategory']);
             $metadata['product_size'] = trim((string) $data['productSize']) ?: null;
             if ($productPriceBreakpoints !== []) {
@@ -636,16 +656,36 @@ Remote Area charge	".$remoteRow;
         }
 
         $wasCreating = !$this->editId;
-        $record = app(\App\Actions\MasterData\SaveMasterRecordAction::class)->execute($this->group, [
-            'code' => $data['code'],
-            'name' => $data['name'],
-            'description' => $data['description'],
-            'color' => in_array($this->group, MasterDataService::COLOR_TYPES, true) ? strtoupper($data['color']) : null,
-            'parent_id' => in_array($this->group, ['product', 'state'], true) ? $data['parentId'] : null,
-            'status' => $data['status'],
-            'sort_order' => $data['sortOrder'],
-            'metadata' => $metadata,
-        ], $this->editId);
+        $saveRecord = function () use ($data, $metadata, $workspaceId) {
+            $record = app(\App\Actions\MasterData\SaveMasterRecordAction::class)->execute($this->group, [
+                'code' => $data['code'],
+                'name' => $data['name'],
+                'description' => $data['description'],
+                'color' => in_array($this->group, MasterDataService::COLOR_TYPES, true) ? strtoupper($data['color']) : null,
+                'parent_id' => in_array($this->group, ['product', 'state'], true) ? $data['parentId'] : null,
+                'status' => $data['status'],
+                'sort_order' => $data['sortOrder'],
+                'metadata' => $metadata,
+            ], $this->editId);
+
+            if ($this->group === 'product' && Schema::hasTable('product_supplier_links')) {
+                $supplierIds = collect($metadata['supplier_ids'])->map(fn ($id) => (int) $id)->all();
+                $links = DB::table('product_supplier_links')
+                    ->where('workspace_id', $workspaceId)
+                    ->where('product_id', $record->id);
+                $supplierIds === [] ? $links->delete() : $links->whereNotIn('supplier_id', $supplierIds)->delete();
+                $now = now();
+                DB::table('product_supplier_links')->insertOrIgnore(array_map(fn (int $supplierId): array => [
+                    'workspace_id' => $workspaceId,
+                    'product_id' => $record->id,
+                    'supplier_id' => $supplierId,
+                    'created_at' => $now,
+                    'updated_at' => $now,
+                ], $supplierIds));
+            }
+            return $record;
+        };
+        $record = $this->group === 'product' ? DB::transaction($saveRecord) : $saveRecord();
 
         if ($this->group === 'product') {
             try {

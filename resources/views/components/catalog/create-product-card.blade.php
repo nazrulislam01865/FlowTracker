@@ -62,8 +62,9 @@
                 <x-ui.search-select
                     label="Supplier"
                     type="suppliers"
-                    context="create-job"
+                    context="create-order-product-supplier"
                     property="create-order-item-supplier:{{ $index }}"
+                    :params="['product_id' => (int) ($item['product_id'] ?? 0)]"
                     :value="$supplier?->id"
                     :selected-label="$supplierLabel !== '' ? $supplierLabel : null"
                     placeholder="Select supplier"

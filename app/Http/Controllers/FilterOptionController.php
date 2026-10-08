@@ -21,6 +21,7 @@ class FilterOptionController
             'client_id' => ['nullable', 'integer', 'exists:clients,id'],
             'parent_type' => ['nullable', 'string', 'in:job,inquiry'],
             'parent_id' => ['nullable', 'integer'],
+            'product_id' => ['nullable', 'integer', 'min:1'],
             // Comma-separated ids used by lightweight add-one-at-a-time remote
             // pickers to omit values already selected in the current form.
             'exclude_ids' => ['nullable', 'string', 'max:1200'],
@@ -65,6 +66,7 @@ class FilterOptionController
                 'client_id' => (int) ($data['client_id'] ?? 0) ?: null,
                 'parent_type' => (string) ($data['parent_type'] ?? ''),
                 'parent_id' => (int) ($data['parent_id'] ?? 0) ?: null,
+                'product_id' => (int) ($data['product_id'] ?? 0) ?: null,
                 'exclude_ids' => collect(explode(',', (string) ($data['exclude_ids'] ?? '')))
                     ->map(fn ($value) => trim($value))
                     ->filter(fn ($value) => ctype_digit($value) && (int) $value > 0)

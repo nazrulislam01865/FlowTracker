@@ -59,6 +59,8 @@ class Index extends Component
     public string $productStatus = '';
     public string $productReferenceCode = '';
     public ?int $productSupplierId = null;
+    /** @var array<int,int|string> */
+    public array $productSupplierIds = [];
     public ?int $productSupplierFilterId = null;
     public string $productSupplierState = '';
     public string $productFormMainCategory = '';
@@ -147,7 +149,8 @@ class Index extends Component
     public string $bulkProductMainCategory = '';
     public ?int $bulkProductCategoryId = null;
     public string $bulkProductSubcategory = '';
-    public ?int $bulkProductSupplierId = null;
+    /** @var array<int,int> */
+    public array $bulkProductSupplierIds = [];
 
     // Product Category hierarchy page state.
     public string $categoryLevelFilter = '';
