@@ -4,6 +4,7 @@ namespace App\Livewire\Inquiries\Concerns;
 
 use App\Models\Inquiry;
 use App\Models\InquiryItem;
+use App\Models\MasterRecord;
 use App\Services\AccessControlService;
 use App\Services\MasterDataService;
 use Livewire\Attributes\Json;
@@ -45,8 +46,13 @@ trait ManagesInquiryProducts
         }
 
         $quantity = max(1, (int) round((float) ($item->quantity ?? 1)));
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $selectedSupplierId = (int) ($item->supplier_id ?? 0) ?: $product?->productSupplierId();
+        $basePrice = $product?->productPriceForQuantity($quantity, $selectedSupplierId);
 
+        $this->editInquiryProductSupplierId = $selectedSupplierId;
+        $supplier = $selectedSupplierId ? MasterRecord::query()->forWorkspace((int)$inquiry->workspace_id)
+            ->ofType('supplier')->find($selectedSupplierId) : null;
+        $this->editInquiryProductSupplierLabel = $supplier?->supplierShortCode() ?: '';
         $this->editInquiryProductItemId = (int) $item->id;
         $this->editInquiryProductSelectedId = $product ? (int) $product->id : null;
         $this->editInquiryProductSearch = '';
@@ -75,6 +81,8 @@ trait ManagesInquiryProducts
     {
         $this->editInquiryProductItemId = null;
         $this->editInquiryProductSelectedId = null;
+        $this->editInquiryProductSupplierId = null;
+        $this->editInquiryProductSupplierLabel = '';
         $this->editInquiryProductSearch = '';
         $this->editInquiryProductShowAllResults = false;
         $this->editInquiryProductCategory = '';
@@ -137,7 +145,10 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail($productId);
         $quantity = max(1, (int) $this->editInquiryProductQuantity);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $supplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
+        $this->editInquiryProductSupplierId = $supplier?->id;
+        $this->editInquiryProductSupplierLabel = $supplier?->supplierShortCode() ?: '';
+        $basePrice = $product->productPriceForQuantity($quantity, $this->editInquiryProductSupplierId);
 
         $this->editInquiryProductSelectedId = (int) $product->id;
         $this->editInquiryProductSearch = (string) $product->name;
@@ -170,11 +181,53 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->editInquiryProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, $this->editInquiryProductSupplierId);
         $this->editInquiryProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
         $this->resetValidation('editInquiryProductUnitPrice');
+    }
+
+    public function updateEditInquiryProductSupplierFromSelector(string $property, mixed $supplierId): array
+    {
+        abort_unless($property === 'editInquiryProductSupplierId' && $this->editInquiryProductSelectedId, 422);
+        return $this->selectInquiryPricingSupplier($supplierId, true);
+    }
+
+    public function updateAddInquiryProductSupplierFromSelector(string $property, mixed $supplierId): array
+    {
+        abort_unless($property === 'inquiryProductSupplierId' && $this->showAddInquiryProductForm && $this->inquiryProductSelectedId, 422);
+        return $this->selectInquiryPricingSupplier($supplierId, false);
+    }
+
+    private function selectInquiryPricingSupplier(mixed $supplierId, bool $editing): array
+    {
+        $user = auth()->user();
+        $inquiry = $this->selectedInquiry();
+        abort_unless($user->canModule('catalog_products', $editing ? 'edit' : 'create')
+            && app(\App\Queries\Inquiries\InquiryDetailQuery::class)->canEdit($user, $inquiry)
+            && !$inquiry->result, 403);
+        $product = app(\App\Services\ProductCatalogService::class)->findActiveProductOrFail(
+            (int) ($editing ? $this->editInquiryProductSelectedId : $this->inquiryProductSelectedId)
+        );
+        $supplierId = (int) $supplierId;
+        abort_unless($product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+        $supplier = MasterRecord::query()->forWorkspace((int)$inquiry->workspace_id)
+            ->ofType('supplier')->active()->findOrFail($supplierId);
+        $quantity = max(1, (int)($editing ? $this->editInquiryProductQuantity : $this->inquiryProductQuantity));
+        $price = $product->productPriceForQuantity($quantity, $supplierId);
+        if ($editing) {
+            $this->editInquiryProductSupplierId = $supplierId;
+            $this->editInquiryProductSupplierLabel = $supplier->supplierShortCode();
+            $this->editInquiryProductUnitPrice = $price !== null ? number_format($price, 2, '.', '') : '';
+        } else {
+            $this->inquiryProductSupplierId = $supplierId;
+            $this->inquiryProductSupplierLabel = $supplier->supplierShortCode();
+            $this->inquiryProductUnitPrice = $price !== null ? number_format($price, 2, '.', '') : '';
+        }
+        $this->dispatch('detail-product-edit-supplier-selected');
+        $this->dispatch('create-order-product-supplier-selected');
+        return ['ok' => true, 'value' => (string)$supplierId, 'label' => $supplier->supplierShortCode()];
     }
 
     public function saveEditInquiryProduct(): void
@@ -192,6 +245,7 @@ trait ManagesInquiryProducts
 
         $data = $this->validate([
             'editInquiryProductSelectedId' => ['required', 'integer', 'min:1'],
+            'editInquiryProductSupplierId' => ['nullable', 'integer'],
             'editInquiryProductQuantity' => ['required', 'integer', 'min:1', 'max:999999999'],
             'editInquiryProductUnitPrice' => ['required', 'numeric', 'min:0', 'max:999999999999.99'],
             'editInquiryProductNotes' => ['nullable', 'string', 'max:2000'],
@@ -212,47 +266,18 @@ trait ManagesInquiryProducts
             ->where('inquiry_id', $inquiry->id)
             ->findOrFail($this->editInquiryProductItemId);
 
-        $duplicate = $inquiry->items()
-            ->where('id', '!=', $item->id)
-            ->whereRaw('LOWER(item_name) = ?', [mb_strtolower((string) $product->name)])
-            ->exists();
-        if ($duplicate) {
-            $this->addError('editInquiryProductSelectedId', 'This product is already added to the Inquiry.');
-            return;
-        }
-
-        $action = app(\App\Actions\Inquiries\UpdateInquiryItem::class);
-        $originalCategory = (string) ($item->category ?? '');
-        $originalProduct = (string) ($item->item_name ?? '');
-
-        if ($category !== $originalCategory) {
-            $action->handle($inquiry, $item, 'category', $category, $user);
-            $item = $item->refresh();
-        }
-        if ($category !== $originalCategory || $product->name !== $originalProduct) {
-            $action->handle($inquiry, $item, 'item_name', (string) $product->name, $user);
-            $item = $item->refresh();
-        }
-
+        $supplierId = (int) ($data['editInquiryProductSupplierId'] ?? 0);
         $quantity = (int) $data['editInquiryProductQuantity'];
-        if ($quantity !== (int) round((float) ($item->quantity ?? 0))) {
-            $action->handle($inquiry, $item, 'quantity', $quantity, $user);
-            $item = $item->refresh();
-        }
-
-        $basePrice = $product->productPriceForQuantity($quantity);
-        $unitPrice = round((float) ($basePrice ?? $data['editInquiryProductUnitPrice']), 2);
-        $currentUnitPrice = $item->unit_price !== null ? round((float) $item->unit_price, 2) : null;
-        if ($unitPrice !== $currentUnitPrice) {
-            $action->handle($inquiry, $item, 'unit_price', $unitPrice, $user);
-            $item = $item->refresh();
-        }
-
-        $notes = trim((string) ($data['editInquiryProductNotes'] ?? ''));
-        $currentNotes = trim((string) ($item->notes ?? ''));
-        if ($notes !== $currentNotes) {
-            $action->handle($inquiry, $item, 'notes', $notes, $user);
-        }
+        app(\App\Services\LegacyInquiryService::class)->updateProductItemDetails(
+            $inquiry,
+            $item,
+            $product,
+            $supplierId ?: null,
+            $quantity,
+            (float) $data['editInquiryProductUnitPrice'],
+            trim((string) ($data['editInquiryProductNotes'] ?? '')),
+            $user
+        );
 
         $this->closeEditInquiryProduct();
         session()->flash('success', 'Inquiry product updated.');
@@ -388,7 +413,9 @@ trait ManagesInquiryProducts
         }
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $this->inquiryProductSupplierId = $linkedSupplier?->id;
+        $this->inquiryProductSupplierLabel = $linkedSupplier?->supplierShortCode() ?: '';
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, $this->inquiryProductSupplierId);
 
         $this->inquiryProductSelectedId = (int) $product->id;
         $this->inquiryProductCategory = $category !== '' ? $category : 'Uncategorized';
@@ -419,7 +446,7 @@ trait ManagesInquiryProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->inquiryProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, $this->inquiryProductSupplierId);
         $this->inquiryProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -471,7 +498,11 @@ trait ManagesInquiryProducts
             return;
         }
 
-        $basePrice = $product->productPriceForQuantity((int) $data['inquiryProductQuantity']);
+        $supplierId = (int) ($this->inquiryProductSupplierId ?? 0);
+        abort_if($supplierId && !$product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+        abort_if(!$supplierId && $product->productSupplierId() && $product->hasProductPricing(), 422, 'Select a supplier with a configured price table.');
+        $basePrice = $product->productPriceForQuantity((int) $data['inquiryProductQuantity'], $supplierId ?: null);
+        abort_if($basePrice === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at this quantity.');
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['inquiryProductUnitPrice'];
@@ -483,6 +514,7 @@ trait ManagesInquiryProducts
             (int) $data['inquiryProductQuantity'],
             $user,
             $resolvedUnitPrice,
+            $supplierId ?: null,
         );
 
         $this->closeAddInquiryProductForm();

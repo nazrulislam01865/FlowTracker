@@ -66,6 +66,8 @@ class Index extends Component
     public string $productFormMainCategory = '';
     public string $productSize = '';
     public string $productPriceTable = '';
+    /** Supplier ID => pasted Excel price table, loaded only for selected suppliers. */
+    public array $productSupplierPriceTables = [];
     public array $productPricePreview = [];
     public array $productRemoteSurchargePreview = [];
     public array $productOptions = [];

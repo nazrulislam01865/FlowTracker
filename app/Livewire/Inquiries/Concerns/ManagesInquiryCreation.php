@@ -353,6 +353,7 @@ trait ManagesInquiryCreation
             ->map(fn (array $row): array => [
                 'row_key' => trim((string) ($row['row_key'] ?? '')),
                 'product_id' => (int) ($row['product_id'] ?? 0),
+                'supplier_id' => (int) ($row['supplier_id'] ?? 0) ?: null,
                 'category' => trim((string) ($row['category'] ?? '')),
                 'product' => trim((string) ($row['product'] ?? '')),
                 'quantity' => $row['quantity'] ?? 1,
@@ -386,6 +387,7 @@ trait ManagesInquiryCreation
             'createWorkflowId' => ['required', 'exists:workflow_templates,id'],
             'createProductRows' => ['array', 'max:25'],
             'createProductRows.*.product_id' => ['required', 'integer'],
+            'createProductRows.*.supplier_id' => ['nullable', 'integer'],
             'createProductRows.*.category' => ['required', 'string', 'max:255'],
             'createProductRows.*.product' => ['required', 'string', 'max:255'],
             'createProductRows.*.quantity' => ['required', 'integer', 'min:1', 'max:999999999'],
@@ -477,7 +479,23 @@ trait ManagesInquiryCreation
             // Re-resolve it at save time so the stored base price always follows
             // the Product quantity price table, even if browser state is stale.
             $quantity = (int) ($row['quantity'] ?? 0);
-            $basePrice = $product->productPriceForQuantity($quantity);
+            $supplierId = (int) ($row['supplier_id'] ?? 0);
+            if ($supplierId && !$product->hasProductSupplier($supplierId)) {
+                $catalogInvalid = true;
+                $this->addError("createProductRows.$index.supplier_id", 'Supplier is not linked to this product.');
+                continue;
+            }
+            if (!$supplierId && $product->productSupplierId() && $product->hasProductPricing()) {
+                $catalogInvalid = true;
+                $this->addError("createProductRows.$index.supplier_id", 'Select a supplier with a configured price table.');
+                continue;
+            }
+            $basePrice = $product->productPriceForQuantity($quantity, $supplierId ?: null);
+            if ($basePrice === null && $product->hasProductPricing()) {
+                $catalogInvalid = true;
+                $this->addError("createProductRows.$index.supplier_id", 'No price table is configured for this supplier at this quantity.');
+                continue;
+            }
             $data['createProductRows'][$index]['unit_price'] = $basePrice !== null
                 ? round($basePrice, 2)
                 : null;
@@ -518,6 +536,7 @@ trait ManagesInquiryCreation
             'items' => array_map(fn (array $row): array => [
                 'category' => trim((string) $row['category']),
                 'name' => trim((string) $row['product']),
+                'supplier_id' => (int) ($row['supplier_id'] ?? 0) ?: null,
                 'quantity' => (int) $row['quantity'],
                 'unit_price' => filled($row['unit_price'] ?? null) ? round((float) $row['unit_price'], 2) : null,
                 'unit' => trim((string) ($row['unit'] ?? 'units')) ?: 'units',

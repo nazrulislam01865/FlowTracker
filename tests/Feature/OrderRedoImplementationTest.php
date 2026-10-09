@@ -102,7 +102,7 @@ class OrderRedoImplementationTest extends TestCase
         $modal = file_get_contents($root.'/resources/views/components/jobs/order-detail/redo-modal.blade.php');
 
         self::assertStringContainsString("->with(['catalogProduct:id,type,metadata'])", $service);
-        self::assertStringContainsString('productPriceForQuantity($quantity)', $service);
+        self::assertStringContainsString('productPriceForQuantity($quantity, (int) ($item->supplier_id ?? 0) ?: null)', $service);
         self::assertStringContainsString("->whereNotIn('status', ['draft', 'cancelled'])", $service);
         self::assertStringContainsString("wire:model.live.debounce.250ms=\"redoCustomerDiscount\"", $modal);
         self::assertStringContainsString("wire:model.live.debounce.250ms=\"redoSupplierChargePercent\"", $modal);

@@ -13,8 +13,8 @@ final class AddInquiryItem
     {
     }
 
-    public function handle(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor, ?float $unitPrice = null): InquiryItem
+    public function handle(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor, ?float $unitPrice = null, ?int $supplierId = null): InquiryItem
     {
-        return $this->inquiries->addItem($inquiry, $category, $product, $quantity, $actor, $unitPrice);
+        return $this->inquiries->addItem($inquiry, $category, $product, $quantity, $actor, $unitPrice, $supplierId);
     }
 }

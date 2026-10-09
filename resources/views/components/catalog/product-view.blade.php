@@ -10,6 +10,11 @@
     // These helpers can parse legacy metadata and build large arrays. Keep that
     // CPU/HTML work behind viewport boundaries instead of doing it above fold.
     $priceBreakpoints = $pricingReady ? collect($product->productPriceBreakpoints()) : collect();
+    $supplierPricing = $pricingReady ? collect($suppliers)->map(fn ($supplier) => [
+        'supplier' => $supplier,
+        'breakpoints' => collect($product->productPriceBreakpoints((int) $supplier->id)),
+        'remote' => collect($product->productRemoteSurchargeBreakpoints((int) $supplier->id))->keyBy('quantity'),
+    ])->filter(fn ($row) => $row['breakpoints']->isNotEmpty()) : collect();
     $remoteSurchargeBreakpoints = $pricingReady ? collect($product->productRemoteSurchargeBreakpoints())->keyBy('quantity') : collect();
     $productOptions = $optionsReady ? collect($product->productOptions()) : collect();
     $shipmentUrgencyOptions = $optionsReady ? collect($product->productShipmentUrgencyOptions()) : collect();
@@ -83,8 +88,21 @@
     </x-catalog.product-section>
 
     @if($pricingReady)
-    @if($priceBreakpoints->isNotEmpty())
+    @if($supplierPricing->isNotEmpty() || $priceBreakpoints->isNotEmpty())
         <x-catalog.product-section title="Product pricing">
+            @foreach($supplierPricing as $supplierPrice)
+                <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap" style="margin-bottom:1rem">
+                    <strong>{{ $supplierPrice['supplier']->supplierShortCode() }} · {{ $supplierPrice['supplier']->name }} @if((int)$supplierPrice['supplier']->id === (int)$product->productSupplierId()) (Default) @endif</strong>
+                    <table class="ft-product-price-preview"><thead><tr><th>Quantity</th>@foreach($supplierPrice['breakpoints'] as $row)<th>{{ number_format($row['quantity']) }}</th>@endforeach</tr></thead>
+                    <tbody>
+                        <tr><th>Product price</th>@foreach($supplierPrice['breakpoints'] as $row)<td>{{ $row['price'] }}</td>@endforeach</tr>
+                        @if($supplierPrice['remote']->isNotEmpty())
+                            <tr><th>Remote surcharge</th>@foreach($supplierPrice['breakpoints'] as $row)<td>{{ data_get($supplierPrice['remote']->get($row['quantity']), 'price', '—') }}</td>@endforeach</tr>
+                        @endif
+                    </tbody></table>
+                </div>
+            @endforeach
+            @if($supplierPricing->isEmpty())
             <div class="ft-product-price-preview-wrap ft-product-detail-price-wrap">
                 <table class="ft-product-price-preview">
                     <thead>
@@ -116,6 +134,7 @@
                     </tbody>
                 </table>
             </div>
+            @endif
         </x-catalog.product-section>
     @endif
     @else

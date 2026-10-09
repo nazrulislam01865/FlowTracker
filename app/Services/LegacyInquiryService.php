@@ -852,6 +852,7 @@ class LegacyInquiryService
             foreach (array_values($data['items'] ?? []) as $index => $item) {
                 InquiryItem::create([
                     'inquiry_id' => $inquiry->id,
+                    'supplier_id' => ($item['supplier_id'] ?? null) ?: null,
                     'category' => ($item['category'] ?? null) ?: null,
                     'item_name' => trim((string) $item['name']),
                     'quantity' => $item['quantity'],
@@ -948,7 +949,7 @@ class LegacyInquiryService
     {
         abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
         abort_unless((int) $item->inquiry_id === (int) $inquiry->id, 404);
-        abort_unless(in_array($field, ['category', 'item_name', 'quantity', 'unit_price', 'notes'], true), 422, 'This Inquiry product field cannot be edited inline.');
+        abort_unless(in_array($field, ['category', 'item_name', 'supplier_id', 'quantity', 'unit_price', 'notes'], true), 422, 'This Inquiry product field cannot be edited inline.');
 
         $saved = DB::transaction(function () use ($inquiry, $item, $field, $value, $actor): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
@@ -964,7 +965,16 @@ class LegacyInquiryService
             $wasDraft = blank($lockedItem->item_name);
             $originalCategory = (string) ($lockedItem->category ?? '');
 
-            if ($field === 'quantity') {
+            if ($field === 'supplier_id') {
+                $value = (int) $value;
+                abort_unless($value > 0, 422, 'Select a supplier for this product.');
+                $product = app(ProductCatalogService::class)->activeProductsQuery()
+                    ->where('name', (string) $lockedItem->item_name)
+                    ->when(filled($lockedItem->category), fn ($query) => $query->whereHas('parent',
+                        fn ($parent) => $parent->where('name', (string) $lockedItem->category)))
+                    ->first();
+                abort_unless($product && $product->hasProductSupplier($value), 422, 'Supplier is not linked to this product.');
+            } elseif ($field === 'quantity') {
                 $value = (int) $value;
                 abort_if($value < 1 || $value > 999999999, 422, 'Quantity must be at least 1.');
             } elseif ($field === 'unit_price') {
@@ -1000,7 +1010,20 @@ class LegacyInquiryService
                 abort_unless($validProduct, 422, 'Select a valid active product for this category.');
             }
 
-            $lockedItem->update([$field => $value]);
+            if (in_array($field, ['supplier_id', 'quantity'], true)) {
+                $product = isset($product) ? $product : app(ProductCatalogService::class)->activeProductsQuery()
+                    ->where('name', (string) $lockedItem->item_name)
+                    ->when(filled($lockedItem->category), fn ($query) => $query->whereHas('parent',
+                        fn ($parent) => $parent->where('name', (string) $lockedItem->category)))
+                    ->first();
+                $supplier = $field === 'supplier_id' ? (int) $value : ((int) ($lockedItem->supplier_id ?? 0) ?: null);
+                $quantity = $field === 'quantity' ? (int) $value : (int) $lockedItem->quantity;
+                $resolved = $product?->productPriceForQuantity($quantity, $supplier);
+                abort_if($product && $resolved === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at the selected quantity.');
+                $lockedItem->update([$field => $value, 'unit_price' => $resolved !== null ? round($resolved, 2) : $lockedItem->unit_price]);
+            } else {
+                $lockedItem->update([$field => $value]);
+            }
 
             // Category and product are dependent. Never leave a product selected
             // from the previous category after an inline category change.
@@ -1039,10 +1062,64 @@ class LegacyInquiryService
         return $saved;
     }
 
-    public function addItem(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor, ?float $unitPrice = null): InquiryItem
+    /** Save a product, supplier and quantity together so no intermediate supplier rate is applied. */
+    public function updateProductItemDetails(
+        Inquiry $inquiry,
+        InquiryItem $item,
+        MasterRecord $product,
+        ?int $supplierId,
+        int $quantity,
+        float $fallbackPrice,
+        string $notes,
+        User $actor
+    ): InquiryItem {
+        abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'edit'), 403);
+        abort_unless($quantity >= 1 && $quantity <= 999999999, 422, 'Quantity must be between 1 and 999999999.');
+        abort_unless($product->type === 'product' && $product->status === 'active'
+            && (int) $product->workspace_id === (int) $inquiry->workspace_id, 422, 'Invalid product.');
+        abort_if($supplierId && ! $product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+        abort_if(!$supplierId && $product->productSupplierId() && $product->hasProductPricing(), 422, 'Select a supplier with a configured price table.');
+        abort_if(mb_strlen($notes) > 2000, 422, 'Product notes may not exceed 2000 characters.');
+        $price = $product->productPriceForQuantity($quantity, $supplierId);
+        abort_if($price === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at the selected quantity.');
+        $price = round($price ?? $fallbackPrice, 2);
+        abort_if($price < 0 || $price > 999999999999.99, 422, 'Unit price is outside the allowed range.');
+        $category = trim((string) ($product->parent?->name ?? ''));
+        abort_if($category === '', 422, 'Select an active product category.');
+
+        $saved = DB::transaction(function () use ($inquiry, $item, $product, $supplierId, $quantity, $price, $notes, $category, $actor): InquiryItem {
+            $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
+            abort_unless($this->canEdit($actor, $lockedInquiry), 403);
+            abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
+            $lockedItem = InquiryItem::query()->where('inquiry_id', $lockedInquiry->id)
+                ->lockForUpdate()->findOrFail($item->id);
+            $duplicate = $lockedInquiry->items()
+                ->where('id', '!=', $lockedItem->id)
+                ->whereRaw('LOWER(item_name) = ?', [mb_strtolower((string) $product->name)])
+                ->exists();
+            abort_if($duplicate, 422, 'This product is already added to the Inquiry.');
+            $lockedItem->update([
+                'category' => $category,
+                'item_name' => (string) $product->name,
+                'supplier_id' => $supplierId,
+                'quantity' => $quantity,
+                'unit_price' => $price,
+                'notes' => $notes !== '' ? $notes : null,
+            ]);
+            $this->activity($lockedInquiry, $actor, 'inquiry.product_updated', 'Inquiry product details updated.');
+            $lockedInquiry->touch();
+            return $lockedItem->refresh();
+        }, 3);
+
+        app(DashboardService::class)->forget($actor->id);
+        app(ReportService::class)->forget($actor->id);
+        return $saved;
+    }
+
+    public function addItem(Inquiry $inquiry, string $category, string $product, int $quantity, User $actor, ?float $unitPrice = null, ?int $supplierId = null): InquiryItem
     {
         abort_unless(app(AccessControlService::class)->can($actor, 'catalog_products', 'view') && app(AccessControlService::class)->can($actor, 'catalog_products', 'create'), 403);
-        $item = DB::transaction(function () use ($inquiry, $category, $product, $quantity, $actor, $unitPrice): InquiryItem {
+        $item = DB::transaction(function () use ($inquiry, $category, $product, $quantity, $actor, $unitPrice, $supplierId): InquiryItem {
             $lockedInquiry = Inquiry::query()->whereKey($inquiry->id)->lockForUpdate()->firstOrFail();
             abort_unless($this->canEdit($actor, $lockedInquiry), 403);
             abort_if($lockedInquiry->result, 422, 'Products on a closed Inquiry cannot be changed.');
@@ -1098,6 +1175,7 @@ class LegacyInquiryService
                 'inquiry_id' => $lockedInquiry->id,
                 'category' => $category !== '' ? $category : null,
                 'item_name' => $product,
+                'supplier_id' => $supplierId,
                 'quantity' => max(1, min(999999999, $quantity)),
                 'unit' => 'pcs',
                 'unit_price' => $unitPrice !== null ? round(max(0, min(999999999999.99, $unitPrice)), 2) : null,

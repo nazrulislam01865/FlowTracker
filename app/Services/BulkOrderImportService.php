@@ -200,7 +200,7 @@ class BulkOrderImportService
                     $row['product_supplier_resolved_name'] = (string) $supplier->name;
                 }
 
-                $basePrice = $product->productPriceForQuantity((int) $row['product_quantity_resolved']);
+                $basePrice = $product->productPriceForQuantity((int) $row['product_quantity_resolved'], (int) ($supplier?->id ?? 0) ?: null);
                 $row['product_unit_price_resolved'] = $basePrice !== null
                     ? round((float) $basePrice, 2)
                     : null;

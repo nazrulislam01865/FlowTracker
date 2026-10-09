@@ -69,7 +69,7 @@ trait ManagesOrderProducts
         $quantity = max(1, (int) ($item->quantity ?? 1));
         $defaultSupplier = $product ? $catalog->supplierForProduct($product) : null;
         $selectedSupplier = $item->supplier ?: $defaultSupplier;
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, (int) ($selectedSupplier?->id ?? 0) ?: null);
 
         $this->editOrderProductItemId = (int) $item->id;
         $this->editOrderProductSelectedId = $product ? (int) $product->id : null;
@@ -172,7 +172,7 @@ trait ManagesOrderProducts
         $product = $catalog->findActiveProductOrFail($productId);
         $supplier = $catalog->supplierForProduct($product);
         $quantity = max(1, (int) $this->editOrderProductQuantity);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, (int) ($supplier?->id ?? 0) ?: null);
 
         $this->editOrderProductSelectedId = (int) $product->id;
         $this->editOrderProductSearch = (string) $product->name;
@@ -209,7 +209,7 @@ trait ManagesOrderProducts
 
         $product = app(\App\Services\ProductCatalogService::class)
             ->findActiveProductOrFail((int) $this->editOrderProductSelectedId);
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, $this->editOrderProductSupplierId);
         $this->editOrderProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -230,7 +230,12 @@ trait ManagesOrderProducts
             ->active()
             ->findOrFail($supplierId);
 
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail((int) $this->editOrderProductSelectedId);
+        abort_unless($product->hasProductSupplier((int) $supplier->id), 422, 'Supplier is not linked to this product.');
         $this->editOrderProductSupplierId = (int) $supplier->id;
+        $basePrice = $product->productPriceForQuantity(max(1, (int)$this->editOrderProductQuantity), (int)$supplier->id);
+        $this->editOrderProductUnitPrice = $basePrice !== null ? number_format($basePrice, 2, '.', '') : '0.00';
         $this->editOrderProductSupplierLabel = $supplier->supplierShortCode();
         $this->resetValidation('editOrderProductSupplierId');
         $this->dispatch('detail-product-edit-supplier-selected');
@@ -273,7 +278,8 @@ trait ManagesOrderProducts
             return;
         }
 
-        $basePrice = $product->productPriceForQuantity((int) $data['editOrderProductQuantity']);
+        $basePrice = $product->productPriceForQuantity((int) $data['editOrderProductQuantity'], (int) $data['editOrderProductSupplierId']);
+        abort_if($basePrice === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at this quantity.');
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['editOrderProductUnitPrice'];
@@ -425,7 +431,7 @@ trait ManagesOrderProducts
         $linkedSupplier = app(\App\Services\ProductCatalogService::class)->supplierForProduct($product);
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, (int) ($linkedSupplier?->id ?? 0) ?: null);
 
         $this->jobProductSelectedId = (int) $product->id;
         $this->jobProductCategory = $category !== '' ? $category : 'Uncategorized';
@@ -473,7 +479,12 @@ trait ManagesOrderProducts
             ->active()
             ->findOrFail($supplierId);
 
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail((int) $this->jobProductSelectedId);
+        abort_unless($product->hasProductSupplier((int) $supplier->id), 422, 'Supplier is not linked to this product.');
         $this->jobProductSupplierId = (int) $supplier->id;
+        $basePrice = $product->productPriceForQuantity(max(1, (int)$this->jobProductQuantity), (int)$supplier->id);
+        $this->jobProductUnitPrice = $basePrice !== null ? number_format($basePrice, 2, '.', '') : '0.00';
         $this->jobProductSupplierLabel = $supplier->supplierShortCode();
         $this->jobProductSupplierSkipped = false;
         $this->jobProductSupplierLocked = false;
@@ -504,7 +515,7 @@ trait ManagesOrderProducts
             ->active()
             ->find((int) $this->jobProductSelectedId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, $this->jobProductSupplierId);
         $this->jobProductUnitPrice = $basePrice !== null
             ? number_format((float) $basePrice, 2, '.', '')
             : '0.00';
@@ -565,7 +576,10 @@ trait ManagesOrderProducts
         $supplierId = filled($data['jobProductSupplierId'] ?? null)
             ? (int) $data['jobProductSupplierId']
             : null;
-        $basePrice = $product->productPriceForQuantity((int) $data['jobProductQuantity']);
+        abort_if($supplierId && !$product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+        abort_if(!$supplierId && $product->productSupplierId() && $product->hasProductPricing(), 422, 'Select a supplier with a configured price table.');
+        $basePrice = $product->productPriceForQuantity((int) $data['jobProductQuantity'], $supplierId);
+        abort_if($basePrice === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at this quantity.');
         $resolvedUnitPrice = $basePrice !== null
             ? (float) $basePrice
             : (float) $data['jobProductUnitPrice'];

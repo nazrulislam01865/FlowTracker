@@ -50,6 +50,17 @@
         </div>
 
         <div class="ft-ipr-card-status">
+            <div style="min-width:145px">
+                <x-ui.search-select
+                    label="Price supplier" type="suppliers" context="create-inquiry"
+                    property="create-inquiry-price-supplier:{{ $index }}"
+                    :value="$item['supplier_id'] ?? null"
+                    :selected-label="($item['supplier_label'] ?? '') ?: ((int) ($defaultSupplier?->id ?? 0) === (int) ($item['supplier_id'] ?? 0) ? $defaultSupplier?->supplierShortCode() : null)"
+                    action="updateCreateInquiryProductSupplierFromSelector"
+                    placeholder="Price supplier" :hide-label="false" :clearable="false" :fixed-menu="true"
+                />
+                @error('createProductRows.'.$index.'.supplier_id')<small class="validation-error">{{ $message }}</small>@enderror
+            </div>
             <span class="ft-ipr-supplier-count">{{ $supplierCount }} {{ \Illuminate\Support\Str::plural('supplier', $supplierCount) }}</span>
             <span class="ft-ipr-send-badge {{ $sendOnCreate ? 'is-send' : 'is-draft' }}">{{ $sendOnCreate ? 'Invite on create' : 'Draft only' }}</span>
         </div>

@@ -21,6 +21,7 @@
     'selectedSubcategory' => '',
     'pricePreview' => [],
     'remoteSurchargePreview' => [],
+    'supplierPriceTables' => [],
     'productOptions' => [],
     'productOptionUploads' => [],
     'shipmentUrgencies' => collect(),
@@ -209,7 +210,39 @@
             </x-catalog.product-section>
         @endif
 
-        <x-catalog.product-section number="3" title="Product pricing" subtitle="Paste the complete Quantity and Product price table directly from Excel.">
+        <x-catalog.product-section number="3" title="Product pricing" subtitle="Maintain one quantity price table per supplier. Changing the supplier changes the resolved unit price.">
+            @php
+                $pricingSupplierIds = collect($productSupplierIds)->push($productSupplierId)->filter()->unique()->values();
+                $pricingSuppliers = $pricingSupplierIds->isEmpty() ? collect() : \App\Models\MasterRecord::query()
+                    ->where('workspace_id', app(\App\Services\MasterDataService::class)->workspaceId())
+                    ->where('type', 'supplier')->whereIn('id', $pricingSupplierIds->all())
+                    ->get(['id', 'name', 'metadata']);
+            @endphp
+            @if($pricingSuppliers->isNotEmpty())
+                @foreach($pricingSuppliers as $pricingSupplier)
+                    @php
+                        $supplierTableText = (string) ($supplierPriceTables[(string) $pricingSupplier->id] ?? '');
+                        $supplierParsed = $supplierTableText !== '' ? app(\App\Services\ProductPriceTableParser::class)->parseTable($supplierTableText) : null;
+                        $supplierPreview = $supplierParsed['price_breakpoints'] ?? [];
+                    @endphp
+                    <div class="ft-product-price-preview-wrap" wire:key="supplier-price-editor-{{ $pricingSupplier->id }}" style="margin-bottom:1.25rem;padding:1rem">
+                        <label class="ft-product-field ft-product-price-table-field">
+                            <span>{{ $pricingSupplier->supplierShortCode() }} · {{ $pricingSupplier->name }} @if((int)$pricingSupplier->id === (int)$productSupplierId)<em>Default</em>@endif</span>
+                            <textarea wire:model.change="productSupplierPriceTables.{{ $pricingSupplier->id }}" rows="5" spellcheck="false" placeholder="Paste quantity and price table for this supplier"></textarea>
+                            <small>Only this supplier's prices are used when selected on an Order or Inquiry.</small>
+                            @error('productSupplierPriceTables.'.$pricingSupplier->id)<b class="validation-error">{{ $message }}</b>@enderror
+                        </label>
+                        @if($supplierPreview)
+                            <table class="ft-product-price-preview"><thead><tr><th>Quantity</th>@foreach($supplierPreview as $point)<th>{{ number_format($point['quantity']) }}</th>@endforeach</tr></thead>
+                            <tbody><tr><th>Product price</th>@foreach($supplierPreview as $point)<td>{{ $point['price'] }}</td>@endforeach</tr></tbody></table>
+                        @endif
+                    </div>
+                @endforeach
+                @error('productSupplierPriceTables')<b class="validation-error">{{ $message }}</b>@enderror
+            @else
+                <p class="ft-product-help">Link suppliers above to enter their individual pricing tables. Existing products without suppliers retain their original price table.</p>
+            @endif
+            @if($pricingSuppliers->isEmpty())
             <label class="ft-product-field ft-product-price-table-field">
                 <span>Price table <em>Optional</em></span>
                 <textarea
@@ -257,6 +290,7 @@
                         </tbody>
                     </table>
                 </div>
+            @endif
             @endif
         </x-catalog.product-section>
 

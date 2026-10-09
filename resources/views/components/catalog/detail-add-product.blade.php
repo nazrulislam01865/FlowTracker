@@ -16,6 +16,7 @@
     'unitPriceModel',
     'unitPriceValue' => '0.00',
     'supplierModel' => null,
+    'supplierAction' => 'updateAddJobProductSupplierFromSelector',
     'supplierValue' => null,
     'supplierLabel' => '',
     'supplierLocked' => false,
@@ -99,7 +100,7 @@
                         $resultSupplier = $searchSuppliers->get((int) $product->id);
                         $supplierWords = preg_split('/\s+/', trim((string) ($resultSupplier?->name ?? ''))) ?: [];
                         $supplierInitials = $resultSupplier?->supplierShortCode() ?: strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
-                        $previewPrice = $product->productPriceForQuantity(1000);
+                        $previewPrice = $product->productPriceForQuantity(1000, (int) ($resultSupplier?->id ?? 0) ?: null);
                         $leadDays = (int) (data_get($product->metadata, 'lead_time_days') ?: data_get($product->metadata, 'supplier_lead_time_days') ?: 0);
                         $isPreferred = (bool) (data_get($product->metadata, 'supplier_preferred') ?: data_get($product->metadata, 'preferred_supplier'));
                         $resultReferenceCode = $product->productReferenceCode();
@@ -193,7 +194,7 @@
                                     placeholder="Select supplier"
                                     search-placeholder="Search supplier"
                                     :clearable="false"
-                                    action="updateAddJobProductSupplierFromSelector"
+                                    action="{{ $supplierAction }}"
                                     :menu-width="360"
                                     :hide-label="true"
                                     :fixed-menu="true"

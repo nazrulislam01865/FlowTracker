@@ -2489,8 +2489,10 @@ class LegacyJobService
             ->exists();
         abort_unless($validSupplier, 422, 'Select an active supplier for this product.');
 
+        abort_unless($product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
         $quantity = max(1, (int) ($data['quantity'] ?? 1));
-        $basePrice = $product->productPriceForQuantity($quantity);
+        $basePrice = $product->productPriceForQuantity($quantity, $supplierId);
+        abort_if($basePrice === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at the selected quantity.');
         $fallbackPrice = $data['unit_price'] ?? 0;
         abort_unless(is_numeric($fallbackPrice), 422, 'Unit price must be a number.');
         $unitPrice = round(max(0, (float) ($basePrice ?? $fallbackPrice)), 2);
@@ -2586,7 +2588,25 @@ class LegacyJobService
             abort_if($value === '', 422, $field === 'category_name' ? 'Product category is required.' : 'Product name is required.');
         }
 
-        $item->update([$field => $value, 'updated_by' => $actor->id]);
+        if (in_array($field, ['supplier_id', 'quantity'], true) && (int) ($item->catalog_product_id ?? 0) > 0) {
+            $product = MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())
+                ->ofType('product')->find((int) $item->catalog_product_id);
+            if ($product) {
+                $supplierId = $field === 'supplier_id' ? (int) $value : ((int) $item->supplier_id ?: null);
+                if ($field === 'supplier_id') {
+                    abort_unless($product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+                }
+                $quantity = $field === 'quantity' ? (int) $value : (int) $item->quantity;
+                $price = $product->productPriceForQuantity($quantity, $supplierId);
+                abort_if($price === null && $product->hasProductPricing(), 422, 'No price table is configured for this supplier at the selected quantity.');
+                // Legacy products without configured prices may retain their manual rate.
+                $item->update([$field => $value, 'unit_price' => $price !== null ? round($price, 2) : $item->unit_price, 'updated_by' => $actor->id]);
+            } else {
+                $item->update([$field => $value, 'updated_by' => $actor->id]);
+            }
+        } else {
+            $item->update([$field => $value, 'updated_by' => $actor->id]);
+        }
 
         // Category and product are a dependent pair. A real category change
         // always clears the previous product so the user explicitly chooses a

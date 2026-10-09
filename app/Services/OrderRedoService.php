@@ -1048,7 +1048,7 @@ class OrderRedoService
                 $quantity = max(0, (int) $item->quantity);
                 if ($quantity === 0) continue;
 
-                $price = $item->catalogProduct?->productPriceForQuantity($quantity);
+                $price = $item->catalogProduct?->productPriceForQuantity($quantity, (int) ($item->supplier_id ?? 0) ?: null);
                 if ($price === null || $price <= 0) {
                     $allCatalogLinesPriced = false;
                     break;

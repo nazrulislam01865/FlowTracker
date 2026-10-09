@@ -96,7 +96,7 @@
                         $supplierInitials = strtoupper(substr(implode('', array_map(fn ($word) => substr($word, 0, 1), array_filter($supplierWords))), 0, 2));
                         $supplierShortCode = trim((string) ($resultSupplier?->supplierShortCode() ?? ''));
                         $supplierLabel = $supplierShortCode !== '' ? $supplierShortCode : trim((string) ($resultSupplier?->name ?? ''));
-                        $previewPrice = $product->productPriceForQuantity(1000);
+                        $previewPrice = $product->productPriceForQuantity(1000, (int) ($resultSupplier?->id ?? 0) ?: null);
                         $leadDays = (int) (data_get($product->metadata, 'lead_time_days') ?: data_get($product->metadata, 'supplier_lead_time_days') ?: 0);
                         $isPreferred = (bool) (data_get($product->metadata, 'supplier_preferred') ?: data_get($product->metadata, 'preferred_supplier'));
                         $referenceCode = $product->productReferenceCode();

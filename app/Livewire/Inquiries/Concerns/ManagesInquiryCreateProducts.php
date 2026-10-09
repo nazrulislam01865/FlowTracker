@@ -142,10 +142,13 @@ trait ManagesInquiryCreateProducts
         $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity);
+        $supplierId = $product->productSupplierId();
+        $basePrice = $product->productPriceForQuantity($defaultQuantity, $supplierId);
         $this->createProductRows[] = [
             'row_key' => (string) \Illuminate\Support\Str::uuid(),
             'product_id' => (int) $product->id,
+            'supplier_id' => $supplierId,
+            'supplier_label' => '',
             'category' => $productCategory,
             'product' => (string) $product->name,
             'quantity' => $defaultQuantity,
@@ -158,6 +161,24 @@ trait ManagesInquiryCreateProducts
         // linked a Product-Master supplier, it is seeded here automatically.
         $this->createProductRfqRows[] = $this->newCreateProductRfqState($product->fresh());
         $this->syncLegacyCreateRfqState();
+    }
+
+    public function updateCreateInquiryProductSupplierFromSelector(string $property, mixed $supplierId): array
+    {
+        $this->authorizeCreateInquiryProducts();
+        abort_unless(preg_match('/^create-inquiry-price-supplier:(\d+)$/', $property, $match) === 1, 422);
+        $index = (int) $match[1];
+        abort_unless(isset($this->createProductRows[$index]), 422);
+        $product = app(\App\Services\ProductCatalogService::class)
+            ->findActiveProductOrFail((int) ($this->createProductRows[$index]['product_id'] ?? 0));
+        $supplierId = (int) $supplierId;
+        abort_unless($product->hasProductSupplier($supplierId), 422, 'Supplier is not linked to this product.');
+        $this->createProductRows[$index]['supplier_id'] = $supplierId;
+        $this->syncCreateInquiryProductBasePrice($index);
+        $supplier = MasterRecord::query()->forWorkspace(app(MasterDataService::class)->workspaceId())
+            ->ofType('supplier')->active()->findOrFail($supplierId);
+        $this->createProductRows[$index]['supplier_label'] = $supplier->supplierShortCode();
+        return ['ok' => true, 'value' => (string) $supplierId, 'label' => $supplier->supplierShortCode()];
     }
 
     private function syncCreateInquiryProductBasePrice(int $index): void
@@ -179,7 +200,7 @@ trait ManagesInquiryCreateProducts
             ->active()
             ->find($productId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity);
+        $basePrice = $product?->productPriceForQuantity($quantity, (int) ($this->createProductRows[$index]['supplier_id'] ?? 0) ?: null);
         $this->createProductRows[$index]['unit_price'] = $basePrice !== null
             ? number_format($basePrice, 2, '.', '')
             : '';

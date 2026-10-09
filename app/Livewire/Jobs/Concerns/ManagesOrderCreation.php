@@ -1376,7 +1376,23 @@ trait ManagesOrderCreation
             // the base/unit price again at save time so a stale browser value or
             // client-side tampering cannot override the quantity price table.
             $quantity = (int) ($row['quantity'] ?? 0);
-            $basePrice = $product->productPriceForQuantity($quantity);
+            $supplierId = (int) ($row['supplier_id'] ?? 0);
+            if ($supplierId && !$product->hasProductSupplier($supplierId)) {
+                $catalogInvalid = true;
+                $this->addError("jobItems.$index.supplier_id", 'Supplier is not linked to this product.');
+                continue;
+            }
+            if (!$supplierId && $product->productSupplierId() && $product->hasProductPricing()) {
+                $catalogInvalid = true;
+                $this->addError("jobItems.$index.supplier_id", 'Select a supplier with a configured price table.');
+                continue;
+            }
+            $basePrice = $product->productPriceForQuantity($quantity, $supplierId ?: null);
+            if ($basePrice === null && $product->hasProductPricing()) {
+                $catalogInvalid = true;
+                $this->addError("jobItems.$index.supplier_id", 'No price table is configured for this supplier at this quantity.');
+                continue;
+            }
             $data['jobItems'][$index]['unit_price'] = $basePrice !== null
                 ? round($basePrice, 2)
                 : null;

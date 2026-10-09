@@ -1,0 +1,22 @@
+FlowTracker: supplier-specific product price tables
+
+CHANGES
+- Product Master > Products > Add/Edit: maintain a separate quantity-based price table for each linked supplier. Select the default supplier normally.
+- Product Details: review supplier-specific price and remote-area surcharge breakpoints.
+- Order Create / Product Add / Product Edit / inline supplier and quantity edits: resolve the quantity price from the chosen supplier.
+- Inquiry Create / Product Add / Product Edit / inline supplier and quantity edits: resolve prices from the chosen supplier and persist the price supplier on each inquiry line.
+- Bulk order import and Order Redo catalogue price estimate use each order's supplier.
+- Legacy products with only one generic price table remain supported. Supplier-less products that receive their first default supplier keep their existing price table.
+- Missing supplier prices do not fall back to other suppliers. Historical order/inquiry rates are retained until an item is edited; no automatic repricing of closed documents.
+
+INSTALL
+1. Back up your database and project. Apply the changed-files ZIP at the Laravel project root, or replace the project with the full-project ZIP while keeping your own .env and runtime files.
+2. Run: php artisan migrate --force
+3. Run: php artisan optimize:clear
+4. Review a Product tagged with suppliers A and B. Paste a distinct table for each supplier and save. Test creating/editing an Order and Inquiry with each supplier and quantities crossing price tiers.
+5. Run application tests on your configured deployment: php artisan test --filter=SupplierProductPricingTest
+
+NOTES
+- One new nullable inquiry_items.supplier_id foreign key is the only schema change. Supplier-specific tables are embedded in existing product metadata, so price lookup does not issue additional queries.
+- The archive did not include composer vendor/; PHPUnit/Laravel integration tests could not be run in this workspace. All changed PHP files passed php -l.
+- Do not overwrite your production .env or run schema changes before a backup.
