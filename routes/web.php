@@ -134,6 +134,8 @@ Route::middleware(['auth', 'super.admin'])->prefix('administration/reminders/sup
 Route::middleware('auth')->group(function () {
     if ((bool) config('flowtrack.order_tracking_enabled', false)) {
         Route::get('/orders/{job}/qr-code/download', [OrderQrCodeController::class, 'download'])->name('orders.qr.download');
+        Route::post('/orders/{job}/artwork-tracking/generate', [OrderQrCodeController::class, 'generate'])
+            ->middleware('throttle:6,1')->name('orders.tracking.generate');
     }
     Route::post('/session/timezone', function (\Illuminate\Http\Request $request) {
         $data = $request->validate([

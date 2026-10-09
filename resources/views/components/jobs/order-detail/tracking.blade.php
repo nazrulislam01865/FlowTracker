@@ -317,4 +317,57 @@
             .ft-btn-tracking-link { grid-column: auto; }
         }
     </style>
+@else
+    {{-- Older Orders may need a QR before a confirmed-artwork PDF exists.
+         Never generate a token or query the task graph during a page render. --}}
+    <section class="section-card ft-order-section-card ft-order-tracking-pending" aria-label="Order tracking generation">
+        <div class="ft-order-tracking-pending__heading">
+            <div>
+                <h2>Order tracking</h2>
+                <p>{{ filled($job->tracking_token) ? 'Tracking QR is ready. The artwork PDF has not been generated.' : 'Prepare tracking for this Order, including historical Orders.' }}</p>
+            </div>
+            <span class="ft-order-tracking-pending__tag">{{ filled($job->tracking_token) ? 'QR ready' : 'Not generated' }}</span>
+        </div>
+
+        @if(filled($job->tracking_token))
+            <div class="ft-order-tracking-pending__qr">
+                <div class="ft-order-tracking-pending__code" aria-label="Order tracking QR code">
+                    {!! app(\App\Services\QrCodeService::class)->renderSvg($job->trackingUrl(), 108) !!}
+                </div>
+                <div>
+                    <strong>Tracking QR available</strong>
+                    <p>The QR opens the current order status. A confirmed-artwork PDF is created only after artwork approval is recorded.</p>
+                    <a href="{{ $job->trackingUrl() }}" target="_blank" rel="noopener noreferrer">Open tracking</a>
+                </div>
+            </div>
+        @endif
+
+        @error('artworkTracking')
+            <p class="ft-order-tracking-pending__notice" role="alert">{{ $message }}</p>
+        @enderror
+
+        @if(auth()->user()?->canModule('documents', 'create'))
+            <form method="POST" action="{{ route('orders.tracking.generate', $job->id) }}">
+                @csrf
+                <button type="submit" class="ft-btn-tracking-primary">
+                    {{ filled($job->tracking_token) ? 'Generate confirmed-artwork PDF' : 'Generate QR & confirmed-artwork PDF' }}
+                </button>
+            </form>
+        @endif
+    </section>
+    <style>
+        .ft-order-tracking-pending { border: 1px solid #dbe5ee; border-radius: 14px; padding: 18px; background: #fff; }
+        .ft-order-tracking-pending__heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 14px; }
+        .ft-order-tracking-pending__heading h2 { margin: 0 0 4px; font-size: 17px; }
+        .ft-order-tracking-pending__heading p, .ft-order-tracking-pending__qr p { margin: 0; color: #66768a; font-size: 12px; line-height: 1.55; }
+        .ft-order-tracking-pending__tag { white-space: nowrap; color: #087868; background: #e9f7f3; border-radius: 999px; padding: 5px 10px; font-size: 11px; }
+        .ft-order-tracking-pending__qr { display: flex; align-items: center; gap: 18px; margin: 16px 0; }
+        .ft-order-tracking-pending__code { flex: 0 0 auto; padding: 7px; border: 1px solid #dbe5ee; border-radius: 9px; line-height: 0; }
+        .ft-order-tracking-pending__code svg { width: 108px; height: 108px; }
+        .ft-order-tracking-pending__qr a { display: inline-block; margin-top: 7px; color: #008a73; font-size: 12px; }
+        .ft-order-tracking-pending__notice { margin: 12px 0; color: #a63030; font-size: 12px; }
+        .ft-order-tracking-pending form { margin-top: 16px; }
+        .ft-order-tracking-pending .ft-btn-tracking-primary { border: 0; cursor: pointer; padding: 11px 16px; border-radius: 7px; font: inherit; font-size: 12px; font-weight: 700; background: #008a73; color: #fff; }
+        @media(max-width: 560px) { .ft-order-tracking-pending__qr { align-items: flex-start; } .ft-order-tracking-pending__heading { flex-wrap: wrap; } }
+    </style>
 @endif
