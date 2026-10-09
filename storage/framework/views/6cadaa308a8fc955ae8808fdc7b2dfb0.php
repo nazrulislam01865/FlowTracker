@@ -1,7 +1,7 @@
 <?php $attributes ??= new \Illuminate\View\ComponentAttributeBag;
 
 $__newAttributes = [];
-$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['status' => 'active']));
+$__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames((['active' => true]));
 
 foreach ($attributes->all() as $__key => $__value) {
     if (in_array($__key, $__propNames)) {
@@ -16,7 +16,7 @@ $attributes = new \Illuminate\View\ComponentAttributeBag($__newAttributes);
 unset($__propNames);
 unset($__newAttributes);
 
-foreach (array_filter((['status' => 'active']), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
+foreach (array_filter((['active' => true]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
 
@@ -27,9 +27,8 @@ foreach ($attributes->all() as $__key => $__value) {
 }
 
 unset($__defined_vars, $__key, $__value); ?>
-<?php ($active = strtolower((string) $status) === 'active'); ?>
-<span <?php echo e($attributes->class(['ft-supplier-list-status', 'is-active' => $active, 'is-inactive' => !$active])); ?>>
+<span class="<?php echo \Illuminate\Support\Arr::toCssClasses(['ft-product-status-pill', 'is-inactive' => !$active]); ?>">
     <?php echo e($active ? 'Active' : 'Inactive'); ?>
 
 </span>
-<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/suppliers/status-badge.blade.php ENDPATH**/ ?>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/catalog/status.blade.php ENDPATH**/ ?>

@@ -79,6 +79,9 @@ class FilterOptionService
         array $constraints = [],
     ): FilterOptionPage {
         abort_unless($this->supports($type), 404);
+        if ($type === 'suppliers' && $context === 'product-list') {
+            abort_unless($user->canModule('catalog_products', 'view'), 403);
+        }
 
         $page = max(1, min(10000, $page));
         $perPage = max(1, min(self::MAX_PER_PAGE, $perPage));
@@ -892,10 +895,11 @@ class FilterOptionService
         return MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
             ->ofType('supplier')
-            ->active()
+            ->when($context !== 'product-list', fn ($q) => $q->active())
             ->when(strlen($search) >= 2, fn ($q) => $q->where(fn ($x) => $x
                 ->whereLike('name', $search.'%')
-                ->orWhereLike('code', $search.'%')))
+                ->orWhereLike('code', $search.'%')
+                ->when($context === 'product-list', fn ($x) => $x->orWhereLike('metadata->short_code', $search.'%'))))
             ->orderBy('sort_order')
             ->orderBy('name')
             ->offset($offset)
@@ -904,7 +908,7 @@ class FilterOptionService
             ->map(fn (MasterRecord $record) => [
                 'id' => (string) $record->id,
                 'label' => $showShortCode ? $record->supplierShortCode() : (string) $record->name,
-                'meta' => $showShortCode ? (string) $record->name : '',
+                'meta' => $context === 'product-list' ? '' : ($showShortCode ? (string) $record->name : ''),
             ]);
     }
 
@@ -915,7 +919,7 @@ class FilterOptionService
         $record = MasterRecord::query()
             ->forWorkspace(app(SetupContext::class)->workspaceId())
             ->ofType('supplier')
-            ->active()
+            ->when($context !== 'product-list', fn ($q) => $q->active())
             ->find((int) $id, ['id', 'name', 'code', 'metadata', 'type']);
 
         if (! $record) return null;
@@ -925,7 +929,7 @@ class FilterOptionService
         return [
             'id' => (string) $record->id,
             'label' => $showShortCode ? $record->supplierShortCode() : (string) $record->name,
-            'meta' => $showShortCode ? (string) $record->name : '',
+            'meta' => $context === 'product-list' ? '' : ($showShortCode ? (string) $record->name : ''),
         ];
     }
 
@@ -937,6 +941,7 @@ class FilterOptionService
             'job-detail',
             'order-detail-product-edit',
             'master-product',
+            'product-list',
         ], true);
     }
 

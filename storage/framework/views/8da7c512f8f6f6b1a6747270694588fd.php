@@ -2,8 +2,9 @@
 
 $__newAttributes = [];
 $__propNames = \Illuminate\View\ComponentAttributeBag::extractPropNames(([
-    'primary' => '—',
-    'secondary' => null,
+    'model',
+    'label',
+    'options' => [],
 ]));
 
 foreach ($attributes->all() as $__key => $__value) {
@@ -20,8 +21,9 @@ unset($__propNames);
 unset($__newAttributes);
 
 foreach (array_filter(([
-    'primary' => '—',
-    'secondary' => null,
+    'model',
+    'label',
+    'options' => [],
 ]), 'is_string', ARRAY_FILTER_USE_KEY) as $__key => $__value) {
     $$__key = $$__key ?? $__value;
 }
@@ -34,10 +36,14 @@ foreach ($attributes->all() as $__key => $__value) {
 
 unset($__defined_vars, $__key, $__value); ?>
 
-<td class="ft-order-product-updated" data-label="Updated">
-    <strong><?php echo e($primary); ?></strong>
-    <?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if BLOCK]><![endif]--><?php endif; ?><?php if(filled($secondary)): ?>
-        <span><?php echo e($secondary); ?></span>
-    <?php endif; ?><?php if(\Livewire\Mechanisms\ExtendBlade\ExtendBlade::isRenderingLivewireComponent()): ?><!--[if ENDBLOCK]><![endif]--><?php endif; ?>
-</td>
-<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/catalog/detail-product-updated.blade.php ENDPATH**/ ?>
+<label class="ft-product-filter-select" title="<?php echo e($label); ?>">
+    <span class="ft-product-visually-hidden"><?php echo e($label); ?></span>
+    <select wire:model.live="<?php echo e($model); ?>" aria-label="<?php echo e($label); ?>">
+        <?php echo e($slot); ?>
+
+    </select>
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+        <path d="m8 10 4 4 4-4"/>
+    </svg>
+</label>
+<?php /**PATH /Applications/XAMPP/xamppfiles/htdocs/laravel/FlowTracker/resources/views/components/catalog/filter-select.blade.php ENDPATH**/ ?>

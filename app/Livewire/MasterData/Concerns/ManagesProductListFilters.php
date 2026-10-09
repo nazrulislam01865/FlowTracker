@@ -58,6 +58,18 @@ trait ManagesProductListFilters
         $this->resetPage('masterPage');
     }
 
+    public function updatedProductSupplierFilterId(): void
+    {
+        $value = trim($this->productSupplierFilterId);
+        $this->productSupplierFilterId = ctype_digit($value) && (int) $value > 0
+            ? (string) (int) $value
+            : '';
+        $this->productSupplierState = '';
+        $this->recordsReady = true;
+        $this->clearProductSelection();
+        $this->resetPage('masterPage');
+    }
+
     public function updatedProductSupplierState(): void
     {
         $this->recordsReady = true;
@@ -68,7 +80,7 @@ trait ManagesProductListFilters
     public function showProductsWithoutSupplier(): void
     {
         abort_unless($this->group === 'product', 404);
-        $this->productSupplierFilterId = null;
+        $this->productSupplierFilterId = '';
         $this->productSupplierState = 'unassigned';
         $this->recordsReady = true;
         $this->clearProductSelection();
@@ -90,7 +102,7 @@ trait ManagesProductListFilters
         $this->productCategory = '';
         $this->productClientAvailability = '';
         $this->productStatus = '';
-        $this->productSupplierFilterId = null;
+        $this->productSupplierFilterId = '';
         $this->productSupplierState = '';
         $this->recordsReady = true;
         $this->clearProductSelection();

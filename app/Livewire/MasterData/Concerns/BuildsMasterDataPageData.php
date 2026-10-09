@@ -42,7 +42,7 @@ trait BuildsMasterDataPageData
 
         $rows = null;
         // Progressive rendering fallback retained for non-product groups: ? $service->paginate($this->group, $this->search, 30)
-        if ($this->recordsReady) {
+        if ($this->recordsReady && !($this->group === 'product' && $this->showProductView)) {
             if ($this->group === 'product') {
                 $rows = $service->paginate($this->group, $this->search, $this->productPerPage, [
                     'main_category' => $this->productMainCategory,
@@ -595,44 +595,18 @@ trait BuildsMasterDataPageData
             }
         }
         $productSelectionCount = $this->group === 'product' ? $this->productSelectionCount() : 0;
-        $productSuppliersByProduct = collect();
-        if ($this->group === 'product' && $rows) {
-            $pageProducts = collect($rows->items());
-            $pageProductIds = $pageProducts->pluck('id')->map(fn ($id) => (int) $id)->values();
-            $supplierIdsByProduct = $pageProducts->mapWithKeys(fn (MasterRecord $product) => [
-                (int) $product->id => collect($product->productSupplierIds())->map(fn ($id) => (int) $id)->filter()->unique()->values(),
-            ]);
-
-            if (Schema::hasTable('product_supplier_links') && $pageProductIds->isNotEmpty()) {
-                DB::table('product_supplier_links')
-                    ->where('workspace_id', $workspaceId)
-                    ->whereIn('product_id', $pageProductIds->all())
-                    ->get(['product_id', 'supplier_id'])
-                    ->each(function ($link) use ($supplierIdsByProduct): void {
-                        $productId = (int) $link->product_id;
-                        $supplierId = (int) $link->supplier_id;
-                        $bucket = collect($supplierIdsByProduct->get($productId, collect()))->push($supplierId)->unique()->values();
-                        $supplierIdsByProduct->put($productId, $bucket);
-                    });
-            }
-
-            $allSupplierIds = $supplierIdsByProduct->flatten()->map(fn ($id) => (int) $id)->filter()->unique()->values();
-            $supplierRecords = $allSupplierIds->isEmpty()
-                ? collect()
-                : MasterRecord::query()
-                    ->forWorkspace($workspaceId)
-                    ->ofType('supplier')
-                    ->whereIn('id', $allSupplierIds->all())
-                    ->get(['id', 'name', 'code', 'status'])
-                    ->keyBy('id');
-
-            $productSuppliersByProduct = $pageProducts->mapWithKeys(fn (MasterRecord $product) => [
-                (int) $product->id => collect($supplierIdsByProduct->get((int) $product->id, collect()))
-                    ->map(fn ($supplierId) => $supplierRecords->get((int) $supplierId))
-                    ->filter()
-                    ->values(),
-            ]);
-        }
+        $supplierLookup = app(\App\Services\ProductSupplierLookup::class);
+        $productSupplierFilterSelectedOptions = $this->group === 'product' && ! $this->showProductView && ! $this->showModal && $this->productSupplierFilterId !== ''
+            ? app(\App\Services\FilterOptionService::class)->selectedOptions(
+                auth()->user(), 'suppliers', 'product-list', [$this->productSupplierFilterId],
+            )
+            : collect();
+        $productSuppliersByProduct = $this->group === 'product' && $rows
+            ? $supplierLookup->forProducts(collect($rows->items()), $workspaceId)
+            : collect();
+        $viewProductSuppliers = $viewProduct
+            ? $supplierLookup->forProducts(collect([$viewProduct]), $workspaceId)->get((int) $viewProduct->id, collect())
+            : collect();
 
         $bulkProductSupplierOptions = collect();
         $bulkProductSupplierProductCounts = collect();
@@ -796,9 +770,11 @@ trait BuildsMasterDataPageData
                 : collect(),
             'availableProductShipmentUrgencies' => $availableProductShipmentUrgencies,
             'viewProduct' => $viewProduct,
+            'viewProductSuppliers' => $viewProductSuppliers,
             'editProduct' => $editProduct,
             'productSelectionCount' => $productSelectionCount,
             'productSuppliersByProduct' => $productSuppliersByProduct,
+            'productSupplierFilterSelectedOptions' => $productSupplierFilterSelectedOptions,
             'bulkProductSupplierOptions' => $bulkProductSupplierOptions,
             'bulkProductSupplierProductCounts' => $bulkProductSupplierProductCounts,
             'categorySelectionCount' => $categorySelectionCount,

@@ -1,4 +1,4 @@
-@props(['product', 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC', 'detailSectionsReady' => []])
+@props(['product', 'suppliers' => collect(), 'canEdit' => false, 'canDelete' => false, 'displayTimezone' => 'UTC', 'detailSectionsReady' => []])
 @php
     $pricingReady = (bool) ($detailSectionsReady['pricing'] ?? false);
     $optionsReady = (bool) ($detailSectionsReady['options'] ?? false);
@@ -43,6 +43,19 @@
                 <div><dt>Reference product code</dt><dd>{{ $product->productReferenceCode() ?: '—' }}</dd></div>
                 <div><dt>Product name</dt><dd>{{ $product->name }}</dd></div>
                 <div><dt>Product size</dt><dd class="ft-product-detail-size">{{ $product->productSize() ?: '—' }}</dd></div>
+                <div class="ft-product-detail-supplier-row">
+                    <dt>Tagged suppliers</dt>
+                    <dd class="ft-product-detail-supplier-capsules">
+                        @forelse($suppliers as $supplier)
+                            <span class="ft-product-detail-supplier-capsule">
+                                {{ $supplier->supplierShortCode() }}
+                                @if((int) $supplier->id === (int) $product->productSupplierId())<small>Default</small>@endif
+                            </span>
+                        @empty
+                            <span class="ft-product-detail-supplier-empty">No suppliers tagged</span>
+                        @endforelse
+                    </dd>
+                </div>
             </dl>
             <div class="ft-product-detail-image-panel">
                 <div class="ft-product-detail-image">

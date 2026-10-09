@@ -90,6 +90,7 @@
 
 .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-supplier-filter-btn,
 .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-assign-supplier-btn,
+.ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-export-button,
 .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-add-button {
     width: auto;
     min-width: 0;
@@ -124,8 +125,19 @@
 
     .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-supplier-filter-btn,
     .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-assign-supplier-btn,
+    .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-export-button,
     .ft-master-page:has(.ft-product-list-head) .ft-product-list-head-actions .ft-product-add-button {
         width: auto;
         min-width: 0;
     }
 }
+
+/* Product detail: show every tagged supplier in compact, wrapping capsules. */
+.ft-product-detail-supplier-capsules { display:flex; gap:7px; align-items:center; flex-wrap:wrap; min-width:0; }
+.ft-product-detail-supplier-capsule { display:inline-flex; align-items:center; gap:6px; max-width:100%; padding:5px 10px; border:1px solid var(--border-color,#d7e1e9); border-radius:999px; background:var(--surface-subtle,#f8fafc); color:var(--ft-text-primary,#10233b); font-size:var(--font-size-xs,12px); font-weight:650; line-height:1.25; }
+.ft-product-detail-supplier-name { font-weight:450; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.ft-product-detail-supplier-capsule small { padding:2px 6px; border-radius:999px; background:color-mix(in srgb,var(--ft-theme-primary,#0f766e) 11%,white); color:var(--ft-theme-primary,#0f766e); font-size:10px; font-weight:750; }
+.ft-product-detail-supplier-empty { color:var(--ft-text-muted,#718197); font-weight:450; }
+.ft-product-list-head-actions .ft-product-export-button:disabled { opacity:.65; cursor:wait; }
+
+.ft-product-detail-list > .ft-product-detail-supplier-row { align-items:start; padding:10px 0; }

@@ -61,7 +61,7 @@ class Index extends Component
     public ?int $productSupplierId = null;
     /** @var array<int,int|string> */
     public array $productSupplierIds = [];
-    public ?int $productSupplierFilterId = null;
+    public string $productSupplierFilterId = '';
     public string $productSupplierState = '';
     public string $productFormMainCategory = '';
     public string $productSize = '';
@@ -199,7 +199,7 @@ class Index extends Component
             }
 
             $requestedSupplierId = request()->integer('supplier_id');
-            $this->productSupplierFilterId = $requestedSupplierId > 0 ? $requestedSupplierId : null;
+            $this->productSupplierFilterId = $requestedSupplierId > 0 ? (string) $requestedSupplierId : '';
         }
 
         // Allow other workflows (for example Create Inquiry) to send the user

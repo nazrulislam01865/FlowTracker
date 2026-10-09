@@ -267,34 +267,34 @@ trait ManagesProductBulkActions
         session()->flash('success', 'Category updated for '.number_format($count).' '.strtolower(\Illuminate\Support\Str::plural('product', $count)).'.');
     }
 
+    public function exportProducts()
+    {
+        abort_unless($this->group === 'product', 404);
+        abort_unless(auth()->user()?->canModule('catalog_products', 'view'), 403);
+
+        return $this->downloadProducts($this->filteredProductsQuery());
+    }
+
     public function exportSelectedProducts()
     {
+        abort_unless($this->group === 'product', 404);
         abort_unless(auth()->user()?->canModule('catalog_products', 'view'), 403);
-        $count = $this->productSelectionCount();
-        if ($count < 1) return null;
-        $products = $this->selectedProductsQuery()->orderBy('id')->get();
-        $filename = 'flowtrack-products-'.now()->format('Ymd-His').'.csv';
+        if ($this->productSelectionCount() < 1) return null;
 
-        return response()->streamDownload(function () use ($products): void {
-            $out = fopen('php://output', 'w');
-            fwrite($out, "\xEF\xBB\xBF");
-            fputcsv($out, ['Product code', 'Reference code', 'Product name', 'Main category', 'Product category', 'Subcategory', 'Size', 'Client availability', 'Status', 'Updated']);
-            foreach ($products as $product) {
-                fputcsv($out, [
-                    $product->productDisplayCode(),
-                    $product->productReferenceCode(),
-                    $product->name,
-                    $product->productMainCategory(),
-                    $product->parent?->name,
-                    trim((string) (data_get($product->metadata, 'sub_category') ?: data_get($product->metadata, 'excel_sub_category'))),
-                    $product->productSize(),
-                    implode(', ', $product->productAvailabilityLabels()),
-                    ucfirst($product->status),
-                    optional($product->updated_at)->toDateTimeString(),
-                ]);
-            }
-            fclose($out);
-        }, $filename, ['Content-Type' => 'text/csv; charset=UTF-8']);
+        return $this->downloadProducts($this->selectedProductsQuery());
+    }
+
+    private function downloadProducts(\Illuminate\Database\Eloquent\Builder $query)
+    {
+        $workspaceId = app(MasterDataService::class)->workspaceId();
+        $filename = 'flowtracker-products-'.now()->format('Ymd-His').'.xlsx';
+
+        return response()->streamDownload(function () use ($query, $workspaceId): void {
+            app(\App\Services\ProductCatalogExportService::class)->write($query, $workspaceId);
+        }, $filename, [
+            'Content-Type' => 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+            'Cache-Control' => 'private, no-store, no-cache, must-revalidate, max-age=0',
+        ]);
     }
 
     public function bulkDeleteProducts(): void

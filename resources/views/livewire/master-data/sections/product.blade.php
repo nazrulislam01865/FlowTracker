@@ -1,6 +1,7 @@
         @if($showProductView && $viewProduct)
             <x-catalog.product-view
                 :product="$viewProduct"
+                :suppliers="$viewProductSuppliers"
                 :can-edit="$canEditMaster"
                 :can-delete="$canDeleteMaster"
                 :display-timezone="$displayTimezone"
@@ -48,6 +49,7 @@
                 <p>Manage the product catalog, client availability and supporting documents.</p>
             </div>
             <div class="ft-product-list-head-actions">
+                <button type="button" class="ft-product-page-btn is-secondary ft-product-export-button" wire:click="exportProducts" wire:loading.attr="disabled" wire:target="exportProducts">Export Excel</button>
                 @if($canEditMaster)
                     <button type="button" class="ft-product-page-btn is-secondary ft-product-supplier-filter-btn" wire:click="showProductsWithoutSupplier">Show products without supplier</button>
                     <button type="button" class="ft-product-page-btn is-primary ft-product-assign-supplier-btn" wire:click="openProductSupplierAssignment" @disabled($productSelectionCount < 1)>Assign supplier</button>
@@ -118,6 +120,23 @@
                     :menu-width="300"
                     search-placeholder="Search product category…"
                     footer-message="Options shown instantly. Type to search."
+                />
+
+                <x-ui.search-select
+                    class="ft-product-list-filter"
+                    label="Supplier"
+                    property="productSupplierFilterId"
+                    type="suppliers"
+                    context="product-list"
+                    :value="$productSupplierFilterId"
+                    :initial-options="$productSupplierFilterSelectedOptions"
+                    :selected-label="$productSupplierFilterSelectedOptions->first()['label'] ?? null"
+                    placeholder="All suppliers"
+                    :hide-label="true"
+                    :fixed-menu="true"
+                    :menu-width="300"
+                    :infinite-scroll="true"
+                    search-placeholder="Search supplier code…"
                 />
 
                 <x-ui.search-select

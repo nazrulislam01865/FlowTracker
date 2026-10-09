@@ -33,7 +33,7 @@
             <button type="button" class="ft-product-bulk-btn is-bulk-secondary" wire:click="openProductBulkPanel('category')">Change category</button>
         @endif
 
-        <button type="button" class="ft-product-bulk-btn is-bulk-secondary" wire:click="exportSelectedProducts">Export</button>
+        <button type="button" class="ft-product-bulk-btn is-bulk-secondary" wire:click="exportSelectedProducts">Export selected Excel</button>
 
         <div class="ft-product-bulk-menu-wrap">
             <button type="button" class="ft-product-bulk-btn" x-on:click="moreOpen = !moreOpen; statusOpen = false" :aria-expanded="moreOpen.toString()">

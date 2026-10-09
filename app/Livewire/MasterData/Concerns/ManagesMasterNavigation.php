@@ -31,7 +31,8 @@ trait ManagesMasterNavigation
         $this->productCategory = '';
         $this->productClientAvailability = '';
         $this->productStatus = '';
-        $this->productSupplierFilterId = null;
+        $this->productSupplierFilterId = '';
+        $this->productSupplierState = '';
         $this->categoryLevelFilter = '';
         $this->categoryParentFilter = '';
         $this->categoryStatusFilter = '';
