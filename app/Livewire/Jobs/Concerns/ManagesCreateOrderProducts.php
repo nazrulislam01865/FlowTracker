@@ -123,7 +123,6 @@ trait ManagesCreateOrderProducts
         abort_unless($supplier, 422, 'Select a supplier linked to this product.');
 
         $this->jobItems[$index]['supplier_id'] = (int) $supplier->id;
-        $this->syncCreateOrderProductBasePrice($index);
         $this->createOrderSupplierOverrides[$productId] = (int) $supplier->id;
         $this->createOrderSupplierSkipProductIds = array_values(array_filter(
             $this->createOrderSupplierSkipProductIds,
@@ -150,7 +149,7 @@ trait ManagesCreateOrderProducts
         $productCategory = $productCategory !== '' ? $productCategory : 'Uncategorized';
 
         $defaultQuantity = 1000;
-        $basePrice = $product->productPriceForQuantity($defaultQuantity, $supplierId);
+        $basePrice = $product->productPriceForQuantity($defaultQuantity);
 
         $this->jobItems[] = [
             'product_id' => (int) $product->id,
@@ -188,7 +187,7 @@ trait ManagesCreateOrderProducts
             ->active()
             ->find($productId);
 
-        $basePrice = $product?->productPriceForQuantity($quantity, (int) ($this->jobItems[$index]['supplier_id'] ?? 0) ?: null);
+        $basePrice = $product?->productPriceForQuantity($quantity);
         $this->jobItems[$index]['unit_price'] = $basePrice !== null
             ? number_format($basePrice, 2, '.', '')
             : '';

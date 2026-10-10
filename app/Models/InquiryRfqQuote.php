@@ -13,7 +13,7 @@ class InquiryRfqQuote extends Model
         'currency', 'freight', 'tooling_cost', 'sample_cost', 'discount', 'tax_status',
         'lead_time_days', 'sample_lead_time_days', 'incoterm', 'shipping_port', 'estimated_delivery_date',
         'validity_days', 'specification_compliance', 'notes', 'supporting_information', 'document_notes',
-        'submitted_by_name', 'submitted_by_email', 'submitted_total',
+        'submitted_by_name', 'submitted_by_email', 'submitted_total', 'portal_submission_uuid', 'portal_details',
     ];
 
     protected function casts(): array
@@ -29,6 +29,7 @@ class InquiryRfqQuote extends Model
             'validity_days' => 'integer',
             'estimated_delivery_date' => 'date',
             'supporting_information' => 'array',
+            'portal_details' => 'array',
         ];
     }
 

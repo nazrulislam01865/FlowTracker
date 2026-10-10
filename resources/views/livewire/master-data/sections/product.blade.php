@@ -29,7 +29,6 @@
                 :selected-main-category="$productFormMainCategory"
                 :selected-product-category-id="$parentId"
                 :selected-subcategory="$productSubcategory"
-                :supplier-price-tables="$productSupplierPriceTables"
                 :price-preview="$productPricePreview"
                 :remote-surcharge-preview="$productRemoteSurchargePreview"
                 :product-options="$productOptions"

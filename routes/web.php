@@ -134,8 +134,6 @@ Route::middleware(['auth', 'super.admin'])->prefix('administration/reminders/sup
 Route::middleware('auth')->group(function () {
     if ((bool) config('flowtrack.order_tracking_enabled', false)) {
         Route::get('/orders/{job}/qr-code/download', [OrderQrCodeController::class, 'download'])->name('orders.qr.download');
-        Route::post('/orders/{job}/artwork-tracking/generate', [OrderQrCodeController::class, 'generate'])
-            ->middleware('throttle:6,1')->name('orders.tracking.generate');
     }
     Route::post('/session/timezone', function (\Illuminate\Http\Request $request) {
         $data = $request->validate([
@@ -234,6 +232,14 @@ Route::middleware('auth')->group(function () {
 
         return StoredFileResponse::download((string) $document->path, (string) $document->name, $document->mime_type);
     })->name('document-archive.orders.download');
+
+    Route::get('/inquiries/rfq-quote-documents/{document}/download', function (\App\Models\InquiryRfqQuoteDocument $document) {
+        abort_unless(auth()->user()->canModule('documents', 'view'), 403);
+        $inquiryId = $document->quote?->invitation?->inquiry_id;
+        abort_unless($inquiryId && app(\App\Services\InquiryService::class)
+            ->visibleQuery(auth()->user())->whereKey($inquiryId)->exists(), 404);
+        return StoredFileResponse::download((string)$document->path, (string)$document->name, $document->mime_type);
+    })->name('inquiries.rfq-quote-documents.download');
 
     Route::get('/inquiries/documents/{document}/open', function (\App\Models\InquiryDocument $document) {
         abort_unless(auth()->user()->canModule('documents', 'view'), 403);

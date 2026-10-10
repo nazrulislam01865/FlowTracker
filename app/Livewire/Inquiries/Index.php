@@ -154,8 +154,6 @@ class Index extends Component
     public string $inquiryProductCategory = '';
     public string $inquiryProductQuantity = '1';
     public string $inquiryProductUnitPrice = '0.00';
-    public ?int $inquiryProductSupplierId = null;
-    public string $inquiryProductSupplierLabel = '';
 
     // Compact inline editor used from the Inquiry Details product table.
     public ?int $editInquiryProductItemId = null;
@@ -166,8 +164,6 @@ class Index extends Component
     public string $editInquiryProductName = '';
     public string $editInquiryProductQuantity = '1';
     public string $editInquiryProductUnitPrice = '';
-    public ?int $editInquiryProductSupplierId = null;
-    public string $editInquiryProductSupplierLabel = '';
     public string $editInquiryProductNotes = '';
 
     // Options are loaded only when create/workflow management is opened.

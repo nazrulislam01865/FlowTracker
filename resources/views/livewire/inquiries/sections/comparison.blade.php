@@ -195,7 +195,7 @@
                         <tr>
                             <th scope="row">MOQ</th>
                             @foreach($submittedQuotes as $invitation)
-                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">{{ $supplierMetaValue($invitation, ['moq', 'minimum_order_quantity', 'minimum_order_qty']) }}</td>
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">@forelse($invitation->quote->items as $line)<div>{{ $line->product_name }}: {{ $line->moq ?? '—' }}</div>@empty — @endforelse</td>
                             @endforeach
                         </tr>
 
@@ -209,14 +209,59 @@
                         <tr>
                             <th scope="row">Sample</th>
                             @foreach($submittedQuotes as $invitation)
-                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">{{ $supplierMetaValue($invitation, ['sample_terms', 'sample', 'sample_cost']) }}</td>
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">{{ $symbolFor((string)$invitation->quote->currency) }}{{ number_format((float)$invitation->quote->sample_cost,2) }}</td>
+                            @endforeach
+                        </tr>
+
+                        <tr>
+                            <th scope="row">Quoted items</th>
+                            @foreach($submittedQuotes as $invitation)
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">
+                                    @foreach($invitation->quote->items as $line)
+                                        <div>{{ $line->product_name }} · {{ $line->quantity }} × {{ $invitation->quote->currency }} {{ number_format((float)$line->unit_price, 2) }}</div>
+                                    @endforeach
+                                </td>
+                            @endforeach
+                        </tr>
+                        <tr>
+                            <th scope="row">Commercial terms</th>
+                            @foreach($submittedQuotes as $invitation)
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">
+                                    <div>Tooling: {{ $invitation->quote->currency }} {{ number_format((float)$invitation->quote->tooling_cost,2) }}</div>
+                                    <div>Tax: {{ ucfirst((string)$invitation->quote->tax_status) }}</div>
+                                    <div>Incoterm: {{ $invitation->quote->incoterm ?: '—' }}</div>
+                                    <div>Shipping port: {{ $invitation->quote->shipping_port ?: '—' }}</div>
+                                    <div>Validity: {{ $invitation->quote->validity_days ?? '—' }} days</div>
+                                    <div>Compliance: {{ $invitation->quote->specification_compliance ?: '—' }}</div>
+                                    @if($invitation->quote->sample_lead_time_days !== null)
+                                        <div>Sample lead: {{ $invitation->quote->sample_lead_time_days }} days</div>
+                                    @endif
+                                </td>
+                            @endforeach
+                        </tr>
+                        <tr>
+                            <th scope="row">Volume price breaks</th>
+                            @foreach($submittedQuotes as $invitation)
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">
+                                    @forelse((array)data_get($invitation->quote->portal_details, 'price_breaks', []) as $break)
+                                        <div>{{ $break['quantity'] ?? '—' }} units: {{ $invitation->quote->currency }} {{ $break['unit_price'] ?? '—' }}</div>
+                                    @empty — @endforelse
+                                </td>
                             @endforeach
                         </tr>
 
                         <tr class="ft-rfq-comparison-attachments-row">
                             <th scope="row">Attachments</th>
                             @foreach($submittedQuotes as $invitation)
-                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }"><span class="ft-rfq-comparison-empty-value">—</span></td>
+                                <td :class="{ 'is-selected': selectedSupplierId === {{ $invitation->id }} }">
+                                    @forelse($invitation->quote->documents as $quoteDocument)
+                                        <a href="{{ route('inquiries.rfq-quote-documents.download', ['document' => $quoteDocument->id]) }}" class="ft-rfq-comparison-attachment" style="display:block;margin:3px 0;text-decoration:underline" title="Download {{ $quoteDocument->name }}">
+                                            {{ $quoteDocument->name }}
+                                        </a>
+                                    @empty
+                                        <span class="ft-rfq-comparison-empty-value">—</span>
+                                    @endforelse
+                                </td>
                             @endforeach
                         </tr>
 

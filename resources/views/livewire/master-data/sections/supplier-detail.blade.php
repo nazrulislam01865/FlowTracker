@@ -24,6 +24,9 @@
     @if(session('success'))
         <div class="flash success ft-master-flash">{{ session('success') }}</div>
     @endif
+    @if(session('warning'))
+        <div class="flash error ft-master-flash" role="alert">{{ session('warning') }}</div>
+    @endif
 
     <header class="ft-supplier-detail-head">
         <div class="ft-supplier-detail-identity">
@@ -49,6 +52,25 @@
             @endif
         </div>
     </header>
+
+    <section class="ft-supplier-detail-card" style="margin-bottom: 16px;">
+        <div class="ft-supplier-detail-card-head"><div>
+            <h2>Supplier portal connection</h2>
+            <p>FlowTracker supplier ID {{ $supplier->id }} · Short code {{ $shortCode }}</p>
+        </div></div>
+        <div class="ft-supplier-detail-fields">
+            <div class="ft-supplier-detail-field"><span>Portal account</span><strong>{{ data_get($supplier->metadata, 'portal_linked_at') ? 'Linked' : 'Not created from FlowTracker' }}</strong></div>
+            @if(auth()->user()->canModule('suppliers', 'manage'))
+                <div class="ft-supplier-detail-field"><span>Username</span><strong>{{ data_get($supplier->metadata, 'portal_username', '—') }}</strong></div>
+                <div class="ft-supplier-detail-field"><span>Login email</span><strong>{{ data_get($supplier->metadata, 'portal_email', '—') }}</strong></div>
+            @endif
+            <div class="ft-supplier-detail-field"><span>Assigned products</span><strong>{{ $products->count() }}</strong></div>
+        </div>
+        @if($canEditMaster)
+            <button type="button" class="ft-supplier-list-button is-secondary" wire:click="syncSupplierPortal" wire:loading.attr="disabled" wire:target="syncSupplierPortal">Sync supplier &amp; products</button>
+            @error('portalSync') <div role="alert" class="flash error">{{ $message }}</div> @enderror
+        @endif
+    </section>
 
     <div class="ft-supplier-detail-summary">
         <x-suppliers.stat-card label="Assigned products" :value="number_format($products->count())" icon="product" />

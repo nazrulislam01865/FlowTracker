@@ -588,8 +588,9 @@ final class InquiryRfqService
             ->where('inquiry_id', $inquiry->id)
             ->with([
                 'supplier:id,name,code,metadata,status',
-                'quote:id,invitation_id,currency,freight,lead_time_days,validity_days,notes,submitted_total,created_at,updated_at',
-                'quote.items:id,quote_id,inquiry_item_id,product_name,quantity,unit_price,sort_order',
+                'quote:id,invitation_id,currency,freight,tooling_cost,sample_cost,tax_status,lead_time_days,sample_lead_time_days,incoterm,shipping_port,estimated_delivery_date,validity_days,specification_compliance,notes,document_notes,supporting_information,portal_details,submitted_total,created_at,updated_at',
+                'quote.items:id,quote_id,inquiry_item_id,product_name,quantity,unit_price,moq,sort_order',
+                'quote.documents:id,quote_id,document_type,name,size',
             ])
             ->orderBy('invited_at')
             ->orderBy('id')
@@ -679,6 +680,7 @@ final class InquiryRfqService
         // Keep the secure invitation valid even if a later status/audit write has
         // an unexpected problem after the provider has already accepted the mail.
         $invitation->update(['email_status' => 'Delivered', 'email_tracking_id' => $trackingId]);
+        app(\App\Services\SupplierBridge\DeliverRfq::class)->queue($invitation);
 
         $this->activity($inquiry, $actor, 'rfq.invited', 'RFQ invitation sent to '.$supplier->name.'.', [
             'supplier_id' => (int) $supplier->id,
@@ -798,6 +800,8 @@ final class InquiryRfqService
             'email_tracking_id' => $trackingId,
         ]);
 
+        app(\App\Services\SupplierBridge\DeliverRfq::class)->queue($invitation);
+
         $verb = $wasDelivered ? 'resent' : 'sent';
         $this->activity($inquiry, $actor, $wasDelivered ? 'rfq.resent' : 'rfq.invited', 'RFQ invitation '.$verb.' to '.$invitation->supplier?->name.'.', [
             'supplier_id' => (int) $invitation->supplier_id,
@@ -879,7 +883,7 @@ final class InquiryRfqService
     }
 
     /** @param array<int,array{inquiry_item_id:int,unit_price:float|int|string,moq?:float|int|string|null}> $items */
-    public function submitQuote(InquiryRfqInvitation $invitation, array $items, array $data): InquiryRfqQuote
+    public function submitQuote(InquiryRfqInvitation $invitation, array $items, array $data, ?callable $storePortalFiles = null): InquiryRfqQuote
     {
         abort_if($invitation->awarded_at || $invitation->rejected_at, 422, 'This RFQ is already closed.');
         abort_if($invitation->quote_status === 'submitted', 422, 'This quotation has already been submitted and can no longer be edited.');
@@ -917,7 +921,7 @@ final class InquiryRfqService
         $subtotal = $normalized->sum(fn (array $row) => ((float) $row['quantity']) * ((float) $row['unit_price']));
         $submittedTotal = round($subtotal + $freight + $toolingCost + $sampleCost - $discount, 2);
 
-        $quote = DB::transaction(function () use ($invitation, $normalized, $data, $freight, $toolingCost, $sampleCost, $discount, $submittedTotal): InquiryRfqQuote {
+        $quote = DB::transaction(function () use ($invitation, $normalized, $data, $freight, $toolingCost, $sampleCost, $discount, $submittedTotal, $storePortalFiles): InquiryRfqQuote {
             $quote = InquiryRfqQuote::query()->updateOrCreate(
                 ['invitation_id' => $invitation->id],
                 [
@@ -953,6 +957,8 @@ final class InquiryRfqService
                 'created_at' => $now,
                 'updated_at' => $now,
             ])->all());
+
+            if ($storePortalFiles !== null) $storePortalFiles($quote);
 
             $invitation->update([
                 'interest_status' => 'interested',

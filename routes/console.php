@@ -250,3 +250,96 @@ if ((bool) config('observability.enabled', false)) {
         ->withoutOverlapping()
         ->onOneServer();
 }
+
+// Durable one-way supplier delivery; independent of worker availability.
+Artisan::command('flowtrack:sync-supplier-orders', function (): int {
+    if (!config('supplier_bridge.enabled')) {
+        $this->line('Supplier bridge disabled.');
+        return 0;
+    }
+    $ids = DB::table('supplier_order_deliveries')
+        ->where(function ($query): void {
+            $query->where('status', 'pending')
+                ->orWhere(fn ($stale) => $stale->where('status', 'sending')->where('locked_at', '<', now()->subMinutes(5)));
+        })
+        ->where(fn ($query) => $query->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()))
+        ->orderBy('id')->limit(50)->pluck('id');
+    $sent = 0;
+    foreach ($ids as $id) {
+        if (app(\App\Services\SupplierBridge\DeliverOrder::class)->send((int) $id)) $sent++;
+    }
+    $this->info("Supplier order deliveries: {$sent} sent, ".($ids->count() - $sent).' not sent.');
+    return 0;
+})->purpose('Retry supplier order-created API notifications without exposing FlowTracker');
+
+Schedule::command('flowtrack:sync-supplier-orders')->everyMinute()->withoutOverlapping()->onOneServer();
+
+// Refresh only delivered orders whose workflow, assigned lines, or artwork changed.
+Artisan::command('flowtrack:refresh-supplier-orders {--all : Queue every previously delivered order once} {--order= : Only this FlowTracker order ID} {--dry-run : Count without modifying records}', function (): int {
+    if (! config('supplier_bridge.enabled')) { $this->error('Supplier bridge disabled.'); return 1; }
+    $query = DB::table('supplier_order_deliveries as d')
+        ->join('flow_jobs as j', 'j.id', '=', 'd.flow_job_id')
+        ->where('d.status', 'delivered');
+    if ($this->option('order') !== null) {
+        $id = filter_var($this->option('order'), FILTER_VALIDATE_INT, ['options' => ['min_range' => 1]]);
+        if ($id === false) { $this->error('Invalid order ID.'); return 1; }
+        $query->where('d.flow_job_id', $id);
+    } elseif (! $this->option('all')) {
+        $query->where(function ($q): void {
+            $q->whereColumn('j.updated_at', '>=', 'd.delivered_at')
+                ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('tasks as t')
+                    ->whereColumn('t.flow_job_id', 'd.flow_job_id')->whereColumn('t.updated_at', '>=', 'd.delivered_at'))
+                ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('documents as doc')
+                    ->whereColumn('doc.flow_job_id', 'd.flow_job_id')->whereColumn('doc.updated_at', '>=', 'd.delivered_at'))
+                ->orWhereExists(fn ($sub) => $sub->selectRaw('1')->from('flow_job_items as i')
+                    ->whereColumn('i.flow_job_id', 'd.flow_job_id')->whereColumn('i.updated_at', '>=', 'd.delivered_at'));
+        });
+    }
+    $count = 0;
+    $lastId = 0;
+    // A manual --all walks the entire archive in bounded batches, not the same first 500 repeatedly.
+    do {
+        $ids = (clone $query)->where('d.id', '>', $lastId)->orderBy('d.id')
+            ->limit(100)->pluck('d.id');
+        if ($ids->isEmpty()) break;
+        $lastId = (int) $ids->last();
+        $count += $ids->count();
+        if (! $this->option('dry-run')) {
+            DB::table('supplier_order_deliveries')->whereIn('id', $ids->all())
+                ->where('status', 'delivered')->update([
+                    'status' => 'pending', 'attempts' => 0, 'next_attempt_at' => null,
+                    'locked_at' => null, 'updated_at' => now(),
+                ]);
+        }
+    } while ($this->option('all'));
+    $this->info($count.($this->option('dry-run') ? ' matching deliveries (dry run).' : ' supplier order refreshes queued.'));
+    return 0;
+})->purpose('Queue changed supplier order details and approved artwork for retry-safe delivery');
+
+Schedule::command('flowtrack:refresh-supplier-orders')->everyFiveMinutes()->withoutOverlapping()->onOneServer();
+
+// Safety-net for product assignment updates made outside the supplier editor.
+Schedule::command('flowtrack:sync-supplier-catalog')->hourly()->withoutOverlapping()->onOneServer();
+
+// Retry both existing and newly sent supplier RFQs without blocking inquiry email delivery.
+Artisan::command('flowtrack:sync-supplier-rfqs', function (): int {
+    if (! config('supplier_bridge.enabled')) {
+        $this->line('Supplier bridge disabled.');
+        return 0;
+    }
+    $ids = DB::table('supplier_rfq_deliveries')
+        ->where(function ($q): void {
+            $q->where('status', 'pending')
+                ->orWhere(fn ($stale) => $stale->where('status', 'sending')->where('locked_at', '<', now()->subMinutes(5)));
+        })
+        ->where(fn ($q) => $q->whereNull('next_attempt_at')->orWhere('next_attempt_at', '<=', now()))
+        ->orderBy('id')->limit(50)->pluck('id');
+    $sent = 0;
+    foreach ($ids as $id) {
+        if (app(\App\Services\SupplierBridge\DeliverRfq::class)->send((int) $id)) $sent++;
+    }
+    $this->info("Supplier RFQ deliveries: {$sent} sent, ".($ids->count() - $sent).' pending.');
+    return 0;
+})->purpose('Retry supplier RFQ invitations to the isolated Supplier Portal');
+
+Schedule::command('flowtrack:sync-supplier-rfqs')->everyMinute()->withoutOverlapping()->onOneServer();

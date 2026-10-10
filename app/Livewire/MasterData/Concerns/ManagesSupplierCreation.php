@@ -45,6 +45,9 @@ trait ManagesSupplierCreation
         $this->supplierShortCode = '';
         $this->supplierCodeDraft = '';
         $this->supplierProductCodes = [];
+        $this->portalUsername = '';
+        $this->portalEmail = '';
+        $this->portalPassword = '';
         $this->resetValidation();
     }
 
@@ -85,6 +88,16 @@ trait ManagesSupplierCreation
         $this->authorizeGroupAction('create');
         $this->commitSupplierProductCodes();
 
+        $provisionLogin = trim($this->portalUsername) !== '' || trim($this->portalEmail) !== '' || $this->portalPassword !== '';
+        if ($provisionLogin) {
+            abort_unless(auth()->user()?->canModule('suppliers', 'manage'), 403);
+            $this->validate([
+                'portalUsername' => ['required', 'string', 'regex:/^[A-Za-z0-9._-]+$/', 'min:3', 'max:60'],
+                'portalEmail' => ['required', 'email:rfc', 'max:254'],
+                'portalPassword' => ['required', 'string', \Illuminate\Validation\Rules\Password::min(12)->letters()->mixedCase()->numbers()],
+                'status' => ['required', Rule::in(['active'])],
+            ]);
+        }
         $workspaceId = app(MasterDataService::class)->workspaceId();
         $data = $this->validate([
             'name' => [
@@ -145,6 +158,33 @@ trait ManagesSupplierCreation
             return $supplier;
         });
 
+        if ($provisionLogin) {
+            try {
+                app(\App\Services\SupplierBridge\SyncSupplier::class)->provision(
+                    (int) $supplier->id,
+                    strtolower(trim($this->portalUsername)),
+                    strtolower(trim($this->portalEmail)),
+                    $this->portalPassword,
+                    trim($this->supplierContactPerson) ?: $supplier->name,
+                );
+                $metadata = (array) ($supplier->metadata ?? []);
+                $metadata['portal_username'] = strtolower(trim($this->portalUsername));
+                $metadata['portal_email'] = strtolower(trim($this->portalEmail));
+                $metadata['portal_linked_at'] = now()->toIso8601String();
+                $supplier->update(['metadata' => $metadata]);
+                session()->flash('success', 'Supplier and portal login created successfully.');
+            } catch (\Throwable $exception) {
+                session()->flash('warning', 'Supplier saved, but portal login was not created. Open Edit supplier to retry without recreating this supplier.');
+            } finally {
+                $this->portalPassword = '';
+            }
+        } elseif (config('supplier_bridge.enabled')) {
+            try {
+                app(\App\Services\SupplierBridge\SyncSupplier::class)->sync((int) $supplier->id);
+            } catch (\Throwable $exception) {
+                session()->flash('warning', 'Supplier created locally. Portal synchronization will retry from the catalogue sync command.');
+            }
+        }
         $assigned = $codeRows->where('valid', true)->count();
         session()->flash('success', $supplier->name.' created'.($assigned ? ' with '.$assigned.' assigned product'.($assigned === 1 ? '' : 's').'.' : '.'));
         $this->redirectRoute('master-data', ['group' => 'supplier'], navigate: true);

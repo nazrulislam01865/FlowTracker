@@ -28,6 +28,7 @@
     </header>
 
     @if(session('success'))<div class="flash success ft-master-flash">{{ session('success') }}</div>@endif
+    @if(session('warning'))<div class="flash error ft-master-flash" role="alert">{{ session('warning') }}</div>@endif
     @error('record')<div class="flash error ft-master-flash">{{ $message }}</div>@enderror
 
     <div class="ft-supplier-list-summary">

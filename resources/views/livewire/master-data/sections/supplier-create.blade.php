@@ -111,6 +111,23 @@
                 </div>
             </x-suppliers.form-card>
 
+            @if(auth()->user()->canModule('suppliers', 'manage'))
+                <x-suppliers.form-card title="Supplier portal login" badge="Optional" copy="Set a username, login email and password to create portal access immediately. Supplier and products will be synchronized using their FlowTracker IDs. No password is saved in FlowTracker.">
+                    <div class="ft-supplier-form-grid">
+                        <x-suppliers.field label="Portal username" error="portalUsername">
+                            <input wire:model="portalUsername" type="text" maxlength="60" autocomplete="off" placeholder="supplier.username">
+                        </x-suppliers.field>
+                        <x-suppliers.field label="Portal login email" error="portalEmail">
+                            <input wire:model="portalEmail" type="email" maxlength="254" autocomplete="off" placeholder="supplier@example.com">
+                        </x-suppliers.field>
+                        <x-suppliers.field label="Portal password" error="portalPassword" wide>
+                            <input wire:model="portalPassword" type="password" autocomplete="new-password" placeholder="At least 12 characters, mixed case and a number">
+                        </x-suppliers.field>
+                    </div>
+                    <small>Leave all three blank to create the supplier without a login. You can add portal credentials later from Edit supplier.</small>
+                </x-suppliers.form-card>
+            @endif
+
             <div class="ft-supplier-create-actions">
                 <button type="button" class="ft-supplier-secondary-button" wire:click="cancelSupplierCreate">Cancel</button>
                 <button

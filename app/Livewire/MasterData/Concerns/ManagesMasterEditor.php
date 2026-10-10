@@ -20,29 +20,6 @@ use Illuminate\Validation\ValidationException;
 
 trait ManagesMasterEditor
 {
-    /** Rebuild the editor text for imported tables that only stored normalized tiers. */
-    private function supplierPriceTableForEditing(mixed $table): string
-    {
-        $raw = trim((string) data_get($table, 'raw', ''));
-        if ($raw !== '') return $raw;
-
-        $prices = collect((array) data_get($table, 'price_breakpoints', []))
-            ->filter(fn ($row) => (int) data_get($row, 'quantity', 0) > 0)
-            ->sortBy(fn ($row) => (int) data_get($row, 'quantity', 0))->values();
-        if ($prices->isEmpty()) return '';
-
-        $tab = "\t";
-        $text = 'Quantity'.$tab.$prices->pluck('quantity')->implode($tab)
-            ."\n".'Product price'.$tab.$prices->pluck('price')->implode($tab);
-        $remote = collect((array) data_get($table, 'remote_surcharge_breakpoints', []))->keyBy('quantity');
-        if ($remote->isNotEmpty()) {
-            $text .= "\n".'Remote Area charge'.$tab.$prices
-                ->map(fn ($row) => data_get($remote->get(data_get($row, 'quantity')), 'price', ''))
-                ->implode($tab);
-        }
-        return $text;
-    }
-
     public function open(?int $id = null): void
     {
         $action = $id ? 'edit' : 'create';
@@ -72,7 +49,6 @@ trait ManagesMasterEditor
         $this->newProductCategoryName = '';
         $this->productSupplierId = null;
         $this->productSupplierIds = [];
-        $this->productSupplierPriceTables = [];
         $this->productCertificateUpload = null;
         $this->productTemplateUpload = null;
         $this->productOptions = [];
@@ -121,9 +97,6 @@ trait ManagesMasterEditor
             $this->productFormMainCategory = $r->productMainCategory();
             $this->productSize = $r->productSize();
             $this->productPriceTable = trim((string) data_get($r->metadata, 'price_table_raw'));
-            $this->productSupplierPriceTables = collect((array) data_get($r->metadata, 'supplier_price_tables', []))
-                ->mapWithKeys(fn ($table, $id) => [(string) $id => $this->supplierPriceTableForEditing($table)])
-                ->all();
             $storedPriceBreakpoints = collect((array) data_get($r->metadata, 'price_breakpoints', []))
                 ->map(fn ($row) => [
                     'quantity' => (int) data_get($row, 'quantity', 0),
@@ -161,12 +134,6 @@ Product price	".$prices;
                     $this->productPriceTable .= "
 Remote Area charge	".$remoteRow;
                 }
-            }
-            // Assign the existing single table only to its original default supplier.
-            // It must never become a different supplier's price implicitly.
-            $originalDefaultId = $r->productSupplierId();
-            if ($originalDefaultId && !array_key_exists((string) $originalDefaultId, $this->productSupplierPriceTables)) {
-                $this->productSupplierPriceTables[(string) $originalDefaultId] = $this->productPriceTable;
             }
             $this->productOptions = $r->productOptions();
             $this->productOptionUploads = [];
@@ -260,7 +227,6 @@ Remote Area charge	".$remoteRow;
             $this->productFormMainCategory = '';
             $this->productSize = '';
             $this->productPriceTable = '';
-            $this->productSupplierPriceTables = [];
             $this->productPricePreview = [];
             $this->productRemoteSurchargePreview = [];
             $this->productOptions = [];
@@ -391,8 +357,6 @@ Remote Area charge	".$remoteRow;
             'productFormMainCategory' => $this->group === 'product' ? ['required', 'string', 'max:255'] : ['nullable'],
             'productSize' => $this->group === 'product' ? ['nullable', 'string', 'max:1200'] : ['nullable'],
             'productPriceTable' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
-            'productSupplierPriceTables' => $this->group === 'product' ? ['array', 'max:100'] : ['array'],
-            'productSupplierPriceTables.*' => $this->group === 'product' ? ['nullable', 'string', 'max:50000'] : ['nullable'],
             'productOptions' => $this->group === 'product' ? ['array', 'max:30'] : ['array'],
             'productOptions.*.key' => $this->group === 'product' ? ['required', 'string', 'max:80'] : ['nullable'],
             'productOptions.*.label' => $this->group === 'product' ? ['required', 'string', 'max:120'] : ['nullable'],
@@ -525,46 +489,6 @@ Remote Area charge	".$remoteRow;
             }
         }
 
-        // A supplier table may only be saved against a linked supplier in this
-        // workspace. Empty tables are allowed; they never borrow another price.
-        $supplierPriceTables = [];
-        if ($this->group === 'product') {
-            $linked = collect($data['productSupplierIds'] ?? [])->map(fn ($id) => (int) $id);
-            if (filled($data['productSupplierId'] ?? null)) $linked->push((int) $data['productSupplierId']);
-            $linked = $linked->unique()->all();
-            $parser = app(ProductPriceTableParser::class);
-            // When a previously supplier-less product is assigned its first
-            // default supplier, retain its existing generic pricing under that
-            // supplier. Do not reassign A's prices when switching from A to B.
-            if ($this->editId && ($data['productSupplierPriceTables'] ?? []) === []
-                && $this->productPriceTable !== '' && filled($data['productSupplierId'] ?? null)) {
-                $supplierPriceTables[(string) $data['productSupplierId']] = [
-                    'raw' => trim((string) $data['productPriceTable']),
-                    'price_breakpoints' => $productPriceBreakpoints,
-                    'remote_surcharge_breakpoints' => $productRemoteSurchargeBreakpoints,
-                ];
-            }
-            foreach ($data['productSupplierPriceTables'] ?? [] as $supplierId => $raw) {
-                $supplierId = (int) $supplierId;
-                $raw = trim((string) $raw);
-                if ($raw === '') continue;
-                if ($supplierId <= 0 || !in_array($supplierId, $linked, true)) {
-                    throw ValidationException::withMessages(['productSupplierPriceTables' => 'A price table must belong to a linked supplier.']);
-                }
-                $parsed = $parser->parseTable($raw);
-                if ($parsed['price_breakpoints'] === []) {
-                    throw ValidationException::withMessages([
-                        'productSupplierPriceTables.'.$supplierId => 'Paste valid quantities and prices for this supplier.',
-                    ]);
-                }
-                $supplierPriceTables[(string) $supplierId] = [
-                    'raw' => $raw,
-                    'price_breakpoints' => $parsed['price_breakpoints'],
-                    'remote_surcharge_breakpoints' => $parsed['remote_surcharge_breakpoints'],
-                ];
-            }
-        }
-
         $metadata = null;
         if (filled($data['metadataJson'])) {
             $metadata = json_decode($data['metadataJson'], true);
@@ -661,15 +585,6 @@ Remote Area charge	".$remoteRow;
                 unset($metadata['supplier_id'], $metadata['default_supplier_id']);
             }
             $metadata['supplier_ids'] = $linkedSupplierIds->unique()->values()->all();
-            $metadata['supplier_price_tables'] = $supplierPriceTables;
-            // Preserve the legacy price columns as a mirror of the selected
-            // default for old exports and callers. Do not copy another supplier.
-            $defaultTable = $supplierPriceTables[(string) ($data['productSupplierId'] ?? '')] ?? null;
-            if ($linkedSupplierIds->isNotEmpty()) {
-                $productPriceBreakpoints = $defaultTable['price_breakpoints'] ?? [];
-                $productRemoteSurchargeBreakpoints = $defaultTable['remote_surcharge_breakpoints'] ?? [];
-                $data['productPriceTable'] = $defaultTable['raw'] ?? '';
-            }
             $metadata['main_category'] = trim((string) $data['productFormMainCategory']);
             $metadata['product_size'] = trim((string) $data['productSize']) ?: null;
             if ($productPriceBreakpoints !== []) {

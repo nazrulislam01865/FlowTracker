@@ -28,6 +28,17 @@ return Application::configure(basePath: dirname(__DIR__))
             Route::get('/health/ready', InfrastructureReadyController::class)
                 ->name('health.ready');
 
+            Route::get('/api/supplier-bridge/rfq-documents/{invitation}/{document}', \App\Http\Controllers\SupplierBridge\DownloadRfqDocument::class)
+                ->whereNumber('invitation')->whereNumber('document')->middleware('throttle:60,1');
+
+            Route::get('/api/supplier-bridge/order-artwork/{order}/{document}', \App\Http\Controllers\SupplierBridge\DownloadOrderArtwork::class)
+                ->whereNumber('order')->whereNumber('document')->middleware('throttle:60,1');
+
+            Route::post('/api/supplier-bridge/rfq-quotation-files', \App\Http\Controllers\SupplierBridge\ReceiveSupplierQuotationFile::class)
+                ->middleware('throttle:30,1');
+            Route::post('/api/supplier-bridge/rfq-quotations', \App\Http\Controllers\SupplierBridge\ReceiveSupplierQuotation::class)
+                ->middleware('throttle:30,1');
+
             Route::post('/telemetry/realtime', RealtimeTelemetryController::class)
                 ->middleware(['web', 'auth', 'throttle:60,1'])
                 ->name('telemetry.realtime');

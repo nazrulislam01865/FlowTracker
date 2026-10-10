@@ -109,6 +109,31 @@
                 @endif
             </x-suppliers.form-card>
 
+            @if(auth()->user()->canModule('suppliers', 'manage'))
+                <x-suppliers.form-card title="Supplier portal access" copy="Create or update the supplier login in the isolated portal. This account is linked automatically to this FlowTracker supplier ID. Passwords are never saved in FlowTracker.">
+                    <div class="ft-supplier-form-grid">
+                        <x-suppliers.field label="Portal username" required error="portalUsername">
+                            <input wire:model="portalUsername" type="text" maxlength="60" autocomplete="off" placeholder="supplier.username">
+                        </x-suppliers.field>
+                        <x-suppliers.field label="Portal email" required error="portalEmail">
+                            <input wire:model="portalEmail" type="email" maxlength="254" autocomplete="off" placeholder="supplier@example.com">
+                        </x-suppliers.field>
+                        <x-suppliers.field label="New portal password" required error="portalPassword" wide>
+                            <input wire:model="portalPassword" type="password" autocomplete="new-password" placeholder="At least 12 characters, mixed case and a number">
+                        </x-suppliers.field>
+                    </div>
+                    <p>Linked FlowTracker supplier ID: <strong>{{ $supplier->id }}</strong> · {{ $supplier->supplierShortCode() }}</p>
+                    @if(data_get($supplier->metadata, 'portal_linked_at'))
+                        <p>Current portal account: <strong>{{ data_get($supplier->metadata, 'portal_username') }}</strong> ({{ data_get($supplier->metadata, 'portal_email') }})</p>
+                    @else
+                        <p>No portal login created from FlowTracker yet.</p>
+                    @endif
+                    <button type="button" class="ft-supplier-primary-button" wire:click="provisionSupplierPortal" wire:loading.attr="disabled" wire:target="provisionSupplierPortal">Create / update portal login</button>
+                </x-suppliers.form-card>
+            @endif
+            @error('portalSync') <div role="alert" class="flash error">{{ $message }}</div> @enderror
+            <button type="button" class="ft-supplier-secondary-button" wire:click="syncSupplierPortal" wire:loading.attr="disabled" wire:target="syncSupplierPortal">Sync supplier &amp; assigned products</button>
+
             <div class="ft-supplier-create-actions">
                 <button type="button" class="ft-supplier-secondary-button" wire:click="cancelSupplierEdit">Cancel</button>
                 <button

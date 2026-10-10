@@ -13,23 +13,21 @@ use RuntimeException;
 
 final class ArtworkTrackingPdfService
 {
-    public function generate(FlowJob $job, Task $reviewTask, ?User $actor, ?Collection $confirmedArtwork = null): Document
+    public function generate(FlowJob $job, Task $reviewTask, User $actor): Document
     {
-        // Backfills supply the already-validated current artwork. Normal
-        // confirmation keeps the original lookup, so both paths use one PDF renderer.
-        $uploadTask = $confirmedArtwork === null ? Task::query()
+        $uploadTask = Task::query()
             ->where('flow_job_id', $job->id)
             ->where('workflow_phase_id', $reviewTask->workflow_phase_id)
             ->whereNotNull('task_pack_task_id')
             ->with('setupTemplate')
             ->get()
-            ->first(fn (Task $candidate): bool => app(OrderWorkflowActionService::class)->automationKey($candidate) === 'ART_PREPARE_UPLOAD') : null;
+            ->first(fn (Task $candidate): bool => app(OrderWorkflowActionService::class)->automationKey($candidate) === 'ART_PREPARE_UPLOAD');
 
-        if ($confirmedArtwork === null && ! $uploadTask) {
+        if (! $uploadTask) {
             throw new RuntimeException('The confirmed Artwork upload task could not be found.');
         }
 
-        $artwork = $confirmedArtwork ?? app(DocumentService::class)->currentArtworkDocuments($uploadTask);
+        $artwork = app(DocumentService::class)->currentArtworkDocuments($uploadTask);
         if ($artwork->isEmpty()) {
             throw new RuntimeException('Artwork cannot be confirmed until at least one current artwork file is available.');
         }
@@ -71,13 +69,13 @@ final class ArtworkTrackingPdfService
                     'document_number' => 'DOC-TRACK-'.$job->id.'-V'.$artworkVersion,
                     'client_id' => $job->client_id,
                     'task_id' => $reviewTask->id,
-                    'uploaded_by' => $actor?->id,
+                    'uploaded_by' => $actor->id,
                     'name' => $filename,
                     'path' => $path,
                     'mime_type' => 'application/pdf',
                     'size' => strlen($pdf),
                     'is_final' => true,
-                    'note' => 'Generated from confirmed artwork. Includes the approved artwork and the Order Tracking QR code.',
+                    'note' => 'Generated automatically when the artwork was confirmed. Includes the confirmed artwork and the Order Tracking QR code.',
                 ],
             );
         } catch (\Throwable $exception) {

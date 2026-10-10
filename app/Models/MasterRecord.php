@@ -325,15 +325,9 @@ class MasterRecord extends Model
     }
 
     /** @return array<int, array{quantity:int, price:float}> */
-    public function productPriceBreakpoints(?int $supplierId = null): array
+    public function productPriceBreakpoints(): array
     {
         if ($this->type !== 'product') return [];
-
-        $source = $this->productSupplierPriceSource($supplierId);
-        if ($source !== null) {
-            return $this->normalizedProductPriceRows($source['price_breakpoints'] ?? []);
-        }
-        if ($supplierId && $supplierId !== $this->productSupplierId()) return [];
 
         $rows = $this->normalizedProductPriceRows(data_get($this->metadata, 'price_breakpoints', []));
         if ($rows !== []) return $rows;
@@ -353,26 +347,12 @@ class MasterRecord extends Model
         }
     }
 
-    /** Check configured pricing without database lookups (including prices for other suppliers). */
-    public function hasProductPricing(): bool
-    {
-        if ($this->type !== 'product') return false;
-        if (filled(data_get($this->metadata, 'price_table_raw')) ||
-            !empty(data_get($this->metadata, 'price_breakpoints'))) return true;
-
-        foreach ((array) data_get($this->metadata, 'supplier_price_tables', []) as $table) {
-            if (is_array($table) && (filled($table['raw'] ?? null) || !empty($table['price_breakpoints']))) return true;
-        }
-
-        return false;
-    }
-
-    public function productPriceForQuantity(int|float $quantity, ?int $supplierId = null): ?float
+    public function productPriceForQuantity(int|float $quantity): ?float
     {
         if ($this->type !== 'product' || $quantity <= 0) return null;
 
         $matchedPrice = null;
-        foreach ($this->productPriceBreakpoints($supplierId) as $breakpoint) {
+        foreach ($this->productPriceBreakpoints() as $breakpoint) {
             if ($breakpoint['quantity'] > $quantity) break;
             $matchedPrice = (float) $breakpoint['price'];
         }
@@ -381,15 +361,9 @@ class MasterRecord extends Model
     }
 
     /** @return array<int, array{quantity:int, price:float}> */
-    public function productRemoteSurchargeBreakpoints(?int $supplierId = null): array
+    public function productRemoteSurchargeBreakpoints(): array
     {
         if ($this->type !== 'product') return [];
-
-        $source = $this->productSupplierPriceSource($supplierId);
-        if ($source !== null) {
-            return $this->normalizedProductPriceRows($source['remote_surcharge_breakpoints'] ?? []);
-        }
-        if ($supplierId && $supplierId !== $this->productSupplierId()) return [];
 
         $rows = $this->normalizedProductPriceRows(data_get($this->metadata, 'remote_surcharge_breakpoints', []));
         if ($rows !== []) return $rows;
@@ -403,17 +377,6 @@ class MasterRecord extends Model
             report($exception);
             return [];
         }
-    }
-
-    /** Supplier-specific prices are embedded in already-loaded product metadata: no additional queries. */
-    private function productSupplierPriceSource(?int $supplierId): ?array
-    {
-        $supplierId ??= $this->productSupplierId();
-        if (!$supplierId) return null;
-        $tables = data_get($this->metadata, 'supplier_price_tables', []);
-        if (!is_array($tables)) return null;
-        $table = $tables[(string) $supplierId] ?? null;
-        return is_array($table) ? $table : null;
     }
 
     /** @return array<int, array{quantity:int, price:float}> */
@@ -437,12 +400,12 @@ class MasterRecord extends Model
             ->all();
     }
 
-    public function productRemoteSurchargeForQuantity(int|float $quantity, ?int $supplierId = null): ?float
+    public function productRemoteSurchargeForQuantity(int|float $quantity): ?float
     {
         if ($this->type !== 'product' || $quantity <= 0) return null;
 
         $matchedPrice = null;
-        foreach ($this->productRemoteSurchargeBreakpoints($supplierId) as $breakpoint) {
+        foreach ($this->productRemoteSurchargeBreakpoints() as $breakpoint) {
             if ($breakpoint['quantity'] > $quantity) break;
             $matchedPrice = (float) $breakpoint['price'];
         }
